@@ -1,10 +1,75 @@
+const OMP_LANG_KEY = "omp-lang";
+
+function decideLangRedirect(state) {
+  const choice = state.choice;
+  if (choice === "ru" || choice === "en") return null;
+  let path = state.pathname || "/";
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  if (path !== "/" && path !== "/index.html") return null;
+  const primary = String(state.language || "")
+    .toLowerCase()
+    .split(/[-_]/)[0];
+  if (primary === "ru" || primary === "uk" || primary === "be" || primary === "kk") return null;
+  return "/en/" + (state.search || "") + (state.hash || "");
+}
+// end decideLangRedirect
+
+function readLangChoice() {
+  try {
+    return localStorage.getItem(OMP_LANG_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberLang(lang) {
+  try {
+    localStorage.setItem(OMP_LANG_KEY, lang);
+  } catch {
+    /* private mode */
+  }
+}
+
+function primaryLanguage() {
+  const list = navigator.languages;
+  if (list && list.length) return list[0];
+  return navigator.language || "";
+}
+
+function redirectIfNeeded() {
+  const target = decideLangRedirect({
+    choice: readLangChoice(),
+    pathname: location.pathname,
+    language: primaryLanguage(),
+    hash: location.hash,
+    search: location.search,
+  });
+  if (!target) return;
+  const here = location.pathname + location.search + location.hash;
+  if (target === here) return;
+  location.replace(target);
+}
+
+function syncLangLinks() {
+  const hash = location.hash || "";
+  document.querySelectorAll("[data-lang-href]").forEach((a) => {
+    const base = a.getAttribute("data-lang-href") || "/";
+    a.setAttribute("href", base + hash);
+  });
+}
+
+redirectIfNeeded();
+
+document.querySelectorAll("[data-set-lang]").forEach((a) => {
+  a.addEventListener("click", () => {
+    const lang = a.getAttribute("data-set-lang");
+    if (lang === "ru" || lang === "en") rememberLang(lang);
+  });
+});
+syncLangLinks();
+window.addEventListener("hashchange", syncLangLinks);
+
 const screens = ["remote", "catalog", "discover", "playing"];
-const labels = {
-  remote: "Пульт OMP на телефоне",
-  catalog: "Каталог OMP на телефоне",
-  discover: "Обзор новинок OMP",
-  playing: "Экран «Сейчас играет» в OMP",
-};
 const tabs = [...document.querySelectorAll("[data-screen]")];
 const dots = [...document.querySelectorAll("[data-dot]")];
 const tabBar = document.querySelector(".screen-tabs");
@@ -16,7 +81,7 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 screens.forEach((name) => {
   const img = new Image();
   img.decoding = "async";
-  img.src = `assets/${name}.webp`;
+  img.src = `/assets/${name}.webp`;
 });
 
 function scrollTabHorizontally(tab) {
@@ -40,11 +105,17 @@ function syncDots(name) {
   dotsBar.style.setProperty("--progress", "1");
 }
 
+function altFor(name) {
+  const tab = tabs.find((t) => t.dataset.screen === name);
+  return (tab && tab.dataset.alt) || "";
+}
+
 function choose(name) {
   if (!screens.includes(name) || !screen) return;
 
-  screen.src = `assets/${name}.webp`;
-  screen.alt = labels[name];
+  screen.src = `/assets/${name}.webp`;
+  const alt = altFor(name);
+  if (alt) screen.alt = alt;
 
   let activeTab = null;
   tabs.forEach((t) => {
@@ -79,10 +150,9 @@ function toggle() {
   if (icon) icon.textContent = demoPaused ? "▶" : "Ⅱ";
   const play = document.getElementById("play");
   if (play) {
-    play.setAttribute(
-      "aria-label",
-      demoPaused ? "Продолжить демо" : "Приостановить демо",
-    );
+    const pauseLabel = play.getAttribute("data-label-pause") || play.getAttribute("aria-label") || "";
+    const resumeLabel = play.getAttribute("data-label-resume") || pauseLabel;
+    play.setAttribute("aria-label", demoPaused ? resumeLabel : pauseLabel);
   }
 }
 

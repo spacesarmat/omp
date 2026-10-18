@@ -9,13 +9,16 @@
     />
     <meta name="theme-color" content="#111310" />
     <title>OMP - бесплатный плеер для TorrServer на LG webOS и Android TV</title>
-    <link rel="stylesheet" href="style.css?v=20261016b" />
-    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <link rel="alternate" hreflang="ru" href="https://omp-player.online/" />
+    <link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
+    <link rel="stylesheet" href="/style.css?v=20261018a" />
+    <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
   </head>
   <body>
     <header class="header wrap">
       <a class="brand" href="/" aria-label="OMP - на главную">
-        <img src="assets/logo.svg" width="40" height="40" alt="" />
+        <img src="/assets/logo.svg" width="40" height="40" alt="" />
         <b>OMP</b>
         <span>OPEN MOVIE PLAYER</span>
       </a>
@@ -25,7 +28,14 @@
         <a href="#platforms">Платформы</a>
         <a href="https://github.com/spacesarmat/omp" target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
-      <a class="small-download" href="#download"><span class="dl-full">Скачать OMP</span><span class="dl-short">Скачать</span></a>
+      <div class="header-tools">
+        <div class="lang-switch" role="navigation" aria-label="Язык">
+          <a href="/" hreflang="ru" lang="ru" data-set-lang="ru" data-lang-href="/" aria-current="page">RU</a>
+          <span class="lang-sep" aria-hidden="true">|</span>
+          <a href="/en/" hreflang="en" lang="en" data-set-lang="en" data-lang-href="/en/">EN</a>
+        </div>
+        <a class="small-download" href="#download"><span class="dl-full">Скачать OMP</span><span class="dl-short">Скачать</span></a>
+      </div>
     </header>
 
     <main>
@@ -59,18 +69,25 @@
           <div class="cinema" id="cinema">
             <img
               class="room"
-              src="assets/living-room.webp"
+              src="/assets/living-room.webp"
               alt="Уютная гостиная: диван, журнальный столик и большой телевизор в тёплом вечернем свете"
               fetchpriority="high"
             />
             <div class="television">
-              <img class="film" src="assets/film.webp" alt="Демонстрационный фантастический пейзаж" />
+              <img class="film" src="/assets/film.webp" alt="Демонстрационный фантастический пейзаж" />
               <img
                 class="tv-ui"
-                src="assets/tv-ui.webp"
+                src="/assets/tv-ui.webp"
                 alt="Интерфейс плеера OMP с главами и дорожками"
               />
-              <button class="screen-control" id="play" type="button" aria-label="Приостановить демо">
+              <button
+                class="screen-control"
+                id="play"
+                type="button"
+                aria-label="Приостановить демо"
+                data-label-pause="Приостановить демо"
+                data-label-resume="Продолжить демо"
+              >
                 <span id="play-icon">Ⅱ</span>
               </button>
               <span class="paused" hidden>Пауза</span>
@@ -80,7 +97,7 @@
             <div class="phone-area">
               <div class="phone">
                 <div class="speaker"></div>
-                <img id="phone-screen" src="assets/remote.webp" alt="Пульт OMP на телефоне" />
+                <img id="phone-screen" src="/assets/remote.webp" alt="Пульт OMP на телефоне" />
                 <button
                   id="phone-play"
                   type="button"
@@ -106,10 +123,10 @@
             </div>
           </div>
           <div class="screen-tabs" role="group" aria-label="Экран телефона">
-            <button type="button" data-screen="remote" class="active" aria-pressed="true">Пульт</button>
-            <button type="button" data-screen="catalog" aria-pressed="false">Каталог</button>
-            <button type="button" data-screen="discover" aria-pressed="false">Обзор</button>
-            <button type="button" data-screen="playing" aria-pressed="false">Сейчас играет</button>
+            <button type="button" data-screen="remote" data-alt="Пульт OMP на телефоне" class="active" aria-pressed="true">Пульт</button>
+            <button type="button" data-screen="catalog" data-alt="Каталог OMP на телефоне" aria-pressed="false">Каталог</button>
+            <button type="button" data-screen="discover" data-alt="Обзор новинок OMP" aria-pressed="false">Обзор</button>
+            <button type="button" data-screen="playing" data-alt="Экран «Сейчас играет» в OMP" aria-pressed="false">Сейчас играет</button>
           </div>
         </div>
       </section>
@@ -319,6 +336,6 @@
       </div>
       <p class="copyright">© 2026 OMP · Open Movie Player</p>
     </footer>
-    <script src="app.js?v=20261015d"></script>
+    <script src="/app.js?v=20261018a"></script>
   </body>
 </html>

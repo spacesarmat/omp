@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="OMP - Open Movie Player. Movies and series from TorrServer on LG webOS, Android TV and Android. Your phone is the remote and a second screen."
+    />
+    <meta name="theme-color" content="#111310" />
+    <title>OMP - a free player for TorrServer on LG webOS and Android TV</title>
+    <link rel="alternate" hreflang="ru" href="https://omp-player.online/" />
+    <link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
+    <link rel="stylesheet" href="/style.css?v=20261018a" />
+    <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="header wrap">
+      <a class="brand" href="/en/" aria-label="OMP, home">
+        <img src="/assets/logo.svg" width="40" height="40" alt="" />
+        <b>OMP</b>
+        <span>OPEN MOVIE PLAYER</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#experience">Features</a>
+        <a href="#how">Get started</a>
+        <a href="#platforms">Platforms</a>
+        <a href="https://github.com/spacesarmat/omp" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </nav>
+      <div class="header-tools">
+        <div class="lang-switch" role="navigation" aria-label="Language">
+          <a href="/" hreflang="ru" lang="ru" data-set-lang="ru" data-lang-href="/">RU</a>
+          <span class="lang-sep" aria-hidden="true">|</span>
+          <a href="/en/" hreflang="en" lang="en" data-set-lang="en" data-lang-href="/en/" aria-current="page">EN</a>
+        </div>
+        <a class="small-download" href="#download"><span class="dl-full">Download OMP</span><span class="dl-short">Download</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy wrap hero-enter">
+          <div class="eyebrow"><i></i> FREE · NO ADS · OPEN SOURCE</div>
+          <h1>Home cinema.<br /><em>Your phone is the remote.</em></h1>
+          <p>
+            Movies and series from TorrServer on LG webOS, Android TV and Android. Pick a title on your
+            phone — watch in 4K, HDR and Dolby Vision.
+          </p>
+          <div class="actions">
+            <a
+              class="button primary"
+              href="https://github.com/spacesarmat/omp/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Download free</a
+            >
+            <a class="text-link" href="#how">How it works</a>
+          </div>
+          <div class="platforms">
+            <span>LG <small>webOS 4.0+</small></span>
+            <span>Android TV</span>
+            <span>Android</span>
+            <span class="open-source">4K · HDR · Dolby Vision</span>
+          </div>
+        </div>
+
+        <div class="cinema-wrap hero-enter hero-enter-scene">
+          <div class="cinema" id="cinema">
+            <img
+              class="room"
+              src="/assets/living-room.webp"
+              alt="A living room: a sofa, a coffee table and a large TV in warm evening light"
+              fetchpriority="high"
+            />
+            <div class="television">
+              <img class="film" src="/assets/film.webp" alt="A sample science-fiction landscape" />
+              <img
+                class="tv-ui"
+                src="/assets/tv-ui.webp"
+                alt="The OMP player, with chapters and audio tracks"
+              />
+              <button
+                class="screen-control"
+                id="play"
+                type="button"
+                aria-label="Pause the demo"
+                data-label-pause="Pause the demo"
+                data-label-resume="Resume the demo"
+              >
+                <span id="play-icon">Ⅱ</span>
+              </button>
+              <span class="paused" hidden>Paused</span>
+              <div class="screen-note">Demo</div>
+            </div>
+            <div class="room-label"><i></i> A SCREENING IN YOUR LIVING ROOM</div>
+            <div class="phone-area">
+              <div class="phone">
+                <div class="speaker"></div>
+                <img id="phone-screen" src="/assets/remote.webp" alt="The OMP remote on a phone" />
+                <button id="phone-play" type="button" aria-label="Pause or play the demo"></button>
+              </div>
+              <div class="phone-caption">
+                <span>Your phone is the remote.</span>
+                <small>And a whole film library.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scene-controls wrap hero-enter hero-enter-controls">
+          <div class="scene-meta">
+            <span class="scene-hint"><i></i> One screen for the film. The other for everything else.</span>
+            <div class="screen-dots" role="tablist" aria-label="Phone screen slides">
+              <button type="button" data-dot="remote" class="active" aria-label="Remote" aria-current="true"></button>
+              <button type="button" data-dot="catalog" aria-label="Catalog"></button>
+              <button type="button" data-dot="discover" aria-label="Discover"></button>
+              <button type="button" data-dot="playing" aria-label="Now playing"></button>
+            </div>
+          </div>
+          <div class="screen-tabs" role="group" aria-label="Phone screen">
+            <button type="button" data-screen="remote" data-alt="The OMP remote on a phone" class="active" aria-pressed="true">Remote</button>
+            <button type="button" data-screen="catalog" data-alt="The OMP catalog on a phone" aria-pressed="false">Catalog</button>
+            <button type="button" data-screen="discover" data-alt="New releases in OMP Discover" aria-pressed="false">Discover</button>
+            <button type="button" data-screen="playing" data-alt="Now playing in OMP" aria-pressed="false">Now playing</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="experience wrap" id="experience">
+        <div class="section-heading" data-reveal>
+          <div>
+            <div class="eyebrow">WHY OMP</div>
+            <h2>Everything for a movie night.<br />Nothing extra.</h2>
+          </div>
+          <p>
+            One player for the TV and the phone.<br />
+            Your library, your server, your rules.
+          </p>
+        </div>
+        <div class="cards">
+          <article data-reveal style="--reveal-delay: 0">
+            <span class="ico" aria-hidden="true">◎</span>
+            <h3>The phone is the remote and a second screen</h3>
+            <p>
+              Buttons, a touchpad, episodes, audio tracks and subtitles. Look for the next film without
+              stopping the one that’s playing.
+            </p>
+            <a href="#cinema" data-demo="remote">Try the remote</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 1">
+            <span class="ico" aria-hidden="true">4K</span>
+            <h3>4K, HDR and Dolby Vision</h3>
+            <p>
+              The built-in 2160 Player. A sharp picture, and sound out to your receiver — as in a cinema.
+            </p>
+            <a href="#cinema" data-demo="playing">Now playing</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 2">
+            <span class="ico" aria-hidden="true">↺</span>
+            <h3>Resume where you left off</h3>
+            <p>
+              A shared watch history on every device. Start on the TV — finish on the phone.
+            </p>
+            <a href="#cinema" data-demo="playing">See it</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 3">
+            <span class="ico" aria-hidden="true">⚡</span>
+            <h3>TorrServer on the phone</h3>
+            <p>
+              No server of your own? You don’t need one. The built-in TorrServer runs on the phone — no
+              separate PC.
+            </p>
+            <a href="#how">How to connect</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 4">
+            <span class="ico" aria-hidden="true">⌕</span>
+            <h3>One search, and Discover from TMDB</h3>
+            <p>
+              Search every source at once. New releases, collections and descriptions — in Discover.
+            </p>
+            <a href="#cinema" data-demo="discover">Open Discover</a>
+          </article>
+          <article data-reveal style="--reveal-delay: 5">
+            <span class="ico" aria-hidden="true">▤</span>
+            <h3>Chapters, intros and tracks</h3>
+            <p>
+              Jump by chapter, skip the intro, keep your audio track and subtitles. Series play straight
+              through.
+            </p>
+            <a href="#cinema" data-demo="catalog">Open the catalog</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="setup" id="how">
+        <div class="wrap setup-inner" data-reveal>
+          <div>
+            <div class="eyebrow">HOW IT WORKS</div>
+            <h2>Three steps<br />to the opening credits.</h2>
+            <p>
+              The TV and the phone on one home network.<br />
+              OMP shows you the rest.
+            </p>
+            <a
+              class="text-link"
+              href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Full install guide on GitHub</a
+            >
+          </div>
+          <ol>
+            <li>
+              <span>01</span>
+              <div>
+                <h3>Install OMP</h3>
+                <p>Download the build for LG webOS, Android TV or Android from the latest release.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <h3>Connect TorrServer</h3>
+                <p>
+                  Point OMP at your server, or turn on the built-in TorrServer on the phone — no separate
+                  PC.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <h3>Link the phone and the TV</h3>
+                <p>A QR code on LG, or a 6-digit code on Android TV. Pick a film — and sit down.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="platforms-sec wrap" id="platforms">
+        <div class="eyebrow" data-reveal>PLATFORMS</div>
+        <h2 data-reveal>Works on what you already have at home.</h2>
+        <div class="cols">
+          <article data-reveal style="--reveal-delay: 0">
+            <h3>LG webOS <small>4.0+</small></h3>
+            <ul>
+              <li>A player for the big screen</li>
+              <li>Pair the phone with a QR code</li>
+              <li>Chapters, audio tracks, subtitles</li>
+              <li>Shared watch history</li>
+            </ul>
+          </article>
+          <article data-reveal style="--reveal-delay: 1">
+            <h3>Android TV</h3>
+            <ul>
+              <li>2160 Player: 4K, HDR, Dolby Vision</li>
+              <li>Sound to a receiver</li>
+              <li>Pair the phone with a code</li>
+              <li>Intro skip</li>
+            </ul>
+          </article>
+          <article data-reveal style="--reveal-delay: 2">
+            <h3>Android phone</h3>
+            <ul>
+              <li>A remote with buttons and a touchpad</li>
+              <li>Catalog, search and Discover from TMDB</li>
+              <li>Built-in TorrServer</li>
+              <li>Watch on the phone itself</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="download wrap" id="download" data-reveal>
+        <div class="eyebrow">ENJOY THE SHOW</div>
+        <h2>Tonight, we stay in.</h2>
+        <p>OMP is free and has no ads. Download it and set up your cinema in an evening.</p>
+        <div class="actions download-actions">
+          <a
+            class="button primary"
+            href="https://github.com/spacesarmat/omp/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Download the latest version</a
+          >
+          <a
+            class="button secondary"
+            href="https://t.me/ompgplayerroup"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Telegram group</a
+          >
+          <a
+            class="button secondary"
+            href="https://t.me/ompplyaer"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Telegram channel</a
+          >
+        </div>
+        <small
+          >LG webOS 4.0+ · Android TV · Android ·
+          <a
+            href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Install guide</a
+          ></small
+        >
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <a class="footer-brand" href="/en/">OMP <span>Open Movie Player</span></a>
+      <p class="footer-tagline">The movie starts at home.</p>
+      <div class="footer-links">
+        <a href="https://t.me/ompgplayerroup" target="_blank" rel="noopener noreferrer">Group</a>
+        <a href="https://t.me/ompplyaer" target="_blank" rel="noopener noreferrer">Channel</a>
+        <a href="https://github.com/spacesarmat/omp" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/spacesarmat/omp/issues" target="_blank" rel="noopener noreferrer"
+          >Report a bug</a
+        >
+        <a href="https://boosty.to/djmaker/donate" target="_blank" rel="noopener noreferrer"
+          >Support on Boosty</a
+        >
+      </div>
+      <p class="copyright">© 2026 OMP · Open Movie Player</p>
+    </footer>
+    <script src="/app.js?v=20261018a"></script>
+  </body>
+</html>

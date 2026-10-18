@@ -30,6 +30,13 @@ describe('Caddyfile security headers', () => {
     expect(text.match(/handle_errors \{/g)).toHaveLength(4);
   });
 
+  it('rewrites /en and /en/ to the English page before the Russian fallback', () => {
+    const landing = text.slice(text.indexOf('omp-player.online, www'), text.indexOf('billing.omp-player.online'));
+    expect(landing).toContain('@en path /en /en/');
+    expect(landing).toContain('rewrite @en /en/index.html');
+    expect(landing.indexOf('rewrite @en')).toBeLessThan(landing.indexOf('try_files {path} /index.html'));
+  });
+
   it('pins TLS 1.2+ on every site and does not name a certificate', () => {
     const tls = text.slice(text.indexOf('(tls_protocols)'), text.indexOf('(security_headers)'));
     const block = tls.slice(tls.indexOf('tls {'), tls.indexOf('}') + 1);
