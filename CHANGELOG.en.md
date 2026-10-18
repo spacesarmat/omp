@@ -2,6 +2,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.4-beta.4
+
+- [phone] First launch asks where TorrServer is: on this phone, on the home network, or a QR from the TV. Any step can be skipped
+- [phone] Hints appear once: catalog search, Mine, Audiobooks, the audiobook player and the video player
+- [phone] Settings: Show onboarding, and Reset hints
+- [tv] Settings: Show onboarding opens the introduction again
+- The public site has an English page and a language switch
+
 ## 0.20.4-beta.3
 
 - [phone] An audiobook from the catalog, library, history or the menu opens in the audiobook player
