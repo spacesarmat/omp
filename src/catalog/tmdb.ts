@@ -53,7 +53,8 @@ export interface CatalogCard extends CatalogTitle {
 /** `bearer`: the key is a TMDB v4 access token and is sent as Authorization, not as api_key. */
 export interface TmdbEndpoint { base: string; key: string; images: string; bearer?: boolean; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
-export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; }
+/** `episodeCount` is TMDB's `episode_count`. Absent or 0 when the answer left it out (a season cached before it was kept). */
+export interface SeasonDetails { number: number; name: string; airDate: string; overview: string; episodes: Episode[]; episodeCount?: number; }
 
 function withScheme(u: string | undefined, dflt: string): string {
   const s = (u || '').trim().replace(/\/+$/, '');
@@ -206,7 +207,29 @@ export function postersUrl(e: TmdbEndpoint, kind: Kind, id: number, season?: num
   return url(e, path, { include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
 }
 
-export function imageUrl(e: TmdbEndpoint, path: unknown, size: 'w300' | 'w780' | 'w185'): string {
+export type ImageSize = 'w185' | 'w300' | 'w500' | 'w780' | 'w1280' | 'original';
+
+/** Poster width: w500 at 1080p, w780 when the panel is 4K (devicePixelRatio >= 2). */
+export function posterImageSize(dpr?: number): 'w500' | 'w780' {
+  const r = dpr !== undefined ? dpr : (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  return r >= 2 ? 'w780' : 'w500';
+}
+
+/**
+ * A poster URL already saved at w300 (or smaller). Rewritten to the sharp size; anything else is unchanged.
+ */
+export function sharpPosterUrl(url: string, dpr?: number): string {
+  if (!url || url.indexOf('/t/p/') < 0) return url;
+  return url.replace(/\/t\/p\/w(?:45|92|154|185|300)(?=\/)/, '/t/p/' + posterImageSize(dpr));
+}
+
+/** Backdrop width: w1280 at 1080p, original on a 4K panel. */
+export function backdropImageSize(dpr?: number): 'w1280' | 'original' {
+  const r = dpr !== undefined ? dpr : (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  return r >= 2 ? 'original' : 'w1280';
+}
+
+export function imageUrl(e: TmdbEndpoint, path: unknown, size: ImageSize): string {
   if (typeof path !== 'string' || !/^\/?[A-Za-z0-9_.-]+$/.test(path)) return '';
   return e.images + '/t/p/' + size + (path.charAt(0) === '/' ? path : '/' + path);
 }
@@ -254,7 +277,7 @@ function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): Cata
   return {
     kind: kind, id: id, title: title || original, original: original || title,
     year: year(kind === 'movie' ? o.release_date : o.first_air_date),
-    poster: imageUrl(e, o.poster_path, 'w300'),
+    poster: imageUrl(e, o.poster_path, posterImageSize()),
     rating: Math.round(n(o.vote_average) * 10) / 10,
   };
 }
@@ -310,7 +333,7 @@ export function sanitizePosters(e: TmdbEndpoint, raw: unknown): string[] {
     .sort((a, b) => n(b.vote_average) - n(a.vote_average));
   const out: string[] = [];
   ranked.forEach((x) => {
-    const u = imageUrl(e, x.file_path, 'w300');
+    const u = imageUrl(e, x.file_path, posterImageSize());
     if (u && out.indexOf(u) < 0 && out.length < 12) out.push(u);
   });
   return out;
@@ -371,13 +394,13 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
         return {
           number: num, episodes: eps, year: year(x.air_date), aired: num < lastSeason ? eps : num === lastSeason ? Math.min(eps, lastEp) : 0,
           airDate: date(x.air_date),
-          poster: imageUrl(e, x.poster_path, 'w300'),
+          poster: imageUrl(e, x.poster_path, posterImageSize()),
         };
       }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number)
     : [];
   return {
     kind: t.kind, id: t.id, title: t.title, original: t.original, year: t.year, poster: t.poster, rating: t.rating,
-    backdrop: imageUrl(e, o.backdrop_path, 'w780'),
+    backdrop: imageUrl(e, o.backdrop_path, backdropImageSize()),
     genres: genres,
     runtime: kind === 'movie' ? n(o.runtime) : runtimes.length ? runtimes[0] : 0,
     overview: str(o.overview),
@@ -566,7 +589,9 @@ export function sanitizeSeason(raw: unknown, season: number): SeasonDetails | nu
     });
   }
   episodes.sort((a, b) => a.n - b.n);
-  return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes };
+  const rawCount = Math.floor(n(o.episode_count));
+  const episodeCount = rawCount > 0 && rawCount <= 10000 ? rawCount : 0;
+  return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes, episodeCount: episodeCount };
 }
 
 // The season word is a search query for Russian trackers, not UI copy: it stays Russian even in the English UI.

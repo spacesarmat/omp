@@ -1,7 +1,8 @@
 import { t } from '../i18n';
 import { signal, computed } from '@preact/signals';
-import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { FocusGroup, Focusable } from './components';
+import { focusAfterClose } from './focus';
 import { useKeys } from './keys';
 
 interface DialogState {
@@ -9,7 +10,7 @@ interface DialogState {
   title: string;
   /** Long text under the title; Up/Down scroll it while the dialog is open. */
   body?: string;
-  options: { label: string; value: unknown }[];
+  options: { label: string; value: unknown; danger?: boolean }[];
   current?: unknown;
   resolve: (v: unknown) => void;
   prevFocus?: string;
@@ -20,7 +21,7 @@ const dialog = signal<DialogState | null>(null);
 export const dialogOpen = computed(() => dialog.value !== null);
 let dialogSeq = 0;
 
-export function choose<T>(title: string, options: { label: string; value: T }[], current?: T): Promise<T | null> {
+export function choose<T>(title: string, options: { label: string; value: T; danger?: boolean }[], current?: T): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
     if (dialog.value) dialog.value.resolve(null);
     dialog.value = {
@@ -51,11 +52,12 @@ export function textDialog(title: string, body: string, closeLabel: string): Pro
 
 const BODY_STEP = 160;
 
+/** Confirm: focus starts on Cancel, the action is a red danger button, Back cancels. */
 export function confirmDialog(text: string, okLabel = t('tv.yes')): Promise<boolean> {
   return choose(text, [
-    { label: okLabel, value: true },
+    { label: okLabel, value: true, danger: true },
     { label: t('common.cancel'), value: false },
-  ]).then((v) => v === true);
+  ], false).then((v) => v === true);
 }
 
 /** Closes the open dialog as Back would (its promise resolves with null); nothing when none is open. */
@@ -67,7 +69,7 @@ function close(v: unknown) {
   const d = dialog.value;
   if (!d) return;
   dialog.value = null;
-  if (d.prevFocus && doesFocusableExist(d.prevFocus)) setFocus(d.prevFocus);
+  focusAfterClose(d.prevFocus);
   d.resolve(v);
 }
 
@@ -109,7 +111,7 @@ export function DialogHost() {
           <Focusable
             key={i}
             focusKey={'dialog-opt-' + i}
-            className={'dialog-option' + (o.value === d.current ? ' current' : '')}
+            className={'dialog-option' + (o.danger ? ' danger' : '') + (o.value === d.current ? ' current' : '')}
             onPress={() => close(o.value)}
           >
             {o.label}

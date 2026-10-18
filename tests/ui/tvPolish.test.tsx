@@ -145,21 +145,14 @@ describe('TV torrent screen: clean header, status, hints and the action row', ()
     expect(okHint('skip')).toBe('OK — переключить');
   });
 
-  it('scrolls the action row back to the start when the focus leaves it', async () => {
+  it('keeps rename, another poster and delete in a wrapping action row', async () => {
     const host = await open(darkMatter);
-    const box = host.querySelector('.torrent-actions') as HTMLElement;
-    let scroll = 0;
-    Object.defineProperty(box, 'scrollLeft', { configurable: true, get: () => scroll, set: (v: number) => { scroll = v; } });
-    Object.defineProperty(box, 'clientWidth', { configurable: true, get: () => 600 });
     const row = host.querySelector('.torrent-actions-row') as HTMLElement;
-    Array.prototype.forEach.call(row.querySelectorAll('[data-fk]'), (el: HTMLElement, i: number) => {
-      Object.defineProperty(el, 'offsetLeft', { configurable: true, get: () => i * 316 });
-      Object.defineProperty(el, 'offsetWidth', { configurable: true, get: () => 300 });
-    });
-    await act(async () => { setFocus('torrent-delete'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(scroll).toBeGreaterThan(0);
-    await act(async () => { setFocus('skip-intro'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(scroll).toBe(0);
+    const keys = Array.prototype.map.call(row.querySelectorAll('[data-fk]'), (e: Element) => e.getAttribute('data-fk'));
+    expect(keys).toContain('torrent-rename');
+    expect(keys).toContain('torrent-poster');
+    expect(keys).toContain('torrent-delete');
+    expect(row.className).toContain('torrent-actions-row');
   });
 });
 
@@ -247,18 +240,24 @@ describe('TV «Обзор»: the sort hint, the chip bar and the poster window',
     expect(text(document.body.querySelector('.dialog'))).toContain('Сортировка');
   });
 
-  it('keeps the bar in one row that scrolls to the focused chip («Хочу» at the right end)', async () => {
+  it('scrolls the filter chips and keeps «Хочу» pinned outside the scroller', async () => {
     const host = await mount();
+    const bar = host.querySelector('.disc-bar') as HTMLElement;
     const box = host.querySelector('.disc-bar-box') as HTMLElement;
-    expect(box && box.querySelector('.disc-bar')).toBeTruthy();
+    const want = host.querySelector('[data-fk="disc-kind-want"]') as HTMLElement;
+    expect(bar.contains(box)).toBe(true);
+    expect(box.contains(want)).toBe(false);
+    expect(bar.contains(want)).toBe(true);
     let scroll = 0;
     Object.defineProperty(box, 'scrollLeft', { configurable: true, get: () => scroll, set: (v: number) => { scroll = v; } });
     Object.defineProperty(box, 'clientWidth', { configurable: true, get: () => 1760 });
-    const want = host.querySelector('[data-fk="disc-kind-want"]') as HTMLElement;
-    Object.defineProperty(want, 'offsetLeft', { configurable: true, get: () => 1800 });
-    Object.defineProperty(want, 'offsetWidth', { configurable: true, get: () => 120 });
+    const find = host.querySelector('[data-fk="disc-find"]') as HTMLElement;
+    Object.defineProperty(find, 'offsetLeft', { configurable: true, get: () => 1800 });
+    Object.defineProperty(find, 'offsetWidth', { configurable: true, get: () => 120 });
+    await act(async () => { setFocus('disc-find'); await new Promise((r) => setTimeout(r, 20)); });
+    expect(scroll).toBe(1800 + 120 + 36 - 1760);
     await act(async () => { setFocus('disc-kind-want'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(scroll).toBe(1800 + 120 + 24 - 1760);
+    expect(scroll).toBe(1800 + 120 + 36 - 1760);
     const all = host.querySelector('[data-fk="disc-kind-all"]') as HTMLElement;
     Object.defineProperty(all, 'offsetLeft', { configurable: true, get: () => 4 });
     await act(async () => { setFocus('disc-kind-all'); await new Promise((r) => setTimeout(r, 20)); });
@@ -270,10 +269,10 @@ describe('TV «Обзор»: the sort hint, the chip bar and the poster window',
     const imgs = () => host.querySelectorAll('.disc-poster img').length;
     const hasImg = (i: number) => !!host.querySelector('[data-fk="disc-movie-' + (1000 + i) + '"] img');
     expect(host.querySelectorAll('.disc-tile')).toHaveLength(200);
-    // focus at the top: rows 0..9 (80 posters) are loaded
-    expect(imgs()).toBe(80);
+    // focus at the top: the taller rows keep 9 rows (72 posters) loaded
+    expect(imgs()).toBe(72);
     await act(async () => { setFocus('disc-movie-1199'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(imgs()).toBe(80);
+    expect(imgs()).toBe(72);
     expect(hasImg(0)).toBe(false);
     expect(hasImg(199)).toBe(true);
     // the tile keeps its poster box (the layout height stays)

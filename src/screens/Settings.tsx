@@ -11,11 +11,11 @@ import { askText } from '../ui/TextDialog';
 import type { TmdbConfig } from '../api/types';
 import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
-import { nativePlugin } from '../platform/androidNative';
+import { nativeOpenOnStartupState, nativePlugin, nativeRequestOpenOnStartupOverlay, nativeSetOpenOnStartup } from '../platform/androidNative';
 import { p2160Package, P2160_RELEASES_URL } from '../player/player2160';
 import { Qr } from '../ui/Qr';
 import { tvGlyphs } from '../ui/tvText';
-import { restoreFocus } from '../ui/focus';
+import { restoreFocus, rowArrow } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
@@ -147,6 +147,65 @@ function LogBrief() {
   );
 }
 
+/** Android TV only: «Открывать при включении». webOS and the phone UI never render this. */
+function OpenOnStartupSection() {
+  const on = settings.value.openOnStartup;
+  const [blocked, setBlocked] = useState(false);
+  const applyBlocked = (s: { launchBlocked?: boolean; canDrawOverlays?: boolean } | null) => {
+    setBlocked(!!s && s.launchBlocked === true && s.canDrawOverlays !== true);
+  };
+  useEffect(() => {
+    let live = true;
+    const refresh = () => {
+      nativeOpenOnStartupState().then((s) => { if (live) applyBlocked(s); }, () => undefined);
+    };
+    refresh();
+    const onVis = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', refresh);
+    return () => {
+      live = false;
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+  const change = (v: boolean) => {
+    updateSettings({ openOnStartup: v });
+    nativeSetOpenOnStartup(v).then((s) => {
+      applyBlocked(s);
+      if (!v || !s || s.needsOverlay !== true) return;
+      confirmDialog(t('tvSettings.openOnStartupOverlayAsk'), t('tvSettings.openOnStartupAllow')).then((ok) => {
+        if (!ok) return;
+        nativeRequestOpenOnStartupOverlay().then((opened) => {
+          if (opened === false) toast(t('tvSettings.openOnStartupNoScreen'), 'error');
+        }, () => undefined);
+      });
+    }, () => undefined);
+  };
+  return (
+    <div>
+      <ChoiceRow
+        focusKey="set-open-on-startup"
+        label={t('tvSettings.openOnStartup')}
+        value={on}
+        options={onOff()}
+        onChange={change}
+      />
+      <div class="muted engine-note">{t('tvSettings.openOnStartupHint')}</div>
+      {on && blocked && (
+        <div class="row" style={{ marginTop: '16px' }}>
+          <div class="grow muted">{t('tvSettings.openOnStartupBlocked')}</div>
+          <Button focusKey="set-open-on-startup-allow" label={t('tvSettings.openOnStartupAllow')} onPress={() => {
+            nativeRequestOpenOnStartupOverlay().then((opened) => {
+              if (opened === false) toast(t('tvSettings.openOnStartupNoScreen'), 'error');
+            }, () => undefined);
+          }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A name a person chose. Empty when the server is still named after its address. */
 function chosenServerName(s: { name: string; url: string }): string {
   const host = serverHost(s.url);
@@ -180,6 +239,18 @@ export function SettingsScreen() {
     ? t('errors.noServerSelected')
     : (chosenServerName(server) || t('tvSettings.server')) + ' · ' + (reach === 'ok' ? t('settings.reachable') : reach === 'down' ? t('settings.unreachable') : t('settings.checking'));
 
+  // Button rows sit on the right of a full-width choice. Geometry skips the short ones; these neighbours do not.
+  const tail = [
+    ['set-subBackground'],
+    ['set-server', 'set-pair'],
+    ['set-sources'],
+    ['set-live-seeds'],
+    ['set-update-check'],
+    ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
+    ['set-onboarding'],
+  ];
+  const nav = (key: string) => rowArrow(tail, key);
+
   return (
     <FocusGroup focusKey="SETTINGS" className="screen settings">
       <h1>{t('common.settings')}</h1>
@@ -205,24 +276,25 @@ export function SettingsScreen() {
       <h2>{t('common.subtitles')}</h2>
       <ChoiceRow focusKey="set-subSize" label={t('tvSettings.subSize')} value={s.subSize} options={subSizeOptions()} onChange={(v) => updateSettings({ subSize: v })} />
       <ChoiceRow focusKey="set-subColor" label={t('tvSettings.subColor')} value={s.subColor} options={subColorOptions()} onChange={(v) => updateSettings({ subColor: v })} />
-      <ChoiceRow focusKey="set-subBackground" label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} />
+      <ChoiceRow focusKey="set-subBackground" label={t('tvSettings.subBackground')} value={s.subBackground} options={onOff()} onChange={(v) => updateSettings({ subBackground: v })} onArrow={nav('set-subBackground')} />
 
       <h2>{t('settings.watchFrom')}</h2>
       <div class="row">
         <div class="grow">{where}</div>
-        <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
-        <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} />
+        <Button focusKey="set-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} onArrow={nav('set-server')} />
+        <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} onArrow={nav('set-pair')} />
       </div>
 
       <h2>{t('settings.search')}</h2>
       <div class="row">
         <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
-        <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} />
+        <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} onArrow={nav('set-sources')} />
       </div>
-      <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} />
+      <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} onArrow={nav('set-live-seeds')} />
       <div class="muted">{t('settings.liveSeedsHint')}</div>
 
       <h2>{t('settings.app')}</h2>
+      {platformKind() === 'androidtv' && <OpenOnStartupSection />}
       <div class="row">
         <div class="grow">
           {t('tvSettings.aboutLine', { version: APP_VERSION })}
@@ -231,6 +303,7 @@ export function SettingsScreen() {
         <Button
           focusKey="set-update-check"
           label={t('updateScreen.check')}
+          onArrow={nav('set-update-check')}
           onPress={() => checkForUpdate({ manual: true }).then((r) => {
             if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
             else if (r === 'latest') toast(t('updateScreen.latest'));
@@ -238,19 +311,20 @@ export function SettingsScreen() {
         />
       </div>
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} />
+        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} onArrow={nav('set-update')} />
         {platformKind() !== 'androidtv' && (
           <Button
             focusKey="set-addHbRepo"
             label={t('tvSettings.addHbRepo')}
+            onArrow={nav('set-addHbRepo')}
             onPress={() => { openHbChannel(HB_REPO_URL).catch(() => toast(t('updateScreen.openHbFailed'), 'error')); }}
           />
         )}
-        <Button focusKey="set-faq" label={t('settings.help')} onPress={() => navigate({ name: 'faq' })} />
-        <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} />
+        <Button focusKey="set-faq" label={t('settings.help')} onPress={() => navigate({ name: 'faq' })} onArrow={nav('set-faq')} />
+        <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} onArrow={nav('set-advanced')} />
       </div>
       <div class="row">
-        <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} />
+        <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} onArrow={nav('set-onboarding')} />
       </div>
     </FocusGroup>
   );

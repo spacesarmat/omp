@@ -3,8 +3,10 @@ import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { SettingsScreen } from '../../src/screens/Settings';
-import { settings, resetSettings } from '../../src/store/settings';
+import { settings, resetSettings, updateSettings } from '../../src/store/settings';
 import { applyLanguageSetting } from '../../src/i18n';
+import { DialogHost } from '../../src/ui/dialog';
+import { ToastHost } from '../../src/ui/toast';
 
 const w = window as unknown as { Capacitor?: unknown };
 
@@ -142,5 +144,182 @@ describe('SettingsScreen «Плеер для видео»', () => {
       return settings.value.videoPlayer === 'p2160';
     });
     expect(settings.value.videoPlayer).toBe('p2160');
+  });
+});
+
+describe('SettingsScreen «Открывать при включении»', () => {
+  const rowOf = (host: HTMLElement, label: string) =>
+    Array.from(host.querySelectorAll('.choice-row')).find((e) => (e.textContent || '').indexOf(label) >= 0) as HTMLElement;
+  const flush = async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  };
+
+  it('webOS: the switch is absent', () => {
+    const host = mount();
+    expect(host.textContent).not.toContain('Открывать при включении');
+    expect(host.textContent).not.toContain('Open on startup');
+  });
+
+  it('Android TV: on by default, with the hint, and a press stores off', async () => {
+    w.Capacitor = { getPlatform: () => 'android' };
+    const host = mount();
+    const row = rowOf(host, 'Открывать при включении');
+    expect(row.textContent).toContain('Вкл');
+    expect(host.textContent).toContain('сразу после включения приставки');
+    expect(settings.value.openOnStartup).toBe(true);
+    await act(() => { row.click(); });
+    expect(settings.value.openOnStartup).toBe(false);
+    expect(JSON.parse(localStorage.getItem('tsp.settings') || '{}').openOnStartup).toBe(false);
+    expect(row.textContent).toContain('Выкл');
+  });
+
+  it('Android TV in English: the row and the hint have no Cyrillic', () => {
+    applyLanguageSetting('en');
+    w.Capacitor = { getPlatform: () => 'android' };
+    const host = mount();
+    const row = rowOf(host, 'Open on startup');
+    expect(row.textContent).toContain('On');
+    const notes = Array.from(host.querySelectorAll('.engine-note')).map((e) => e.textContent || '').join('\n');
+    expect(notes).toContain('right after the TV box turns on');
+    expect(row.textContent + notes).not.toMatch(/[А-Яа-яЁё]/);
+  });
+
+  it('a blocked launch shows the allow button only while the switch is on', async () => {
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {
+        OmpNative: {
+          localIpv4: () => Promise.resolve({}),
+          openOnStartupState: () => Promise.resolve({ launchBlocked: true, canDrawOverlays: false, needsOverlay: false }),
+          setOpenOnStartup: () => Promise.resolve({ launchBlocked: true, canDrawOverlays: false, needsOverlay: false }),
+        },
+      },
+    };
+    const host = mount();
+    for (let i = 0; i < 20 && (host.textContent || '').indexOf('не дала открыть') < 0; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(host.textContent).toContain('Система не дала открыть OMP при включении.');
+    expect(host.textContent).toContain('Разрешить показ поверх окон');
+    const row = rowOf(host, 'Открывать при включении');
+    await act(() => { row.click(); });
+    await flush();
+    expect(settings.value.openOnStartup).toBe(false);
+    expect(host.textContent).not.toContain('Разрешить показ поверх окон');
+  });
+
+  it('overlay already granted: no blocked hint', async () => {
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {
+        OmpNative: {
+          localIpv4: () => Promise.resolve({}),
+          openOnStartupState: () => Promise.resolve({ launchBlocked: true, canDrawOverlays: true, needsOverlay: false }),
+        },
+      },
+    };
+    const host = mount();
+    await flush();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(host.textContent).not.toContain('не дала открыть');
+    expect(host.textContent).not.toContain('Разрешить показ поверх окон');
+  });
+
+  it('turning the switch on after a blocked launch asks, then opens the system screen', async () => {
+    updateSettings({ openOnStartup: false });
+    let opened = 0;
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {
+        OmpNative: {
+          localIpv4: () => Promise.resolve({}),
+          openOnStartupState: () => Promise.resolve({ launchBlocked: true, canDrawOverlays: false, needsOverlay: false }),
+          setOpenOnStartup: (o: { enabled: boolean }) => Promise.resolve({
+            enabled: o.enabled,
+            launchBlocked: true,
+            canDrawOverlays: false,
+            needsOverlay: o.enabled === true,
+          }),
+          requestOpenOnStartupOverlay: () => { opened += 1; return Promise.resolve({ opened: true }); },
+        },
+      },
+    };
+    const dialogs = document.createElement('div');
+    document.body.appendChild(dialogs);
+    render(h(DialogHost, {}), dialogs);
+    const host = mount();
+    const row = rowOf(host, 'Открывать при включении');
+    expect(row.textContent).toContain('Выкл');
+    await act(() => { row.click(); });
+    await flush();
+    expect(document.body.textContent).toContain('Разрешите показ поверх других окон');
+    expect(opened).toBe(0);
+    const allow = Array.from(document.querySelectorAll('.dialog-option')).find((e) => (e.textContent || '').indexOf('Разрешить показ поверх окон') >= 0) as HTMLElement;
+    await act(() => { allow.click(); });
+    await flush();
+    expect(opened).toBe(1);
+    expect(settings.value.openOnStartup).toBe(true);
+  });
+
+  it('cancelling the prompt leaves the switch on and does not open system settings', async () => {
+    updateSettings({ openOnStartup: false });
+    let opened = 0;
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {
+        OmpNative: {
+          localIpv4: () => Promise.resolve({}),
+          openOnStartupState: () => Promise.resolve({ launchBlocked: false, canDrawOverlays: false }),
+          setOpenOnStartup: (o: { enabled: boolean }) => Promise.resolve({
+            launchBlocked: true,
+            canDrawOverlays: false,
+            needsOverlay: o.enabled === true,
+          }),
+          requestOpenOnStartupOverlay: () => { opened += 1; return Promise.resolve({ opened: true }); },
+        },
+      },
+    };
+    const dialogs = document.createElement('div');
+    document.body.appendChild(dialogs);
+    render(h(DialogHost, {}), dialogs);
+    const host = mount();
+    await act(() => { rowOf(host, 'Открывать при включении').click(); });
+    await flush();
+    const cancel = Array.from(document.querySelectorAll('.dialog-option')).find((e) => (e.textContent || '') === 'Отмена') as HTMLElement;
+    await act(() => { cancel.click(); });
+    await flush();
+    expect(opened).toBe(0);
+    expect(settings.value.openOnStartup).toBe(true);
+  });
+
+  it('a missing system screen shows an error and keeps the switch on', async () => {
+    updateSettings({ openOnStartup: false });
+    w.Capacitor = {
+      getPlatform: () => 'android',
+      Plugins: {
+        OmpNative: {
+          localIpv4: () => Promise.resolve({}),
+          openOnStartupState: () => Promise.resolve({ launchBlocked: true, canDrawOverlays: false }),
+          setOpenOnStartup: (o: { enabled: boolean }) => Promise.resolve({
+            launchBlocked: true,
+            canDrawOverlays: false,
+            needsOverlay: o.enabled === true,
+          }),
+          requestOpenOnStartupOverlay: () => Promise.resolve({ opened: false }),
+        },
+      },
+    };
+    const dialogs = document.createElement('div');
+    document.body.appendChild(dialogs);
+    render(h(DialogHost, {}), dialogs);
+    const toasts = document.createElement('div');
+    document.body.appendChild(toasts);
+    render(h(ToastHost, {}), toasts);
+    const host = mount();
+    await act(() => { rowOf(host, 'Открывать при включении').click(); });
+    await flush();
+    const allow = Array.from(document.querySelectorAll('.dialog-option')).find((e) => (e.textContent || '').indexOf('Разрешить показ поверх окон') >= 0) as HTMLElement;
+    await act(() => { allow.click(); });
+    await flush();
+    expect(toasts.textContent).toContain('Не удалось открыть настройки системы.');
+    expect(settings.value.openOnStartup).toBe(true);
   });
 });

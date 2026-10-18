@@ -57,6 +57,17 @@ describe('installKeyListener', () => {
     expect(back).not.toHaveBeenCalled();
     expect(e.defaultPrevented).toBe(true);
   });
+  it('back inside a text field still reaches handlers, so search can close', () => {
+    const seen: string[] = [];
+    cleanups.push(installKeyListener(() => undefined));
+    cleanups.push(pushKeyHandler((a) => { seen.push(a); return a === 'back'; }));
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    press(461, input);
+    expect(seen).toEqual(['back']);
+    expect(document.activeElement).not.toBe(input);
+  });
   it('left/right in text input stay native and hidden from bubble listeners', () => {
     cleanups.push(installKeyListener(() => undefined));
     const bubble = vi.fn();

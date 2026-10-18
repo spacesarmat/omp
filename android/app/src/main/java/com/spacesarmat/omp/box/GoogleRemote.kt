@@ -254,10 +254,12 @@ class GoogleRemoteChannel private constructor(
         } catch (e: Throwable) {
             failure = e
         } finally {
-            firstMessage.countDown()
-            active.countDown()
+            // Mark the channel closed before releasing the waiters. connect() checks `open` the moment
+            // a latch opens; releasing first let a TV that hung up before any message look connected.
             val was = open
             shut()
+            firstMessage.countDown()
+            active.countDown()
             if (was) listener.closed(failure?.javaClass?.simpleName ?: "closed")
         }
     }
