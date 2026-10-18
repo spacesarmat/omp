@@ -22,6 +22,7 @@ import { tvGlyphs } from '../ui/tvText';
 import { CastRow, initials, showInRow } from '../ui/CastRow';
 import { seasonPlan } from './Series';
 import { SeriesPill } from './library/SeriesTile';
+import { posterInitials } from './library/Poster';
 import { ratingText } from './library/DiscoverGrid';
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -132,7 +133,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
           </div>
         ) : null}
         <div class="series-poster">
-          {card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(card.title)}</div>}
+          {card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(posterInitials(card.title))}</div>}
         </div>
         <div class="series-info">
           <h1>{tvGlyphs(card.title)}</h1>

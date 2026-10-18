@@ -68,16 +68,23 @@ export function upcomingSeasons(card: CatalogCard, now: number = Date.now()): Up
   return out.sort((a, b) => a.number - b.number);
 }
 
-/** The status pill of a series; null for a film or when nothing is known. */
-export function seriesPill(card: CatalogCard, now: number = Date.now()): StatusPill | null {
+/**
+ * The status pill of a series; null for a film or when nothing is known.
+ * `compact` is the one-line badge on a poster («Серия 23 окт.», «Отменён»), not the sentence on the series page.
+ */
+export function seriesPill(card: CatalogCard, now: number = Date.now(), compact: boolean = false): StatusPill | null {
   if (card.kind !== 'tv') return null;
   const status = card.status || '';
   if (status === 'canceled') return { tone: 'canceled', text: t('series.statusCanceled') };
   if (status === 'ended') return { tone: 'ended', text: t('series.statusEnded') };
-  if (status === 'production' || status === 'planned') return { tone: 'soon', text: t('series.statusProduction') };
+  if (status === 'production' || status === 'planned') return { tone: 'soon', text: compact ? t('series.tileProduction') : t('series.statusProduction') };
   const next = upcomingEpisode(card, now);
-  if (next) return { tone: 'airing', text: t('series.statusAiring') + ' · ' + t('series.nextEpisode', { date: airDateText(next.airDate, now) }) };
-  if (upcomingSeasons(card, now).length) return { tone: 'soon', text: t('series.statusSoon') };
+  if (next) {
+    const date = airDateText(next.airDate, now);
+    const text = compact ? t('series.tileNext', { date: date }) : t('series.statusAiring') + ' · ' + t('series.nextEpisode', { date: date });
+    return { tone: 'airing', text: text };
+  }
+  if (upcomingSeasons(card, now).length) return { tone: 'soon', text: compact ? t('series.tileSoon') : t('series.statusSoon') };
   if (status === 'returning') return { tone: 'airing', text: t('series.statusAiring') };
   return null;
 }

@@ -18,6 +18,7 @@ import { navigate } from '../ui/nav';
 import { textDialog } from '../ui/dialog';
 import { tvGlyphs } from '../ui/tvText';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../lib/gridWindow';
+import { posterInitials } from './library/Poster';
 import { DISCOVER_COLS, ratingText } from './library/DiscoverGrid';
 import { initials, routeOf } from './TitleCard';
 
@@ -161,7 +162,7 @@ function Body({ card }: { card: PersonCard }) {
                 }}
               >
                 <div class="disc-poster">
-                  {c.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(c.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (c.id % 4)}>{tvGlyphs(c.title)}</div>}
+                  {c.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(c.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (c.id % 4)}>{tvGlyphs(posterInitials(c.title))}</div>}
                   {c.rating > 0 && <span class="disc-rating">{ratingText(c.rating)}</span>}
                   {isWanted(c.kind, c.id) ? (
                     <span class="disc-mark disc-mark-want">{tvGlyphs(t('tv.discover.wantMark'))}</span>

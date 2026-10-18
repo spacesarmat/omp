@@ -39,50 +39,95 @@ function contentBelow(): boolean {
 }
 
 function syncFade(box: HTMLElement): void {
-  const viewL = box.scrollLeft;
-  let partial = false;
-  const tabs = box.querySelectorAll('.tab');
-  for (let i = 0; i < tabs.length; i++) {
-    const el = tabs[i] as HTMLElement;
-    const left = el.offsetLeft;
-    const right = left + el.offsetWidth;
-    if (right <= viewL + 1) continue;
-    partial = left < viewL - 1;
-    break;
-  }
-  box.classList.toggle('fade-left', partial);
   box.classList.toggle('fade-right', box.scrollLeft + box.clientWidth < box.scrollWidth - 2);
 }
 
+export interface TabBox { left: number; width: number; }
+
 /**
- * The focused tab stays fully in the strip. Then scroll sits on a tab boundary, so the left edge
- * never shows a cut-off word («тория») beside the logo.
+ * Where the strip should sit. On the TV the old pad left only 76px of scroll, short of «История»'s
+ * 172px, so the snap clamped mid-tab. The end pad grows by that shortfall and then stops.
+ * A tab that still crosses the left edge is covered, in pixels, so none of it stays visible.
  */
-export function alignTabStrip(box: HTMLElement, focusKey?: string): void {
-  const focusEl = (focusKey
-    ? box.querySelector('[data-fk="' + focusKey + '"]')
-    : box.querySelector('.tab.focused')) as HTMLElement | null;
-  const view = box.clientWidth;
-  const max = Math.max(0, box.scrollWidth - view);
-  let scroll = box.scrollLeft;
-  if (focusEl && view > 0) {
-    const left = focusEl.offsetLeft;
-    const right = left + focusEl.offsetWidth;
+export function tabStripPlan(o: {
+  scrollLeft: number;
+  clientWidth: number;
+  scrollWidth: number;
+  padWidth: number;
+  focus: TabBox | null;
+  tabs: TabBox[];
+}): { scrollLeft: number; cover: number; pad: number } {
+  // The furthest snap target is a tab's left edge. Once the strip overflows, grow the end pad by
+  // exactly the shortfall so that edge is reachable. A second call sees the new maximum and adds nothing.
+  let furthest = 0;
+  for (let i = 0; i < o.tabs.length; i++) if (o.tabs[i].left > furthest) furthest = o.tabs[i].left;
+  const maxNow = Math.max(0, o.scrollWidth - o.clientWidth);
+  const extra = maxNow > 0 ? Math.max(0, Math.ceil(furthest - maxNow)) : 0;
+  const pad = o.padWidth + extra;
+  const max = maxNow + extra;
+  const view = o.clientWidth;
+  let scroll = o.scrollLeft;
+  if (o.focus && view > 0) {
+    const left = o.focus.left;
+    const right = left + o.focus.width;
     if (left < scroll) scroll = left;
     else if (right > scroll + view) scroll = Math.max(0, right - view);
   }
-  const tabs = box.querySelectorAll('.tab');
   let boundary = scroll;
-  for (let i = 0; i < tabs.length; i++) {
-    const left = (tabs[i] as HTMLElement).offsetLeft;
+  let found = false;
+  for (let i = 0; i < o.tabs.length; i++) {
+    const left = o.tabs[i].left;
     if (left + 1 < scroll) continue;
     boundary = left;
+    found = true;
     break;
   }
-  if (focusEl && boundary > focusEl.offsetLeft) boundary = focusEl.offsetLeft;
+  if (!found) {
+    for (let i = o.tabs.length - 1; i >= 0; i--) {
+      if (o.tabs[i].left <= scroll + 1) { boundary = o.tabs[i].left; break; }
+    }
+  }
+  if (o.focus && boundary > o.focus.left) boundary = o.focus.left;
   if (boundary < 0) boundary = 0;
   if (boundary > max) boundary = max;
-  box.scrollLeft = boundary;
+  let cover = 0;
+  for (let i = 0; i < o.tabs.length; i++) {
+    const t = o.tabs[i];
+    const right = t.left + t.width;
+    if (right <= boundary + 1) continue;
+    if (t.left < boundary - 1) cover = Math.ceil(right - boundary);
+    break;
+  }
+  return { scrollLeft: boundary, cover: cover, pad: pad };
+}
+
+/** The focused tab stays fully in the strip, and the left edge sits on a tab boundary. */
+export function alignTabStrip(box: HTMLElement, focusKey?: string): void {
+  const padEl = box.querySelector('.topbar-tabs-pad') as HTMLElement | null;
+  const nodes = box.querySelectorAll('.tab');
+  const tabs: TabBox[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i] as HTMLElement;
+    tabs.push({ left: el.offsetLeft, width: el.offsetWidth });
+  }
+  const focusEl = (focusKey
+    ? box.querySelector('[data-fk="' + focusKey + '"]')
+    : box.querySelector('.tab.focused')) as HTMLElement | null;
+  const plan = tabStripPlan({
+    scrollLeft: box.scrollLeft,
+    clientWidth: box.clientWidth,
+    scrollWidth: box.scrollWidth,
+    padWidth: padEl ? padEl.offsetWidth : 0,
+    focus: focusEl ? { left: focusEl.offsetLeft, width: focusEl.offsetWidth } : null,
+    tabs: tabs,
+  });
+  if (padEl) {
+    padEl.style.width = plan.pad + 'px';
+    padEl.style.flexBasis = plan.pad + 'px';
+  }
+  box.scrollLeft = plan.scrollLeft;
+  const cover = box.parentElement ? box.parentElement.querySelector('.topbar-tabs-cover') as HTMLElement | null : null;
+  if (cover) cover.style.width = plan.cover + 'px';
   syncFade(box);
 }
 
@@ -137,6 +182,7 @@ export function TopBar(p: TopBarProps) {
         {device && <span class="topbar-device" title={device}>{tvGlyphs(device)}</span>}
       </div>
       <div class="topbar-tabs-clip">
+        <div class="topbar-tabs-cover" />
         <div class="topbar-tabs" ref={tabsRef}>
           {tvLibraryTabs().map((tb) => (
             <Focusable

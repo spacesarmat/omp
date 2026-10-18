@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
-import { TopBar, topBarKeys, alignTabStrip } from '../../src/ui/TopBar';
+import { TopBar, topBarKeys, alignTabStrip, tabStripPlan } from '../../src/ui/TopBar';
 import { stepKey, barArrow } from '../../src/ui/focus';
 import { newsUnseen } from '../../src/phone/monitor';
 import { latestUpdate } from '../../src/store/updates';
@@ -226,6 +226,60 @@ describe('top bar neighbours', () => {
     expect(box.classList.contains('fade-left')).toBe(false);
     expect(box.classList.contains('fade-right')).toBe(true);
     await act(() => { render(null, host); });
+  });
+
+  it('reaches the next tab edge when the TV strip only has 76px of scroll', () => {
+    // «История» is 172px and the strip starts 76px into it: the old maximum could not hide it
+    const plan = tabStripPlan({
+      scrollLeft: 76,
+      clientWidth: 1100,
+      scrollWidth: 1176,
+      padWidth: 48,
+      focus: null,
+      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
+    });
+    expect(plan.scrollLeft).toBe(172);
+    expect(plan.cover).toBe(0);
+    // 48px pad plus the 96px shortfall (172 − 76); a second pass must not grow it again
+    expect(plan.pad).toBe(144);
+    const again = tabStripPlan({
+      scrollLeft: plan.scrollLeft,
+      clientWidth: 1100,
+      scrollWidth: 1176 + (plan.pad - 48),
+      padWidth: plan.pad,
+      focus: null,
+      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
+    });
+    expect(again.scrollLeft).toBe(172);
+    expect(again.pad).toBe(plan.pad);
+    expect(again.cover).toBe(0);
+  });
+
+  it('snaps back to the tab edge when the strip does not overflow', () => {
+    const plan = tabStripPlan({
+      scrollLeft: 150,
+      clientWidth: 400,
+      scrollWidth: 400,
+      padWidth: 0,
+      focus: { left: 150, width: 180 },
+      tabs: [{ left: 0, width: 172 }],
+    });
+    expect(plan.scrollLeft).toBe(0);
+    expect(plan.cover).toBe(0);
+    expect(plan.pad).toBe(0);
+  });
+
+  it('covers a tab fragment when the focus sits inside it', () => {
+    const plan = tabStripPlan({
+      scrollLeft: 100,
+      clientWidth: 400,
+      scrollWidth: 900,
+      padWidth: 48,
+      focus: { left: 100, width: 80 },
+      tabs: [{ left: 0, width: 172 }, { left: 172, width: 140 }],
+    });
+    expect(plan.scrollLeft).toBe(100);
+    expect(plan.cover).toBe(72);
   });
 
   it('hides a tab that is only partly visible on the left', () => {

@@ -25,14 +25,15 @@ import { useKeys } from '../../ui/keys';
 import { navigate } from '../../ui/nav';
 import { tvGlyphs } from '../../ui/tvText';
 import { scrollToShow } from '../../ui/focus';
+import { posterInitials } from './Poster';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 
 /** Posters per row (the CSS widths match). */
 export const DISCOVER_COLS = 8;
 /** The height of a row of posters with the title and the gap under it, px. */
-const DISCOVER_ROW_PX = 380;
+const DISCOVER_ROW_PX = 460;
 /** Inner margin of the chip bar: a focused chip keeps this much room to the bar's edge. */
-const BAR_PAD = 24;
+const BAR_PAD = 36;
 
 // every sort needs a label: a new DiscoverSort fails tsc here instead of t(undefined) on the TV
 const SORT_KEYS: { [s in DiscoverSort]: Key } = {
@@ -464,7 +465,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(x.title)}</div>}
+                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>

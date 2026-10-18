@@ -255,9 +255,9 @@ describe('TV «Обзор»: the sort hint, the chip bar and the poster window',
     Object.defineProperty(find, 'offsetLeft', { configurable: true, get: () => 1800 });
     Object.defineProperty(find, 'offsetWidth', { configurable: true, get: () => 120 });
     await act(async () => { setFocus('disc-find'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(scroll).toBe(1800 + 120 + 24 - 1760);
+    expect(scroll).toBe(1800 + 120 + 36 - 1760);
     await act(async () => { setFocus('disc-kind-want'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(scroll).toBe(1800 + 120 + 24 - 1760);
+    expect(scroll).toBe(1800 + 120 + 36 - 1760);
     const all = host.querySelector('[data-fk="disc-kind-all"]') as HTMLElement;
     Object.defineProperty(all, 'offsetLeft', { configurable: true, get: () => 4 });
     await act(async () => { setFocus('disc-kind-all'); await new Promise((r) => setTimeout(r, 20)); });
@@ -269,10 +269,10 @@ describe('TV «Обзор»: the sort hint, the chip bar and the poster window',
     const imgs = () => host.querySelectorAll('.disc-poster img').length;
     const hasImg = (i: number) => !!host.querySelector('[data-fk="disc-movie-' + (1000 + i) + '"] img');
     expect(host.querySelectorAll('.disc-tile')).toHaveLength(200);
-    // focus at the top: rows 0..9 (80 posters) are loaded
-    expect(imgs()).toBe(80);
+    // focus at the top: the taller rows keep 9 rows (72 posters) loaded
+    expect(imgs()).toBe(72);
     await act(async () => { setFocus('disc-movie-1199'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(imgs()).toBe(80);
+    expect(imgs()).toBe(72);
     expect(hasImg(0)).toBe(false);
     expect(hasImg(199)).toBe(true);
     // the tile keeps its poster box (the layout height stays)
