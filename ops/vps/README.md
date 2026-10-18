@@ -31,6 +31,19 @@ These Jackett indexers were disabled by moving their definitions to `data/jacket
 
 `BILLING_BOT_POLL` chooses whether this process calls Telegram `getUpdates`. The default is `1` (poll). The live VPS container must be the only poller. Set `BILLING_BOT_POLL=0` on every other copy (a dev checkout, the NAS compose, an old container) and restart it. Two pollers split updates: the extra process answers `/start admin_<token>` with «Ссылка для входа устарела» for tokens it does not have. A 409 `terminated by other getUpdates request` is written to the billing log at most once a minute. If admin Telegram notices are on, admins get one message an hour. The panel tab **Сервисы** shows the last successful `getUpdates` and whether that 409 was seen in the last 15 minutes. Admin login links last 10 minutes. `0`, `false`, `off`, and `no` turn polling off. Any other value, including an empty one, leaves it on.
 
+## Home NUC (production)
+
+Since 2026-10-19 the stack runs on the home NUC (`192.168.1.211`, `/opt/omp-vps`) instead of the VPS:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
+```
+
+- `docker-compose.nuc.yml`: Caddy serves plain HTTP on `:80` with `Caddyfile.nuc` (TLS ends at Cloudflare); billing keeps `BILLING_BOT_POLL=1` (the NUC is the only `getUpdates` poller, the VPS `omp-billing` stays stopped).
+- `warp-tunnel` is a separate WARP used only by the `cloudflared` connectors: the home ISP breaks Cloudflare Tunnel edge connections. Host traffic and Jackett/JacRed (via `warp`) are not routed through it.
+- `cloudflared` runs tunnel `omp-nuc` (omp-player.online, www, billing, jackett, jacred -> `http://nuc-caddy:80`); `cloudflared-home-nas` is a replica connector for tunnel `home-nas` (music.omp-player.online -> NAS `192.168.1.191:8880`). Ingress is managed in Cloudflare.
+- Tokens live only in `tunnel.env` and `tunnel-home-nas.env` (root, mode 600, see `tunnel.env.example`); they are git-ignored.
+
 ## Emergency admin login
 
 The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused — leave `.env` as it is.
