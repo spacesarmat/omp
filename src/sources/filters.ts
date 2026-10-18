@@ -3,6 +3,7 @@
 // and "full season only", which drop only titles that carry their marks. Shared by the phone and the TV:
 // Chromium 53 rules.
 import { t } from '../i18n';
+import { parseEpisodeRange } from '../monitor/episodes';
 
 export type Res = 720 | 1080 | 2160 | 0;
 export type Source = 'web' | 'bdrip' | 'remux';
@@ -18,6 +19,8 @@ export interface ReleaseInfo {
   original: boolean;
   rusSubs: boolean;
   seasons: number[];
+  /** «Complete series» / «все сезоны»: every season, so a season filter keeps it. */
+  allSeasons: boolean;
   episodes: { from: number; to: number; of: number } | null;
 }
 
@@ -53,22 +56,23 @@ function sourceOf(s: string): Source | '' {
   return '';
 }
 
-function range(a: number, b: number): number[] {
-  const out: number[] = [];
-  for (let i = a; i <= b && out.length < 50; i++) out.push(i);
-  return out;
-}
+// «Complete series», «all seasons», «все сезоны», «полный сериал» — the pack holds the selected season.
+const COMPLETE = /(?:^|[^a-zа-яё])(?:complete[\s._-]+series|all[\s._-]+seasons|все\s+сезоны|полный\s+сериал)(?:[^a-zа-яё]|$)/i;
 
+/** Every season a title names: one number, or each season of a pack («S01-S03», «Сезоны 1-3»). */
 function seasonsOf(s: string): number[] {
-  let m = /сезоны?:?\s*(\d{1,2})\s*[-–]\s*(\d{1,2})/i.exec(s);
-  if (m) return range(+m[1], +m[2]);
-  m = /сезон:?\s*(\d{1,2})/i.exec(s) || /(\d{1,2})\s*сезон/i.exec(s) || /(?:^|[^a-z])s(\d{1,2})(?:e\d{1,3})?(?:[^0-9]|$)/i.exec(s);
-  return m ? [+m[1]] : [];
+  const r = parseEpisodeRange(s);
+  if (r.season === undefined) return [];
+  const last = r.seasonTo !== undefined && r.seasonTo >= r.season ? r.seasonTo : r.season;
+  const out: number[] = [];
+  for (let i = r.season; i <= last && out.length < 50; i++) out.push(i);
+  return out;
 }
 
 export function parseRelease(title: string): ReleaseInfo {
   const s = title || '';
-  const ep = /серии:?\s*(\d{1,4})\s*[-–]\s*(\d{1,4})\s*из\s*(\d{1,4})/i.exec(s);
+  const r = parseEpisodeRange(s);
+  const seasons = seasonsOf(s);
   return {
     res: resOf(s),
     hdr: /hdr|dolby\s*vision|(^|[^a-z])dv([^a-z]|$)/i.test(s),
@@ -78,8 +82,9 @@ export function parseRelease(title: string): ReleaseInfo {
     mvo: /многоголос|(^|[^a-z])mvo([^a-z]|$)/i.test(s),
     original: /оригинал|original|(^|[^a-z])eng([^a-z]|$)/i.test(s),
     rusSubs: /sub\s*rus|rus\s*sub|русские\s*субтитры|субтитры/i.test(s),
-    seasons: seasonsOf(s),
-    episodes: ep ? { from: +ep[1], to: +ep[2], of: +ep[3] } : null,
+    seasons,
+    allSeasons: !seasons.length && COMPLETE.test(s),
+    episodes: r.from !== undefined && r.to !== undefined && r.total !== undefined ? { from: r.from, to: r.to, of: r.total } : null,
   };
 }
 
@@ -161,10 +166,25 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
       if (!ok) return false;
     }
     if (f.rusSubs && !i.rusSubs) return false;
-    if (f.season && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
+    // a named season set must include the choice; a pack («S01–S03», «1-3 сезоны») and «Complete series» stay;
+    // a title with no season stays (sorted below the matches)
+    if (f.season && !i.allSeasons && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
     if (f.fullSeason && i.episodes && (i.episodes.from > 1 || i.episodes.to < i.episodes.of)) return false;
     return true;
   });
+}
+
+/** With a season chosen, titles that never name a season go under the ones that match. Order inside each part stays. */
+export function sinkUnknownSeasons<T extends { Title: string }>(list: T[], season: number): T[] {
+  if (!season) return list;
+  const known: T[] = [];
+  const unknown: T[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const info = parseRelease(list[i].Title);
+    if (info.seasons.length || info.allSeasons) known.push(list[i]);
+    else unknown.push(list[i]);
+  }
+  return known.concat(unknown);
 }
 
 /** The subscription quality the filters imply: the lowest chosen resolution ('' = any). */

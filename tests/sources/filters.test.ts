@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRelease, applyFilters, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf } from '../../src/sources/filters';
+import { parseRelease, applyFilters, sinkUnknownSeasons, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf } from '../../src/sources/filters';
 import { applyLanguageSetting } from '../../src/i18n';
 
 const GB = 1024 * 1024 * 1024;
@@ -39,6 +39,19 @@ describe('parseRelease', () => {
     expect(parseRelease('Орбитальная станция 2 сезон').seasons).toEqual([2]);
     expect(parseRelease('Орбитальная станция / Серии: 1-10 из 10').episodes).toEqual({ from: 1, to: 10, of: 10 });
   });
+  it('reads RU and EN season marks, including packs and episode ranges', () => {
+    expect(parseRelease('Орбитальная станция / Сезон: 2 / WEB-DL').seasons).toEqual([2]);
+    expect(parseRelease('Орбитальная станция 2 сезон WEB-DL').seasons).toEqual([2]);
+    expect(parseRelease('Orbital Station S02 1080p').seasons).toEqual([2]);
+    expect(parseRelease('Orbital Station S01-S03 1080p').seasons).toEqual([1, 2, 3]);
+    expect(parseRelease('Орбитальная станция / Сезоны 1-3 / WEB-DL').seasons).toEqual([1, 2, 3]);
+    expect(parseRelease('Orbital Station S02E01-08 1080p WEB-DL').seasons).toEqual([2]);
+    expect(parseRelease('Гангстерленд / MobLand [01x01-10 из 10] (2026) WEB-DL').seasons).toEqual([1]);
+    expect(parseRelease('Gangsterland Season 1 1080p').seasons).toEqual([1]);
+    expect(parseRelease('Gangsterland Complete Series 1080p').allSeasons).toBe(true);
+    expect(parseRelease('Gangsterland Complete Series 1080p').seasons).toEqual([]);
+    expect(parseRelease('Гангстерленд (2026) WEB-DL 1080p').seasons).toEqual([]);
+  });
 });
 
 describe('applyFilters', () => {
@@ -69,6 +82,34 @@ describe('applyFilters', () => {
     const s = [r('Орбитальная станция / Сезон: 2 / Серии: 1-6 из 10'), r('Орбитальная станция / Сезон: 2 / Серии: 1-10 из 10'), r('Орбитальная станция / Сезон: 1')];
     expect(applyFilters(s, { ...NO_FILTERS, season: 2 }).length).toBe(2);
     expect(applyFilters(s, { ...NO_FILTERS, season: 2, fullSeason: true }).length).toBe(1);
+  });
+  it('a chosen season drops other seasons from every source title, and the count is what remains', () => {
+    const s = [
+      r('Гангстерленд / MobLand [01x01-10 из 10] (2026) WEB-DL 1080p JacRed', 198),
+      r('Гангстерленд (сезон 1, серии 1-10 из 10) WEB-DL', 168),
+      r('Gangsterland Season 1 1080p WEB-DL', 40),
+      r('Gangsterland S01 1080p', 12),
+      r('Гангстерленд / Сезон: 2 / Серии: 1-3 из 10 WEB-DL', 80),
+      r('Gangsterland S02E01-08 1080p WEB-DL', 70),
+      r('Gangsterland S01-S03 Complete 1080p', 60),
+      r('Гангстерленд / Сезоны 1-3 WEB-DL', 55),
+      r('Гангстерленд 1-3 сезоны WEB-DL', 54),
+      r('Gangsterland Complete series 1080p', 11),
+      r('Гангстерленд (2026) WEB-DL 1080p', 400),
+    ];
+    const out = applyFilters(s, { ...NO_FILTERS, season: 2 });
+    expect(out.map((x) => x.Title)).toEqual([
+      'Гангстерленд / Сезон: 2 / Серии: 1-3 из 10 WEB-DL',
+      'Gangsterland S02E01-08 1080p WEB-DL',
+      'Gangsterland S01-S03 Complete 1080p',
+      'Гангстерленд / Сезоны 1-3 WEB-DL',
+      'Гангстерленд 1-3 сезоны WEB-DL',
+      'Gangsterland Complete series 1080p',
+      'Гангстерленд (2026) WEB-DL 1080p',
+    ]);
+    const shown = sinkUnknownSeasons(out, 2);
+    expect(shown.map((x) => x.Seed)).toEqual([80, 70, 60, 55, 54, 11, 400]);
+    expect(shown[shown.length - 1].Title).toBe('Гангстерленд (2026) WEB-DL 1080p');
   });
 });
 
