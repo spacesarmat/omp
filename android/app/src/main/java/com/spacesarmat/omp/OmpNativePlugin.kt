@@ -179,6 +179,7 @@ class OmpNativePlugin : Plugin() {
         // a magnet that arrived before the bridge was ready
         synchronized(magnetLock) { pendingMagnet }?.let { emitMagnet(it) }
         synchronized(magnetLock) { pendingOpen }?.let { emitMonitorOpen(it) }
+        synchronized(magnetLock) { pendingAudioHash }?.let { emitAudioOpen(it) }
     }
 
     override fun handleOnDestroy() {
@@ -457,6 +458,13 @@ class OmpNativePlugin : Plugin() {
 
     // ---- audiobook player (its own MediaSession, not player-core) ----
 
+    /** Notification permission, asked from the book card before the player opens. */
+    @PluginMethod
+    fun audioPrepare(call: PluginCall) = audioPrepareOp(call)
+
+    @PermissionCallback
+    private fun audioPrepareDone(call: PluginCall) = audioPrepareDoneOp(call)
+
     /** Plays a TorrServer audiobook queue in [com.spacesarmat.omp.audio.AudioPlayerService]. */
     @PluginMethod
     fun audioPlay(call: PluginCall) = audioPlayOp(call)
@@ -471,6 +479,10 @@ class OmpNativePlugin : Plugin() {
     /** The player state, or { active: false } when nothing is loaded. */
     @PluginMethod
     fun audioState(call: PluginCall) = audioStateOp(call)
+
+    /** Hash of a tapped audiobook notification that arrived before the page was listening. */
+    @PluginMethod
+    fun takePendingAudioOpen(call: PluginCall) = takePendingAudioOpenOp(call)
 
     // ---- phone remote (Android TV) ----
 
@@ -735,6 +747,8 @@ class OmpNativePlugin : Plugin() {
         internal var pendingMagnet: String? = null
         // link of a tapped monitoring notification (omp:news?...), see takeMonitorOpen
         internal var pendingOpen: String? = null
+        /** Infohash from a tapped audiobook notification (session activity). */
+        internal var pendingAudioHash: String? = null
         internal val MONITOR_PHONE_ONLY: String get() = I18n.s("plugin.monitorPhoneOnly")
         internal val CF_UNAVAILABLE: String get() = I18n.s("plugin.cfUnavailable")
         internal val CF_GONE: String get() = I18n.s("plugin.cfGone")
@@ -835,6 +849,13 @@ class OmpNativePlugin : Plugin() {
         /** Audiobook player state for the open page (event `audio`). */
         fun deliverAudio(state: JSONObject) {
             instance?.notifyListeners("audio", JSObject.fromJSONObject(state))
+        }
+
+        /** A tap on the audiobook notification: pending until the page takes it, and event `audioOpen`. */
+        fun deliverAudioOpen(hash: String) {
+            if (hash.isEmpty()) return
+            synchronized(magnetLock) { pendingAudioHash = hash }
+            instance?.emitAudioOpen(hash)
         }
 
         /** A background run finished: event monitorDone { summary: JSON string | absent } for an open app. */

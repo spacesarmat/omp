@@ -35,14 +35,41 @@ class AudioPlayerTest {
         assertEquals(
             listOf(
                 Player.COMMAND_SEEK_BACK,
-                Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-                Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
                 Player.COMMAND_SEEK_FORWARD,
                 Player.COMMAND_STOP,
             ),
             AudioSession.notificationCommands,
         )
         assertFalse(AudioSession.notificationCommands.contains(Player.COMMAND_PLAY_PAUSE))
+        assertEquals("omp.audio.prev", AudioSession.CMD_PREV)
+        assertEquals("omp.audio.next", AudioSession.CMD_NEXT)
+        assertEquals("com.spacesarmat.omp.audio.OPEN", AudioSession.OPEN_ACTION)
+        assertEquals("omp.audio.hash", AudioSession.EXTRA_HASH)
+    }
+
+    @Test
+    fun anErrorOrAnIdlePlayerPreparesAgainAndAPausedOneDoesNot() {
+        assertTrue(AudioSession.resumeNeedsPrepare(true, Player.STATE_READY))
+        assertTrue(AudioSession.resumeNeedsPrepare(false, Player.STATE_IDLE))
+        assertFalse(AudioSession.resumeNeedsPrepare(false, Player.STATE_READY))
+        assertFalse(AudioSession.resumeNeedsPrepare(false, Player.STATE_BUFFERING))
+    }
+
+    @Test
+    fun stateCarriesTheSleepCountdownTheTrackCountAndAPlaceLine() {
+        I18n.lang = "ru"
+        val o = AudioQueueParser.stateJson(
+            true, true, 1, 5_000L, 60_000L, 1.5f, "30", "02", "Книга", 4, null, 90_000L, 12, "ab",
+        )
+        assertEquals(90_000L, o.getLong("sleepLeftMs"))
+        assertEquals(12, o.getInt("count"))
+        assertEquals("ab", o.getString("hash"))
+        assertEquals("Трек 2 из 12", AudioQueueParser.trackPlace(1, 12))
+        I18n.lang = "en"
+        val en = I18n.s("audio.trackOf", "n" to "2", "total" to "12")
+        assertEquals("Track 2 of 12", en)
+        assertFalse(en.any { it in '\u0400'..'\u04FF' })
+        I18n.lang = "ru"
     }
 
     @Test
@@ -131,6 +158,7 @@ class AudioPlayerTest {
             "audio.notify.prev",
             "audio.notify.next",
             "audio.notify.stop",
+            "audio.trackOf",
         )
         for (key in keys) {
             I18n.lang = "en"

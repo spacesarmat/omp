@@ -250,6 +250,9 @@ describe('audiobook search mode', () => {
     expect(keepAudiobookRow({ Title: 'Просто книга', Categories: '7000' }, true)).toBe(false);
     expect(keepAudiobookRow({ Title: 'Книга EPUB', Categories: '7020' }, true)).toBe(false);
     expect(keepAudiobookRow({ Title: 'Аудиокнига', Categories: 'Аудиокниги' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Трудно быть богом [чит. Клюквин] (2024) МР3', Categories: '2000' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Стругацкие - Пикник (2020) MP3', Categories: '2000' }, true)).toBe(true);
+    expect(keepAudiobookRow({ Title: 'Книга EPUB', Categories: '2000' }, true)).toBe(false);
     expect(keepAudiobookRow({ Title: 'Leaked film', Categories: '2000' }, false)).toBe(false);
     expect(keepAudiobookRow({ Title: 'From cat 3030', Categories: '' }, false)).toBe(true);
   });

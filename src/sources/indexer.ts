@@ -6,7 +6,7 @@
 import { t } from '../i18n';
 import { stashFile } from '../api/torrentFiles';
 import { formatBytes } from '../lib/format';
-import { looseAudiobookTitle } from '../lib/releaseKind';
+import { ebookTitle, looseAudiobookTitle, movieCategoryAudiobook, strongAudiobookTitle } from '../lib/releaseKind';
 import { infohashFromMagnet } from './html';
 import { hostKey, indexerConnections, indexerKeyName, INDEXER_SOURCE_PREFIX, onIndexersChange, setTorznabHosts, torznabHosts } from './indexerStore';
 import type { IndexerConn } from './indexerStore';
@@ -265,7 +265,8 @@ export function indexerSourceId(conn: Pick<IndexerConn, 'id'>): string {
  * nothing for `cat=3030`. So an audiobook search runs both requests and merges them:
  * (a) `cat=3030` (Prowlarr: `categories=3030`);
  * (b) no category, keeping 3030/30xx, or 7000/80xx when the title looks like an audiobook.
- * Rows in 1000/2000/4000/5000 (console, movies, PC, TV) are dropped. Duplicates match on infohash,
+ * Rows in 1000/2000/4000/5000 (console, movies, PC, TV) are dropped, unless the title is an audiobook
+ * (a movie forum often holds MP3 books). E-books are dropped. Duplicates match on infohash,
  * or on the title when the hash is missing.
  */
 export const AUDIOBOOK_CAT = '3030';
@@ -299,6 +300,8 @@ function rejectedAudiobookId(n: number): boolean {
  * that is not console, a movie, PC or TV.
  */
 export function keepAudiobookRow(r: AudiobookHit, open: boolean): boolean {
+  if (strongAudiobookTitle(r.Title) || movieCategoryAudiobook(r.Title, r.Categories)) return true;
+  if (ebookTitle(r.Title)) return false;
   const ids = torznabIds(r.Categories || '');
   for (let i = 0; i < ids.length; i++) if (rejectedAudiobookId(ids[i])) return false;
   if (!open) return true;

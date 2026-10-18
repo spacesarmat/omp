@@ -2,8 +2,10 @@
 // when the server has them. A tap opens the native audiobook player with that queue.
 import { useEffect, useState } from 'preact/hooks';
 import type { FfprobeResult, Torrent } from '../../../src/api/types';
+import { fileListPhase } from '../../../src/lib/audiobookFiles';
 import { chapterPlayItem, filePlayItem, type AudioPlayItem } from '../../../src/lib/audiobookPlayback';
-import { formatBytes, formatDuration } from '../../../src/lib/format';
+import { formatDuration } from '../../../src/lib/format';
+import { fmtBytes } from '../../../src/i18n';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import {
   audiobookSections,
@@ -18,24 +20,32 @@ import { client } from '../../../src/store/servers';
 import { Icon } from '../ui/Icon';
 import { filesOf, recordPhoneWatch, streamUrlFor } from '../watch';
 import { sharedResume } from '../lib/sharedProgress';
-import { setAudioLaunch } from './launch';
+import { audioBridge, audioNow, currentLaunch, setAudioLaunch } from './launch';
 import { navigate } from '../nav';
 import { AudiobookBar } from './bar';
 
 const PLAY = 'M8 5v14l11-7z';
+/** Poll get() while metadata is still missing. /stream?stat is not used: a timeout there closes the torrent. */
+const FILE_POLL_MS = 3000;
+const FILE_POLL_TRIES = 40;
+
+type Phase = 'wait' | 'ready' | 'empty' | 'timeout';
 
 export function Book({ hash }: { hash: string }) {
   const c = client.value;
   const listed = torrents.value.find((x) => x.hash === hash);
   const [fetched, setFetched] = useState<Torrent | null | undefined>(undefined);
   const [loaded, setLoaded] = useState<Torrent | null>(null);
+  const [phase, setPhase] = useState<Phase>('wait');
+  const [attempt, setAttempt] = useState(0);
   const [probe, setProbe] = useState<FfprobeResult | null | undefined>(undefined);
   const [error, setError] = useState('');
   const tor = listed || (fetched && fetched.hash ? fetched : undefined);
   const own = tor ? filesOf(tor) : [];
   const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
   const m4b = singleM4bFile(allFiles);
-  const waitingFiles = !!c && !!tor && !own.length && !loaded;
+  const filePhase: Phase = own.length ? 'ready' : phase;
+  const now = audioNow.value;
 
   useEffect(() => {
     if (!c || listed) return;
@@ -53,14 +63,50 @@ export function Book({ hash }: { hash: string }) {
   useEffect(() => {
     if (!c || !tor || own.length) return;
     let alive = true;
-    c.loadInfo(hash).then(
-      (info) => alive && setLoaded(info),
-      () => alive && setLoaded(infoEmpty()),
-    );
+    let tries = 0;
+    let timer = 0;
+    setPhase('wait');
+    const fail = () => {
+      if (alive) setPhase('timeout');
+    };
+    const tick = () => {
+      c.get(hash).then(
+        (info) => {
+          if (!alive) return;
+          const next = fileListPhase(info);
+          if (next === 'ready') {
+            setLoaded(info);
+            setPhase('ready');
+            return;
+          }
+          if (next === 'empty') {
+            setLoaded(info);
+            setPhase('empty');
+            return;
+          }
+          tries++;
+          if (tries >= FILE_POLL_TRIES) {
+            setPhase('timeout');
+            return;
+          }
+          timer = window.setTimeout(tick, FILE_POLL_MS);
+        },
+        fail,
+      );
+    };
+    // A retry re-adds the magnet so a torrent TorrServer closed can come back. Nothing here removes it.
+    if (attempt > 0) {
+      c.add({
+        link: 'magnet:?xt=urn:btih:' + hash,
+        title: tor.title,
+        category: tor.category || 'audiobook',
+      }).then(tick, tick);
+    } else tick();
     return () => {
       alive = false;
+      window.clearTimeout(timer);
     };
-  }, [c, hash, !!tor, own.length]);
+  }, [c, hash, !!tor, own.length, attempt]);
 
   // Chapters only for a single m4b. probe() is null when TorrServer has no ffprobe.
   useEffect(() => {
@@ -90,15 +136,25 @@ export function Book({ hash }: { hash: string }) {
       return;
     }
     setError('');
-    const launch = setAudioLaunch({
-      hash,
-      book: libraryTitle(tor).title,
-      items,
-      start,
-      positionMs: Math.max(0, Math.round(at * 1000)),
-    });
-    void recordPhoneWatch(c, hash, file.id, at, 0);
-    navigate({ name: 'audiobookPlayer', hash, token: launch.token });
+    const item = items[start] || items[0];
+    const same = item ? currentLaunch(hash, item.fileId, item.startMs) : null;
+    if (same) {
+      navigate({ name: 'audiobookPlayer', hash, token: same.token });
+      return;
+    }
+    const open = () => {
+      const launch = setAudioLaunch({
+        hash,
+        book: libraryTitle(tor).title,
+        items,
+        start,
+        positionMs: Math.max(0, Math.round(at * 1000)),
+      });
+      void recordPhoneWatch(c, hash, file.id, at, 0);
+      navigate({ name: 'audiobookPlayer', hash, token: launch.token });
+    };
+    // The permission dialog belongs on the book card, before the player covers the screen.
+    audioBridge().prepare().then(open, open);
   };
 
   if (!tor) {
@@ -129,15 +185,28 @@ export function Book({ hash }: { hash: string }) {
       <AudiobookBar title={name.title} />
       {name.meta && <p class="m-muted m-small">{name.meta}</p>}
       {error && <div class="m-error">{error}</div>}
-      {waitingFiles || (m4b && probe === undefined) ? (
+      {filePhase === 'wait' || (m4b && probe === undefined) ? (
         <p class="m-muted m-note" data-book-loading="">
           {t('audiobooks.loading')}
         </p>
+      ) : filePhase === 'timeout' ? (
+        <div data-files="timeout">
+          <p class="m-muted m-note">{t('audiobooks.filesTimeout')}</p>
+          <button type="button" class="m-btn m-btn-secondary" data-files="retry" onClick={() => setAttempt((n) => n + 1)}>
+            {t('audiobooks.retry')}
+          </button>
+        </div>
       ) : showChapters ? (
         <section class="m-set-group" data-chapters="">
           <div class="m-set-label">{t('audiobooks.chapters')}</div>
           {chapters.map((ch, i) => (
-            <TrackRow key={ch.index} label={ch.title} meta={chapterMeta(ch)} onClick={() => play(queue, i, ch.file, ch.start)} />
+            <TrackRow
+              key={ch.index}
+              label={ch.title}
+              meta={chapterMeta(ch)}
+              playing={!!now && now.hash === hash && now.fileId === ch.file.id && now.startMs === Math.round(ch.start * 1000)}
+              onClick={() => play(queue, i, ch.file, ch.start)}
+            />
           ))}
         </section>
       ) : sections.length === 0 ? (
@@ -155,8 +224,9 @@ export function Book({ hash }: { hash: string }) {
                   <TrackRow
                     key={tr.file.id}
                     label={tr.label}
-                    meta={tr.file.length > 0 ? formatBytes(tr.file.length) : ''}
+                    meta={tr.file.length > 0 ? fmtBytes(tr.file.length) : ''}
                     path={tr.file.path}
+                    playing={!!now && now.hash === hash && now.fileId === tr.file.id && now.startMs === 0}
                     onClick={() => play(queue, index < 0 ? 0 : index, tr.file, sharedResume(hash, tr.file.id))}
                   />
                 );
@@ -173,17 +243,14 @@ function chapterMeta(ch: AudiobookChapter): string {
   return ch.start >= 1 ? t('audiobooks.from', { time: formatDuration(ch.start) }) : '';
 }
 
-/** A failed file list is an empty torrent, so the card can say there are no audio files. */
-function infoEmpty(): Torrent {
-  return { hash: '', title: '', stat: 0, file_stats: [] };
-}
-
-function TrackRow(p: { label: string; meta: string; path?: string; onClick: () => void }) {
+function TrackRow(p: { label: string; meta: string; path?: string; playing?: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
-      class="m-set-row m-set-pick"
+      class={'m-set-row m-set-pick' + (p.playing ? ' m-track-on' : '')}
       data-track={p.path || p.label}
+      data-playing={p.playing ? '' : undefined}
+      aria-current={p.playing ? 'true' : undefined}
       aria-label={t('audiobooks.play', { name: p.label })}
       onClick={p.onClick}
     >

@@ -39,6 +39,7 @@ const pad2 = (n: number) => (n < 10 ? '0' : '') + n;
 export function kindLabel(k: ReleaseKind): string {
   if (k.kind === 'movie') return t('search.kind.movie');
   if (k.kind === 'audiobook') return t('search.kind.audiobook');
+  if (k.kind === 'ebook') return t('search.kind.ebook');
   if (k.kind !== 'series') return '';
   const parts = [t('search.kind.series')];
   const s = k.season;

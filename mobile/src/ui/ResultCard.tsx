@@ -8,6 +8,7 @@ import { parseSize } from '../../../src/sources/html';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
+import { releaseKind } from '../../../src/lib/releaseKind';
 import { resultKindLabel } from '../../../src/sources/releaseRow';
 
 /** The size in the phone's one format («1,5 ГБ»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
@@ -59,7 +60,14 @@ export function ResultCard(p: {
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
+  const kindName = releaseKind(r).kind;
+  const book = kindName === 'audiobook';
+  const ebook = kindName === 'ebook';
   const kind = resultKindLabel(r);
+  const showPhone = !!p.onPhone && !ebook;
+  const showTv = !ebook;
+  const phoneLabel = book ? t('audiobooks.listenOnPhone') : t('add.onPhone');
+  const phoneAria = book ? t('audiobooks.addAndListenPhone', { title: r.Title }) : t('add.addAndWatchPhone', { title: r.Title });
   const act = (f: () => void) => () => {
     setOpen(false);
     f();
@@ -94,26 +102,28 @@ export function ResultCard(p: {
             >
               <Icon d={PLUS} size={22} />
             </button>
-            {p.onPhone && (
+            {showPhone && (
               <button
                 type="button"
-                class="m-rc-btn m-rc-btn-phone"
-                aria-label={t('add.addAndWatchPhone', { title: r.Title })}
+                class={'m-rc-btn m-rc-btn-phone' + (book ? ' m-rc-btn-tv' : '')}
+                aria-label={phoneAria}
                 disabled={!!p.busy}
                 onClick={p.onPhone}
               >
                 <Icon d={PHONE_PLAY} size={22} />
               </button>
             )}
-            <button
-              type="button"
-              class="m-rc-btn m-rc-btn-tv"
-              aria-label={t('add.addAndWatch', { title: r.Title })}
-              disabled={!!p.busy}
-              onClick={p.onWatch}
-            >
-              <Icon d={TV_PLAY} size={22} />
-            </button>
+            {showTv && (
+              <button
+                type="button"
+                class={'m-rc-btn' + (book ? '' : ' m-rc-btn-tv')}
+                aria-label={t('add.addAndWatch', { title: r.Title })}
+                disabled={!!p.busy}
+                onClick={p.onWatch}
+              >
+                <Icon d={TV_PLAY} size={22} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -159,14 +169,16 @@ export function ResultCard(p: {
             <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
               {t('common.add')}
             </button>
-            {p.onPhone && (
-              <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onPhone)}>
-                {t('add.onPhone')}
+            {showPhone && (
+              <button type="button" class={book ? 'm-btn m-btn-primary' : 'm-btn m-btn-secondary'} disabled={!!p.busy} onClick={act(p.onPhone!)}>
+                {phoneLabel}
               </button>
             )}
-            <button type="button" class="m-btn m-btn-primary" disabled={!!p.busy} onClick={act(p.onWatch)}>
-              {t('add.onTv')}
-            </button>
+            {showTv && (
+              <button type="button" class={book ? 'm-btn m-btn-secondary' : 'm-btn m-btn-primary'} disabled={!!p.busy} onClick={act(p.onWatch)}>
+                {t('add.onTv')}
+              </button>
+            )}
           </div>
         </Sheet>
       )}
