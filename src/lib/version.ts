@@ -39,3 +39,21 @@ export function compareVersions(a: string, b: string): number {
 export function isBetaVersion(v: string): boolean {
   return /-beta\.[0-9]+$/.test((v || '').trim());
 }
+
+/**
+ * Android versionCode. Each patch has 100 slots: betas use 1..98, a stable release uses 99,
+ * so 0.20.4-beta.1 < 0.20.4-beta.2 < 0.20.4 < 0.20.5-beta.1. The old code (major*10000+minor*100+patch)
+ * had no room between 0.20.4 (2004) and 0.20.5 (2005), so beta.2 could not install over beta.1.
+ * android/app/build.gradle computes the same numbers.
+ */
+export function androidVersionCode(version: string): number {
+  const s = (version || '').trim().replace(/^v/i, '');
+  const m = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?/.exec(s);
+  if (!m) return 0;
+  const major = parseInt(m[1], 10);
+  const minor = parseInt(m[2], 10);
+  const patch = parseInt(m[3], 10);
+  const beta = m[4] ? parseInt(m[4], 10) : 0;
+  const slot = beta === 0 ? 99 : Math.min(beta, 98);
+  return major * 1000000 + minor * 10000 + patch * 100 + slot;
+}
