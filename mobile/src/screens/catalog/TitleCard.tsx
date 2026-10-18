@@ -5,6 +5,7 @@ import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { airDateText } from '../../../../src/lib/seriesStatus';
 import { SeriesPill } from '../../ui/SeriesPill';
 import { goBack, navigate } from '../../nav';
+import { routeForHash } from '../../audiobooks/route';
 import { Icon } from '../../ui/Icon';
 import { CastStrip } from '../../ui/CastStrip';
 import { torrents } from '../../../../src/store/library';
@@ -236,7 +237,7 @@ function Body({ card }: { card: CatalogCard }) {
 
   const watch = () => {
     if (!spot) {
-      if (hash) navigate({ name: 'torrent', hash });
+      if (hash) navigate(routeForHash(hash));
       return;
     }
     if (!activeTv.value) {

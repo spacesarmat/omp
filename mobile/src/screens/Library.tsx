@@ -12,6 +12,7 @@ import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentAction
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate, scrollToTop } from '../nav';
+import { routeForTorrent } from '../audiobooks/route';
 import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
@@ -389,7 +390,7 @@ export function Library() {
         return;
       }
       if (selecting) toggle(hashesOf(it));
-      else if (it.kind === 'torrent') navigate({ name: 'torrent', hash: it.tor.hash });
+      else if (it.kind === 'torrent') navigate(routeForTorrent(it.tor));
       else navigate({ name: 'series', key: it.key });
     },
     'aria-pressed': selecting ? isChosen(it) : undefined,
@@ -653,7 +654,7 @@ export function Library() {
                 const from = resumeFrom(e.progress, MIN_RESUME, WATCHED_RATIO);
                 return (
                   <div class="m-hrow" key={tor.hash}>
-                    <button type="button" class="m-hrow-main" onClick={() => navigate({ name: 'torrent', hash: tor.hash })}>
+                    <button type="button" class="m-hrow-main" onClick={() => navigate(routeForTorrent(tor))}>
                       <Poster torrent={tor} class="m-poster-mini" />
                       <span class="m-hrow-text">
                         <span class="m-hrow-title"><ShortTitle tor={tor} /></span>

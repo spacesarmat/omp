@@ -22,6 +22,7 @@ import type { PlayItem } from '../../src/player/types';
 import { MIN_RESUME, getLocalProgress } from '../../src/store/progress';
 import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
+import { isAudiobookTorrent } from '../../src/lib/audiobookRoute';
 import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
@@ -164,6 +165,11 @@ export interface PhoneWatch {
  * or a missing 2160 Player app: the stream goes to the system chooser. Rejects when no player could be opened.
  */
 export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatch): Promise<void> {
+  // A book never opens in 2160. The book card plays it in the native audiobook player.
+  if (isAudiobookTorrent(t)) {
+    navigate({ name: 'audiobook', hash: w.hash });
+    return;
+  }
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
   const mode = settings.value.phonePlayer;
   let open: ((o: Open2160Options) => Promise<unknown>) | null = null;
@@ -199,7 +205,16 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
  */
 export async function watchAddedOnPhone(c: TorrServerClient, hash: string): Promise<'played' | 'opened'> {
   let tor = await c.get(hash);
+  // Category is enough. loadInfo (/stream?stat) can close a torrent that has not fetched its files yet.
+  if (tor.category === 'audiobook') {
+    navigate({ name: 'audiobook', hash });
+    return 'opened';
+  }
   if (!c.files(tor).length) tor = await c.loadInfo(hash);
+  if (isAudiobookTorrent(tor)) {
+    navigate({ name: 'audiobook', hash });
+    return 'opened';
+  }
   const files = playableFiles(c.files(tor));
   if (files.length !== 1) {
     navigate({ name: 'torrent', hash });

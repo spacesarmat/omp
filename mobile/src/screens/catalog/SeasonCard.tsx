@@ -11,6 +11,7 @@ import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { artKey, artVersion, pickedArt, saveArt } from '../../catalog/artPick';
 import { goBack, navigate } from '../../nav';
+import { routeForHash } from '../../audiobooks/route';
 import { Icon } from '../../ui/Icon';
 import { activeTv } from '../../tv/tvStore';
 import { useTvLaunch } from '../../watch';
@@ -124,7 +125,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
 
   const watch = () => {
     if (!spot) {
-      if (hash) navigate({ name: 'torrent', hash });
+      if (hash) navigate(routeForHash(hash));
       return;
     }
     if (!activeTv.value) {

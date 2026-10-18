@@ -85,6 +85,22 @@ afterEach(() => {
 });
 
 describe('Torrent', () => {
+  it('opens an audiobook on the book card and hides the video controls', async () => {
+    torrents.value = [{
+      ...tor,
+      category: 'audiobook',
+      title: 'King It',
+      file_stats: [{ id: 1, path: '01.mp3', length: 1000 }, { id: 2, path: '02.mp3', length: 1000 }],
+    }];
+    mount();
+    await flush();
+    expect(currentRoute.value).toEqual({ name: 'audiobook', hash: 'abc' });
+    expect(el.querySelector('[data-block="skip"]')).toBeNull();
+    expect(el.querySelector('[data-block="seasons"]')).toBeNull();
+    expect(byText('Слушать на телефоне')).toBeTruthy();
+    expect(byText('Пропускать заставку')).toBeUndefined();
+  });
+
   it('shows header meta and an episode row per file', async () => {
     mount();
     await flush();

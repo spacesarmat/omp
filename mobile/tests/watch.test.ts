@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { lanServerUrl, tvServerUrl, noWifi, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch, watchOnPhone } from '../src/watch';
+import { lanServerUrl, tvServerUrl, noWifi, setWatchActions, watchOnTvParams, streamUrlFor, isNoOmp, openInstallGuide, OMP_INSTALL_URL, recordPhoneWatch, watchAddedOnPhone, watchOnPhone } from '../src/watch';
+import { currentRoute, routeStack } from '../src/nav';
 import { updateSettings } from '../../src/store/settings';
 import { getLocalProgress, reloadProgress } from '../../src/store/progress';
 import { tvNoOmp } from '../src/tv/tvClient';
@@ -147,7 +148,7 @@ describe('watchOnPhone', () => {
     const o = a.playEmbedded2160.mock.calls[0][0];
     expect(o.items).toHaveLength(3);
     expect(o.start).toBe(1);
-    expect(o).toMatchObject({ positionMs: 125000, fromStart: false, background: false });
+    expect(o).toMatchObject({ positionMs: 125000, fromStart: false, background: true });
     expect(a.open2160).not.toHaveBeenCalled();
     expect(a.player2160).not.toHaveBeenCalled();
     expect(a.openExternal).not.toHaveBeenCalled();
@@ -163,7 +164,7 @@ describe('watchOnPhone', () => {
     updateSettings({ phonePlayer: 'embedded', backgroundAudio: true });
     await watchOnPhone(c, tor as any, w(2, 0));
     expect(a.playEmbedded2160.mock.calls[0][0]).toMatchObject({ background: true });
-    updateSettings({ backgroundAudio: false });
+    updateSettings({ backgroundAudio: true, backgroundAudioTouched: false });
     done();
   });
 
@@ -240,5 +241,44 @@ describe('watchOnPhone', () => {
     expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(a.openExternal).toHaveBeenCalledTimes(2);
     done();
+  });
+
+  it('an audiobook opens the book card and never starts 2160', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    routeStack.value = [{ name: 'library' }];
+    const book = { hash: 'abc', category: 'audiobook', title: 'Book', file_stats: [{ id: 1, path: 'a.mp3', length: 1 }] };
+    await watchOnPhone(c, book as any, { hash: 'abc', file: book.file_stats[0], title: 'a', at: 10, duration: 0 });
+    expect(currentRoute.value).toEqual({ name: 'audiobook', hash: 'abc' });
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
+    expect(a.open2160).not.toHaveBeenCalled();
+    expect(a.openExternal).not.toHaveBeenCalled();
+    const audio = { hash: 'abc', title: 'Disc', file_stats: [{ id: 1, path: '01.mp3', length: 1 }, { id: 2, path: '02.flac', length: 1 }] };
+    await watchOnPhone(c, audio as any, { hash: 'abc', file: audio.file_stats[0], title: '01', at: 0, duration: 0 });
+    expect(currentRoute.value).toEqual({ name: 'audiobook', hash: 'abc' });
+    expect(a.playEmbedded2160).not.toHaveBeenCalled();
+    done();
+  });
+});
+
+describe('watchAddedOnPhone', () => {
+  it('opens a book from its category and does not ask the server for files', async () => {
+    routeStack.value = [{ name: 'library' }];
+    const c = new TorrServerClient({ url: 'http://h:8090' });
+    const load = vi.spyOn(c, 'loadInfo');
+    vi.spyOn(c, 'get').mockResolvedValue({ hash: 'abc', category: 'audiobook', title: 'Book', file_stats: [] } as any);
+    await expect(watchAddedOnPhone(c, 'abc')).resolves.toBe('opened');
+    expect(load).not.toHaveBeenCalled();
+    expect(currentRoute.value).toEqual({ name: 'audiobook', hash: 'abc' });
+  });
+
+  it('opens the book card when the loaded files are only audio', async () => {
+    routeStack.value = [{ name: 'library' }];
+    const c = new TorrServerClient({ url: 'http://h:8090' });
+    vi.spyOn(c, 'get').mockResolvedValue({ hash: 'abc', category: '', title: 'Disc', file_stats: [] } as any);
+    vi.spyOn(c, 'loadInfo').mockResolvedValue({ hash: 'abc', category: '', title: 'Disc', file_stats: [{ id: 1, path: '01.mp3', length: 1 }] } as any);
+    await expect(watchAddedOnPhone(c, 'abc')).resolves.toBe('opened');
+    expect(currentRoute.value).toEqual({ name: 'audiobook', hash: 'abc' });
   });
 });
