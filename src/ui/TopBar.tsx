@@ -148,11 +148,20 @@ export function TopBar(p: TopBarProps) {
     if (box) alignTabStrip(box, 'tab-' + id);
   };
   useEffect(() => {
-    if (tabsRef.current) alignTabStrip(tabsRef.current, 'tab-' + p.tab);
-    return () => { armedTab = ''; };
-  }, []);
+    // Widths are 0 on the first paint. A second pass after layout scrolls the active tab fully into the strip.
+    const run = () => {
+      if (tabsRef.current) alignTabStrip(tabsRef.current, 'tab-' + p.tab);
+    };
+    run();
+    const raf = requestAnimationFrame(run);
+    return () => {
+      cancelAnimationFrame(raf);
+      armedTab = '';
+    };
+  }, [p.tab]);
   return (
-    <FocusGroup focusKey="LIB-HEADER" className="topbar">
+    // No saved child: the first Up after launch would otherwise land on «История» (closest to the origin).
+    <FocusGroup focusKey="LIB-HEADER" className="topbar" saveLastFocusedChild={false} preferredChildFocusKey={'tab-' + p.tab}>
       <div class="topbar-home">
         <Logo size={52} />
         <span class="topbar-brand">OMP</span>

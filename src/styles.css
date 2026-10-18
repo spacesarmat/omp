@@ -831,8 +831,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .settings .button.focused { transform-origin: left center; }
 
 .tile-large .tile-title, .tile-small .tile-title { font-size: 28px; line-height: 34px; height: 68px; -webkit-line-clamp: 2; }
-/* a single long word otherwise clips with no ellipsis inside the 2-line box (Chrome 53) */
-.tile-small .tile-title { word-wrap: break-word; word-break: break-all; }
+/* same as .disc-title: wrap on spaces; only a word that does not fit the 160px tile breaks */
+.tile-small .tile-title { overflow-wrap: break-word; word-wrap: break-word; word-break: normal; }
 .tile-meta { font-size: 24px; line-height: 30px; }
 .disc-title { font-size: 28px; line-height: 34px; height: 68px; margin-top: 8px; }
 .disc-meta { font-size: 24px; }

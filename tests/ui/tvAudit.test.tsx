@@ -348,6 +348,8 @@ describe('TV audit stylesheet', () => {
     expect(css).not.toContain(':has(');
     expect(css).not.toContain('aspect-ratio');
     expect(css).toContain('.tile-large .tile-title, .tile-small .tile-title { font-size: 28px;');
+    expect(css).toContain('.tile-small .tile-title { overflow-wrap: break-word; word-wrap: break-word; word-break: normal; }');
+    expect(css).not.toContain('word-break: break-all');
     expect(css).toContain('.connect-body { width: 980px;');
     expect(css).toContain('.faq-body-scroll { height: 100%; overflow-y: auto;');
   });

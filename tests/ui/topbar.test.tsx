@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, h } from 'preact';
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { TopBar, topBarKeys, alignTabStrip, tabStripPlan } from '../../src/ui/TopBar';
+import { FocusGroup, Focusable } from '../../src/ui/components';
 import { stepKey, barArrow } from '../../src/ui/focus';
 import { newsUnseen } from '../../src/phone/monitor';
 import { latestUpdate } from '../../src/store/updates';
@@ -314,6 +315,97 @@ describe('top bar neighbours', () => {
     expect(history.style.visibility).toBe('hidden');
     expect(news.style.visibility).toBe('');
     box.remove();
+  });
+
+  it('Up from the first tile focuses the active tab and scrolls it into the strip', async () => {
+    const { act } = await import('preact/test-utils');
+    const orig = Element.prototype.getBoundingClientRect;
+    const box = (l: number, t: number, w: number, h: number) => ({
+      x: l, y: t, left: l, top: t, width: w, height: h, right: l + w, bottom: t + h, toJSON() { return this; },
+    });
+    const tabs = ['tab-history', 'tab-news', 'tab-discover', 'tab-all', 'tab-movie', 'tab-tv', 'tab-music', 'tab-audiobook', 'tab-other'];
+    Element.prototype.getBoundingClientRect = function () {
+      const el = this as HTMLElement;
+      const fk = el.getAttribute ? el.getAttribute('data-fk') : '';
+      if (fk === 'tile-1') return box(96, 280, 160, 240) as DOMRect;
+      if (el.classList && el.classList.contains('views-tiles')) return box(80, 200, 1760, 800) as DOMRect;
+      if (el.classList && el.classList.contains('topbar')) return box(0, 0, 1920, 120) as DOMRect;
+      if (el.classList && el.classList.contains('screen')) return box(0, 0, 1920, 1080) as DOMRect;
+      const i = fk ? tabs.indexOf(fk) : -1;
+      if (i >= 0) return box(i * 140, 24, 130, 48) as DOMRect;
+      if (fk && fk.indexOf('lib-btn-') === 0) return box(1600, 24, 56, 56) as DOMRect;
+      return box(0, 0, 0, 0) as DOMRect;
+    };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const onTab = vi.fn();
+    try {
+    const bar = {
+      tab: 'all' as const, onTab, view: 'small' as const, sort: 'new' as const, searchOpen: false,
+      onSearch: vi.fn(), onView: vi.fn(), onSort: vi.fn(), onFocused: vi.fn(),
+    };
+    await act(() => {
+      render(h(FocusGroup as any, { focusKey: 'LIBRARY', className: 'screen library' },
+        h(TopBar as any, bar),
+        h(FocusGroup as any, { focusKey: 'LIB-GRID', className: 'views-tiles' },
+          h(Focusable as any, { focusKey: 'tile-1', className: 'tile tile-small' }, 'Гангстерленд'),
+        ),
+      ), host);
+    });
+    const strip = host.querySelector('.topbar-tabs') as HTMLElement;
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 1139 });
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1215 });
+    const nodes = host.querySelectorAll('.tab');
+    // TV widths: «История» 0–172, «Прочее» 1089–1215. «Все» sits in the middle.
+    const place = [0, 180, 340, 520, 640, 780, 900, 1000, 1089];
+    const width = [172, 140, 150, 100, 120, 100, 80, 70, 126];
+    for (let i = 0; i < nodes.length; i++) {
+      Object.defineProperty(nodes[i], 'offsetLeft', { configurable: true, value: place[i] });
+      Object.defineProperty(nodes[i], 'offsetWidth', { configurable: true, value: width[i] });
+    }
+    strip.scrollLeft = 0;
+    // A focus on «История» (the first tab) must not stick: Up still returns to the open tab.
+    await focus('tab-history');
+    expect(onTab).not.toHaveBeenCalled();
+    await focus('tile-1');
+    await press('ArrowUp');
+    await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); });
+    expect(getCurrentFocusKey()).toBe('tab-all');
+    expect(onTab).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-fk="tab-all"]')!.classList.contains('focused')).toBe(true);
+    expect((host.querySelector('[data-fk="tab-all"]') as HTMLElement).style.visibility).toBe('');
+    // «Прочее» is the open tab and starts past the strip: Up scrolls it fully in and hides «История».
+    await act(() => { render(null, host); });
+    const onTab2 = vi.fn();
+    await act(() => {
+      render(h(FocusGroup as any, { focusKey: 'LIBRARY', className: 'screen library' },
+        h(TopBar as any, { ...bar, tab: 'other', onTab: onTab2 }),
+        h(FocusGroup as any, { focusKey: 'LIB-GRID', className: 'views-tiles' },
+          h(Focusable as any, { focusKey: 'tile-1', className: 'tile tile-small' }, 'Гангстерленд'),
+        ),
+      ), host);
+    });
+    const strip2 = host.querySelector('.topbar-tabs') as HTMLElement;
+    Object.defineProperty(strip2, 'clientWidth', { configurable: true, value: 1139 });
+    Object.defineProperty(strip2, 'scrollWidth', { configurable: true, value: 1215 });
+    const nodes2 = host.querySelectorAll('.tab');
+    for (let i = 0; i < nodes2.length; i++) {
+      Object.defineProperty(nodes2[i], 'offsetLeft', { configurable: true, value: place[i] });
+      Object.defineProperty(nodes2[i], 'offsetWidth', { configurable: true, value: width[i] });
+    }
+    strip2.scrollLeft = 0;
+    await focus('tile-1');
+    await press('ArrowUp');
+    await act(async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); });
+    expect(getCurrentFocusKey()).toBe('tab-other');
+    expect(onTab2).not.toHaveBeenCalled();
+    expect(strip2.scrollLeft).toBe(76);
+    expect((host.querySelector('[data-fk="tab-history"]') as HTMLElement).style.visibility).toBe('hidden');
+    expect((host.querySelector('[data-fk="tab-other"]') as HTMLElement).style.visibility).toBe('');
+    } finally {
+      Element.prototype.getBoundingClientRect = orig;
+      await act(() => { render(null, host); });
+    }
   });
 
   it('a programmatic focus on «История» does not switch the library', async () => {

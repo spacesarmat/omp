@@ -54,6 +54,11 @@ interface FocusGroupProps {
   boundary?: boolean;
   autoFocus?: boolean;
   preferredChildFocusKey?: string;
+  /**
+   * When false, entering this group does not return to the child focused last time.
+   * The preferred child is used instead (the top bar always returns to the active tab).
+   */
+  saveLastFocusedChild?: boolean;
   /** When false, unmounting this group does not move focus to its parent. */
   autoRestoreFocus?: boolean;
   children?: ComponentChildren;
@@ -63,7 +68,7 @@ export function FocusGroup(p: FocusGroupProps) {
   const { ref, focusKey, focusSelf } = useFocusable({
     focusKey: p.focusKey,
     trackChildren: true,
-    saveLastFocusedChild: true,
+    saveLastFocusedChild: p.saveLastFocusedChild !== false,
     isFocusBoundary: !!p.boundary,
     preferredChildFocusKey: p.preferredChildFocusKey,
     autoRestoreFocus: p.autoRestoreFocus,
