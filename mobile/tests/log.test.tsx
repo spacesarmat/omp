@@ -132,9 +132,11 @@ describe('Log screen', () => {
     seed();
     const el = mount(<Log />);
     await act(async () => btn(el, 'Очистить').click());
+    await settle();
     expect(logEntries().length).toBe(3);
     const calls2 = actionsFake();
     await act(async () => btn(el, 'Очистить').click());
+    await settle();
     expect(logEntries().length).toBe(0);
     expect(calls2.confirm).toEqual(['Очистить журнал?']);
     expect(calls.confirm.length).toBe(0);
@@ -195,6 +197,7 @@ describe('Log screen in English', () => {
     await settle();
     expect(calls.share[0].name).toMatch(/^omp-log-\d{4}-\d\d-\d\d\.txt$/);
     await act(async () => btn(el, 'Clear').click());
+    await settle();
     expect(calls.confirm).toEqual(['Clear the log?']);
     expect(toast.value).toBe('Log cleared');
     expect(el.textContent).not.toMatch(CYR);

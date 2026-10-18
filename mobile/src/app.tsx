@@ -10,6 +10,7 @@ import { native } from './platform/native';
 import { audioLaunch, rememberAudio } from './audiobooks/launch';
 import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
 import { Toast, showToast } from './ui/toast';
+import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
 import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
@@ -456,6 +457,7 @@ export function App() {
       {tabRoot && !prompt && !localPrompt && !showTour && !showSetup && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
+      <ConfirmHost />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

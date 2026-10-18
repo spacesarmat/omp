@@ -7,6 +7,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { runBack } from '../src/ui/backStack';
+import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 import { settings, updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
@@ -36,9 +37,11 @@ let removeSpy: ReturnType<typeof vi.spyOn>;
 let serverList: Torrent[];
 
 function mount() {
+  unmountConfirmHost();
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<Library />, el));
+  mountConfirmHost();
 }
 
 const cards = () => Array.from(el.querySelectorAll('.m-card, .m-vrow, .m-crow')) as HTMLElement[];
@@ -90,10 +93,10 @@ beforeEach(() => {
   removeSpy = vi.spyOn(TorrServerClient.prototype, 'remove').mockImplementation(async (h: string) => {
     serverList = serverList.filter((x) => x.hash !== h);
   });
-  window.confirm = vi.fn(() => true);
 });
 
 afterEach(() => {
+  unmountConfirmHost();
   act(() => render(null, el));
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -219,8 +222,10 @@ describe('Library delete', () => {
     await act(async () => {
       btn('Удалить', menu()!)!.click();
     });
+    expect(confirmText()).toBe('Удалить раздачу «Quiet Signal»?');
+    expect(document.querySelector('[data-confirm="danger"]')!.textContent).toBe('Удалить');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить раздачу «Quiet Signal»?');
     expect(removeSpy).toHaveBeenCalledTimes(1);
     expect(removeSpy).toHaveBeenCalledWith('h2');
     expect(cards().length).toBe(2);
@@ -265,8 +270,9 @@ describe('Library delete', () => {
     await act(async () => {
       btn('Удалить (2)')!.click();
     });
+    expect(confirmText()).toBe('Удалить 2 раздачи с сервера?');
+    await acceptConfirm();
     await flush();
-    expect(window.confirm).toHaveBeenCalledWith('Удалить 2 раздачи с сервера?');
     expect(removeSpy).toHaveBeenCalledTimes(2);
     expect(cards().length).toBe(1);
     expect(toast.value).toBe('Удалено: 2');
@@ -274,7 +280,6 @@ describe('Library delete', () => {
   });
 
   it('confirm false removes nothing', async () => {
-    window.confirm = vi.fn(() => false);
     mount();
     await flush();
     longPress(cards()[0]);
@@ -282,6 +287,8 @@ describe('Library delete', () => {
     await act(async () => {
       btn('Удалить (1)')!.click();
     });
+    expect(confirmText()).toBe('Удалить 1 раздачу с сервера?');
+    await declineConfirm();
     await flush();
     expect(removeSpy).not.toHaveBeenCalled();
     expect(cards().length).toBe(3);
@@ -301,9 +308,10 @@ describe('Library delete', () => {
     await act(async () => {
       btn('Удалить (3)')!.click();
     });
+    expect(confirmText()).toBe('Удалить 3 раздачи с сервера?');
+    await acceptConfirm();
     await flush();
     expect(removeSpy).toHaveBeenCalledTimes(3);
-    expect(window.confirm).toHaveBeenCalledWith('Удалить 3 раздачи с сервера?');
     expect(toast.value).toBe('Не удалось удалить: 1');
     expect(cards().length).toBe(1);
     expect(cards()[0].textContent).toContain('Quiet Signal');
@@ -367,8 +375,10 @@ describe('Library delete', () => {
       await act(async () => {
         btn('Delete (2)')!.click();
       });
+      expect(confirmText()).toBe('Delete 2 torrents from the server?');
+      expect(document.querySelector('[data-confirm-cancel]')!.textContent).toBe('Cancel');
+      await acceptConfirm();
       await flush();
-      expect(window.confirm).toHaveBeenCalledWith('Delete 2 torrents from the server?');
       expect(toast.value).toBe('Deleted: 2');
     } finally {
       applyLanguageSetting('ru');

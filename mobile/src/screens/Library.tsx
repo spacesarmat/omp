@@ -9,6 +9,7 @@ import { TorrentMenu } from '../ui/TorrentMenu';
 import { sharedResume } from '../lib/sharedProgress';
 import { useBackHandler } from '../ui/backStack';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { askConfirm } from '../ui/confirm';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
 import { navigate, scrollToTop } from '../nav';
@@ -346,7 +347,7 @@ export function Library() {
     });
   const deleteChosen = async () => {
     if (!c || deleting || !chosen.length) return;
-    if (!window.confirm(tp('library.deleteAsk', chosen.length))) return;
+    if (!(await askConfirm(tp('library.deleteAsk', chosen.length), t('common.delete'), { destructive: true }))) return;
     setDeleting(true);
     try {
       reportDeleted(await deleteTorrents(c, chosen));

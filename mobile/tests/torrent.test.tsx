@@ -17,6 +17,7 @@ import { saveProgress, reloadProgress, serverViewed } from '../../src/store/prog
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { Torrent as T } from '../../src/api/types';
 import { addFindings, findingsOf } from '../../src/monitor/subs';
+import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 
 const EPS = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.S02E03.mkv', 'Show.S02E04.mkv'];
 const tor: T = {
@@ -42,10 +43,12 @@ const copy = vi.fn();
 const record = vi.fn();
 
 function mount(skipOpen = true) {
+  unmountConfirmHost();
   if (skipOpen) localStorage.setItem('tsp.ui.skipOpen', 'true');
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<Torrent hash="abc" />, el));
+  mountConfirmHost();
 }
 
 function click(sel: string | Element | undefined | null) {
@@ -78,6 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  unmountConfirmHost();
   act(() => render(null, el));
   setPlayerLinkDeps(null);
   vi.restoreAllMocks();
@@ -254,14 +258,15 @@ describe('Torrent', () => {
   it('delete asks for confirmation, removes and goes back', async () => {
     const rem = vi.spyOn(TorrServerClient.prototype, 'remove').mockResolvedValue(undefined);
     vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
     mount();
     await flush();
     click('[aria-label="Удалить раздачу"]');
     expect(rem).not.toHaveBeenCalled();
+    expect(confirmText()).toBe('Удалить раздачу «Starbound Frontier»?');
+    await declineConfirm();
     click('[aria-label="Удалить раздачу"]');
+    await acceptConfirm();
     await flush();
-    expect(confirm).toHaveBeenCalledTimes(2);
     expect(rem).toHaveBeenCalledWith('abc');
     expect(currentRoute.value.name).toBe('library');
   });
@@ -269,12 +274,12 @@ describe('Torrent', () => {
   it('delete drops the «Новые серии» card of that torrent', async () => {
     vi.spyOn(TorrServerClient.prototype, 'remove').mockResolvedValue(undefined);
     vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const r = { Title: 'x', Categories: '', Size: '', CreateDate: '', Tracker: '', Link: '', Magnet: '', Hash: '', Peer: 0, Seed: 1, source: 'rutor' };
     addFindings([{ subId: 'episodes', key: 'abc:1:10', at: 1, result: r, episodes: { torrentHash: 'abc', torrentTitle: 't', season: 1, haveTo: 8, to: 10 } }]);
     mount();
     await flush();
     click('[aria-label="Удалить раздачу"]');
+    await acceptConfirm();
     await flush();
     expect(findingsOf('episodes')).toEqual([]);
   });
@@ -339,10 +344,10 @@ describe('Torrent', () => {
 
   it('delete failure toasts and stays', async () => {
     vi.spyOn(TorrServerClient.prototype, 'remove').mockRejectedValue(new Error('boom'));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mount();
     await flush();
     click('[aria-label="Удалить раздачу"]');
+    await acceptConfirm();
     await flush();
     expect(toast.value).toContain('boom');
     expect(currentRoute.value.name).toBe('torrent');
@@ -353,10 +358,10 @@ describe('Torrent', () => {
     let done!: () => void;
     vi.spyOn(TorrServerClient.prototype, 'remove').mockReturnValue(new Promise<void>((r) => (done = r)));
     vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mount();
     await flush();
     click('[aria-label="Удалить раздачу"]');
+    await acceptConfirm();
     act(() => navigate({ name: 'settings' }));
     done();
     await flush();
@@ -688,14 +693,15 @@ describe('Torrent in English', () => {
 
   it('poster toasts, the delete question and not found', async () => {
     vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     mount();
     await flush();
     click('button[aria-label="Find a poster"]');
     await flush();
     expect(toast.value).toBe('Set a TMDB key in “Server settings”');
     click('button[aria-label="Delete the torrent"]');
-    expect(confirm).toHaveBeenCalledWith('Delete the torrent “Starbound Frontier”?');
+    expect(confirmText()).toBe('Delete the torrent “Starbound Frontier”?');
+    expect(document.querySelector('[data-confirm-cancel]')!.textContent).toBe('Cancel');
+    await declineConfirm();
     torrents.value = [];
     vi.spyOn(TorrServerClient.prototype, 'get').mockRejectedValue(new Error('404'));
     mount();

@@ -4,6 +4,7 @@ import { t } from '../../../src/i18n';
 import { native } from '../platform/native';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
+import { askConfirm } from '../ui/confirm';
 import { navigate } from '../nav';
 import { activeTv, ATV_PORT, isAtv, isTvRenamed, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
 import { TvRenameSheet } from '../ui/TvRenameSheet';
@@ -80,7 +81,7 @@ export interface RemoteActions {
   warmUp: () => Promise<void>;
   /** Makes a saved TV the active one and connects with its saved key or token. */
   switchTv: (tv: SavedTv) => Promise<void>;
-  confirm: (text: string) => boolean;
+  confirm: (text: string) => boolean | Promise<boolean>;
 }
 
 const defaults: RemoteActions = {
@@ -103,7 +104,7 @@ const defaults: RemoteActions = {
     setActiveTv(tv.ip);
     return connectTv(tv).catch(() => {});
   },
-  confirm: (t) => window.confirm(t),
+  confirm: (text) => askConfirm(text, t('remote.turnOff')),
 };
 
 let act: RemoteActions = defaults;
@@ -1006,7 +1007,7 @@ export function Remote() {
     act.volume(dir).catch(fail);
   };
   const off = async () => {
-    if (!act.confirm(t('remote.turnOffAsk', { name: tv.name }))) return;
+    if (!(await act.confirm(t('remote.turnOffAsk', { name: tv.name })))) return;
     try {
       await act.turnOffTv();
       showToast(t('remote.turnedOff'));

@@ -19,6 +19,7 @@ import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
 import { routeForTorrent } from '../audiobooks/route';
 import { filesOf, useTvLaunch } from '../watch';
 import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { askConfirm } from '../ui/confirm';
 import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
 import { client } from '../../../src/store/servers';
 import { sharedProgress, sharedResume } from '../lib/sharedProgress';
@@ -406,7 +407,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             season === NO_SEASON
               ? tp('series.keepOnlyAskNoSeason', others.length)
               : tp('series.keepOnlyAsk', others.length, { season: String(season) });
-          if (!window.confirm(ask)) return false;
+          if (!(await askConfirm(ask, t('series.keepOnly'), { destructive: true }))) return false;
           reportDeleted(await deleteTorrents(c, others.map((m) => m.hash)));
           return true;
         },

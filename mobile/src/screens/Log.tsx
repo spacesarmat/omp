@@ -4,6 +4,7 @@ import { ru } from '../../../src/i18n/ru';
 import { Clipboard } from '@capacitor/clipboard';
 import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
+import { askConfirm } from '../ui/confirm';
 import { goBack } from '../nav';
 import { native } from '../platform/native';
 import {
@@ -37,7 +38,7 @@ export interface LogActions {
   copyText: (text: string) => Promise<void>;
   openUrl: (url: string) => void;
   shareText: (o: { name: string; text: string; title?: string }) => Promise<void>;
-  confirm: (text: string) => boolean;
+  confirm: (text: string) => boolean | Promise<boolean>;
   /** Phone model; null when unknown. */
   phoneName: () => Promise<string | null>;
 }
@@ -48,7 +49,7 @@ const defaults: LogActions = {
     window.open(url, '_system');
   },
   shareText: (o) => native.shareText(o),
-  confirm: (text) => window.confirm(text),
+  confirm: (text) => askConfirm(text, t('tvSettings.clear')),
   phoneName: () => native.phoneName().then((n) => (n && n !== ru.history.phone && n !== t('history.phone') ? n : null)),
 };
 
@@ -88,8 +89,8 @@ export async function shareLog(): Promise<void> {
   }
 }
 
-export function clearWithConfirm(): void {
-  if (!actions.confirm(t('tvSettings.clearLogAsk'))) return;
+export async function clearWithConfirm(): Promise<void> {
+  if (!(await actions.confirm(t('tvSettings.clearLogAsk')))) return;
   clearLog();
   showToast(t('log.cleared'));
 }
@@ -116,7 +117,7 @@ export function Log() {
         <button type="button" class="m-btn m-btn-secondary" onClick={() => void shareLog()}>
           {t('log.share')}
         </button>
-        <button type="button" class="m-btn m-btn-secondary" onClick={clearWithConfirm}>
+        <button type="button" class="m-btn m-btn-secondary" onClick={() => void clearWithConfirm()}>
           {t('tvSettings.clear')}
         </button>
       </div>

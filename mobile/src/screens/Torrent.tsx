@@ -33,6 +33,7 @@ import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
 import type { SkipPrefs } from '../../../src/lib/journal';
 import { libraryTitle, posterColor, shortTitle } from '../../../src/lib/libraryView';
+import { askConfirm } from '../ui/confirm';
 import { loadQualityWatch, loadWatch, saveQualityWatch, saveWatch } from '../../../src/store/journal';
 import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
@@ -545,8 +546,8 @@ export function Torrent({ hash }: { hash: string }) {
       void refreshTorrents(c).catch(() => {});
     });
 
-  const remove = () => {
-    if (!window.confirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }))) return;
+  const remove = async () => {
+    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true }))) return;
     void deleteTorrents(c, [hash]).then((r) => {
       if (r.failed.length) {
         showToast(errorMessage(r.firstError));
@@ -573,7 +574,7 @@ export function Torrent({ hash }: { hash: string }) {
             <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.rename.title')} onClick={() => setRenaming(true)}>
               <Icon d={PENCIL} size={20} />
             </button>
-            <button type="button" class="m-icon-btn m-glass m-danger" aria-label={t('torrent.screen.deleteTorrent')} onClick={remove}>
+            <button type="button" class="m-icon-btn m-glass m-danger" aria-label={t('torrent.screen.deleteTorrent')} onClick={() => void remove()}>
               <Icon d={TRASH} size={20} />
             </button>
           </div>

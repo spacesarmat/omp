@@ -393,8 +393,8 @@ export const en: EnDict<typeof ru> = {
     files: { one: '{n} file', other: '{n} files' },
     alreadyHave: 'Already in the library: {info}',
     keepOnly: 'Keep only this one',
-    keepOnlyAsk: { one: 'Delete the other torrent of season {season} ({n})?', other: 'Delete the other torrents of season {season} ({n})?' },
-    keepOnlyAskNoSeason: { one: 'Delete the other torrent with no season ({n})?', other: 'Delete the other torrents with no season ({n})?' },
+    keepOnlyAsk: { one: 'Delete {n} more torrent of season {season}?', other: 'Delete {n} more torrents of season {season}?' },
+    keepOnlyAskNoSeason: { one: 'Delete {n} more torrent with no season?', other: 'Delete {n} more torrents with no season?' },
     // the TV series screen
     watchEp: 'Watch {code}',
     releasesBtn: 'Torrents · {n}',
