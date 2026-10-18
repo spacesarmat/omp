@@ -2420,7 +2420,7 @@ export const en: EnDict<typeof ru> = {
     loadFailed: 'Could not load the server settings',
     loading: 'Loading…',
     diskCache: 'Cache on the phone’s disk',
-    tmdbKey: 'Key for posters and descriptions (TMDB)',
+    tmdbKey: 'TMDB key',
     set: 'Set',
     notSet: 'Not set',
     fillPosters: 'Find posters for torrents without one',
