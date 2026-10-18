@@ -8,6 +8,7 @@ import {
   oversizeLogLine,
   escapeHtml,
   CAPTION_MAX,
+  CAPTION_NOTES_MAX,
   UPLOAD_MAX,
 } from '../../scripts/telegram-lib.mjs';
 
@@ -21,14 +22,28 @@ describe('telegram-lib', () => {
 
   it('builds a caption with the version and the changelog lines', () => {
     const c = buildCaption('0.14.1', ['Поддержать OMP', 'Окна <выбора>']);
-    expect(c).toBe('<b>OMP 0.14.1</b>\n\n• Поддержать OMP\n• Окна &lt;выбора&gt;');
+    expect(c).toBe(
+      '<b>OMP 0.14.1</b>\n\n• Поддержать OMP\n• Окна &lt;выбора&gt;' +
+        '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v0.14.1">Все изменения и файлы — на GitHub</a>',
+    );
+  });
+
+  it('keeps only the first bullets and links the release page of the tag', () => {
+    const notes = Array.from({ length: 13 }, (_, i) => `Пункт ${i}`);
+    const c = buildCaption('1.0.0', notes, 'v1.0.0');
+    expect(CAPTION_NOTES_MAX).toBe(5);
+    expect(c.match(/• /g)).toHaveLength(CAPTION_NOTES_MAX);
+    expect(c).toContain('• Пункт 4');
+    expect(c).not.toContain('Пункт 5');
+    expect(c).toMatch(/releases\/tag\/v1\.0\.0">/);
+    expect(c).not.toMatch(/README|установ/i);
   });
 
   it('cuts on a whole line and stays under the Telegram limit', () => {
     const notes = Array.from({ length: 30 }, (_, i) => `Пункт ${i} `.repeat(8));
     const c = buildCaption('1.0.0', notes);
     expect(c.length).toBeLessThanOrEqual(CAPTION_MAX);
-    expect(c).toContain('…и другое');
+    expect(c).toContain('на GitHub</a>');
     expect(c).toContain('• Пункт 0');
   });
 

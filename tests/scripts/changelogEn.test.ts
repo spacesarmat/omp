@@ -21,9 +21,9 @@ describe('changelog-en', () => {
       expect(englishNotes(md, v)).not.toBe('');
     });
   });
-  it('the release workflow appends the English section from the script', () => {
+  it('the release workflow builds the bilingual body from the script, without the generated PR list', () => {
     const yml = readFileSync('.github/workflows/release.yml', 'utf8');
-    expect(yml).toContain('node scripts/changelog-en.mjs "$VERSION"');
-    expect(yml).toContain('## English');
+    expect(yml).toContain('node scripts/release-notes.mjs "$TAG" build > notes.md');
+    expect(yml).not.toContain('--generate-notes');
   });
 });
