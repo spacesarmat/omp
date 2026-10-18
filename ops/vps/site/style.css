@@ -125,6 +125,38 @@ footer a:hover {
   background: rgba(249, 196, 0, 0.06);
 }
 
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #8d927f;
+}
+
+.lang-switch a {
+  color: inherit;
+  border-radius: 4px;
+}
+
+.lang-switch a[aria-current="page"],
+.lang-switch a:hover {
+  color: var(--yellow);
+}
+
+.lang-switch .lang-sep {
+  color: #555a49;
+  font-weight: 500;
+}
+
 .hero-copy {
   text-align: center;
   padding: 55px 0 36px;
@@ -1200,6 +1232,12 @@ footer .copyright {
 }
 
 @media (min-width: 901px) and (max-width: 1100px) {
+  .header nav {
+    gap: 16px;
+  }
+  .header-tools {
+    gap: 12px;
+  }
   .hero {
     padding-inline: 30px;
     column-gap: 20px;
@@ -1434,6 +1472,19 @@ footer .copyright {
     gap: 12px;
   }
 
+  .header-tools {
+    gap: 8px;
+  }
+
+  .lang-switch a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 32px;
+    padding: 0 2px;
+  }
+
   .brand {
     min-height: 44px;
   }
@@ -1484,6 +1535,11 @@ footer .copyright {
     line-height: 1.12;
     letter-spacing: -0.04em;
     margin: 12px 0;
+  }
+
+  html[lang="en"] h1 {
+    font-size: clamp(24px, 7.4vw, 36px);
+    letter-spacing: -0.05em;
   }
 
   .hero-copy p,
@@ -1719,5 +1775,18 @@ footer .copyright {
     padding-top: 4px;
     color: #c5c9b6;
     font-size: 13px;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-tools {
+    gap: 4px;
+  }
+  .lang-switch {
+    gap: 2px;
+    letter-spacing: 0.02em;
+  }
+  .small-download {
+    padding-inline: 10px;
   }
 }

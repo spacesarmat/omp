@@ -36,6 +36,10 @@ omp-player.online, www.omp-player.online {
 		import security_headers
 	}
 	root * /srv/site
+	# /en and /en/ are the English page. try_files accepts only regular files,
+	# so a directory request would otherwise fall through to the Russian index.
+	@en path /en /en/
+	rewrite @en /en/index.html
 	file_server
 	try_files {path} /index.html
 	header {
