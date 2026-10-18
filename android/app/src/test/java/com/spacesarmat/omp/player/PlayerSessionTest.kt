@@ -170,6 +170,23 @@ class PlayerSessionTest {
     }
 
     @Test
+    fun classifiedFailureReplacesTheCodecTextUntilCleared() {
+        session.load(request())
+        session.showClassified(FailureKind.NO_SEEDERS, ErrorKind.UNSUPPORTED_FORMAT)
+        assertEquals(FailureKind.NO_SEEDERS, session.shownFailure)
+        assertEquals(ErrorKind.UNSUPPORTED_FORMAT, session.error)
+        assertEquals("Нет раздающих — раздача сейчас недоступна. Попробуйте другую раздачу.", session.errorText())
+        session.showClassified(FailureKind.BUFFERING, ErrorKind.NETWORK)
+        assertNull(session.shownFailure)
+        assertNull(session.error)
+        session.showClassified(FailureKind.SERVER, ErrorKind.NETWORK)
+        assertEquals("Нет связи с TorrServer. Проверьте, что сервер включён и доступен в сети.", session.errorText())
+        session.retry()
+        assertNull(session.error)
+        assertNull(session.shownFailure)
+    }
+
+    @Test
     fun eventsReachTheUi() {
         session.load(request())
         val l = engine.listener!!

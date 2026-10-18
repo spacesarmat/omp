@@ -85,6 +85,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private lateinit var btnSkip: TextView
     private lateinit var errorBox: View
     private lateinit var errorText: TextView
+    private lateinit var bufferText: TextView
+    private lateinit var errPrimary: TextView
+    private lateinit var errRetry: TextView
+    private lateinit var errBack: TextView
     private lateinit var ticksView: ChapterTicksView
     private lateinit var hint: TextView
     private lateinit var toastBox: View
@@ -107,6 +111,22 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** The TorrServer statistics of the torrent playing (InfoStatsState), and whether a request is out. */
     private val infoStats = InfoStatsState()
     private var infoFetching = false
+
+    /** Keep the connecting line up until the first frame, or while peers are connected but nothing is buffered. */
+    private var holdForSwarm = false
+    /** A /cache read for the latest engine fault is in flight (the error box stays hidden). */
+    private var classifying = false
+    /** Bumps when the item changes or a frame arrives, so a late /cache answer is dropped. */
+    private var faultGen = 0
+    private var swarmFetching = false
+    private var swarmStats: TorrentStats? = null
+    private val swarmRetry = Runnable {
+        if (isFinishing || isDestroyed || !::session.isInitialized) return@Runnable
+        if (session.error != null || session.firstFrame) return@Runnable
+        holdForSwarm = true
+        session.retry()
+        render()
+    }
 
     /** «Инфо» refresh: once a second while shown (TorrServer asked in the background). */
     private val infoTick = object : Runnable {
@@ -178,7 +198,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             checkSkips()
             preloadNext()
             render()
-            if (++ticks % 2 == 0) emitState()
+            if (++ticks % 2 == 0) {
+                pollSwarm()
+                emitState()
+            }
             handler.postDelayed(this, 500)
         }
     }
@@ -217,6 +240,15 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         btnSkip = findViewById(R.id.player_skip_intro)
         errorBox = findViewById(R.id.player_error)
         errorText = findViewById(R.id.player_error_text)
+        bufferText = findViewById(R.id.player_buffering_text)
+        errPrimary = findViewById(R.id.player_error_primary)
+        errRetry = findViewById(R.id.player_error_retry)
+        errBack = findViewById(R.id.player_error_back)
+        errPrimary.setOnClickListener {
+            if (::session.isInitialized && session.shownFailure == FailureKind.NO_SEEDERS) anotherRelease() else retry()
+        }
+        errRetry.setOnClickListener { retry() }
+        errBack.setOnClickListener { close() }
         ticksView = findViewById(R.id.player_ticks)
         hint = findViewById(R.id.player_hint)
         toastBox = findViewById(R.id.player_toast)
@@ -236,7 +268,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         findViewById<TextView>(R.id.player_toast_undo).text = I18n.s("player.res.undoSkip")
         donateQrView.contentDescription = I18n.s("player.res.donateQr")
         findViewById<TextView>(R.id.player_next_hint).text = I18n.s("player.res.nextHint")
-        findViewById<TextView>(R.id.player_error_hint).text = I18n.s("player.res.errorHint")
+        errRetry.text = I18n.s("player.errRetry")
+        errBack.text = I18n.s("player.errBack")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = onBack()
@@ -316,6 +349,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         // a new run picks its engine again (the setting or the torrent's choice may differ)
         val next = if (choose) switcher.engineForRun(r) else null
         // the session first: everything below may render, and render reads the queue and index from it
+        resetSwarmWait()
         session.load(r, next)
         flow.reset()
         dedupe.reset()
@@ -364,6 +398,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         override fun beforeSwitch() = commitPendingSeek()
 
         override fun switched(kind: EngineKind, reason: SwitchReason) {
+            handler.removeCallbacks(swarmRetry)
+            if (!classifying) holdForSwarm = false
             if (reason == SwitchReason.FORMAT) showMessage(EngineChooser.FORMAT_SWITCH_TEXT, false)
             emitEngine(kind, reason)
             showControls()
@@ -411,8 +447,105 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** The open «VLC не справляется» prompt; null when none. */
     private var vlcPrompt: AlertDialog? = null
 
-    override fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean =
-        ::switcher.isInitialized && switcher.engineFailed(kind, detail, beforeFirstFrame)
+    override fun onFirstFrameShown() {
+        holdForSwarm = false
+        classifying = false
+        handler.removeCallbacks(swarmRetry)
+        faultGen++
+        render()
+    }
+
+    /**
+     * Before the first frame of a TorrServer stream, a format or network error is not a codec failure until
+     * /cache says data actually arrived. Returning true keeps [PlayerSession] from showing the engine text and
+     * keeps «Авто» from jumping to VLC on an empty swarm.
+     */
+    override fun engineFailed(kind: ErrorKind, detail: String, beforeFirstFrame: Boolean): Boolean {
+        if (!::switcher.isInitialized) return false
+        if (detail == EngineChooser.OUT_OF_MEMORY) return switcher.engineFailed(kind, detail, beforeFirstFrame)
+        val req = if (beforeFirstFrame) session.item()?.url?.let { TorrServerStats.request(it) } else null
+        if (req == null) return switcher.engineFailed(kind, detail, beforeFirstFrame)
+        classifying = true
+        holdForSwarm = true
+        val gen = ++faultGen
+        val hash = req.hash
+        render()
+        val t = Thread {
+            val stats = TorrServerStats.fetch(req)
+            handler.post {
+                if (gen != faultGen || isDestroyed) return@post
+                val still = session.item()?.url?.let { TorrServerStats.request(it) }?.hash == hash
+                if (!still || session.firstFrame) {
+                    classifying = false
+                    return@post
+                }
+                if (stats != null) swarmStats = stats
+                val swarm = if (stats == null) SwarmLookup.Unreachable else SwarmLookup.Known(PlaybackFailure.statsOf(stats))
+                applySwarm(PlaybackFailure.classify(PlaybackFailure.faultOf(kind), swarm, played = false), kind, detail, beforeFirstFrame)
+            }
+        }
+        t.isDaemon = true
+        t.start()
+        return true
+    }
+
+    private fun applySwarm(cls: FailureKind, kind: ErrorKind, detail: String, beforeFirstFrame: Boolean) {
+        if (isFinishing || isDestroyed) return
+        classifying = false
+        handler.removeCallbacks(swarmRetry)
+        when (cls) {
+            FailureKind.BUFFERING -> {
+                holdForSwarm = true
+                session.showClassified(FailureKind.BUFFERING, kind)
+                handler.postDelayed(swarmRetry, PlaybackFailure.RETRY_MS)
+            }
+            FailureKind.CODEC -> {
+                holdForSwarm = false
+                if (!switcher.engineFailed(kind, detail, beforeFirstFrame)) session.showClassified(FailureKind.CODEC, kind)
+            }
+            else -> {
+                holdForSwarm = false
+                val handed = cls == FailureKind.OTHER &&
+                    (detail == EngineChooser.DECODING_FAILED || kind == ErrorKind.DECODER) &&
+                    switcher.engineFailed(kind, detail, beforeFirstFrame)
+                if (!handed) session.showClassified(cls, kind)
+            }
+        }
+        render()
+    }
+
+    /** Drops a late /cache answer and the connecting retry when the item changes. */
+    private fun resetSwarmWait() {
+        faultGen++
+        classifying = false
+        holdForSwarm = false
+        swarmStats = null
+        swarmFetching = false
+        handler.removeCallbacks(swarmRetry)
+    }
+
+    /** Peers and speed for the connecting line, once a second, until the first frame (or while a retry is held). */
+    private fun pollSwarm() {
+        if (swarmFetching || classifying || !::session.isInitialized || isFinishing) return
+        if (session.error != null) return
+        if (session.firstFrame && !holdForSwarm) return
+        val r = session.item()?.url?.let { TorrServerStats.request(it) } ?: return
+        swarmFetching = true
+        val gen = faultGen
+        val hash = r.hash
+        val t = Thread {
+            val s = TorrServerStats.fetch(r)
+            handler.post {
+                if (gen == faultGen) swarmFetching = false
+                if (gen != faultGen || isDestroyed) return@post
+                if (session.item()?.url?.let { TorrServerStats.request(it) }?.hash != hash) return@post
+                if (s != null) swarmStats = s
+                if (!session.firstFrame || holdForSwarm) render()
+            }
+        }
+        t.isDaemon = true
+        t.start()
+    }
 
     /** { type: "assSubs" } from the page: «Авто» moves the current item to VLC (other items: when they start). */
     fun assSubsKnown(i: Int) {
@@ -583,6 +716,14 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         ColorKeys.actionFor(code)?.let {
             colorKey(it)
             return
+        }
+        if (session.error != null) {
+            if (errorKey(code)) return
+            // the error box owns the D-pad; Back still leaves the player
+            if (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_MENU ||
+                code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                code == KeyEvent.KEYCODE_MEDIA_REWIND || code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+            ) return
         }
         when (code) {
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> when {
@@ -1029,6 +1170,9 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private fun playItem(i: Int) {
         handler.removeCallbacks(commitSeek)
         seeker.cancel()
+        val q = session.request?.queue
+        if (q == null || i !in q.indices || i == session.index) return
+        resetSwarmWait()
         if (!switcher.goTo(i)) return
         cancelCountdown()
         flow.entered()
@@ -1041,8 +1185,38 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     private fun retry() {
         flow.moved()
+        holdForSwarm = false
+        handler.removeCallbacks(swarmRetry)
         session.retry()
         changed()
+    }
+
+    /** «Другая раздача»: the page opens the torrent's find/replace flow, or stays on its details. */
+    private fun anotherRelease() {
+        if (isFinishing) return
+        emitClosed(replaced = false, another = true)
+        finish()
+    }
+
+    /** Left / right move the error buttons; OK presses the focused one. Primary stays focused until then. */
+    private fun errorKey(code: Int): Boolean {
+        val move = code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT
+        val press = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER
+        if (!move && !press) return false
+        val buttons = listOf(errPrimary, errRetry, errBack).filter { it.visibility == View.VISIBLE }
+        if (buttons.isEmpty()) return false
+        val i = buttons.indexOfFirst { it === currentFocus }
+        if (press) {
+            (if (i >= 0) buttons[i] else buttons[0]).performClick()
+            return true
+        }
+        val next = if (code == KeyEvent.KEYCODE_DPAD_LEFT) {
+            if (i <= 0) buttons.size - 1 else i - 1
+        } else {
+            if (i < 0 || i >= buttons.size - 1) 0 else i + 1
+        }
+        buttons[next].requestFocus()
+        return true
     }
 
     private fun onItemEnd() {
@@ -1196,7 +1370,18 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         btnSkip.visibility = if (skipShown()) View.VISIBLE else View.GONE
         // above the controls while they are shown, near the bottom edge when they are hidden (above the donate card)
         renderDonate(visible, paused, pos, dur)
-        buffering.visibility = if (engine.isBuffering && session.error == null) View.VISIBLE else View.GONE
+        val torrent = item.url.let { TorrServerStats.request(it) } != null
+        val waiting = torrent && (!session.firstFrame || holdForSwarm)
+        val showSpin = session.error == null && (engine.isBuffering || holdForSwarm || waiting || classifying)
+        buffering.visibility = if (showSpin) View.VISIBLE else View.GONE
+        if (showSpin && waiting) {
+            val peers = swarmStats?.activePeers ?: 0
+            val speed = swarmStats?.downSpeed ?: 0.0
+            bufferText.text = PlaybackFailure.connectingText(peers, speed)
+            bufferText.visibility = View.VISIBLE
+        } else if (::bufferText.isInitialized) {
+            bufferText.visibility = View.GONE
+        }
         if (flow.countdown >= 0 && hasNext()) {
             nextBox.visibility = View.VISIBLE
             nextCount.text = I18n.s("player.nextIn", "n" to flow.countdown.toString())
@@ -1206,7 +1391,25 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         }
         val e = session.errorText()
         errorBox.visibility = if (e != null) View.VISIBLE else View.GONE
-        if (e != null) errorText.text = e
+        if (e != null) showError(e)
+    }
+
+    /** The error box: classified text, and «Другая раздача» as the primary button when the swarm is empty. */
+    private fun showError(text: String) {
+        var shown = text
+        if (session.shownFailure == FailureKind.CODEC) {
+            val info = engine.mediaInfo()
+            val size = if (info.width > 0 && info.height > 0) "${info.width}×${info.height}" else ""
+            val extra = listOf(info.videoCodec, size).filter { it.isNotEmpty() }.joinToString(" ")
+            if (extra.isNotEmpty()) shown = text + "\n" + extra
+        }
+        errorText.text = shown
+        val noSeeders = session.shownFailure == FailureKind.NO_SEEDERS
+        errPrimary.text = I18n.s(if (noSeeders) "player.anotherRelease" else "player.errRetry")
+        errRetry.visibility = if (noSeeders) View.VISIBLE else View.GONE
+        val focused = currentFocus
+        val onButton = focused === errPrimary || focused === errRetry || focused === errBack
+        if (!onButton) errPrimary.requestFocus()
     }
 
     /** The key hint line and, under it, the colour keys with coloured dots (night sound only where the engine has it). */
@@ -1242,12 +1445,13 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         NativePlayerBridge.emit("nativePlayerState", o)
     }
 
-    private fun emitClosed(replaced: Boolean) {
+    private fun emitClosed(replaced: Boolean, another: Boolean = false) {
         if (closedSent || !::session.isInitialized) return
         closedSent = true
         commitPendingSeek()
         val o = base()
         if (replaced) o.put("replaced", true)
+        if (another) o.put("another", true)
         NativePlayerBridge.emit("nativePlayerClosed", o)
     }
 
