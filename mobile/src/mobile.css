@@ -1410,6 +1410,8 @@ button, .m-btn {
 .m-sub-new { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
 .m-subs-search { display: flex; align-items: center; gap: 6px; }
 .m-subs-search .m-input { min-width: 0; }
+.m-subs-sort { align-items: center; }
+.m-subs-sort-label { flex: 0 0 auto; white-space: nowrap; }
 .m-sub-check { align-self: flex-start; }
 .m-ep-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; background: var(--panel); overflow-wrap: anywhere; }
 .m-ep-card-title { font-size: 14px; font-weight: 700; }
