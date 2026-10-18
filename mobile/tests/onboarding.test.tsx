@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
+// @ts-ignore
 import { resolve } from 'node:path';
 import { render } from 'preact';
 import type { ComponentChild } from 'preact';
