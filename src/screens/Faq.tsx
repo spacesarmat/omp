@@ -12,6 +12,23 @@ const URL_RE = /https?:\/\/[^\s)]+/;
 const STEP_RE = /^(\d+)\.\s+/;
 /** Inner padding of the question panel: a focused row keeps this much room to the panel edge. */
 export const LIST_PAD = 18;
+/** How far Up/Down moves a long answer. */
+export const FAQ_SCROLL_STEP = 160;
+
+/**
+ * The next scrollTop for one D-pad step, or null when that direction is already at the edge
+ * (the remote should move to another question instead).
+ */
+export function scrollStep(scrollTop: number, clientHeight: number, scrollHeight: number, dir: 'up' | 'down', step = FAQ_SCROLL_STEP): number | null {
+  const max = Math.max(0, scrollHeight - clientHeight);
+  if (scrollHeight <= clientHeight + 1) return null;
+  if (dir === 'down') {
+    if (scrollTop >= max - 1) return null;
+    return Math.min(max, scrollTop + step);
+  }
+  if (scrollTop <= 1) return null;
+  return Math.max(0, scrollTop - step);
+}
 
 // the shared FAQ texts are written for the phone: tvGlyphs (src/ui/tvText.ts) swaps glyphs the LG font lacks
 export { tvGlyphs };
@@ -85,6 +102,7 @@ export function FaqScreen() {
   const inSec = items.filter((it) => it.section === secId);
   const [cur, setCur] = useState<string>(inSec.length ? inSec[0].id : '');
   const listRef = useRef<HTMLDivElement>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
 
   const sel: FaqItem | undefined = inSec.filter((it) => it.id === cur)[0] || inSec[0];
@@ -102,6 +120,11 @@ export function FaqScreen() {
     if (inSec.length) setFocus('faq-' + inSec[0].id);
   }, [secId]);
 
+  useEffect(() => {
+    const el = answerRef.current;
+    if (el) el.scrollTop = 0;
+  }, [cur]);
+
   const switchSection = (step: number): void => {
     let i = -1;
     for (let k = 0; k < sections.length; k++) if (sections[k].id === secId) i = k;
@@ -112,9 +135,33 @@ export function FaqScreen() {
     setSecId(next.id);
   };
 
+  const answerEl = (): HTMLElement | null => answerRef.current;
+
+  const scrollAnswer = (dir: 'up' | 'down'): boolean => {
+    const el = answerEl();
+    if (!el) return false;
+    const next = scrollStep(el.scrollTop, el.clientHeight, el.scrollHeight, dir);
+    if (next === null) return false;
+    el.scrollTop = next;
+    return true;
+  };
+
   const onArrow = (dir: string): boolean => {
     if (dir === 'left') { switchSection(-1); return false; }
     if (dir === 'right') { switchSection(1); return false; }
+    if ((dir === 'up' || dir === 'down') && scrollAnswer(dir)) return false;
+    return true;
+  };
+
+  const onAnswerArrow = (dir: string): boolean => {
+    if (dir === 'up' || dir === 'down') {
+      scrollAnswer(dir);
+      return false;
+    }
+    if (dir === 'left' && sel) {
+      setFocus('faq-' + sel.id);
+      return false;
+    }
     return true;
   };
 
@@ -152,10 +199,12 @@ export function FaqScreen() {
       <section class="faq-answer">
         {view && <h2>{tvGlyphs(view.q)}</h2>}
         {view && (
-          <div class="faq-body">
-            <Blocks lines={view.short} cls="faq-short" prefix="s" />
-            {view.more.length > 0 && <Blocks lines={view.more} cls="faq-more" prefix="m" />}
-          </div>
+          <Focusable focusKey="faq-answer" className="faq-body" onArrow={onAnswerArrow}>
+            <div class="faq-body-scroll" ref={answerRef}>
+              <Blocks lines={view.short} cls="faq-short" prefix="s" />
+              {view.more.length > 0 && <Blocks lines={view.more} cls="faq-more" prefix="m" />}
+            </div>
+          </Focusable>
         )}
         {view && url && (
           <div class="faq-qr">

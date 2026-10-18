@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { useEffect, useRef } from 'preact/hooks';
-import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { focusAfterClose } from './focus';
 import { whatsNew, closeWhatsNew, markWhatsNewShown } from '../store/whatsNew';
 import { FocusGroup, Focusable, Button } from './components';
 import { useKeys } from './keys';
@@ -33,7 +34,7 @@ export function WhatsNewDialog() {
     const k = prevFocus.current;
     prevFocus.current = undefined;
     closeWhatsNew();
-    if (k && doesFocusableExist(k)) setFocus(k);
+    focusAfterClose(k);
   };
 
   useKeys((a) => {

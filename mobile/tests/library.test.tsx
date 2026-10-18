@@ -15,6 +15,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents, torrentsAt, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { posterImageSize } from '../../src/catalog/tmdb';
 import { applyLanguageSetting } from '../../src/i18n';
 import type { Torrent } from '../../src/api/types';
 
@@ -92,7 +93,7 @@ describe('Library posters', () => {
     for (let i = 0; i < 6; i++) await flush();
     expect(tmdb).toHaveBeenCalledTimes(3);
     expect(setPoster).toHaveBeenCalledTimes(1);
-    expect(torrents.value.find((t) => t.hash === 'h3')!.poster).toBe('https://imagetmdb.com/t/p/w300/n.jpg');
+    expect(torrents.value.find((t) => t.hash === 'h3')!.poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/n.jpg');
     expect(JSON.parse(localStorage.getItem('tsp.posterTried')!).sort()).toEqual(['h1', 'h2', 'h3']);
     // the next refresh does not search again
     act(() => render(null, el));

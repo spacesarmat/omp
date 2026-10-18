@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, posterImageSize, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { isTmdbV4Token } from '../../src/catalog/tmdbToken';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
@@ -103,7 +103,7 @@ describe('sanitizers', () => {
   it('lists keep films and series, drop people and junk', () => {
     const l = sanitizeList(E, MULTI, null);
     expect(l.items.map((i) => i.kind + ':' + i.id)).toEqual(['movie:101', 'tv:202']);
-    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/w300/nw.jpg', rating: 7.4 });
+    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4 });
     expect(sanitizeList(E, MOVIE_LIST, 'movie').pages).toBe(3);
     expect(sanitizeList(E, 'junk', 'movie')).toEqual({ items: [], pages: 0 });
   });
@@ -114,7 +114,7 @@ describe('sanitizers', () => {
       { number: 1, episodes: 8, year: 2024, aired: 8, airDate: '2024-03-01', poster: '' },
     ]);
     const withPoster = sanitizeCard(E, { ...TV_CARD, seasons: [{ season_number: 1, episode_count: 8, air_date: '2024-03-01', poster_path: '/s1.jpg' }] }, 'tv')!;
-    expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/w300/s1.jpg');
+    expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/' + posterImageSize() + '/s1.jpg');
     expect(c.airing).toBe(true);
     expect(c.cast.length).toBe(12);
     expect(c.runtime).toBeGreaterThan(0);

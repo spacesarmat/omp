@@ -776,3 +776,58 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .onb-actions { display: flex; }
 .onb-actions .button { margin-right: 24px; min-width: 280px; text-align: center; }
 .onb-actions .button:last-child { margin-right: 0; }
+
+/* webOS TV audit: safe margins, sofa-distance type, confirm danger, wrapping actions, FAQ scroll. */
+.dialog-option.danger { background: rgba(229, 72, 77, .22); color: #ffd0d1; box-shadow: inset 0 0 0 2px var(--danger); }
+.dialog-option.danger.focused { background: var(--danger); color: #ffffff; box-shadow: 0 0 0 4px var(--focus); transform: none; }
+
+.player-error .error-view { padding: 80px 96px; }
+.player-error .error-view .message { font-size: 44px; line-height: 1.25; }
+.player-error .details { font-size: 28px; line-height: 1.35; }
+
+.screen.library { padding-left: 96px; padding-right: 96px; }
+.topbar-home { flex: 0 0 auto; }
+.topbar-tabs { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; overflow-x: auto; overflow-y: hidden; }
+.topbar-tabs::-webkit-scrollbar { display: none; }
+.topbar .tab { flex: 0 0 auto; }
+.topbar-tools { flex: 0 0 auto; display: flex; align-items: center; }
+.topbar-tools > * { margin-right: 10px; }
+.topbar-tools > *:last-child { margin-right: 0; }
+
+.disc-bar > .disc-bar-box { flex: 1 1 auto; min-width: 0; margin-right: 12px; overflow: hidden; }
+.disc-bar-scroll { display: flex; flex-wrap: nowrap; align-items: center; }
+.disc-bar-scroll > * { margin-right: 12px; flex-shrink: 0; }
+.disc-bar-scroll > *:last-child { margin-right: 0; }
+.disc-bar > .disc-kind-want { flex: 0 0 auto; margin-left: 12px; margin-right: 0; }
+
+.torrent-actions { overflow: visible; }
+.torrent-actions-row { flex-wrap: wrap; }
+.torrent-actions-row.row > * { margin-bottom: 12px; }
+
+.screen.settings { padding: 48px 96px 180px; }
+.settings .button.focused { transform-origin: left center; }
+
+.tile-large .tile-title { font-size: 28px; line-height: 34px; height: 102px; }
+.tile-small .tile-title { font-size: 28px; line-height: 34px; height: 68px; }
+.tile-small .art-title { font-size: 24px; }
+.tile-meta { font-size: 24px; }
+.disc-title { font-size: 28px; line-height: 34px; margin-top: 8px; }
+.disc-meta { font-size: 24px; }
+.badge, .tile .tile-count, .series-pill, .tile-small .series-pill, .disc-mark, .disc-rating, .search-chip, .tab-badge { font-size: 20px; }
+.hints, .player-hints { font-size: 24px; }
+.hcard-title { font-size: 28px; }
+.hcard-ep, .hcard-time, .hcard-src, .log-line, .log-empty { font-size: 24px; }
+.search-raw, .search-row-error, .search-side, .search-count { font-size: 24px; }
+.connect-hint, .kp-hint, .field-label, .update-text { font-size: 24px; }
+
+.screen.connect { padding-bottom: 200px; }
+.connect-body { width: 980px; padding-top: 36px; }
+.connect .text-input input, .connect .button { min-height: 64px; box-sizing: border-box; }
+
+.faq-answer { display: block; overflow: hidden; }
+.faq-answer h2 { position: absolute; left: 48px; right: 48px; top: 36px; margin: 0; }
+.faq-body { position: absolute; left: 48px; right: 48px; top: 120px; bottom: 248px; overflow: hidden; flex: none; }
+.faq-body.focused { transform: none; box-shadow: inset 0 0 0 3px var(--focus); }
+.faq-body-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
+.faq-body-scroll::-webkit-scrollbar { display: none; }
+.faq-qr, .faq-phone { position: absolute; left: 48px; right: 48px; bottom: 28px; margin-top: 0; }

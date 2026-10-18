@@ -378,8 +378,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
 
   return (
     <div class="discover">
-      <div class="disc-bar-box" ref={barRef}>
       <FocusGroup focusKey="DISC-BAR" className="disc-bar" preferredChildFocusKey={isWant ? 'disc-kind-want' : 'disc-kind-' + kind}>
+      <div class="disc-bar-box" ref={barRef}>
+      <div class="disc-bar-scroll">
         <div class="disc-kinds">
           {kinds().map((k) => (
             <Focusable
@@ -409,11 +410,12 @@ export function DiscoverGrid(p: DiscoverGridProps) {
         <Focusable focusKey="disc-rating" className={'disc-btn' + dim} onPress={feedOnly(pickRating)} onFocused={onChip('disc-rating')}>
           {t('tv.discover.ratingValue', { name: ratingName(query.rating) })}
         </Focusable>
-        <div class="spacer" />
         <Focusable focusKey="disc-find" className={'disc-btn disc-find' + dim} onPress={feedOnly(askSearch)} onFocused={onChip('disc-find')}>
           <Icon name="search" size={26} class="disc-find-icon" />
           {t('tv.discover.find')}
         </Focusable>
+      </div>
+      </div>
         <Focusable
           focusKey="disc-kind-want"
           className={'disc-kind disc-kind-want' + (isWant ? ' active' : '')}
@@ -423,7 +425,6 @@ export function DiscoverGrid(p: DiscoverGridProps) {
           {t('tv.want.tab')}
         </Focusable>
       </FocusGroup>
-      </div>
       {isWant ? (
         <div class="disc-sub">{t('tv.want.subtitle')}</div>
       ) : search ? (

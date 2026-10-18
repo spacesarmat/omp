@@ -1,6 +1,6 @@
-// Android TV: the TV interface is laid out for 1920×1080 CSS px. MainActivity turns on the wide viewport so
-// <meta name="viewport" content="width=1920"> applies; this is the safety net for WebViews that still report a
-// different layout width — the .app root is scaled to fit the window.
+// The TV interface is laid out for 1920×1080 CSS px. Android TV's MainActivity turns on the wide viewport so
+// <meta name="viewport" content="width=1920"> applies; webOS 4K can still report 3840. This scales the .app root
+// by innerWidth/1920 so both panels render the same layout.
 
 const BASE_W = 1920;
 const BASE_H = 1080;

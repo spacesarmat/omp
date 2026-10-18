@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { init } from '@noriginmedia/norigin-spatial-navigation';
 // @ts-ignore node builtin, no @types/node in this project
 import { readFileSync } from 'node:fs';
 import { tvGlyphs } from '../../src/ui/tvText';
@@ -93,24 +93,12 @@ describe('TV torrent screen', () => {
     names.forEach((n: string | null) => expect(n).not.toMatch(/[\u2758\u25B8]/));
   });
 
-  it('keeps the action buttons in one row that scrolls sideways to the focused one', async () => {
-    const box = host.querySelector('.torrent-actions') as HTMLElement;
+  it('keeps rename, another poster and delete in the wrapping action row', () => {
     const row = host.querySelector('.torrent-actions-row') as HTMLElement;
-    expect(box && row && box.contains(row)).toBe(true);
+    expect(row).toBeTruthy();
     const keys = Array.prototype.slice.call(row.querySelectorAll('[data-fk]')).map((e: Element) => e.getAttribute('data-fk') as string);
-    expect(keys.length).toBeGreaterThanOrEqual(5);
-    // no layout in the test DOM: 300px per button (316 apart) in a 1000px box
-    const fix = (el: Element, props: Record<string, any>) => Object.keys(props).forEach((k) => Object.defineProperty(el, k, { configurable: true, ...props[k] }));
-    keys.forEach((k, i) => fix(row.querySelector('[data-fk="' + k + '"]')!, { offsetLeft: { get: () => i * 316 }, offsetWidth: { get: () => 300 } }));
-    let scroll = 0;
-    fix(box, { clientWidth: { get: () => 1000 }, scrollLeft: { get: () => scroll, set: (v: number) => { scroll = v; } } });
-    {
-      const last = keys[keys.length - 1];
-      await act(async () => { setFocus(last); await new Promise((r) => setTimeout(r, 50)); });
-      const start = (keys.length - 1) * 316;
-      expect(box.scrollLeft).toBe(start + 300 + 24 - 1000);
-      await act(async () => { setFocus(keys[0]); await new Promise((r) => setTimeout(r, 50)); });
-      expect(box.scrollLeft).toBe(0);
-    }
+    expect(keys).toContain('torrent-rename');
+    expect(keys).toContain('torrent-poster');
+    expect(keys).toContain('torrent-delete');
   });
 });

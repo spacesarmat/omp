@@ -1,21 +1,95 @@
-import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { takeSavedFocus, screenFocusables, currentRoute } from './nav';
 import type { SavedFocus } from './nav';
 
 /** Height of the hint band pinned to the bottom of the screen; a focused element must end above it. */
 export const HINTS_HEIGHT = 96;
+/** Extra room around a focused element so a focus scale stays inside the screen edge. */
+export const SCROLL_BLOCK_MARGIN = 36;
 
 export function scrollIntoViewSafe(el: Element | null): void {
   if (!el) return;
   const anyEl = el as any;
   if (typeof anyEl.scrollIntoViewIfNeeded === 'function') anyEl.scrollIntoViewIfNeeded(false);
   else el.scrollIntoView(false);
-  // the hint band covers the bottom of the scrolling screen: lift the element clear of it
   let box: HTMLElement | null = el.parentElement;
   while (box && !(box.classList && box.classList.contains('screen'))) box = box.parentElement;
-  if (!box || !box.querySelector('.hints')) return;
-  const over = el.getBoundingClientRect().bottom - (box.getBoundingClientRect().bottom - HINTS_HEIGHT);
+  if (!box) return;
+  // the address keypad's hint sits under the last key; keep that hint above the footer
+  const keypad = typeof (el as HTMLElement).closest === 'function' && (el as HTMLElement).closest('.keypad');
+  const margin = SCROLL_BLOCK_MARGIN + (keypad ? 72 : 0);
+  const hints = box.querySelector('.hints') ? HINTS_HEIGHT : 0;
+  const over = el.getBoundingClientRect().bottom + margin - (box.getBoundingClientRect().bottom - hints);
   if (over > 0) box.scrollTop += over;
+  const topOver = box.getBoundingClientRect().top + margin - el.getBoundingClientRect().top;
+  if (topOver > 0) box.scrollTop -= topOver;
+}
+
+/**
+ * Where D-pad up/down/left/right goes inside an ordered list of rows.
+ * A string is the next key; null means stay; undefined means the spatial library decides (past either end).
+ */
+export function nextRowKey(rows: string[][], key: string, dir: string): string | null | undefined {
+  let ri = -1;
+  let ci = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const c = rows[r].indexOf(key);
+    if (c >= 0) {
+      ri = r;
+      ci = c;
+      break;
+    }
+  }
+  if (ri < 0) return undefined;
+  if (dir === 'left' || dir === 'right') {
+    const row = rows[ri];
+    if (row.length < 2) return null;
+    const n = ci + (dir === 'right' ? 1 : -1);
+    if (n < 0 || n >= row.length) return null;
+    return row[n];
+  }
+  if (dir !== 'up' && dir !== 'down') return undefined;
+  const n = ri + (dir === 'down' ? 1 : -1);
+  if (n < 0 || n >= rows.length) return undefined;
+  const row = rows[n];
+  return row[Math.min(ci, row.length - 1)];
+}
+
+/** onArrow for a key in `rows`: explicit neighbours, so a short button is not skipped. */
+export function rowArrow(rows: string[][], key: string): (dir: string) => boolean {
+  return (dir: string) => {
+    const next = nextRowKey(rows, key, dir);
+    if (next === undefined) return true;
+    if (next && doesFocusableExist(next)) setFocus(next);
+    return false;
+  };
+}
+
+/** After an overlay unmounts, focus `preferred`, else whatever still has focus, else the screen's first focusable. */
+export function focusAfterClose(preferred?: string): void {
+  const route = currentRoute.value;
+  const want = preferred;
+  setTimeout(() => {
+    if (currentRoute.value !== route) return;
+    if (document.querySelector('.onboarding-host, .dialog-backdrop, .better-backdrop, .marks-backdrop')) return;
+    const go = (k: string | null | undefined): boolean => {
+      if (!k || !doesFocusableExist(k)) return false;
+      setFocus(k);
+      return true;
+    };
+    if (go(want)) return;
+    let cur = '';
+    try {
+      cur = getCurrentFocusKey() || '';
+    } catch (e) {
+      cur = '';
+    }
+    if (go(cur)) return;
+    const els = screenFocusables();
+    for (let i = 0; i < els.length; i++) {
+      if (go(els[i].getAttribute('data-fk'))) return;
+    }
+  }, 0);
 }
 
 /** The screen that scrolls around an element (`.screen`), or null. */
