@@ -90,6 +90,7 @@ describe('subscription codes', () => {
 
   it('an extra-device payment issues a new code', () => {
     const start = paid();
+    start.state = activate(start.state, { code: start.code, deviceId: 'a'.repeat(32), now: NOW }).state;
     start.state.settings.extraDeviceRub = 50;
     const applied = applyPayment(start.state, {
       operationId: 'op2',

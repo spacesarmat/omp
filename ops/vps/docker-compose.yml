@@ -50,6 +50,11 @@ services:
       # Fan-out search: 12s per indexer, 18s for the whole /v1/search.
       BILLING_JACKETT_INDEXER_TIMEOUT_MS: "12000"
       BILLING_JACKETT_SEARCH_DEADLINE_MS: "18000"
+      # /v1/activate limits per window (0 = off). See ops/billing/README.md.
+      BILLING_ACTIVATE_IP_MAX: ${BILLING_ACTIVATE_IP_MAX:-20}
+      BILLING_ACTIVATE_CODE_MAX: ${BILLING_ACTIVATE_CODE_MAX:-10}
+      BILLING_ACTIVATE_WINDOW_SEC: ${BILLING_ACTIVATE_WINDOW_SEC:-600}
+      BILLING_LINK_CLEAR_REQUIRE_TOKEN: ${BILLING_LINK_CLEAR_REQUIRE_TOKEN:-0}
       TZ: ${TZ:-Europe/Moscow}
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080

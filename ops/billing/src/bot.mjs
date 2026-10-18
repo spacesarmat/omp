@@ -8,6 +8,8 @@ import {
   confirmAdminPanelLogin,
   confirmDeviceLink,
   createPromo,
+  DEVICE_BASE,
+  deviceCode,
   ensureTelegramAccount,
   formatCode,
   rememberTelegramProfile,
@@ -18,7 +20,6 @@ import {
   priceText,
   quotePurchase,
   redeemPromo,
-  revealableCode,
   subscriptionView,
   supportReplyTarget,
   unbindDevice,
@@ -106,13 +107,16 @@ export function adminBroadcast(settings, text) {
   }));
 }
 
-export function paymentAdminNotices(settings, { ok, amount, label, error, who }) {
+export function paymentAdminNotices(settings, { ok, pending, amount, label, error, who }) {
   const sum = String(amount || '').trim();
   const mark = String(label || '').trim();
   const person = String(who || '').trim();
   const lines = [];
   if (ok) lines.push('Новая оплата' + (sum ? ': ' + sum + ' ₽' : ''));
-  else {
+  else if (pending) {
+    lines.push('Платёж ждёт подтверждения в ЮMoney (unaccepted)' + (sum ? ': ' + sum + ' ₽' : ''));
+    lines.push('Подписка не продлена. Примите перевод в кошельке.');
+  } else {
     lines.push('Ошибка оплаты: ' + (error || 'неизвестно'));
     if (sum) lines.push('Сумма: ' + sum);
   }
@@ -224,6 +228,10 @@ function statusText(sub, account) {
     '\n«Код» — показать код или ссылку в OMP.'
   );
 }
+
+/** Shown instead of a code when every device slot of the subscription is taken. */
+export const DEVICE_LIMIT_TEXT =
+  'Все устройства подписки уже привязаны, новый код не выдан. Уже привязанные устройства продолжают работать. Чтобы подключить другое, отвяжите одно в «Отвязать» или купите доп. устройство.';
 
 function codeMessage(origin, code) {
   const dashed = formatCode(code);
@@ -414,15 +422,16 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     cur = out.state;
     if (out.result.error) say('Не вышло. Нужны telegramId и число дней.', { adminPad: true });
     else {
-      say(
-        'Выдано +' +
-          out.result.days +
-          ' дн. до ' +
-          new Date(out.result.paidUntil).toISOString().slice(0, 10) +
-          '.\n' +
-          codeMessage(origin, out.result.code),
-        { adminPad: true, inline: codeButtons(origin, out.result.code), parseMode: 'Markdown' },
-      );
+      const head = 'Выдано +' + out.result.days + ' дн. до ' + new Date(out.result.paidUntil).toISOString().slice(0, 10) + '.\n';
+      if (out.result.code) {
+        say(head + codeMessage(origin, out.result.code), {
+          adminPad: true,
+          inline: codeButtons(origin, out.result.code),
+          parseMode: 'Markdown',
+        });
+      } else {
+        say(head + 'Лимит устройств достигнут, новый код не выдан. Привязанные устройства продлены.', { adminPad: true });
+      }
     }
   } else if (action === 'admin_promo' && !arg) {
     say('Формат: КОД дни лимит\nПример: DEMO1 1 50', { adminPad: true, await: { kind: 'admin_promo' } });
@@ -448,10 +457,12 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
     else {
       const until = new Date(out.result.paidUntil).toISOString().slice(0, 10);
-      say(
-        'Промокод принят (+' + out.result.days + ' дн., до ' + until + ').\n\n' + codeMessage(origin, out.result.code),
-        { inline: codeButtons(origin, out.result.code), parseMode: 'Markdown' },
-      );
+      const head = 'Промокод принят (+' + out.result.days + ' дн., до ' + until + ').\n\n';
+      if (out.result.code) {
+        say(head + codeMessage(origin, out.result.code), { inline: codeButtons(origin, out.result.code), parseMode: 'Markdown' });
+      } else {
+        say(head + DEVICE_LIMIT_TEXT);
+      }
     }
   } else if (action === 'price') {
     say(
@@ -472,7 +483,9 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
           rub(prices.price) +
           ' за ' +
           prices.days +
-          ' дн. Один код — одно устройство.\n' +
+          ' дн. До ' +
+          DEVICE_BASE +
+          ' устройств, один код — одно устройство.\n' +
           checkout({ kind: 'new', accountId: account.id }, 'OMP Jackett и JacRed'),
       );
     }
@@ -490,13 +503,14 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'code') {
     if (!sub || !sub.active) say('Сначала нужна действующая подписка. «Подписка» или «Промокод».');
     else {
-      const reveal = revealableCode(cur, account.id);
-      if (reveal) {
-        say(codeMessage(origin, reveal.code), { inline: codeButtons(origin, reveal.code), parseMode: 'Markdown' });
-      } else if (sub.devices.some((d) => d.bound)) {
-        say('Код уже привязан к устройству ' + (sub.devices.find((d) => d.bound).deviceId || '').slice(0, 8) + '…\nНовый слот — оплата доп. устройства через панель или продление с новым кодом после отвязки.');
+      // A showable free code first; otherwise a new one while a device slot is free.
+      const slot = deviceCode(cur, sub.id, now);
+      cur = slot.state;
+      if (slot.code) {
+        say(codeMessage(origin, slot.code), { inline: codeButtons(origin, slot.code), parseMode: 'Markdown' });
       } else {
-        say('Свободного кода нет. Напишите в поддержку или админу.');
+        const used = sub.devices.filter((d) => d.bound).length;
+        say('Устройства: ' + used + ' из ' + sub.deviceLimit + '.\n' + DEVICE_LIMIT_TEXT);
       }
       if (wallet && prices.extra) {
         say(
