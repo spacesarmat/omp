@@ -360,7 +360,15 @@ export function Settings() {
           <span>{t('settings.showOnboarding')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-set-row m-set-pick" data-row="reset-hints" onClick={() => resetHints()}>
+        <button
+          type="button"
+          class="m-set-row m-set-pick"
+          data-row="reset-hints"
+          onClick={() => {
+            resetHints();
+            showToast(t('settings.hintsAgain'));
+          }}
+        >
           <span>{t('settings.resetHints')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>

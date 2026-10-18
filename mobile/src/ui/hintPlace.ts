@@ -70,7 +70,8 @@ export function hintTargetVisible(anchor: HintBox, vw: number, vh: number, inset
 
 /**
  * Bubble next to the target. Above only when the whole bubble fits there inside the safe area
- * (status bar included); otherwise below. Clamped on both axes. The arrow stays aimed at the target.
+ * (status bar included); otherwise below. Clamped on both axes, then pushed back off the target
+ * if that clamp would cover it. The arrow stays aimed at the target.
  * Null when the target has scrolled away: the mark must not stay parked on whatever is there now.
  */
 export function placeCoachMark(
@@ -105,8 +106,15 @@ export function placeCoachMark(
   const maxLeft = Math.max(minLeft, maxRight - width);
   const center = anchor.left + anchor.width / 2;
   const left = Math.min(Math.max(center - width / 2, minLeft), maxLeft);
+  // A bubble taller than the free space gets clamped onto the control. Pin it underneath
+  // (past the bottom edge if need be) rather than over the target or up into the status bar.
+  if (coversTarget(top, left, width, height, anchor)) top = Math.max(belowTop, anchor.bottom + HINT_GAP);
   const arrow = Math.min(Math.max(center - left, 14), Math.max(14, width - 14));
   const bubbleMid = top + height / 2;
   const anchorMid = (anchor.top + anchor.bottom) / 2;
   return { top, left, place: bubbleMid <= anchorMid ? 'above' : 'below', arrow };
+}
+
+function coversTarget(top: number, left: number, width: number, height: number, anchor: HintBox): boolean {
+  return top + height > anchor.top && top < anchor.bottom && left + width > anchor.left && left < anchor.right;
 }

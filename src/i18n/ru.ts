@@ -134,6 +134,7 @@ export const ru = {
     help: 'Помощь',
     showOnboarding: 'Показать знакомство с приложением',
     resetHints: 'Сбросить подсказки',
+    hintsAgain: 'Подсказки покажутся снова',
     support: 'Поддержать проект',
     advanced: 'Расширенные',
     expert: 'Для опытных',

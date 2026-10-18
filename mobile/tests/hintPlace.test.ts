@@ -74,6 +74,21 @@ describe('placeCoachMark', () => {
     expect(side!.left + side!.arrow).toBe(20 + 18);
   });
 
+  it('does not cover the control when the bubble is taller than the free space', () => {
+    const anchor = box(360, 16, 358, 220);
+    const bubble = { width: 280, height: 420 };
+    const spot = placeCoachMark(anchor, bubble, 390, 844);
+    expect(spot).not.toBeNull();
+    expect(spot!.top).toBeGreaterThanOrEqual(anchor.bottom);
+    expect(spot!.place).toBe('below');
+    const overlaps =
+      spot!.top < anchor.bottom &&
+      spot!.top + bubble.height > anchor.top &&
+      spot!.left < anchor.right &&
+      spot!.left + bubble.width > anchor.left;
+    expect(overlaps).toBe(false);
+  });
+
   it('hides when the control has scrolled off, including a sliver and a clamp-to-bottom case', () => {
     expect(placeCoachMark(box(-80, 20, 44, 44), hint, 390, 844)).toBeNull();
     expect(placeCoachMark(box(-40, 20, 44, 44), hint, 390, 844)).toBeNull();

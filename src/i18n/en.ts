@@ -133,6 +133,7 @@ export const en: EnDict<typeof ru> = {
     help: 'Help',
     showOnboarding: 'Show onboarding',
     resetHints: 'Reset hints',
+    hintsAgain: 'Hints will show again',
     support: 'Support the project',
     advanced: 'Advanced',
     expert: 'For experienced users',

@@ -28,6 +28,7 @@ import {
   setupVisible,
 } from '../../src/onboarding/gate';
 import { resetHints } from '../../src/onboarding/hints';
+import { toast } from '../src/ui/toast';
 import { closeWhatsNew } from '../../src/store/whatsNew';
 import { WhatsNewSheet } from '../src/ui/WhatsNewSheet';
 import { mockFetch } from '../../tests/helpers/fetchMock';
@@ -101,6 +102,7 @@ afterEach(() => {
   document.body.innerHTML = '';
   document.documentElement.classList.remove('m-hint-hold');
   closeWhatsNew();
+  toast.value = '';
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -247,6 +249,7 @@ describe('phone onboarding', () => {
       (el.querySelector('[data-row="reset-hints"]') as HTMLButtonElement).click();
     });
     expect(settings.value.seenHints.catalog).toBeUndefined();
+    expect(toast.value).toBe('Подсказки покажутся снова');
     await act(async () => row.click());
     expect(el.querySelector('[data-slide]')!.getAttribute('data-slide')).toBe('welcome');
     await act(async () => {
@@ -269,6 +272,12 @@ describe('phone onboarding', () => {
     );
     expect(el.querySelector('[data-row="onboarding"]')!.textContent).toContain('Show onboarding');
     expect(el.querySelector('[data-row="reset-hints"]')!.textContent).toContain('Reset hints');
+    // resetHints writes settings back, which reapplies the stored language. Keep that English too.
+    updateSettings({ language: 'en' });
+    act(() => {
+      (el.querySelector('[data-row="reset-hints"]') as HTMLButtonElement).click();
+    });
+    expect(toast.value).toBe('Hints will show again');
     expect(el.textContent).toContain('Skip');
     expect(el.textContent).toContain('Next');
     applyLanguageSetting('ru');
@@ -482,5 +491,89 @@ describe('phone onboarding', () => {
     expect(z('\\.m-hint')).toBeLessThan(z('\\.m-onb'));
     expect(css).toContain('html.m-hint-hold .m-hint');
     expect(css).toContain('.m-hint-arrow');
+  });
+
+  it('shows the hint again after reset without remounting the host', async () => {
+    installGeometry();
+    const el = mount(<HintPage />);
+    await act(async () => {
+      (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();
+    });
+    expect(el.querySelector('.m-hint')).toBeNull();
+    await act(async () => {
+      resetHints();
+    });
+    expect(el.querySelector('.m-hint')!.getAttribute('data-hint')).toBe('catalog');
+  });
+
+  it('shows the hint on the next visit after reset, with the host left mounted', async () => {
+    installGeometry();
+    function CatalogScreen() {
+      useHint('catalog');
+      useHint('mine');
+      return (
+        <>
+          <button type="button" data-hint-anchor="catalog">search</button>
+          <button type="button" data-hint-anchor="mine">mine</button>
+        </>
+      );
+    }
+    function LibraryGate() {
+      const route = currentRoute.value.name;
+      return (
+        <>
+          {route === 'library' ? <CatalogScreen /> : null}
+          <HintHost blocked={false} />
+        </>
+      );
+    }
+    resetTo({ name: 'library' });
+    const el = mount(<LibraryGate />);
+    expect(el.querySelector('.m-hint')!.getAttribute('data-hint')).toBe('catalog');
+    await act(async () => {
+      (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();
+    });
+    expect(el.querySelector('.m-hint')).toBeNull();
+    await act(async () => {
+      resetTo({ name: 'settings' });
+    });
+    expect(el.querySelector('[data-hint-anchor="catalog"]')).toBeNull();
+    await act(async () => {
+      resetHints();
+      resetTo({ name: 'library' });
+    });
+    expect(el.querySelector('[data-hint-anchor="catalog"]')).toBeTruthy();
+    expect(el.querySelector('.m-hint')!.getAttribute('data-hint')).toBe('catalog');
+  });
+
+  it('follows a layout shift that does not scroll', async () => {
+    installGeometry();
+    const el = mount(<HintPage />);
+    const hint = () => el.querySelector('.m-hint') as HTMLElement;
+    const top0 = Number.parseFloat(hint().style.top);
+    catalogTop = 320;
+    await act(async () => {
+      const node = document.createElement('div');
+      node.setAttribute('data-shift', '');
+      el.appendChild(node);
+    });
+    await frames();
+    expect(Number.parseFloat(hint().style.top)).toBeGreaterThan(top0);
+    expect(hint().style.top).toBe(
+      Math.round(
+        placeCoachMark(
+          { top: 320, left: 300, width: 44, height: 44, right: 344, bottom: 364 },
+          { width: 280, height: 100 },
+          390,
+          844,
+        )!.top,
+      ) + 'px',
+    );
   });
 });
