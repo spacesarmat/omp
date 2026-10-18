@@ -1213,6 +1213,8 @@ export const en: EnDict<typeof ru> = {
     hintsEpisodes: 'CH± — episodes',
     buffering: 'Buffering…',
     bufferPeers: ' · peers {n}',
+    connecting: 'Connecting… peers: {n}, speed {speed}',
+    anotherRelease: 'Another release',
     nextIn: 'Next episode in {n} s',
     nextKeys: 'OK — now · Back — stay',
     skipIntro: 'Skip intro',
@@ -1257,6 +1259,8 @@ export const en: EnDict<typeof ru> = {
     errDecode: 'Decoding error — the TV does not support this format',
     errFormat: 'The TV does not support this format or codec',
     errUnknown: 'Unknown playback error',
+    errNoSeeders: 'No seeders — this torrent is unavailable right now. Try another release.',
+    errServer: 'Cannot reach TorrServer. Check that the server is on and reachable on the network.',
   },
   tv: {
     yes: 'Yes',

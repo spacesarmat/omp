@@ -12,6 +12,7 @@ import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
 import { goBack, currentRoute } from '../ui/nav';
+import { openAnotherRelease } from '../player/anotherRelease';
 import { toast } from '../ui/toast';
 import { t, lang } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
@@ -95,10 +96,16 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           // PlayerActivity covers the WebView, so the interval alone lets «Сейчас играет» go stale
           postSoon();
         },
-        onClosed: (_c, replaced) => {
+        onClosed: (closed, replaced) => {
           if (unbridge) unbridge();
           unbridge = null;
-          if (!replaced) leave();
+          if (replaced) return;
+          if (closed.another) {
+            const it = queue[closed.index];
+            openAnotherRelease(it ? it.hash : undefined);
+            return;
+          }
+          leave();
         },
       }, journal, probeLoader(c), skipIo(c));
       session = run;

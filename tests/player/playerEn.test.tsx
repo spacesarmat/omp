@@ -5,7 +5,7 @@ import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Controls } from '../../src/player/Controls';
 import { DonateCard } from '../../src/player/DonateCard';
-import { InfoOverlay, BufferingOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../../src/player/Overlays';
+import { InfoOverlay, BufferingOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError, bufferStatusText } from '../../src/player/Overlays';
 import { applyMark, chapterLabel } from '../../src/player/chapters';
 import { playerEngineOptions, vlcUnavailable, engineLogText } from '../../src/player/nativeEngine';
 import { infoPanel } from '../../src/player/infoPanel';
@@ -62,6 +62,7 @@ describe('player in English', () => {
       text(<UndoBanner text="Intro skipped" onUndo={noop} />),
       text(<InfoOverlay panel={infoPanel({ title: 'Show · S01E02', probe: null, audioIndex: -1, cache: null, bufferedSec: null })} />),
       text(<BufferingOverlay cache={null} />),
+      text(<BufferingOverlay cache={null} waiting />),
       text(<PlayerError message="x" probe={null} onRetry={noop} onBack={noop} />),
     ];
     expect(all[0]).toContain('Next episode in 5 s');
@@ -69,8 +70,13 @@ describe('player in English', () => {
     expect(all[2]).toBe('Intro skipped · UndoOK — undo');
     expect(all[3]).toBe('S01E02Seeds / peers—Download—Bitrate—Audio—Buffer—');
     expect(all[4]).toContain('Buffering…');
-    expect(all[5]).toContain('Retry');
-    expect(all[5]).toContain('Back');
+    expect(all[5]).toContain('Connecting… peers: 0, speed 0 B/s');
+    expect(all[6]).toContain('Retry');
+    expect(all[6]).toContain('Back');
+    const another = text(<PlayerError message="No seeders" probe={null} onRetry={noop} onBack={noop} onAnother={noop} />);
+    expect(another).toContain('Another release');
+    expect(another.indexOf('Another release')).toBeLessThan(another.indexOf('Retry'));
+    expect(CYR.test(another)).toBe(false);
     expect(CYR.test(all.join(' '))).toBe(false);
   });
 

@@ -124,6 +124,9 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
         /** A playback warning for the open item, already in the UI language. */
         fun playbackWarnings(text: String) {}
+
+        /** The first video frame of the current item was shown. */
+        fun onFirstFrameShown() {}
     }
 
     /** The engine playing now ([switchEngine] replaces it). */
@@ -162,6 +165,13 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
     var error: ErrorKind? = null
         private set
 
+    /**
+     * A failure classified against TorrServer (no seeders, server down, codec). Null: [errorText] uses [error].
+     * [FailureKind.BUFFERING] is never stored — the activity keeps waiting and the error stays clear.
+     */
+    var shownFailure: FailureKind? = null
+        private set
+
     /** The first video frame of the current item was shown (since [load] / [goTo]). */
     var firstFrame = false
         private set
@@ -193,6 +203,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         lastPosMs = r.startAtMs
         lastDurMs = 0L
         error = null
+        shownFailure = null
         firstFrame = false
         pendingAudio = null
         pendingSub = null
@@ -218,6 +229,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         lastPosMs = start
         lastDurMs = 0L
         error = null
+        shownFailure = null
         firstFrame = false
         pendingAudio = carried?.first
         // a file of the previous item means nothing here: its language is in the preferences
@@ -264,6 +276,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
         val pos = old.positionMs
         val playing = old.playWhenReady
         error = null
+        shownFailure = null
         firstFrame = false
         if (r == null) {
             old.listener = null
@@ -343,10 +356,30 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     fun retry() {
         error = null
+        shownFailure = null
         engine.retry()
     }
 
-    fun errorText(): String? = error?.let { message(it) }
+    /**
+     * Shows a failure already classified against the swarm. [FailureKind.BUFFERING] clears the box so the
+     * activity can keep the connecting line up and reopen the stream.
+     */
+    fun showClassified(cls: FailureKind, kind: ErrorKind) {
+        if (cls == FailureKind.BUFFERING) {
+            shownFailure = null
+            error = null
+        } else {
+            shownFailure = cls
+            error = kind
+        }
+        ui.changed()
+    }
+
+    fun errorText(): String? {
+        val shown = shownFailure
+        if (shown != null && shown != FailureKind.BUFFERING) return PlaybackFailure.message(shown)
+        return error?.let { message(it) }
+    }
 
     fun audioOptions(): List<AudioOption> = TrackOptions.audio(engine.audioTracks())
 
@@ -408,11 +441,13 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     override fun onReady() {
         error = null
+        shownFailure = null
         ui.changed()
     }
 
     override fun onFirstFrame() {
         firstFrame = true
+        ui.onFirstFrameShown()
     }
 
     override fun onBuffering(buffering: Boolean) = ui.changed()
@@ -432,6 +467,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
 
     override fun onError(kind: ErrorKind, detail: String) {
         if (ui.engineFailed(kind, detail, !firstFrame)) return
+        shownFailure = null
         error = kind
         ui.changed()
     }
