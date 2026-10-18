@@ -36,12 +36,13 @@ import {
   closeSupportThread,
   SUPPORT_CLOSED_TEXT,
   takeAdminPanelLogin,
+  takeCliAdminLogin,
   unbindCode,
   telegramForDevice,
   unlinkDeviceTelegram,
 } from './logic.mjs';
 import { adminNotifyEnabled, botDeepLink, botReply, paymentAdminNotices, serviceDownNotices, telegramOf } from './bot.mjs';
-import { hashPassword, passwordMatches, randomCode, randomId } from './crypto.mjs';
+import { randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
   basicAuthHeader,
@@ -155,11 +156,17 @@ function listSessions() {
       sessions.delete(id);
       continue;
     }
+    const actor = row.via === 'cli'
+      ? { kind: 'admin', id: 'cli', label: 'cli' }
+      : row.telegramId
+        ? { kind: 'admin', id: String(row.telegramId), label: String(row.telegramId) }
+        : { kind: 'admin', id: '', label: 'панель' };
     out.push({
       id,
       createdAt: row.createdAt || 0,
       lastSeen: row.lastSeen || row.createdAt || 0,
       exp: row.exp,
+      actor,
     });
   }
   out.sort((a, b) => b.lastSeen - a.lastSeen);
@@ -177,13 +184,24 @@ function takeFlash(admin, sid) {
       exp: admin.exp,
       createdAt: admin.createdAt,
       lastSeen: Date.now(),
+      telegramId: admin.telegramId || '',
+      via: admin.via || '',
     });
   }
   return { code, promo, flash, error };
 }
 
-function audit(file, action, detail) {
-  return updateState(file, (state) => ({ state: logAudit(state, { action, detail, now: Date.now() }) }));
+function adminActor(admin) {
+  if (admin && admin.via === 'cli') return { kind: 'admin', id: 'cli', label: 'cli' };
+  const id = admin && admin.telegramId ? String(admin.telegramId) : '';
+  if (id) return { kind: 'admin', id, label: id };
+  return { kind: 'admin', id: '', label: 'панель' };
+}
+
+function audit(file, action, detail, admin) {
+  return updateState(file, (state) => ({
+    state: logAudit(state, { action, detail, now: Date.now(), actor: adminActor(admin) }),
+  }));
 }
 
 async function readBody(req) {
@@ -400,7 +418,7 @@ export function createApp(file, fetchImpl) {
         const state = readState(file);
         const row = (state.codes || []).find((c) => c.id === codeId && !c.revoked && c.plain);
         if (!row) return json(res, 404, { error: 'no_code' });
-        await audit(file, 'code_reveal', codeId);
+        await audit(file, 'code_reveal', codeId, admin);
         return json(res, 200, {
           id: row.id,
           plain: row.plain,
@@ -493,14 +511,14 @@ export function createApp(file, fetchImpl) {
       if (req.method === 'POST' && path === '/admin/login/telegram') {
         const state = readState(file);
         if (!String(state.settings.adminTelegramIds || '').trim()) {
-          return json(res, 400, { ok: false, error: 'Сначала укажите Telegram id администраторов в настройках или войдите по паролю' });
+          return json(res, 400, { ok: false, error: 'Сначала укажите Telegram id администраторов в настройках' });
         }
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
         }
         const started = await updateState(file, (cur) => startAdminPanelLogin(cur, { now: Date.now() }));
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
-        await audit(file, 'login_telegram_start', started.token.slice(0, 8));
+        await audit(file, 'login_telegram_start', 'запрос');
         return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
       }
       if (req.method === 'GET' && path === '/admin/login/telegram/status') {
@@ -517,29 +535,56 @@ export function createApp(file, fetchImpl) {
             lastSeen: now,
             telegramId: taken.telegramId || '',
           });
-          await audit(file, 'login', 'telegram ' + (taken.telegramId || ''));
+          await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
           res.setHeader('set-cookie', adminSetCookie(req, id));
           return json(res, 200, { ok: true, status: 'ok' });
         }
         return json(res, 200, { ok: false, status: taken.status || 'expired' });
       }
-      if (req.method === 'POST' && path === '/admin/login') {
-        const body = await readBody(req);
-        const state = readState(file);
-        if (!passwordMatches(body.password || '', state.settings.adminSalt, state.settings.adminHash)) {
-          await audit(file, 'login_fail', 'bad password');
-          if (wantsJson(req)) return json(res, 401, { ok: false, error: 'Неверный пароль' });
-          return send(res, 401, loginPage('Неверный пароль'), { 'content-type': 'text/html; charset=utf-8' });
+      if (req.method === 'GET' && path === '/admin/login/once') {
+        const token = url.searchParams.get('token') || '';
+        let taken = { status: 'expired' };
+        try {
+          taken = await updateState(file, (cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+        } catch (e) {
+          taken = { status: 'expired' };
+        }
+        if (!taken || taken.status !== 'ok') {
+          return send(res, 403, loginPage('Ссылка недействительна или уже использована'), {
+            'content-type': 'text/html; charset=utf-8',
+          });
         }
         const id = randomId() + randomId();
         const csrf = randomId();
         const now = Date.now();
-        sessions.set(id, { csrf, exp: now + 12 * 60 * 60 * 1000, createdAt: now, lastSeen: now });
-        await audit(file, 'login', 'ok');
+        sessions.set(id, {
+          csrf,
+          exp: now + 12 * 60 * 60 * 1000,
+          createdAt: now,
+          lastSeen: now,
+          via: 'cli',
+        });
         res.setHeader('set-cookie', adminSetCookie(req, id));
-        if (wantsJson(req)) return json(res, 200, { ok: true });
-        res.writeHead(302, { location: '/admin' });
+        res.writeHead(302, { location: '/admin/' });
         return res.end();
+      }
+      if (req.method === 'POST' && path === '/admin/login') {
+        try {
+          await readBody(req);
+        } catch (e) {
+          /* a bad body still rejects; it must not 500 */
+        }
+        try {
+          await audit(file, 'login_fail', 'password disabled', null);
+        } catch (e) {
+          /* audit failure must not turn the rejection into 500 */
+        }
+        if (wantsJson(req)) {
+          return json(res, 403, { ok: false, error: 'Вход по паролю отключён. Войдите через Telegram.' });
+        }
+        return send(res, 403, loginPage('Вход по паролю отключён. Войдите через Telegram.'), {
+          'content-type': 'text/html; charset=utf-8',
+        });
       }
       const admin = adminOf(req);
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
@@ -549,7 +594,7 @@ export function createApp(file, fetchImpl) {
           await updateState(file, (state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
           }));
-          await audit(file, path === '/admin/services' ? 'services_save' : 'settings_save', 'ok');
+          await audit(file, path === '/admin/services' ? 'services_save' : 'settings_save', 'ok', admin);
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices(readState(file).settings, net);
             return json(res, 200, { ok: true, services });
@@ -602,7 +647,7 @@ export function createApp(file, fetchImpl) {
             if (body.channel === 'email' && result.account.email) {
               await sendMail(fresh.settings, { to: result.account.email, subject: 'Код подписки OMP', text });
             }
-            await audit(file, 'issue', (result.account && result.account.id) || '');
+            await audit(file, 'issue', (result.account && result.account.id) || '', admin);
             if (result.account && result.account.id) redirectTo = '/admin/?id=' + encodeURIComponent(result.account.id);
           }
         }
@@ -612,7 +657,7 @@ export function createApp(file, fetchImpl) {
           );
           extra = { codes: result.codes || [] };
           flashText = 'Выдано кодов: ' + ((result.codes && result.codes.length) || 0);
-          await audit(file, 'bulk_issue', String((result.codes && result.codes.length) || 0));
+          await audit(file, 'bulk_issue', String((result.codes && result.codes.length) || 0), admin);
           redirectTo = '/admin/?tab=subs';
         }
         if (path === '/admin/grant') {
@@ -689,7 +734,7 @@ export function createApp(file, fetchImpl) {
           else if (result.promos) {
             extra = { promos: result.promos.map((p) => ({ code: p.code, days: p.days, maxUses: p.maxUses })) };
             flashText = 'Создано промокодов: ' + result.promos.length;
-            await audit(file, 'bulk_promo', String(result.promos.length));
+            await audit(file, 'bulk_promo', String(result.promos.length), admin);
           } else if (result.promo) flashPromo = result.promo.code;
           redirectTo = '/admin/?tab=promos';
         }
@@ -704,42 +749,20 @@ export function createApp(file, fetchImpl) {
               action: 'unbind',
               detail: body.codeId || '',
               now: Date.now(),
+              actor: adminActor(admin),
             }),
           }));
           flashText = 'Устройство сброшено, выдан новый код';
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/password') {
-          const state = readState(file);
-          if (!passwordMatches(body.current || '', state.settings.adminSalt, state.settings.adminHash)) {
-            flashError = 'Текущий пароль неверный';
-            redirectTo = '/admin#security';
-          } else if (!body.next || body.next !== body.next2 || String(body.next).length < 6) {
-            flashError = 'Новый пароль: минимум 6 символов и совпадение';
-            redirectTo = '/admin#security';
-          } else {
-            const hashed = hashPassword(body.next);
-            await updateState(file, (s) => ({
-              state: logAudit(
-                {
-                  ...s,
-                  settings: { ...s.settings, adminHash: hashed.hash, adminSalt: hashed.salt },
-                },
-                { action: 'password_change', detail: 'ok', now: Date.now() },
-              ),
-            }));
-            const keep = cookie(req, 'omp_admin');
-            for (const [id] of sessions) {
-              if (id !== keep) sessions.delete(id);
-            }
-            flashText = 'Пароль сменён, другие сессии завершены';
-            redirectTo = '/admin#security';
-          }
+          flashError = 'Вход по паролю отключён';
+          redirectTo = '/admin/?tab=security';
         }
         if (path === '/admin/logout') {
           const sid = cookie(req, 'omp_admin');
           sessions.delete(sid);
-          await audit(file, 'logout', sid.slice(0, 8));
+          await audit(file, 'logout', 'ok', admin);
           res.setHeader('set-cookie', adminSetCookie(req, '', 0));
           if (wantsJson(req)) return json(res, 200, { ok: true, redirect: '/admin/' });
           res.writeHead(302, { location: '/admin/' });
@@ -750,16 +773,16 @@ export function createApp(file, fetchImpl) {
           const sid = cookie(req, 'omp_admin');
           if (target && target !== sid) {
             sessions.delete(target);
-            await audit(file, 'session_revoke', target.slice(0, 8));
+            await audit(file, 'session_revoke', 'ok', admin);
             flashText = 'Сессия завершена';
           }
           redirectTo = '/admin#security';
         }
         if (path === '/admin/grant' && !flashError && flashText) {
-          await audit(file, 'grant', (body.accountId || '') + ' ' + flashText);
+          await audit(file, 'grant', (body.accountId || '') + ' ' + flashText, admin);
         }
         if (path === '/admin/promo' && flashPromo) {
-          await audit(file, 'promo_create', flashPromo);
+          await audit(file, 'promo_create', flashPromo, admin);
         }
         if (path === '/admin/support') {
           const telegramId = String(body.telegramId || '').trim();
@@ -796,13 +819,13 @@ export function createApp(file, fetchImpl) {
           redirectTo = '/admin/';
         }
         if (path === '/admin/message' && flashText.indexOf('отправлено') >= 0) {
-          await audit(file, 'message', body.accountId || '');
+          await audit(file, 'message', body.accountId || '', admin);
         }
         if (path === '/admin/support' && flashText) {
-          await audit(file, 'support_reply', body.telegramId || '');
+          await audit(file, 'support_reply', body.telegramId || '', admin);
         }
         if (path === '/admin/support-close' && flashText) {
-          await audit(file, 'support_close', body.telegramId || '');
+          await audit(file, 'support_close', body.telegramId || '', admin);
         }
         if (flashed || flashPromo || flashText || flashError) {
           const sid = cookie(req, 'omp_admin');
@@ -1174,40 +1197,21 @@ function envServiceDefaults() {
   };
 }
 
+/** Copy service URLs from the environment. Admin passwords are not created or printed. */
 export async function ensureAdmin(file) {
   const state = readState(file);
   const env = envServiceDefaults();
-  if (state.settings.adminHash) {
-    const need =
-      (env.jackettUrl && !state.settings.jackettUrl) ||
-      (env.jacredUrl && !state.settings.jacredUrl) ||
-      (env.torrserverUrl && !state.settings.torrserverUrl) ||
-      (env.publicOrigin && !state.settings.publicOrigin);
-    if (need) {
-      await updateState(file, (s) => ({
-        state: {
-          ...s,
-          settings: {
-            ...s.settings,
-            jackettUrl: s.settings.jackettUrl || env.jackettUrl,
-            jacredUrl: s.settings.jacredUrl || env.jacredUrl,
-            torrserverUrl: s.settings.torrserverUrl || env.torrserverUrl,
-            publicOrigin: s.settings.publicOrigin || env.publicOrigin,
-          },
-        },
-      }));
-    }
-    return '';
-  }
-  const password = process.env.BILLING_ADMIN_PASSWORD || randomCode();
-  const hashed = hashPassword(password);
+  const need =
+    (env.jackettUrl && !state.settings.jackettUrl) ||
+    (env.jacredUrl && !state.settings.jacredUrl) ||
+    (env.torrserverUrl && !state.settings.torrserverUrl) ||
+    (env.publicOrigin && !state.settings.publicOrigin);
+  if (!need) return;
   await updateState(file, (s) => ({
     state: {
       ...s,
       settings: {
         ...s.settings,
-        adminHash: hashed.hash,
-        adminSalt: hashed.salt,
         jackettUrl: s.settings.jackettUrl || env.jackettUrl,
         jacredUrl: s.settings.jacredUrl || env.jacredUrl,
         torrserverUrl: s.settings.torrserverUrl || env.torrserverUrl,
@@ -1215,17 +1219,13 @@ export async function ensureAdmin(file) {
       },
     },
   }));
-  return process.env.BILLING_ADMIN_PASSWORD ? '' : password;
 }
 
 const started = process.argv[1] && process.argv[1].endsWith('server.mjs');
 if (started) {
   const file = dataFile();
   const port = Number(process.env.PORT || 8787);
-  ensureAdmin(file).then((password) => {
-    if (password) process.stdout.write('admin password: ' + password + '\n');
-    return listen(file, port);
-  }).then(() => {
+  ensureAdmin(file).then(() => listen(file, port)).then(() => {
     process.stdout.write('billing listening on ' + port + '\n');
   });
   pollBot(file);

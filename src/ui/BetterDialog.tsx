@@ -6,6 +6,7 @@
 // «Следить за лучшим качеством» switches omp.q of the torrent in TorrServer (OMP on the phone reads it).
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { focusAfterClose } from './focus';
 import { FocusGroup, Focusable, Button, Spinner } from './components';
 import { useKeys } from './keys';
 import { choose } from './dialog';
@@ -124,9 +125,10 @@ export function BetterDialog(p: {
               return;
             }
           }
+          focusAfterClose();
           return;
         }
-        if (prev && doesFocusableExist(prev)) setFocus(prev);
+        focusAfterClose(prev);
       }, 0);
     };
   }, []);

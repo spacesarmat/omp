@@ -10,6 +10,7 @@ import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { posterImageSize } from '../../src/catalog/tmdb';
 import { torrents } from '../../src/store/library';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
@@ -326,7 +327,8 @@ describe('Add: the new torrent and its poster', () => {
     vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
     vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue({ hash: HASH, title: '', category: 'movie', stat: 1 } as any);
     const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
-    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([{ hash: HASH, title: 'Dune', poster: 'https://imagetmdb.com/t/p/w300/d.jpg', stat: 1 }]);
+    const poster = 'https://imagetmdb.com/t/p/' + posterImageSize() + '/d.jpg';
+    vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([{ hash: HASH, title: 'Dune', poster: poster, stat: 1 }]);
     const tmdb = vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/d.jpg' }] })));
     vi.stubGlobal('fetch', tmdb);
     onTestFinished(() => {
@@ -338,8 +340,8 @@ describe('Add: the new torrent and its poster', () => {
     // turns, so two flushes stop after the search and setPoster call, before the poster is stored.
     for (let i = 0; i < 6 && !(torrents.value[0] && torrents.value[0].poster); i++) await flush();
     expect(String((tmdb.mock.calls[0] as unknown[])[0])).toContain('query=Dune');
-    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH }), 'https://imagetmdb.com/t/p/w300/d.jpg');
-    expect(torrents.value[0].poster).toBe('https://imagetmdb.com/t/p/w300/d.jpg');
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: HASH }), poster);
+    expect(torrents.value[0].poster).toBe(poster);
   });
 });
 

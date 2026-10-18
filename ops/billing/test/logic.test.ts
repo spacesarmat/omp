@@ -28,6 +28,9 @@ import {
   financeReport,
   grantDays,
   logAudit,
+  issueCliAdminLogin,
+  takeCliAdminLogin,
+  enrichActors,
   openAccount,
   openAppUrl,
   paymentsCsv,
@@ -65,7 +68,8 @@ describe('subscription codes', () => {
     expect(again.result.token).toBeTruthy();
     const other = activate(first.state, { code: start.code, deviceId: 'b'.repeat(32), now: NOW });
     expect(other.result.error).toBe('other_device');
-    expect(other.state.attempts.some((a: { reason: string }) => a.reason === 'other_device')).toBe(true);
+    expect(other.state.attempts.some((a: { reason: string; accountId?: string }) => a.reason === 'other_device' && a.accountId === start.account)).toBe(true);
+    expect(first.state.attempts.some((a: { ok?: boolean; accountId?: string }) => a.ok && a.accountId === start.account)).toBe(true);
   });
 
   it('a second payment for the same account extends the subscription', () => {
@@ -79,6 +83,7 @@ describe('subscription codes', () => {
       now: NOW + 1000,
     });
     expect(applied.result.kind).toBe('renew');
+    expect(applied.state.payments.find((p: { operationId?: string }) => p.operationId === 'op1').accountId).toBe(start.account);
     expect(applied.result.paidUntil).toBeGreaterThan(NOW + 30 * 24 * 60 * 60 * 1000);
   });
 
@@ -403,17 +408,80 @@ describe('admin dashboard', () => {
     const dash = adminDashboard(paidState, NOW + 5000);
     expect(dash.alerts.some((a) => a.text.indexOf('Jackett') >= 0 || a.text.indexOf('бота') >= 0)).toBe(true);
     expect(dash.events.some((e) => e.kind === 'pay')).toBe(true);
+    const pay = dash.events.find((e) => e.kind === 'pay');
+    expect(pay?.accountId).toBe(start.account);
+    expect(pay?.actor?.kind).toBe('user');
+    expect(pay?.at).toBe(NOW + 5000);
     const fail = dash.events.find((e) => e.kind === 'fail');
     expect(fail?.text).toContain('неверный код');
     expect(fail?.text).not.toContain('bad_code');
+    expect(fail?.actor?.kind).toBe('device');
+    expect(fail?.at).toBe(NOW + 4000);
   });
 });
 
 describe('audit', () => {
   it('appends admin actions', () => {
-    const next = logAudit(emptyState(), { action: 'grant', detail: '+7', now: NOW });
+    const next = logAudit(emptyState(), { action: 'grant', detail: '+7', now: NOW, actor: { kind: 'admin', id: '99', label: '99' } });
     expect(next.audit).toHaveLength(1);
     expect(next.audit[0].action).toBe('grant');
+    expect(next.audit[0].at).toBe(NOW);
+    expect(next.audit[0].actor).toEqual({ kind: 'admin', id: '99', label: '99' });
+  });
+
+  it('mints a one-time cli login without storing the token', () => {
+    const issued = issueCliAdminLogin(emptyState(), { now: NOW });
+    expect(JSON.stringify(issued.state)).not.toContain(issued.result.token);
+    expect(issued.state.audit[0].actor).toEqual({ kind: 'admin', id: 'cli', label: 'cli' });
+    expect(issued.state.audit[0].detail).not.toContain(issued.result.token);
+    const ok = takeCliAdminLogin(issued.state, { token: issued.result.token, now: NOW + 1000 });
+    expect(ok.result.status).toBe('ok');
+    expect(ok.state.audit[1].action).toBe('login');
+    expect(ok.state.audit[1].actor.label).toBe('cli');
+    expect(takeCliAdminLogin(ok.state, { token: issued.result.token, now: NOW + 2000 }).result.status).toBe('expired');
+    expect(takeCliAdminLogin(issued.state, { token: issued.result.token, now: NOW + 11 * 60 * 1000 }).result.status).toBe('expired');
+    const dash = adminDashboard(ok.state, NOW + 2000);
+    expect(dash.events.some((e) => e.kind === 'admin' && e.actor?.label === 'cli' && e.text.indexOf('сервера') >= 0)).toBe(true);
+  });
+});
+
+describe('actor migration', () => {
+  it('backfills account and actor without dropping existing fields', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'omp-actors-'));
+    const dbPath = join(dir, 'billing.db');
+    const db = new DatabaseSync(dbPath);
+    db.exec('CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+    const payload = {
+      keeper: { note: 'leave-me' },
+      accounts: [{ id: 'acc1', telegramId: '42', createdAt: NOW, nickname: 'keep' }],
+      subscriptions: [{ id: 'sub1', accountId: 'acc1', product: 'jackett', paidUntil: NOW + 86400000, deviceLimit: 1, createdAt: NOW }],
+      codes: [{ id: 'c1', subscriptionId: 'sub1', hash: 'abc', deviceId: '', plain: 'secret-plain', createdAt: NOW }],
+      payments: [{ operationId: 'op', label: 'new:acc1', amount: '10.00', at: NOW, memo: 'keep-pay' }],
+      attempts: [{ at: NOW, hash: 'abc', deviceId: 'abcdef0123456789', ok: false, reason: 'expired', legacy: 7 }],
+      audit: [{ at: NOW, action: 'login', detail: 'telegram 77', ip: '10.0.0.1' }],
+    };
+    db.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(payload), NOW);
+    db.close();
+    const loaded = readState(dbPath);
+    expect(loaded.keeper.note).toBe('leave-me');
+    expect(loaded.accounts[0].nickname).toBe('keep');
+    expect(loaded.payments[0].accountId).toBe('acc1');
+    expect(loaded.payments[0].memo).toBe('keep-pay');
+    expect(loaded.payments[0].amount).toBe('10.00');
+    expect(loaded.attempts[0].accountId).toBe('acc1');
+    expect(loaded.attempts[0].legacy).toBe(7);
+    expect(loaded.codes[0].plain).toBe('secret-plain');
+    expect(loaded.audit[0].actor).toEqual({ kind: 'admin', id: '77', label: '77' });
+    expect(loaded.audit[0].detail).toBe('telegram 77');
+    expect(loaded.audit[0].ip).toBe('10.0.0.1');
+    const again = enrichActors(loaded);
+    expect(again.payments[0].accountId).toBe('acc1');
+    expect(again.payments[0].memo).toBe('keep-pay');
+    writeState(dbPath, loaded);
+    const saved = readState(dbPath);
+    expect(saved.keeper.note).toBe('leave-me');
+    expect(saved.codes[0].plain).toBe('secret-plain');
+    expect(saved.payments[0].accountId).toBe('acc1');
   });
 });
 

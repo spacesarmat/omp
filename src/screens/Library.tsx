@@ -164,9 +164,10 @@ export function LibraryScreen() {
       const match = filterTorrents(all.map((e) => e.torrent), query);
       return { list: [] as Torrent[], history: all.filter((e) => match.indexOf(e.torrent) >= 0) };
     }
-    const inTab = tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
-    return { list: sortTorrents(filterTorrents(inTab, query), sort), history: [] as HistoryEntry[] };
-  }, [tv, tab, query, sort, isHistory, isDiscover, hfilter,progressVersion.value, serverViewed.value]);
+    // a query searches the whole library; an empty «Прочее» or «Музыка» tab used to hide matches in other categories
+    const pool = query.trim() ? tv : tv.filter((t) => tab === 'all' || categoryOf(t.category) === tab);
+    return { list: sortTorrents(filterTorrents(pool, query), sort), history: [] as HistoryEntry[] };
+  }, [tv, tab, query, sort, isHistory, isDiscover, hfilter, progressVersion.value, serverViewed.value]);
 
   if (!c) return null;
 
@@ -203,7 +204,7 @@ export function LibraryScreen() {
 
   let empty: string | null = null;
   if (loaded && !count && !isDiscover) {
-    if (searching) empty = t('catalog.nothingFound');
+    if (searching) empty = t('catalog.searchMiss', { q: query.trim() });
     else if (isHistory && hfilter !== 'all') empty = hfilter === 'phone' ? t('catalog.nothingFromPhone') : t('catalog.nothingFromTv');
     else if (isHistory) empty = t('catalog.historyEmpty');
     else if (!torrents.value.length) empty = t('catalog.noTorrents');
@@ -226,7 +227,7 @@ export function LibraryScreen() {
       {searchOpen && !isDiscover && (
         <FocusGroup focusKey="LIB-SEARCH" className="search-row">
           <TextInput focusKey="lib-search" value={query} onChange={setQuery} placeholder={t('catalog.searchPlaceholder')} onFocused={() => setSel(null)} />
-          <div class="search-count">{searching ? t('catalog.found', { n: count }) : t('catalog.typePart')}</div>
+          <div class="search-count">{searching ? t('catalog.found', { n: count }) + (tab !== 'all' && !isHistory ? ' · ' + t('catalog.searchAll') : '') : t('catalog.typePart')}</div>
         </FocusGroup>
       )}
       {error && !isDiscover && (

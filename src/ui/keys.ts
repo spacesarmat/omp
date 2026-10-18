@@ -58,6 +58,8 @@ export function installKeyListener(onUnhandledBack: () => boolean | void): () =>
       if (a === 'back') {
         e.preventDefault();
         e.stopPropagation();
+        // the field had the key, so the screen never saw it: search's hint says Back closes search
+        dispatchKey(a, e);
       }
       return;
     }

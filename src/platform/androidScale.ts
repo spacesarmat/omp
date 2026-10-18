@@ -1,6 +1,6 @@
-// Android TV: the TV interface is laid out for 1920×1080 CSS px. MainActivity turns on the wide viewport so
-// <meta name="viewport" content="width=1920"> applies; this is the safety net for WebViews that still report a
-// different layout width — the .app root is scaled to fit the window.
+// The TV interface is laid out for 1920×1080 CSS px. Android TV's MainActivity turns on the wide viewport so
+// <meta name="viewport" content="width=1920"> applies; webOS 4K can still report 3840. This scales the .app root
+// by innerWidth/1920 so both panels render the same layout.
 
 const BASE_W = 1920;
 const BASE_H = 1080;
@@ -8,6 +8,21 @@ const TOLERANCE = 2;
 
 interface ScaleWindow {
   innerWidth: number;
+  innerHeight?: number;
+}
+
+function setRootBox(el: HTMLElement, width: string, height: string): void {
+  const doc = el.ownerDocument;
+  const root = doc ? doc.documentElement : null;
+  const body = doc ? doc.body : null;
+  if (root) {
+    root.style.width = width;
+    root.style.height = height;
+  }
+  if (body) {
+    body.style.width = width;
+    body.style.height = height;
+  }
 }
 
 function setTransform(el: HTMLElement, value: string): void {
@@ -19,14 +34,23 @@ function setTransform(el: HTMLElement, value: string): void {
   st.webkitTransformOrigin = origin;
 }
 
-/** Scales `el` by innerWidth/1920 unless the window is already ~1920 wide; returns the applied factor. */
+/**
+ * Scales `el` by innerWidth/1920 unless the window is already ~1920 wide.
+ * html and body grow to the viewport: they are styled 1920×1080 with overflow hidden, so a 2× scale
+ * would otherwise be clipped to the top-left quarter.
+ */
 export function applyTvScale(el: HTMLElement, win: ScaleWindow = window): number {
   const w = win.innerWidth;
   if (!(w > 0) || Math.abs(w - BASE_W) <= TOLERANCE) {
     setTransform(el, '');
+    el.style.width = '';
+    el.style.height = '';
+    setRootBox(el, '', '');
     return 1;
   }
   const s = w / BASE_W;
+  const h = win.innerHeight && win.innerHeight > 0 ? win.innerHeight : Math.round(BASE_H * s);
+  setRootBox(el, w + 'px', h + 'px');
   el.style.width = BASE_W + 'px';
   el.style.height = BASE_H + 'px';
   setTransform(el, 'scale(' + s + ')');
@@ -45,5 +69,8 @@ export function installAndroidScale(root?: HTMLElement | null): () => void {
     window.removeEventListener('resize', update);
     window.removeEventListener('load', update);
     setTransform(el, '');
+    el.style.width = '';
+    el.style.height = '';
+    setRootBox(el, '', '');
   };
 }

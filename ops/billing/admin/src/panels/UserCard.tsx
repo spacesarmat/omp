@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { CopyBtn, FlashBox, SubStatus, toast } from '@/components/chrome';
 import { api, type PostResult } from '@/lib/api';
-import { personLabel, problemKind, when } from '@/lib/text';
+import { Stamp } from '@/components/stamp';
+import { personLabel, problemKind } from '@/lib/text';
 import type { UserData } from '@/lib/types';
 
 const DAY_KEY = 'omp-grant-days';
@@ -67,11 +68,11 @@ export function UserCard({
             <span className="text-muted-foreground">Почта</span> {user.account.email || '—'}
           </p>
           <p>
-            <span className="text-muted-foreground">Создан</span> {user.account.createdText}
+            <span className="text-muted-foreground">Создан</span> <Stamp ms={user.account.createdAt} />
           </p>
           {user.subscription ? (
             <p className="flex flex-wrap items-center gap-2">
-              Подписка до <b>{user.subscription.paidUntilText}</b>
+              Подписка до <Stamp ms={user.subscription.paidUntil} />
               <span className="text-muted-foreground">устройств {user.subscription.deviceLimit}</span>
               <SubStatus status={status} />
             </p>
@@ -163,6 +164,15 @@ export function UserCard({
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="font-mono">{open?.formatted || (c.bound ? 'привязан · ' + (c.deviceId || '') : 'скрыт')}</span>
+                <span className="text-muted-foreground">
+                  создан <Stamp ms={c.createdAt} />
+                  {c.boundAt ? (
+                    <>
+                      {' '}
+                      · привязан <Stamp ms={c.boundAt} />
+                    </>
+                  ) : null}
+                </span>
                 {c.bound && !c.hasPlain && !open ? <span className="text-muted-foreground">код стёрт после привязки</span> : null}
                 {open ? <CopyBtn value={open.formatted} /> : null}
                 {c.hasPlain && !open ? (
@@ -210,7 +220,7 @@ export function UserCard({
             <Table className="min-w-[36rem]">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Когда</TableHead>
+                  <TableHead>Когда, МСК</TableHead>
                   <TableHead>Сумма</TableHead>
                   <TableHead>Метка</TableHead>
                   <TableHead>Ошибка</TableHead>
@@ -219,7 +229,9 @@ export function UserCard({
               <TableBody>
                 {(user.payments || []).map((p, i) => (
                   <TableRow key={i}>
-                    <TableCell>{p.at ? when(p.at) : '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Stamp ms={p.at} />
+                    </TableCell>
                     <TableCell>{p.amount || '—'}</TableCell>
                     <TableCell className="font-mono text-xs">{p.label || '—'}</TableCell>
                     <TableCell>{p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : '—'}</TableCell>
