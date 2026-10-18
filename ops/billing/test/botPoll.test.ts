@@ -276,6 +276,13 @@ describe('bot poll docs', () => {
     expect(readFileSync('ops/billing/casaos-docker-compose.yml', 'utf8')).toContain('BILLING_BOT_POLL: "0"');
     expect(readFileSync('ops/billing/env.tunnel.example', 'utf8')).toContain('BILLING_BOT_POLL=0');
     expect(readFileSync('ops/billing/README.md', 'utf8')).toContain('BILLING_BOT_POLL');
+    const html = readFileSync('ops/billing/public/index.html', 'utf8');
+    const match = html.match(/\/admin\/assets\/(index-[^"]+\.js)/);
+    expect(match).toBeTruthy();
+    const js = readFileSync('ops/billing/public/assets/' + (match ? match[1] : ''), 'utf8');
+    expect(js).toContain('Опрос бота');
+    expect(js).toContain('BILLING_BOT_POLL=0');
+    expect(js).toContain('getUpdates');
   });
 });
 
