@@ -142,9 +142,11 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
-        <h1 class="m-bar-title">{t('serverSettings.title')}</h1>
+        <div class="m-ss-head">
+          <h1 class="m-bar-title">{t('serverSettings.title')}</h1>
+          {server && <div class="m-ss-sub">{server.name}</div>}
+        </div>
       </div>
-      {server && <div class="m-muted m-small m-ss-sub">{server.name}</div>}
       {error && (
         <div class="m-error" role="alert">
           <span>{error}</span>{' '}
@@ -160,18 +162,18 @@ export function ServerSettings({ url }: { url?: string } = {}) {
             <section class="m-set-group">
               <button
                 type="button"
-                class="m-set-row m-set-pick"
+                class="m-set-row m-set-pick m-ss-key"
                 data-field="tmdb"
                 onClick={() => {
                   setTmdbKey(tmdb.APIKey || '');
                   setTmdbOpen(true);
                 }}
               >
-                <div class="m-set-text" style="flex-grow: 1">
-                  <span>{t('serverSettings.tmdbKey')}</span>
-                  <span class="m-muted m-small">{t('serverSettings.tmdbHint')}</span>
-                </div>
-                <span class="m-muted">{tmdb.APIKey ? t('serverSettings.set') : t('serverSettings.notSet')}</span>
+                <span class="m-ss-key-top">
+                  <span class="m-ss-key-title">{t('serverSettings.tmdbKey')}</span>
+                  <span class="m-muted m-ss-key-value">{tmdb.APIKey ? t('serverSettings.set') : t('serverSettings.notSet')}</span>
+                </span>
+                <span class="m-muted m-small m-ss-key-hint">{t('serverSettings.tmdbHint')}</span>
               </button>
               {tmdb.APIKey && isActive && (
                 <button type="button" class="m-set-row m-set-pick" data-field="posters" disabled={progress !== null} onClick={fillAll}>

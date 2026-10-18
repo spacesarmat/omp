@@ -988,7 +988,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     q: 'No posters for new torrents',
     short: [
       '1. Get a free key at themoviedb.org (Settings → API).',
-      '2. Enter it in Settings → “Advanced” → “Server settings” → “Key for posters and descriptions (TMDB)”. It has to be a v3 API key of 32 characters.',
+      '2. Enter it in Settings → “Advanced” → “Server settings” → “TMDB key”. It has to be a v3 API key of 32 characters.',
     ],
     more: [
       'Posters are looked up in the TMDB database with the key stored in TorrServer.',

@@ -935,7 +935,8 @@ button, .m-btn {
 .m-track-on { box-shadow: inset 3px 0 0 var(--accent); background: #3A3320; }
 .m-track-on .m-set-text > span:first-child { color: var(--accent); }
 .m-screen[data-route='advanced'],
-.m-screen[data-route='account'] { display: flex; flex-direction: column; gap: 20px; }
+.m-screen[data-route='account'],
+.m-screen[data-route='serverSettings'] { display: flex; flex-direction: column; gap: 20px; }
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
@@ -1247,7 +1248,18 @@ button, .m-btn {
 .m-set-pick > span:first-child, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-set-pick > .m-muted { flex: 0 0 auto; white-space: nowrap; }
 .m-sheet [role="radio"][aria-checked="true"] { justify-content: space-between; }
-.m-ss-sub { margin: -6px 0 4px 56px; }
+/* subtitle under the title, in the same column; the back button stays on the title row */
+.m-screen[data-route='serverSettings'] > .m-bar { align-items: flex-start; }
+.m-ss-head { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-ss-head > .m-bar-title { flex: none; display: flex; align-items: center; min-height: 44px; }
+.m-ss-sub { margin: 0; font-size: 13px; line-height: 1.3; color: var(--muted); overflow-wrap: anywhere; }
+/* title and value share one line (12px apart); the hint is the full width under them */
+.m-ss-key { flex-direction: column; align-items: stretch; gap: 4px; padding: 12px 14px; }
+.m-ss-key-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.m-ss-key-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.m-ss-key-value { flex: 0 0 auto; white-space: nowrap; }
+.m-set-pick.m-ss-key > .m-ss-key-top { flex: none; width: 100%; }
+.m-set-pick.m-ss-key > .m-ss-key-hint { flex: none; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
 .m-ss-reset { margin-top: 12px; width: 100%; }
 
 /* v0.10: Android TV in the TV list, pairing code, Android TV remote */

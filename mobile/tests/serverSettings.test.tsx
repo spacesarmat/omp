@@ -104,7 +104,7 @@ describe('ServerSettings', () => {
     setup();
     await mount();
     expect(el.textContent).toContain('Настройки сервера');
-    expect(el.textContent).toContain('Home');
+    expect(el.querySelector('.m-bar .m-ss-sub')!.textContent).toBe('Home');
     expect(btn('Размер кэша').textContent).toContain('64 МБ');
     await act(async () => btn('Для опытных').click());
     expect(btn('Предзагрузка').textContent).toContain('50%');
@@ -201,8 +201,10 @@ describe('ServerSettings TMDB key', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
     await mount();
-    const row = btn('Ключ для постеров и описаний (TMDB)');
+    const row = btn('TMDB-ключ');
     expect(row.textContent).toContain('Не задан');
+    expect(row.querySelector('.m-ss-key-value')!.textContent).toBe('Не задан');
+    expect(row.querySelector('.m-ss-key-hint')!.textContent).toContain('Ключ API v3');
     act(() => row.click());
     const input = el.querySelector('#tmdb-key') as HTMLInputElement;
     act(() => {
@@ -215,7 +217,7 @@ describe('ServerSettings TMDB key', () => {
     expect(s.length).toBe(1);
     expect(s[0].sets.TMDBSettings).toEqual({ APIKey: 'key123', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
     expect(s[0].sets.Unknown).toBe('keep');
-    expect(btn('Ключ для постеров и описаний (TMDB)').textContent).toContain('Задан');
+    expect(btn('TMDB-ключ').textContent).toContain('Задан');
   });
 
   it('finds posters for all torrents without one, with progress', async () => {
@@ -240,7 +242,7 @@ describe('ServerSettings TMDB key', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: 'eyJ.bad.token', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' } };
     await mount();
-    act(() => btn('Ключ для постеров и описаний (TMDB)').click());
+    act(() => btn('TMDB-ключ').click());
     const edit = el.querySelector('[role=dialog][aria-label="Ключ для постеров и описаний (TMDB)"]') as HTMLElement;
     expect(edit).toBeTruthy();
     act(() => btn('Очистить', edit).click());
@@ -253,13 +255,13 @@ describe('ServerSettings TMDB key', () => {
     act(() => btn('Очистить', el.querySelector('[role=dialog][aria-label="Очистить ключ TMDB?"]') as HTMLElement).click());
     await flush();
     expect(sets()[0].sets.TMDBSettings).toEqual({ APIKey: '', APIURL: 'https://api.themoviedb.org', ImageURLRu: 'https://imagetmdb.com' });
-    expect(btn('Ключ для постеров и описаний (TMDB)').textContent).toContain('Не задан');
+    expect(btn('TMDB-ключ').textContent).toContain('Не задан');
   });
 
   it('is hidden on servers without TMDB settings', async () => {
     setup();
     await mount();
-    expect(btn('Ключ для постеров и описаний (TMDB)')).toBeUndefined();
+    expect(btn('TMDB-ключ')).toBeUndefined();
   });
 });
 
@@ -337,8 +339,8 @@ describe('ServerSettings in English', () => {
     setup();
     current = { ...BASE, TMDBSettings: { APIKey: '' } };
     await mount();
-    expect(btn('Key for posters and descriptions (TMDB)').textContent).toContain('Not set');
-    act(() => btn('Key for posters and descriptions (TMDB)').click());
+    expect(btn('TMDB key').textContent).toContain('Not set');
+    act(() => btn('TMDB key').click());
     expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Key for posters and descriptions (TMDB)');
     expect(el.querySelector('label[for=tmdb-key]')!.textContent).toBe('API key');
     expect(el.textContent).toContain('A free v3 API key from themoviedb.org → Settings → API. It is 32 characters. A v4 token starts with eyJ and does not belong here. OMP uses it for posters and descriptions.');
@@ -352,7 +354,7 @@ describe('ServerSettings in English', () => {
     current = { ...BASE, TMDBSettings: { APIKey: 'k' } };
     torrents.value = [{ hash: 'b', title: 'Beta', stat: 0, poster: 'http://p/b.jpg' } as any];
     await mount();
-    expect(btn('Key for posters and descriptions (TMDB)').textContent).toContain('Set');
+    expect(btn('TMDB key').textContent).toContain('Set');
     act(() => btn('Find posters for torrents without one').click());
     await flush();
     expect(toast.value).toBe('All torrents have posters');
