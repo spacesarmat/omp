@@ -58,6 +58,7 @@ function fakeHost(info: Partial<StartInfo> = {}, startFails = false): FakeHost {
       return Promise.reject(new Error('no network in tests'));
     },
     secretGet: () => Promise.resolve({ value: null }),
+    billingRefresh: () => Promise.resolve({ ok: false, error: 'network' }),
     notify: (n) => {
       h.notes.push(n);
       h.log.push('notify');

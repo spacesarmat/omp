@@ -12,7 +12,10 @@ sealed class RpcPageMessage {
     /** `{op:'rpcReply', rpc, ok, result | error:{code, message}}`: the answer to one call of [RpcDispatcher]. */
     data class Reply(val rpc: Int, val ok: Boolean, val result: Any?, val code: String?, val message: String?) : RpcPageMessage()
 
-    /** Only [BridgeRequest.Http] and [BridgeRequest.SecretGet]: the page reads sites and secrets like the monitor page. */
+    /**
+     * Only [BridgeRequest.Http], [BridgeRequest.SecretGet] and [BridgeRequest.BillingRefresh]: the page reads sites and
+     * secrets like the monitor page and renews the subscription's access token.
+     */
     data class Bridge(val request: BridgeRequest) : RpcPageMessage()
 
     /** A malformed or refused message; answered with [error] when it has an id. */
@@ -37,8 +40,8 @@ object RpcProtocol {
             "ready" -> RpcPageMessage.Ready
             "rpcReply" -> reply(o) ?: RpcPageMessage.Invalid(null, BridgeProtocol.BAD_MESSAGE)
             // the monitor bridge validates these two; every other monitor op (start, notify, persist, finish) is refused
-            "http", "secretGet" -> when (val r = BridgeProtocol.parse(text)) {
-                is BridgeRequest.Http, is BridgeRequest.SecretGet -> RpcPageMessage.Bridge(r)
+            "http", "secretGet", "billingRefresh" -> when (val r = BridgeProtocol.parse(text)) {
+                is BridgeRequest.Http, is BridgeRequest.SecretGet, is BridgeRequest.BillingRefresh -> RpcPageMessage.Bridge(r)
                 is BridgeRequest.Invalid -> RpcPageMessage.Invalid(r.id, r.error)
                 else -> RpcPageMessage.Invalid(id, BridgeProtocol.BAD_MESSAGE)
             }

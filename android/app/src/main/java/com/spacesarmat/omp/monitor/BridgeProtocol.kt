@@ -36,6 +36,8 @@ sealed class BridgeRequest {
     data class Finish(val summary: JSONObject?) : BridgeRequest()
     /** Public hosts this process may reach over plain HTTP (saved servers, indexers, FlareSolverr). */
     data class Cleartext(val id: Int, val hosts: List<String>) : BridgeRequest()
+    /** A new access token of the OMP subscription (SourceServices.billing): the page cannot see the refresh token. */
+    data class BillingRefresh(val id: Int, val deviceId: String, val stale: String) : BridgeRequest()
     /** A malformed request; answered with [error] when it has an id. */
     data class Invalid(val id: Int?, val error: String) : BridgeRequest()
 }
@@ -72,6 +74,12 @@ object BridgeProtocol {
             "notify" -> notify(o.optJSONObject("notification"))?.let { BridgeRequest.Notify(id, it) }
                 ?: BridgeRequest.Invalid(id, BAD_MESSAGE)
             "cleartext" -> BridgeRequest.Cleartext(id, hostList(o.optJSONArray("hosts")))
+            "billingRefresh" -> {
+                val device = o.opt("deviceId") as? String
+                val stale = (o.opt("stale") as? String) ?: ""
+                if (device == null || device.length > 64 || stale.length > 2_048) BridgeRequest.Invalid(id, BAD_MESSAGE)
+                else BridgeRequest.BillingRefresh(id, device, stale)
+            }
             else -> BridgeRequest.Invalid(id, BAD_MESSAGE)
         }
     }

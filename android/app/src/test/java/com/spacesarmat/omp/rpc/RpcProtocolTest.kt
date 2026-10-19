@@ -65,4 +65,9 @@ class RpcProtocolTest {
         assertEquals("sources", o.getString("method"))
         assertEquals(0, o.getJSONObject("params").length())
     }
+
+    @Test fun theTvSearchPageMayRenewTheSubscriptionToken() {
+        val m = RpcProtocol.parse("""{"id":3,"op":"billingRefresh","deviceId":"${"b".repeat(32)}","stale":"a1.y"}""") as RpcPageMessage.Bridge
+        assertEquals(BridgeRequest.BillingRefresh(3, "b".repeat(32), "a1.y"), m.request)
+    }
 }

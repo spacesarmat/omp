@@ -919,6 +919,7 @@ export const en: EnDict<typeof ru> = {
       rate: 'Too many requests — wait a moment',
       down: 'The subscription server is not responding',
       revoked: 'This device was disconnected — enter a new code',
+      extraExpired: 'The extra device was not renewed — renew it in the bot',
       keystoreLost: 'The subscription key was not saved on this phone — enter the code again',
       reopen: 'Open OMP on the phone to renew the subscription sign-in',
       legacyDisabled: 'The old subscription sign-in no longer works — enter the code again',

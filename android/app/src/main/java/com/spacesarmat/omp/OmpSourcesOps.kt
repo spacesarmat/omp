@@ -103,6 +103,59 @@ internal fun OmpNativePlugin.secretDeleteOp(call: PluginCall) {
     }
 }
 
+/** { deviceId, stale } → a new access token of the OMP subscription (BillingTokens.refresh); never rejects. */
+internal fun OmpNativePlugin.billingRefreshOp(call: PluginCall) {
+    val once = CallOnce(call)
+    val deviceId = call.getString("deviceId") ?: ""
+    val stale = call.getString("stale") ?: ""
+    io.execute {
+        try {
+            once.resolve(JSObject(sources.billing.refresh(deviceId, stale).toString()))
+        } catch (e: Exception) {
+            once.resolve(JSObject().put("ok", false).put("error", "down"))
+        }
+    }
+}
+
+/** { refreshToken } of a pair the page got (activation, legacy upgrade) → { volatile }: Keystore, or memory when refused. */
+internal fun OmpNativePlugin.billingAdoptOp(call: PluginCall) {
+    val once = CallOnce(call)
+    val token = call.getString("refreshToken")
+    if (token.isNullOrEmpty() || token.length > com.spacesarmat.omp.sources.BillingTokens.MAX_TOKEN) return once.reject(OmpNativePlugin.SECRETS_FAILED)
+    io.execute {
+        try {
+            once.resolve(JSObject().put("volatile", sources.billing.adopt(token)))
+        } catch (e: Exception) {
+            once.reject(OmpNativePlugin.SECRETS_FAILED)
+        }
+    }
+}
+
+/** → { present, volatile } of the subscription's refresh token. */
+internal fun OmpNativePlugin.billingStatusOp(call: PluginCall) {
+    val once = CallOnce(call)
+    io.execute {
+        try {
+            once.resolve(JSObject(sources.billing.status().toString()))
+        } catch (e: Exception) {
+            once.resolve(JSObject().put("present", true).put("volatile", false))
+        }
+    }
+}
+
+/** Forgets the subscription's refresh token («Отключить», or the server dropped the binding). */
+internal fun OmpNativePlugin.billingForgetOp(call: PluginCall) {
+    val once = CallOnce(call)
+    io.execute {
+        try {
+            sources.billing.forget()
+        } catch (e: Exception) {
+            // best effort
+        }
+        once.resolve()
+    }
+}
+
 /** JS keys live in their own namespace: page code cannot read the cookie entries. */
 internal fun OmpNativePlugin.secretKey(call: PluginCall): String? = SourceServices.jsSecretKey(call.getString("key"))
 

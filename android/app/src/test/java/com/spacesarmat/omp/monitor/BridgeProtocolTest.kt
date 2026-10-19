@@ -139,4 +139,14 @@ class BridgeProtocolTest {
         assertEquals("Сайт не отвечает", e.getString("error"))
         assertTrue(JSONObject(BridgeProtocol.ok(6, null)).isNull("value"))
     }
+
+    @Test
+    fun billingRefreshCarriesOnlyTheDeviceAndTheStaleAccessToken() {
+        val r = BridgeProtocol.parse(msg("billingRefresh", JSONObject().put("deviceId", "a".repeat(32)).put("stale", "a1.x"), id = 9))
+        assertEquals(BridgeRequest.BillingRefresh(9, "a".repeat(32), "a1.x"), r)
+        val bare = BridgeProtocol.parse(msg("billingRefresh", JSONObject().put("deviceId", "a".repeat(32)), id = 10))
+        assertEquals(BridgeRequest.BillingRefresh(10, "a".repeat(32), ""), bare)
+        assertTrue(BridgeProtocol.parse(msg("billingRefresh", JSONObject(), id = 11)) is BridgeRequest.Invalid)
+        assertTrue(BridgeProtocol.parse(msg("billingRefresh", JSONObject().put("deviceId", "a".repeat(32)).put("stale", "x".repeat(3_000)), id = 12)) is BridgeRequest.Invalid)
+    }
 }

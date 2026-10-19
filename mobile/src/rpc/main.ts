@@ -22,6 +22,8 @@ if (port) {
     http: createSourceHttp((req) => bridge.http(req)),
     client: null,
     secrets: createSecretStore({ get: (key) => bridge.secretGet(key), set: readOnly, delete: readOnly }),
+    // TV search keeps working when the phone app was not opened for days: the app renews the access token
+    billing: { refresh: (deviceId, stale) => bridge.billingRefresh(deviceId, stale) },
   };
   const handler = createRpcHandler({
     // the app may have added or removed a Jackett / Prowlarr connection since this page started

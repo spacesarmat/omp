@@ -157,6 +157,10 @@ class RpcPageHost(
                         BridgeProtocol.error(r.id, SourceServices.SECRETS_FAILED)
                     }
                 }
+                // the TV search server renews the subscription's access token itself (the app may be closed for days)
+                is BridgeRequest.BillingRefresh -> background(reply, r.id) {
+                    BridgeProtocol.ok(r.id, services.billing.refresh(r.deviceId, r.stale))
+                }
                 else -> {}
             }
             is RpcPageMessage.Invalid -> m.id?.let { reply.postMessage(BridgeProtocol.error(it, m.error)) }

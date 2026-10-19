@@ -1,8 +1,9 @@
 // Device tokens of the billing server (ops/billing README «Реестр устройств и токены»): the refresh/access pair,
 // its rotation and the one-time move off the opaque token of apps before PR-5. Chromium 53 safe: promises, no async.
 //
-// Only the app's own page refreshes (startBillingKeepAlive): it alone can write the Keystore. The hidden pages
-// (background check, TV search server) share localStorage, use the access token found there and never rotate.
+// Android (ctx.billing): the refresh token lives in the app (BillingTokens.kt, Keystore only) and every page renews
+// through it, the background check and the TV search server included, one refresh at a time for the process.
+// Without it (browser build, tests) only the app's own page rotates (startBillingKeepAlive).
 import { billingPost } from './client';
 import { rekeyBillingAccess, saveBillingAccess } from './entitlement';
 import {
@@ -18,7 +19,7 @@ import {
 } from './session';
 import { t } from '../i18n';
 import { log } from '../lib/log';
-import type { HttpResponse, SourceContext } from '../sources/types';
+import type { HttpResponse, NativeBilling, SourceContext } from '../sources/types';
 
 /** Keystore key of the refresh token. */
 export const REFRESH_SECRET = 'billing.refresh';
@@ -72,8 +73,14 @@ function onAndroid(ctx: SourceContext): boolean {
   return keystoreOnly && !!ctx.secrets;
 }
 
+/** Android: every page renews through the app (one refresh for the process). Elsewhere only the app's own page. */
 function canRefresh(ctx: SourceContext): boolean {
-  return refresher && !ctx.background;
+  return !!ctx.billing || (refresher && !ctx.background);
+}
+
+/** The one-time move off the legacy token needs to keep a refresh token: the app's page only. */
+function canUpgrade(ctx: SourceContext): boolean {
+  return ctx.billing ? !!ctx.billing.adopt : refresher && !ctx.background;
 }
 
 export function errorOf(text: string): string {
@@ -184,7 +191,18 @@ function lostOnRestart(ctx: SourceContext, s: BillingSession): boolean {
 /** Saves a fresh pair: the refresh token to the Keystore, the access token to the session. `prev` keeps the binding id. */
 export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession> {
   const id = prev && prev.id ? prev.id : newId();
-  return storeRefresh(ctx, pair.refreshToken, id).then((stored) => {
+  const native = ctx.billing;
+  const keep: Promise<Stored> =
+    native && native.adopt
+      ? native.adopt(pair.refreshToken).then(
+          (r) => (r.volatile ? { volatile: true } : {}),
+          () => {
+            // the app could not take the token at all: the code works again on this phone, ask for it once more
+            throw downError();
+          },
+        )
+      : storeRefresh(ctx, pair.refreshToken, id);
+  return keep.then((stored) => {
     if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
     const row: BillingSession = {
       token: '',
@@ -209,7 +227,8 @@ export function dropDeviceTokens(ctx: SourceContext | null, notice: BillingNotic
   saveBillingSession(null);
   setBillingNotice(notice);
   memoryRefresh = null;
-  if (ctx && ctx.secrets) ctx.secrets.delete(REFRESH_SECRET).then(undefined, () => undefined);
+  if (ctx && ctx.billing && ctx.billing.forget) ctx.billing.forget().then(undefined, () => undefined);
+  else if (ctx && ctx.secrets) ctx.secrets.delete(REFRESH_SECRET).then(undefined, () => undefined);
   emitBillingChange();
 }
 
@@ -289,7 +308,8 @@ export function refreshDeviceTokens(ctx: SourceContext): Promise<BillingSession>
   return single(() => {
     const s = billingSession();
     if (!s) return Promise.reject(tokenFailure(t('sources.billing.badCode')));
-    if (isLegacySession(s)) return upgradeLegacy(ctx, s);
+    if (isLegacySession(s)) return canUpgrade(ctx) ? upgradeLegacy(ctx, s) : Promise.resolve(s);
+    if (ctx.billing) return nativeRefresh(ctx, ctx.billing, s);
     return readRefresh(ctx, s).then(
       (refreshToken) => {
         if (!refreshToken) {
@@ -311,6 +331,50 @@ export function refreshDeviceTokens(ctx: SourceContext): Promise<BillingSession>
       },
     );
   });
+}
+
+/** Android: the app renews (Keystore, one refresh for every page, a lost answer retried); the page keeps the access token. */
+function nativeRefresh(ctx: SourceContext, native: NativeBilling, s: BillingSession): Promise<BillingSession> {
+  return native.refresh(deviceId(), s.access || '').then(
+    (ans) => {
+      if (ans && ans.ok && typeof ans.accessToken === 'string' && ans.accessToken && typeof ans.accessExpiresAt === 'number') {
+        const cur = billingSession();
+        // the user disconnected or entered another code while this was on the way
+        if (!cur || sessionKey(cur) !== sessionKey(s)) throw downError();
+        failedAt = 0;
+        const row: BillingSession = {
+          token: '',
+          paidUntil: typeof ans.paidUntil === 'number' ? ans.paidUntil : cur.paidUntil,
+          id: cur.id,
+          access: ans.accessToken,
+          accessExp: ans.accessExpiresAt,
+          refreshExp: typeof ans.refreshExpiresAt === 'number' ? ans.refreshExpiresAt : cur.refreshExp,
+        };
+        if (ans.volatile) row.volatile = true;
+        saveBillingSession(row);
+        emitBillingChange();
+        return row;
+      }
+      const error = ans && ans.error ? ans.error : 'down';
+      if (error === 'gone') {
+        dropDeviceTokens(ctx, 'revoked');
+        throw goneError();
+      }
+      if (error === 'missing') {
+        // nothing to renew with: the Keystore refused it before a restart, or it was never there
+        const lost = !!s.volatile;
+        dropDeviceTokens(ctx, lost ? 'keystore' : 'revoked');
+        throw lost ? tokenFailure(t('sources.billing.keystoreLost')) : goneError();
+      }
+      failedAt = Date.now();
+      throw error === 'rate' ? tokenFailure(t('sources.billing.rate')) : downError();
+    },
+    (e) => {
+      if (isTokenError(e)) throw e;
+      failedAt = Date.now();
+      throw downError();
+    },
+  );
 }
 
 /** The bearer token for the next call: renewed ahead of expiry on the app's own page. '' without a session. */
@@ -397,13 +461,27 @@ export function startBillingKeepAlive(ctxOf: () => SourceContext, opts?: { keyst
     const s = billingSession();
     if (!s) return;
     const ctx = ctxOf();
+    const renew = () => {
+      if (needsWork(s, Date.now())) deviceBearer(ctx).then(undefined, () => undefined);
+    };
+    const native = ctx.billing;
     // the refresh token was in memory only and the app restarted: ask for the code now, saying why
-    if (lostOnRestart(ctx, s)) {
+    if (native && native.status && s.volatile) {
+      native.status().then(
+        (st) => {
+          const cur = billingSession();
+          if (!st.present && cur && sessionKey(cur) === sessionKey(s)) dropDeviceTokens(ctx, 'keystore');
+          else renew();
+        },
+        () => undefined,
+      );
+      return;
+    }
+    if (!native && lostOnRestart(ctx, s)) {
       dropDeviceTokens(ctx, 'keystore');
       return;
     }
-    if (!needsWork(s, Date.now())) return;
-    deviceBearer(ctx).then(undefined, () => undefined);
+    renew();
   };
   tick();
   const timer = setInterval(tick, KEEP_ALIVE_MS);

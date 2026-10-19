@@ -711,6 +711,20 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun secretDelete(call: PluginCall) = secretDeleteOp(call)
 
+    // ---- OMP subscription: the refresh token lives here (Keystore), one refresh at a time for every page ----
+
+    @PluginMethod
+    fun billingRefresh(call: PluginCall) = billingRefreshOp(call)
+
+    @PluginMethod
+    fun billingAdopt(call: PluginCall) = billingAdoptOp(call)
+
+    @PluginMethod
+    fun billingStatus(call: PluginCall) = billingStatusOp(call)
+
+    @PluginMethod
+    fun billingForget(call: PluginCall) = billingForgetOp(call)
+
     // ---- Cloudflare: the visible check, «Пройти на телефоне» ----
 
     internal val cfOpen = AtomicBoolean(false)

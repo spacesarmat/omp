@@ -6,7 +6,7 @@ import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../
 import { t } from '../../../src/i18n';
 import { log } from '../../../src/lib/log';
 import { sanitizeP2160, type P2160Result } from '../../../src/player/player2160';
-import type { HttpResponse, SecretStore, SourceHttp } from '../../../src/sources/types';
+import type { HttpResponse, NativeBilling, NativeBillingAnswer, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { ApkAbi, UpdateInfo } from '../../../src/lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../../../src/sources/cloudflareCheck';
 import type { BrowserLoginRequest } from '../../../src/sources/browserLogin';
@@ -239,6 +239,11 @@ export interface OmpNativeApi {
   secretGet(key: string): Promise<string | null>;
   secretSet(key: string, value: string): Promise<void>;
   secretDelete(key: string): Promise<void>;
+  /** OMP subscription: the refresh token lives in the app (Keystore), one refresh at a time for every page. */
+  billingRefresh(deviceId: string, stale: string): Promise<NativeBillingAnswer>;
+  billingAdopt(refreshToken: string): Promise<{ volatile: boolean }>;
+  billingStatus(): Promise<{ present: boolean; volatile: boolean }>;
+  billingForget(): Promise<void>;
   /** Writes `text` to a file `name` and opens the system «Поделиться». */
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
   /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); never rejects, no-op off-device. */
@@ -347,6 +352,10 @@ interface OmpNativePlugin {
   secretGet(o: { key: string }): Promise<{ value?: string | null }>;
   secretSet(o: { key: string; value: string }): Promise<void>;
   secretDelete(o: { key: string }): Promise<void>;
+  billingRefresh(o: { deviceId: string; stale: string }): Promise<NativeBillingAnswer>;
+  billingAdopt(o: { refreshToken: string }): Promise<{ volatile?: boolean }>;
+  billingStatus(): Promise<{ present?: boolean; volatile?: boolean }>;
+  billingForget(): Promise<void>;
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
   setLanguage(o: { lang: string }): Promise<void>;
   setOrientation?(o: { mode: string }): Promise<void>;
@@ -903,6 +912,29 @@ export const native: OmpNativeApi = {
     return plugin.secretDelete({ key });
   },
 
+  billingRefresh(deviceId, stale) {
+    if (!plugin) return unavailable();
+    return plugin.billingRefresh({ deviceId, stale });
+  },
+
+  async billingAdopt(refreshToken) {
+    if (!plugin) return unavailable();
+    const r = await plugin.billingAdopt({ refreshToken });
+    return { volatile: !!(r && r.volatile) };
+  },
+
+  async billingStatus() {
+    if (!plugin) return unavailable();
+    const r = await plugin.billingStatus();
+    // unknown counts as present: never drop a binding on a doubtful answer
+    return { present: !r || r.present !== false, volatile: !!(r && r.volatile) };
+  },
+
+  billingForget() {
+    if (!plugin) return unavailable();
+    return plugin.billingForget();
+  },
+
   shareText(o) {
     if (!plugin) return unavailable();
     return logged('shareText', plugin.shareText(o));
@@ -991,6 +1023,16 @@ export const sourceHttp: SourceHttp = createSourceHttp(
   (req) => native.http(req),
   (url) => native.httpClearCookies(url),
 );
+
+/** The OMP subscription's refresh token in the app (Keystore); null off-device (the browser build keeps it itself). */
+export const nativeBilling: NativeBilling | null = available
+  ? {
+      refresh: (deviceId, stale) => native.billingRefresh(deviceId, stale),
+      adopt: (refreshToken) => native.billingAdopt(refreshToken),
+      status: () => native.billingStatus(),
+      forget: () => native.billingForget(),
+    }
+  : null;
 
 /** Keystore-encrypted storage for tracker logins; rejects off-device. */
 export const secrets: SecretStore = createSecretStore({

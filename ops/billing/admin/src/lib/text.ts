@@ -164,4 +164,5 @@ export const FAIL_FILTERS: [string, string][] = [
   ['expired', 'Подписка истекла'],
   ['other_device', 'Чужое устройство'],
   ['device_limit', 'Лимит устройств'],
+  ['extra_expired', 'Доп. устройство не продлено'],
 ];

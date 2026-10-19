@@ -142,6 +142,8 @@ export function hostContext(host: MonitorHost, client: MonitorClient | null): So
     http: createSourceHttp((req) => host.http(req)),
     client,
     secrets: createSecretStore({ get: (key) => host.secretGet(key), set: readOnly, delete: readOnly }),
+    // the subscription's access token is renewed by the app, so a check days after the app was opened still works
+    billing: { refresh: (deviceId, stale) => host.billingRefresh(deviceId, stale) },
     // a site whose code page paused its background requests (tsp.sourcePause) is not asked from here
     background: true,
   };

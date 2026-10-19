@@ -768,6 +768,67 @@ describe('billing HTTP: grace and over-limit phones', () => {
     expect(search.data && search.data.error).toBe('device_limit');
   });
 
+  it('extra_expired: a phone held only by a lapsed extra slot hears it (token pair); old apps keep device_limit', async () => {
+    const f = threeDevices();
+    const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW + 29 * DAY, withExtras: false });
+    const renewed = pay(q.state, q.result.label, '150', NOW + 29 * DAY, 'op-base').state as State;
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
+    writeState(file, realTime(renewed, NOW + 34 * DAY));
+    const app = createApp(file, noFetch, { env: {} });
+    // the old token (an app before PR-5) still gets the code it knows
+    const legacy = await call(app, 'POST', '/v1/search', { headers: { 'x-device-id': DEV_C, authorization: 'Bearer ' + f.tokens.C }, body: { q: 'x' } });
+    expect(legacy.status).toBe(403);
+    expect(legacy.data && legacy.data.error).toBe('device_limit');
+    // the same phone on the token pair: same status, the precise reason
+    const up = await call(app, 'POST', '/v1/token/upgrade', { headers: { 'x-device-id': DEV_C, authorization: 'Bearer ' + f.tokens.C } });
+    expect(up.status).toBe(200);
+    const access = String((up.data as { accessToken: string }).accessToken);
+    const search = await call(app, 'POST', '/v1/search', { headers: { 'x-device-id': DEV_C, authorization: 'Bearer ' + access }, body: { q: 'x' } });
+    expect(search.status).toBe(403);
+    expect(search.data && search.data.error).toBe('extra_expired');
+    // A and B are inside the included devices: nothing changes for them
+    const meA = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + f.tokens.A } });
+    expect(meA.data).toMatchObject({ active: true, overLimit: false });
+  });
+
+  it('extra_expired on activation: 409 like device_limit, only for apps that ask for the token pair', async () => {
+    const start = paid();
+    const a = activate(start.state, { code: start.code, deviceId: DEV_A, now: NOW });
+    const second = issueActivation(a.state, { accountId: start.account, now: NOW + 1 });
+    const b = activate(second.state, { code: second.result.code, deviceId: DEV_B, now: NOW + 1 });
+    const quote = quotePurchase(b.state, { kind: 'dev', accountId: start.account, subscriptionId: start.sub, now: NOW + 2 });
+    const bought = pay(quote.state, quote.result.label, '50.00', NOW + 2, 'op-dev');
+    // the base is renewed, the extra slot is not: its code was never used
+    const q = quotePurchase(bought.state as State, { kind: 'sub', accountId: start.account, subscriptionId: start.sub, now: NOW + 29 * DAY, withExtras: false });
+    const renewed = pay(q.state, q.result.label, '150', NOW + 29 * DAY, 'op-base').state as State;
+    const late = NOW + 40 * DAY;
+    expect(activate(renewed, { code: bought.result.code, deviceId: DEV_C, now: late }).result.error).toBe('device_limit');
+    const pairNew = activate(renewed, { code: bought.result.code, deviceId: DEV_C, now: late, legacy: false });
+    expect(pairNew.result.error).toBe('extra_expired');
+    expect(pairNew.state.attempts[pairNew.state.attempts.length - 1].reason).toBe('extra_expired');
+
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
+    writeState(file, realTime(renewed, late));
+    const app = createApp(file, noFetch, { env: {} });
+    const old = await call(app, 'POST', '/v1/activate', { body: { code: bought.result.code, deviceId: DEV_C } });
+    expect(old.status).toBe(409);
+    expect(old.data && old.data.error).toBe('device_limit');
+    const fresh = await call(app, 'POST', '/v1/activate', { body: { code: bought.result.code, deviceId: DEV_C, tokens: 'pair' } });
+    expect(fresh.status).toBe(409);
+    expect(fresh.data && fresh.data.error).toBe('extra_expired');
+  });
+
+  it('no extra slot at all: a full subscription is device_limit for every app', () => {
+    const start = paid();
+    const a = activate(start.state, { code: start.code, deviceId: DEV_A, now: NOW });
+    const second = issueActivation(a.state, { accountId: start.account, now: NOW + 1 });
+    const b = activate(second.state, { code: second.result.code, deviceId: DEV_B, now: NOW + 1 });
+    const third = issueActivation(b.state, { accountId: start.account, now: NOW + 2 });
+    expect(third.result.error).toBe('device_limit');
+    // B's code entered on a third phone: the code is someone else's
+    expect(activate(b.state, { code: second.result.code, deviceId: DEV_C, now: NOW + 3, legacy: false }).result.error).toBe('other_device');
+  });
+
   it('/v1/yoomoney renewal with an extra slot tells the user both dates in MSK', async () => {
     const f = threeDevices();
     f.state.settings.yoomoneySecret = 'secret';

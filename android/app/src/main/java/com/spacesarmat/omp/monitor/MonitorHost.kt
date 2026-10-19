@@ -132,6 +132,10 @@ class MonitorHost(
                     BridgeProtocol.error(r.id, SourceServices.SECRETS_FAILED)
                 }
             }
+            // the background check renews the subscription's access token itself
+            is BridgeRequest.BillingRefresh -> background(reply, r.id) {
+                BridgeProtocol.ok(r.id, services.billing.refresh(r.deviceId, r.stale))
+            }
             is BridgeRequest.Notify -> {
                 // a check only: the result of a button is shown by the worker
                 val shown = action == null && MonitorNotifier.post(ctx, r.spec)

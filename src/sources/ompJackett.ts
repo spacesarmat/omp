@@ -73,6 +73,7 @@ function billingError(status: number, text: string): Error {
   const token = tokenError(body.error || '');
   if (token) return token;
   if (body.error === 'disabled') return new Error(t('sources.billing.disabled'));
+  if (body.error === 'extra_expired') return new Error(t('sources.billing.extraExpired'));
   if (body.error === 'rate' || status === 429) return new Error(t('sources.billing.rate'));
   if (body.error === 'device_limit') return new Error(t('sources.billing.overLimit'));
   if (body.error === 'expired' || status === 401 || status === 403) return new Error(t('sources.billing.expired'));
@@ -87,6 +88,7 @@ export function clearBilling(ctx?: SourceContext): void {
 /** What a refused code means. The error code decides; a bare 409 is the old «другое устройство». */
 function activateError(status: number, code: string): Error {
   if (code === 'device_limit') return new Error(t('sources.billing.deviceLimit'));
+  if (code === 'extra_expired') return new Error(t('sources.billing.extraExpired'));
   if (code === 'other_device') return new Error(t('sources.billing.otherDevice'));
   if (code === 'expired') return new Error(t('sources.billing.expired'));
   if (code === 'app_update_required') return new Error(t('sources.billing.appUpdate'));

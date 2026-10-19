@@ -3,6 +3,7 @@
 // requests are JSON messages { id, op, ... } and every answer is { id, ok, value | error }.
 import { t } from '../../../src/i18n';
 import type { NativeHttpRequest } from '../../../src/sources/http';
+import type { NativeBillingAnswer } from '../../../src/sources/types';
 import type { MonitorSummary } from '../../../src/monitor/settings';
 import { sanitizeJournal, type JournalItem } from './journal';
 
@@ -45,6 +46,8 @@ export interface MonitorHost {
   start(): Promise<StartInfo>;
   http(req: NativeHttpRequest): Promise<HttpReply>;
   secretGet(key: string): Promise<{ value?: string | null }>;
+  /** A new access token of the OMP subscription, renewed by the app (the page never sees the refresh token). */
+  billingRefresh(deviceId: string, stale: string): Promise<NativeBillingAnswer>;
   /** Resolves false when Android could not show it (notifications off or not permitted). */
   notify(n: MonitorNotification): Promise<boolean>;
   /** Stores dedup markers outside localStorage (fsync'ed file). */
@@ -113,6 +116,8 @@ export function bridgeHost(port: HostPort): MonitorHost {
         const o = (v && typeof v === 'object' ? v : {}) as { value?: unknown };
         return { value: typeof o.value === 'string' ? o.value : null };
       }),
+    billingRefresh: (deviceId, stale) =>
+      send('billingRefresh', { deviceId, stale }).then((v) => (v && typeof v === 'object' ? (v as NativeBillingAnswer) : { ok: false, error: 'down' })),
     notify: (n) => send('notify', { notification: n }).then((v) => !!v && typeof v === 'object' && (v as { shown?: unknown }).shown === true),
     persist: (items) => send('persist', { items }).then(() => undefined),
     setCleartext: (hosts) => send('cleartext', { hosts }).then(() => undefined),

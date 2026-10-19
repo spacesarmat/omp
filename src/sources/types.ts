@@ -70,8 +70,36 @@ export interface SourceResult extends SearchResult {
   groupKey?: string;
 }
 
+/** Answer of the Android refresh of the OMP subscription (BillingTokens.kt). The refresh token never reaches the page. */
+export interface NativeBillingAnswer {
+  ok?: boolean;
+  /** gone (code: revoked / refresh_expired / bad_token), missing, network, rate, down, bad_request */
+  error?: string;
+  code?: string;
+  accessToken?: string;
+  accessExpiresAt?: number;
+  refreshExpiresAt?: number;
+  paidUntil?: number;
+  /** The Keystore refused the rotated refresh token: it is in the app's memory only. */
+  volatile?: boolean;
+}
+
+/**
+ * Android: the OMP subscription's refresh token lives in the app (Keystore), one refresh at a time for every page.
+ * Hidden pages (background check, TV search server) get `refresh` only; the app's page gets all four.
+ */
+export interface NativeBilling {
+  refresh(deviceId: string, stale: string): Promise<NativeBillingAnswer>;
+  /** A pair the page got itself (activation, legacy upgrade): the refresh token goes to the Keystore. */
+  adopt?(refreshToken: string): Promise<{ volatile: boolean }>;
+  status?(): Promise<{ present: boolean; volatile: boolean }>;
+  forget?(): Promise<void>;
+}
+
 export interface SourceContext {
   http: SourceHttp;
+  /** Android: the subscription's refresh token in the app (src/billing/tokens.ts); absent in the browser build. */
+  billing?: NativeBilling;
   /** TorrServer client for the TorrServer sources; null when no server is chosen. */
   client: { search(query: string, source: SearchSource): Promise<SearchResult[]> } | null;
   secrets?: SecretStore;
