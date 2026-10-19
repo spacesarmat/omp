@@ -2534,4 +2534,10 @@ export const ru = {
     sourcesFailed: 'Телевизор не смог применить источники',
     sourcesRejected: 'Телевизор не принял данные - обновите OMP на телевизоре',
   },
+  ads: {
+    label: 'Реклама',
+    erid: 'erid: {erid}',
+    aria: 'Реклама: {title}. {advertiser}',
+    open: 'Подробнее',
+  },
 };

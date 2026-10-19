@@ -82,6 +82,10 @@ const AUDIT_ACTION: Record<string, string> = {
   payment_confirm: 'подтверждение платежа',
   payment_reject: 'отклонение платежа',
   swaps_reset: 'сброс счётчика смен',
+  ads_config: 'настройки рекламы',
+  ads_banner_add: 'новый баннер',
+  ads_banner_save: 'изменение баннера',
+  ads_banner_remove: 'удаление баннера',
 };
 
 const PROBLEM_KIND: Record<string, string> = {
@@ -160,6 +164,10 @@ export const AUDIT_FILTERS: [string, string][] = [
   ['swaps_reset', 'Сброс смен'],
   ['message', 'Сообщение'],
   ['settings_save', 'Настройки'],
+  ['ads_config', 'Реклама: настройки'],
+  ['ads_banner_add', 'Реклама: новый баннер'],
+  ['ads_banner_save', 'Реклама: изменение баннера'],
+  ['ads_banner_remove', 'Реклама: удаление баннера'],
 ];
 
 export const FAIL_FILTERS: [string, string][] = [

@@ -46,6 +46,7 @@ export default defineConfig({
       '/admin/subscriptions.csv': 'http://127.0.0.1:8787',
       '/admin/users.csv': 'http://127.0.0.1:8787',
       '/admin/promos.csv': 'http://127.0.0.1:8787',
+      '/admin/ads': 'http://127.0.0.1:8787',
     },
   },
 });

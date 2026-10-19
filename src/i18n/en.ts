@@ -2493,4 +2493,10 @@ export const en: EnDict<typeof ru> = {
     sourcesFailed: 'The TV could not apply the sources',
     sourcesRejected: 'The TV did not accept the data - update OMP on the TV',
   },
+  ads: {
+    label: 'Ad',
+    erid: 'erid: {erid}',
+    aria: 'Ad: {title}. {advertiser}',
+    open: 'Learn more',
+  },
 };

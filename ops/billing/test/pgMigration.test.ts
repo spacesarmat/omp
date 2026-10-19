@@ -245,6 +245,6 @@ describe.skipIf(!PG_URL)('billing.db → Postgres', () => {
     expect(r.deleted).toEqual({ audit: 1, webhooks: 0, attempts: 1 });
     expect((await store.read()).audit.map((x: Any) => x.id)).toEqual(['a2']);
     expect((await store.query('SELECT id FROM audit')).rows).toEqual([{ id: 'a2' }]);
-    expect(await store.retention(now)).toEqual({ expired: { audit: 0, webhooks: 0, attempts: 0 }, deleted: { audit: 0, webhooks: 0, attempts: 0 } });
+    expect(await store.retention(now)).toEqual({ expired: { audit: 0, webhooks: 0, attempts: 0 }, deleted: { audit: 0, webhooks: 0, attempts: 0 }, adStats: 0 });
   });
 });

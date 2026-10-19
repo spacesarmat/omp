@@ -1,5 +1,5 @@
 // TMDB.org-style homepage: horizontal rails from trending / popular / now playing / …
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
 import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
@@ -9,6 +9,9 @@ import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import type { HomeSection, HomeSectionId, Kind, TrendingWindow } from '../../../../src/catalog/tmdb';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { withAds } from '../../../../src/ads/ads';
+import { AdCell } from '../../ads/AdCell';
+import { useAdSlots } from '../../ads/useAdSlots';
 
 function sectionTitle(id: HomeSectionId): string {
   switch (id) {
@@ -81,6 +84,16 @@ export function DiscoverHome({
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const list = torrents.value;
   const lib = useMemo(() => libraryIndex(list), [list]);
+  const homeRef = useRef<HTMLDivElement>(null);
+  // an ad block between the rails (a card-size cell with its text beside it), only below the screen when it appears
+  const ads = useAdSlots({
+    section: 'discoverRails',
+    count: sections ? sections.length : 0,
+    perScreen: 3,
+    active: !error && !!sections && sections.length > 2,
+    listKey: kind + '|' + window,
+    itemEl: (i) => (homeRef.current ? homeRef.current.querySelectorAll('[data-rail]')[i] || null : null),
+  });
 
   useEffect(() => {
     let alive = true;
@@ -129,7 +142,7 @@ export function DiscoverHome({
     return <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>;
   }
   return (
-    <div class="m-disc-home">
+    <div class="m-disc-home" ref={homeRef}>
       <div class="m-disc-trend" role="group" aria-label={t('discover.homeTrending')}>
         <button
           type="button"
@@ -148,9 +161,15 @@ export function DiscoverHome({
           {t('discover.homeWeek')}
         </button>
       </div>
-      {sections.map((s) => (
-        <Rail key={s.id} section={s} owned={(x) => inLibrary(lib, x)} />
-      ))}
+      {withAds(sections, ads.admitted).map((e) => {
+        if (e.item === undefined) {
+          const b = ads.banner(e.ad);
+          const pos = e.ad;
+          return b ? <AdCell key={'ad:rails:' + pos} kind="rail" banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+        }
+        const s = e.item;
+        return <Rail key={s.id} section={s} owned={(x) => inLibrary(lib, x)} />;
+      })}
     </div>
   );
 }

@@ -13,6 +13,8 @@ import { normalizeState } from '../../state.mjs';
 import { LOG_TABLES, expiredLogCounts, pruneLogs, retentionCutoffs } from '../../retention.mjs';
 import { decodeRow, encodeRow } from './mapper.mjs';
 import * as reg from './registry.mjs';
+import * as adsSql from './ads.mjs';
+import { adStatsCutoffDay } from '../../ads.mjs';
 import { migrate } from './schema.mjs';
 import { COLLECTIONS, SPECIAL_KEYS } from './spec.mjs';
 
@@ -377,7 +379,17 @@ export async function createPgStore({ connectionString, schema, max }) {
         const r = await pool.query('DELETE FROM ' + table + ' WHERE NOT live AND at < $1', [cut[name]]);
         deleted[name] = r.rowCount;
       }
-      return { expired, deleted };
+      // Ad counters: 90 days (src/ads.mjs).
+      const adStats = await adsSql.pruneAdStats(pool, adStatsCutoffDay(at));
+      return { expired, deleted, adStats };
+    },
+    /** Ad images and daily counters (db/pg/ads.mjs), outside the state snapshot. */
+    ads: {
+      bump: (day, rows) => adsSql.bumpAdStats(pool, day, rows),
+      since: (fromDay) => adsSql.adStatsSince(pool, fromDay),
+      putImage: (img, now) => adsSql.putAdImage(pool, img, now),
+      getImage: (id) => adsSql.getAdImage(pool, id),
+      gcImages: (keepIds, now, graceMs) => adsSql.gcAdImages(pool, keepIds, now, graceMs),
     },
     /** Read-only stats and tests: run SQL on the store's pool (same schema). */
     query: (sql, params) => pool.query(sql, params),
