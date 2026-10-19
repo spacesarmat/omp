@@ -1386,6 +1386,82 @@ footer .copyright {
   border: 0;
 }
 
+.faq {
+  padding-block: 0 80px;
+}
+
+.faq-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 30px;
+  max-width: 900px;
+}
+
+.faq details {
+  background: var(--panel);
+  border-left: 2px solid var(--yellow);
+  border-radius: 0 12px 12px 0;
+  padding: 0 24px;
+}
+
+.faq summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 0;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: "+";
+  color: var(--yellow);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.faq details[open] summary::after {
+  content: "−";
+}
+
+.faq summary:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 4px;
+}
+
+.faq h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.faq details p {
+  margin: 0;
+  padding-bottom: 20px;
+  font-size: 14px;
+}
+
+.faq details a {
+  color: var(--yellow);
+}
+
+@media (max-width: 600px) {
+  .faq {
+    padding-block: 0 50px;
+  }
+  .faq details {
+    padding: 0 18px;
+  }
+  .faq details p {
+    font-size: 15px;
+  }
+}
+
 .download {
   background: radial-gradient(ellipse at center, #2a2610, transparent 70%);
 }
