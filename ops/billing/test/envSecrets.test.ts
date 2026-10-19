@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { compareSecrets, ENV_SECRETS, envLinesFor, moveSecretsOutOfDb, secretText, secretViews, withEnvSecrets } from '../src/envSecrets.mjs';
+import { compareSecrets, ENV_SECRETS, envLinesFor, envSecretValues, moveSecretsOutOfDb, secretText, secretViews, withEnvSecrets } from '../src/envSecrets.mjs';
 import { issueCliAdminLogin } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
@@ -88,6 +88,22 @@ async function call(app: Any, method: string, path: string, opts: { cookie?: str
   }
   return { status: res.status, headers: res.headers, data, body: res.body };
 }
+
+
+describe('exact secret values (no trim)', () => {
+  it('keeps surrounding spaces in .env reads, exports and comparisons', () => {
+    const spaced = ' pass with spaces ';
+    const env = { BILLING_SMTP_PASS: spaced };
+    expect(envSecretValues(env).smtpPass).toBe(spaced);
+    expect(secretText(spaced)).toContain('****');
+    const settings = { smtpPass: spaced };
+    const lines = envLinesFor(settings, '', {});
+    expect(lines.lines.some((l) => l.includes("BILLING_SMTP_PASS=' pass with spaces '"))).toBe(true);
+    const cmp = compareSecrets(settings, '', env);
+    const smtp = cmp.find((x) => x.name === 'BILLING_SMTP_PASS');
+    expect(smtp.state).toBe('same');
+  });
+});
 
 describe('secret display and the settings form', () => {
   it('shows set or not, the last four characters of long values only, never the value', () => {

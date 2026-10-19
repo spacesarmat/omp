@@ -24,13 +24,13 @@ export const SECRET_KEYS = ENV_SECRETS.map((s) => s.key);
 export const TOKEN_SECRET_ENV = 'BILLING_TOKEN_SECRET';
 export const TOKEN_SECRET_MIN = 32;
 
-/** { settingsKey: value } for every secret .env sets (non-empty after trim). */
+/** { settingsKey: value } for every secret .env sets (exact non-empty string, spaces kept). */
 export function envSecretValues(env) {
   const out = {};
   const e = env || {};
   for (const s of ENV_SECRETS) {
-    const v = String(e[s.env] == null ? '' : e[s.env]).trim();
-    if (v) out[s.key] = v;
+    const v = e[s.env] == null ? '' : String(e[s.env]);
+    if (v !== '') out[s.key] = v;
   }
   return out;
 }
@@ -98,8 +98,8 @@ export async function moveSecretsOutOfDb(store, env) {
 
 /** «задан ✅, ****abcd» (the last four only for values of 12+ characters), «не задан» otherwise. */
 export function secretText(value) {
-  const s = String(value || '').trim();
-  if (!s) return 'не задан';
+  const s = value == null ? '' : String(value);
+  if (s === '') return 'не задан';
   return 'задан ✅, ****' + (s.length >= 12 ? s.slice(-4) : '');
 }
 
@@ -139,8 +139,8 @@ export function envLinesFor(settings, kvTokenSecret, env) {
     names.push(name);
   };
   for (const s of ENV_SECRETS) {
-    const v = String((settings && settings[s.key]) ?? '').trim();
-    if (v && !have[s.key]) add(s.env, v);
+    const v = (settings && settings[s.key]) == null ? '' : String(settings[s.key]);
+    if (v !== '' && !have[s.key]) add(s.env, v);
   }
   const kv = String(kvTokenSecret || '');
   if (kv.length >= TOKEN_SECRET_MIN && !tokenSecretFromEnv(env)) add(TOKEN_SECRET_ENV, kv);
@@ -152,8 +152,8 @@ export function compareSecrets(settings, kvTokenSecret, env) {
   const have = envSecretValues(env);
   const state = (inEnv, inDb, same) => (inEnv && inDb ? (same ? 'same' : 'differs') : inEnv ? 'env only' : inDb ? 'db only' : 'none');
   const out = ENV_SECRETS.map((s) => {
-    const db = String((settings && settings[s.key]) ?? '').trim();
-    return { name: s.env, state: state(!!have[s.key], !!db, have[s.key] === db) };
+    const db = (settings && settings[s.key]) == null ? '' : String(settings[s.key]);
+    return { name: s.env, state: state(!!have[s.key], db !== '', have[s.key] === db) };
   });
   const envTok = tokenSecretFromEnv(env) ? String(env[TOKEN_SECRET_ENV]) : '';
   const kv = String(kvTokenSecret || '');
