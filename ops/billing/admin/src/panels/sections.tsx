@@ -84,13 +84,15 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
   const [days, setDays] = useState('1');
   const [maxUses, setMaxUses] = useState('1');
   const [count, setCount] = useState('1');
+  const [bonusSlots, setBonusSlots] = useState('0');
+  const [bonusDays, setBonusDays] = useState('');
   return (
     <Card>
       <CardHeader>
         <CardTitle>Промокоды</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-2 md:grid-cols-5">
+        <div className="grid gap-2 md:grid-cols-7">
           <label className="space-y-1 text-sm">
             <span className="text-muted-foreground">Код</span>
             <Input placeholder="пусто = сгенерировать" value={code} onChange={(e) => setCode(e.target.value)} />
@@ -98,6 +100,14 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
           <label className="space-y-1 text-sm">
             <span className="text-muted-foreground">Дней</span>
             <Input type="number" value={days} onChange={(e) => setDays(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Бонусных устройств</span>
+            <Input type="number" min={0} max={20} value={bonusSlots} onChange={(e) => setBonusSlots(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Бонус на дней</span>
+            <Input type="number" min={0} placeholder="пусто = навсегда" value={bonusDays} onChange={(e) => setBonusDays(e.target.value)} />
           </label>
           <label className="space-y-1 text-sm">
             <span className="text-muted-foreground">Активаций</span>
@@ -111,12 +121,14 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <Button
               onClick={() => {
                 const n = Number(count) || 1;
-                void run('/admin/promo', { code, days, maxUses, count: n }).then((res) => {
+                void run('/admin/promo', { code, days, maxUses, count: n, bonusSlots, bonusDays }).then((res) => {
                   const list = res?.extra?.promos || [];
                   if (list.length > 1) {
                     downloadCsv(
                       'omp-promos-new.csv',
-                      [['код', 'дней', 'активаций']].concat(list.map((p) => [p.code, String(p.days), String(p.maxUses)])),
+                      [['код', 'дней', 'активаций', 'бонусных устройств', 'бонус на дней']].concat(
+                        list.map((p) => [p.code, String(p.days), String(p.maxUses), String(p.bonusSlots || 0), p.bonusSlots ? String(p.bonusDays || 0) : '']),
+                      ),
                     );
                   }
                 });
@@ -136,6 +148,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <TableRow>
               <TableHead>Код</TableHead>
               <TableHead>Дни</TableHead>
+              <TableHead>Бонус</TableHead>
               <TableHead>Создан</TableHead>
               <TableHead>Использования</TableHead>
               <TableHead />
@@ -144,7 +157,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
           <TableBody>
             {promos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
+                <TableCell colSpan={6} className="text-muted-foreground">
                   Нет промокодов
                 </TableCell>
               </TableRow>
@@ -157,6 +170,9 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
                     <span className={p.revoked ? 'text-muted-foreground' : 'font-mono'}>{p.code}</span> <CopyBtn value={p.code} />
                   </TableCell>
                   <TableCell>{p.days}</TableCell>
+                  <TableCell>
+                    {p.bonusSlots ? '+' + p.bonusSlots + ' устр. ' + (p.bonusDays ? 'на ' + p.bonusDays + ' дн.' : 'навсегда') : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Stamp ms={p.createdAt} />
                   </TableCell>
@@ -296,6 +312,11 @@ export function SubsPanel({
                 </TableCell>
                 <TableCell>
                   <Devices bound={s.bound} limit={s.deviceLimit} over={s.overLimit} />
+                  {s.limitOverride ? (
+                    <span className="ml-1 text-xs text-amber-300" title={s.limitText}>
+                      индивид.
+                    </span>
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <a className="text-primary" href={'/admin/?id=' + encodeURIComponent(s.accountId)}>
@@ -525,6 +546,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     fields: [
       ['priceRub', 'Цена, ₽'],
       ['periodDays', 'Период, дней'],
+      ['baseDevices', 'Базовых устройств в подписке (1–20; кроме индивидуальных лимитов)'],
       ['extraDeviceRub', 'Доп. устройство, ₽ в месяц'],
       ['graceDays', 'Льготный период, дней'],
       ['publicPromo', 'Промокод на пробный день (бот покажет, пока он действует)'],

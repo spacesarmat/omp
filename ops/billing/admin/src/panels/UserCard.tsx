@@ -78,6 +78,7 @@ export function UserCard({
               Подписка до <Stamp ms={user.subscription.paidUntil} />
               <span className="text-muted-foreground">
                 устройств {user.subscription.bound ?? 0} из {user.subscription.deviceLimit}
+                {user.subscription.limitText ? ' (' + user.subscription.limitText + ')' : ''}
               </span>
               <SubStatus status={status} />
               {inGrace && user.subscription.accessUntil ? (
@@ -167,7 +168,11 @@ export function UserCard({
       </Card>
 
       <SubtractDaysCard key={'sub-' + (user.subscription?.paidUntil || 0)} user={user} run={run} />
-      <LimitCard key={'lim-' + (user.subscription?.baseLimit ?? '') + '-' + (user.subscription?.extraSlots ?? '')} user={user} run={run} />
+      <LimitCard
+        key={'lim-' + (user.subscription?.limitOverride ?? '') + '-' + (user.subscription?.extraSlots ?? '') + '-' + (user.subscription?.limitText ?? '')}
+        user={user}
+        run={run}
+      />
 
       <Card>
         <CardHeader>

@@ -3,7 +3,11 @@ import {
   accountCard,
   activeExtras,
   adminDashboard,
+  bonusActive,
+  bonusRows,
   dailySeries,
+  limitBreakdown,
+  limitOverrideOf,
   deviceLimitNow,
   financeReport,
   mainSubscription,
@@ -53,6 +57,8 @@ function subRows(state, now) {
         paidUntilText: day(sub.paidUntil),
         createdAt: sub.createdAt || 0,
         deviceLimit: limit,
+        limitText: limitBreakdown(state, sub, now).text,
+        limitOverride: limitOverrideOf(sub),
         extraSlots: activeExtras(state, sub, now),
         extraUntil: Number(sub.extraUntil) || 0,
         inGrace: access.grace,
@@ -73,6 +79,8 @@ function promoRows(state) {
       id: p.id,
       code: p.code,
       days: p.days,
+      bonusSlots: p.bonusSlots || 0,
+      bonusDays: p.bonusSlots ? p.bonusDays || 0 : 0,
       uses: (p.uses || []).length,
       maxUses: p.maxUses,
       revoked: !!p.revoked,
@@ -149,6 +157,7 @@ function deviceRows(card, registry, overIds) {
         id: r.id,
         codeId: r.code_id,
         deviceId: String(r.device_id).slice(0, 8),
+        name: String(r.name || ''),
         boundAt: Number(r.bound_at) || 0,
         lastSeenAt: Number(r.last_seen_at) || 0,
         lastIp: maskIp(r.last_ip_net),
@@ -170,6 +179,32 @@ function deviceRows(card, registry, overIds) {
       auth: 'legacy',
       overLimit: overIds.has(c.id),
     }));
+}
+
+/**
+ * The limit of one subscription for the panel: the breakdown text, the individual limit (null = the global base),
+ * the global base, and every bonus row (expired ones too, marked), newest first.
+ */
+function limitPayload(state, subRow, now) {
+  if (!subRow) return {};
+  const limit = limitBreakdown(state, subRow, now);
+  return {
+    limitText: limit.text,
+    limitOverride: limit.override,
+    globalBase: limit.globalBase,
+    bonusSlots: limit.bonusTotal,
+    bonus: bonusRows(subRow)
+      .map((b) => ({
+        id: String(b.id || ''),
+        count: Math.floor(Number(b.count)) || 0,
+        until: b.until === null || b.until === undefined || b.until === '' ? null : Number(b.until) || 0,
+        reason: String(b.reason || ''),
+        grantedAt: Number(b.grantedAt) || 0,
+        source: b.source === 'promo' ? 'promo' : 'admin',
+        active: bonusActive(b, now),
+      }))
+      .reverse(),
+  };
 }
 
 export function userPayload(state, accountId, opts) {
@@ -207,6 +242,7 @@ export function userPayload(state, accountId, opts) {
           accessUntil: sub.accessUntil || 0,
           deviceLimit: sub.deviceLimit,
           baseLimit: sub.baseLimit,
+          ...limitPayload(state, subRow, now),
           extraSlots: sub.extraSlots,
           extraUntil: sub.extraUntil || 0,
           bound: boundCount,

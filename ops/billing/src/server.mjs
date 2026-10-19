@@ -25,6 +25,7 @@ import {
   logWebhook,
   codeWithinLimit,
   overLimitReason,
+  baseDevices,
   deviceAccess,
   dueReminders,
   markReminder,
@@ -87,11 +88,14 @@ import {
   revokeDevice,
   cloneMark,
   revokeNoticeText,
+  grantBonus,
+  removeBonus,
   setDeviceLimit,
   subtractDays,
 } from './deviceAdmin.mjs';
 import {
   activeRowForCode,
+  setDeviceName,
   deviceRow,
   isAccessToken,
   issuePair,
@@ -126,6 +130,7 @@ import {
   createSearchCache,
   mergeSettings,
   probeAllServices,
+  validBase,
   sourceEnabled,
 } from './services.mjs';
 import { readState, registryDb, resolveDbPath, updateState } from './store.mjs';
@@ -559,6 +564,16 @@ export function createApp(file, fetchImpl, opts) {
     }
   }
 
+  /** Device name the phone sends on activate / refresh / upgrade («Xiaomi 2201117TY»), sanitized. Best effort. */
+  function noteName(rowId, raw) {
+    if (!rowId || raw === undefined) return;
+    try {
+      setDeviceName(regDb(), rowId, raw);
+    } catch (e) {
+      /* the name is cosmetic */
+    }
+  }
+
   /** A rotated refresh token came back: journal and feed only, no unbind and no message to the user. */
   async function markClone(row) {
     try {
@@ -803,11 +818,20 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
         const body = await readBody(req);
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        // settings.baseDevices: a whole number 1–20; a bad value keeps the current one and says so
+        const badBase = path === '/admin/settings' && body.baseDevices !== undefined && body.baseDevices !== '' && !validBase(body.baseDevices);
         if (path === '/admin/settings' || path === '/admin/services') {
+          const baseBefore = baseDevices(readState(file).settings);
           await updateState(file, (state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
           }));
-          await audit(file, path === '/admin/services' ? 'services_save' : 'settings_save', 'ok', admin);
+          const baseAfter = baseDevices(readState(file).settings);
+          await audit(
+            file,
+            path === '/admin/services' ? 'services_save' : 'settings_save',
+            baseAfter !== baseBefore ? 'Базовых устройств: ' + baseBefore + ' → ' + baseAfter : 'ok',
+            admin,
+          );
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices(readState(file).settings, net);
             return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
@@ -819,6 +843,7 @@ export function createApp(file, fetchImpl, opts) {
         let flashError = '';
         let redirectTo = '/admin';
         let extra = null;
+        if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 — оставлено прежнее значение';
         if (path === '/admin/find') {
           const found = adminFind(readState(file), body.q || '', Date.now());
           if (found) {
@@ -931,24 +956,32 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/promo') {
           const count = Number(body.count) || 1;
+          // 0 days is allowed for a promo that only gives bonus device slots
+          const promoDays = body.days === undefined || body.days === '' ? 1 : Number(body.days) || 0;
           const result = await updateState(file, (state) =>
             count > 1
               ? createPromos(state, {
                   count,
-                  days: Number(body.days) || 1,
+                  days: promoDays,
                   maxUses: Number(body.maxUses) || 1,
+                  bonusSlots: Number(body.bonusSlots) || 0,
+                  bonusDays: Number(body.bonusDays) || 0,
                   now: Date.now(),
                 })
               : createPromo(state, {
                   code: body.code,
-                  days: Number(body.days) || 1,
+                  days: promoDays,
                   maxUses: Number(body.maxUses) || 1,
+                  bonusSlots: Number(body.bonusSlots) || 0,
+                  bonusDays: Number(body.bonusDays) || 0,
                   now: Date.now(),
                 }),
           );
           if (result.error && !(result.promos && result.promos.length)) flashError = 'Не удалось создать промокод';
           else if (result.promos) {
-            extra = { promos: result.promos.map((p) => ({ code: p.code, days: p.days, maxUses: p.maxUses })) };
+            extra = {
+              promos: result.promos.map((p) => ({ code: p.code, days: p.days, maxUses: p.maxUses, bonusSlots: p.bonusSlots || 0, bonusDays: p.bonusDays || 0 })),
+            };
             flashText = 'Создано промокодов: ' + result.promos.length;
             await audit(file, 'bulk_promo', String(result.promos.length), admin);
           } else if (result.promo) flashPromo = result.promo.code;
@@ -1007,16 +1040,44 @@ export function createApp(file, fetchImpl, opts) {
           const out = await updateState(file, (state) =>
             setDeviceLimit(state, {
               accountId: body.accountId || '',
-              deviceLimit: body.deviceLimit,
+              limitOverride: body.limitOverride,
               extraSlots: body.extraSlots,
               now: Date.now(),
               actor: adminActor(admin),
             }),
           );
           if (out.error === 'no_subscription') flashError = 'Нет подписки';
-          else if (out.error) flashError = 'Лимит: целое число от 1, доп. устройства от 0 (не больше 20)';
+          else if (out.error) flashError = 'Индивидуальный лимит: пусто или целое число от 1, доп. устройства от 0 (не больше 20)';
           else if (out.unchanged) flashText = 'Лимит не изменился';
-          else flashText = 'Лимит устройств: ' + out.total + (out.extraSlots ? ' (' + out.deviceLimit + ' + ' + out.extraSlots + ' доп.)' : '');
+          else flashText = 'Лимит устройств: ' + out.total + ' (' + out.text + ')';
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/bonus') {
+          const out = await updateState(file, (state) =>
+            grantBonus(state, {
+              accountId: body.accountId || '',
+              count: body.count,
+              days: body.days,
+              reason: body.reason,
+              now: Date.now(),
+              actor: adminActor(admin),
+            }),
+          );
+          if (out.error === 'no_subscription') flashError = 'Нет подписки';
+          else if (out.error) flashError = 'Бонус: устройств от 1 до 20, дней пусто (навсегда) или от 1 до 3650';
+          else flashText = 'Бонусные устройства выданы. Лимит: ' + out.total + ' (' + out.text + ')';
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/bonus-remove') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const out = await updateState(file, (state) =>
+              removeBonus(state, { accountId: body.accountId || '', bonusId: body.bonusId || '', now: Date.now(), actor: adminActor(admin) }),
+            );
+            if (out.error === 'no_subscription') flashError = 'Нет подписки';
+            else if (out.error) flashError = 'Бонус не найден';
+            else flashText = 'Бонус снят. Лимит: ' + out.total + ' (' + out.text + ')';
+          }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/subtract') {
@@ -1186,6 +1247,7 @@ export function createApp(file, fetchImpl, opts) {
         if (result.error) return json(res, conflict ? 409 : 403, result);
         const row = activeRowForCode(regDb(), result.codeId);
         if (row) noteSeen(row.id, clientIp(req), true);
+        if (row) noteName(row.id, body.name);
         if (!wantPair) return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
         if (!row) return json(res, 403, { error: 'revoked' });
         return json(res, 200, { ...issuePair(regDb(), secret(), row, now).pair, paidUntil: result.paidUntil });
@@ -1202,6 +1264,7 @@ export function createApp(file, fetchImpl, opts) {
         if (out.clone && out.cloneLog) await markClone(out.row);
         if (out.error) return json(res, 401, { error: out.error });
         noteSeen(out.row.id, clientIp(req), false);
+        if (!out.clone) noteName(out.row.id, body.name);
         return json(res, 200, { ...out.pair, paidUntil: paidUntilOf(readState(file), out.row) });
       }
       if (req.method === 'POST' && path === '/v1/token/upgrade') {
@@ -1221,6 +1284,7 @@ export function createApp(file, fetchImpl, opts) {
         if (!row || row.device_id !== deviceId) return json(res, 401, { error: 'revoked' });
         const pair = upgradePair(regDb(), secret(), { row, now, again: up.again, since: up.since });
         noteSeen(row.id, clientIp(req), false);
+        noteName(row.id, body.name);
         return json(res, 200, { ...pair, paidUntil: paidUntilOf(readState(file), row) });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {

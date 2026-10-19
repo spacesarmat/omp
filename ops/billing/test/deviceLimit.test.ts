@@ -75,9 +75,9 @@ describe('device limit', () => {
   it('activation of a free legacy code over the limit is device_limit and is logged', () => {
     const f = full();
     // Legacy data: a third unbound code minted before limits were enforced.
-    const raised = { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 3 })) };
+    const raised = { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, limitOverride: 3 })) };
     const minted = issueActivation(raised, { accountId: f.account, now: NOW });
-    const back = { ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 2 })) };
+    const back = { ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, limitOverride: null })) };
     const refused = activate(back, { code: minted.result.code, deviceId: DEV_C, now: NOW });
     expect(refused.result.error).toBe('device_limit');
     expect(refused.result.token).toBeUndefined();
@@ -363,10 +363,10 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
   it('/v1/activate answers 409 device_limit for a third device and 429 past the IP limit', async () => {
     const f = full();
     const minted = issueActivation(
-      { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 3 })) },
+      { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, limitOverride: 3 })) },
       { accountId: f.account, now: NOW },
     );
-    const file = tempFile({ ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 2, paidUntil: Date.now() + DAY })) });
+    const file = tempFile({ ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, limitOverride: null, paidUntil: Date.now() + DAY })) });
     const app = createApp(file, noFetch, { env: { BILLING_ACTIVATE_IP_MAX: '3', BILLING_ACTIVATE_CODE_MAX: '10' } });
     const ip = { 'cf-connecting-ip': '203.0.113.5' };
     const third = await call(app, 'POST', '/v1/activate', { headers: ip, body: { code: minted.result.code, deviceId: DEV_C } });

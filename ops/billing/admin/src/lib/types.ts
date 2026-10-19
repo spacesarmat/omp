@@ -43,6 +43,9 @@ export type SubRow = {
   createdAt?: number;
   bound: number;
   deviceLimit: number;
+  /** «2 базовых + 1 бонусный (навсегда) + 1 купленный» */
+  limitText?: string;
+  limitOverride?: number | null;
   active: boolean;
   status: string;
   overLimit?: boolean;
@@ -75,6 +78,8 @@ export type DeviceRow = {
   id?: string;
   codeId: string;
   deviceId: string;
+  /** Model the phone sent («Xiaomi 2201117TY»), '' for older apps. */
+  name?: string;
   boundAt?: number;
   lastSeenAt?: number;
   /** Masked on the server: «95.24.113.*». */
@@ -85,6 +90,17 @@ export type DeviceRow = {
   cloneAt?: number;
   cloneCount?: number;
   overLimit?: boolean;
+};
+
+export type BonusRow = {
+  id: string;
+  count: number;
+  /** ms, or null = forever */
+  until: number | null;
+  reason: string;
+  grantedAt: number;
+  source: 'promo' | 'admin';
+  active: boolean;
 };
 
 export type SwapInfo = { used: number; left: number; limit: number; nextAt?: number; resetAt?: number };
@@ -103,7 +119,18 @@ export type HomeData = {
   };
   subscriptions?: SubRow[];
   pending?: PendingPayment[];
-  promos?: { id: string; code: string; days: number; uses: number; maxUses: number; revoked: boolean; createdAt?: number }[];
+  promos?: {
+    id: string;
+    code: string;
+    days: number;
+    /** Free device slots the promo adds; bonusDays 0 = forever. */
+    bonusSlots?: number;
+    bonusDays?: number;
+    uses: number;
+    maxUses: number;
+    revoked: boolean;
+    createdAt?: number;
+  }[];
   fails?: { at?: number; atText: string; reason: string; deviceId: string }[];
   sessions?: { id: string; lastSeen?: number; createdAt?: number; actor?: FeedActor }[];
   support?: SupportThread[];
@@ -142,6 +169,14 @@ export type UserData = {
     inGrace?: boolean;
     accessUntil?: number;
     baseLimit?: number;
+    /** «2 базовых + 1 бонусный (навсегда) + 1 купленный» */
+    limitText?: string;
+    /** «Индивидуальный лимит»: replaces the global base; null = the global base. */
+    limitOverride?: number | null;
+    globalBase?: number;
+    /** Active bonus slots now. */
+    bonusSlots?: number;
+    bonus?: BonusRow[];
     extraSlots?: number;
     extraUntil?: number;
     bound?: number;

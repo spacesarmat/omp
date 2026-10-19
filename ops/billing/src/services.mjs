@@ -1,5 +1,11 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
-import { graceDays } from './logic.mjs';
+import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
+
+/** settings.baseDevices from the form: a whole number 1–20. */
+export function validBase(v) {
+  const n = Number(String(v).trim());
+  return Number.isInteger(n) && n >= 1 && n <= BASE_DEVICES_MAX;
+}
 
 export const SECRET_MASK = '••••••••';
 
@@ -61,6 +67,7 @@ export function publicAdminSettings(settings) {
     priceRub: s.priceRub || 0,
     periodDays: s.periodDays || 30,
     extraDeviceRub: s.extraDeviceRub || 0,
+    baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
   };
@@ -114,6 +121,8 @@ export function mergeSettings(prev, body) {
     priceRub: num(b.priceRub !== undefined ? b.priceRub : cur.priceRub, 0),
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
     extraDeviceRub: num(b.extraDeviceRub !== undefined ? b.extraDeviceRub : cur.extraDeviceRub, 0),
+    // 1–20; an empty or bad value keeps the current one
+    baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),
     /** Promo the bot advertises as a trial day; shown only while it exists and has uses left. */
     publicPromo: String(b.publicPromo !== undefined ? b.publicPromo : cur.publicPromo || '')

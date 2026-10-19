@@ -1031,6 +1031,7 @@ export const nativeBilling: NativeBilling | null = available
       adopt: (refreshToken) => native.billingAdopt(refreshToken),
       status: () => native.billingStatus(),
       forget: () => native.billingForget(),
+      name: () => native.phoneName(),
     }
   : null;
 

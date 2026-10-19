@@ -106,6 +106,7 @@ class SourceServices private constructor(context: Context) {
             BillingTokens.Answer(r.status, r.text)
         },
         warn = { android.util.Log.w("OmpBilling", it) },
+        name = { BillingTokens.modelName(android.os.Build.MANUFACTURER, android.os.Build.MODEL) },
     )
 
     /** This device's User-Agent (the visible check uses it, the phone sends it with a check it passed for the TV). */

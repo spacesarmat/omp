@@ -19,6 +19,8 @@ class BillingTokens(
     private val pause: (Long) -> Unit = { Thread.sleep(it) },
     private val warn: (String) -> Unit = {},
     private val clock: () -> Long = { System.currentTimeMillis() },
+    /** This phone's model («Xiaomi 2201117TY»), sent with every refresh so the bot and the panel can name it. */
+    private val name: () -> String = { "" },
 ) {
     data class Answer(val status: Int, val text: String)
 
@@ -50,7 +52,16 @@ class BillingTokens(
             return failure("down")
         }
         if (token.isNullOrEmpty()) return failure("missing")
-        val form = mapOf("refreshToken" to token, "deviceId" to deviceId)
+        val label = try {
+            billingName(name())
+        } catch (_: Exception) {
+            ""
+        }
+        val form = if (label.isEmpty()) {
+            mapOf("refreshToken" to token, "deviceId" to deviceId)
+        } else {
+            mapOf("refreshToken" to token, "deviceId" to deviceId, "name" to label)
+        }
         val headers = mapOf("X-Device-Id" to deviceId)
         val answer = try {
             post(form, headers)
@@ -135,6 +146,26 @@ class BillingTokens(
     private fun failure(error: String): JSONObject = JSONObject().put("ok", false).put("error", error)
 
     companion object {
+        /** Longest device name the billing server keeps. */
+        const val NAME_MAX = 40
+        private val NAME_DROP = Regex("[^\\p{L}\\p{N} .,()+/-]")
+        private val SPACES = Regex("\\s+")
+
+        /** «Xiaomi 2201117TY» from Build.MANUFACTURER / Build.MODEL; the maker is not repeated when the model starts with it. */
+        fun modelName(maker: String?, model: String?): String {
+            val m = maker.orEmpty().trim()
+            val n = model.orEmpty().trim()
+            return when {
+                n.isEmpty() -> m
+                m.isEmpty() || n.startsWith(m, ignoreCase = true) -> n
+                else -> m.replaceFirstChar { it.uppercase() } + " " + n
+            }
+        }
+
+        /** The name as the server stores it: letters, digits, spaces and . , - ( ) + /, at most [NAME_MAX] characters. */
+        fun billingName(raw: String?): String =
+            raw.orEmpty().replace(NAME_DROP, " ").replace(SPACES, " ").trim().take(NAME_MAX).trim()
+
         /** The JS secret `billing.refresh` (SourceServices.jsSecretKey): the same entry the page used to write. */
         const val KEY = "js:billing.refresh"
         const val REFRESH_URL = "https://billing.omp-player.online/v1/token/refresh"

@@ -7,6 +7,7 @@ import com.spacesarmat.omp.install.DevModeReminder
 import com.spacesarmat.omp.rpc.PhoneRpcService
 import com.spacesarmat.omp.rpc.RpcConfig
 import com.spacesarmat.omp.rpc.SharedRpcPrefs
+import com.spacesarmat.omp.sources.BillingTokens
 
 /** Developer-mode reminder and the phone RPC server. Bodies for [OmpNativePlugin]. */
 
@@ -49,15 +50,7 @@ internal fun OmpNativePlugin.phoneNameOp(call: PluginCall) {
     call.resolve(JSObject().put("name", deviceName()))
 }
 
-internal fun OmpNativePlugin.deviceName(): String {
-    val maker = Build.MANUFACTURER.orEmpty().trim()
-    val model = Build.MODEL.orEmpty().trim()
-    return when {
-        model.isEmpty() -> maker
-        maker.isEmpty() || model.startsWith(maker, ignoreCase = true) -> model
-        else -> maker.replaceFirstChar { it.uppercase() } + " " + model
-    }
-}
+internal fun OmpNativePlugin.deviceName(): String = BillingTokens.modelName(Build.MANUFACTURER, Build.MODEL)
 
 internal fun OmpNativePlugin.rpcSetEnabledOp(call: PluginCall) {
     val once = CallOnce(call)

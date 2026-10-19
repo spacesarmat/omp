@@ -176,13 +176,13 @@ describe('admin: revoke, limit, subtract', () => {
   it('changes the limit and extra slots, and warns when bound devices exceed it', () => {
     const s = withDevice();
     const two = bindAnother(s.state, s.subscriptionId, DEV_B, NOW + MIN);
-    const up = setDeviceLimit(two.state, { accountId: s.accountId, deviceLimit: '2', extraSlots: '1', now: NOW, actor: ADMIN });
+    const up = setDeviceLimit(two.state, { accountId: s.accountId, extraSlots: '1', now: NOW, actor: ADMIN });
     expect(up.result.total).toBe(3);
     const sub = up.state.subscriptions[0];
     expect(sub.extraSlots).toBe(1);
     expect(sub.extraUntil).toBe(sub.paidUntil);
-    expect(up.state.audit[up.state.audit.length - 1].detail).toContain('2 → 2 + 1 доп.');
-    const down = setDeviceLimit(up.state, { accountId: s.accountId, deviceLimit: 1, extraSlots: 0, now: NOW, actor: ADMIN });
+    expect(up.state.audit[up.state.audit.length - 1].detail).toContain('Лимит устройств 2 (2 базовых) → 3 (2 базовых + 1 купленный)');
+    const down = setDeviceLimit(up.state, { accountId: s.accountId, limitOverride: 1, extraSlots: 0, now: NOW, actor: ADMIN });
     expect(down.result.total).toBe(1);
     // The newest phone is over the limit now: no access, a warning on the card and on the home page.
     expect(sessionOk(down.state, { token: two.token, deviceId: DEV_B, now: NOW + 2 * MIN })).toBeNull();
@@ -190,15 +190,21 @@ describe('admin: revoke, limit, subtract', () => {
     const now = NOW + 2 * MIN;
     const alerts = adminDashboard(down.state, now).alerts;
     expect(alerts.some((a: { text: string }) => a.text.indexOf('Устройств больше лимита (2 из 1)') === 0)).toBe(true);
-    for (const bad of [0, 21, 1.5, 'x', '']) {
-      expect(setDeviceLimit(down.state, { accountId: s.accountId, deviceLimit: bad, now, actor: ADMIN }).result.error).toBe('bad_args');
+    expect(down.state.subscriptions[0].limitOverride).toBe(1);
+    expect(down.result.text).toBe('1 (индивидуальный лимит)');
+    for (const bad of [0, 21, 1.5, 'x']) {
+      expect(setDeviceLimit(down.state, { accountId: s.accountId, limitOverride: bad, now, actor: ADMIN }).result.error).toBe('bad_args');
     }
-    expect(setDeviceLimit(down.state, { accountId: s.accountId, deviceLimit: 2, extraSlots: -1, now, actor: ADMIN }).result.error).toBe('bad_args');
+    expect(setDeviceLimit(down.state, { accountId: s.accountId, limitOverride: 2, extraSlots: -1, now, actor: ADMIN }).result.error).toBe('bad_args');
+    // empty = back to the global base
+    const back = setDeviceLimit(down.state, { accountId: s.accountId, limitOverride: '', now, actor: ADMIN });
+    expect(back.state.subscriptions[0].limitOverride).toBeNull();
+    expect(back.result.total).toBe(2);
   });
 
   it('subtracts days and cuts extra slots to the new date', () => {
     const s = withDevice();
-    const extra = setDeviceLimit(s.state, { accountId: s.accountId, deviceLimit: 2, extraSlots: 1, now: NOW, actor: ADMIN }).state;
+    const extra = setDeviceLimit(s.state, { accountId: s.accountId, extraSlots: 1, now: NOW, actor: ADMIN }).state;
     const before = extra.subscriptions[0].paidUntil;
     const out = subtractDays(extra, { accountId: s.accountId, days: '10', now: NOW, actor: ADMIN });
     expect(out.result.paidUntil).toBe(before - 10 * DAY);
@@ -516,7 +522,9 @@ describe('admin http: devices and payments', () => {
     const before = JSON.stringify(readState(t.file).subscriptions);
     const routes: [string, Record<string, unknown>][] = [
       ['/admin/device-revoke', { accountId: t.accountId, codeId: t.codeId, confirm: 'yes' }],
-      ['/admin/limit', { accountId: t.accountId, deviceLimit: 5, extraSlots: 3 }],
+      ['/admin/limit', { accountId: t.accountId, limitOverride: 5, extraSlots: 3 }],
+      ['/admin/bonus', { accountId: t.accountId, count: 2, days: '' }],
+      ['/admin/bonus-remove', { accountId: t.accountId, bonusId: 'x', confirm: 'yes' }],
       ['/admin/subtract', { accountId: t.accountId, days: 5, confirm: 'yes' }],
       ['/admin/swaps-reset', { accountId: t.accountId }],
       ['/admin/payment-confirm', { operationId: 'op', confirm: 'yes' }],
@@ -648,8 +656,8 @@ describe('admin http: devices and payments', () => {
     const t = await setup();
     const { cookie, csrf } = await adminCookie(t.app, t.file);
     const before = readState(t.file).subscriptions[0].paidUntil;
-    const lim = await call(t.app, 'POST', '/admin/limit', { cookie, body: { csrf, accountId: t.accountId, deviceLimit: '3', extraSlots: '0' } });
-    expect((lim.data as { flash?: { text?: string } }).flash?.text).toBe('Лимит устройств: 3');
+    const lim = await call(t.app, 'POST', '/admin/limit', { cookie, body: { csrf, accountId: t.accountId, limitOverride: '3', extraSlots: '0' } });
+    expect((lim.data as { flash?: { text?: string } }).flash?.text).toBe('Лимит устройств: 3 (3 (индивидуальный лимит))');
     const sub1 = await call(t.app, 'POST', '/admin/subtract', { cookie, body: { csrf, accountId: t.accountId, days: '5' } });
     expect((sub1.data as { ok?: boolean }).ok).toBe(false);
     const sub2 = await call(t.app, 'POST', '/admin/subtract', { cookie, body: { csrf, accountId: t.accountId, days: '5', confirm: 'yes' } });
@@ -657,7 +665,7 @@ describe('admin http: devices and payments', () => {
     const reset = await call(t.app, 'POST', '/admin/swaps-reset', { cookie, body: { csrf, accountId: t.accountId } });
     expect((reset.data as { ok?: boolean }).ok).toBe(true);
     const st = readState(t.file);
-    expect(st.subscriptions[0].deviceLimit).toBe(3);
+    expect(st.subscriptions[0].limitOverride).toBe(3);
     expect(st.subscriptions[0].paidUntil).toBe(before - 5 * DAY);
     const acts = st.audit.filter((a: { accountId?: string }) => a.accountId === t.accountId).map((a: { action: string }) => a.action);
     expect(acts).toEqual(['limit_set', 'days_subtract', 'swaps_reset']);

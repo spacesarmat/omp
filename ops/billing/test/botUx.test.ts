@@ -442,7 +442,7 @@ describe('«Устройства» from the device registry', () => {
     expect(view.devices.map((d: { overReason: string }) => d.overReason)).toEqual(['', '', 'extra_expired']);
     expect(devicesText(lapsed, NOW + 5 * DAY)).toContain('3) cccccccc… · не работает: доп. устройство не продлено');
 
-    const cut = { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 1, extraSlots: 0, extraUntil: 0 })) };
+    const cut = { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, limitOverride: 1, extraSlots: 0, extraUntil: 0 })) };
     expect(subscriptionView(cut, f.account, NOW).devices.map((d: { overReason: string }) => d.overReason)).toEqual(['', 'device_limit', 'device_limit']);
     expect(devicesText(cut, NOW)).toContain('2) bbbbbbbb… · не работает: сверх лимита устройств');
   });
