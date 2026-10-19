@@ -155,6 +155,24 @@ describe('changelog source (GitHub main, cached)', () => {
     expect(await bytes.src.get()).toMatchObject({ ok: false, error: 'too large' });
     const header = setup(() => ({ ...textRes(RU), headers: { get: (k: string) => (k === 'content-length' ? String(3 * 1024 * 1024) : null) } }));
     expect(await header.src.get()).toMatchObject({ ok: false, error: 'too large' });
+    let bodyCancelled = false;
+    let bodyRead = false;
+    const declared = setup(() => ({
+      ...textRes(''),
+      headers: { get: (k: string) => (k === 'content-length' ? String(3 * 1024 * 1024) : null) },
+      body: {
+        getReader: () => {
+          bodyRead = true;
+          throw new Error('must not read');
+        },
+        cancel: async () => {
+          bodyCancelled = true;
+        },
+      },
+    }));
+    expect(await declared.src.get()).toMatchObject({ ok: false, error: 'too large' });
+    expect(bodyCancelled).toBe(true);
+    expect(bodyRead).toBe(false);
     let cancelled = false;
     let reads = 0;
     const chunk = new Uint8Array(512 * 1024);

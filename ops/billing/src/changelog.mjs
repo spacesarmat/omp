@@ -55,7 +55,11 @@ export function parseChangelogSections(md) {
 /** The body as text, at most CHANGELOG_MAX_BYTES bytes: a bigger answer is refused while it downloads. */
 async function readLimited(res) {
   const len = Number((res.headers && typeof res.headers.get === 'function' && res.headers.get('content-length')) || 0);
-  if (len > CHANGELOG_MAX_BYTES) throw new Error('too large');
+  if (len > CHANGELOG_MAX_BYTES) {
+    // close the unread body, or the connection stays open after fetchText clears its abort timer
+    if (res.body && typeof res.body.cancel === 'function') await res.body.cancel().catch(() => {});
+    throw new Error('too large');
+  }
   const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
   if (!reader) {
     const text = await res.text();
