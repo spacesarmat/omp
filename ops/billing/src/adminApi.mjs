@@ -17,7 +17,6 @@ import {
 } from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
 import { backupAlert } from './pgBackup.mjs';
-import { storageInfo } from './store.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -139,8 +138,8 @@ export function homePayload(state, file, opts) {
     audit: (state.audit || []).slice(-40).reverse(),
     series: dailySeries(state, now, 90),
     settings: publicAdminSettings(s),
-    // The server passes the store's info (SQLite or Postgres); a bare path is the SQLite file.
-    storage: (opts && opts.storage) || (typeof file === 'string' ? storageInfo(file) : null),
+    // The server passes the store's info (Postgres: engine, database name, size).
+    storage: (opts && opts.storage) || null,
     // Postgres dumps: null when BILLING_PG_BACKUP_DIR is not set (file names and sizes only, no paths with secrets).
     backup: (opts && opts.backup) || null,
     readOnly: !!(opts && opts.readOnly),

@@ -1,6 +1,6 @@
 /**
  * BILLING_READONLY=1: the cutover window (docs/billing/postgres-cutover.md). Reads keep working, every write
- * is refused with 503 so nothing lands in billing.db after the copy is taken: POST routes answer 503
+ * is refused with 503 so nothing lands in the database while a copy is taken or restored: POST routes answer 503
  * (YooMoney retries its notification later), the store refuses update() and registry writes, lastSeen
  * touches are skipped, and the bot poller, reminders and retention do not start (Telegram keeps the
  * updates for 24 hours and hands them over after the switch).

@@ -1,6 +1,3 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { activate, createSubscription, openAccount } from '../src/logic.mjs';
 import {
@@ -20,7 +17,8 @@ import {
   searchJacRed,
 } from '../src/jackett.mjs';
 import { createApp } from '../src/server.mjs';
-import { emptyState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { writeState, testStore } from './pg';
 
 const ORIGIN = 'http://jackett.test:9117';
 const KEY = 'SECRETKEY';
@@ -351,8 +349,8 @@ function mockRes() {
   };
 }
 
-function subscriber(extra: { user?: string; pass?: string } = {}) {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-search-')), 'billing.db');
+async function subscriber(extra: { user?: string; pass?: string } = {}) {
+  const file = await testStore();
   const now = Date.now();
   const opened = openAccount(emptyState(), { telegramId: '42', now });
   const created = createSubscription(opened.state, { accountId: opened.account.id, now, days: 30 });
@@ -366,7 +364,7 @@ function subscriber(extra: { user?: string; pass?: string } = {}) {
     act.state.settings.indexerUser = extra.user;
     act.state.settings.indexerPass = extra.pass || '';
   }
-  writeState(file, act.state);
+  await writeState(file, act.state);
   return { file, device, token: act.result.token as string };
 }
 
@@ -440,7 +438,7 @@ describe('POST /v1/search', () => {
   it('strips Jackett links, caches the merged feed, and logs the slow indexer', async () => {
     process.env.BILLING_JACKETT_INDEXER_TIMEOUT_MS = '200';
     process.env.BILLING_JACKETT_SEARCH_DEADLINE_MS = '2000';
-    const { file, device, token } = subscriber({ user: 'omp', pass: 'pw' });
+    const { file, device, token } = await subscriber({ user: 'omp', pass: 'pw' });
     const calls: string[] = [];
     let sawAuth = false;
     const fetchImpl = (url: string, opts: FetchOpts = {}) => {
@@ -491,7 +489,7 @@ describe('POST /v1/search', () => {
   });
 
   it('keeps JacRed on the aggregate Torznab search', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const calls: string[] = [];
     const fetchImpl = (url: string) => {
       calls.push(String(url));
@@ -511,7 +509,7 @@ describe('POST /v1/search', () => {
   });
 
   it('searches a thin Latin JacRed query again without its last two letters', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const calls: string[] = [];
     const fetchImpl = (url: string) => {
       calls.push(String(url));
@@ -541,7 +539,7 @@ describe('POST /v1/search', () => {
   });
 
   it('does not widen a Cyrillic JacRed query or a Latin query that already filled the bucket', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const calls: string[] = [];
     const many = '<rss><channel>' + new Array(8).fill('<item><title>Avatar</title><link>http://jacred.test:9118/dl/a</link></item>').join('') + '</channel></rss>';
     const fetchImpl = (url: string) => {
@@ -563,7 +561,7 @@ describe('POST /v1/search', () => {
   });
 
   it('keeps the first JacRed feed when the wider query fails', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const fetchImpl = (url: string) => {
       if (queryOf(String(url)) === 'matr') return Promise.resolve({ status: 502, text: async () => '' });
       return Promise.resolve({
@@ -579,7 +577,7 @@ describe('POST /v1/search', () => {
   });
 
   it('does not call Jackett without a session, and returns 502 when every indexer fails', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const calls: string[] = [];
     const fetchImpl = (url: string) => {
       calls.push(String(url));
@@ -606,7 +604,7 @@ describe('POST /v1/search', () => {
     expect(safeTorznabCat('3030, 3040')).toBe('3030,3040');
     expect(safeTorznabCat('')).toBe('');
     expect(safeTorznabCat('3030&apikey=nope')).toBe('');
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const calls: string[] = [];
     const fetchImpl = (url: string) => {
       calls.push(String(url));
@@ -678,7 +676,7 @@ describe('POST /v1/torrent magnet redirect', () => {
   const LINK = 'omp-fetch:/api/v2.0/indexers/rutracker/results/torznab/download';
 
   it('returns a magnet and does not log the download URL', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const magnet = 'magnet:?xt=urn:btih:' + 'cd'.repeat(20);
     const seen: { redirect?: string }[] = [];
     const logs: string[] = [];
@@ -722,7 +720,7 @@ describe('POST /v1/torrent magnet redirect', () => {
   });
 
   it('still returns a torrent file', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const body = 'd4:infod4:name4:testee';
     const fetchImpl = (_url: string, opts?: { redirect?: string }) => {
       expect(opts && opts.redirect).toBe('manual');
@@ -739,7 +737,7 @@ describe('POST /v1/torrent magnet redirect', () => {
   });
 
   it('turns a Jackett 401 or 403 into 502 upstream and logs the /dl indexer', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const link = 'omp-fetch:/dl/megapeer/?path=ENC&file=Name.torrent';
     for (const status of [401, 403]) {
       const seen: string[] = [];
@@ -782,7 +780,7 @@ describe('POST /v1/torrent magnet redirect', () => {
   });
 
   it('keeps apikey on a JacRed download and hides its 401 the same way', async () => {
-    const { file, device, token } = subscriber();
+    const { file, device, token } = await subscriber();
     const seen: string[] = [];
     const logs: string[] = [];
     const orig = process.stderr.write;

@@ -1,17 +1,18 @@
 /**
- * Storage contract (PR 2 of the Postgres plan): the SQLite store and the Postgres store behave the same.
+ * Storage contract of the Postgres store (the only billing store).
  * Postgres runs when BILLING_TEST_DATABASE_URL is set (CI: a postgres:17 service); every suite gets its
  * own schema. BILLING_TEST_REQUIRE_PG=1 (CI) fails instead of skipping when the URL is missing.
  */
-import { afterAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { randomBytes } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { activate, createSubscription, deviceCode, ensureTelegramAccount, revokeCode, unbindCode } from '../src/logic.mjs';
 import { emptyState, normalizeState } from '../src/state.mjs';
 import { openStore, storeEngine, toStore } from '../src/db/index.mjs';
 import { createApp } from '../src/server.mjs';
+import { testStore } from './pg';
 
 const PG_URL = process.env.BILLING_TEST_DATABASE_URL || '';
 const REQUIRE_PG = process.env.BILLING_TEST_REQUIRE_PG === '1';
@@ -25,19 +26,11 @@ type State = ReturnType<typeof emptyState>;
 type Store = any;
 type App = (req: unknown, res: unknown) => Promise<void>;
 
+/** Stores opened here are closed (and their schemas dropped) by test/pg.ts after the file. */
 const opened: Store[] = [];
-afterAll(async () => {
-  for (const s of opened) if (s.engine === 'postgres') await s.close();
-});
 
-/** Loaded only when Postgres runs: the root `npm test` (build job) has no ops/billing node_modules, so no `pg`. */
 async function createPgStore(opts: { connectionString: string; schema: string }): Promise<Store> {
-  const mod = await import('../src/db/pg/store.mjs');
-  return mod.createPgStore(opts);
-}
-
-function tmpDb(tag: string) {
-  return join(mkdtempSync(join(tmpdir(), 'omp-store-' + tag + '-')), 'billing.db');
+  return testStore(opts.schema);
 }
 
 function schemaName() {
@@ -45,15 +38,6 @@ function schemaName() {
 }
 
 const engines: { name: string; open: () => Promise<{ store: Store; reopen: () => Promise<Store> }> }[] = [
-  {
-    name: 'sqlite',
-    open: async () => {
-      const file = tmpDb('sq');
-      const store = toStore(file);
-      // The SQLite store of a path is shared per process; reading through it again reads the file.
-      return { store, reopen: async () => toStore(file) };
-    },
-  },
   {
     name: 'postgres',
     open: async () => {
@@ -173,13 +157,22 @@ function search(app: App, token: string, deviceId: string) {
 }
 
 describe('BILLING_STORE selection', () => {
-  it('defaults to sqlite, accepts postgres, refuses anything else and a postgres store without a URL', async () => {
-    expect(storeEngine({})).toBe('sqlite');
+  it('Postgres only: BILLING_STORE may be unset or postgres; sqlite, anything else or no URL refuses to start', async () => {
+    expect(storeEngine({})).toBe('postgres');
     expect(storeEngine({ BILLING_STORE: 'Postgres' })).toBe('postgres');
+    expect(() => storeEngine({ BILLING_STORE: 'sqlite' })).toThrow(/no longer supported/);
     expect(() => storeEngine({ BILLING_STORE: 'mysql' })).toThrow(/BILLING_STORE/);
-    await expect(openStore({ BILLING_STORE: 'postgres' }, tmpDb('env'))).rejects.toThrow(/BILLING_DATABASE_URL/);
-    const file = tmpDb('env');
-    expect((await openStore({}, file)).engine).toBe('sqlite');
+    await expect(openStore({})).rejects.toThrow(/BILLING_DATABASE_URL/);
+    await expect(openStore({ BILLING_STORE: 'sqlite', BILLING_DATABASE_URL: 'postgres://x@127.0.0.1:1/x' })).rejects.toThrow(/no longer supported/);
+    // A path to the old billing.db is not a store any more.
+    expect(() => toStore('/data/billing.db')).toThrow(/Postgres/);
+  });
+
+  it('no server code loads SQLite (only tools/ reads the archived billing.db)', () => {
+    const root = fileURLToPath(new URL('../src', import.meta.url));
+    const files = readdirSync(root, { recursive: true }).map(String).filter((f) => f.endsWith('.mjs'));
+    expect(files.length).toBeGreaterThan(10);
+    for (const f of files) expect(readFileSync(join(root, f), 'utf8'), f).not.toMatch(/node:sqlite/);
   });
 
   it.runIf(REQUIRE_PG)('CI has a Postgres for the store tests', () => {

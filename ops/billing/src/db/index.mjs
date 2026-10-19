@@ -1,49 +1,42 @@
 /**
  * Storage interface of the billing server. A store is
  *   { engine, read(): Promise<State>, update(fn): Promise<result>, registry: {...async}, info(), close() }
- * `update(fn)` keeps the contract of store.mjs updateState: fn(state) returns { state, result? } (or a state);
- * writes are serialized and the result (or the returned object) resolves.
+ * `update(fn)`: fn(state) returns { state, result? } (or a state); writes are serialized and the result
+ * (or the returned object) resolves.
  *
- * BILLING_STORE=sqlite (default): billing.db at BILLING_DATA. BILLING_STORE=postgres: BILLING_DATABASE_URL.
- * Every server entry point still accepts a billing.db path (tests, CLI) and wraps it with toStore().
+ * The only engine is Postgres (BILLING_DATABASE_URL). The SQLite store was removed after the cutover;
+ * the old billing.db stays on disk as an archive and tools/migrateToPostgres.mjs can still read it.
  */
-import { resolveDbPath } from '../store.mjs';
-import { createSqliteStore } from './sqlite.mjs';
-
-const sqliteStores = new Map();
 
 export function isStore(x) {
   return !!x && typeof x === 'object' && typeof x.read === 'function' && typeof x.update === 'function' && !!x.registry;
 }
 
-/** A store object as is, or the (shared) SQLite store of a billing.db path. */
-export function toStore(fileOrStore) {
-  if (isStore(fileOrStore)) return fileOrStore;
-  const path = resolveDbPath(fileOrStore);
-  let store = sqliteStores.get(path);
-  if (!store) {
-    store = createSqliteStore(path);
-    sqliteStores.set(path, store);
-  }
-  return store;
-}
-
-/** The engine BILLING_STORE asks for: 'postgres' or 'sqlite'. Anything else is an error, not a silent fallback. */
-export function storeEngine(env) {
-  const raw = String((env && env.BILLING_STORE) || 'sqlite').trim().toLowerCase();
-  if (raw === 'sqlite' || raw === '') return 'sqlite';
-  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg') return 'postgres';
-  throw new Error('BILLING_STORE must be sqlite or postgres');
+/** The store itself. A path (the old billing.db) is an error: there is no SQLite store any more. */
+export function toStore(store) {
+  if (isStore(store)) return store;
+  throw new Error('billing needs a Postgres store (BILLING_DATABASE_URL); the SQLite store was removed');
 }
 
 /**
- * Open the store the environment asks for. Postgres runs its schema migrations first.
+ * BILLING_STORE is optional and may only say postgres. sqlite (or anything else) is an error at start,
+ * so a stale .env cannot silently run on an empty database.
+ */
+export function storeEngine(env) {
+  const raw = String((env && env.BILLING_STORE) || 'postgres').trim().toLowerCase();
+  if (raw === 'postgres' || raw === 'postgresql' || raw === 'pg' || raw === '') return 'postgres';
+  if (raw === 'sqlite') throw new Error('BILLING_STORE=sqlite is no longer supported: billing runs on Postgres only (BILLING_DATABASE_URL)');
+  throw new Error('BILLING_STORE must be postgres');
+}
+
+/**
+ * Open the Postgres store (schema migrations run first).
  * The connection string is never logged (it carries the password).
  */
-export async function openStore(env, sqlitePath) {
-  if (storeEngine(env) === 'sqlite') return toStore(sqlitePath);
+export async function openStore(env) {
+  storeEngine(env);
   const url = String((env && env.BILLING_DATABASE_URL) || '');
-  if (!url) throw new Error('BILLING_STORE=postgres needs BILLING_DATABASE_URL');
+  if (!url) throw new Error('billing needs BILLING_DATABASE_URL (Postgres)');
   const { createPgStore } = await import('./pg/store.mjs');
   return createPgStore({ connectionString: url });
 }

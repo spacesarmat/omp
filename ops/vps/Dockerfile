@@ -21,6 +21,8 @@ COPY package.json ./
 RUN npm install --omit=dev && npm cache clean --force
 
 COPY src ./src
+# tools/migrateToPostgres.mjs: reads an archived billing.db into an empty Postgres (not used at runtime).
+COPY tools ./tools
 COPY public ./public
 COPY start.sh ./start.sh
 RUN chmod +x start.sh
@@ -28,7 +30,6 @@ RUN chmod +x start.sh
 ENV NODE_ENV=production
 ENV PORT=8787
 ENV BILLING_HOST=0.0.0.0
-ENV BILLING_DATA=/data/billing.db
 # 1 polls Telegram getUpdates. Set 0 on any second billing process.
 ENV BILLING_BOT_POLL=1
 

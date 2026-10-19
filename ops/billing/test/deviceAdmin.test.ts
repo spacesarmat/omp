@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
 import { botCallback, botReply } from '../src/bot.mjs';
 import {
@@ -18,7 +15,6 @@ import {
   swapStatus,
   SWAP_WINDOW_MS,
 } from '../src/deviceAdmin.mjs';
-import { activeRowForCode, listDevices, touchRow } from '../src/registry.mjs';
 import {
   activate,
   adminDashboard,
@@ -36,7 +32,8 @@ import {
   sessionOk,
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
-import { emptyState, readState, registryDb, updateState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 
 const NOW = Date.UTC(2026, 9, 19, 9, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
@@ -77,36 +74,37 @@ describe('lastSeen / lastIp', () => {
     expect(maskIp('')).toBe('');
   });
 
-  it('writes the registry row at most once per 10 minutes, truncated, and never a free code', () => {
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-seen-')), 'billing.db');
+  it('writes the registry row at most once per 10 minutes, truncated, and never a free code', async () => {
+    const file = await testStore();
     const s = withDevice();
-    writeState(file, s.state);
-    const db = registryDb(file);
-    const row = activeRowForCode(db, s.codeId);
+    await writeState(file, s.state);
+    const db = file.registry;
+    const row = (await db.activeRowForCode(s.codeId));
     expect(row.device_id).toBe(DEV_A);
-    expect(touchRow(db, row.id, { ip: '95.24.113.7', now: NOW })).toBe(true);
-    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
-    expect(touchRow(db, row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS - 1 })).toBe(false);
-    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
-    expect(touchRow(db, row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS })).toBe(true);
-    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW + SEEN_EVERY_MS, last_ip_net: '1.2.3.*' });
+    expect((await db.touchRow(row.id, { ip: '95.24.113.7', now: NOW }))).toBe(true);
+    expect((await db.activeRowForCode(s.codeId))).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
+    expect((await db.touchRow(row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS - 1 }))).toBe(false);
+    expect((await db.activeRowForCode(s.codeId))).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
+    expect((await db.touchRow(row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS }))).toBe(true);
+    expect((await db.activeRowForCode(s.codeId))).toMatchObject({ last_seen_at: NOW + SEEN_EVERY_MS, last_ip_net: '1.2.3.*' });
     // The snapshot is not rewritten for lastSeen any more.
-    const snapshot = JSON.stringify(readState(file));
+    const snapshot = JSON.stringify((await readState(file)));
     expect(snapshot).not.toContain('1.2.3.');
     // A free (unbound) code has no registry row.
     const free = deviceCode(s.state, s.subscriptionId, NOW);
-    writeState(file, free.state);
-    expect(activeRowForCode(db, free.codeId)).toBeNull();
+    await writeState(file, free.state);
+    expect((await db.activeRowForCode(free.codeId))).toBeNull();
   });
 
-  it('shows the device list from the registry with masked IPs and never the full address', () => {
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-seen-')), 'billing.db');
+  it('shows the device list from the registry with masked IPs and never the full address', async () => {
+    const file = await testStore();
     const s = withDevice(Date.now());
-    writeState(file, s.state);
-    const db = registryDb(file);
-    const row = activeRowForCode(db, s.codeId);
-    touchRow(db, row.id, { ip: '95.24.113.7', now: Date.now(), force: true });
-    const user = userPayload(readState(file), s.accountId, { registry: (subId: string) => listDevices(db, subId) });
+    await writeState(file, s.state);
+    const db = file.registry;
+    const row = (await db.activeRowForCode(s.codeId));
+    (await db.touchRow(row.id, { ip: '95.24.113.7', now: Date.now(), force: true }));
+    const devices = await db.listDevices(s.subscriptionId);
+    const user = userPayload((await readState(file)), s.accountId, { registry: (subId: string) => (subId === s.subscriptionId ? devices : []) });
     expect(user.devices).toHaveLength(1);
     expect(user.devices[0].id).toBe(row.id);
     expect(user.devices[0].codeId).toBe(s.codeId);
@@ -130,8 +128,8 @@ describe('stored IPs are truncated', () => {
     expect(truncateIp('')).toBe('');
   });
 
-  it('migrates full addresses written by an earlier build when the snapshot is read', () => {
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-ipmig-')), 'billing.db');
+  it('migrates full addresses written by an earlier build when the snapshot is read', async () => {
+    const file = await testStore();
     const s = withDevice();
     const b = bindAnother(s.state, s.subscriptionId, DEV_B, NOW);
     const raw = {
@@ -141,8 +139,8 @@ describe('stored IPs are truncated', () => {
       ),
     };
     // Written as is, the way an older server would have stored it.
-    writeState(file, raw);
-    const read = readState(file);
+    await writeState(file, raw);
+    const read = (await readState(file));
     expect(read.codes.find((c: { id: string }) => c.id === s.codeId).lastIp).toBe('95.24.113.*');
     expect(read.codes.find((c: { id: string }) => c.id === b.codeId).lastIp).toBe('2a02:6b8:c0e::*');
     expect(JSON.stringify(read)).not.toContain('95.24.113.7');
@@ -484,10 +482,10 @@ async function call(
 }
 
 async function setup() {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-devadm-')), 'billing.db');
+  const file = await testStore();
   const s = withDevice(Date.now());
   s.state.settings.botToken = 'token';
-  writeState(file, s.state);
+  await writeState(file, s.state);
   const sent: string[] = [];
   const fetchImpl = async (url: string, init?: { body?: string }) => {
     if (String(url).indexOf('sendMessage') >= 0) sent.push(String((init && init.body) || ''));
@@ -519,7 +517,7 @@ describe('admin http: devices and payments', () => {
   it('denies every new action without an admin session or with a wrong csrf', async () => {
     const t = await setup();
     const { cookie } = await adminCookie(t.app, t.file);
-    const before = JSON.stringify(readState(t.file).subscriptions);
+    const before = JSON.stringify((await readState(t.file)).subscriptions);
     const routes: [string, Record<string, unknown>][] = [
       ['/admin/device-revoke', { accountId: t.accountId, codeId: t.codeId, confirm: 'yes' }],
       ['/admin/limit', { accountId: t.accountId, limitOverride: 5, extraSlots: 3 }],
@@ -538,8 +536,8 @@ describe('admin http: devices and payments', () => {
       const fake = await call(t.app, 'POST', path, { cookie: 'omp_admin=not-a-session', body: { ...body, csrf: 'x' } });
       expect(fake.status).toBe(403);
     }
-    expect(JSON.stringify(readState(t.file).subscriptions)).toBe(before);
-    expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).deviceId).toBe(DEV_A);
+    expect(JSON.stringify((await readState(t.file)).subscriptions)).toBe(before);
+    expect((await readState(t.file)).codes.find((c: { id: string }) => c.id === t.codeId).deviceId).toBe(DEV_A);
     const user = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId));
     expect(user.status).toBe(401);
   });
@@ -550,32 +548,32 @@ describe('admin http: devices and payments', () => {
     const auth = { authorization: 'Bearer ' + t.token, 'x-device-id': DEV_A, 'x-forwarded-for': '95.24.113.7' };
     const me = await call(t.app, 'GET', '/v1/me', { headers: auth });
     expect(me.status).toBe(200);
-    const db = registryDb(t.file);
-    const seen = () => activeRowForCode(db, t.codeId);
-    const seen1 = seen();
+    const db = t.file.registry;
+    const seen = () => db.activeRowForCode(t.codeId);
+    const seen1 = await seen();
     expect(seen1.last_seen_at).toBeGreaterThan(0);
     expect(seen1.last_ip_net).toBe('95.24.113.*');
     // Inside 10 minutes: nothing is written, even from another IP.
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
-    expect(seen()).toMatchObject({ last_seen_at: seen1.last_seen_at, last_ip_net: '95.24.113.*' });
+    expect(await seen()).toMatchObject({ last_seen_at: seen1.last_seen_at, last_ip_net: '95.24.113.*' });
     // 11 minutes later the next authenticated request updates it.
-    db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(Date.now() - 11 * MIN, seen1.id);
+    await t.file.query('UPDATE devices SET last_seen_at = $1 WHERE id = $2', [Date.now() - 11 * MIN, seen1.id]);
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
-    const seen3 = seen();
+    const seen3 = await seen();
     expect(seen3.last_ip_net).toBe('1.2.3.*');
     expect(Date.now() - seen3.last_seen_at).toBeLessThan(MIN);
-    expect(JSON.stringify(readState(t.file))).not.toContain('1.2.3.4');
+    expect(JSON.stringify((await readState(t.file)))).not.toContain('1.2.3.4');
     // A bad token records nothing.
-    db.prepare("UPDATE devices SET last_seen_at = 1, last_ip_net = '9.9.9.*' WHERE id = ?").run(seen1.id);
+    await t.file.query("UPDATE devices SET last_seen_at = 1, last_ip_net = '9.9.9.*' WHERE id = $1", [seen1.id]);
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, authorization: 'Bearer bad' }, body: { q: 'x' } });
-    expect(seen().last_ip_net).toBe('9.9.9.*');
+    expect((await seen()).last_ip_net).toBe('9.9.9.*');
 
     const card = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     expect(card.body).not.toContain('1.2.3.4');
 
     const noConfirm = await call(t.app, 'POST', '/admin/device-revoke', { cookie, body: { csrf, accountId: t.accountId, codeId: t.codeId } });
     expect((noConfirm.data as { ok?: boolean }).ok).toBe(false);
-    expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).deviceId).toBe(DEV_A);
+    expect((await readState(t.file)).codes.find((c: { id: string }) => c.id === t.codeId).deviceId).toBe(DEV_A);
     const listed = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     const rows = (listed.data && (listed.data.devices as { id: string; codeId: string }[])) || [];
     expect(rows).toHaveLength(1);
@@ -586,8 +584,8 @@ describe('admin http: devices and payments', () => {
       body: { csrf, accountId: t.accountId, deviceRowId: rows[0].id, codeId: rows[0].codeId, confirm: 'yes' },
     });
     expect((revoked.data as { ok?: boolean }).ok).toBe(true);
-    expect(db.prepare('SELECT status, revoke_reason FROM devices WHERE id = ?').get(seen1.id)).toMatchObject({ status: 'revoked', revoke_reason: 'admin' });
-    expect(activeRowForCode(db, t.codeId)).toBeNull();
+    expect((await t.file.query('SELECT status, revoke_reason FROM devices WHERE id = $1', [seen1.id])).rows[0]).toMatchObject({ status: 'revoked', revoke_reason: 'admin' });
+    expect((await db.activeRowForCode(t.codeId))).toBeNull();
     const again = await call(t.app, 'POST', '/admin/device-revoke', {
       cookie,
       body: { csrf, accountId: t.accountId, deviceRowId: rows[0].id, confirm: 'yes' },
@@ -606,7 +604,7 @@ describe('admin http: devices and payments', () => {
     expect(search.status).toBe(403);
     const torrent = await call(t.app, 'POST', '/v1/torrent', { headers: auth, body: { link: 'x' } });
     expect(torrent.status).toBe(403);
-    const audit = readState(t.file).audit;
+    const audit = (await readState(t.file)).audit;
     expect(audit[audit.length - 1]).toMatchObject({ action: 'device_revoke', accountId: t.accountId });
     const home = await call(t.app, 'GET', '/admin/api/home', { cookie });
     const events = (home.data && (home.data.events as { kind: string; text: string }[])) || [];
@@ -635,7 +633,7 @@ describe('admin http: devices and payments', () => {
       return { state: p.state, result: q.result.label };
     });
     expect(label).toContain('buy:');
-    const before = readState(t.file).subscriptions[0].paidUntil;
+    const before = (await readState(t.file)).subscriptions[0].paidUntil;
     const home = await call(t.app, 'GET', '/admin/api/home', { cookie });
     expect(((home.data && home.data.pending) as unknown[]).length).toBe(1);
     t.sent.length = 0;
@@ -643,7 +641,7 @@ describe('admin http: devices and payments', () => {
     expect((first.data as { ok?: boolean }).ok).toBe(true);
     const second = await call(t.app, 'POST', '/admin/payment-confirm', { cookie, body: { csrf, operationId: 'op-h', confirm: 'yes' } });
     expect((second.data as { flash?: { error?: string } }).flash?.error).toBe('Платёж уже обработан');
-    const after = readState(t.file);
+    const after = (await readState(t.file));
     expect(after.subscriptions[0].paidUntil).toBe(before + 30 * DAY);
     expect(after.payments.filter((p: { operationId: string }) => p.operationId === 'op-h')).toHaveLength(1);
     expect(t.sent).toHaveLength(1);
@@ -655,7 +653,7 @@ describe('admin http: devices and payments', () => {
   it('changes the limit, subtracts days and resets swaps over HTTP, each in the journal', async () => {
     const t = await setup();
     const { cookie, csrf } = await adminCookie(t.app, t.file);
-    const before = readState(t.file).subscriptions[0].paidUntil;
+    const before = (await readState(t.file)).subscriptions[0].paidUntil;
     const lim = await call(t.app, 'POST', '/admin/limit', { cookie, body: { csrf, accountId: t.accountId, limitOverride: '3', extraSlots: '0' } });
     expect((lim.data as { flash?: { text?: string } }).flash?.text).toBe('Лимит устройств: 3 (3 (индивидуальный лимит))');
     const sub1 = await call(t.app, 'POST', '/admin/subtract', { cookie, body: { csrf, accountId: t.accountId, days: '5' } });
@@ -664,7 +662,7 @@ describe('admin http: devices and payments', () => {
     expect((sub2.data as { ok?: boolean }).ok).toBe(true);
     const reset = await call(t.app, 'POST', '/admin/swaps-reset', { cookie, body: { csrf, accountId: t.accountId } });
     expect((reset.data as { ok?: boolean }).ok).toBe(true);
-    const st = readState(t.file);
+    const st = (await readState(t.file));
     expect(st.subscriptions[0].limitOverride).toBe(3);
     expect(st.subscriptions[0].paidUntil).toBe(before - 5 * DAY);
     const acts = st.audit.filter((a: { accountId?: string }) => a.accountId === t.accountId).map((a: { action: string }) => a.action);

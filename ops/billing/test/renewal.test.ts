@@ -1,7 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { homePayload } from '../src/adminApi.mjs';
 import { botReply, reminderMessage } from '../src/bot.mjs';
 import {
@@ -36,7 +33,8 @@ import {
 } from '../src/logic.mjs';
 import { createApp, runReminders, startReminders } from '../src/server.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
-import { emptyState, readState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, writeState, testStore } from './pg';
 import { notificationHash } from '../src/yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -390,13 +388,13 @@ describe('migration of lifetime extra devices', () => {
     expect(subOf(migrateExtraSlots(withSub(moved, start.sub, { deviceLimit: 4 })), start.sub).deviceLimit).toBe(4);
   });
 
-  it('a snapshot from before PR-1 (base 1, one bought device) ends as 2 included + 1 monthly slot via SQLite', () => {
+  it('a snapshot from before PR-1 (base 1, one bought device) ends as 2 included + 1 monthly slot through the store', async () => {
     const start = paid();
     const old = { ...withSub(start.state, start.sub, { deviceLimit: 2 }) } as Record<string, unknown>;
     delete old.meta;
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, old);
-    const read = readState(file);
+    const file = await testStore();
+    await writeState(file, old);
+    const read = (await readState(file));
     expect(subOf(read, start.sub)).toMatchObject({ deviceLimit: 2, extraSlots: 1, extraUntil: NOW + 30 * DAY });
     expect(read.meta).toMatchObject({ deviceBase: 2, extraMonthly: 1 });
     // A plain old subscription («2 из 1» in prod) becomes 2 included, no extra slot.
@@ -595,8 +593,8 @@ describe('grace end notice', () => {
 
   it('the runner sends it once, and not on a BILLING_BOT_POLL=0 copy', async () => {
     const f = expiringAt(msk('2026-10-22T15:30:00'));
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, f.state);
+    const file = await testStore();
+    await writeState(file, f.state);
     const sent: { text: string }[] = [];
     const net = async (url: string, init?: { body?: string }) => {
       if (String(url).indexOf('/sendMessage') >= 0 && init && init.body) sent.push(JSON.parse(init.body));
@@ -610,7 +608,7 @@ describe('grace end notice', () => {
     expect(await runReminders(file, net, clock())).toEqual({ sent: 1, failed: 0 });
     expect(await runReminders(file, net, clock() + 10 * 60 * 1000)).toEqual({ sent: 0, failed: 0 });
     expect(sent[0].text).toContain('Льготный период закончился');
-    expect(readState(file).subscriptions[0].reminders.sent.end).toBe(clock());
+    expect((await readState(file)).subscriptions[0].reminders.sent.end).toBe(clock());
   });
 });
 
@@ -636,15 +634,15 @@ describe('reminder runner', () => {
     return { sent, net };
   }
 
-  function fileWith(state: unknown) {
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, state);
+  async function fileWith(state: unknown) {
+    const file = await testStore();
+    await writeState(file, state);
     return file;
   }
 
   it('sends a due reminder once, even when ticks repeat', async () => {
     const f = expiringAt(msk('2026-10-25T15:00:00'));
-    const file = fileWith(f.state);
+    const file = await fileWith(f.state);
     const { sent, net } = capture();
     const at = msk('2026-10-24T10:05:00');
     expect(await runReminders(file, net, at)).toEqual({ sent: 1, failed: 0 });
@@ -652,12 +650,12 @@ describe('reminder runner', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].chat_id).toBe('42');
     expect(sent[0].text).toContain('заканчивается завтра');
-    expect(readState(file).subscriptions[0].reminders.sent.d1).toBe(at);
+    expect((await readState(file)).subscriptions[0].reminders.sent.d1).toBe(at);
   });
 
   it('retries a failed send on the next tick and gives up after REMINDER_TRIES', async () => {
     const f = expiringAt(msk('2026-10-25T15:00:00'));
-    const file = fileWith(f.state);
+    const file = await fileWith(f.state);
     const down = capture(false);
     const at = msk('2026-10-24T10:05:00');
     for (let i = 0; i < REMINDER_TRIES; i++) expect(await runReminders(file, down.net, at + i)).toEqual({ sent: 0, failed: 1 });
@@ -667,22 +665,22 @@ describe('reminder runner', () => {
   it('does nothing without a bot token', async () => {
     const f = expiringAt(msk('2026-10-25T15:00:00'));
     f.state.settings.botToken = '';
-    const file = fileWith(f.state);
+    const file = await fileWith(f.state);
     const { sent, net } = capture();
     expect(await runReminders(file, net, msk('2026-10-24T10:05:00'))).toEqual({ sent: 0, failed: 0 });
     expect(sent).toHaveLength(0);
-    expect(readState(file).subscriptions[0].reminders).toBeUndefined();
+    expect((await readState(file)).subscriptions[0].reminders).toBeUndefined();
   });
 
   it('the timer runs only on the polling instance (BILLING_BOT_POLL) and never repeats a reminder', async () => {
     const f = expiringAt(msk('2026-10-25T15:00:00'));
-    const file = fileWith(f.state);
+    const file = await fileWith(f.state);
     const clock = () => msk('2026-10-24T10:05:00');
     const off = capture();
     stops.push(startReminders(file, off.net, { env: { BILLING_BOT_POLL: '0' }, firstMs: 1, everyMs: 5, now: clock }));
     await new Promise((r) => setTimeout(r, 40));
     expect(off.sent).toHaveLength(0);
-    expect(readState(file).subscriptions[0].reminders).toBeUndefined();
+    expect((await readState(file)).subscriptions[0].reminders).toBeUndefined();
     const on = capture();
     stops.push(startReminders(file, on.net, { env: {}, firstMs: 1, everyMs: 5, now: clock }));
     await new Promise((r) => setTimeout(r, 80));
@@ -751,13 +749,13 @@ describe('billing HTTP: grace and over-limit phones', () => {
   it('/v1/me in grace is active with inGrace; after grace it is inactive', async () => {
     const start = paid();
     const a = activate(start.state, { code: start.code, deviceId: DEV_A, now: NOW });
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, realTime(a.state, NOW + 31 * DAY));
+    const file = await testStore();
+    await writeState(file, realTime(a.state, NOW + 31 * DAY));
     const app = createApp(file, noFetch, { env: {} });
     const me = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token } });
     expect(me.status).toBe(200);
     expect(me.data).toMatchObject({ active: true, inGrace: true, overLimit: false });
-    writeState(file, realTime(a.state, NOW + 34 * DAY));
+    await writeState(file, realTime(a.state, NOW + 34 * DAY));
     const after = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token } });
     expect(after.status).toBe(200);
     expect(after.data).toMatchObject({ active: false, inGrace: false });
@@ -770,8 +768,8 @@ describe('billing HTTP: grace and over-limit phones', () => {
     const f = threeDevices();
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW + 29 * DAY, withExtras: false });
     const renewed = pay(q.state, q.result.label, '150', NOW + 29 * DAY, 'op-base').state as State;
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, realTime(renewed, NOW + 34 * DAY));
+    const file = await testStore();
+    await writeState(file, realTime(renewed, NOW + 34 * DAY));
     const app = createApp(file, noFetch, { env: {} });
     const meC = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_C, authorization: 'Bearer ' + f.tokens.C } });
     expect(meC.status).toBe(200);
@@ -789,8 +787,8 @@ describe('billing HTTP: grace and over-limit phones', () => {
     const f = threeDevices();
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW + 29 * DAY, withExtras: false });
     const renewed = pay(q.state, q.result.label, '150', NOW + 29 * DAY, 'op-base').state as State;
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, realTime(renewed, NOW + 34 * DAY));
+    const file = await testStore();
+    await writeState(file, realTime(renewed, NOW + 34 * DAY));
     const app = createApp(file, noFetch, { env: {} });
     // the old token (an app before PR-5) still gets the code it knows
     const legacy = await call(app, 'POST', '/v1/search', { headers: { 'x-device-id': DEV_C, authorization: 'Bearer ' + f.tokens.C }, body: { q: 'x' } });
@@ -824,8 +822,8 @@ describe('billing HTTP: grace and over-limit phones', () => {
     expect(pairNew.result.error).toBe('extra_expired');
     expect(pairNew.state.attempts[pairNew.state.attempts.length - 1].reason).toBe('extra_expired');
 
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, realTime(renewed, late));
+    const file = await testStore();
+    await writeState(file, realTime(renewed, late));
     const app = createApp(file, noFetch, { env: {} });
     const old = await call(app, 'POST', '/v1/activate', { body: { code: bought.result.code, deviceId: DEV_C } });
     expect(old.status).toBe(409);
@@ -850,8 +848,8 @@ describe('billing HTTP: grace and over-limit phones', () => {
     const f = threeDevices();
     f.state.settings.yoomoneySecret = 'secret';
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW });
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
-    writeState(file, q.state);
+    const file = await testStore();
+    await writeState(file, q.state);
     const sent: { chat_id: string; text: string }[] = [];
     const net = async (url: string, init?: { body?: string }) => {
       if (String(url).indexOf('/sendMessage') >= 0 && init && init.body) sent.push(JSON.parse(init.body));
@@ -872,7 +870,7 @@ describe('billing HTTP: grace and over-limit phones', () => {
     fields.sha1_hash = notificationHash(fields, 'secret');
     const res = await call(app, 'POST', '/v1/yoomoney', { form: fields });
     expect(res.status).toBe(200);
-    const sub = readState(file).subscriptions[0];
+    const sub = (await readState(file)).subscriptions[0];
     expect(sub.extraUntil).toBe(sub.paidUntil);
     const user = sent.find((m) => m.chat_id === '42');
     expect(user && user.text).toContain('Подписка продлена до ' + mskDateTime(sub.paidUntil));

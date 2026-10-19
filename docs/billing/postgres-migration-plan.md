@@ -1,6 +1,6 @@
 # План переезда биллинга OMP с SQLite на PostgreSQL
 
-Статус: **план одобрен Andy 19.10.2026**. PR 1 (стабильные id строк) - #148. Дальше - PR 2 (интерфейс хранилища + Postgres за `BILLING_STORE`).
+Статус: **выполнено**. Переключено 19.10.2026 в 17:13 МСК, путь SQLite удалён (PR «Billing: Postgres only»). План одобрен Andy 19.10.2026. PR 1 (стабильные id строк) - #148. Дальше - PR 2 (интерфейс хранилища + Postgres за `BILLING_STORE`).
 Основа: `main` f9d025b (включая #147: `baseDevices`, `limitOverride`, `bonusSlots`, `meta.limitModel`).
 
 ## Решения Andy (19.10.2026)

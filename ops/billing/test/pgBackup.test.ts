@@ -23,7 +23,7 @@ import {
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 import { homePayload } from '../src/adminApi.mjs';
 import { healthPayload } from '../src/server.mjs';
-import { emptyState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
 
 const HOUR = 3600 * 1000;
 const DAY = 24 * HOUR;
@@ -241,8 +241,26 @@ const realOk = !!DB && pgDumpMajor() >= 17;
 
 describe.skipIf(!realOk)('Postgres backups: real pg_dump', () => {
   it('dumps the test database into a custom-format file', async () => {
+    // Its own small database: the shared one holds the schemas of the files running in parallel.
+    const pg = (await import('pg')).default;
+    const name = 'dump_' + Date.now().toString(36) + '_' + Math.random().toString(16).slice(2, 8);
+    const admin = new pg.Client({ connectionString: DB });
+    await admin.connect();
+    await admin.query('CREATE DATABASE ' + name);
+    const url = new URL(DB);
+    url.pathname = '/' + name;
     const dir = join(tmp(), 'pg');
-    const r = await runDump({ dir, url: DB }, Date.now());
+    let r;
+    try {
+      const own = new pg.Client({ connectionString: url.toString() });
+      await own.connect();
+      await own.query('CREATE TABLE t (id int PRIMARY KEY); INSERT INTO t VALUES (1)');
+      await own.end();
+      r = await runDump({ dir, url: url.toString() }, Date.now());
+    } finally {
+      await admin.query('DROP DATABASE IF EXISTS ' + name).catch(() => {});
+      await admin.end();
+    }
     expect(r.ok, String(r.error)).toBe(true);
     const file = join(dir, r.name as string);
     expect(existsSync(file)).toBe(true);

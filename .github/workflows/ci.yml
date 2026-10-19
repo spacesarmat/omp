@@ -77,12 +77,12 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  # Billing tests run in Node (ops/billing/vitest.config.ts); the jsdom suite cannot load node:sqlite.
+  # Billing tests run in Node (ops/billing/vitest.config.ts) against Postgres, apart from the jsdom suite.
   # Admin deps are separate from the server. No path filter: a skipped job reports no status, so this
   # check can be required on pull requests to main. The suite is small, so it runs on every CI event.
   billing:
     runs-on: ubuntu-latest
-    # The store contract tests run on SQLite and on this Postgres (throwaway credentials, CI only).
+    # Every billing test runs on this Postgres, the only store (throwaway credentials, CI only).
     services:
       postgres:
         image: postgres:17-alpine

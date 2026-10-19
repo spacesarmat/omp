@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { adminLoginFailureLine, botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
@@ -49,7 +46,8 @@ import {
   telegramForDevice,
   unlinkDeviceTelegram,
 } from '../src/logic.mjs';
-import { emptyState, readState, resolveDbPath, updateState, writeState } from '../src/store.mjs';
+import { emptyState, normalizeState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 import { notificationHash, notificationOk } from '../src/yoomoney.mjs';
 
 const NOW = Date.parse('2026-10-14T12:00:00Z');
@@ -516,11 +514,7 @@ describe('audit', () => {
 });
 
 describe('actor migration', () => {
-  it('backfills account and actor without dropping existing fields', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-actors-'));
-    const dbPath = join(dir, 'billing.db');
-    const db = new DatabaseSync(dbPath);
-    db.exec('CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+  it('backfills account and actor without dropping existing fields', async () => {
     const payload = {
       keeper: { note: 'leave-me' },
       accounts: [{ id: 'acc1', telegramId: '42', createdAt: NOW, nickname: 'keep' }],
@@ -530,9 +524,8 @@ describe('actor migration', () => {
       attempts: [{ at: NOW, hash: 'abc', deviceId: 'abcdef0123456789', ok: false, reason: 'expired', legacy: 7 }],
       audit: [{ at: NOW, action: 'login', detail: 'telegram 77', ip: '10.0.0.1' }],
     };
-    db.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(payload), NOW);
-    db.close();
-    const loaded = readState(dbPath);
+    // The migration runs on every read (normalizeState); the stored rows keep every unknown field.
+    const loaded = normalizeState(JSON.parse(JSON.stringify(payload)));
     expect(loaded.keeper.note).toBe('leave-me');
     expect(loaded.accounts[0].nickname).toBe('keep');
     expect(loaded.payments[0].accountId).toBe('acc1');
@@ -547,8 +540,9 @@ describe('actor migration', () => {
     const again = enrichActors(loaded);
     expect(again.payments[0].accountId).toBe('acc1');
     expect(again.payments[0].memo).toBe('keep-pay');
-    writeState(dbPath, loaded);
-    const saved = readState(dbPath);
+    const dbPath = await testStore();
+    await writeState(dbPath, loaded);
+    const saved = (await readState(dbPath));
     expect(saved.keeper.note).toBe('leave-me');
     expect(saved.codes[0].plain).toBe('secret-plain');
     expect(saved.payments[0].accountId).toBe('acc1');
@@ -612,46 +606,6 @@ describe('promos', () => {
     expect(out.result.error).toBeUndefined();
     expect(out.result.paidUntil).toBe(NOW + 31 * 24 * 60 * 60 * 1000);
     expect(out.result.code).toBeTruthy();
-  });
-});
-
-describe('sqlite store', () => {
-  it('migrates state.json and round-trips', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-bill-'));
-    const jsonFile = join(dir, 'state.json');
-    const start = paid();
-    writeFileSync(jsonFile, JSON.stringify(start.state));
-    const db = resolveDbPath(jsonFile);
-    const loaded = readState(jsonFile);
-    expect(loaded.accounts).toHaveLength(1);
-    expect(db.endsWith('.db')).toBe(true);
-    writeState(db, { ...loaded, settings: { ...loaded.settings, priceRub: 199 } });
-    expect(readState(db).settings.priceRub).toBe(199);
-  });
-
-  it('leaves unreadable legacy json and a bad snapshot untouched', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-bill-bad-'));
-    const jsonFile = join(dir, 'state.json');
-    writeFileSync(jsonFile, 'NOT JSON');
-    await expect(updateState(jsonFile, (cur) => ({ state: cur }))).rejects.toThrow(/unreadable/);
-    expect(readFileSync(jsonFile, 'utf8')).toBe('NOT JSON');
-    const dbPath = resolveDbPath(jsonFile);
-    const fresh = new DatabaseSync(dbPath);
-    expect(fresh.prepare('SELECT id FROM snapshot WHERE id = 1').get()).toBeUndefined();
-    fresh.close();
-    writeFileSync(jsonFile, JSON.stringify(paid().state));
-    expect(readState(jsonFile).accounts).toHaveLength(1);
-
-    const broken = join(mkdtempSync(join(tmpdir(), 'omp-bill-snap-')), 'state.json');
-    writeFileSync(broken, JSON.stringify(paid().state));
-    readState(broken);
-    const snap = new DatabaseSync(resolveDbPath(broken));
-    snap.prepare('UPDATE snapshot SET data = ? WHERE id = 1').run('{');
-    snap.close();
-    await expect(updateState(broken, (cur) => ({ state: { ...cur, accounts: [] } }))).rejects.toThrow(/unreadable/);
-    const still = new DatabaseSync(resolveDbPath(broken));
-    expect(still.prepare('SELECT data FROM snapshot WHERE id = 1').get().data).toBe('{');
-    still.close();
   });
 });
 

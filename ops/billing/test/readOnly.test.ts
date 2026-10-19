@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { activate, createSubscription, ensureTelegramAccount } from '../src/logic.mjs';
 import { createApp, healthPayload } from '../src/server.mjs';
-import { emptyState, readState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, writeState, testStore } from './pg';
 import { readOnlyMode, readOnlyStore } from '../src/readOnly.mjs';
 import { toStore } from '../src/db/index.mjs';
 
@@ -46,8 +44,8 @@ async function call(app: App, method: string, path: string, opts: { body?: unkno
 
 const DEV = 'a'.repeat(32);
 
-function seeded() {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-ro-')), 'billing.db');
+async function seeded() {
+  const file = await testStore();
   const now = Date.now();
   let state = emptyState();
   state.settings.botToken = 'token';
@@ -56,7 +54,7 @@ function seeded() {
   const created = createSubscription(opened.state, { accountId: opened.account.id, now, days: 30 });
   const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
   state = act.state;
-  writeState(file, state);
+  await writeState(file, state);
   return { file, token: act.result.token as string, code: created.result.code as string };
 }
 
@@ -69,8 +67,8 @@ describe('BILLING_READONLY (cutover window)', () => {
   });
 
   it('refuses every write with 503 and keeps reads working; billing.db is untouched', async () => {
-    const s = seeded();
-    const before = JSON.stringify(readState(s.file));
+    const s = await seeded();
+    const before = JSON.stringify((await readState(s.file)));
     const app = createApp(s.file, async () => ({ ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' }), {
       env: {},
       readOnly: true,
@@ -104,11 +102,11 @@ describe('BILLING_READONLY (cutover window)', () => {
     const me = await call(app, 'GET', '/v1/me', { headers: { authorization: 'Bearer ' + s.token, 'x-device-id': DEV } });
     expect(me.status).toBe(200);
 
-    expect(JSON.stringify(readState(s.file))).toBe(before);
+    expect(JSON.stringify((await readState(s.file)))).toBe(before);
   });
 
   it('the read-only store refuses update() and registry writes, lastSeen touches are skipped', async () => {
-    const s = seeded();
+    const s = await seeded();
     const ro = readOnlyStore(toStore(s.file));
     expect(ro.readOnly).toBe(true);
     expect((await ro.read()).accounts.length).toBe(1);

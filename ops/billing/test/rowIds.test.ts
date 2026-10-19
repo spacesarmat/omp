@@ -1,10 +1,6 @@
 // Stable row ids (meta.rowIds = 1): every row of the billing state gets an `id`, the Postgres primary key later
 // (docs/billing/postgres-migration-plan.md, PR 1). Rows stored before get a derived id on read; new rows a random one.
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { confirmPendingPayment, selfUnbind } from '../src/deviceAdmin.mjs';
 import {
   activate,
@@ -22,7 +18,8 @@ import {
   redeemPromo,
   withRowId,
 } from '../src/logic.mjs';
-import { emptyState, readState, writeState } from '../src/store.mjs';
+import { emptyState, normalizeState } from '../src/state.mjs';
+import { readState, writeState, testStore } from './pg';
 
 const NOW = Date.UTC(2026, 9, 19, 9, 0, 0); // 19.10.2026 12:00 MSK
 const DEVS = ['a', 'b', 'c'].map((c) => c.repeat(32));
@@ -71,13 +68,9 @@ function withoutIds(state: State) {
   } as Record<string, unknown>;
 }
 
-function dbWith(snapshot: unknown) {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-ids-')), 'billing.db');
-  const raw = new DatabaseSync(file);
-  raw.exec('CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
-  raw.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(snapshot), NOW);
-  raw.close();
-  return file;
+/** What a read of a stored snapshot gives: the one-time migrations run in normalizeState on every read. */
+function readRaw(snapshot: unknown): State {
+  return normalizeState(JSON.parse(JSON.stringify(snapshot)));
 }
 
 /** Every id of every row collection, by collection. */
@@ -130,8 +123,7 @@ describe('migration of a snapshot from before row ids', () => {
   it('fills every missing id and changes nothing else; the device limit stays the same', () => {
     const { state, sub } = live();
     const old = withoutIds(state);
-    const file = dbWith(old);
-    const read = readState(file);
+    const read = readRaw(old);
     expect(read.meta.rowIds).toBe(1);
     const ids = idsOf(read);
     for (const key of Object.keys(ids)) {
@@ -139,38 +131,33 @@ describe('migration of a snapshot from before row ids', () => {
       expect(new Set(ids[key]).size, key).toBe(ids[key].length);
     }
     // only `id` and meta.rowIds were added
-    expect(withoutIds(read)).toEqual(withoutIds(readState(dbWith(state))));
-    const before = readState(dbWith({ ...old, meta: { ...(old.meta as object) } }));
+    expect(withoutIds(read)).toEqual(withoutIds(readRaw(state)));
+    const before = readRaw({ ...old, meta: { ...(old.meta as object) } });
     const s0 = before.subscriptions.find((s: Row) => s.id === sub);
     const s1 = read.subscriptions.find((s: Row) => s.id === sub);
     expect(deviceLimitNow(read, s1, NOW)).toBe(deviceLimitNow(state, state.subscriptions.find((s: Row) => s.id === sub), NOW));
     expect(limitBreakdown(read, s1, NOW)).toEqual(limitBreakdown(before, s0, NOW));
   });
 
-  it('is stable: every read of the same snapshot gives the same ids, and a write keeps them', () => {
-    const file = dbWith(withoutIds(live().state));
-    const a = readState(file);
-    const b = readState(file);
+  it('is stable: every read of the same snapshot gives the same ids, and a write keeps them', async () => {
+    const old = withoutIds(live().state);
+    const a = readRaw(old);
+    const b = readRaw(old);
     expect(idsOf(b)).toEqual(idsOf(a));
-    writeState(file, a);
-    expect(idsOf(readState(file))).toEqual(idsOf(a));
+    const file = await testStore();
+    await writeState(file, a);
+    expect(idsOf((await readState(file)))).toEqual(idsOf(a));
     // idempotent
     expect(migrateRowIds(a)).toBe(a);
     expect(migrateRowIds({ ...a, meta: { ...a.meta, rowIds: 0 } }).payments).toBe(a.payments);
   });
 
-  it('after a rollback the older image adds rows without ids: the next read fills only those', () => {
-    const file = dbWith(withoutIds(live().state));
-    const migrated = readState(file);
-    writeState(file, migrated);
-    // what the previous image writes: keeps the ids it read (spread rows), appends rows without one, keeps meta.rowIds
-    const raw = new DatabaseSync(file);
-    const snap = JSON.parse((raw.prepare('SELECT data FROM snapshot WHERE id = 1').get() as { data: string }).data);
+  it('rows added without an id (an older writer) are filled on the next read; the others keep theirs', () => {
+    const migrated = readRaw(withoutIds(live().state));
+    const snap = JSON.parse(JSON.stringify(migrated));
     snap.audit.push({ at: NOW + 100, action: 'old_image', detail: 'y' });
     snap.payments.push({ operationId: 'op-old', label: 'x', amount: '1', at: NOW + 101, error: 'bad_label' });
-    raw.prepare('UPDATE snapshot SET data = ? WHERE id = 1').run(JSON.stringify(snap));
-    raw.close();
-    const again = readState(file);
+    const again = readRaw(snap);
     const before = idsOf(migrated);
     const after = idsOf(again);
     expect(after.audit.slice(0, -1)).toEqual(before.audit);
@@ -195,7 +182,6 @@ describe('migration of a snapshot from before row ids', () => {
 
   it('an empty or missing state still gets meta.rowIds', () => {
     expect(emptyState().meta.rowIds).toBe(1);
-    const file = dbWith({ settings: {}, meta: { deviceBase: 2, extraMonthly: 1, limitModel: 1 } });
-    expect(readState(file).meta.rowIds).toBe(1);
+    expect(readRaw({ settings: {}, meta: { deviceBase: 2, extraMonthly: 1, limitModel: 1 } }).meta.rowIds).toBe(1);
   });
 });

@@ -1,8 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { createHmac } from 'node:crypto';
 import { revokeDevice, selfUnbind } from '../src/deviceAdmin.mjs';
 import {
@@ -14,21 +10,11 @@ import {
   nextBoundAt,
   revokeCode,
 } from '../src/logic.mjs';
-import {
-  ACCESS_TTL_MS,
-  activeRowForCode,
-  CLONE_LOG_EVERY_MS,
-  issuePair,
-  listDevices,
-  refreshPair,
-  revokeRow,
-  ROTATE_GRACE_MS,
-  signAccess,
-  tokenSecret,
-} from '../src/registry.mjs';
+import { ACCESS_TTL_MS, CLONE_LOG_EVERY_MS, ROTATE_GRACE_MS, signAccess } from '../src/registry.mjs';
 import { userPayload } from '../src/adminApi.mjs';
 import { createApp } from '../src/server.mjs';
-import { emptyState, readState, registryDb, updateState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 
 const DAY = 24 * 60 * 60 * 1000;
 const DEV_A = 'a'.repeat(32);
@@ -85,10 +71,6 @@ async function call(app: App, method: string, path: string, opts: { body?: unkno
   return { status: res.status, data, body: res.body };
 }
 
-function tmpDb(tag: string) {
-  return join(mkdtempSync(join(tmpdir(), 'omp-tok-' + tag + '-')), 'billing.db');
-}
-
 /** Telegram account 42, a 30-day subscription, phone A bound with the legacy token. JacRed is configured. */
 function base(now: number) {
   let state: State = emptyState();
@@ -104,9 +86,9 @@ function base(now: number) {
 }
 
 async function setup(opts: { env?: Record<string, string> } = {}) {
-  const file = tmpDb('http');
+  const file = await testStore();
   const s = base(Date.now());
-  writeState(file, s.state);
+  await writeState(file, s.state);
   const sent: { chat_id: string; text: string }[] = [];
   const fetchImpl = async (url: string, init?: { body?: string }) => {
     const u = String(url);
@@ -115,7 +97,7 @@ async function setup(opts: { env?: Record<string, string> } = {}) {
     return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
   };
   const app = createApp(file, fetchImpl, { env: opts.env || {} });
-  return { file, app, sent, db: registryDb(file), ...s };
+  return { file, app, sent, db: file.registry, ...s };
 }
 
 function search(app: App, token: string, deviceId: string) {
@@ -127,8 +109,8 @@ function search(app: App, token: string, deviceId: string) {
 
 async function pairFor(t: Awaited<ReturnType<typeof setup>>, deviceId: string) {
   // A second slot on the same subscription, activated by a new app that asks for the pair.
-  const slot = deviceCode(readState(t.file), t.subscriptionId, Date.now());
-  writeState(t.file, slot.state);
+  const slot = deviceCode((await readState(t.file)), t.subscriptionId, Date.now());
+  await writeState(t.file, slot.state);
   const out = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId, tokens: 'pair' } });
   expect(out.status).toBe(200);
   return { ...(out.data as { refreshToken: string; accessToken: string; accessExpiresAt: number; paidUntil: number }), codeId: slot.codeId };
@@ -139,7 +121,7 @@ function b64(obj: unknown) {
 }
 
 describe('migration: every bound code becomes a registry row', () => {
-  it('builds the registry from a snapshot written before PR-4, keeps days and bindings, and is idempotent', () => {
+  it('builds the registry from a snapshot written before PR-4, keeps days and bindings, and is idempotent', async () => {
     const now = Date.UTC(2026, 9, 19, 9, 0, 0);
     // Prod-like: three accounts, one subscription «2 из 1», a free slot, an expired subscription, a revoked code.
     const a = base(now);
@@ -160,32 +142,29 @@ describe('migration: every bound code becomes a registry row', () => {
     st = revokeCode(gone.state, gone.codeId);
     st = { ...st, codes: st.codes.map((c: { id: string }) => (c.id === a.codeId ? { ...c, lastSeenAt: now - 5000, lastIp: '95.24.113.7' } : c)) };
 
-    // Written the old way: only the snapshot table exists.
-    const file = tmpDb('mig');
-    const raw = new DatabaseSync(file);
-    raw.exec('CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
-    raw.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(st), now);
-    raw.close();
+    // The first write of a state with bindings and an empty registry builds the rows.
+    const file = await testStore();
+    await writeState(file, st);
 
-    const read = readState(file);
-    const db = registryDb(file);
-    const rows = db.prepare("SELECT * FROM devices WHERE status = 'active' ORDER BY device_id").all() as Record<string, unknown>[];
+    const read = (await readState(file));
+    const db = file.registry;
+    const rows = (await file.query("SELECT * FROM devices WHERE status = 'active' ORDER BY device_id")).rows as Record<string, unknown>[];
     expect(rows.map((r) => r.device_id)).toEqual([DEV_A, DEV_B, DEV_C, DEV_D]);
     const rowA = rows[0];
     expect(rowA).toMatchObject({ code_id: a.codeId, subscription_id: a.subscriptionId, account_id: a.accountId, last_seen_at: now - 5000, last_ip_net: '95.24.113.*' });
-    expect(activeRowForCode(db, free.codeId)).toBeNull();
-    expect(activeRowForCode(db, gone.codeId)).toBeNull();
+    expect((await db.activeRowForCode(free.codeId))).toBeNull();
+    expect((await db.activeRowForCode(gone.codeId))).toBeNull();
     // Days, limits and bindings are untouched.
     expect(read.subscriptions.map((x: { paidUntil: number }) => x.paidUntil)).toEqual(st.subscriptions.map((x: { paidUntil: number }) => x.paidUntil));
     expect(read.subscriptions.find((x: { id: string }) => x.id === a.subscriptionId).limitOverride).toBe(1);
     expect(read.codes.filter((c: { deviceId: string }) => c.deviceId).length).toBe(4);
     // Writing again changes nothing in the registry.
     const ids = rows.map((r) => r.id);
-    writeState(file, readState(file));
-    writeState(file, readState(file));
-    const after = db.prepare("SELECT id FROM devices WHERE status = 'active' ORDER BY device_id").all() as { id: string }[];
+    await writeState(file, (await readState(file)));
+    await writeState(file, (await readState(file)));
+    const after = (await file.query("SELECT id FROM devices WHERE status = 'active' ORDER BY device_id")).rows as { id: string }[];
     expect(after.map((r) => r.id)).toEqual(ids);
-    expect((db.prepare('SELECT COUNT(*) AS n FROM devices').get() as { n: number }).n).toBe(4);
+    expect(((await file.query('SELECT COUNT(*) AS n FROM devices')).rows[0] as { n: number }).n).toBe(4);
   });
 
   it('keeps the old token working after the migration and exchanges it once for a pair', async () => {
@@ -198,7 +177,7 @@ describe('migration: every bound code becomes a registry row', () => {
     expect(pair.refreshToken.indexOf('r1.')).toBe(0);
     expect(pair.accessToken.indexOf('a1.')).toBe(0);
     expect(pair.accessExpiresAt - Date.now()).toBeGreaterThan(ACCESS_TTL_MS - 60 * 1000);
-    expect(pair.paidUntil).toBe(readState(t.file).subscriptions[0].paidUntil);
+    expect(pair.paidUntil).toBe((await readState(t.file)).subscriptions[0].paidUntil);
     expect((await search(t.app, pair.accessToken, DEV_A)).status).toBe(200);
     // The legacy token still works for in-flight requests…
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(200);
@@ -210,7 +189,7 @@ describe('migration: every bound code becomes a registry row', () => {
     const firstRefresh = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_A }, body: { refreshToken: pair.refreshToken } });
     expect(firstRefresh).toMatchObject({ status: 401, data: { error: 'revoked' } });
     // Dropping a never-used token is not a clone: the device stays.
-    expect(activeRowForCode(t.db, t.codeId)).not.toBeNull();
+    expect((await t.db.activeRowForCode(t.codeId))).not.toBeNull();
     // After the minute the legacy token is dead and cannot be upgraded again.
     await updateState(t.file, (st: State) => ({ state: { ...st, sessions: st.sessions.map((x: object) => ({ ...x, upgradedAt: Date.now() - 61 * 1000 })) } }));
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(403);
@@ -239,8 +218,8 @@ describe('migration: every bound code becomes a registry row', () => {
 describe('old apps (no client change)', () => {
   it('activate without tokens answers exactly as before and the opaque token keeps working', async () => {
     const t = await setup();
-    const slot = deviceCode(readState(t.file), t.subscriptionId, Date.now());
-    writeState(t.file, slot.state);
+    const slot = deviceCode((await readState(t.file)), t.subscriptionId, Date.now());
+    await writeState(t.file, slot.state);
     const out = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId: DEV_B } });
     expect(out.status).toBe(200);
     expect(Object.keys(out.data).sort()).toEqual(['paidUntil', 'token']);
@@ -253,16 +232,16 @@ describe('old apps (no client change)', () => {
     // An unknown legacy token is still 403 «expired» (what the old app understands), not 401.
     expect(await search(t.app, 'f'.repeat(32), DEV_B)).toMatchObject({ status: 403, data: { error: 'expired' } });
     // The registry has the new phone.
-    expect(activeRowForCode(t.db, slot.codeId)).toMatchObject({ device_id: DEV_B });
+    expect((await t.db.activeRowForCode(slot.codeId))).toMatchObject({ device_id: DEV_B });
   });
 
   it('a binding revoked in the registry stops the old token too, and a snapshot write does not bring it back', async () => {
     const t = await setup();
-    const row = activeRowForCode(t.db, t.codeId);
-    revokeRow(t.db, row.id, 'admin', Date.now());
+    const row = (await t.db.activeRowForCode(t.codeId));
+    (await t.db.revokeRow(row.id, 'admin', Date.now()));
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(403);
-    writeState(t.file, readState(t.file));
-    expect(activeRowForCode(t.db, t.codeId)).toBeNull();
+    await writeState(t.file, (await readState(t.file)));
+    expect((await t.db.activeRowForCode(t.codeId))).toBeNull();
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(403);
   });
 });
@@ -280,11 +259,11 @@ describe('BILLING_LEGACY_TOKENS', () => {
     expect(await search(t.app, t.legacy, DEV_A)).toMatchObject({ status: 401, data: { error: 'legacy_disabled' } });
     const me = await call(t.app, 'GET', '/v1/me', { headers: { authorization: 'Bearer ' + t.legacy, 'x-device-id': DEV_A } });
     expect(me).toMatchObject({ status: 401, data: { error: 'legacy_disabled' } });
-    const slot = deviceCode(readState(t.file), t.subscriptionId, Date.now());
-    writeState(t.file, slot.state);
+    const slot = deviceCode((await readState(t.file)), t.subscriptionId, Date.now());
+    await writeState(t.file, slot.state);
     const old = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId: DEV_B } });
     expect(old).toMatchObject({ status: 403, data: { error: 'app_update_required' } });
-    expect(readState(t.file).codes.find((c: { id: string }) => c.id === slot.codeId).deviceId).toBeFalsy();
+    expect((await readState(t.file)).codes.find((c: { id: string }) => c.id === slot.codeId).deviceId).toBeFalsy();
     const pair = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId: DEV_B, tokens: 'pair' } });
     expect(pair.status).toBe(200);
     const up = await call(t.app, 'POST', '/v1/token/upgrade', { headers: { authorization: 'Bearer ' + t.legacy, 'x-device-id': DEV_A } });
@@ -298,13 +277,13 @@ describe('access tokens', () => {
     const t = await setup();
     const pair = await pairFor(t, DEV_B);
     expect(pair).not.toHaveProperty('token');
-    expect(readState(t.file).sessions.some((x: { codeId: string }) => x.codeId === pair.codeId)).toBe(false);
+    expect((await readState(t.file)).sessions.some((x: { codeId: string }) => x.codeId === pair.codeId)).toBe(false);
     expect((await search(t.app, pair.accessToken, DEV_B)).status).toBe(200);
     const me = await call(t.app, 'GET', '/v1/me', { headers: { authorization: 'Bearer ' + pair.accessToken, 'x-device-id': DEV_B } });
     expect(me.status).toBe(200);
     expect(me.data).toMatchObject({ active: true, linked: true });
     expect((me.data.devices as unknown[]).length).toBe(2);
-    expect(activeRowForCode(t.db, pair.codeId).last_seen_at).toBeGreaterThan(0);
+    expect((await t.db.activeRowForCode(pair.codeId)).last_seen_at).toBeGreaterThan(0);
   });
 
   it('rejects forged, expired, foreign and other-device tokens with 401', async () => {
@@ -312,10 +291,10 @@ describe('access tokens', () => {
     const pair = await pairFor(t, DEV_B);
     const [, payload, sig] = pair.accessToken.split('.');
     const p = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    const secret = tokenSecret(t.db, {});
+    const secret = (await t.db.tokenSecret({}));
     const sign = (key: string, body: string) => createHmac('sha256', key).update(body).digest('base64url');
-    const rowB = activeRowForCode(t.db, pair.codeId);
-    const rowA = activeRowForCode(t.db, t.codeId);
+    const rowB = (await t.db.activeRowForCode(pair.codeId));
+    const rowA = (await t.db.activeRowForCode(t.codeId));
     const cases: [string, string, string][] = [
       // payload changed (longer exp), old signature
       ['a1.' + b64({ ...p, exp: p.exp + 30 * DAY }) + '.' + sig, DEV_B, 'bad_token'],
@@ -359,8 +338,8 @@ describe('access tokens', () => {
     const t = await setup({ env: { BILLING_TOKEN_SECRET: 's'.repeat(40) } });
     const pair = await pairFor(t, DEV_B);
     expect((await search(t.app, pair.accessToken, DEV_B)).status).toBe(200);
-    const rowB = activeRowForCode(t.db, pair.codeId);
-    const stored = signAccess(tokenSecret(t.db, {}), rowB, Date.now()).token;
+    const rowB = (await t.db.activeRowForCode(pair.codeId));
+    const stored = signAccess((await t.db.tokenSecret({})), rowB, Date.now()).token;
     expect(await search(t.app, stored, DEV_B)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
   });
 
@@ -376,7 +355,7 @@ describe('access tokens', () => {
     const r = await call(app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } });
     expect(r.status).toBe(200);
     expect((await search(app, String(r.data.accessToken), DEV_B)).status).toBe(200);
-    expect(activeRowForCode(t.db, pair.codeId)).toMatchObject({ status: 'active', clone_count: 0 });
+    expect((await t.db.activeRowForCode(pair.codeId))).toMatchObject({ status: 'active', clone_count: 0 });
     // The legacy token of phone A does not depend on the key.
     expect((await search(app, t.legacy, DEV_A)).status).toBe(200);
     // A key shorter than 32 characters is ignored (DB key signs) and says so once on stderr.
@@ -437,7 +416,7 @@ describe('refresh rotation', () => {
       status: 401,
       data: { error: 'revoked' },
     });
-    expect(activeRowForCode(t.db, pair.codeId)).not.toBeNull();
+    expect((await t.db.activeRowForCode(pair.codeId))).not.toBeNull();
     const r3 = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n2.refreshToken } });
     expect(r3.status).toBe(200);
     expect(t.sent.filter((m) => m.text.indexOf('отключено') >= 0)).toHaveLength(0);
@@ -454,7 +433,7 @@ describe('refresh rotation', () => {
     // The copy still holds the first token: it gets a pair too (a false alarm must not lock a phone out).
     const clone = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } });
     expect(clone.status).toBe(200);
-    const row = activeRowForCode(t.db, pair.codeId);
+    const row = (await t.db.activeRowForCode(pair.codeId));
     expect(row).toMatchObject({ status: 'active', clone_count: 1 });
     expect(row.clone_at).toBeGreaterThan(0);
     // Both holders keep working: nothing is revoked or unbound.
@@ -463,7 +442,7 @@ describe('refresh rotation', () => {
     expect(
       (await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n2.refreshToken } })).status,
     ).toBe(200);
-    let st = readState(t.file);
+    let st = (await readState(t.file));
     expect(st.codes.find((c: { id: string }) => c.id === pair.codeId)).toMatchObject({ deviceId: DEV_B });
     expect(st.audit[st.audit.length - 1]).toMatchObject({ action: 'device_clone', accountId: t.accountId });
     const feed = adminDashboard(st, Date.now()).events.map((e: { text: string }) => e.text);
@@ -473,41 +452,42 @@ describe('refresh rotation', () => {
     // A second reuse within the hour counts but does not flood the journal.
     const again = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n1.refreshToken } });
     expect(again.status).toBe(200);
-    expect(activeRowForCode(t.db, pair.codeId).clone_count).toBe(2);
-    st = readState(t.file);
+    expect((await t.db.activeRowForCode(pair.codeId)).clone_count).toBe(2);
+    st = (await readState(t.file));
     expect(st.audit.filter((a: { action: string }) => a.action === 'device_clone')).toHaveLength(1);
     // The admin device list shows the mark.
-    const list = listDevices(t.db, t.subscriptionId).find((r: { code_id: string }) => r.code_id === pair.codeId);
+    const list = (await t.db.listDevices(t.subscriptionId)).find((r: { code_id: string }) => r.code_id === pair.codeId);
     expect(list).toMatchObject({ clone_count: 2 });
-    const user = userPayload(st, t.accountId, { registry: (subId: string) => listDevices(t.db, subId) });
+    const listed = await t.db.listDevices(t.subscriptionId);
+    const user = userPayload(st, t.accountId, { registry: (subId: string) => (subId === t.subscriptionId ? listed : []) });
     const shown = user.devices.find((d: { codeId: string }) => d.codeId === pair.codeId);
     expect(shown.cloneAt).toBeGreaterThan(0);
     expect(shown.cloneCount).toBe(2);
     expect(user.devices.find((d: { codeId: string }) => d.codeId === t.codeId).cloneAt).toBe(0);
   });
 
-  it('a rotated token after the 60 s window is a suspected clone even if the successor was never used', () => {
-    const file = tmpDb('grace');
+  it('a rotated token after the 60 s window is a suspected clone even if the successor was never used', async () => {
+    const file = await testStore();
     const s = base(Date.now());
-    writeState(file, s.state);
-    const db = registryDb(file);
-    const secret = tokenSecret(db, {});
-    const row = activeRowForCode(db, s.codeId);
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = (await db.tokenSecret({}));
+    const row = (await db.activeRowForCode(s.codeId));
     const now = Date.now();
-    const issued = issuePair(db, secret, row, now).pair.refreshToken;
-    const rot = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 });
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    const rot = (await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 }));
     expect(rot.pair).toBeTruthy();
-    const inside = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS });
+    const inside = (await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS }));
     expect(inside.retry).toBe(true);
     expect(inside.clone).toBeUndefined();
-    const outside = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS + 1 });
+    const outside = (await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS + 1 }));
     expect(outside).toMatchObject({ clone: true, cloneLog: true });
     expect(outside.pair.refreshToken).toBeTruthy();
-    const later = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS });
+    const later = (await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS }));
     expect(later).toMatchObject({ clone: true, cloneLog: false });
-    const hourLater = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS + CLONE_LOG_EVERY_MS });
+    const hourLater = (await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS + CLONE_LOG_EVERY_MS }));
     expect(hourLater).toMatchObject({ clone: true, cloneLog: true });
-    expect(activeRowForCode(db, s.codeId)).toMatchObject({ status: 'active', clone_count: 3 });
+    expect((await db.activeRowForCode(s.codeId))).toMatchObject({ status: 'active', clone_count: 3 });
   });
 
   it('refuses unknown, other-device and expired refresh tokens, and rate-limits per IP', async () => {
@@ -518,10 +498,10 @@ describe('refresh rotation', () => {
     expect(await r('r1.' + 'x'.repeat(43), DEV_B)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
     expect(await r(pair.refreshToken, DEV_A)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
     expect(await r('', DEV_B)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
-    t.db.prepare('UPDATE refresh_tokens SET expires_at = ?').run(Date.now() - 1);
+    await t.file.query('UPDATE refresh_tokens SET expires_at = $1', [Date.now() - 1]);
     expect(await r(pair.refreshToken, DEV_B)).toMatchObject({ status: 401, data: { error: 'refresh_expired' } });
     // Wrong-device and expired presentations do not revoke anything.
-    expect(activeRowForCode(t.db, pair.codeId)).not.toBeNull();
+    expect((await t.db.activeRowForCode(pair.codeId))).not.toBeNull();
     expect((await r(pair.refreshToken, DEV_B)).status).toBe(401);
     const limited = await r(pair.refreshToken, DEV_B);
     expect(limited.status).toBe(429);
@@ -538,12 +518,12 @@ describe('revoke works against the registry', () => {
     expect(
       await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } }),
     ).toMatchObject({ status: 401, data: { error: 'revoked' } });
-    expect(t.db.prepare('SELECT status FROM devices WHERE code_id = ?').get(pair.codeId)).toMatchObject({ status: 'revoked' });
+    expect((await t.file.query('SELECT status FROM devices WHERE code_id = $1', [pair.codeId])).rows[0]).toMatchObject({ status: 'revoked' });
 
     // Bot self-service on phone A (legacy token).
     await updateState(t.file, (st: State) => selfUnbind(st, { accountId: t.accountId, deviceIds: [DEV_A], now: Date.now() }));
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(403);
-    expect(t.db.prepare('SELECT revoke_reason FROM devices WHERE code_id = ?').get(t.codeId)).toMatchObject({ revoke_reason: 'unbound' });
+    expect((await t.file.query('SELECT revoke_reason FROM devices WHERE code_id = $1', [t.codeId])).rows[0]).toMatchObject({ revoke_reason: 'unbound' });
   });
 
   afterEach(() => {
@@ -553,16 +533,16 @@ describe('revoke works against the registry', () => {
   it('an unbind and a rebind of the same phone in the same millisecond still give an active row (no 403 revoked)', async () => {
     const t = await setup();
     const pair = await pairFor(t, DEV_B);
-    const oldRow = activeRowForCode(t.db, pair.codeId);
+    const oldRow = (await t.db.activeRowForCode(pair.codeId));
     // Freeze the clock at the binding's own millisecond: revoke and the new activation share boundAt's ms.
-    const bound = readState(t.file).codes.find((c: { id: string }) => c.id === pair.codeId).boundAt;
+    const bound = (await readState(t.file)).codes.find((c: { id: string }) => c.id === pair.codeId).boundAt;
     vi.spyOn(Date, 'now').mockReturnValue(bound);
     await updateState(t.file, (st: State) => revokeDevice(st, { accountId: t.accountId, codeId: pair.codeId, now: Date.now(), actor: ADMIN }));
-    const fresh = readState(t.file).codes.find((c: { id: string }) => c.id === pair.codeId);
+    const fresh = (await readState(t.file)).codes.find((c: { id: string }) => c.id === pair.codeId);
     expect(fresh.lastBoundAt).toBe(bound);
     const again = await call(t.app, 'POST', '/v1/activate', { body: { code: fresh.plain, deviceId: DEV_B, tokens: 'pair' } });
     expect(again.status).toBe(200);
-    const newRow = activeRowForCode(t.db, pair.codeId);
+    const newRow = (await t.db.activeRowForCode(pair.codeId));
     expect(newRow.id).not.toBe(oldRow.id);
     expect(newRow.bound_at).toBe(bound + 1);
     expect((await search(t.app, String(again.data.accessToken), DEV_B)).status).toBe(200);
@@ -579,12 +559,12 @@ describe('revoke works against the registry', () => {
   it('a rebind of the same slot gets a new registry row; old tokens of the slot stay dead', async () => {
     const t = await setup();
     const pair = await pairFor(t, DEV_B);
-    const oldRow = activeRowForCode(t.db, pair.codeId);
+    const oldRow = (await t.db.activeRowForCode(pair.codeId));
     await updateState(t.file, (st: State) => revokeDevice(st, { accountId: t.accountId, codeId: pair.codeId, now: Date.now(), actor: ADMIN }));
-    const code = readState(t.file).codes.find((c: { id: string }) => c.id === pair.codeId).plain;
+    const code = (await readState(t.file)).codes.find((c: { id: string }) => c.id === pair.codeId).plain;
     const again = await call(t.app, 'POST', '/v1/activate', { body: { code, deviceId: DEV_B, tokens: 'pair' } });
     expect(again.status).toBe(200);
-    const newRow = activeRowForCode(t.db, pair.codeId);
+    const newRow = (await t.db.activeRowForCode(pair.codeId));
     expect(newRow.id).not.toBe(oldRow.id);
     expect(await search(t.app, pair.accessToken, DEV_B)).toMatchObject({ status: 401, data: { error: 'revoked' } });
     expect((await search(t.app, String(again.data.accessToken), DEV_B)).status).toBe(200);

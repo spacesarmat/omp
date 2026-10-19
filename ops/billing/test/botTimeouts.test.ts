@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { BOT_POLL_ERROR_LOG_EVERY_MS, noteBotPollOk, resetBotPollState } from '../src/botPoll.mjs';
 import { ensureTelegramAccount } from '../src/logic.mjs';
 import { healthPayload, pollBot, refreshMissingProfiles, telegramCall, TG_POLL_TIMEOUT_MS, TG_SEND_TIMEOUT_MS } from '../src/server.mjs';
-import { emptyState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { writeState, testStore } from './pg';
 
 const NOW = Date.parse('2026-10-19T10:00:00Z');
 const TOKEN = 'timeout-test-token';
@@ -28,13 +26,13 @@ function captureStderr() {
   };
 }
 
-function dbFile(withAccount = false) {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-tgto-')), 'billing.db');
+async function dbFile(withAccount = false) {
+  const file = await testStore();
   let state = emptyState();
   state.settings.botToken = TOKEN;
   state.settings.adminNotify = false;
   if (withAccount) state = ensureTelegramAccount(state, '42', NOW).state;
-  writeState(file, state);
+  await writeState(file, state);
   return file;
 }
 
@@ -73,7 +71,7 @@ describe('Telegram timeouts', () => {
   });
 
   it('a hanging getUpdates does not stall the poll loop; the failure is logged once a minute without the token', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     const log = captureStderr();
     let slept = 0;
     try {
@@ -98,7 +96,7 @@ describe('Telegram timeouts', () => {
   });
 
   it('a network error is logged as network, never with its message', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     const log = captureStderr();
     try {
       await pollBot(
@@ -115,7 +113,7 @@ describe('Telegram timeouts', () => {
   });
 
   it('a hanging sendMessage times out and polling goes on', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     let polls = 0;
     const fetchImpl = (url: string) => {
       if (url.indexOf('getUpdates') >= 0) {
@@ -132,7 +130,7 @@ describe('Telegram timeouts', () => {
   });
 
   it('refreshMissingProfiles gives up on a hanging getChat', async () => {
-    const file = dbFile(true);
+    const file = await dbFile(true);
     const started = Date.now();
     await refreshMissingProfiles(file, TOKEN, () => hang(), { timeoutMs: 30 });
     expect(Date.now() - started).toBeLessThan(2000);

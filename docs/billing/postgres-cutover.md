@@ -2,6 +2,8 @@
 
 **Статус:** переключено 19.10.2026 в 17:13 МСК (только чтение - 75 с). Биллинг работает на Postgres, `billing.db` больше не пишется; бэкапы до переключения - `/opt/omp-backups/billing-20261019-171052` и `…-171229`.
 
+Путь SQLite из кода удалён (PR «Billing: Postgres only»): откат на `billing.db` больше невозможен ни правкой compose, ни старым `BILLING_STORE=sqlite` (биллинг с ним не стартует). Разделы 0, 1 и «Откат» ниже - история переключения; восстановление теперь только из дампа Postgres (раздел 2). `billing.db` лежит на диске как архив, `tools/migrateToPostgres.mjs` умеет прочитать его в пустую базу.
+
 Ранбук к разделам 4–6 [плана](postgres-migration-plan.md). Все команды - на NUC в `/opt/omp-vps`, от root (`sudo -i`).
 Сокращение: `dc` = `docker compose -f docker-compose.yml -f docker-compose.nuc.yml`.
 

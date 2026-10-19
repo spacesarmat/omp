@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
   botCallback,
   botReply,
@@ -27,10 +24,10 @@ import {
   renewalPrice,
   subscriptionView,
 } from '../src/logic.mjs';
-import { activeRowForCode, touchRow } from '../src/registry.mjs';
 import { createApp, pollBot } from '../src/server.mjs';
 import { mergeSettings } from '../src/services.mjs';
-import { emptyState, readState, registryDb, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, writeState, testStore } from './pg';
 import { notificationHash } from '../src/yoomoney.mjs';
 
 const NOW = Date.UTC(2026, 9, 19, 9, 0, 0); // 19.10.2026 12:00 MSK
@@ -221,8 +218,8 @@ describe('P1-4: held YooMoney payments', () => {
     f.state.settings.botToken = 'test-token';
     f.state.settings.adminNotify = false;
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW });
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-ux-')), 'billing.db');
-    writeState(file, q.state);
+    const file = await testStore();
+    await writeState(file, q.state);
     const sent: { url: string; body: Record<string, unknown> }[] = [];
     const net = async (url: string, init: { body?: string }) => {
       sent.push({ url, body: init && init.body ? JSON.parse(init.body) : {} });
@@ -260,7 +257,7 @@ describe('P1-4: held YooMoney payments', () => {
     const toUser = sent.filter((c) => c.url.endsWith('/sendMessage') && c.body.chat_id === '42');
     expect(toUser).toHaveLength(1);
     expect(String(toUser[0].body.text)).toContain('⏳ Платёж 150.00 ₽ получен и ждёт подтверждения.');
-    expect(readState(file).payments[0].pending).toBe(true);
+    expect((await readState(file)).payments[0].pending).toBe(true);
   });
 });
 
@@ -362,11 +359,11 @@ describe('admin /grant and support limit', () => {
 });
 
 describe('pollBot: groups and inline buttons', () => {
-  function harness(state: State, updates: unknown[]) {
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-ux-poll-')), 'billing.db');
+  async function harness(state: State, updates: unknown[]) {
+    const file = await testStore();
     state.settings.botToken = 'poll-token';
     state.settings.adminNotify = false;
-    writeState(file, state);
+    await writeState(file, state);
     const calls: { method: string; body: Record<string, unknown> }[] = [];
     let served = false;
     const net = async (url: string, init: { body?: string }) => {
@@ -383,10 +380,10 @@ describe('pollBot: groups and inline buttons', () => {
   }
 
   it('ignores a group chat completely', async () => {
-    const h = harness(emptyState(), [{ update_id: 1, message: { message_id: 1, chat: { id: -100500, type: 'supergroup' }, from: { id: 5 }, text: '/start' } }]);
+    const h = await harness(emptyState(), [{ update_id: 1, message: { message_id: 1, chat: { id: -100500, type: 'supergroup' }, from: { id: 5 }, text: '/start' } }]);
     await pollBot(h.file, h.net, { maxLoops: 1, sleep: async () => {} });
     expect(h.calls.filter((c) => c.method === 'sendMessage')).toEqual([]);
-    expect(readState(h.file).accounts).toEqual([]);
+    expect((await readState(h.file)).accounts).toEqual([]);
   });
 
   it('answers a button, asks to confirm, then unbinds and clears the confirm buttons', async () => {
@@ -396,24 +393,24 @@ describe('pollBot: groups and inline buttons', () => {
       update_id: Number(id),
       callback_query: { id, data, from: { id: 42 }, message: { message_id: 70, chat: { id: 42, type: 'private' } } },
     });
-    const ask = harness(f.state, [cq('11', 'u1:' + codeId)]);
+    const ask = await harness(f.state, [cq('11', 'u1:' + codeId)]);
     await pollBot(ask.file, ask.net, { maxLoops: 1, sleep: async () => {} });
     expect(ask.calls.filter((c) => c.method === 'answerCallbackQuery')).toHaveLength(1);
     expect(ask.calls.filter((c) => c.method === 'editMessageReplyMarkup')).toEqual([]);
     const question = ask.calls.find((c) => c.method === 'sendMessage')!;
     expect(String(question.body.text)).toContain('Отвязать устройство 1 (aaaaaaaa…)?');
 
-    const yes = harness(f.state, [cq('12', 'y1:' + codeId + ':aaaaaaaa'), cq('13', 'y1:' + codeId + ':aaaaaaaa')]);
+    const yes = await harness(f.state, [cq('12', 'y1:' + codeId + ':aaaaaaaa'), cq('13', 'y1:' + codeId + ':aaaaaaaa')]);
     await pollBot(yes.file, yes.net, { maxLoops: 1, sleep: async () => {} });
     const answers = yes.calls.filter((c) => c.method === 'answerCallbackQuery').map((c) => c.body.text);
     expect(answers).toEqual(['Отвязано', 'Устройство уже отвязано или сменилось.']);
     expect(yes.calls.filter((c) => c.method === 'editMessageReplyMarkup')).toHaveLength(2);
-    const after = readState(yes.file);
+    const after = (await readState(yes.file));
     expect(after.codes.find((c: { id: string }) => c.id === codeId).deviceId).toBe('');
     expect(after.subscriptions[0].swaps).toHaveLength(1);
 
     // A button pressed by someone else in a forwarded message, or in a group, changes nothing.
-    const foreign = harness(f.state, [{ update_id: 20, callback_query: { id: '20', data: 'ya:x', from: { id: 77 }, message: { message_id: 1, chat: { id: 42, type: 'private' } } } }]);
+    const foreign = await harness(f.state, [{ update_id: 20, callback_query: { id: '20', data: 'ya:x', from: { id: 77 }, message: { message_id: 1, chat: { id: 42, type: 'private' } } } }]);
     await pollBot(foreign.file, foreign.net, { maxLoops: 1, sleep: async () => {} });
     expect(foreign.calls.filter((c) => c.method === 'sendMessage')).toEqual([]);
     expect(foreign.calls.filter((c) => c.method === 'answerCallbackQuery')).toHaveLength(1);
@@ -447,18 +444,18 @@ describe('«Устройства» from the device registry', () => {
     expect(devicesText(cut, NOW)).toContain('2) bbbbbbbb… · не работает: сверх лимита устройств');
   });
 
-  it('the polling bot reads name and last seen from billing.db', async () => {
+  it('the polling bot reads name and last seen from the registry', async () => {
     const f = setup({ bound: 1 });
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-ux-reg-')), 'billing.db');
+    const file = await testStore();
     f.state.settings.botToken = 'poll-token';
     f.state.settings.adminNotify = false;
-    writeState(file, f.state);
+    await writeState(file, f.state);
     const codeId = f.state.codes.find((c: { deviceId: string }) => c.deviceId === DEV_A).id;
-    const db = registryDb(file);
-    const row = activeRowForCode(db, codeId);
+    const db = file.registry;
+    const row = (await db.activeRowForCode(codeId));
     const seen = Date.now() - 5 * MIN;
-    db.prepare('UPDATE devices SET name = ? WHERE id = ?').run('Kitchen phone', row.id);
-    touchRow(db, row.id, { ip: '', now: seen, force: true });
+    await file.query('UPDATE devices SET name = $1 WHERE id = $2', ['Kitchen phone', row.id]);
+    (await db.touchRow(row.id, { ip: '', now: seen, force: true }));
     const sent: string[] = [];
     let served = false;
     const net = async (url: string, init: { body?: string }) => {

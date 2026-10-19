@@ -1,6 +1,6 @@
 /**
- * Postgres store: the billing state in normalized tables (spec.mjs, schema.mjs) behind the same
- * interface as the SQLite store (db/index.mjs).
+ * Postgres store (the only billing store): the state in normalized tables (spec.mjs, schema.mjs)
+ * behind the storage interface (db/index.mjs).
  *
  * update(fn): one transaction under an advisory lock (writers in every process are serialized), the
  * current state (cached while kv.store_version is unchanged), fn on a copy, normalizeState, then only
@@ -241,10 +241,6 @@ export async function storeVersion(q) {
   return r.rows[0] ? String(r.rows[0].value) : '0';
 }
 
-/**
- * Open (and migrate) a Postgres store. `schema` (tests) puts every table in that schema.
- * The connection string is used only to connect: never logged, never in info().
- */
 /** A migrated pool. `schema` (tests) puts every table in that schema. Shared by the store and the data migration. */
 export async function openPool({ connectionString, schema, max }) {
   const config = { connectionString, types, max: max || 5 };
@@ -383,7 +379,7 @@ export async function createPgStore({ connectionString, schema, max }) {
       }
       return { expired, deleted };
     },
-    /** Tests: run SQL on the store's pool (same schema). */
+    /** Read-only stats and tests: run SQL on the store's pool (same schema). */
     query: (sql, params) => pool.query(sql, params),
   };
 }
