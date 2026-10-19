@@ -17,7 +17,7 @@ import {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** lastSeen / lastIp of a device are written at most this often (the state is one JSON document). */
+/** lastSeen / lastIp of a device are written at most this often (registry row, src/registry.mjs). */
 export const SEEN_EVERY_MS = 10 * 60 * 1000;
 
 /** Self-service device changes in the bot («Отвязать», then «Код» for the freed slot). */
@@ -43,28 +43,6 @@ export function maskIp(ip) {
 
 function codeById(state, codeId) {
   return (state.codes || []).find((c) => c.id === codeId) || null;
-}
-
-/** True when the device behind `codeId` has not been marked seen for SEEN_EVERY_MS. */
-export function seenDue(state, codeId, now) {
-  const row = codeById(state, codeId);
-  if (!row || row.revoked || !row.deviceId) return false;
-  const last = Number(row.lastSeenAt) || 0;
-  return !last || now - last >= SEEN_EVERY_MS || now < last;
-}
-
-/**
- * Mark an authenticated request: lastSeenAt and lastIp on the bound code. Throttled: inside
- * SEEN_EVERY_MS the same state object comes back (nothing to write). `force` skips the throttle.
- */
-export function touchDevice(state, { codeId, ip, now, force }) {
-  if (!force && !seenDue(state, codeId, now)) return state;
-  const row = codeById(state, codeId);
-  if (!row || row.revoked || !row.deviceId) return state;
-  // Only the truncated address is stored: «95.24.113.*».
-  const addr = truncateIp(ip);
-  const codes = state.codes.map((c) => (c.id === codeId ? { ...c, lastSeenAt: now, lastIp: addr || c.lastIp || '' } : c));
-  return { ...state, codes };
 }
 
 function subOf(state, accountId) {
@@ -168,6 +146,33 @@ export function revokeDevice(state, { accountId, codeId, now, actor }) {
   return {
     state: audited(next, actor, 'device_revoke', 'Отозвано устройство ' + device + '… (' + who(state, accountId) + ')', accountId, now),
     result: { ok: true, device, telegramId: (findAccount(state, accountId) || {}).telegramId || '' },
+  };
+}
+
+/**
+ * The registry saw one refresh token used by two holders and revoked the device row: unbind the
+ * code too (session gone, fresh code for the slot), like an admin revoke. Only while the code is
+ * still bound to that same binding. Not a self-service change.
+ */
+export function cloneRevoke(state, { codeId, deviceId, boundAt, now }) {
+  const row = codeById(state, codeId);
+  if (!row || row.revoked || !row.deviceId || row.deviceId !== deviceId || (Number(row.boundAt) || 0) !== (Number(boundAt) || 0)) {
+    return { state, result: { error: 'not_bound' } };
+  }
+  const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
+  const accountId = sub ? sub.accountId : '';
+  const device = row.deviceId.slice(0, 8);
+  const next = unbindCode(state, codeId);
+  return {
+    state: audited(
+      next,
+      { kind: 'system', id: 'tokens', label: 'Защита от клонов' },
+      'device_clone',
+      'Устройство ' + device + '… отключено: ключ использован на двух устройствах (' + who(state, accountId) + ')',
+      accountId,
+      now,
+    ),
+    result: { ok: true, device, accountId, telegramId: (findAccount(state, accountId) || {}).telegramId || '' },
   };
 }
 

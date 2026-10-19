@@ -516,7 +516,11 @@ export function issueMany(state, { count, days, now }) {
   return { state: cur, result: { codes } };
 }
 
-export function activate(state, { code, deviceId, now }) {
+/**
+ * `legacy: false` (a client that asked for the token pair) binds the code without an opaque
+ * session token; the server then issues refresh/access from the registry row.
+ */
+export function activate(state, { code, deviceId, now, legacy }) {
   if (!deviceOk(deviceId) || normalizeCode(code).length !== 8) return fail('bad_code', state);
   const hash = codeHash(code);
   const row = state.codes.find((c) => c.hash === hash && !c.revoked);
@@ -539,8 +543,9 @@ export function activate(state, { code, deviceId, now }) {
   const codes = state.codes.map((c) =>
     c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
   );
-  const token = randomId() + randomId();
-  const sessions = state.sessions.filter((s) => s.codeId !== row.id).concat([{ codeId: row.id, hash: sha256(token), createdAt: now }]);
+  const token = legacy === false ? '' : randomId() + randomId();
+  const kept = state.sessions.filter((s) => s.codeId !== row.id);
+  const sessions = token ? kept.concat([{ codeId: row.id, hash: sha256(token), createdAt: now }]) : kept;
   let next = recordAttempt({ ...state, codes, sessions }, { at: now, hash, deviceId, ok: true, reason: 'ok', accountId: sub.accountId });
   // Keep the phone↔Telegram link in sync when the code belongs to a TG account.
   const account = findAccount(next, sub.accountId);
@@ -556,11 +561,21 @@ export function activate(state, { code, deviceId, now }) {
   return { state: next, result: { token, paidUntil: sub.paidUntil, codeId: row.id } };
 }
 
-/** The code row behind `token` when that session belongs to `deviceId`. Expiry is not checked. */
-export function sessionForDevice(state, { token, deviceId }) {
-  if (!token || !deviceOk(deviceId)) return null;
+/** A legacy opaque token exchanged via /v1/token/upgrade still works this long (in-flight requests, lost response). */
+export const LEGACY_UPGRADE_GRACE_MS = 60 * 1000;
+
+function legacySession(state, token, now) {
   const hash = sha256(token);
   const session = state.sessions.find((s) => s.hash === hash);
+  if (!session) return null;
+  if (session.upgradedAt && (now === undefined ? Date.now() : now) - session.upgradedAt > LEGACY_UPGRADE_GRACE_MS) return null;
+  return session;
+}
+
+/** The code row behind the legacy `token` when that session belongs to `deviceId`. Expiry is not checked. */
+export function sessionForDevice(state, { token, deviceId, now }) {
+  if (!token || !deviceOk(deviceId)) return null;
+  const session = legacySession(state, token, now);
   if (!session) return null;
   const row = state.codes.find((c) => c.id === session.codeId && !c.revoked);
   return row && row.deviceId === deviceId ? row : null;
@@ -568,11 +583,36 @@ export function sessionForDevice(state, { token, deviceId }) {
 
 export function sessionOk(state, { token, deviceId, now }) {
   if (!token || !deviceOk(deviceId)) return null;
-  const hash = sha256(token);
-  const session = state.sessions.find((s) => s.hash === hash);
+  const session = legacySession(state, token, now);
   if (!session) return null;
   const row = state.codes.find((c) => c.id === session.codeId && !c.revoked);
   if (!row || row.deviceId !== deviceId) return null;
+  return codeAccess(state, row, now);
+}
+
+/**
+ * Exchange a legacy opaque token for the registry pair (once). The session is marked upgraded and
+ * keeps working for LEGACY_UPGRADE_GRACE_MS; the same token inside that window upgrades again
+ * (`again`, lost response). Errors: bad_token, upgraded (window passed).
+ */
+export function legacyUpgrade(state, { token, deviceId, now }) {
+  if (!token || !deviceOk(deviceId)) return { state, result: { error: 'bad_token' } };
+  const hash = sha256(token);
+  const session = state.sessions.find((s) => s.hash === hash);
+  if (!session) return { state, result: { error: 'bad_token' } };
+  const row = state.codes.find((c) => c.id === session.codeId && !c.revoked);
+  if (!row || row.deviceId !== deviceId) return { state, result: { error: 'bad_token' } };
+  if (session.upgradedAt) {
+    if (now - session.upgradedAt > LEGACY_UPGRADE_GRACE_MS) return { state, result: { error: 'upgraded' } };
+    return { state, result: { codeId: row.id, again: true, since: session.upgradedAt } };
+  }
+  const sessions = state.sessions.map((s) => (s.hash === hash ? { ...s, upgradedAt: now } : s));
+  return { state: { ...state, sessions }, result: { codeId: row.id, again: false, since: now } };
+}
+
+/** Search access of a bound code row: paid or grace, and within the device limit. */
+export function codeAccess(state, row, now) {
+  if (!row || row.revoked || !row.deviceId) return null;
   const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
   // Access lasts through the grace period after paidUntil (server clock only).
   const access = subAccess(state, sub, now);
@@ -1486,6 +1526,7 @@ const FEED_HIDDEN = {
 /** Admin actions on a subscription store a full sentence in `detail`; the feed shows it as is. */
 const DETAIL_FEED = {
   device_revoke: 1,
+  device_clone: 1,
   limit_set: 1,
   days_subtract: 1,
   payment_confirm: 1,

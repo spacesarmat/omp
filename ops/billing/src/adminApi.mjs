@@ -134,6 +134,42 @@ export function homePayload(state, file, opts) {
   };
 }
 
+/**
+ * The device list comes from the registry (src/registry.mjs) when the server passes `registry`:
+ * lastSeen, truncated IP and whether the phone already uses refresh tokens. Without it (tests of
+ * the payload alone) the bound codes are listed as before.
+ */
+function deviceRows(card, registry, overIds) {
+  const bound = (card.codes || []).filter((c) => c.deviceId);
+  const byCode = new Map(bound.map((c) => [c.id, c]));
+  if (typeof registry === 'function' && card.sub) {
+    return registry(card.sub.id)
+      .filter((r) => byCode.has(r.code_id) && byCode.get(r.code_id).deviceId === r.device_id)
+      .map((r) => ({
+        id: r.id,
+        codeId: r.code_id,
+        deviceId: String(r.device_id).slice(0, 8),
+        boundAt: Number(r.bound_at) || 0,
+        lastSeenAt: Number(r.last_seen_at) || 0,
+        lastIp: maskIp(r.last_ip_net),
+        auth: r.auth === 'refresh' ? 'refresh' : 'legacy',
+        overLimit: overIds.has(r.code_id),
+      }));
+  }
+  return bound
+    .sort((a, b) => (a.boundAt || 0) - (b.boundAt || 0))
+    .map((c) => ({
+      id: '',
+      codeId: c.id,
+      deviceId: c.deviceId.slice(0, 8),
+      boundAt: c.boundAt || 0,
+      lastSeenAt: c.lastSeenAt || 0,
+      lastIp: maskIp(c.lastIp),
+      auth: 'legacy',
+      overLimit: overIds.has(c.id),
+    }));
+}
+
 export function userPayload(state, accountId, opts) {
   const now = Date.now();
   const card = accountCard(state, accountId, now);
@@ -178,18 +214,8 @@ export function userPayload(state, accountId, opts) {
             : null,
         }
       : null,
-    /** Bound devices, oldest binding first. IPs are masked here; the full address stays on the server. */
-    devices: (card.codes || [])
-      .filter((c) => c.deviceId)
-      .sort((a, b) => (a.boundAt || 0) - (b.boundAt || 0))
-      .map((c) => ({
-        codeId: c.id,
-        deviceId: c.deviceId.slice(0, 8),
-        boundAt: c.boundAt || 0,
-        lastSeenAt: c.lastSeenAt || 0,
-        lastIp: maskIp(c.lastIp),
-        overLimit: overIds.has(c.id),
-      })),
+    /** Bound devices, oldest binding first. */
+    devices: deviceRows(card, opts.registry, overIds),
     pending: pendingPayments(state, card.account.id),
     codes: (card.codes || []).map((c) => ({
       id: c.id,

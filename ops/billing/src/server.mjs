@@ -34,8 +34,9 @@ import {
   openAppUrl,
   paymentsCsv,
   revokePromo,
+  codeAccess,
+  legacyUpgrade,
   sessionForDevice,
-  sessionOk,
   rememberSupportReply,
   rememberTelegramProfile,
   startAdminPanelLogin,
@@ -76,12 +77,25 @@ import {
   rejectPendingPayment,
   resetSwaps,
   revokeDevice,
+  cloneRevoke,
   revokeNoticeText,
-  seenDue,
   setDeviceLimit,
   subtractDays,
-  touchDevice,
 } from './deviceAdmin.mjs';
+import {
+  activeRowForCode,
+  cloneNoticeText,
+  deviceRow,
+  isAccessToken,
+  issuePair,
+  listDevices,
+  refreshPair,
+  setRevokeReason,
+  tokenSecret,
+  touchRow,
+  upgradePair,
+  verifyAccess,
+} from './registry.mjs';
 import {
   basicAuthHeader,
   indexerByLink,
@@ -98,6 +112,7 @@ import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import {
   activateLimitConfig,
+  tokenLimitConfig,
   clientIp,
   createActivateLimiter,
   createRateLimit,
@@ -106,7 +121,7 @@ import {
   probeAllServices,
   sourceEnabled,
 } from './services.mjs';
-import { readState, resolveDbPath, updateState } from './store.mjs';
+import { readState, registryDb, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
@@ -384,12 +399,9 @@ function paymentWho(state, result) {
   return acc.telegramId || acc.email || acc.id || '';
 }
 
-/** Why a session is refused: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
-function denyReason(state, token, deviceId) {
-  const now = Date.now();
-  const row = sessionForDevice(state, { token, deviceId });
-  if (!row) return 'expired';
-  const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
+/** Why a bound code has no search access: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
+function denyReason(state, row, now) {
+  const sub = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
   if (sub && subAccess(state, sub, now).access && !codeWithinLimit(state, sub, row, now)) return 'device_limit';
   return 'expired';
 }
@@ -398,25 +410,6 @@ function denyReason(state, token, deviceId) {
 function confirmed(body) {
   const v = body && body.confirm;
   return v === true || v === 'yes' || v === '1' || v === 1 || v === 'true';
-}
-
-/**
- * lastSeen / lastIp for an authenticated device request. The state is one JSON document, so this
- * writes only when the stored mark is older than SEEN_EVERY_MS; `busy` keeps parallel requests
- * of one device from writing twice. A failure here never fails the request.
- */
-async function noteSeen(file, state, codeId, ip, busy, force) {
-  if (!codeId || busy.has(codeId)) return;
-  const now = Date.now();
-  if (!force && !seenDue(state, codeId, now)) return;
-  busy.add(codeId);
-  try {
-    await updateState(file, (cur) => ({ state: touchDevice(cur, { codeId, ip, now, force }) }));
-  } catch (e) {
-    /* lastSeen is best effort */
-  } finally {
-    busy.delete(codeId);
-  }
 }
 
 function tellPayment(state, result, fetchImpl) {
@@ -465,7 +458,62 @@ export function createApp(file, fetchImpl, opts) {
   const env = (opts && opts.env) || process.env;
   const activateLimit = createActivateLimiter(activateLimitConfig(env));
   const strictLinkClear = linkClearRequiresToken(env);
-  const seenBusy = new Set();
+  // Refresh and upgrade are cheap to call but should not be hammered from one address.
+  const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
+  const regDb = () => registryDb(file);
+  const secret = () => tokenSecret(regDb(), env);
+
+  /**
+   * The device behind a bearer token: an access token (checked against the registry row) or a
+   * legacy opaque token from an app before PR-5. `{ error, status: 401 }` for a bad access token;
+   * null for an unknown legacy token (the old 403 behaviour stays).
+   */
+  function deviceCaller(state, token, deviceId, now) {
+    const device = String(deviceId || '');
+    if (isAccessToken(token)) {
+      const v = verifyAccess(regDb(), secret(), token, device, now);
+      if (v.error) return { error: v.error, status: 401 };
+      const code = state.codes.find((c) => c.id === v.row.code_id && !c.revoked && c.deviceId === device);
+      if (!code) return { error: 'revoked', status: 401 };
+      return { code, rowId: v.row.id };
+    }
+    const code = sessionForDevice(state, { token, deviceId: device, now });
+    if (!code) return null;
+    // A binding revoked in the registry (admin, clone) no longer works with the old token either.
+    const row = activeRowForCode(regDb(), code.id);
+    if (!row || row.device_id !== device) return null;
+    return { code, rowId: row.id, legacy: true };
+  }
+
+  /** lastSeen / truncated IP on the registry row: one small UPDATE at most every 10 minutes, never fails the request. */
+  function noteSeen(rowId, ip, force) {
+    if (!rowId) return;
+    try {
+      touchRow(regDb(), rowId, { ip, now: Date.now(), force: !!force });
+    } catch (e) {
+      /* lastSeen is best effort */
+    }
+  }
+
+  /** Two holders of one refresh token: unbind the code, log it, tell the owner in Telegram. */
+  async function revokeClone(row) {
+    try {
+      const out = await updateState(file, (state) =>
+        cloneRevoke(state, { codeId: row.code_id, deviceId: row.device_id, boundAt: row.bound_at, now: Date.now() }),
+      );
+      if (out.ok && out.telegramId) {
+        const cur = readState(file);
+        await telegramSend(cur.settings.botToken, out.telegramId, cloneNoticeText(out.device), net, { keyboard: mainKeyboard() });
+      }
+    } catch (e) {
+      process.stderr.write('token clone revoke failed\n');
+    }
+  }
+
+  function paidUntilOf(state, row) {
+    const sub = row ? state.subscriptions.find((s) => s.id === row.subscription_id) : null;
+    return sub ? sub.paidUntil : 0;
+  }
   return async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -573,7 +621,7 @@ export function createApp(file, fetchImpl, opts) {
         const id = url.searchParams.get('id') || '';
         const sid = cookie(req, 'omp_admin');
         const flash = takeFlash(admin, sid);
-        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash });
+        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash, registry: (subId) => listDevices(regDb(), subId) });
         if (!payload) return json(res, 404, { error: 'not_found' });
         return json(res, 200, payload);
       }
@@ -884,9 +932,17 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/device-revoke') {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
-            const out = await updateState(file, (state) =>
-              revokeDevice(state, { accountId: body.accountId || '', codeId: body.codeId || '', now: Date.now(), actor: adminActor(admin) }),
-            );
+            // The panel sends the registry row id; a bare codeId (older panel page) still works.
+            const picked = body.deviceRowId ? deviceRow(regDb(), body.deviceRowId) : null;
+            const codeId = picked ? picked.code_id : body.codeId || '';
+            const before = activeRowForCode(regDb(), codeId);
+            const out =
+              picked && picked.status !== 'active'
+                ? { error: 'not_bound' }
+                : await updateState(file, (state) =>
+                    revokeDevice(state, { accountId: body.accountId || '', codeId, now: Date.now(), actor: adminActor(admin) }),
+                  );
+            if (out.ok && before) setRevokeReason(regDb(), before.id, 'admin');
             if (out.error === 'not_bound') flashError = 'Устройство уже отвязано';
             else if (out.error) flashError = 'Устройство не найдено';
             else {
@@ -1065,11 +1121,50 @@ export function createApp(file, fetchImpl, opts) {
           res.setHeader('retry-after', String(wait));
           return json(res, 429, { error: 'rate' });
         }
-        const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now: Date.now() }));
+        // An app that sends tokens: "pair" gets refresh/access only; older apps get the opaque token as before.
+        const wantPair = body.tokens === 'pair';
+        const now = Date.now();
+        const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
         // device_limit is 409 like other_device: the current app then says the code is tied to another device.
         if (result.error) return json(res, result.error === 'other_device' || result.error === 'device_limit' ? 409 : 403, result);
-        await noteSeen(file, null, result.codeId, clientIp(req), seenBusy, true);
-        return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
+        const row = activeRowForCode(regDb(), result.codeId);
+        if (row) noteSeen(row.id, clientIp(req), true);
+        if (!wantPair) return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
+        if (!row) return json(res, 403, { error: 'revoked' });
+        return json(res, 200, { ...issuePair(regDb(), secret(), row, now).pair, paidUntil: result.paidUntil });
+      }
+      if (req.method === 'POST' && path === '/v1/token/refresh') {
+        const wait = tokenLimit.check(clientIp(req), '');
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const out = refreshPair(regDb(), secret(), { refreshToken: body.refreshToken, deviceId, now: Date.now() });
+        if (out.clone) await revokeClone(out.clone);
+        if (out.error) return json(res, 401, { error: out.error });
+        noteSeen(out.row.id, clientIp(req), false);
+        return json(res, 200, { ...out.pair, paidUntil: paidUntilOf(readState(file), out.row) });
+      }
+      if (req.method === 'POST' && path === '/v1/token/upgrade') {
+        const wait = tokenLimit.check(clientIp(req), '');
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const token = bearer(req);
+        if (!token || isAccessToken(token)) return json(res, 401, { error: 'bad_token' });
+        const now = Date.now();
+        const up = await updateState(file, (state) => legacyUpgrade(state, { token, deviceId, now }));
+        if (up.error) return json(res, 401, { error: up.error });
+        const row = activeRowForCode(regDb(), up.codeId);
+        if (!row || row.device_id !== deviceId) return json(res, 401, { error: 'revoked' });
+        const pair = upgradePair(regDb(), secret(), { row, now, again: up.again, since: up.since });
+        noteSeen(row.id, clientIp(req), false);
+        return json(res, 200, { ...pair, paidUntil: paidUntilOf(readState(file), row) });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
@@ -1085,7 +1180,10 @@ export function createApp(file, fetchImpl, opts) {
         const token = bearer(req);
         // A token that is sent must belong to this device. A paid-up session is not needed to unlink,
         // so an expired subscription still matches on the session itself.
-        if (token && !sessionForDevice(readState(file), { token, deviceId })) return json(res, 401, { error: 'bad_token' });
+        if (token) {
+          const caller = deviceCaller(readState(file), token, deviceId, Date.now());
+          if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        }
         if (!token && strictLinkClear) return json(res, 401, { error: 'token_required' });
         const result = await updateState(file, (state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
@@ -1100,9 +1198,12 @@ export function createApp(file, fetchImpl, opts) {
         let paidUntil = 0;
         if (token) {
           // The token only has to belong to this device: an expired or over-limit phone still learns its status.
-          const row = sessionForDevice(state, { token, deviceId: device });
+          const caller = deviceCaller(state, token, device, now);
+          // A bad access token is 401 (refresh it); an unknown legacy token falls back to the deviceId as before.
+          if (caller && caller.error) return json(res, 401, { error: caller.error });
+          const row = caller ? caller.code : null;
           const own = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
-          if (row) await noteSeen(file, state, row.id, clientIp(req), seenBusy, false);
+          if (caller) noteSeen(caller.rowId, clientIp(req), false);
           if (own) {
             account = state.accounts.find((a) => a.id === own.accountId) || null;
             paidUntil = own.paidUntil;
@@ -1142,9 +1243,12 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId;
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        const session = sessionOk(state, { token, deviceId, now: Date.now() });
-        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
-        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
+        const now = Date.now();
+        const caller = deviceCaller(state, token, deviceId, now);
+        if (caller && caller.error) return json(res, 401, { error: caller.error });
+        const session = caller ? codeAccess(state, caller.code, now) : null;
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        noteSeen(caller.rowId, clientIp(req), false);
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
         const rateKey = String(deviceId || token || '').slice(0, 64);
@@ -1197,9 +1301,12 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        const session = sessionOk(state, { token, deviceId, now: Date.now() });
-        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
-        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
+        const now = Date.now();
+        const caller = deviceCaller(state, token, deviceId, now);
+        if (caller && caller.error) return json(res, 401, { error: caller.error });
+        const session = caller ? codeAccess(state, caller.code, now) : null;
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        noteSeen(caller.rowId, clientIp(req), false);
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);

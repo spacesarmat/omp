@@ -17,8 +17,8 @@ import {
   subtractDays,
   swapStatus,
   SWAP_WINDOW_MS,
-  touchDevice,
 } from '../src/deviceAdmin.mjs';
+import { activeRowForCode, listDevices, touchRow } from '../src/registry.mjs';
 import {
   activate,
   adminDashboard,
@@ -36,7 +36,7 @@ import {
   sessionOk,
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
-import { emptyState, readState, updateState, writeState } from '../src/store.mjs';
+import { emptyState, readState, registryDb, updateState, writeState } from '../src/store.mjs';
 
 const NOW = Date.UTC(2026, 9, 19, 9, 0, 0);
 const DAY = 24 * 60 * 60 * 1000;
@@ -77,32 +77,42 @@ describe('lastSeen / lastIp', () => {
     expect(maskIp('')).toBe('');
   });
 
-  it('writes at most once per 10 minutes and returns the same state when throttled', () => {
+  it('writes the registry row at most once per 10 minutes, truncated, and never a free code', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-seen-')), 'billing.db');
     const s = withDevice();
-    const first = touchDevice(s.state, { codeId: s.codeId, ip: '95.24.113.7', now: NOW });
-    const row = first.codes.find((c: { id: string }) => c.id === s.codeId);
-    expect(row.lastSeenAt).toBe(NOW);
-    expect(row.lastIp).toBe('95.24.113.*');
-    const again = touchDevice(first, { codeId: s.codeId, ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS - 1 });
-    expect(again).toBe(first);
-    const later = touchDevice(first, { codeId: s.codeId, ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS });
-    expect(later).not.toBe(first);
-    const moved = later.codes.find((c: { id: string }) => c.id === s.codeId);
-    expect(moved.lastSeenAt).toBe(NOW + SEEN_EVERY_MS);
-    expect(moved.lastIp).toBe('1.2.3.*');
-    // A free (unbound) code is never touched.
-    const free = deviceCode(later, s.subscriptionId, NOW);
-    const freeId = free.codeId;
-    expect(touchDevice(free.state, { codeId: freeId, ip: '1.1.1.1', now: NOW })).toBe(free.state);
+    writeState(file, s.state);
+    const db = registryDb(file);
+    const row = activeRowForCode(db, s.codeId);
+    expect(row.device_id).toBe(DEV_A);
+    expect(touchRow(db, row.id, { ip: '95.24.113.7', now: NOW })).toBe(true);
+    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
+    expect(touchRow(db, row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS - 1 })).toBe(false);
+    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW, last_ip_net: '95.24.113.*' });
+    expect(touchRow(db, row.id, { ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS })).toBe(true);
+    expect(activeRowForCode(db, s.codeId)).toMatchObject({ last_seen_at: NOW + SEEN_EVERY_MS, last_ip_net: '1.2.3.*' });
+    // The snapshot is not rewritten for lastSeen any more.
+    const snapshot = JSON.stringify(readState(file));
+    expect(snapshot).not.toContain('1.2.3.');
+    // A free (unbound) code has no registry row.
+    const free = deviceCode(s.state, s.subscriptionId, NOW);
+    writeState(file, free.state);
+    expect(activeRowForCode(db, free.codeId)).toBeNull();
   });
 
-  it('shows the device list with masked IPs and never the full address', () => {
+  it('shows the device list from the registry with masked IPs and never the full address', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-seen-')), 'billing.db');
     const s = withDevice(Date.now());
-    const touched = touchDevice(s.state, { codeId: s.codeId, ip: '95.24.113.7', now: Date.now() });
-    const user = userPayload(touched, s.accountId, {});
+    writeState(file, s.state);
+    const db = registryDb(file);
+    const row = activeRowForCode(db, s.codeId);
+    touchRow(db, row.id, { ip: '95.24.113.7', now: Date.now(), force: true });
+    const user = userPayload(readState(file), s.accountId, { registry: (subId: string) => listDevices(db, subId) });
     expect(user.devices).toHaveLength(1);
+    expect(user.devices[0].id).toBe(row.id);
+    expect(user.devices[0].codeId).toBe(s.codeId);
     expect(user.devices[0].deviceId).toBe(DEV_A.slice(0, 8));
     expect(user.devices[0].lastIp).toBe('95.24.113.*');
+    expect(user.devices[0].auth).toBe('legacy');
     expect(user.devices[0].boundAt).toBeGreaterThan(0);
     expect(user.devices[0].lastSeenAt).toBeGreaterThan(0);
     expect(JSON.stringify(user)).not.toContain('95.24.113.7');
@@ -476,29 +486,25 @@ describe('admin http: devices and payments', () => {
     const auth = { authorization: 'Bearer ' + t.token, 'x-device-id': DEV_A, 'x-forwarded-for': '95.24.113.7' };
     const me = await call(t.app, 'GET', '/v1/me', { headers: auth });
     expect(me.status).toBe(200);
-    const seen1 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
-    expect(seen1.lastSeenAt).toBeGreaterThan(0);
-    expect(seen1.lastIp).toBe('95.24.113.*');
+    const db = registryDb(t.file);
+    const seen = () => activeRowForCode(db, t.codeId);
+    const seen1 = seen();
+    expect(seen1.last_seen_at).toBeGreaterThan(0);
+    expect(seen1.last_ip_net).toBe('95.24.113.*');
     // Inside 10 minutes: nothing is written, even from another IP.
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
-    const seen2 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
-    expect(seen2.lastSeenAt).toBe(seen1.lastSeenAt);
-    expect(seen2.lastIp).toBe('95.24.113.*');
+    expect(seen()).toMatchObject({ last_seen_at: seen1.last_seen_at, last_ip_net: '95.24.113.*' });
     // 11 minutes later the next authenticated request updates it.
-    await updateState(t.file, (st: State) => ({
-      state: { ...st, codes: st.codes.map((c: { id: string }) => (c.id === t.codeId ? { ...c, lastSeenAt: Date.now() - 11 * MIN } : c)) },
-    }));
+    db.prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?').run(Date.now() - 11 * MIN, seen1.id);
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
-    const seen3 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
-    expect(seen3.lastIp).toBe('1.2.3.*');
+    const seen3 = seen();
+    expect(seen3.last_ip_net).toBe('1.2.3.*');
+    expect(Date.now() - seen3.last_seen_at).toBeLessThan(MIN);
     expect(JSON.stringify(readState(t.file))).not.toContain('1.2.3.4');
-    expect(Date.now() - seen3.lastSeenAt).toBeLessThan(MIN);
     // A bad token records nothing.
-    await updateState(t.file, (st: State) => ({
-      state: { ...st, codes: st.codes.map((c: { id: string }) => (c.id === t.codeId ? { ...c, lastSeenAt: 1, lastIp: '9.9.9.*' } : c)) },
-    }));
+    db.prepare("UPDATE devices SET last_seen_at = 1, last_ip_net = '9.9.9.*' WHERE id = ?").run(seen1.id);
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, authorization: 'Bearer bad' }, body: { q: 'x' } });
-    expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).lastIp).toBe('9.9.9.*');
+    expect(seen().last_ip_net).toBe('9.9.9.*');
 
     const card = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     expect(card.body).not.toContain('1.2.3.4');
@@ -506,11 +512,23 @@ describe('admin http: devices and payments', () => {
     const noConfirm = await call(t.app, 'POST', '/admin/device-revoke', { cookie, body: { csrf, accountId: t.accountId, codeId: t.codeId } });
     expect((noConfirm.data as { ok?: boolean }).ok).toBe(false);
     expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).deviceId).toBe(DEV_A);
+    const listed = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
+    const rows = (listed.data && (listed.data.devices as { id: string; codeId: string }[])) || [];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(seen1.id);
+    // The panel revokes by registry row id.
     const revoked = await call(t.app, 'POST', '/admin/device-revoke', {
       cookie,
-      body: { csrf, accountId: t.accountId, codeId: t.codeId, confirm: 'yes' },
+      body: { csrf, accountId: t.accountId, deviceRowId: rows[0].id, codeId: rows[0].codeId, confirm: 'yes' },
     });
     expect((revoked.data as { ok?: boolean }).ok).toBe(true);
+    expect(db.prepare('SELECT status, revoke_reason FROM devices WHERE id = ?').get(seen1.id)).toMatchObject({ status: 'revoked', revoke_reason: 'admin' });
+    expect(activeRowForCode(db, t.codeId)).toBeNull();
+    const again = await call(t.app, 'POST', '/admin/device-revoke', {
+      cookie,
+      body: { csrf, accountId: t.accountId, deviceRowId: rows[0].id, confirm: 'yes' },
+    });
+    expect((again.data as { flash?: { error?: string } }).flash?.error).toBe('Устройство уже отвязано');
     expect((revoked.data as { flash?: { text?: string } }).flash?.text).toContain('Пользователю отправлено сообщение');
     const notice = t.sent.map((b) => JSON.parse(b)).find((b: { text: string }) => b.text.indexOf('отключено администратором') >= 0);
     expect(notice).toBeTruthy();
