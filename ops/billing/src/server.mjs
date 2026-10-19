@@ -84,6 +84,7 @@ import {
   noteBotPollOk,
   noteGetUpdatesConflict,
 } from './botPoll.mjs';
+import { createChangelogSource } from './changelog.mjs';
 import { codeHash, normalizeCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
@@ -552,6 +553,8 @@ export function createApp(file, fetchImpl, opts) {
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
+  // The full changelog for the «Изменения» tab: GitHub main, cached; one source per app.
+  const changelog = (opts && opts.changelog) || createChangelogSource({ net });
   // Pending admin login tokens stay in memory during cutover (same as session cookies).
   const adminAuth =
     (opts && opts.adminAuthMem) ||
@@ -694,6 +697,11 @@ export function createApp(file, fetchImpl, opts) {
         if (!admin) return json(res, 401, { auth: false });
         const services = await probeAllServices((await store.read()).settings, net);
         return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
+      }
+      if (req.method === 'GET' && path === '/admin/api/changelog') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        return json(res, 200, await changelog.get());
       }
       if (req.method === 'GET' && path === '/admin/api/reveal') {
         const admin = adminOf(req);

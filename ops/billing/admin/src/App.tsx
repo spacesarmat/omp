@@ -10,6 +10,7 @@ import { Login } from '@/panels/Login';
 import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
+import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import type { HomeData, UserData } from '@/lib/types';
 
@@ -175,6 +176,7 @@ export function App() {
           <TabsTrigger value="fails">Отказы</TabsTrigger>
           <TabsTrigger value="audit">Журнал</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
+          <TabsTrigger value="changes">Изменения</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
         </TabsList>
@@ -254,6 +256,9 @@ export function App() {
         </TabsContent>
         <TabsContent value="audit">
           <AuditPanel />
+        </TabsContent>
+        <TabsContent value="changes">
+          <ChangelogPanel />
         </TabsContent>
         <TabsContent value="settings">
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
