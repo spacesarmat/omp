@@ -143,7 +143,7 @@ describe('phone torrent card · Пропуск', () => {
   it('status: manual marks when the file has no chapters (or ffprobe is missing)', async () => {
     probeResult = null;
     await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
-    expect(byText('Заставка и титры')!.textContent).toContain('в файле нет глав · заставка 0:45–2:15 · титры: последние 1:30');
+    expect(byText('Заставка и титры')!.textContent).toContain('в файле нет глав · заставка 0:45-2:15 · титры: последние 1:30');
   });
 
   it('the sheet is filled from the marks and saves parsed values', async () => {

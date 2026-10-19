@@ -153,7 +153,7 @@ describe('Library', () => {
       await flush();
       const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
-      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1–6 из 10', '2026']);
+      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1-6 из 10', '2026']);
       expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
@@ -209,7 +209,7 @@ describe('Library', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя');
-    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1–6 of 10');
+    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1-6 of 10');
     expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 

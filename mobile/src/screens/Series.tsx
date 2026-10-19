@@ -77,10 +77,10 @@ function seasonName(n: number): string {
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** «2022–2026 · ★ 7,6 · Фантастика, Приключения»: the years of its seasons, the TMDB rating, up to 2 genres. */
+/** «2022-2026 · ★ 7,6 · Фантастика, Приключения»: the years of its seasons, the TMDB rating, up to 2 genres. */
 export function heroMeta(card: CatalogCard): string {
   const end = card.seasons.reduce((m, s) => Math.max(m, s.year), 0);
-  const years = !card.year ? '' : end > card.year ? card.year + '–' + end : String(card.year);
+  const years = !card.year ? '' : end > card.year ? card.year + '-' + end : String(card.year);
   return [years, card.rating > 0 ? ratingText(card.rating) : '', card.genres.slice(0, 2).map(capital).join(', ')]
     .filter(Boolean)
     .join(' · ');

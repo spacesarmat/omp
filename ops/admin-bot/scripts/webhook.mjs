@@ -33,7 +33,7 @@ export function checkUrl(raw) {
 }
 
 export function checkSecret(s) {
-  if (!/^[A-Za-z0-9_-]{16,256}$/.test(s || '')) throw new Error('WEBHOOK_SECRET: 16–256 символов, только A-Z a-z 0-9 _ -');
+  if (!/^[A-Za-z0-9_-]{16,256}$/.test(s || '')) throw new Error('WEBHOOK_SECRET: 16-256 символов, только A-Z a-z 0-9 _ -');
   return s;
 }
 

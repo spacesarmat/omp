@@ -166,7 +166,7 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
       if (!ok) return false;
     }
     if (f.rusSubs && !i.rusSubs) return false;
-    // a named season set must include the choice; a pack («S01–S03», «1-3 сезоны») and «Complete series» stay;
+    // a named season set must include the choice; a pack («S01-S03», «1-3 сезоны») and «Complete series» stay;
     // a title with no season stays (sorted below the matches)
     if (f.season && !i.allSeasons && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
     if (f.fullSeason && i.episodes && (i.episodes.from > 1 || i.episodes.to < i.episodes.of)) return false;

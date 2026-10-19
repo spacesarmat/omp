@@ -23,7 +23,7 @@ const EXTRA: { [c: string]: string } = {
 /** Cyrillic digit look-alikes, used only where the rest is digits (an IPv4 or a port). */
 const CYR_DIGITS: { [c: string]: string } = { '\u043E': '0', '\u041E': '0', '\u0437': '3', '\u0417': '3' };
 
-/** Full-width ASCII (U+FF01–U+FF5E) and the ideographic space as ASCII, for a WebView without normalize(). */
+/** Full-width ASCII (U+FF01-U+FF5E) and the ideographic space as ASCII, for a WebView without normalize(). */
 function fromFullWidth(s: string): string {
   return s.replace(/[\uFF01-\uFF5E\u3000]/g, (c) => (c === '\u3000' ? ' ' : String.fromCharCode(c.charCodeAt(0) - 0xfee0)));
 }

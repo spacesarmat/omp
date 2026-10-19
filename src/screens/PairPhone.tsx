@@ -108,7 +108,7 @@ function usePhonePaired(onPaired: () => void): void {
 function RemoteCodeBlock({ generation }: { generation: number }) {
   const st = useRemoteCode(generation);
   const name = useTvName();
-  const digits = st.code ? st.code.split('') : ['–', '–', '–', '–'];
+  const digits = st.code ? st.code.split('') : ['-', '-', '-', '-'];
   return (
     <div class="pair-code">
       <div class="pair-code-label">{t('pair.codeLabel')}</div>

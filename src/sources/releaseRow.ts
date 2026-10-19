@@ -1,12 +1,12 @@
 // The text parts of a found-release row, shared by the phone and the TV: the short title with its meta
-// («Тёмная материя · 2 сезон · серии 1–6 из 10») and the quality chips. Pure; Chromium 53 safe.
+// («Тёмная материя · 2 сезон · серии 1-6 из 10») and the quality chips. Pure; Chromium 53 safe.
 import { libraryTitle, type LibraryTitle } from '../lib/libraryView';
 import { displayBadge, parseReleaseInfo } from '../lib/releaseInfo';
 import { parseRelease } from './filters';
 import { releaseKind, type KindFilter, type KindInput, type ReleaseKind } from '../lib/releaseKind';
 import { t } from '../i18n';
 
-/** «Звездный путь: Странные новые миры» + «1–4 сезоны · серии 1–40 из 40» from a tracker title. */
+/** «Звездный путь: Странные новые миры» + «1-4 сезоны · серии 1-40 из 40» from a tracker title. */
 export function releaseTitle(raw: string): LibraryTitle {
   return libraryTitle({ hash: '', title: raw || '' });
 }
@@ -33,7 +33,7 @@ export function isHotChip(chip: string): boolean {
 const pad2 = (n: number) => (n < 10 ? '0' : '') + n;
 
 /**
- * The kind badge of a result: «Фильм», «Сериал», «Сериал · S01», «Сериал · S01–S03», «Сериал · S02 · 1–8 из 8»; ''
+ * The kind badge of a result: «Фильм», «Сериал», «Сериал · S01», «Сериал · S01-S03», «Сериал · S02 · 1-8 из 8»; ''
  * when the kind is unknown (no badge).
  */
 export function kindLabel(k: ReleaseKind): string {
@@ -44,7 +44,7 @@ export function kindLabel(k: ReleaseKind): string {
   const parts = [t('search.kind.series')];
   const s = k.season;
   if (typeof s === 'number') parts.push('S' + pad2(s));
-  else if (s) parts.push('S' + pad2(s[0]) + '–S' + pad2(s[1]));
+  else if (s) parts.push('S' + pad2(s[0]) + '-S' + pad2(s[1]));
   const e = k.episodes;
   if (e) {
     if (e.from === e.to) parts.push(t('search.kind.episode', { n: e.from }));

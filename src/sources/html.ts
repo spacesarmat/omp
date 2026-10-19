@@ -166,7 +166,7 @@ export function infohashFromMagnet(magnet: string | null | undefined): string | 
   return undefined;
 }
 
-/** Characters of windows-1251 bytes 0x80–0xBF (0x98 is unused); 0xC0–0xFF are А–я. */
+/** Characters of windows-1251 bytes 0x80-0xBF (0x98 is unused); 0xC0-0xFF are А-я. */
 const CP1251_HIGH =
   '\u0402\u0403\u201a\u0453\u201e\u2026\u2020\u2021\u20ac\u2030\u0409\u2039\u040a\u040c\u040b\u040f' +
   '\u0452\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u0000\u2122\u0459\u203a\u045a\u045c\u045b\u045f' +

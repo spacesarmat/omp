@@ -157,7 +157,7 @@ describe('notification texts', () => {
     expect(subNotification(sub, [1, 2, 3, 4, 5].map((i) => f('k' + i))).title).toBe('Дюна 2160p: 5 новых раздач');
   });
 
-  it('new episodes: «вышли серии 9–10» and «У вас 1–8»', () => {
+  it('new episodes: «вышли серии 9-10» and «У вас 1-8»', () => {
     const f: Finding = {
       subId: EPISODES_ID,
       key: 'h:1:10',
@@ -170,8 +170,8 @@ describe('notification texts', () => {
       id: 'ep:' + 'f'.repeat(40),
       subId: EPISODES_ID,
       key: 'h:1:10',
-      title: 'Starbound Frontier: вышли серии 9–10',
-      text: 'Новая раздача на Rutor: серии 1–10 из 10. У вас 1–8.',
+      title: 'Starbound Frontier: вышли серии 9-10',
+      text: 'Новая раздача на Rutor: серии 1-10 из 10. У вас 1-8.',
       action: 'replace',
     });
     const one = { ...f, episodes: { ...f.episodes!, haveTo: 9 } };
@@ -236,7 +236,7 @@ describe('runMonitor: a check', () => {
     const client = fakeClient([watched, off, film]);
     const s = await runMonitor(deps(host, { client: () => client, check: { search: fakeSearch({ 'Starbound Frontier': [res(NEWER)] }, queries) } }));
     expect(queries).toEqual(['Starbound Frontier', 'Дюна 2021']);
-    expect(host.notes.map((n) => n.title)).toEqual(['Starbound Frontier: вышли серии 9–10']);
+    expect(host.notes.map((n) => n.title)).toEqual(['Starbound Frontier: вышли серии 9-10']);
     expect(s.found).toBe(1);
     expect(findingsOf(EPISODES_ID)).toHaveLength(1);
     expect(localStorage.getItem(EPISODE_CURSOR_KEY)).toBe('0');
@@ -331,8 +331,8 @@ describe('notification texts in English', () => {
       episodes: { torrentHash: 'f'.repeat(40), torrentTitle: 'Starbound Frontier S01 1-8', season: 1, haveTo: 8, from: 1, to: 10 },
     };
     const n = episodeNotification(ep);
-    expect(n.title).toBe('Starbound Frontier: episodes 9–10 are out');
-    expect(n.text).toBe('New torrent on Rutor: episodes 1–10 of 10. You have 1–8.');
+    expect(n.title).toBe('Starbound Frontier: episodes 9-10 are out');
+    expect(n.text).toBe('New torrent on Rutor: episodes 1-10 of 10. You have 1-8.');
     expect(n.title + n.text).not.toMatch(/[А-Яа-яЁё]/);
     // a button with no saved finding and no server
     const host = fakeHost({ action: { kind: 'add', subId: 'nope', key: 'nope' } });

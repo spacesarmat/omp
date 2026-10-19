@@ -85,8 +85,8 @@ describe('ReplaceSheet', () => {
     await mount();
     const t = el.textContent!;
     expect(t).toContain('Starbound Frontier · Сезон 2');
-    expect(el.querySelectorAll('.m-rep-line')[0].textContent).toMatch(/^Серии 1–8 из 10 · 1080p · /);
-    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1–10 из 10 · 1080p · 17,6 ГБ');
+    expect(el.querySelectorAll('.m-rep-line')[0].textContent).toMatch(/^Серии 1-8 из 10 · 1080p · /);
+    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-10 из 10 · 1080p · 17,6 ГБ');
     expect(t).toContain('Новая · rutor · 820 сидов');
     expect(t).toContain('История просмотров и места остановки переносятся');
     expect(t).toContain('Настройки «Пропуск» и категория переносятся');
@@ -99,7 +99,7 @@ describe('ReplaceSheet', () => {
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Другая раздача')));
     expect(el.querySelector('[role=radiogroup][aria-label="Другая раздача"]')).toBeTruthy();
     click(Array.from(el.querySelectorAll('[role=radio]')).find((b) => (b.textContent || '').includes('720p')));
-    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1–9 из 10 · 720p · 9 ГБ');
+    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-9 из 10 · 720p · 9 ГБ');
     replaceMock.mockResolvedValue({ ok: true, hash: 'd'.repeat(40) });
     click(byText('Заменить'));
     await flush();

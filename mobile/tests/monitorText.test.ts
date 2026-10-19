@@ -38,9 +38,9 @@ describe('monitoring texts', () => {
   });
 
   it('episode ranges', () => {
-    expect(episodesLine({ torrentHash: 'h', torrentTitle: 't', season: 2, haveTo: 8, to: 10 })).toBe('Вышли серии 9–10 · у вас 1–8');
-    expect(episodesLine({ torrentHash: 'h', torrentTitle: 't', season: 2, haveTo: 9, to: 10 }, 5)).toBe('Вышла серия 10 · у вас 5–9');
-    expect(rangeText('Starbound Frontier / Сезон 2 / Серии 1-10 из 10 / 1080p')).toBe('Серии 1–10 из 10');
+    expect(episodesLine({ torrentHash: 'h', torrentTitle: 't', season: 2, haveTo: 8, to: 10 })).toBe('Вышли серии 9-10 · у вас 1-8');
+    expect(episodesLine({ torrentHash: 'h', torrentTitle: 't', season: 2, haveTo: 9, to: 10 }, 5)).toBe('Вышла серия 10 · у вас 5-9');
+    expect(rangeText('Starbound Frontier / Сезон 2 / Серии 1-10 из 10 / 1080p')).toBe('Серии 1-10 из 10');
     expect(rangeText('Show S03E05 1080p')).toBe('Серия 5');
     expect(rangeText('Фильм (2026) 1080p')).toBe('');
   });

@@ -67,7 +67,7 @@ export interface SupportCode {
   /** «2026-11» */
   month: string;
   year: number;
-  /** 1–12 */
+  /** 1-12 */
   mon: number;
   /** base64url, without padding */
   sig: string;

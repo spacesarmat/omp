@@ -1,6 +1,6 @@
 // Kind of a found release: a film, a series (with its season and episodes), an audiobook, an e-book, else unknown.
 // The tracker's category decides when the source gave one (a RuTracker forum, a Kinozal section, Torznab ids
-// 2000–2999 / 3030 / 5000–5999, TorrServer's rutor categories), then the title: series marks (S01, S01E01-08,
+// 2000-2999 / 3030 / 5000-5999, TorrServer's rutor categories), then the title: series marks (S01, S01E01-08,
 // «Сезон 2», «2 сезон», «Season 1», «серии 1-8 из 8», «[1-8 из 8]», «complete series», «сериал», «[TV]»), else a
 // year without them = a film. An audiobook title wins over a movie category: «аудиокнига», «радиоспектакль»,
 // «чит.», «читает», m4b, or MP3/M4A/AAC/FLAC (Cyrillic look-alikes included) when the row is not a video and not
@@ -41,7 +41,7 @@ const CAT_OTHER = /музык|music|audio|аудио|игр[ыа]|games?(?:[^a-z
 
 type CatVerdict = ReleaseKindName | 'other' | null;
 
-/** Torznab ids: 5000–5999 TV, 2000–2999 Movies, 3030 audiobook, other standard ids (1000–8999) neither. */
+/** Torznab ids: 5000-5999 TV, 2000-2999 Movies, 3030 audiobook, other standard ids (1000-8999) neither. */
 function numericCategory(c: string): CatVerdict {
   const ids = c.match(/\d+/g);
   if (!ids) return null;

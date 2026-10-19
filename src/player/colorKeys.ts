@@ -1,6 +1,6 @@
 // The colour keys of the TV player, the same on LG (web player) and Android TV (native player): Red — the audio / dub
 // list, Green — the subtitles list, Yellow — night sound where the player has it, else «Инфо», Blue — the player
-// menu. webOS codes 403–406 (src/platform/keys.ts). Pure.
+// menu. webOS codes 403-406 (src/platform/keys.ts). Pure.
 import type { KeyAction } from '../platform/keys';
 
 export type ColorKeyCommand = 'audio' | 'subs' | 'night' | 'stats' | 'menu';

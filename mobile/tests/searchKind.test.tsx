@@ -103,11 +103,11 @@ describe('phone search: kind badge and filter', () => {
     mount();
     await search('dune');
     expect(badge(FILM)).toBe('Фильм');
-    expect(badge(SERIES)).toBe('Сериал · S01 · 1–6 из 6');
+    expect(badge(SERIES)).toBe('Сериал · S01 · 1-6 из 6');
     expect(badge(BARE)).toBeNull();
     // the details sheet shows it too
     click(card(SERIES).querySelector('.m-rc-open')!);
-    expect(el.querySelector('[data-result-details] [data-kind-badge]')!.textContent).toBe('Сериал · S01 · 1–6 из 6');
+    expect(el.querySelector('[data-result-details] [data-kind-badge]')!.textContent).toBe('Сериал · S01 · 1-6 из 6');
   });
 
   it('«Все / Фильмы / Сериалы» filters the results, the unknown kind only under «Все»; kept for the session', async () => {

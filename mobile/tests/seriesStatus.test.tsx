@@ -344,11 +344,11 @@ describe('«Мои» tiles', () => {
     const tile = () => el!.querySelector('[data-anchor="dm"]')!;
     // not matched yet: the short name from the torrent title
     expect(tile().querySelector('.m-card-title')!.textContent).toBe('Темная материя');
-    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1–6 из 10');
+    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1-6 из 10');
     act(() => showTile((e) => e.getAttribute('data-anchor') === 'dm'));
     await flush();
     expect(tile().querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
-    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1–6 из 10');
+    expect(tile().querySelector('.m-card-meta')!.textContent).toBe('2 сезон · серии 1-6 из 10');
     // the grouped series card too: the TMDB name, the count only on the poster badge
     torrents.value = [S1, S2];
     vi.spyOn(TorrServerClient.prototype, 'list').mockImplementation(async () => [S1, S2]);

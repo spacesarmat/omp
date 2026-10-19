@@ -1,5 +1,5 @@
 // Parser monitor, a manual run with «notify» (the admin bot's /check starts one): sends this run's table to the
-// admin's Telegram chat when the workflow finishes. A Cloudflare Worker cannot wait for a 5–40 minute run, so the
+// admin's Telegram chat when the workflow finishes. A Cloudflare Worker cannot wait for a 5-40 minute run, so the
 // workflow reports itself.
 // Usage: node scripts/parser-monitor/notify.mjs monitor-out/report.json
 // Env: TELEGRAM_BOT_TOKEN, MONITOR_TG_CHAT, MONITOR_RUN_URL, MONITOR_DRY_RUN=true (says so in the title). Without the

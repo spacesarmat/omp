@@ -100,10 +100,10 @@ export function subNotification(sub: Subscription, found: Finding[]): MonitorNot
 }
 
 function range(from: number, to: number): string {
-  return from >= to ? String(to) : from + '–' + to;
+  return from >= to ? String(to) : from + '-' + to;
 }
 
-/** «Starbound Frontier: вышли серии 9–10» / «Новая раздача на rutor: серии 1–10 из 10. У вас 1–8.» */
+/** «Starbound Frontier: вышли серии 9-10» / «Новая раздача на rutor: серии 1-10 из 10. У вас 1-8.» */
 export function episodeNotification(f: Finding): MonitorNotification {
   const e = f.episodes!;
   const name = seriesQuery(e.torrentTitle) || e.torrentTitle;

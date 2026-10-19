@@ -433,7 +433,7 @@ describe('NativeSession', () => {
       await flush();
       expect(skip.save).toHaveBeenCalledWith(H1, { mi: [45, 135] });
       const cmds = sent(f);
-      expect(cmds[cmds.length - 1]).toEqual({ type: 'toast', text: 'Отмечено: заставка 0:45–2:15', error: false, session: sid });
+      expect(cmds[cmds.length - 1]).toEqual({ type: 'toast', text: 'Отмечено: заставка 0:45-2:15', error: false, session: sid });
       expect(cmds[cmds.length - 2]).toMatchObject({ type: 'segments', intro: { start: 45, end: 135 }, mi: [45, 135] });
       expect(cmds[cmds.length - 2].pending).toBeUndefined();
       // credits: the last N whole seconds

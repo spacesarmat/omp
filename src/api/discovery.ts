@@ -38,7 +38,7 @@ export function subnetOf(ip: string): string | null {
 
 /**
  * The 254 host octets: likely ones first, then the low, middle and high thirds of the /24 in round-robin.
- * Ascending .1–.254 left a server at .191 behind ~380 probes (~15 s at the old pace).
+ * Ascending .1-.254 left a server at .191 behind ~380 probes (~15 s at the old pace).
  */
 export function scanHosts(): number[] {
   const used: boolean[] = [];

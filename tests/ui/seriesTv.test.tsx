@@ -397,7 +397,7 @@ describe('TV series screen', () => {
       card.seasons = saved;
     });
 
-    it('another numbering (library S14, TMDB 1–11) offers no missing seasons', async () => {
+    it('another numbering (library S14, TMDB 1-11) offers no missing seasons', async () => {
       card.seasons = tmdb(11) as any;
       useLibrary(14);
       const host = await mount();
@@ -411,7 +411,7 @@ describe('TV series screen', () => {
       const host = await mount();
       expect(fks(host)).toEqual(['season-1', 'season-9']);
       const chip = host.querySelector('[data-fk="season-1"]')!;
-      expect(text(chip.querySelector('.chip-name'))).toBe('+ Сезоны 1–8');
+      expect(text(chip.querySelector('.chip-name'))).toBe('+ Сезоны 1-8');
       expect(text(chip.querySelector('.chip-sub'))).toBe('нет в медиатеке');
       act(() => setFocus('season-1'));
       await flush();

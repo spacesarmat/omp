@@ -5,7 +5,7 @@
 export const DEAD_RELEASE_MS = 60000;
 
 export interface DeadSample {
-  /** TorrServer is getting info, preloading, or working (stat 1–3), or the player is still waiting on it. */
+  /** TorrServer is getting info, preloading, or working (stat 1-3), or the player is still waiting on it. */
   active: boolean;
   /** `connected_seeders`. */
   seeders: number;

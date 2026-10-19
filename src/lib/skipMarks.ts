@@ -16,7 +16,7 @@ export function parseMark(text: string): number | null {
   return sec;
 }
 
-/** The manual marks as text («заставка 0:45–2:15», «титры: последние 1:30»). */
+/** The manual marks as text («заставка 0:45-2:15», «титры: последние 1:30»). */
 export function manualMarks(prefs: SkipPrefs): string[] {
   const marks: string[] = [];
   if (prefs.mi) marks.push(t('skip.intro', { from: formatDuration(prefs.mi[0]), to: formatDuration(prefs.mi[1]) }));

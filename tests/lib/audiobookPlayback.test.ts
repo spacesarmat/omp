@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AUDIO_SEEK_MS, AUDIO_SPEEDS, chapterPlayItem, filePlayItem, playOffsetMs } from '../../src/lib/audiobookPlayback';
 
 describe('audiobook playback queue', () => {
-  it('seeks by 30 seconds and keeps speed inside 0.5–3', () => {
+  it('seeks by 30 seconds and keeps speed inside 0.5-3', () => {
     expect(AUDIO_SEEK_MS).toBe(30000);
     expect(AUDIO_SPEEDS[0]).toBe(0.5);
     expect(AUDIO_SPEEDS[AUDIO_SPEEDS.length - 1]).toBe(3);

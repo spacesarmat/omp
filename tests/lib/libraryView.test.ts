@@ -52,10 +52,10 @@ describe('libraryTitle', () => {
     expect(libraryTitle(tor('Последний богатырь'))).toEqual({ title: 'Последний богатырь', meta: '' });
   });
   it('a series: season and episodes', () => {
-    expect(libraryTitle(tor('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]'))).toEqual({ title: 'Темная материя', meta: '2 сезон · серии 1–6 из 10' });
+    expect(libraryTitle(tor('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 (Алик Сахаров) [2026, США, WEB-DL 1080p]'))).toEqual({ title: 'Темная материя', meta: '2 сезон · серии 1-6 из 10' });
     expect(libraryTitle(tor('Starbound Frontier S02 1080p WEB-DL'))).toEqual({ title: 'Starbound Frontier', meta: '2 сезон' });
-    expect(libraryTitle(tor('Дом дракона 2 сезон 1-8 серии из 8 [2024, WEB-DL]'))).toEqual({ title: 'Дом дракона', meta: '2 сезон · серии 1–8 из 8' });
-    expect(libraryTitle(tor('Starbound.Frontier.S01-S03.1080p'))).toEqual({ title: 'Starbound Frontier', meta: 'сезоны 1–3' });
+    expect(libraryTitle(tor('Дом дракона 2 сезон 1-8 серии из 8 [2024, WEB-DL]'))).toEqual({ title: 'Дом дракона', meta: '2 сезон · серии 1-8 из 8' });
+    expect(libraryTitle(tor('Starbound.Frontier.S01-S03.1080p'))).toEqual({ title: 'Starbound Frontier', meta: 'сезоны 1-3' });
     expect(libraryTitle(tor('Starbound.Frontier.S02E05.1080p'))).toEqual({ title: 'Starbound Frontier', meta: '2 сезон · серия 5' });
   });
   it('a raw release name without separators', () => {
@@ -73,10 +73,10 @@ describe('libraryTitle', () => {
   });
   it('English meta', () => {
     applyLanguageSetting('en');
-    expect(libraryTitle(tor('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 [2026]')).meta).toBe('season 2 · episodes 1–6 of 10');
-    expect(libraryTitle(tor('Starbound.Frontier.S01-S03.1080p')).meta).toBe('seasons 1–3');
+    expect(libraryTitle(tor('Темная материя / Dark Matter / Сезон: 2 / Серии: 1-6 из 10 [2026]')).meta).toBe('season 2 · episodes 1-6 of 10');
+    expect(libraryTitle(tor('Starbound.Frontier.S01-S03.1080p')).meta).toBe('seasons 1-3');
     expect(libraryTitle(tor('Show.S02E05.1080p')).meta).toBe('season 2 · episode 5');
-    expect(libraryTitle(tor('Show / Шоу / Серии: 1-6 [2026]')).meta).toBe('episodes 1–6');
+    expect(libraryTitle(tor('Show / Шоу / Серии: 1-6 [2026]')).meta).toBe('episodes 1-6');
   });
 });
 

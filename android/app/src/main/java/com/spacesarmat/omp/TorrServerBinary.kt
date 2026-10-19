@@ -193,7 +193,7 @@ class TorrServerBinary(private val dir: File, val pin: TorrServerPin) {
 
         /**
          * The argv that starts [binary]: through the system linker on Android 10+ (API 29), where exec() of app data
-         * files is denied; directly on Android 8–9, which still allow it.
+         * files is denied; directly on Android 8-9, which still allow it.
          */
         fun command(sdkInt: Int, binary: String, args: List<String>): List<String> =
             if (sdkInt >= 29) listOf(LINKER64, binary) + args else listOf(binary) + args

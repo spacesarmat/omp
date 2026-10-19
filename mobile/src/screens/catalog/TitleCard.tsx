@@ -48,14 +48,14 @@ function stillAiring(card: CatalogCard): boolean {
   return card.airing || card.status === 'returning' || card.status === 'production' || card.status === 'planned';
 }
 
-/** «2019 – 2024», or «2019 – выходит» while the series is on air. */
+/** «2019 - 2024», or «2019 - выходит» while the series is on air. */
 export function seriesDates(card: CatalogCard): string {
   const start = startYear(card);
-  if (stillAiring(card)) return start ? start + ' – ' + t('titleCard.stillAiring') : t('titleCard.stillAiring');
+  if (stillAiring(card)) return start ? start + ' - ' + t('titleCard.stillAiring') : t('titleCard.stillAiring');
   const last = card.lastAirDate && card.lastAirDate.length >= 4 ? +card.lastAirDate.slice(0, 4) : 0;
   const end = last || card.seasons.reduce((m, s) => Math.max(m, s.year), 0);
   if (!start) return end ? String(end) : '';
-  return end > start ? start + ' – ' + end : String(start);
+  return end > start ? start + ' - ' + end : String(start);
 }
 
 /** The short status next to the dates: «Выходит», «Завершён», … */

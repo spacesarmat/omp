@@ -5,7 +5,7 @@ import { t } from '../../../src/i18n';
 
 const LEN = 6;
 
-/** The 6-character pairing code the Google TV remote service shows on the TV: digits and A–F. */
+/** The 6-character pairing code the Google TV remote service shows on the TV: digits and A-F. */
 export function cleanBoxCode(text: string): string {
   return text
     .toUpperCase()

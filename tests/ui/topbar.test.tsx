@@ -229,8 +229,8 @@ describe('top bar neighbours', () => {
   });
 
   it('hides the partial tab at the TV widths and never grows a spacer', () => {
-    // Real LG: strip x 265–1404 (1139px), tabs total 1215px, max scroll stays 76px.
-    // «История» is 189–361 while scrolled (content 0–172). «Прочее» is 1354–1480 at the left edge (content 1089–1215).
+    // Real LG: strip x 265-1404 (1139px), tabs total 1215px, max scroll stays 76px.
+    // «История» is 189-361 while scrolled (content 0-172). «Прочее» is 1354-1480 at the left edge (content 1089-1215).
     const stripStart = 265;
     const stripEnd = 1404;
     const clientWidth = stripEnd - stripStart;
@@ -356,7 +356,7 @@ describe('top bar neighbours', () => {
     Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 1139 });
     Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1215 });
     const nodes = host.querySelectorAll('.tab');
-    // TV widths: «История» 0–172, «Прочее» 1089–1215. «Все» sits in the middle.
+    // TV widths: «История» 0-172, «Прочее» 1089-1215. «Все» sits in the middle.
     const place = [0, 180, 340, 520, 640, 780, 900, 1000, 1089];
     const width = [172, 140, 150, 100, 120, 100, 80, 70, 126];
     for (let i = 0; i < nodes.length; i++) {

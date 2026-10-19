@@ -38,7 +38,7 @@ function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
-/** «18,2 ГБ · 940 сидов · rutor · сезоны 1–3». */
+/** «18,2 ГБ · 940 сидов · rutor · сезоны 1-3». */
 function rowMeta(lib: LibraryTorrent, r: SourceResult): string {
   return [r.Size, seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)].filter(Boolean).join(' · ');
 }

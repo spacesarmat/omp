@@ -88,7 +88,7 @@ describe('webhook setup script', () => {
     const body = commandsBody('536445442');
     expect(body.scope).toEqual({ type: 'chat', chat_id: 536445442 });
     expect(body.commands.map((c) => c.command)).toEqual(['status', 'check', 'versions', 'stats', 'ci', 'help']);
-    // Telegram: 1–32 chars a-z0-9_, description 1–256
+    // Telegram: 1-32 chars a-z0-9_, description 1-256
     COMMANDS.forEach((c) => {
       expect(c.command).toMatch(/^[a-z0-9_]{1,32}$/);
       expect(c.description.length).toBeGreaterThan(0);

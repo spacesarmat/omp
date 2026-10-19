@@ -128,7 +128,7 @@ export async function statusText(gh: GitHub, now: number): Promise<string> {
 }
 
 /**
- * /check: starts the monitor workflow with notify=true. A run takes 3–40 minutes and a Worker may keep working only
+ * /check: starts the monitor workflow with notify=true. A run takes 3-40 minutes and a Worker may keep working only
  * ~30 s after answering, so the workflow itself sends the table when it finishes (scripts/parser-monitor/notify.mjs).
  * Here, after the answer, the bot only looks for the new run for a few seconds and adds its link to the message.
  */

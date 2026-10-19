@@ -25,7 +25,7 @@ const EPISODE_WORD = '(?:сери[ияй]|эпизод\\S*|episodes?)';
 const SXE = new RegExp('(?:^|[^a-z0-9])s(\\d{1,2})[ ._]?e(\\d{1,4})(?:\\s*' + D + '\\s*(?:s\\d{1,2})?e?(\\d{1,4}))?' + OF, 'i');
 // 02x01-04 из 10, 03х01-08 (Cyrillic х), 02x13 из 13; the episode has 2+ digits, so the studio «2x2» is not one
 const NXN = new RegExp('(?:^|[^0-9a-z])(\\d{1,2})[xх](\\d{2,4})(?:\\s*' + D + '\\s*(\\d{1,4}))?' + OF, 'i');
-// Серии: 1-8 из 12, серии 1–10, Серия 5
+// Серии: 1-8 из 12, серии 1-10, Серия 5
 const NAMED = new RegExp('(?:сери[ия]|эпизод[ыа]?|episodes?)\\s*:?\\s*(\\d{1,4})(?![0-9pр])(?:\\s*' + D + '\\s*(\\d{1,4}))?' + OF, 'i');
 // 1-8 серии из 10, 1-10 серия
 const RANGE_WORD = new RegExp('(?:^|[^0-9])(\\d{1,4})\\s*' + D + '\\s*(\\d{1,4})\\s*' + EPISODE_WORD + OF, 'i');

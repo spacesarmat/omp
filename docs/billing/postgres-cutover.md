@@ -4,7 +4,7 @@
 
 Путь SQLite из кода удалён (PR «Billing: Postgres only»): откат на `billing.db` больше невозможен ни правкой compose, ни старым `BILLING_STORE=sqlite` (биллинг с ним не стартует). Разделы 0, 1 и «Откат» ниже - история переключения; восстановление теперь только из дампа Postgres (раздел 2). `billing.db` лежит на диске как архив, `tools/migrateToPostgres.mjs` умеет прочитать его в пустую базу.
 
-Ранбук к разделам 4–6 [плана](postgres-migration-plan.md). Все команды - на NUC в `/opt/omp-vps`, от root (`sudo -i`).
+Ранбук к разделам 4-6 [плана](postgres-migration-plan.md). Все команды - на NUC в `/opt/omp-vps`, от root (`sudo -i`).
 Сокращение: `dc` = `docker compose -f docker-compose.yml -f docker-compose.nuc.yml`.
 
 **Секреты.** Пароль Postgres живёт только в `.env` (`BILLING_PG_PASSWORD`). Не печатать его и не запускать
@@ -34,7 +34,7 @@
 docker exec omp-billing node --input-type=module -e "import { backupConfig, runDump } from '/app/src/pgBackup.mjs'; console.log(JSON.stringify(await runDump(backupConfig(process.env), Date.now())))"
 ```
 
-Частота и срок хранения - админка (`backupEveryHours` 1–168, по умолчанию 24; `backupKeepDays` 1–365, по умолчанию 30; самый свежий дамп не удаляется никогда).
+Частота и срок хранения - админка (`backupEveryHours` 1-168, по умолчанию 24; `backupKeepDays` 1-365, по умолчанию 30; самый свежий дамп не удаляется никогда).
 Планировщик в биллинге смотрит раз в 10 минут. Свежесть: `/health` → `pgBackupOk` / `pgBackupAgoSec`; дамп старше `backupEveryHours + 3 ч` (или ошибка `pg_dump`) - красное предупреждение на главной админки и одно сообщение админам в Telegram (и одно, когда снова в порядке).
 
 ## 1. Переключение на Postgres (окно ~15 минут, ночью)

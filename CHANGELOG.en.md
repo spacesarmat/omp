@@ -214,7 +214,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.0-beta.15
 
-- same as beta.13–14 (release failed: the in-app changelog window dropped 0.17.0)
+- same as beta.13-14 (release failed: the in-app changelog window dropped 0.17.0)
 
 ## 0.20.0-beta.14
 
@@ -229,7 +229,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.0-beta.12
 
-- same as beta.10–11 (release failed: billingPost type)
+- same as beta.10-11 (release failed: billingPost type)
 
 ## 0.20.0-beta.11
 
@@ -243,7 +243,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.0-beta.9
 
-- same as beta.7–8 (beta.8 had broken Cyrillic in the update notes)
+- same as beta.7-8 (beta.8 had broken Cyrillic in the update notes)
 
 ## 0.20.0-beta.8
 
@@ -296,7 +296,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] Colour keys in the player: red for dub, green for subtitles, yellow for Info, blue for the menu; the Info panel shows HDR, codec, seeds, speed, bitrate and buffer
 - [phone] The Android TV remote drives the whole box: Home, volume, menu and media keys, via Google TV Remote with the code from the screen or via network debugging
 - [phone] Rename a TV by long-pressing its name on the Remote screen
-- [tv] Release search: "Movie" / "Series · S02 · 1–8 of 8" badges and an "All / Movies / Series" filter
+- [tv] Release search: "Movie" / "Series · S02 · 1-8 of 8" badges and an "All / Movies / Series" filter
 - [phone] Release search: badges and the "All / Movies / Series" filter, and "Watch on the phone" on found releases
 - [tv] Series and release screens: the announced episodes after the last one ("S02E08 · out Oct 8"); season chips read "10 episodes · watched 1"
 - [tv] The TorrServer address has OMP's own keypad (digits, ".", ":", http://, https://) and is cleaned of TV-keyboard look-alikes; Android TV hints about a VPN when no server answers
@@ -372,7 +372,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### Dates and «Calendar»
 
-- [phone] «New» → «Calendar»: the episodes of the next 30 days by day for the series in «Mine» and subscriptions; several episodes of a day in one row «S13E07–E08»; the ones out are marked «out» - «Watch» or «Find»
+- [phone] «New» → «Calendar»: the episodes of the next 30 days by day for the series in «Mine» and subscriptions; several episodes of a day in one row «S13E07-E08»; the ones out are marked «out» - «Watch» or «Find»
 - [phone] «Discover»: dates on the tiles - «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8»; the «Digital soon» sort lists films by their digital date in the next 60 days
 - [phone] Film card: «Cinema · Digital · Disc» with dates; series card: «Upcoming episodes»; the series screen shows announced episodes as muted rows «7. Pyramid · out Oct 8»
 - [phone] A release's category is checked by itself: a series in «Films» moves to «Series», an album to «Music»
@@ -387,7 +387,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### Mine and series
 
-- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1-6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
 - [phone] «Mine»: a series' seasons are grouped into one card, by any of their names, including torrents titled only in English or with the English name after brackets («Russian name (season 3…) / Star Trek…»); different series sharing a network or a voice-over («/ AMC», «/ BBC») stay apart; the card takes its name in the interface language (English in English, Russian in Russian)
 - [phone] The torrent card is compact: poster, three lines, round ＋ and ▶TV; details, category and the full title are in a sheet on tap
 - [phone] The series screen: a TMDB backdrop, years · rating · genres, overview, seasons with episode count and year, missing seasons with «Find torrents»
@@ -441,7 +441,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] A site behind a Cloudflare check in TV search is one short sentence: sign in on the phone in «Search sources»
 - «What's new» lists only what concerns this device: TV changes on the TV, phone changes on the phone
 - [phone] «Digital soon»: films are ordered by their digital date, every tile has a date, old films show their real year
-- [phone] «Calendar»: no repeated date on the right, no placeholder names like «Episode 7», several episodes of a day in one row «S13E07–E08»
+- [phone] «Calendar»: no repeated date on the right, no placeholder names like «Episode 7», several episodes of a day in one row «S13E07-E08»
 - [phone] «Mine»: series show a clean name («Dark Matter», season and episodes on the line below), no «· 2 releases» in the name; dates everywhere as «Oct 8»
 - [phone] Series screen: episodes show the code and size without the file name; announced episodes of the season follow as muted rows «7. Pyramid · out Oct 8»
 - [phone] «Now on TV», the mini player and «Where to watch?» name the series and the episode («Dark Matter · S02E01 · Quiet Life»), not the file
@@ -483,7 +483,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## 0.17.0-beta.2
 
 - [phone] «Discover»: sorting (popular, by rating, by release date, most anticipated) and filters (genre, year, country, minimum rating); talk shows, news and reality are hidden by default; type and year under the poster, long titles neatly cut at two lines; 2, 3 or 4 posters per row
-- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1-6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
 - [phone] Two-finger zoom in «Catalog»: one step per gesture with a smooth transition - cards move to their new places and the text stays sharp
 - [phone] «Search sources»: one row style - only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; rutracker gets its site screen too (including «Send the sign-in to the TV»)
 - [phone] torrent.by works on the phone again: the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»

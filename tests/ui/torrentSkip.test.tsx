@@ -104,7 +104,7 @@ describe('TV torrent card · Пропуск', () => {
   it('status: manual marks without chapters, and without ffprobe', async () => {
     probeResult = null;
     await mount({ i: false, c: false, mi: [45, 135], mc: 90 });
-    expect(row('Заставка и титры').textContent).toContain('в файле нет глав · заставка 0:45–2:15 · титры: последние 1:30');
+    expect(row('Заставка и титры').textContent).toContain('в файле нет глав · заставка 0:45-2:15 · титры: последние 1:30');
   });
 });
 

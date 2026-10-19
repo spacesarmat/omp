@@ -26,7 +26,7 @@ function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
-/** «Серии 1–8 из 10 · 1080p · 14,1 ГБ». */
+/** «Серии 1-8 из 10 · 1080p · 14,1 ГБ». */
 function releaseLine(title: string, size: string): string {
   return [rangeText(title), qualityBadge(title), size].filter(Boolean).join(' · ') || title;
 }

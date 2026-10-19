@@ -36,7 +36,7 @@ export type SubscriptionInput = Pick<Subscription, 'query' | 'quality' | 'source
 /** subId of the findings of new episodes (not a subscription). */
 export const EPISODES_ID = 'episodes';
 
-/** New episodes of a library series: «Вышли серии 9–10 · у вас 1–8». */
+/** New episodes of a library series: «Вышли серии 9-10 · у вас 1-8». */
 export interface EpisodesInfo {
   /** Infohash of the library torrent (lowercase). */
   torrentHash: string;
