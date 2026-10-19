@@ -326,3 +326,62 @@ async function call(
   }
   return { status: res.status, headers: res.headers, data };
 }
+
+describe('pollBot: update types and the channel pin notice', () => {
+  it('asks Telegram for messages, buttons and channel posts on every poll', async () => {
+    const file = await dbFile();
+    const urls: string[] = [];
+    const fetchImpl = async (url: string) => {
+      urls.push(String(url));
+      return jsonResponse(200, { ok: true, result: [] });
+    };
+    await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW });
+    const poll = urls.find((u) => u.indexOf('/getUpdates') >= 0)!;
+    expect(decodeURIComponent(poll.split('allowed_updates=')[1])).toBe('["message","callback_query","channel_post"]');
+  });
+
+  it('deletes the «pinned a message» post of the OMP channel and nothing else', async () => {
+    const file = await dbFile();
+    const calls: Call[] = [];
+    let polled = false;
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+      if (String(url).indexOf('/getUpdates') >= 0) {
+        if (polled) return jsonResponse(200, { ok: true, result: [] });
+        polled = true;
+        return jsonResponse(200, {
+          ok: true,
+          result: [
+            { update_id: 1, channel_post: { message_id: 88, chat: { id: -1009, type: 'channel', username: 'ompplyaer' }, pinned_message: { message_id: 87 } } },
+            { update_id: 2, channel_post: { message_id: 89, chat: { id: -1009, type: 'channel', username: 'ompplyaer' }, text: 'релиз' } },
+            { update_id: 3, channel_post: { message_id: 90, chat: { id: -2000, type: 'channel', username: 'other' }, pinned_message: { message_id: 1 } } },
+          ],
+        });
+      }
+      return jsonResponse(200, { ok: true, result: true });
+    };
+    await pollBot(file, fetchImpl, { maxLoops: 2, sleep: async () => {}, now: () => NOW, channel: '@ompplyaer' });
+    const deletes = calls.filter((c) => c.url.indexOf('/deleteMessage') >= 0);
+    expect(deletes).toHaveLength(1);
+    expect(JSON.parse(deletes[0].body)).toEqual({ chat_id: -1009, message_id: 88 });
+    // the next poll confirms all three updates
+    expect(calls.filter((c) => c.url.indexOf('/getUpdates') >= 0)[1].url).toContain('offset=4');
+  });
+
+  it('an empty channel setting deletes nothing', async () => {
+    const file = await dbFile();
+    const calls: string[] = [];
+    const fetchImpl = async (url: string) => {
+      calls.push(String(url));
+      if (String(url).indexOf('/getUpdates') >= 0) {
+        return jsonResponse(200, {
+          ok: true,
+          result: [{ update_id: 1, channel_post: { message_id: 88, chat: { id: -1009, type: 'channel', username: 'ompplyaer' }, pinned_message: { message_id: 87 } } }],
+        });
+      }
+      return jsonResponse(200, { ok: true, result: true });
+    };
+    await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW, channel: '' });
+    expect(calls.filter((u) => u.indexOf('/deleteMessage') >= 0)).toHaveLength(0);
+  });
+});

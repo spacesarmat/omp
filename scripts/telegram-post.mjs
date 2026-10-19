@@ -32,8 +32,13 @@ function caller(token, doFetch) {
   };
 }
 
-/** Pins the release post silently (only the post with the description, never the files). A failure is only logged. */
-async function pinPost(call, chat, messageId, log, pause) {
+/**
+ * Pins the release post silently (only the post with the description, never the files). A failure is only logged.
+ * Telegram then adds a «… pinned a message» line to the channel; the billing bot (@OMPBILLINGBOT, ops/billing) polls
+ * this bot's updates and deletes that line. This script never polls the bot's updates and never sets a webhook: the
+ * token is the billing bot's, and a second poller would take its updates away (409) or change its allowed update types.
+ */
+async function pinPost(call, chat, messageId, log) {
   const form = new FormData();
   form.set('chat_id', chat);
   form.set('message_id', String(messageId));
@@ -42,63 +47,7 @@ async function pinPost(call, chat, messageId, log, pause) {
     await call('pinChatMessage', form);
   } catch (e) {
     log(`${e.message} (the bot needs the «pin messages» right)`);
-    return;
   }
-  await deletePinNotice(call, chat, messageId, log, pause);
-}
-
-/** Log line when the admin bot's webhook is on: the bot deletes the notice itself. */
-export const WEBHOOK_NOTICE_LOG = 'Telegram: a webhook is set (admin bot, ops/admin-bot): it deletes the pin notice, getUpdates skipped';
-
-/** True when a webhook is set for the bot: getUpdates then fails (409) and the webhook owner gets the updates. */
-async function webhookActive(call) {
-  try {
-    const info = await call('getWebhookInfo', new FormData());
-    return !!(info && info.url);
-  } catch {
-    // unknown: try getUpdates as before
-    return false;
-  }
-}
-
-/**
- * Deletes the «… pinned a message» line Telegram adds to the channel. The Bot API does not return its id, so it is
- * looked up in the bot's channel updates (the service post whose pinned_message is our post).
- * When the admin bot (ops/admin-bot, a Cloudflare Worker) has its webhook on this bot, getUpdates is unavailable: the
- * Worker receives the service post itself and deletes it, so here it only logs and returns.
- */
-async function deletePinNotice(call, chat, messageId, log, pause) {
-  if (await webhookActive(call)) {
-    log(WEBHOOK_NOTICE_LOG);
-    return;
-  }
-  for (let attempt = 0; attempt < 5; attempt++) {
-    if (attempt) await pause(1500);
-    let updates;
-    try {
-      const form = new FormData();
-      form.set('allowed_updates', JSON.stringify(['channel_post']));
-      updates = await call('getUpdates', form);
-    } catch (e) {
-      // 409 Conflict: a webhook was set in the meantime, its owner deletes the notice
-      log(/\b409\b/.test(e.message) ? WEBHOOK_NOTICE_LOG : `${e.message} (pin notice left in the channel)`);
-      return;
-    }
-    const notice = updates.map((u) => u.channel_post).find((p) => p && p.pinned_message && p.pinned_message.message_id === messageId);
-    if (updates.length) {
-      // confirm what was read so the next run does not see it again
-      const ack = new FormData();
-      ack.set('offset', String(updates[updates.length - 1].update_id + 1));
-      ack.set('allowed_updates', JSON.stringify(['channel_post']));
-      await call('getUpdates', ack).catch(() => {});
-    }
-    if (notice) {
-      await deleteMessages(call, chat, [notice.message_id], log);
-      log(`Telegram: deleted the pin notice ${notice.message_id}`);
-      return;
-    }
-  }
-  log('Telegram: pin notice not found, left in the channel');
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -184,7 +133,7 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
     postId = await sendSinglePhoto(call, chat, post);
     log(`Telegram: posted ${version}`);
   }
-  await pinPost(call, chat, postId, log, pause);
+  await pinPost(call, chat, postId, log);
 
   const failed = await sendFiles({ call, chat, replyTo: postId, tag, version, dir, log });
   if (buttons) {
@@ -343,7 +292,7 @@ export async function replacePhoto({ tag, messageId, root = '.', token, chat, fe
   form.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   await call('editMessageMedia', form);
   log(`Telegram: replaced the picture of ${version} (message ${messageId})`);
-  await pinPost(call, chat, messageId, log, pause);
+  await pinPost(call, chat, messageId, log);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

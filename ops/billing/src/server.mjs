@@ -85,6 +85,7 @@ import {
   noteGetUpdatesConflict,
 } from './botPoll.mjs';
 import { createChangelogSource } from './changelog.mjs';
+import { ALLOWED_UPDATES, channelFromEnv, pinNotice } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
@@ -1693,6 +1694,7 @@ export async function pollBot(file, fetchImpl, opts) {
   const sendTimeoutMs = (opts && opts.sendTimeoutMs) || TG_SEND_TIMEOUT_MS;
   const adminLoginOnly = !!(opts && opts.adminLoginOnly);
   const adminAuthMem = (opts && opts.adminAuthMem) || null;
+  const channel = opts && opts.channel !== undefined ? String(opts.channel) : channelFromEnv(process.env);
   /** At most one stderr line a minute for failed polls; never the URL or error text (they can carry the token). */
   const pollFailed = (kind) => {
     const line = notePollError(kind, nowFn());
@@ -1728,7 +1730,12 @@ export async function pollBot(file, fetchImpl, opts) {
       try {
         const { res, data } = await telegramCall(
           net,
-          'https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset,
+          'https://api.telegram.org/bot' +
+            token +
+            '/getUpdates?timeout=25&offset=' +
+            offset +
+            '&allowed_updates=' +
+            encodeURIComponent(JSON.stringify(ALLOWED_UPDATES)),
           {},
           pollTimeoutMs,
         );
@@ -1754,6 +1761,16 @@ export async function pollBot(file, fetchImpl, opts) {
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
         offset = u.update_id + 1;
+        if (u.channel_post) {
+          // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
+          const notice = pinNotice(u, channel);
+          if (notice) {
+            await telegramMethod(token, 'deleteMessage', { chat_id: notice.chatId, message_id: notice.messageId }, net, sendTimeoutMs).catch(
+              () => undefined,
+            );
+          }
+          continue;
+        }
         if (u.callback_query) {
           await handleCallback(file, token, u.callback_query, net, sendTimeoutMs, {
             adminLoginOnly,
