@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Telegram release post without text links: the caption holds only the change bullets, the files and the GitHub release page are buttons only (new universal APK button), no separate message linking the big files
 - [tech] One Telegram bot, @OMPBILLINGBOT, for billing and channel posts: billing requests its update types explicitly and deletes the «pinned a message» line itself; the release script no longer polls the bot
 - [tech] Parser monitor (GitHub Actions) removed together with the admin bot's /status and /check; /stats and /ci no longer show it
 - [tech] Billing: admin login works under BILLING_READONLY (in-memory sessions and tokens), /health uses backupEveryHours, a failed pg_dump sets pgBackupOk false and alerts immediately; bot deviceInfo only when showing devices.

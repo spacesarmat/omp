@@ -4,7 +4,6 @@ import {
   buildKeyboard,
   buildFiles,
   routeFiles,
-  buildLinksMessage,
   oversizeLogLine,
   escapeHtml,
   CAPTION_MAX,
@@ -23,20 +22,17 @@ describe('telegram-lib', () => {
 
   it('builds a caption with the version and the changelog lines', () => {
     const c = buildCaption('0.14.1', ['Поддержать OMP', 'Окна <выбора>']);
-    expect(c).toBe(
-      '<b>OMP 0.14.1</b>\n\n• Поддержать OMP\n• Окна &lt;выбора&gt;' +
-        '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v0.14.1">Все изменения и файлы - на GitHub</a>',
-    );
+    expect(c).toBe('<b>OMP 0.14.1</b>\n\n• Поддержать OMP\n• Окна &lt;выбора&gt;');
   });
 
-  it('keeps only the first bullets and links the release page of the tag', () => {
+  it('keeps only the first bullets and has no text links (the buttons carry them)', () => {
     const notes = Array.from({ length: 13 }, (_, i) => `Пункт ${i}`);
-    const c = buildCaption('1.0.0', notes, 'v1.0.0');
+    const c = buildCaption('1.0.0', notes);
     expect(CAPTION_NOTES_MAX).toBe(5);
     expect(c.match(/• /g)).toHaveLength(CAPTION_NOTES_MAX);
     expect(c).toContain('• Пункт 4');
     expect(c).not.toContain('Пункт 5');
-    expect(c).toMatch(/releases\/tag\/v1\.0\.0">/);
+    expect(c).not.toMatch(/<a |https?:|GitHub/);
     expect(c).not.toMatch(/README|установ/i);
   });
 
@@ -44,14 +40,12 @@ describe('telegram-lib', () => {
     const notes = Array.from({ length: 30 }, (_, i) => `Пункт ${i} `.repeat(8));
     const c = buildCaption('1.0.0', notes);
     expect(c.length).toBeLessThanOrEqual(CAPTION_MAX);
-    expect(c).toContain('на GitHub</a>');
+    expect(c).not.toContain('<a ');
     expect(c).toContain('• Пункт 0');
   });
 
   it('no user bullet: «Исправления и улучшения», never a «[tech]» one', () => {
-    const fallback =
-      '<b>OMP 1.0.1</b>\n\n• Исправления и улучшения' +
-      '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v1.0.1">Все изменения и файлы - на GitHub</a>';
+    const fallback = '<b>OMP 1.0.1</b>\n\n• Исправления и улучшения';
     expect(CAPTION_FALLBACK).toBe('Исправления и улучшения');
     expect(buildCaption('1.0.1', [])).toBe(fallback);
     expect(buildCaption('1.0.1', ['[tech] Биллинг', ' '])).toBe(fallback);
@@ -84,30 +78,25 @@ describe('telegram-lib', () => {
     expect(r.link.map((f) => f.name)).toEqual(['a', 'd']);
   });
 
-  it('names every oversize file with its GitHub link in the closing reply', () => {
-    const m = buildLinksMessage('v0.14.1', [{ name: 'OMP-0.14.1-arm64.apk' }, { name: 'OMP-0.14.1.apk' }]);
-    expect(m).toBe(
-      `Файл OMP-0.14.1-arm64.apk больше 50 МБ - скачать: ${DL}/OMP-0.14.1-arm64.apk\n` +
-        `Файл OMP-0.14.1.apk больше 50 МБ - скачать: ${DL}/OMP-0.14.1.apk`,
-    );
-  });
-
   it('logs the size in MB for a manual forward', () => {
     expect(oversizeLogLine({ name: 'OMP-0.14.1-arm64.apk', size: 67_200_000 })).toBe(
       'Telegram: OMP-0.14.1-arm64.apk is 68 MB - forward it manually from GitHub',
     );
   });
 
-  it('builds per-ABI, ipk, release and support buttons', () => {
+  it('builds per-ABI, universal, ipk, GitHub release and support buttons: a button for every build file', () => {
     const k = buildKeyboard({ tag: 'v0.14.1', version: '0.14.1', donateUrl: 'https://boosty.to/x/donate' });
-    expect(k.inline_keyboard.flat().map((b) => b.text)).toEqual(['arm64', 'armv7', 'Для LG (ipk)', 'Что нового', 'Поддержать']);
+    expect(k.inline_keyboard.flat().map((b) => b.text)).toEqual(['arm64', 'armv7', 'Универсальный', 'Для LG (ipk)', 'Что нового', 'Поддержать']);
     expect(k.inline_keyboard.flat().map((b) => b.url)).toEqual([
       `${DL}/OMP-0.14.1-arm64.apk`,
       `${DL}/OMP-0.14.1-armv7.apk`,
+      `${DL}/OMP-0.14.1.apk`,
       `${DL}/OMP-0.14.1-webOS.ipk`,
       'https://github.com/spacesarmat/omp/releases/tag/v0.14.1',
       'https://boosty.to/x/donate',
     ]);
-    expect(buildKeyboard({ tag: 'v1', version: '1' }).inline_keyboard.flat()).toHaveLength(4);
+    const urls = k.inline_keyboard.flat().map((b) => b.url);
+    for (const f of buildFiles('0.14.1')) expect(urls).toContain(`${DL}/${f}`);
+    expect(buildKeyboard({ tag: 'v1', version: '1' }).inline_keyboard.flat()).toHaveLength(5);
   });
 });
