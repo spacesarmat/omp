@@ -13,7 +13,7 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 Cloudflare DNS: A `@` and `www` → VPS IP, proxied (same as billing). SSL/TLS **Full (strict)**. Cloudflare Tunnel is not used.
 
-Caddy allows TLS 1.2 and 1.3 only (automatic certificates are unchanged) and adds the same response headers on every host: `Strict-Transport-Security: max-age=15552000; includeSubDomains` (no preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and removes `Server`. Apply a Caddyfile change with `caddy reload` (the file is bind-mounted). HEAD/OPTIONS behaviour is in the billing image, so that container needs a new image before a restart picks it up.
+Caddy allows TLS 1.2 and 1.3 only (automatic certificates are unchanged) and adds the same response headers on every host: `Strict-Transport-Security: max-age=15552000; includeSubDomains` (no preload), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (except the landing, see Yandex.Metrika below), `Referrer-Policy: strict-origin-when-cross-origin`, and removes `Server`. Apply a Caddyfile change with `caddy reload` (the file is bind-mounted). HEAD/OPTIONS behaviour is in the billing image, so that container needs a new image before a restart picks it up.
 
 JacRed syncs from `https://sync.jacred.stream` (`syncapi`). `jacred/init.yaml` sets `syncsport: false`, `syncspidr: false`, and `timeSync: 120`. Spidr is off because it pulled torrents far beyond the 16 `synctrackers`. That list is a 16-tracker subset of the jacred-fdb defaults ([`Data/init.yaml`](https://github.com/immisterio/jacred-fdb/blob/main/Data/init.yaml); the image is `ghcr.io/jacred-fdb/jacred`), trimmed for a 2 GB VPS. FileDB change logging stays on (`logFdb: true`) and is capped at `logFdbRetentionDays: 1`, `logFdbMaxSizeMb: 500`, and `logFdbMaxFiles: 3`, after the log grew to 11 GB in an hour. `tracks` is `false`, so JacRed does not ffprobe TorrServer at `http://torrserver:8090`; that saves RAM. `apikey` and `devkey` stay `change-me` in git. Watch memory after sync starts and trim `synctrackers` if the box is still tight.
 
@@ -47,6 +47,12 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 - `warp-tunnel` is a separate WARP used only by the `cloudflared` connectors: the home ISP breaks Cloudflare Tunnel edge connections. Host traffic and Jackett/JacRed (via `warp`) are not routed through it.
 - `cloudflared` runs tunnel `omp-nuc` (omp-player.online, www, billing, jackett, jacred -> `http://nuc-caddy:80`); `cloudflared-home-nas` is a replica connector for tunnel `home-nas` (music.omp-player.online -> NAS `192.168.1.191:8880`). Ingress is managed in Cloudflare.
 - Tokens live only in `tunnel.env` and `tunnel-home-nas.env` (root, mode 600, see `tunnel.env.example`); they are git-ignored.
+
+## Yandex.Metrika on the landing
+
+`site/index.html` and `site/en/index.html` carry counter 113673968 (inline script in `<head>`, noscript pixel at the start of `<body>`). The landing CSP in `Caddyfile` and `Caddyfile.nuc` allows that inline script by its `sha256` and allows `mc.yandex.ru`, `mc.yandex.com`, and `yastatic.net` (scripts, hits, pixels, Webvisor frames). Any edit to the inline script needs a new hash in both Caddyfiles; `test/metrika.test.ts` fails until they match. Billing, Jackett, and JacRed have no counter. The landing sends no `X-Frame-Options` (it cannot list hosts); its CSP `frame-ancestors` allows `self` and the Metrika interface hosts from Yandex's CSP guide, so click and link maps can frame it. The other hosts keep `X-Frame-Options DENY`.
+
+On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy it over the existing file in place (`cp`, not `mv` or `rsync`, so the single-file bind mount keeps the same inode), reload Caddy, then copy `site/`.
 
 ## Emergency admin login
 

@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const text = readFileSync('ops/vps/Caddyfile', 'utf8');
-const snippet = text.slice(text.indexOf('(security_headers)'), text.indexOf('# Project landing page'));
+const snippet = text.slice(text.indexOf('(security_headers_common)'), text.indexOf('# Project landing page'));
+const common = snippet.slice(0, snippet.indexOf('(security_headers)'));
+const deny = snippet.slice(snippet.indexOf('(security_headers)'));
 
 describe('Caddyfile security headers', () => {
   it('sets the exact HSTS policy once, with no preload, and deletes Server on its own', () => {
@@ -10,7 +12,9 @@ describe('Caddyfile security headers', () => {
     expect(hsts).toEqual(['Strict-Transport-Security "max-age=15552000; includeSubDomains"']);
     expect(text.toLowerCase()).not.toContain('preload');
     expect(snippet).toContain('X-Content-Type-Options nosniff');
-    expect(snippet).toContain('X-Frame-Options DENY');
+    expect(common).not.toContain('X-Frame-Options');
+    expect(deny).toContain('import security_headers_common');
+    expect(deny).toMatch(/^\s*header X-Frame-Options DENY$/m);
     expect(snippet).toContain('Referrer-Policy strict-origin-when-cross-origin');
     expect(snippet).toMatch(/^\s*header -Server$/m);
     expect(snippet).not.toMatch(/header\s*\{[^}]*-Server/s);
@@ -26,7 +30,16 @@ describe('Caddyfile security headers', () => {
     ]) {
       expect(text).toContain(host);
     }
-    expect(text.match(/import security_headers/g)).toHaveLength(8);
+    // The landing (2 imports) takes the common headers only; the 3 other sites
+    // keep X-Frame-Options DENY on responses and errors.
+    expect(text.match(/import security_headers_common$/gm)).toHaveLength(3);
+    expect(text.match(/import security_headers$/gm)).toHaveLength(6);
+    const landing = text.slice(text.indexOf('# Project landing page'), text.indexOf('billing.omp-player.online {'));
+    expect(landing.match(/import security_headers_common$/gm)).toHaveLength(2);
+    expect(landing).not.toMatch(/import security_headers$/m);
+    const rest = text.slice(text.indexOf('billing.omp-player.online {'));
+    expect(rest.match(/import security_headers$/gm)).toHaveLength(6);
+    expect(rest).not.toContain('security_headers_common');
     expect(text.match(/handle_errors \{/g)).toHaveLength(4);
   });
 
