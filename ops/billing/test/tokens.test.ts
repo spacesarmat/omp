@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ import {
   createSubscription,
   deviceCode,
   ensureTelegramAccount,
+  nextBoundAt,
   revokeCode,
 } from '../src/logic.mjs';
 import {
@@ -543,6 +544,36 @@ describe('revoke works against the registry', () => {
     await updateState(t.file, (st: State) => selfUnbind(st, { accountId: t.accountId, deviceIds: [DEV_A], now: Date.now() }));
     expect((await search(t.app, t.legacy, DEV_A)).status).toBe(403);
     expect(t.db.prepare('SELECT revoke_reason FROM devices WHERE code_id = ?').get(t.codeId)).toMatchObject({ revoke_reason: 'unbound' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('an unbind and a rebind of the same phone in the same millisecond still give an active row (no 403 revoked)', async () => {
+    const t = await setup();
+    const pair = await pairFor(t, DEV_B);
+    const oldRow = activeRowForCode(t.db, pair.codeId);
+    // Freeze the clock at the binding's own millisecond: revoke and the new activation share boundAt's ms.
+    const bound = readState(t.file).codes.find((c: { id: string }) => c.id === pair.codeId).boundAt;
+    vi.spyOn(Date, 'now').mockReturnValue(bound);
+    await updateState(t.file, (st: State) => revokeDevice(st, { accountId: t.accountId, codeId: pair.codeId, now: Date.now(), actor: ADMIN }));
+    const fresh = readState(t.file).codes.find((c: { id: string }) => c.id === pair.codeId);
+    expect(fresh.lastBoundAt).toBe(bound);
+    const again = await call(t.app, 'POST', '/v1/activate', { body: { code: fresh.plain, deviceId: DEV_B, tokens: 'pair' } });
+    expect(again.status).toBe(200);
+    const newRow = activeRowForCode(t.db, pair.codeId);
+    expect(newRow.id).not.toBe(oldRow.id);
+    expect(newRow.bound_at).toBe(bound + 1);
+    expect((await search(t.app, String(again.data.accessToken), DEV_B)).status).toBe(200);
+    expect(await search(t.app, pair.accessToken, DEV_B)).toMatchObject({ status: 401, data: { error: 'revoked' } });
+  });
+
+  it('nextBoundAt: now, or one past the previous binding of the slot (clock equal or behind)', () => {
+    expect(nextBoundAt({}, 1000)).toBe(1000);
+    expect(nextBoundAt({ lastBoundAt: 999 }, 1000)).toBe(1000);
+    expect(nextBoundAt({ lastBoundAt: 1000 }, 1000)).toBe(1001);
+    expect(nextBoundAt({ lastBoundAt: 1500 }, 1000)).toBe(1501);
   });
 
   it('a rebind of the same slot gets a new registry row; old tokens of the slot stay dead', async () => {

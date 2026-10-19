@@ -8,7 +8,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { activate, createSubscription, deviceCode, ensureTelegramAccount, revokeCode } from '../src/logic.mjs';
+import { activate, createSubscription, deviceCode, ensureTelegramAccount, revokeCode, unbindCode } from '../src/logic.mjs';
 import { emptyState, normalizeState } from '../src/state.mjs';
 import { openStore, storeEngine, toStore } from '../src/db/index.mjs';
 import { createApp } from '../src/server.mjs';
@@ -324,6 +324,24 @@ for (const engine of engines) {
       expect((await reg.refreshPair(secret, { refreshToken: upgraded.refreshToken, deviceId: DEV_A, now: now + 8000 })).error).toBe('revoked');
       expect((await reg.verifyAccess(secret, upgraded.accessToken, DEV_A, now + 8000)).error).toBe('revoked');
       expect(await reg.revokeRow(row.id, 'again', now)).toBe(false);
+    });
+
+    it('a same-millisecond unbind + rebind of one phone keeps an active registry row', async () => {
+      const { store } = await engine.open();
+      const now = Date.now();
+      const rich = richState(now);
+      await store.update(() => ({ state: rich.state }));
+      const before = await store.registry.activeRowForCode(rich.codeId);
+      const bound = (await store.read()).codes.find((c: { id: string }) => c.id === rich.codeId).boundAt;
+      await store.update((s: State) => ({ state: unbindCode(s, rich.codeId) }));
+      expect(await store.registry.activeRowForCode(rich.codeId)).toBeNull();
+      const plain = (await store.read()).codes.find((c: { id: string }) => c.id === rich.codeId).plain;
+      const res = await store.update((s: State) => activate(s, { code: plain, deviceId: DEV_A, now: bound, legacy: false }));
+      expect(res.codeId).toBe(rich.codeId);
+      const row = await store.registry.activeRowForCode(rich.codeId);
+      expect(row).not.toBeNull();
+      expect(row.id).not.toBe(before.id);
+      expect(row.bound_at).toBe(bound + 1);
     });
 
     it('HTTP: activate with a pair, search, refresh, legacy upgrade and an unbind work through createApp(store)', async () => {
