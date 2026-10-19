@@ -33,8 +33,9 @@ describe('Caddyfile security headers', () => {
     // The landing (2 imports) takes the common headers only; the 3 other sites
     // keep X-Frame-Options DENY on responses and errors.
     expect(text.match(/import security_headers_common$/gm)).toHaveLength(3);
-    expect(text.match(/import security_headers$/gm)).toHaveLength(6);
-    const landing = text.slice(text.indexOf('# Project landing page'), text.indexOf('billing.omp-player.online {'));
+    // 6 on billing/Jackett/JacRed, 1 on the www redirect.
+    expect(text.match(/import security_headers$/gm)).toHaveLength(7);
+    const landing = text.slice(text.indexOf('\nomp-player.online {'), text.indexOf('www.omp-player.online {'));
     expect(landing.match(/import security_headers_common$/gm)).toHaveLength(2);
     expect(landing).not.toMatch(/import security_headers$/m);
     const rest = text.slice(text.indexOf('billing.omp-player.online {'));
@@ -43,17 +44,17 @@ describe('Caddyfile security headers', () => {
     expect(text.match(/handle_errors \{/g)).toHaveLength(4);
   });
 
-  it('rewrites /en and /en/ to the English page before the Russian fallback', () => {
-    const landing = text.slice(text.indexOf('omp-player.online, www'), text.indexOf('billing.omp-player.online'));
+  it('rewrites /en and /en/ to the English page before file_server', () => {
+    const landing = text.slice(text.indexOf('\nomp-player.online {'), text.indexOf('www.omp-player.online {'));
     expect(landing).toContain('@en path /en /en/');
     expect(landing).toContain('rewrite @en /en/index.html');
-    expect(landing.indexOf('rewrite @en')).toBeLessThan(landing.indexOf('try_files {path} /index.html'));
+    expect(landing.indexOf('rewrite @en')).toBeLessThan(landing.indexOf('file_server'));
   });
 
   it('pins TLS 1.2+ on every site and does not name a certificate', () => {
     const tls = text.slice(text.indexOf('(tls_protocols)'), text.indexOf('(security_headers)'));
     const block = tls.slice(tls.indexOf('tls {'), tls.indexOf('}') + 1);
     expect(block.replace(/\s+/g, ' ').trim()).toBe('tls { protocols tls1.2 tls1.3 }');
-    expect(text.match(/import tls_protocols/g)).toHaveLength(4);
+    expect(text.match(/import tls_protocols/g)).toHaveLength(5);
   });
 });
