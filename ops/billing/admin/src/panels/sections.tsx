@@ -12,7 +12,7 @@ import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
 import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
-import type { BackupStatus, HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
+import type { BackupStatus, HomeData, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
 
 export { HomeFeed } from '@/panels/EventFeed';
 
@@ -561,6 +561,24 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
   },
 ];
 
+/** Secrets are read-only in the panel: they live in the server's .env. */
+const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
+
+/** One read-only secret: «задан ✅, ****abcd» or «не задан», and where it changes. */
+function SecretField({ name, label, view, fallback }: { name: string; label: string; view?: SecretView; fallback?: string }) {
+  const text = view ? view.text : fallback || 'не задан';
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={name}>{label}</Label>
+      <Input id={name} value={text} readOnly disabled />
+      <p className="text-xs text-muted-foreground">
+        Меняется на сервере: {view ? view.env : 'переменная'} в .env, затем перезапуск billing.
+        {view && view.source === 'db' ? <span className="text-destructive"> Сейчас ещё в базе - перенесите в .env.</span> : null}
+      </p>
+    </div>
+  );
+}
+
 /** Last dump, its size and freshness; «not configured» when the server has no BILLING_PG_BACKUP_DIR. */
 export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
   if (!backup || !backup.enabled) return <CardDescription>Бэкапы Postgres на этом сервере не настроены (нет BILLING_PG_BACKUP_DIR).</CardDescription>;
@@ -582,11 +600,13 @@ export function SettingsCard({
   settings,
   storage,
   backup,
+  secrets,
 }: {
   run: Run;
   settings: Record<string, string | number | boolean>;
   storage?: HomeData['storage'];
   backup?: HomeData['backup'];
+  secrets?: SecretView[];
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
@@ -596,7 +616,7 @@ export function SettingsCard({
   useEffect(() => {
     const o: Record<string, string> = {};
     for (const group of SETTING_GROUPS) {
-      for (const [k] of group.fields) o[k] = String(settings[k] ?? '');
+      for (const [k] of group.fields) if (!SECRET_KEYS.has(k)) o[k] = String(settings[k] ?? '');
     }
     setForm(o);
     setNotify(settings.adminNotify !== false);
@@ -631,12 +651,16 @@ export function SettingsCard({
             {group.title === 'Бэкапы Postgres' ? <BackupLine backup={backup} /> : null}
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            {group.fields.map(([name, label]) => (
-              <div key={name} className="space-y-1">
-                <Label htmlFor={name}>{label}</Label>
-                <Input id={name} value={form[name] || ''} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />
-              </div>
-            ))}
+            {group.fields.map(([name, label]) =>
+              SECRET_KEYS.has(name) ? (
+                <SecretField key={name} name={name} label={label} view={(secrets || []).find((v) => v.key === name)} fallback={String(settings[name] ?? '')} />
+              ) : (
+                <div key={name} className="space-y-1">
+                  <Label htmlFor={name}>{label}</Label>
+                  <Input id={name} value={form[name] || ''} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />
+                </div>
+              ),
+            )}
             {group.title === 'Бот' ? (
               <label className="flex items-center gap-2 text-sm md:col-span-2">
                 <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
@@ -704,22 +728,22 @@ function HealthBadge({ row, checking }: { row?: ServiceProbe; checking?: boolean
 export function ServicesCard({
   csrf,
   settings,
+  secrets,
   onSaved,
 }: {
   csrf: string;
   settings: Record<string, string | number | boolean>;
+  secrets?: SecretView[];
   onSaved: () => void;
 }) {
+  const secretView = (key: string) => (secrets || []).find((v) => v.key === key);
   const [form, setForm] = useState({
     jackettUrl: String(settings.jackettUrl ?? ''),
-    jackettApiKey: String(settings.jackettApiKey ?? ''),
     jackettEnabled: settings.jackettEnabled !== false,
     jacredUrl: String(settings.jacredUrl ?? ''),
-    jacredApiKey: String(settings.jacredApiKey ?? ''),
     jacredEnabled: settings.jacredEnabled !== false,
     torrserverUrl: String(settings.torrserverUrl ?? ''),
     indexerUser: String(settings.indexerUser ?? ''),
-    indexerPass: String(settings.indexerPass ?? ''),
   });
   const [services, setServices] = useState<ServicesPayload | null>(null);
   const [botPoll, setBotPoll] = useState<BotPollView | null>(null);
@@ -730,14 +754,11 @@ export function ServicesCard({
   useEffect(() => {
     setForm({
       jackettUrl: String(settings.jackettUrl ?? ''),
-      jackettApiKey: String(settings.jackettApiKey ?? ''),
       jackettEnabled: settings.jackettEnabled !== false,
       jacredUrl: String(settings.jacredUrl ?? ''),
-      jacredApiKey: String(settings.jacredApiKey ?? ''),
       jacredEnabled: settings.jacredEnabled !== false,
       torrserverUrl: String(settings.torrserverUrl ?? ''),
       indexerUser: String(settings.indexerUser ?? ''),
-      indexerPass: String(settings.indexerPass ?? ''),
     });
   }, [settings]);
 
@@ -829,20 +850,20 @@ export function ServicesCard({
       <Card>
         <CardHeader>
           <CardTitle>Настройки сервисов</CardTitle>
-          <CardDescription>Пустой или замаскированный секрет не перезаписывает текущий.</CardDescription>
+          <CardDescription>Ключи и пароль - только для чтения: они в .env на сервере.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={(e) => void save(e)}>
             <div className="grid gap-3 md:grid-cols-2">
               <Field id="jackettUrl" label="Адрес Jackett" value={form.jackettUrl} onChange={(v) => setForm({ ...form, jackettUrl: v })} placeholder="http://jackett:9117" />
-              <Field id="jackettApiKey" label="Ключ API Jackett" value={form.jackettApiKey} onChange={(v) => setForm({ ...form, jackettApiKey: v })} placeholder="••••••••" />
+              <SecretField name="jackettApiKey" label="Ключ API Jackett" view={secretView('jackettApiKey')} fallback={String(settings.jackettApiKey ?? '')} />
               <Check label="Jackett доступен подписчикам" checked={form.jackettEnabled} onChange={(v) => setForm({ ...form, jackettEnabled: v })} />
               <Field id="jacredUrl" label="Адрес JacRed" value={form.jacredUrl} onChange={(v) => setForm({ ...form, jacredUrl: v })} placeholder="http://jacred:9117" />
-              <Field id="jacredApiKey" label="Ключ API JacRed" value={form.jacredApiKey} onChange={(v) => setForm({ ...form, jacredApiKey: v })} placeholder="••••••••" />
+              <SecretField name="jacredApiKey" label="Ключ API JacRed" view={secretView('jacredApiKey')} fallback={String(settings.jacredApiKey ?? '')} />
               <Check label="JacRed доступен подписчикам" checked={form.jacredEnabled} onChange={(v) => setForm({ ...form, jacredEnabled: v })} />
               <Field id="torrserverUrl" label="Адрес TorrServer (только мониторинг)" value={form.torrserverUrl} onChange={(v) => setForm({ ...form, torrserverUrl: v })} placeholder="http://torrserver:8090" wide />
               <Field id="indexerUser" label="Логин basic-авторизации" value={form.indexerUser} onChange={(v) => setForm({ ...form, indexerUser: v })} placeholder="omp" />
-              <Field id="indexerPass" label="Пароль basic-авторизации" value={form.indexerPass} onChange={(v) => setForm({ ...form, indexerPass: v })} placeholder="••••••••" />
+              <SecretField name="indexerPass" label="Пароль basic-авторизации" view={secretView('indexerPass')} fallback={String(settings.indexerPass ?? '')} />
             </div>
             {err ? <Alert variant="destructive">{err}</Alert> : null}
             <Button type="submit" disabled={busy}>

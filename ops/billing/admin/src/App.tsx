@@ -254,10 +254,10 @@ export function App() {
           <AuditPanel />
         </TabsContent>
         <TabsContent value="settings">
-          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} />
+          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
         </TabsContent>
         <TabsContent value="services">
-          <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} onSaved={() => void reload()} />
+          <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>
         <TabsContent value="security">
           <SecurityCard run={run} sessions={d.sessions || []} sessionId={d.sessionId || ''} />

@@ -143,6 +143,8 @@ export function homePayload(state, file, opts) {
     // Postgres dumps: null when BILLING_PG_BACKUP_DIR is not set (file names and sizes only, no paths with secrets).
     backup: (opts && opts.backup) || null,
     readOnly: !!(opts && opts.readOnly),
+    // Secrets live in the server's .env: label, .env name, «задан ✅, ****abcd» and the source; never a value.
+    secrets: (opts && opts.secrets) || [],
   };
 }
 

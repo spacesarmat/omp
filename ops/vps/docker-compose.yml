@@ -57,6 +57,14 @@ services:
       BILLING_LINK_CLEAR_REQUIRE_TOKEN: ${BILLING_LINK_CLEAR_REQUIRE_TOKEN:-0}
       # HMAC key for device access tokens (set in .env, 32+ chars; empty = key kept in billing.db).
       BILLING_TOKEN_SECRET: ${BILLING_TOKEN_SECRET:-}
+      # Secrets live only in .env (the panel shows them read-only): bot token, YooMoney secret, SMTP password,
+      # indexer keys. Empty = the old value in the database settings is used until it is moved.
+      BILLING_BOT_TOKEN: ${BILLING_BOT_TOKEN:-}
+      BILLING_YOOMONEY_SECRET: ${BILLING_YOOMONEY_SECRET:-}
+      BILLING_SMTP_PASS: ${BILLING_SMTP_PASS:-}
+      BILLING_JACKETT_API_KEY: ${BILLING_JACKETT_API_KEY:-}
+      BILLING_JACRED_API_KEY: ${BILLING_JACRED_API_KEY:-}
+      BILLING_INDEXER_PASS: ${BILLING_INDEXER_PASS:-}
       # 0 = refuse the old long-lived device tokens (apps before the token update). Leave 1 for now.
       BILLING_LEGACY_TOKENS: ${BILLING_LEGACY_TOKENS:-1}
       TZ: ${TZ:-Europe/Moscow}

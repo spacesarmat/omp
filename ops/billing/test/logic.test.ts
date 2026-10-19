@@ -787,18 +787,18 @@ describe('telegram nickname', () => {
 });
 
 describe('services settings', () => {
-  it('masks secrets in the admin payload and keeps them on save', () => {
+  it('masks secrets in the admin payload; the form cannot change them', () => {
     const cur = emptyState().settings;
     cur.jackettApiKey = 'secret-key';
     cur.indexerPass = 'pass';
     cur.jackettUrl = 'http://jackett:9117';
     const pub = publicAdminSettings(cur);
-    expect(pub.jackettApiKey).toBe(SECRET_MASK);
-    expect(pub.indexerPass).toBe(SECRET_MASK);
+    expect(pub.jackettApiKey).toBe('задан ✅, ****');
+    expect(pub.indexerPass).toBe('задан ✅, ****');
     expect(pub.jackettUrl).toBe('http://jackett:9117');
     expect(keepSecret(SECRET_MASK, 'secret-key')).toBe('secret-key');
     const next = mergeSettings(cur, {
-      jackettApiKey: SECRET_MASK,
+      jackettApiKey: 'typed-new-key',
       jackettEnabled: 'false',
       jacredEnabled: 'true',
       torrserverUrl: 'http://torrserver:8090',
