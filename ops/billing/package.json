@@ -9,6 +9,7 @@
     "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts"
   },
   "dependencies": {
-    "nodemailer": "^7.0.6"
+    "nodemailer": "^7.0.6",
+    "pg": "8.23.1"
   }
 }

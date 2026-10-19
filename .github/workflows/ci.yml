@@ -82,6 +82,21 @@ jobs:
   # check can be required on pull requests to main. The suite is small, so it runs on every CI event.
   billing:
     runs-on: ubuntu-latest
+    # The store contract tests run on SQLite and on this Postgres (throwaway credentials, CI only).
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: billing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d billing_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -98,6 +113,9 @@ jobs:
       - name: Billing tests
         working-directory: ops/billing
         run: npm test
+        env:
+          BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test
+          BILLING_TEST_REQUIRE_PG: '1'
       - name: Admin typecheck
         working-directory: ops/billing/admin
         run: npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json
