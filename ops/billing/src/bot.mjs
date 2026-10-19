@@ -272,6 +272,42 @@ export function renewalText(state, subRow, sub, now) {
 }
 
 /**
+ * One-time notice when access is over (the grace period ended, or the subscription with graceDays 0).
+ * After the grace period extra slots have lapsed too, so the renewal is the base price; a lapsed
+ * slot is listed with its monthly price and comes back through «Код» after renewal.
+ */
+function graceEndMessage(state, row, subRow, grace, now) {
+  const lines = [
+    grace > 0
+      ? 'Льготный период закончился — поиск в OMP отключён.'
+      : 'Подписка OMP закончилась — поиск отключён.',
+  ];
+  const quote = subRow ? renewalPrice(state, subRow, now) : null;
+  // Slots that ran with this subscription and lapsed with it (not ones dropped in an earlier cycle).
+  const withSub = subRow && (Number(subRow.extraUntil) || 0) >= (Number(subRow.paidUntil) || 0);
+  const lapsed = withSub ? Math.max(0, Math.floor(Number(subRow.extraSlots) || 0) - (quote ? quote.extras : 0)) : 0;
+  if (quote && quote.base > 0) {
+    let price = 'Продлите подписку, чтобы продолжить: ' + rub(quote.total) + ' на ' + quote.days + ' дн.';
+    if (quote.extras > 0) price += ' (подписка ' + rub(quote.base) + ' + доп. устройство ' + rub(quote.extraRub) + ' × ' + quote.extras + ').';
+    lines.push(price);
+    if (lapsed > 0 && quote.extraRub > 0) {
+      lines.push(
+        'Доп. устройство × ' + lapsed + ' тоже отключено: после продления верните его кнопкой «Код» — ещё ' + rub(quote.extraRub) + ' в месяц за каждое.',
+      );
+    }
+  } else {
+    lines.push('Продлите подписку, чтобы продолжить.');
+  }
+  lines.push('Нажмите «Продлить» — ссылка на оплату придёт в этот чат.');
+  return {
+    chatId: String(row.telegramId),
+    text: lines.join('\n'),
+    keyboard: mainKeyboard(),
+    inline: { inline_keyboard: [[{ text: 'Продлить', url: botDeepLink(state.settings, 'renew') }]] },
+  };
+}
+
+/**
  * Telegram reminder before / on the expiry day. `row` comes from dueReminders.
  * @returns {{ chatId, text, keyboard, inline }}
  */
@@ -280,6 +316,7 @@ export function reminderMessage(state, row, now) {
   const grace = graceDays(state.settings);
   const until = row.paidUntil;
   const accessEnd = until + grace * 86400000;
+  if (row.kind === 'end') return graceEndMessage(state, row, subRow, grace, now);
   let head = '';
   if (row.kind === 'd3') head = 'Подписка OMP заканчивается через 3 дня — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
   else if (row.kind === 'd1') head = 'Подписка OMP заканчивается завтра — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';

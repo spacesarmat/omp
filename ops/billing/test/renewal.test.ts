@@ -13,6 +13,7 @@ import {
   createSubscription,
   deviceLimitNow,
   dueReminders,
+  END_WINDOW_MS,
   grantDays,
   graceDays,
   issueActivation,
@@ -431,10 +432,10 @@ describe('renewal reminders', () => {
     expect(dueReminders(f.state, msk('2026-10-23T10:00:00')).map((r: { kind: string }) => r.kind)).toEqual(['d0']);
     const noTg = { ...f.state, accounts: f.state.accounts.map((a: object) => ({ ...a, telegramId: '' })) } as State;
     expect(dueReminders(noTg, msk('2026-10-23T10:00:00'))).toEqual([]);
-    // Fully lapsed (after grace): no expiry-day reminder is left.
+    // Fully lapsed (graceDays 0): no expiry-day reminder is left, only the «end» notice.
     const gone = expiringAt(msk('2026-10-25T00:30:00'));
     gone.state.settings.graceDays = 0;
-    expect(dueReminders(gone.state, msk('2026-10-25T10:00:00'))).toEqual([]);
+    expect(dueReminders(gone.state, msk('2026-10-25T10:00:00')).map((r: { kind: string }) => r.kind)).toEqual(['end']);
   });
 
   it('a failed send is freed for a retry, up to REMINDER_TRIES', () => {
@@ -448,6 +449,93 @@ describe('renewal reminders', () => {
       state = releaseReminder(state, row);
     }
     expect(dueReminders(state, at)).toEqual([]);
+  });
+});
+
+describe('grace end notice', () => {
+  const kinds = (state: State, iso: string) => dueReminders(state, msk(iso)).map((r: { kind: string }) => r.kind);
+
+  it('comes from 10:00 MSK when grace ended in the night, until the end of that day', () => {
+    // paidUntil 22.10 02:00 MSK → grace ends 25.10 02:00 MSK.
+    const f = expiringAt(msk('2026-10-22T02:00:00'));
+    expect(kinds(f.state, '2026-10-25T01:59:59')).toEqual([]);
+    expect(kinds(f.state, '2026-10-25T02:00:00')).toEqual([]);
+    expect(kinds(f.state, '2026-10-25T09:59:59')).toEqual([]);
+    expect(kinds(f.state, '2026-10-25T10:00:00')).toEqual(['end']);
+    expect(kinds(f.state, '2026-10-25T23:59:59')).toEqual(['end']);
+    expect(kinds(f.state, '2026-10-26T00:00:00')).toEqual([]);
+    expect(kinds(f.state, '2026-10-27T10:00:00')).toEqual([]);
+  });
+
+  it('comes right away when grace ended after 10:00 MSK, and not a millisecond before', () => {
+    const f = expiringAt(msk('2026-10-22T15:30:00'));
+    expect(kinds(f.state, '2026-10-25T15:29:59')).toEqual([]);
+    expect(kinds(f.state, '2026-10-25T15:30:00')).toEqual(['end']);
+    // A 23:50 end is not lost to the 10-minute tick: it stays due for END_WINDOW_MS.
+    const late = expiringAt(msk('2026-10-22T23:50:00'));
+    const end = msk('2026-10-25T23:50:00');
+    expect(dueReminders(late.state, end + END_WINDOW_MS - 1).map((r: { kind: string }) => r.kind)).toEqual(['end']);
+    expect(dueReminders(late.state, end + END_WINDOW_MS)).toEqual([]);
+  });
+
+  it('is sent once per expiry date and starts over after a renewal', () => {
+    const f = expiringAt(msk('2026-10-22T15:30:00'));
+    const at = msk('2026-10-25T16:00:00');
+    const row = dueReminders(f.state, at)[0];
+    const marked = markReminder(f.state, { ...row, now: at });
+    expect(dueReminders(marked, at + HOUR)).toEqual([]);
+    const q = quotePurchase(marked, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: at + 2 * HOUR });
+    const renewed = pay(q.state, q.result.label, '150', at + 2 * HOUR, 'op-after').state as State;
+    const sub = subOf(renewed, f.sub);
+    expect(sub.paidUntil).toBe(at + 2 * HOUR + 30 * DAY);
+    expect(dueReminders(renewed, at + 3 * HOUR)).toEqual([]);
+    // The next cycle gets its own end notice.
+    const nextEnd = sub.paidUntil + 3 * DAY;
+    expect(dueReminders(renewed, nextEnd).map((r: { kind: string }) => r.kind)).toEqual(['end']);
+  });
+
+  it('text: grace ended, price, the lapsed extra slot and a «Продлить» button', () => {
+    const f = threeDevices(); // paidUntil 18.11 03:00 MSK, extra slot until the same date
+    const at = msk('2026-11-21T10:00:00');
+    const rows = dueReminders(f.state, at);
+    expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['end']);
+    const msg = reminderMessage(f.state, rows[0], at);
+    expect(msg.text).toBe(
+      'Льготный период закончился — поиск в OMP отключён.\n' +
+        'Продлите подписку, чтобы продолжить: 150 ₽ на 30 дн.\n' +
+        'Доп. устройство × 1 тоже отключено: после продления верните его кнопкой «Код» — ещё 50 ₽ в месяц за каждое.\n' +
+        'Нажмите «Продлить» — ссылка на оплату придёт в этот чат.',
+    );
+    expect(msg.inline.inline_keyboard[0][0]).toEqual({ text: 'Продлить', url: 'https://t.me/OMPBILLINGBOT?start=renew' });
+    // A slot still paid past the end (renewed separately) stays in the price.
+    const longer = withSub(f.state, f.sub, { extraUntil: msk('2026-12-01T00:00:00') });
+    const t2 = reminderMessage(longer, dueReminders(longer, at)[0], at).text;
+    expect(t2).toContain('200 ₽ на 30 дн. (подписка 150 ₽ + доп. устройство 50 ₽ × 1).');
+    expect(t2).not.toContain('тоже отключено');
+    const plain = expiringAt(msk('2026-11-18T03:00:00'));
+    plain.state.settings.graceDays = 0;
+    const p = reminderMessage(plain.state, dueReminders(plain.state, msk('2026-11-18T10:00:00'))[0], msk('2026-11-18T10:00:00'));
+    expect(p.text).toContain('Подписка OMP закончилась — поиск отключён.');
+  });
+
+  it('the runner sends it once, and not on a BILLING_BOT_POLL=0 copy', async () => {
+    const f = expiringAt(msk('2026-10-22T15:30:00'));
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-pr2-')), 'billing.db');
+    writeState(file, f.state);
+    const sent: { text: string }[] = [];
+    const net = async (url: string, init?: { body?: string }) => {
+      if (String(url).indexOf('/sendMessage') >= 0 && init && init.body) sent.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '', headers: {}, arrayBuffer: async () => new ArrayBuffer(0) };
+    };
+    const clock = () => msk('2026-10-25T16:00:00');
+    const stopOff = startReminders(file, net, { env: { BILLING_BOT_POLL: 'off' }, firstMs: 1, everyMs: 5, now: clock });
+    await new Promise((r) => setTimeout(r, 40));
+    stopOff();
+    expect(sent).toHaveLength(0);
+    expect(await runReminders(file, net, clock())).toEqual({ sent: 1, failed: 0 });
+    expect(await runReminders(file, net, clock() + 10 * 60 * 1000)).toEqual({ sent: 0, failed: 0 });
+    expect(sent[0].text).toContain('Льготный период закончился');
+    expect(readState(file).subscriptions[0].reminders.sent.end).toBe(clock());
   });
 });
 

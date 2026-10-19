@@ -1844,6 +1844,8 @@ export function mskDateTime(ms) {
 export const REMINDER_OFFSETS = { d3: 3, d1: 1, d0: 0 };
 /** A reminder goes out from 10:00 MSK on its day until the end of that day; a missed day is skipped. */
 export const REMINDER_HOUR = 10;
+/** The «grace ended» notice stays due at least this long after its time, so a 23:59 end is not missed. */
+export const END_WINDOW_MS = 60 * 60 * 1000;
 /** Telegram failures before a reminder is given up for this expiry date. */
 export const REMINDER_TRIES = 3;
 
@@ -1852,7 +1854,8 @@ export const REMINDER_TRIES = 3;
  * Only accounts with Telegram, only their main subscription (the one that lasts longest).
  * A reminder whose time came before the subscription was last extended or created is skipped,
  * so a 1-day promo does not get «завтра» right after it was taken.
- * @returns {{ subscriptionId, accountId, telegramId, kind: 'd3'|'d1'|'d0', paidUntil }[]}
+ * Plus one «end» notice when access is over (paidUntil + grace), see below.
+ * @returns {{ subscriptionId, accountId, telegramId, kind: 'd3'|'d1'|'d0'|'end', paidUntil }[]}
  */
 export function dueReminders(state, now) {
   const out = [];
@@ -1875,6 +1878,15 @@ export function dueReminders(state, now) {
       if (kind === 'd0' ? !subAccess(state, sub, now).access : !(sub.paidUntil > now)) continue;
       if (mark && mark.sent && mark.sent[kind]) continue;
       out.push({ subscriptionId: sub.id, accountId: account.id, telegramId: String(account.telegramId), kind, paidUntil: sub.paidUntil });
+    }
+    // «end»: access is over (grace ended). From 10:00 MSK on that Moscow day, or right away when it ended later.
+    const endAt = accessUntil(state, sub);
+    const endDay = mskDayStart(endAt);
+    const endDue = Math.max(endAt, endDay + REMINDER_HOUR * 60 * 60 * 1000);
+    // Until the end of that day; a late-evening end still gets END_WINDOW_MS of ticks.
+    const endStop = Math.max(endDay + DAY, endDue + END_WINDOW_MS);
+    if (now >= endDue && now < endStop && !(mark && mark.sent && mark.sent.end)) {
+      out.push({ subscriptionId: sub.id, accountId: account.id, telegramId: String(account.telegramId), kind: 'end', paidUntil: sub.paidUntil });
     }
   }
   return out;
