@@ -94,6 +94,22 @@ describe('landing SEO', () => {
     expect(counts[1]).toBe(counts[0]);
   });
 
+  it('keeps 404.html out of the index for everyone, with a Yandex group that adds Clean-param', () => {
+    const robots = readFileSync(`${SITE}/robots.txt`, 'utf8');
+    const groups = robots
+      .split(/\n(?=User-agent:)/)
+      .map((g) => g.split('\n').filter((l) => l && !l.startsWith('#') && !l.startsWith('Sitemap:')));
+    expect(groups.map((g) => g[0])).toEqual(['User-agent: *', 'User-agent: Yandex']);
+    const [all, yandex] = groups;
+    expect(all).toEqual(['User-agent: *', 'Allow: /', 'Disallow: /404.html']);
+    // Yandex ignores the * group when its own exists, so the same rules repeat.
+    expect(yandex.slice(1, 3)).toEqual(all.slice(1));
+    expect(yandex[3]).toBe('Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term /');
+    expect(yandex).toHaveLength(4);
+    expect(robots.match(/^Sitemap: /gm)).toHaveLength(1);
+    expect(robots.match(/^Clean-param: /gm)).toHaveLength(1);
+  });
+
   it('points robots.txt at a sitemap that lists both pages with hreflang', () => {
     const robots = readFileSync(`${SITE}/robots.txt`, 'utf8');
     expect(robots).toMatch(/^User-agent: \*$/m);
