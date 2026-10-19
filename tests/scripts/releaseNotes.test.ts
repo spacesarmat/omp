@@ -65,3 +65,30 @@ describe('release notes', () => {
     expect(out).toContain('compare/v');
   });
 });
+
+describe('release notes and «[tech]» bullets', () => {
+  it('the body and its «…и ещё N» count skip «[tech]» bullets', async () => {
+    // @ts-ignore node builtin
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    // @ts-ignore node builtin
+    const { tmpdir } = await import('node:os');
+    // @ts-ignore node builtin
+    const { join } = await import('node:path');
+    const root = mkdtempSync(join(tmpdir(), 'omp-notes-'));
+    const user = Array.from({ length: 9 }, (_, i) => `- Пункт ${i}`);
+    const tech = Array.from({ length: 4 }, (_, i) => `- [tech] Техника ${i}`);
+    writeFileSync(join(root, 'CHANGELOG.md'), `# Изменения\n\n## 2.0.0\n\n${[...tech, ...user].join('\n')}\n\n## 1.9.0\n\n- [tech] Только техника\n`);
+    writeFileSync(
+      join(root, 'CHANGELOG.en.md'),
+      `# Changes\n\n## 2.0.0\n\n${[...tech.map((l, i) => `- [tech] Tech ${i}`), ...user.map((l, i) => `- Item ${i}`)].join('\n')}\n`,
+    );
+    const body = renderReleaseNotes('v2.0.0', join(root, 'none'), root);
+    expect(body).not.toMatch(/tech|Техника|Tech /i);
+    expect(body).toContain('- Пункт 0');
+    expect(body).toContain('…и ещё 1 - в');
+    expect(body).toContain('…and 1 more in');
+    const only = renderReleaseNotes('v1.9.0', join(root, 'none'), root);
+    expect(only).toContain('- Исправления и улучшения');
+    expect(only).not.toMatch(/tech|техника/i);
+  });
+});

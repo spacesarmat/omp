@@ -1,21 +1,25 @@
 # Changes
 
+<!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
+
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Unreleased
 
-- Billing: admin login works under BILLING_READONLY (in-memory sessions and tokens), /health uses backupEveryHours, a failed pg_dump sets pgBackupOk false and alerts immediately; bot deviceInfo only when showing devices.
-- Billing: the admin user card and subscription list show the credit (RUB toward the next renewal)
-- Billing: admin home shows counts of devices on new vs legacy tokens (prep for strict checks; flags stay off)
+- [tech] Billing: admin login works under BILLING_READONLY (in-memory sessions and tokens), /health uses backupEveryHours, a failed pg_dump sets pgBackupOk false and alerts immediately; bot deviceInfo only when showing devices.
+- [tech] Billing: the admin user card and subscription list show the credit (RUB toward the next renewal)
+- [tech] Billing: admin home shows counts of devices on new vs legacy tokens (prep for strict checks; flags stay off)
 
 ## 0.20.5
 
-- Subscription: device limit = base (admin) + bonus + bought; bot and admin show the breakdown and phone model
-- [phone] Subscription: new self-renewing device keys and clearer disconnect / limit errors
-- Payment bot: 6-button menu (Pay, Devices), unbind with confirm, credit for a late extra payment
-- Subscription: admin shows devices and last seen, revoke and limit; at most 2 device changes per 30 days in the bot
+- Subscription: limit = base + bonus + bought, the bot shows the breakdown and the phone model
+- Bot: Pay / Devices menu, unbind with confirmation, credit for a late payment
 - [phone] Without an OMP subscription, up to 10 items in New → Subscriptions (extras paused)
-- Billing on Postgres 17: daily dumps, admin alert, SQLite path removed
+- [phone] Clearer device disconnect and limit errors
+- At most 2 device changes per 30 days
+- [tech] Subscription: new self-renewing device keys
+- [tech] Admin: devices and last seen, revoke, limit; the base limit is set in the admin, which also shows the breakdown and phone model
+- [tech] Billing on Postgres 17: daily dumps, admin alert, SQLite path removed
 
 ## 0.20.4
 
@@ -31,7 +35,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Server settings: tidy spacing and a TMDB key row
 - [phone] Audiobooks: their own search, a player with lock-screen controls, speed and a sleep timer. The built-in player is 2160 Player 0.2.8
 - [phone] First launch helps find TorrServer, hints appear once each
-- The payment bot keeps admin login working when a second copy runs. The site has an English page
+- The site has an English page
+- [tech] The payment bot keeps admin login working when a second copy runs
 
 ## 0.20.4-beta.4
 
@@ -53,7 +58,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] The built-in player is updated to 2160 Player 0.2.8. The screen stays on while a video is playing: the core setting is on by default
 - [phone] An audiobook and a video stay on separate sessions, so the lock-screen buttons do not mix
-- The Android build pins commons-io 2.18.0 and commons-lang3 3.18.0, so the old SMB copies stay out of the app
+- [tech] The Android build pins commons-io 2.18.0 and commons-lang3 3.18.0, so the old SMB copies stay out of the app
 - [phone] Audiobooks: search classifies MP3, M4B, AAC, FLAC and a narrator credit as audiobooks, and FB2, EPUB, PDF and DJVU as e-books
 - [phone] Book card: when the file list is missing because there are few seeds, Retry asks again
 - [phone] Audiobook player: after an error the current track starts again, and the button layout stays put
@@ -102,7 +107,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] History: the phone/TV filter sits inside the list. Add: magnet is a button, sources and filters share one row. Settings: one yellow update button, Video player on its own screen
 - [phone] OMP Jackett and JacRed: search and download only through the subscription; keys are not in the app
 - [phone] Backup: skipping a TorrServer update stays on this phone
-- The subscription admin is in Russian: activation codes stay out of bulk lists, the wallet is masked, there is a filter for subscriptions expiring within 7 days, and notices go to administrators
+- [tech] The subscription admin is in Russian: activation codes stay out of bulk lists, the wallet is masked, there is a filter for subscriptions expiring within 7 days, and notices go to administrators
 - The public site on a narrow phone: platform labels wrap, and the download button shortens
 
 ## 0.20.1-beta.15
@@ -113,7 +118,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Discover: posters show again after you return to the tab
 - [phone] With no TV selected, Catalog, Remote and Settings list the TVs already found; one tap connects
 - TorrServer search on the LAN is faster: saved addresses and likely hosts first; on the phone a server shows up as soon as it answers
-- The magnet-add test waits until the poster is stored
+- [tech] The magnet-add test waits until the poster is stored
 
 ## 0.20.1-beta.14
 
@@ -132,7 +137,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] TV and Android TV Box TLS: TOFU certificate pin (no trust-all)
 - [phone] TV and Android TV Box TLS: TOFU pin; cleartext to public IPs blocked; ControlServer accepts LAN only
 - phone-to-TV pairing code is 6 digits
-- CI: Actions pinned to commit SHAs; ADMIN_CHAT_ID is a Worker secret only
+- [tech] CI: Actions pinned to commit SHAs; ADMIN_CHAT_ID is a Worker secret only
 
 ## 0.20.1-beta.10
 
@@ -177,10 +182,10 @@ The English translation covers the latest versions only; the full history (in Ru
 ## 0.20.1-beta.1
 
 - [phone] OMP Jackett and JacRed: search and download only through billing (`/v1/search`, `/v1/torrent`); keys removed from the APK
-- [billing] «Services» tab - Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
-- [billing] bot: user vs admin pads (`/admin`, «As user»)
-- [billing] user card - message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
-- [ops] VPS: WARP proxy for the Telegram Bot API; search rate limit
+- [tech] «Services» tab - Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
+- [tech] bot: user vs admin pads (`/admin`, «As user»)
+- [tech] user card - message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
+- [tech] VPS: WARP proxy for the Telegram Bot API; search rate limit
 
 ## 0.20.0
 
@@ -201,12 +206,12 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] TorrServer search on start: native multithreaded TCP scan of the /24 (ports 8090 and 5665), then a short /echo only on open ports
 - [phone] Now on TV: swipe hints (remote / episodes), episode swipe with highlight; remote settings open from the deck too
 - [phone] TV keyboard overlays the remote without shrinking the pad
-- [billing] support chat shows the Telegram nick next to the user id; “End dialog” notifies the bot
+- [tech] support chat shows the Telegram nick next to the user id; “End dialog” notifies the bot
 
 ## 0.20.0-beta.17
 
 - [phone] Jackett and JacRed on one subscription: keys in the app, search over HTTPS
-- [billing] admin panel sign-in through Telegram (adminTelegramIds); password stays as a fallback
+- [tech] admin panel sign-in through Telegram (adminTelegramIds); password stays as a fallback
 
 ## 0.20.0-beta.16
 
@@ -240,7 +245,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] Jackett OMP: subscription end date refreshes from the server after admin grants days
 - [phone] Billing: prefer https://billing.omp-player.online, fall back to the NAS on LAN
-- [ops] React+shadcn admin; alerts always visible; Cloudflare Tunnel (HTTP/2) for omp-player.online
+- [tech] React+shadcn admin; alerts always visible; Cloudflare Tunnel (HTTP/2) for omp-player.online
 
 ## 0.20.0-beta.9
 
@@ -252,7 +257,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.0-beta.7
 
-- [ops] Admin panel on Preact + Pico; SQLite storage (migrates from state.json)
+- [tech] Admin panel on Preact + Pico; SQLite storage (migrates from state.json)
 - [phone] Jackett OMP shows Telegram link status and can unlink
 - [phone] Settings: sources and TV first, then server, player, and updates
 

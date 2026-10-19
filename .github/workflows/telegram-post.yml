@@ -1,5 +1,7 @@
 # Posts an existing GitHub release to the Telegram channel, the same way the Release workflow does
 # (scripts/telegram-post.mjs). For a release whose Telegram step failed. Run by hand only.
+# Scripts and CHANGELOG come from the branch the workflow runs on (main), so a fixed caption script and «[tech]»
+# markers added after the tag apply; the files posted are the release assets of the input tag.
 name: Telegram post (existing release)
 on:
   workflow_dispatch:
@@ -23,7 +25,7 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Refuse a beta tag
+      - name: Refuse a beta tag or a run from another branch
         # same as release.yml: betas are not posted, the channel gets releases only
         run: |
           case "$TAG" in
@@ -31,9 +33,20 @@ jobs:
             v*) ;;
             *) echo "::error::tag must look like vX.Y.Z"; exit 1 ;;
           esac
+          # the caption and the script come from the checked-out branch: only main is reviewed
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::run this workflow from main (got $GITHUB_REF)"
+            exit 1
+          fi
+      # the workflow ref (main), not the tag: scripts/telegram-post.mjs and CHANGELOG.md as they are now
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ inputs.tag }}
+      - name: CHANGELOG has this version
+        run: |
+          VERSION="${TAG#v}"
+          if ! grep -qx "## ${VERSION}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md on ${GITHUB_REF_NAME} has no section ## ${VERSION}"
+            exit 1
+          fi
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24

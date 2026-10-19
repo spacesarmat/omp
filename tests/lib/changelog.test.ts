@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { changelogWindow, forPlatform, itemPlatform, parseChangelog, releasesUpTo, stripPlatform } from '../../src/lib/changelog';
+import { changelogWindow, forPlatform, isTech, itemPlatform, parseChangelog, releasesUpTo, stripPlatform } from '../../src/lib/changelog';
 import { checkWhatsNew, whatsNew, openWhatsNew, closeWhatsNew, SEEN_KEY } from '../../src/store/whatsNew';
 import { CHANGELOG, CHANGELOG_FLOOR } from '../../src/lib/changelogData';
 import { APP_VERSION } from '../../src/version';
@@ -33,6 +33,25 @@ describe('platform markers', () => {
     ]);
     expect(forPlatform(list, 'atv')).toEqual([{ version: '0.4.0', items: ['Общее', 'Оба ТВ', 'Только Android TV'] }]);
     expect(forPlatform(list, 'phone')).toEqual([{ version: '0.4.0', items: ['Общее', 'Телефон'] }]);
+  });
+});
+
+describe('«[tech]» bullets', () => {
+  const MD = '## 0.6.0\n- Общее\n- [tech] Биллинг на Postgres\n- [phone] Телефон\n- [TECH] CI\n\n## 0.5.1\n- [tech] Только админка\n\n## 0.5.0\n- [lg] LG\n';
+  it('the parser keeps them, no platform shows them, and a version left with only them is dropped', () => {
+    const list = parseChangelog(MD);
+    expect(list.map((e) => e.version)).toEqual(['0.6.0', '0.5.1', '0.5.0']);
+    expect(isTech(list[0].items[1])).toBe(true);
+    expect(isTech(list[0].items[3])).toBe(true);
+    expect(isTech('Общее')).toBe(false);
+    expect(isTech('Про [tech] в тексте')).toBe(false);
+    expect(itemPlatform('[tech] CI')).toBe('');
+    expect(forPlatform(list, 'phone')).toEqual([{ version: '0.6.0', items: ['Общее', 'Телефон'] }]);
+    expect(forPlatform(list, 'lg')).toEqual([
+      { version: '0.6.0', items: ['Общее'] },
+      { version: '0.5.0', items: ['LG'] },
+    ]);
+    expect(forPlatform(list, 'atv')).toEqual([{ version: '0.6.0', items: ['Общее'] }]);
   });
 });
 
