@@ -1430,6 +1430,10 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-sub-row { display: flex; align-items: center; gap: 10px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
 .m-sub-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .m-sub-q { font-size: 15px; font-weight: 700; }
+.m-sub-paused { opacity: 0.55; }
+.m-sub-paused-note { color: var(--accent); font-weight: 600; }
+.m-subs-quota { text-transform: none; letter-spacing: 0; }
+.m-subs-quota.full { color: var(--accent); }
 .m-fresh { flex-shrink: 0; padding: 4px 10px; border-radius: 10px; background: var(--accent); color: var(--bg); font-size: 12px; font-weight: 700; }
 .m-sub-new { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
 .m-subs-search { display: flex; align-items: center; gap: 6px; }

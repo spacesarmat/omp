@@ -9,6 +9,8 @@ import { addSubscription, loadSubs } from '../../../../src/monitor/subs';
 import { subQualityOf } from '../../../../src/sources/filters';
 import type { SubQuality } from '../../../../src/monitor/types';
 import { torrentQuery, type CatalogCard } from '../../../../src/catalog/tmdb';
+import { subsLimitReached } from '../../../../src/monitor/limit';
+import { SubsLimitSheet } from '../../ui/SubsLimitSheet';
 
 /** The quality this sheet offers: any, 1080p or 4K (720p of the filters counts as 1080p). */
 function defaultQuality(): SubQuality {
@@ -20,6 +22,7 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
   const [quality, setQuality] = useState<SubQuality>(defaultQuality);
   // «Только лучшее качество»: on here, since a title is wanted once, in the best quality that comes out
   const [better, setBetter] = useState(true);
+  const [limited, setLimited] = useState(subsLimitReached);
   const options: { id: SubQuality; label: string }[] = [
     { id: '', label: t('monitor.anyQuality') },
     { id: '1080', label: '1080p' },
@@ -27,6 +30,7 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
   ];
 
   const subscribe = () => {
+    if (subsLimitReached()) return setLimited(true);
     const first = loadSubs().length === 0;
     const saved = addSubscription({ query: torrentQuery(card), quality, sources: null, notify: true, better });
     if (saved) {
@@ -36,6 +40,8 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
     }
     onClose();
   };
+
+  if (limited) return <SubsLimitSheet onClose={onClose} />;
 
   // a title without a year reads «"X"», not «"X" ()»
   const about = t(card.kind === 'tv' ? 'titleCard.wantSeries' : 'titleCard.wantFilm', { title: card.title, year: card.year || '' }).replace(' ()', '');

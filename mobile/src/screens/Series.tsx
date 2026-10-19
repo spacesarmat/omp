@@ -12,6 +12,8 @@ import { SeriesPill } from '../ui/SeriesPill';
 import { showToast } from '../ui/toast';
 import { askNotifyOnce, monitorVersion, reloadMonitor } from '../monitor/ui';
 import { addSubscription, loadSubs, sameQuery } from '../../../src/monitor/subs';
+import { subsLimitReached } from '../../../src/monitor/limit';
+import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/seriesStatus';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
@@ -210,7 +212,9 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   void monitorVersion.value; // re-read after a subscription is added
   const query = torrentQuery(card, season.number);
   const on = loadSubs().some((s) => sameQuery(s.query, query));
+  const [limited, setLimited] = useState(false);
   const remind = () => {
+    if (subsLimitReached()) return setLimited(true);
     const first = loadSubs().length === 0;
     const saved = addSubscription({ query: query, quality: '', sources: null, notify: true });
     if (!saved) return;
@@ -230,6 +234,7 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
           {t('series.remind')}
         </button>
       )}
+      {limited && <SubsLimitSheet onClose={() => setLimited(false)} />}
     </div>
   );
 }

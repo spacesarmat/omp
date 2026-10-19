@@ -11,6 +11,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
+import { saveBillingAccess } from '../billing/entitlement';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
@@ -72,6 +73,7 @@ function billingError(status: number, text: string): Error {
 }
 
 export function clearBilling(): void {
+  saveBillingAccess(null);
   saveBillingSession(null);
   emitBillingChange();
 }
@@ -148,6 +150,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       };
       // When /v1/me omits sources (old server), keep both on while the subscription is active.
       const hasSources = !!body.sources;
+      // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
+      if (session) saveBillingAccess({ active: !!body.active, accessUntil: body.accessUntil || 0 });
       return {
         telegramId: body.telegramId || '',
         paidUntil,

@@ -3,6 +3,7 @@
 // better-quality ones, which never push the others out). Read from localStorage on every call:
 // the background page and the app write the same keys from different JS contexts. Chromium 53 safe.
 import { isObject, loadJson, saveJson } from '../store/storage';
+import { ompSubscribed } from '../billing/entitlement';
 import type { SourceResult } from '../sources/types';
 import { BETTER_ID, EPISODES_ID, type BetterInfo, type EpisodesInfo, type Finding, type SubQuality, type Subscription, type SubscriptionInput } from './types';
 
@@ -17,6 +18,8 @@ export const FOUND_MAX = 100;
 /** Better-quality findings kept, on top of FOUND_MAX: they never push the other findings out. */
 export const BETTER_FOUND_MAX = 30;
 const QUERY_MAX = 200;
+/** Subscriptions without the OMP subscription (see limit.ts). */
+export const FREE_SUBS_MAX = 10;
 
 const QUALITIES: SubQuality[] = ['', '720', '1080', '2160'];
 
@@ -159,10 +162,14 @@ function newId(now: number, taken: Subscription[]): string {
   return id;
 }
 
-/** «+ Новая подписка» / «Подписаться»: the saved subscription, or null for an empty query. */
+/**
+ * «+ Новая подписка» / «Подписаться»: the saved subscription, or null for an empty query or, without the OMP
+ * subscription, when FREE_SUBS_MAX are already saved (the callers show the limit sheet first: limit.ts).
+ */
 export function addSubscription(input: SubscriptionInput, now?: number): Subscription | null {
   const at = now === undefined ? Date.now() : now;
   const list = loadSubs();
+  if (list.length >= FREE_SUBS_MAX && !ompSubscribed(at)) return null;
   const sub = sanitizeSubscription({ ...input, id: newId(at, list), createdAt: at });
   if (!sub) return null;
   saveSubs(list.concat([sub]));

@@ -1125,6 +1125,16 @@ export const en: EnDict<typeof ru> = {
       deleted: 'Subscription deleted',
       deleteAsk: 'Delete the subscription “{query}”?',
     },
+    limit: {
+      title: 'Up to {n} subscriptions without OMP',
+      text: 'Without an OMP subscription — up to {n} subscriptions. Subscribe to follow more',
+      go: 'Get an OMP subscription',
+      quota: '{used} of {max}',
+      quotaAria: 'Subscriptions: {used} of {max} without an OMP subscription',
+      paused: 'paused — needs an OMP subscription',
+      pausedCheck: 'This subscription is paused: without an OMP subscription only the first {n} are checked',
+      tvWant: 'The phone already has {n} subscriptions — no more without an OMP subscription.',
+    },
     replaceSheet: {
       title: 'Replace the release',
       titleWatch: 'Replace and watch',

@@ -32,6 +32,11 @@ import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, unse
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
+import { FREE_SUBS_MAX, subsLimitReached, subsQuota, syncPaused } from '../../../src/monitor/limit';
+import { ompSubscribed } from '../../../src/billing/entitlement';
+import { billingSession, onBillingChange } from '../../../src/billing/session';
+import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { Calendar } from './Calendar';
 import { filterSubs, FINDINGS_CAP, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
 
@@ -220,7 +225,23 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
     saveSubsSort(m);
     setSort(m);
   };
+  const [, setBillingTick] = useState(0);
+  // the OMP subscription switched on or off (a code, /v1/me): the cap and the pause follow
+  useEffect(() => onBillingChange(() => setBillingTick((n) => n + 1)), []);
+  useEffect(() => {
+    // over the cap: ask /v1/me once per visit, so a renewal paid in the bot lifts the pause without opening «Аккаунт»
+    if (!billingSession() || loadSubs().length <= FREE_SUBS_MAX) return;
+    fetchBillingAccount(phoneSourceContext()).then(
+      () => setBillingTick((n) => n + 1),
+      () => undefined,
+    );
+  }, []);
+  const [limitOpen, setLimitOpen] = useState(false);
   const subs = loadSubs();
+  const subscribed = ompSubscribed();
+  // also records the pause, so a subscription that leaves it gets a quiet first check (limit.ts)
+  const paused = syncPaused(subs, subscribed);
+  const quota = subsQuota(subs, subscribed);
   const searching = !!query.trim();
   const shownSubs = filterSubs(sortSubs(subs, sort), query);
   const found = matchFindings(query, loadFound(), FINDINGS_CAP, sort, subs);
@@ -290,7 +311,14 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       <div class="m-muted m-small" role="status" data-monitor-status>
         {line}
       </div>
-      <div class="m-set-label">{t('news.subs')}</div>
+      <div class="m-set-label">
+        {t('news.subs')}
+        {quota && (
+          <span class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
+            {' · ' + t('monitor.limit.quota', quota)}
+          </span>
+        )}
+      </div>
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
       {subs.length > 0 && (
         <div class="m-subs-search">
@@ -323,11 +351,19 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {searching && shownSubs.length === 0 && subs.length > 0 && <div class="m-muted m-small">{t('news.noSubsMatch')}</div>}
       {shownSubs.map((s) => {
         const n = unseenCount(s.id);
+        const off = paused[s.id] === true;
         return (
-          <button key={s.id} type="button" class="m-sub-row" onClick={() => navigate({ name: 'subFindings', id: s.id })}>
+          <button
+            key={s.id}
+            type="button"
+            class={'m-sub-row' + (off ? ' m-sub-paused' : '')}
+            data-paused={off ? '' : undefined}
+            onClick={() => navigate({ name: 'subFindings', id: s.id })}
+          >
             <span class="m-sub-text">
               <span class="m-sub-q">{s.query}</span>
               <span class="m-muted m-small">{subRule(s)}</span>
+              {off && <span class="m-small m-sub-paused-note">{t('monitor.limit.paused')}</span>}
             </span>
             {n > 0 && <span class="m-fresh">{freshText(n)}</span>}
           </button>
@@ -341,7 +377,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
           {found.more > 0 && <div class="m-muted m-small">{tp('news.moreFindings', found.more)}</div>}
         </div>
       )}
-      <button type="button" class="m-sub-new" onClick={() => setEditing(true)}>
+      <button type="button" class="m-sub-new" onClick={() => (subsLimitReached() ? setLimitOpen(true) : setEditing(true))}>
         {t('news.newSub')}
       </button>
       <div class="m-set-label">{t('news.episodesHead')}</div>
@@ -434,6 +470,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
         <span class="m-muted" aria-hidden="true">›</span>
       </button>
       {editing && <SubSheet onClose={() => setEditing(false)} />}
+      {limitOpen && <SubsLimitSheet onClose={() => setLimitOpen(false)} />}
       {replace && (
         <ReplaceSheet
           finding={replace.f}

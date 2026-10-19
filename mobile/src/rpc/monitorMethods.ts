@@ -13,6 +13,9 @@ import {
   updateSubscription,
 } from '../../../src/monitor/subs';
 import { reloadSourcePrefs } from '../../../src/sources/store';
+import { FREE_SUBS_MAX, isSubPaused, pausedSubIds, subsLimitReached } from '../../../src/monitor/limit';
+import { ompSubscribed } from '../../../src/billing/entitlement';
+import { t } from '../../../src/i18n';
 import { loadLastRun } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import type { RpcFeed, RpcFinding, RpcFindingKind, RpcSub } from '../../../src/phone/rpcTypes';
@@ -45,8 +48,8 @@ function toRpcFinding(f: Finding, subs: Subscription[]): RpcFinding {
   return out;
 }
 
-function toRpcSub(s: Subscription, found: Finding[]): RpcSub {
-  return {
+function toRpcSub(s: Subscription, found: Finding[], paused?: { [id: string]: true }): RpcSub {
+  const out: RpcSub = {
     id: s.id,
     query: s.query,
     quality: s.quality,
@@ -56,12 +59,20 @@ function toRpcSub(s: Subscription, found: Finding[]): RpcSub {
     checking: checking[s.id] === true,
     createdAt: s.createdAt,
   };
+  // over the cap without the OMP subscription: not checked (limit.ts); absent on older phones
+  if (paused && paused[s.id]) out.paused = true;
+  return out;
 }
+
+const pausedNow = () => pausedSubIds(loadSubs(), ompSubscribed());
+
+/** A refusal the TV shows as it is (newsError / wantAction print the phone's message). */
+const limitError = (key: 'monitor.limit.pausedCheck' | 'monitor.limit.tvWant') => new RpcError('failed', t(key, { n: FREE_SUBS_MAX }));
 
 function subOf(id: string): RpcSub {
   const s = getSubscription(id);
   if (!s) throw bad('id');
-  return toRpcSub(s, loadFound());
+  return toRpcSub(s, loadFound(), pausedNow());
 }
 
 function idParam(p: Params, name = 'id'): string {
@@ -93,13 +104,15 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
 
     subs(): { subs: RpcSub[] } {
       const found = loadFound();
-      return { subs: loadSubs().map((s) => toRpcSub(s, found)) };
+      const paused = pausedNow();
+      return { subs: loadSubs().map((s) => toRpcSub(s, found, paused)) };
     },
 
     subCheck(p) {
       const id = idParam(p);
       const sub = getSubscription(id);
       if (!sub) throw bad('id');
+      if (isSubPaused(id)) throw limitError('monitor.limit.pausedCheck');
       const check = deps.checkSubscription;
       if (!check) throw new RpcError('failed');
       if (checking[id]) return { started: true };
@@ -144,7 +157,8 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
       const better = optBool(p, 'better');
       const found = loadFound();
       const had = loadSubs().filter((s) => sameQuery(s.query, query))[0];
-      if (had) return { sub: toRpcSub(had, found), created: false };
+      if (had) return { sub: toRpcSub(had, found, pausedNow()), created: false };
+      if (subsLimitReached()) throw limitError('monitor.limit.tvWant');
       const sub = addSubscription({ query, quality: '', sources: null, notify: true, better: better !== false }, deps.now());
       if (!sub) throw bad('query');
       return { sub: toRpcSub(sub, found), created: true };

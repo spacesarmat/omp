@@ -10,6 +10,8 @@ import { addSubscription, loadSubs, removeSubscription, updateSubscription } fro
 import type { SubQuality, Subscription, SubscriptionInput } from '../../../src/monitor/types';
 import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
+import { subsLimitReached } from '../../../src/monitor/limit';
+import { SubsLimitSheet } from './SubsLimitSheet';
 
 const CHECK = 'M5 12l5 5l9-10';
 const CHEVRON = 'M9 6l6 6-6 6';
@@ -53,6 +55,8 @@ export function SubSheet(p: {
   const [better, setBetter] = useState(base.better === true);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
+  // without the OMP subscription a new one past the cap is refused before the form (limit.ts)
+  const [limited, setLimited] = useState(() => !p.sub && subsLimitReached());
 
   const all = allSources();
   const enabledIds = enabledSources(all).map((s) => s.id);
@@ -85,6 +89,7 @@ export function SubSheet(p: {
       saved = updateSubscription(p.sub.id, input);
     } else {
       const first = loadSubs().length === 0;
+      if (subsLimitReached()) return setLimited(true);
       saved = addSubscription(input);
       if (saved && first) void askNotifyOnce().catch(() => {});
     }
@@ -104,6 +109,8 @@ export function SubSheet(p: {
     p.onDeleted?.();
     p.onClose();
   };
+
+  if (limited) return <SubsLimitSheet onClose={p.onClose} />;
 
   if (picking) {
     return (

@@ -5,6 +5,7 @@ import { t, type Key } from '../../../src/i18n';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { checkSubscription } from '../../../src/monitor/check';
 import { getSubscription, loadFound } from '../../../src/monitor/subs';
+import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { qualityOf } from '../../../src/sources/view';
 import { phoneSourceContext } from '../searchContext';
@@ -168,6 +169,11 @@ export function isCheckingSub(id: string): boolean {
 export function checkSubNow(id: string): Promise<void> {
   const sub = getSubscription(id);
   if (!sub || isCheckingSub(id)) return Promise.resolve();
+  // over the cap without the OMP subscription: paused, not checked (limit.ts)
+  if (isSubPaused(id)) {
+    showToast(t('monitor.limit.pausedCheck', { n: FREE_SUBS_MAX }));
+    return Promise.resolve();
+  }
   checkingSubs.value = checkingSubs.value.concat([id]);
   const end = () => {
     checkingSubs.value = checkingSubs.value.filter((x) => x !== id);

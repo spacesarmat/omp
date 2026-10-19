@@ -2,6 +2,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
+
 ## 0.20.4
 
 - [lg] LG: tiles redesigned in every view: full-width grids, two-line titles that wrap by word, aligned list columns. Same on 1080p and 4K
