@@ -489,13 +489,13 @@ describe('News in English', () => {
 
   it('feed: no sources switched on and sites that did not answer', async () => {
     await mount();
-    expect(el.querySelector('.m-hint-warn')!.textContent).toBe('The feed comes from rutor, nnmclub and torrent.by — turn them on in “Search sources”.');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toBe('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
     registerSource({ id: 'feedy', name: 'Feedy', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('down')) });
     click(byText('Series'));
     await flush();
     expect(el.querySelector('.m-news-status')!.textContent).toContain('sites did not respond');
-    expect(el.textContent).toContain('Sites did not respond — try again later');
+    expect(el.textContent).toContain('Sites did not respond - try again later');
   });
 
   it('subscriptions: empty list, buttons and the monitoring link', async () => {

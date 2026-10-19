@@ -896,9 +896,9 @@ export function createApp(file, fetchImpl, opts) {
         let flashError = '';
         let redirectTo = '/admin';
         let extra = null;
-        if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 — оставлено прежнее значение';
+        if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 - оставлено прежнее значение';
         if (path === '/admin/settings' && !lowerBlocked && badBackupSetting(body)) {
-          flashError = 'Бэкап Postgres: каждые 1–168 часов, хранить 1–365 дней (целые числа) — оставлено прежнее значение';
+          flashError = 'Бэкап Postgres: каждые 1–168 часов, хранить 1–365 дней (целые числа) - оставлено прежнее значение';
         }
         if (lowerBlocked) {
           flashError =

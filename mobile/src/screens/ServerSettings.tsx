@@ -132,7 +132,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
     return (
       <button type="button" class="m-set-row m-set-pick" data-field={r.field} onClick={() => setOpen(r.field)}>
         <span>{r.label}</span>
-        <span class="m-muted">{cur ? cur.label : '—'}</span>
+        <span class="m-muted">{cur ? cur.label : '-'}</span>
       </button>
     );
   }

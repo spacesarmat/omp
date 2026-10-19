@@ -164,7 +164,7 @@ describe('Remote header and layout', () => {
     click(lbl('Клавиатура'));
     expect(lbl('Клавиатура').getAttribute('aria-pressed')).toBe('true');
     expect(document.querySelector('input[aria-label="Ввод на телевизоре"]')).toBeTruthy();
-    // typing overlays — the remote rows stay in place underneath
+    // typing overlays - the remote rows stay in place underneath
     expect(el.querySelectorAll('.m-rb-colors button').length).toBe(4);
   });
 
@@ -760,7 +760,7 @@ describe('Remote for Android TV', () => {
     expect(text('Тачпад')).toBeFalsy();
     click(text('Свайпы'));
     const pad = el.querySelector('[data-atv-pad]')!;
-    expect(pad.textContent).toContain('Проведите — выделение на ТВ двигается по пунктам · касание — OK · удержание — Меню · двумя — прокрутка');
+    expect(pad.textContent).toContain('Проведите - выделение на ТВ двигается по пунктам · касание - OK · удержание - Меню · двумя - прокрутка');
     const fb = () => pad.querySelector('[data-pad-feedback]');
     expect(fb()).toBeNull();
     ptr(pad, 'pointerdown', 10, 10);
@@ -983,7 +983,7 @@ describe('Remote in English', () => {
     expect(el.querySelector('.m-touchpad .m-muted')!.textContent).toBe('Swipe with a finger · two fingers scroll');
     click(lbl('Keyboard'));
     expect(document.querySelector('input.m-remote-type')!.getAttribute('aria-label')).toBe('Typing on the TV');
-    expect(document.querySelector('input.m-remote-type')!.getAttribute('placeholder')).toBe('Type — the text goes to the TV');
+    expect(document.querySelector('input.m-remote-type')!.getAttribute('placeholder')).toBe('Type - the text goes to the TV');
     click(lbl('Turn off the TV'));
     expect(a.confirm).toHaveBeenCalledWith('Turn off LG OLED?');
     await flush();
@@ -993,7 +993,7 @@ describe('Remote in English', () => {
     });
     click(lbl('Turn on the TV'));
     await flush();
-    expect(toast.value).toBe('Connect to the TV while it is on — then you can turn it on from the phone');
+    expect(toast.value).toBe('Connect to the TV while it is on - then you can turn it on from the phone');
     noCyrillic();
     noCyrillicLabels();
   });
@@ -1050,13 +1050,13 @@ describe('Remote remembers the saved TVs', () => {
     expect(a.warmUp).toHaveBeenCalled();
   });
 
-  it('a TV that does not answer: «… не отвечает — включите ТВ» and «Повторить»', () => {
+  it('a TV that does not answer: «… не отвечает - включите ТВ» and «Повторить»', () => {
     saveTv({ ip: '192.168.1.156', name: '[LG] webOS TV OLED55C9PLA', clientKey: 'k' });
     mount();
     act(() => {
       tvState.value = 'error';
     });
-    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает — включите ТВ');
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает - включите ТВ');
     a.warmUp.mockClear();
     click(byBtn('Повторить')!);
     expect(a.warmUp).toHaveBeenCalledTimes(1);

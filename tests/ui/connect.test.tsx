@@ -81,7 +81,7 @@ describe('ConnectScreen: a server that does not answer', () => {
     const btn = () => host.querySelector('[data-fk="connect-btn"], .button.primary') as HTMLElement;
     btn().click();
     await flush();
-    expect(host.querySelector('.connect-error')!.textContent).toBe('Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт');
+    expect(host.querySelector('.connect-error')!.textContent).toBe('Не удалось подключиться к 192.168.1.191:8090 - проверьте адрес и порт');
     expect(btn().textContent).toBe('Подключиться');
     expect(btn().className).not.toContain('disabled');
     expect(servers.value).toHaveLength(0);
@@ -98,7 +98,7 @@ describe('ConnectScreen: a server that does not answer', () => {
       vi.advanceTimersByTime(CONNECT_TIMEOUT_MS);
       expect(await seen).toBe('timeout');
       expect(connectErrorText('http://10.0.0.5:8091', { kind: 'timeout', message: 'Timeout' })).toBe(
-        'Не удалось подключиться к 10.0.0.5:8091 — проверьте адрес и порт',
+        'Не удалось подключиться к 10.0.0.5:8091 - проверьте адрес и порт',
       );
     } finally {
       vi.useRealTimers();

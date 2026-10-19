@@ -290,7 +290,7 @@ describe('phone onboarding', () => {
     expect(mark.getAttribute('data-hint')).toBe('catalog');
     expect(mark.getAttribute('data-place')).toBe('below');
     expect(mark.querySelector('[data-hint-arrow]')).toBeTruthy();
-    expect(mark.querySelector('p')!.textContent).toBe('Поиск фильма или сериала — эта кнопка. «Добавить» ищет по трекерам.');
+    expect(mark.querySelector('p')!.textContent).toBe('Поиск фильма или сериала - эта кнопка. «Добавить» ищет по трекерам.');
     expect(mark.querySelector('[data-action="hint-dismiss"]')!.textContent).toBe('Понятно');
     await act(async () => {
       (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();

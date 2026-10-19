@@ -204,11 +204,11 @@ describe('TV search through the phone', () => {
     await searchDune();
     act(() => (host.querySelector('.search-result') as HTMLElement).click());
     await step(100);
-    expect(host.querySelector('.search-row-error')!.textContent).toBe('Результаты устарели — найдите ещё раз');
+    expect(host.querySelector('.search-row-error')!.textContent).toBe('Результаты устарели - найдите ещё раз');
     script.resolve = [new Error('timeout')];
     act(() => (host.querySelector('.search-result') as HTMLElement).click());
     await step(100);
-    expect(host.querySelector('.search-row-error')!.textContent).toBe('Телефон не ответил — попробуйте ещё раз');
+    expect(host.querySelector('.search-row-error')!.textContent).toBe('Телефон не ответил - попробуйте ещё раз');
   });
 
   it('a phone that does not answer: the yellow note and the TorrServer rows', async () => {
@@ -216,7 +216,7 @@ describe('TV search through the phone', () => {
     mount();
     await searchDune();
     const note = host.querySelector('.search-note-warn')!;
-    expect(note.textContent).toBe('Телефон не отвечает — откройте OMP на телефоне. Ищем через TorrServer (Rutor, Jackett)');
+    expect(note.textContent).toBe('Телефон не отвечает - откройте OMP на телефоне. Ищем через TorrServer (Rutor, Jackett)');
     expect(host.querySelector('.search-by')!.textContent).toBe('Ищет TorrServer · ');
     expect(rowTitles()).toEqual(['Dune 2021 TS 720p']);
   });
@@ -466,7 +466,7 @@ describe('TV search: film / series', () => {
     act(() => kindButton('Сериалы').click());
     expect(rowTitles()).toEqual([]);
     expect(host.querySelector('[data-hint="nothing"]')).toBeNull();
-    expect(host.querySelector('[data-hint="no-kind"]')!.textContent).toBe('Нет раздач этого типа — выберите «Все»');
+    expect(host.querySelector('[data-hint="no-kind"]')!.textContent).toBe('Нет раздач этого типа - выберите «Все»');
   });
 });
 

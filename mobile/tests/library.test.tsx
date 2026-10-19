@@ -511,7 +511,7 @@ describe('Library', () => {
     expect(el.querySelector('.m-offline')).not.toBeNull();
     expect(byText('Запустить сервер')).toBeUndefined();
     expect(el.querySelector('[data-local="note"]')!.textContent).toBe(
-      'TorrServer на телефоне больше не входит в OMP — его нужно один раз скачать.',
+      'TorrServer на телефоне больше не входит в OMP - его нужно один раз скачать.',
     );
     await act(async () => byText('Скачать TorrServer (~61 МБ)')!.click());
     expect(start).not.toHaveBeenCalled();

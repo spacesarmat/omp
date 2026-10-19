@@ -18,7 +18,7 @@ export function loginPage(error) {
     '<main style="max-width:360px;margin:4rem auto;padding:0 1rem">' +
     '<h1 style="font-size:1.4rem;display:flex;align-items:center;gap:10px">' +
     '<img src="/admin/logo.svg" alt="" width="40" height="40" style="border-radius:8px">OMP Billing</h1>' +
-    '<p style="color:#9AA1B2">Вход в панель — только через Telegram. Соберите SPA (`admin` vite build), чтобы открыть кнопку входа.</p>' +
+    '<p style="color:#9AA1B2">Вход в панель - только через Telegram. Соберите SPA (`admin` vite build), чтобы открыть кнопку входа.</p>' +
     err +
     '</main></body></html>'
   );

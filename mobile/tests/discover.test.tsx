@@ -349,7 +349,7 @@ describe('Discover («Новинки»)', () => {
     mount(<Discover />);
     await flush();
     expect(el.textContent).toContain(ru.discover.offlineTitle);
-    expect(el.textContent).toContain('Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key). Ваши раздачи — во вкладке «Мои».');
+    expect(el.textContent).toContain('Нет ключа TMDB. Добавьте его в настройках TorrServer (TMDB → API key). Ваши раздачи - во вкладке «Мои».');
     expect(el.textContent).not.toContain(ru.discover.offlineText);
     expect(OFFLINE_TITLE).toBe('discover.offlineTitle');
     expect(NOKEY_TEXT).toBe('discover.nokeyText');
@@ -381,7 +381,7 @@ describe('Discover («Новинки»)', () => {
     mount(<Discover />);
     await flush();
     expect(el.textContent).toContain('Каталог фильмов недоступен');
-    expect(el.textContent).toContain('TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже. Ваши раздачи — во вкладке «Мои».');
+    expect(el.textContent).toContain('TMDB не отвечает из этой сети. Укажите зеркало TMDB в настройках TorrServer или попробуйте позже. Ваши раздачи - во вкладке «Мои».');
     expect(OFFLINE_TEXT).toBe('discover.offlineText');
     expect(button('Как получить ключ')).toBeUndefined();
     expect(nov).toHaveBeenCalledTimes(1);

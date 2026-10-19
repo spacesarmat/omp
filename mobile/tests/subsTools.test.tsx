@@ -345,7 +345,7 @@ describe('«Проверить сейчас» for one subscription', () => {
     checkMock.mockResolvedValueOnce({ sub: s, findings: [], first: false, answered: [], failed: ['rutor'] });
     click(el.querySelector('[data-check-sub]'));
     await flush();
-    expect(toast.value).toBe('Сайты не ответили — попробуйте позже');
+    expect(toast.value).toBe('Сайты не ответили - попробуйте позже');
   });
 });
 

@@ -53,7 +53,7 @@ describe('SettingsScreen «Плеер»', () => {
     w.Capacitor = { getPlatform: () => 'android' };
     const host = mount();
     expect(host.textContent).toContain('Чем показывать видео на этом телевизоре.');
-    expect(host.textContent).toContain('Для отдельной раздачи плеер меняется в меню плеера — «Сменить плеер».');
+    expect(host.textContent).toContain('Для отдельной раздачи плеер меняется в меню плеера - «Сменить плеер».');
     const radios = Array.from(host.querySelectorAll('[role="radio"]')) as HTMLElement[];
     expect(radios.map((r) => r.getAttribute('aria-label'))).toEqual(['Авто', 'Встроенный', 'VLC']);
     expect(radios[0].getAttribute('aria-checked')).toBe('true');

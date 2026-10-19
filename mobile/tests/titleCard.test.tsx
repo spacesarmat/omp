@@ -314,7 +314,7 @@ describe('TitleCard: series', () => {
 
 describe('SeasonCard', () => {
   it('episode line: number, title and runtime, then the file size', async () => {
-    expect(episodeHead(3, 'Название', 52)).toBe('3 · Название — 52 мин');
+    expect(episodeHead(3, 'Название', 52)).toBe('3 · Название - 52 мин');
     torrents.value = [{
       hash: 'h-s3',
       title: 'Ледяной перевал S03 WEB-DL',
@@ -324,9 +324,9 @@ describe('SeasonCard', () => {
     mount(<SeasonCard id={21} season={3} />);
     await flush();
     const e = episodes();
-    expect(e[0].querySelector('.m-tc-ep-title')!.textContent).toBe('1 · Эпизод 3.1 — 48 мин');
+    expect(e[0].querySelector('.m-tc-ep-title')!.textContent).toBe('1 · Эпизод 3.1 - 48 мин');
     expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('1.4 GB');
-    expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('3 · Серия 3 — 50 мин');
+    expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('3 · Серия 3 - 50 мин');
     expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('нет в медиатеке');
     expect(button('Смотреть на ТВ')).toBeTruthy();
   });

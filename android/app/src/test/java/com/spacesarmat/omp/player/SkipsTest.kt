@@ -183,7 +183,7 @@ class SkipsTest {
     @Test
     fun markRowsLikeLg() {
         assertEquals(
-            listOf("Отметить начало заставки: —", "Отметить конец заставки: сейчас 2:15", "Отметить начало титров: —"),
+            listOf("Отметить начало заставки: -", "Отметить конец заставки: сейчас 2:15", "Отметить начало титров: -"),
             markRows(null, 135_000, 1_400_000),
         )
         val withMarks = ItemSkip(0, emptyList(), null, null, false, false, Segment(30_000, 90_000), 100, null)

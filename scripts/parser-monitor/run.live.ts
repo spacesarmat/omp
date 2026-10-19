@@ -40,7 +40,7 @@ test('parser monitor', async () => {
   for (const p of list) {
     log(p.source.name + ': проверка…');
     const r = await runProbe(p, { env, log });
-    log(p.source.name + ': ' + r.status + ' — ' + r.detail);
+    log(p.source.name + ': ' + r.status + ' - ' + r.detail);
     reports.push(r);
   }
 

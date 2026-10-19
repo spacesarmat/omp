@@ -66,7 +66,7 @@ describe('marksValid / markText', () => {
     expect(marksValid({ mi: null, mc: null })).toBe(true);
   });
   it('shows a dash for unset marks', () => {
-    expect(markText({ mi: null, mc: null }, 'from')).toBe('—');
+    expect(markText({ mi: null, mc: null }, 'from')).toBe('-');
     expect(markText({ mi: [45, 135], mc: 90 }, 'to')).toBe('2:15');
     expect(markText({ mi: [45, 135], mc: 90 }, 'last')).toBe('1:30');
   });

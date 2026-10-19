@@ -114,7 +114,7 @@ function VideoPlayerSection() {
         ]}
         onChange={(v) => { if (v === 'builtin' || !missing) updateSettings({ videoPlayer: v }); }}
       />
-      {missing && <div class="muted engine-note">{tvGlyphs(t('player.p2160') + ' — ' + t('player.p2160Missing'))}</div>}
+      {missing && <div class="muted engine-note">{tvGlyphs(t('player.p2160') + ' - ' + t('player.p2160Missing'))}</div>}
       {missing && <div class="row"><Qr text={P2160_RELEASES_URL} size={160} /></div>}
       <div class="muted engine-note">{tvGlyphs(t('player.p2160Note'))}</div>
     </div>

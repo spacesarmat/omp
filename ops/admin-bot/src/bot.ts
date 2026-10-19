@@ -68,7 +68,7 @@ export async function handleUpdate(update: TgUpdate, env: Env, deps: Deps): Prom
   const chatId = msg.chat.id;
   const cmd = parseCommand(msg.text, env.BOT_USERNAME);
   if (!cmd) {
-    await tg.send(chatId, 'Не понял. /help — список команд.');
+    await tg.send(chatId, 'Не понял. /help - список команд.');
     return;
   }
   const gh = new GitHub(env.GH_TOKEN, env.GITHUB_REPO || 'spacesarmat/omp', deps.fetch);
@@ -98,7 +98,7 @@ export async function handleUpdate(update: TgUpdate, env: Env, deps: Deps): Prom
         await tg.send(chatId, await ciText(gh, deps.now()));
         return;
       default:
-        await tg.send(chatId, 'Нет такой команды. /help — список.');
+        await tg.send(chatId, 'Нет такой команды. /help - список.');
     }
   } catch (e) {
     deps.log('command /' + cmd.name + ': ' + (e instanceof Error ? e.message : String(e)));

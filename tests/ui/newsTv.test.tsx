@@ -190,13 +190,13 @@ describe('TV «Новое» tab', () => {
     expect(text(host.querySelector('.news-card'))).toContain('Новое и подписки ведёт OMP на телефоне');
     expect(text(host.querySelector('.news-card'))).toContain('Настройки → Телевизор');
     expect(calls.length).toBe(0);
-    expect(text(host.querySelector('.hints'))).toBe('ОК — смотреть · Назад — к медиатеке');
+    expect(text(host.querySelector('.hints'))).toBe('ОК - смотреть · Назад - к медиатеке');
   });
 
   it('a phone that does not answer: the note and «Повторить», which asks again', async () => {
     useScript({ feed: [new Error('timeout'), { findings: FINDINGS, lastRun: 1 }], findingsSeen: [{ ok: true }] });
     const host = await mount();
-    expect(text(host.querySelector('.news-card'))).toContain('Телефон не отвечает — откройте OMP на телефоне');
+    expect(text(host.querySelector('.news-card'))).toContain('Телефон не отвечает - откройте OMP на телефоне');
     expect(text(host.querySelector('.news-phone'))).toContain('не отвечает');
     const retry = host.querySelector('[data-fk="news-retry"]') as HTMLElement;
     act(() => setFocus('news-retry'));
@@ -337,7 +337,7 @@ describe('news texts', () => {
     expect(kindLine({ ...FINDINGS[2], better: { torrentHash: OLD, have: '', got: '4K' } })).toBe('Лучше качество: качество не указано → 4K');
   });
   it('errors: a silent phone, the phone own message', () => {
-    expect(newsError(new PhoneRpcError('timeout'))).toBe('Телефон не ответил — попробуйте ещё раз');
+    expect(newsError(new PhoneRpcError('timeout'))).toBe('Телефон не ответил - попробуйте ещё раз');
     expect(newsError(new PhoneRpcError('failed', 'This release comes only as a .torrent file: add it from the phone'))).toBe(
       'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     );
@@ -401,14 +401,14 @@ describe('TV «Подписки» segment', () => {
     expect(subEl(host, 's2', 'better').querySelector('.src-switch.on')).not.toBeNull();
     expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
     expect(text(subEl(host, 's1', 'remove'))).toBe('Удалить');
-    expect(text(host.querySelector('.hints'))).toBe('ОК — переключить или выбрать · Назад — к медиатеке');
+    expect(text(host.querySelector('.hints'))).toBe('ОК - переключить или выбрать · Назад - к медиатеке');
   });
 
   it('an empty list says where subscriptions come from', async () => {
     useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: [] }] });
     const host = await mountSubs();
     expect(text(host.querySelector('.news-subs-empty'))).toBe(
-      'Подписок пока нет — добавьте их на телефоне или кнопкой «Хочу посмотреть» в карточке',
+      'Подписок пока нет - добавьте их на телефоне или кнопкой «Хочу посмотреть» в карточке',
     );
   });
 
@@ -539,13 +539,13 @@ describe('TV «Подписки» segment', () => {
     expect(text(host.querySelector('[data-fk="news-subs-find"]'))).toBe('Найти подписку: «ЕЛК»');
   });
 
-  it('a subscription paused on the phone (no OMP subscription, over 10) is dimmed with «на паузе — нужна подписка OMP»', async () => {
+  it('a subscription paused on the phone (no OMP subscription, over 10) is dimmed with «на паузе - нужна подписка OMP»', async () => {
     const list = SUBS.map((s, i) => (i === 2 ? { ...s, paused: true } : s));
     useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: list }] });
     const host = await mountSubs();
     const rows = subRows(host);
     expect(rows.map((r) => r.classList.contains('news-sub-paused'))).toEqual([false, false, true]);
-    expect(text(rows[2].querySelector('.news-sub-paused-note'))).toBe('на паузе — нужна подписка OMP');
+    expect(text(rows[2].querySelector('.news-sub-paused-note'))).toBe('на паузе - нужна подписка OMP');
     expect(rows[0].querySelector('.news-sub-paused-note')).toBeNull();
     // the row stays usable: remove and the switches are still there
     expect(subEl(host, 's3', 'remove')).not.toBeNull();

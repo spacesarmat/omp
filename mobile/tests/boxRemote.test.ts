@@ -139,7 +139,7 @@ describe('box flow', () => {
     await enableBox(tv());
     expect(n.pairStart).toHaveBeenCalledWith(IP);
     expect(boxState.value).toBe('code');
-    await expect(submitBoxCode(tv(), 'a1 b2c3')).rejects.toMatchObject({ code: BOX.BAD_CODE, message: 'Код неверный — проверьте код на экране телевизора' });
+    await expect(submitBoxCode(tv(), 'a1 b2c3')).rejects.toMatchObject({ code: BOX.BAD_CODE, message: 'Код неверный - проверьте код на экране телевизора' });
     expect(n.pairFinish).toHaveBeenCalledWith(IP, 'A1B2C3');
     expect(boxState.value).toBe('code');
     await submitBoxCode(tv(), 'A1B2C4');

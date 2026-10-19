@@ -216,15 +216,15 @@ describe('monthly extra device', () => {
     expect(reply.messages).toHaveLength(1);
     const msg = reply.messages[0];
     expect(msg.text).toContain('Продление на 30 дней, до 18.12.2026 03:00 МСК:');
-    expect(msg.text).toContain('• подписка — 150 ₽');
-    expect(msg.text).toContain('• доп. устройство × 1 — 50 ₽');
+    expect(msg.text).toContain('• подписка - 150 ₽');
+    expect(msg.text).toContain('• доп. устройство × 1 - 50 ₽');
     expect(msg.text).toContain('Итого: 200 ₽');
     expect(msg.text).toContain('Только подписка: доп. устройство перестанет работать после 21.11.2026 03:00 МСК (привязка сохранится).');
     expect(msg.text).not.toContain('yoomoney');
     const [full, base] = msg.inline.inline_keyboard.map((r: { text: string; url: string }[]) => r[0]);
     expect(full.text).toBe('Оплатить 200 ₽');
     expect(full.url).toContain('sum=200');
-    expect(base.text).toBe('Только подписка — 150 ₽');
+    expect(base.text).toBe('Только подписка - 150 ₽');
     expect(base.url).toContain('sum=150');
   });
 
@@ -336,15 +336,15 @@ describe('monthly extra device', () => {
     expect(rub.result.error).toBe('amount');
   });
 
-  it('after grace the bot offers 200 ₽ with a breakdown and «Без доп. устройств — 150 ₽»; «Подписка» renews too', () => {
+  it('after grace the bot offers 200 ₽ with a breakdown and «Без доп. устройств - 150 ₽»; «Подписка» renews too', () => {
     const f = threeDevices();
     const t = NOW + 40 * DAY;
     for (const press of ['Оплатить', 'Продлить', 'Подписка', '/start renew']) {
       const reply = botReply(f.state, { chatId: '42', text: press, now: t });
       const msg = reply.messages[0];
-      expect(msg.text).toContain('Подписка закончилась 18.11.2026 03:00 МСК — поиск отключён на всех устройствах.');
-      expect(msg.text).toContain('• подписка — 150 ₽');
-      expect(msg.text).toContain('• доп. устройство × 1 — 50 ₽');
+      expect(msg.text).toContain('Подписка закончилась 18.11.2026 03:00 МСК - поиск отключён на всех устройствах.');
+      expect(msg.text).toContain('• подписка - 150 ₽');
+      expect(msg.text).toContain('• доп. устройство × 1 - 50 ₽');
       expect(msg.text).toContain('Итого: 200 ₽');
       expect(msg.text).toContain('Только подписка: доп. устройство останется отключённым (привязка сохранится).');
       const urls = msg.inline.inline_keyboard.map((r: { url: string }[]) => r[0].url);
@@ -367,12 +367,12 @@ describe('monthly extra device', () => {
       const reply = botReply(f.state, { chatId: '42', text: press, now: NOW });
       const text = reply.messages.map((m: { text: string }) => m.text).join('\n');
       expect(text).toContain('Устройства: 3 из 3 (2 базовых + 1 купленный до 18.11.2026)');
-      expect(text).toContain('Ещё одно устройство — 50 ₽ до 18.11.2026');
+      expect(text).toContain('Ещё одно устройство - 50 ₽ до 18.11.2026');
       expect(text).toContain('продление станет 250 ₽');
       expect(reply.messages[1].inline.inline_keyboard[0][0].text).toBe('Оплатить 50 ₽');
     }
     const price = botReply(f.state, { chatId: '42', text: 'Цены', now: NOW });
-    expect(price.messages[0].text).toContain('Доп. устройство — 50 ₽ в месяц');
+    expect(price.messages[0].text).toContain('Доп. устройство - 50 ₽ в месяц');
     expect(price.messages[0].text).toContain('После окончания ещё 3 дня поиск работает');
     expect(price.messages[0].text).toContain('на ТВ она не нужна');
   });
@@ -463,13 +463,13 @@ describe('renewal reminders', () => {
     const m3 = reminderMessage(f.state, d3[0], msk('2026-11-15T10:00:00'));
     expect(m3.chatId).toBe('42');
     expect(m3.text).toBe(
-      '⚠️ Подписка OMP заканчивается через 3 дня — 18.11.2026 в 03:00 МСК.\n' +
+      '⚠️ Подписка OMP заканчивается через 3 дня - 18.11.2026 в 03:00 МСК.\n' +
         'Продление на 30 дней: 200 ₽ (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
-        'Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.',
+        'Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.',
     );
     expect(m3.inline.inline_keyboard[0][0]).toEqual({ text: 'Оплатить', url: 'https://t.me/OMPBILLINGBOT?start=pay' });
     const d1 = dueReminders(f.state, msk('2026-11-17T10:00:00'));
-    expect(reminderMessage(f.state, d1[0], msk('2026-11-17T10:00:00')).text).toContain('заканчивается завтра — 18.11.2026 в 03:00 МСК');
+    expect(reminderMessage(f.state, d1[0], msk('2026-11-17T10:00:00')).text).toContain('заканчивается завтра - 18.11.2026 в 03:00 МСК');
     const plain = expiringAt(until);
     const p1 = dueReminders(plain.state, msk('2026-11-17T10:00:00'));
     expect(reminderMessage(plain.state, p1[0], msk('2026-11-17T10:00:00')).text).toContain('Продление на 30 дней: 150 ₽.');
@@ -575,11 +575,11 @@ describe('grace end notice', () => {
     expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['end']);
     const msg = reminderMessage(f.state, rows[0], at);
     expect(msg.text).toBe(
-      '⚠️ Льготный период закончился — поиск в OMP отключён.\n' +
+      '⚠️ Льготный период закончился - поиск в OMP отключён.\n' +
         'Продление на 30 дней: 200 ₽ (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
         'Привязанные устройства заработают сами, код вводить не нужно.\n' +
-        'Без доп. устройств — 150 ₽.\n' +
-        'Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.',
+        'Без доп. устройств - 150 ₽.\n' +
+        'Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.',
     );
     expect(msg.text).not.toContain('«Код»');
     expect(msg.inline.inline_keyboard[0][0]).toEqual({ text: 'Оплатить', url: 'https://t.me/OMPBILLINGBOT?start=pay' });
@@ -590,7 +590,7 @@ describe('grace end notice', () => {
     const plain = expiringAt(msk('2026-11-18T03:00:00'));
     plain.state.settings.graceDays = 0;
     const p = reminderMessage(plain.state, dueReminders(plain.state, msk('2026-11-18T10:00:00'))[0], msk('2026-11-18T10:00:00'));
-    expect(p.text).toContain('⚠️ Подписка OMP закончилась — поиск отключён.');
+    expect(p.text).toContain('⚠️ Подписка OMP закончилась - поиск отключён.');
   });
 
   it('the runner sends it once, and not on a BILLING_BOT_POLL=0 copy', async () => {

@@ -99,7 +99,7 @@ class EngineChooserTest {
     fun menuRowAndMessageTexts() {
         assertEquals("Плеер: VLC → сменить на встроенный", EngineChooser.menuRow(EngineKind.VLC))
         assertEquals("Плеер: Встроенный → сменить на VLC", EngineChooser.menuRow(EngineKind.MEDIA3))
-        assertEquals("Встроенный плеер не открыл этот файл — включён VLC", EngineChooser.FORMAT_SWITCH_TEXT)
+        assertEquals("Встроенный плеер не открыл этот файл - включён VLC", EngineChooser.FORMAT_SWITCH_TEXT)
         assertEquals("builtin", EngineKind.MEDIA3.wire)
         assertEquals("vlc", EngineKind.VLC.wire)
     }

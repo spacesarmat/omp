@@ -50,9 +50,9 @@ describe('«Инфо» panel (LG)', () => {
     expect(p.title).toBe('Фильм (2024)');
     expect(p.hdr).toBe('');
     expect(p.chip).toBe('');
-    expect(p.tiles.map((x) => x.value)).toEqual(['—', '—', '—']);
-    expect(p.sound).toBe('—');
-    expect(p.buffer).toBe('—');
+    expect(p.tiles.map((x) => x.value)).toEqual(['-', '-', '-']);
+    expect(p.sound).toBe('-');
+    expect(p.buffer).toBe('-');
     expect(p.bufferFill).toBe(0);
     // the default audio track when the playing one is unknown; the format bitrate without a stream one
     const q = infoPanel({ title: '', probe: { streams: [probe.streams[1]], format: { bit_rate: '8000000' } }, audioIndex: -1, cache: null, bufferedSec: 0 });

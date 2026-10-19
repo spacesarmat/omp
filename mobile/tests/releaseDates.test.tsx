@@ -75,9 +75,9 @@ describe('tile labels', () => {
       seasons: [{ number: 3, episodes: 8, year: 2026, aired: 0, airDate: '2026-10-20' }, ...SHOW.seasons],
       nextEpisode: { season: 3, episode: 1, airDate: '2026-10-20' },
     });
-    expect(tileLabel(premiere, NOW)).toBe('3 сезон — 20 окт.');
+    expect(tileLabel(premiere, NOW)).toBe('3 сезон - 20 окт.');
     const later = show({ seasons: [{ number: 3, episodes: 8, year: 2026, aired: 0, airDate: '2026-11-15' }, ...SHOW.seasons], nextEpisode: null });
-    expect(tileLabel(later, NOW)).toBe('3 сезон — 15 нояб.');
+    expect(tileLabel(later, NOW)).toBe('3 сезон - 15 нояб.');
     expect(tileLabel(show({ nextEpisode: null }), NOW)).toBe('');
   });
 
@@ -86,7 +86,7 @@ describe('tile labels', () => {
     expect(tileLabel(film({ digital: '2026-11-12' }), NOW)).toBe('digital Nov 12');
     expect(tileLabel(film({ theatrical: '2026-10-03' }), NOW)).toBe('in cinemas since Oct 3');
     expect(tileLabel(SHOW, NOW)).toBe('new episode Oct 8');
-    expect(tileLabel(show({ seasons: [{ number: 3, episodes: 8, year: 2026, aired: 0, airDate: '2026-11-15' }], nextEpisode: null }), NOW)).toBe('season 3 — Nov 15');
+    expect(tileLabel(show({ seasons: [{ number: 3, episodes: 8, year: 2026, aired: 0, airDate: '2026-11-15' }], nextEpisode: null }), NOW)).toBe('season 3 - Nov 15');
   });
 });
 

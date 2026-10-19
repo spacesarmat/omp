@@ -41,7 +41,7 @@ export interface InfoInput {
 /** The bar fills with the player's seconds ahead against this. */
 export const BUFFER_TARGET_S = 30;
 
-const DASH = '—';
+const DASH = '-';
 
 /** «HEVC», «AVC», «AV1»… from an ffprobe codec name; a Dolby Vision stream keeps its base codec (DV is the HDR mark). */
 export function videoCodecName(s: FfprobeStream): string {

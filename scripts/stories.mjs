@@ -32,14 +32,14 @@ const slides = [
    <div style="position:absolute;top:330px;left:0;right:0;display:flex;justify-content:center"><div style="width:420px;height:420px">${logo}</div></div>
    <div style="position:absolute;top:840px;left:90px;right:90px;text-align:center">
      <h1 style="font-size:150px">OMP</h1>
-     <p style="font-size:50px;color:#E8EAF0;font-weight:700">Торренты на телевизоре —<br>сразу смотреть, без скачивания</p>
+     <p style="font-size:50px;color:#E8EAF0;font-weight:700">Торренты на телевизоре -<br>сразу смотреть, без скачивания</p>
      <p>LG webOS · Android TV · телефон</p>
    </div>`,
   // 2 — TV catalog
-  `<div class="top"><div class="kicker">Каталог на ТВ</div><h1>Ваш TorrServer как красивая медиатека</h1><p>Обложки, сериалы по сезонам, «Продолжить просмотр» — всё с пульта.</p></div>
+  `<div class="top"><div class="kicker">Каталог на ТВ</div><h1>Ваш TorrServer как красивая медиатека</h1><p>Обложки, сериалы по сезонам, «Продолжить просмотр» - всё с пульта.</p></div>
    <div class="shot" style="top:880px;left:-260px;right:-260px;transform:rotate(-2deg)"><img src="${SHOTS}library-large.png"></div>`,
   // 3 — phone as remote
-  `<div class="top"><div class="kicker">Телефон-пульт</div><h1>Нашли на телефоне — смотрите на ТВ</h1><p>Поиск по трекерам, тачпад и пульт в одном приложении.</p></div>
+  `<div class="top"><div class="kicker">Телефон-пульт</div><h1>Нашли на телефоне - смотрите на ТВ</h1><p>Поиск по трекерам, тачпад и пульт в одном приложении.</p></div>
    <div class="phone" style="top:830px;left:80px;transform:rotate(-4deg)"><img src="${SHOTS}android-search.png"></div>
    <div class="phone" style="top:860px;right:80px;transform:rotate(4deg)"><img src="${SHOTS}android-remote.png"></div>`,
   // 4 — player
@@ -47,7 +47,7 @@ const slides = [
    <div class="shot" style="top:800px;right:200px"><img src="${SHOTS}androidtv-skip.png"></div>
    <div class="shot" style="top:1180px;left:200px;right:40px;transform:rotate(-3deg)"><img src="${SHOTS}androidtv-chapters.png"></div>`,
   // 5 — new episodes
-  `<div class="top"><div class="kicker">Ничего не пропустите</div><h1>Новые серии и раздачи — уведомлением</h1><p>Подписки на запросы и «Заменить» одной кнопкой: история и место остановки переезжают сами.</p></div>
+  `<div class="top"><div class="kicker">Ничего не пропустите</div><h1>Новые серии и раздачи - уведомлением</h1><p>Подписки на запросы и «Заменить» одной кнопкой: история и место остановки переезжают сами.</p></div>
    <div class="phone" style="top:860px;left:305px"><img src="${SHOTS}android-news.png"></div>`,
   // 6 — install assistant
   `<div class="top"><div class="kicker">Установка</div><h1>Телефон сам поставит OMP на ТВ</h1><p>Помощник найдёт LG или Android TV в сети и покажет шаги под вашу модель.</p></div>
@@ -55,7 +55,7 @@ const slides = [
    <div class="phone" style="top:860px;right:80px;transform:rotate(4deg)"><img src="${SHOTS}android-install-steps.png"></div>`,
   // 7 — finale
   `<div class="glow" style="top:auto;bottom:-600px"></div>
-   <div class="top" style="top:200px;text-align:center"><div class="kicker">Бесплатно и без рекламы</div><h1>Открытый код.<br>Новые версии — в канале</h1></div>
+   <div class="top" style="top:200px;text-align:center"><div class="kicker">Бесплатно и без рекламы</div><h1>Открытый код.<br>Новые версии - в канале</h1></div>
    <div style="position:absolute;top:780px;left:0;right:0;display:flex;justify-content:center"><div style="width:480px;height:480px;padding:28px;background:#fff;border-radius:40px">${qr}</div></div>
    <div style="position:absolute;top:1320px;left:90px;right:90px;text-align:center">
      <p style="color:#E8EAF0;font-weight:700;font-size:48px;margin:0">t.me/ompplyaer</p>

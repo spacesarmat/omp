@@ -157,7 +157,7 @@ describe('Android TV «Источники поиска» indexers (mockup 1)', (
   it('a connection without its key on the TV says to send it from the phone', async () => {
     const id = saveJackett();
     await mount();
-    expect(row(id).textContent).toContain('нужен API-ключ — передайте с телефона');
+    expect(row(id).textContent).toContain('нужен API-ключ - передайте с телефона');
     expect(calls).toHaveLength(0);
   });
 

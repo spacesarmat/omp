@@ -247,7 +247,7 @@ describe('series screen', () => {
     const subs = loadSubs();
     expect(subs.length).toBe(1);
     expect(subs[0]).toMatchObject({ query: torrentQuery(NEXT_SEASON, 3), quality: '', sources: null, notify: true });
-    expect(toast.value).toBe('Подписка добавлена — смотрите «Новое»');
+    expect(toast.value).toBe('Подписка добавлена - смотрите «Новое»');
     await flush();
     expect(button('Напомнить')).toBeUndefined();
     expect(button('Напоминание включено')).toBeTruthy();

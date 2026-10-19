@@ -75,12 +75,12 @@ class PlaybackFailureTest {
     @Test
     fun textsInRussianAndEnglish() {
         I18n.lang = "ru"
-        assertEquals("Нет раздающих — раздача сейчас недоступна. Попробуйте другую раздачу.", PlaybackFailure.message(FailureKind.NO_SEEDERS))
+        assertEquals("Нет раздающих - раздача сейчас недоступна. Попробуйте другую раздачу.", PlaybackFailure.message(FailureKind.NO_SEEDERS))
         assertEquals("Нет связи с TorrServer. Проверьте, что сервер включён и доступен в сети.", PlaybackFailure.message(FailureKind.SERVER))
         assertEquals("Формат видео не поддерживается", PlaybackFailure.message(FailureKind.CODEC))
         assertEquals("Подключаемся… пиров: 3, скорость 0 КБ/с", PlaybackFailure.connectingText(3, 0.0))
         I18n.lang = "en"
-        assertEquals("No seeders — this torrent is unavailable right now. Try another release.", PlaybackFailure.message(FailureKind.NO_SEEDERS))
+        assertEquals("No seeders - this torrent is unavailable right now. Try another release.", PlaybackFailure.message(FailureKind.NO_SEEDERS))
         assertEquals("Cannot reach TorrServer. Check that the server is on and reachable on the network.", PlaybackFailure.message(FailureKind.SERVER))
         assertEquals("The video format is not supported", PlaybackFailure.message(FailureKind.CODEC))
         assertEquals("Connecting… peers: 3, speed 0 KB/s", PlaybackFailure.connectingText(3, 0.0))

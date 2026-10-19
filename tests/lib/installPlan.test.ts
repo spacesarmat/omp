@@ -121,7 +121,7 @@ describe('androidLabel / isArm64', () => {
   });
 });
 
-describe('installPlan — LG', () => {
+describe('installPlan - LG', () => {
   it('asks to pair first when only discovery data is known', () => {
     const p = installPlan(lg({ paired: false, apps: undefined, ompVersion: undefined, productName: undefined }));
     expect(p.kind).toBe('lg-pair');
@@ -172,7 +172,7 @@ describe('installPlan — LG', () => {
     expect(p.kind).toBe('lg-update');
     expect(p.installed).toBe('0.12.1');
     expect(p.needsUpdate).toBe(true);
-    expect(p.steps[0]).toEqual({ id: 'omp', title: 'OMP установлен', text: 'Версия 0.12.1 — есть 0.13.1', state: 'done' });
+    expect(p.steps[0]).toEqual({ id: 'omp', title: 'OMP установлен', text: 'Версия 0.12.1 - есть 0.13.1', state: 'done' });
     expect(p.actions).toEqual([{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }]);
     expect(p.subtitle).toBe('OLED55C1 · webOS 6.0 · OMP 0.12.1');
   });
@@ -181,7 +181,7 @@ describe('installPlan — LG', () => {
     const p = installPlan(lg({ ompVersion: '0.13.1', latest: '0.13.1' }));
     expect(p.needsUpdate).toBe(false);
     expect(p.actions).toEqual([]);
-    expect(p.steps[0].text).toBe('Версия 0.13.1 — последняя версия');
+    expect(p.steps[0].text).toBe('Версия 0.13.1 - последняя версия');
     expect(installPlan(lg({ ompVersion: '0.13.1', latest: null })).steps[0].text).toBe('Версия 0.13.1');
   });
 
@@ -210,7 +210,7 @@ describe('installPlan — LG', () => {
   it('nothing installed: the Developer Mode path from the first step', () => {
     const p = installPlan(lg());
     expect(p.kind).toBe('lg-devmode');
-    expect(p.subtitle).toBe('OLED55C1 · webOS 6.0 · без root — ставим через режим разработчика');
+    expect(p.subtitle).toBe('OLED55C1 · webOS 6.0 · без root - ставим через режим разработчика');
     expect(p.steps.map((s) => s.title)).toEqual([
       'Аккаунт разработчика LG',
       'Приложение Developer Mode',
@@ -243,11 +243,11 @@ describe('installPlan — LG', () => {
     const p = installPlan(lg({ productName: undefined, model: 'LG TV' }));
     expect(p.kind).toBe('lg-devmode');
     expect(p.notes[0]).toContain('Не удалось узнать версию webOS');
-    expect(p.subtitle).toBe('LG TV · без root — ставим через режим разработчика');
+    expect(p.subtitle).toBe('LG TV · без root - ставим через режим разработчика');
   });
 });
 
-describe('installPlan — Android TV', () => {
+describe('installPlan - Android TV', () => {
   it('OMP installed: version and update', () => {
     const p = installPlan(atv({ ompVersion: '0.12.0', latest: '0.13.1' }));
     expect(p.kind).toBe('atv-installed');
@@ -274,7 +274,7 @@ describe('installPlan — Android TV', () => {
     expect(p.steps[1].title).toBe('Отладка по сети');
     expect(p.steps[1].text).toContain('телефон пока не поддерживает');
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: true });
-    expect(p.subtitle).toBe('Google TV · Android 12 · arm64 — встроенный TorrServer будет работать');
+    expect(p.subtitle).toBe('Google TV · Android 12 · arm64 - встроенный TorrServer будет работать');
     expect(p.notes).toEqual([]);
   });
 
@@ -319,7 +319,7 @@ describe('atvBrand', () => {
   });
 });
 
-describe('installPlan — Xiaomi, Sber, Yandex', () => {
+describe('installPlan - Xiaomi, Sber, Yandex', () => {
   it('Xiaomi: the adb path with Xiaomi menu paths, the manual way, the phone pairing and its FAQ', () => {
     const p = installPlan(atv({ brand: 'xiaomi', model: 'MIBOX4' }));
     expect(p.kind).toBe('atv-adb');
@@ -377,7 +377,7 @@ describe('installPlan — Xiaomi, Sber, Yandex', () => {
   });
 });
 
-describe('installPlan — Samsung', () => {
+describe('installPlan - Samsung', () => {
   it('is not supported yet', () => {
     const p = installPlan({ kind: 'samsung', name: 'Samsung', ip: '192.168.1.3' });
     expect(p.kind).toBe('samsung-unsupported');

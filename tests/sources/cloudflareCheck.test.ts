@@ -107,7 +107,7 @@ describe('copy of the visible check', () => {
     expect(clearanceText(now - 1, now)).toBeNull();
     expect(clearanceText(null, now)).toBeNull();
     expect(tvSiteNote(false, false, null, now)).toEqual({ text: 'выключен', tone: 'muted' });
-    expect(tvSiteNote(true, true, null, now)).toEqual({ text: 'нужна проверка — пройдите на телефоне', tone: 'warn' });
+    expect(tvSiteNote(true, true, null, now)).toEqual({ text: 'нужна проверка - пройдите на телефоне', tone: 'warn' });
     expect(tvSiteNote(true, false, new Date(2026, 9, 4, 22, 40).getTime(), now).text).toBe('обход Cloudflare · проверка пройдена · действует до 22:40');
     expect(tvSiteNote(true, false, null, now)).toEqual({ text: 'обход Cloudflare', tone: 'ok' });
   });

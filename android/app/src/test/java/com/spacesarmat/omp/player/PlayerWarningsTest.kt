@@ -55,12 +55,12 @@ class PlayerWarningsTest {
         val kinds = listOf(PlayerWarning.SOFTWARE_4K, PlayerWarning.HDR_ON_SDR)
         I18n.lang = "ru"
         assertEquals(
-            "4K декодируется программно — возможны рывки\nЭкран без HDR — цвета будут преобразованы",
+            "4K декодируется программно - возможны рывки\nЭкран без HDR - цвета будут преобразованы",
             PlayerWarnings.message(kinds),
         )
         I18n.lang = "en"
         assertEquals(
-            "4K is decoded in software — playback may stutter\nThis screen is not HDR — colors will be tone-mapped",
+            "4K is decoded in software - playback may stutter\nThis screen is not HDR - colors will be tone-mapped",
             PlayerWarnings.message(kinds),
         )
         assertEquals("", PlayerWarnings.message(emptyList()))

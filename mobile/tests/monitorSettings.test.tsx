@@ -173,7 +173,7 @@ describe('Monitoring settings in English', () => {
     expect(el.textContent).toContain('for series from the catalog');
     expect(el.textContent).toContain('No checks yet');
     expect(el.textContent).toContain('every 3 hours ›');
-    expect(el.textContent).toContain('Notifications for OMP are off — you will only learn about new torrents by opening the “News” tab.');
+    expect(el.textContent).toContain('Notifications for OMP are off - you will only learn about new torrents by opening the “News” tab.');
     expect(el.textContent).toContain('Android may postpone background checks to save battery.');
     expect(Array.from(el.querySelectorAll('button')).some((b) => b.textContent === 'Allow notifications')).toBe(true);
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('How often')));

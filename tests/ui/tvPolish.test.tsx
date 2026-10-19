@@ -129,20 +129,20 @@ describe('TV torrent screen: clean header, status, hints and the action row', ()
     expect(text(host.querySelector('.torrent-status'))).not.toMatch(/Torrent|B\/s/);
   });
 
-  it('makes the hint follow the focused area: «OK — переключить» on a skip switch', async () => {
+  it('makes the hint follow the focused area: «OK - переключить» on a skip switch', async () => {
     const host = await open(darkMatter);
     const hint = () => text(host.querySelector('.hints'));
-    expect(hint()).toContain('OK — смотреть');
+    expect(hint()).toContain('OK - смотреть');
     await act(async () => { setFocus('skip-intro'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(hint()).toContain('OK — переключить');
+    expect(hint()).toContain('OK - переключить');
     expect(hint()).not.toContain('смотреть');
     await act(async () => { setFocus('skip-status'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(hint()).toContain('OK — задать метки');
+    expect(hint()).toContain('OK - задать метки');
     await act(async () => { setFocus('file-1'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(hint()).toContain('OK — смотреть');
+    expect(hint()).toContain('OK - смотреть');
     await act(async () => { setFocus('torrent-rename'); await new Promise((r) => setTimeout(r, 20)); });
-    expect(hint()).toContain('OK — выбрать');
-    expect(okHint('skip')).toBe('OK — переключить');
+    expect(hint()).toContain('OK - выбрать');
+    expect(okHint('skip')).toBe('OK - переключить');
   });
 
   it('keeps rename, another poster and delete in a wrapping action row', async () => {

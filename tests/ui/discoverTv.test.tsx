@@ -112,7 +112,7 @@ describe('TV «Обзор» tab', () => {
     expect(text(tiles[0].querySelector('.disc-meta'))).toBe('2021 · Сериал');
     expect(tiles[0].querySelector('img')!.getAttribute('src')).toBe('http://img/p.jpg');
     expect(tiles[1].querySelector('.disc-mark')).toBeNull();
-    expect(text(host.querySelector('.hints'))).toContain('ОК — карточка');
+    expect(text(host.querySelector('.hints'))).toContain('ОК - карточка');
   });
 
   it('opens the title card on OK', async () => {

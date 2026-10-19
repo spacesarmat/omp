@@ -420,7 +420,7 @@ export function clip(s: string, n: number): string {
 /** Issue body: what failed, the query, HTTP status, the page piece, times. */
 export function issueBody(r: SourceReport, s: SourceState, run: RunInfo): string {
   const lines: string[] = [];
-  lines.push('Монитор парсеров: **' + r.name + '** (`' + r.id + '`) — ' + statusWord(r.status) + ' ' + s.streak + ' проверки подряд.');
+  lines.push('Монитор парсеров: **' + r.name + '** (`' + r.id + '`) - ' + statusWord(r.status) + ' ' + s.streak + ' проверки подряд.');
   lines.push('');
   lines.push('- Сломан с: ' + (s.since || run.now.toISOString()));
   lines.push('- Проверено: ' + r.at);
@@ -430,7 +430,7 @@ export function issueBody(r: SourceReport, s: SourceState, run: RunInfo): string
   lines.push('| Проверка | Итог | HTTP | Результатов | Подробности |');
   lines.push('|---|---|---|---|---|');
   r.checks.concat(r.link ? [r.link] : []).forEach((c) => {
-    lines.push('| ' + cell(c.label) + ' | ' + ICON[c.status] + ' ' + c.status + ' | ' + (c.httpStatus === undefined ? '—' : c.httpStatus) + ' | ' + c.results + ' | ' + cell(c.detail) + ' |');
+    lines.push('| ' + cell(c.label) + ' | ' + ICON[c.status] + ' ' + c.status + ' | ' + (c.httpStatus === undefined ? '-' : c.httpStatus) + ' | ' + c.results + ' | ' + cell(c.detail) + ' |');
   });
   const withSnippet = r.checks.concat(r.link ? [r.link] : []).filter((c) => c.status === 'BROKEN' && c.snippet);
   if (withSnippet.length) {

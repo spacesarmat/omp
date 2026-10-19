@@ -93,7 +93,7 @@ describe('beta feeds and titles', () => {
   });
   it('titles a beta, a release over a beta and a plain update', () => {
     expect(updateTitle('0.16.0-beta.2', '0.15.3')).toBe('Доступна бета 0.16.0-beta.2');
-    expect(updateTitle('0.16.0', '0.16.0-beta.2')).toBe('Вышла OMP 0.16.0 — она заменит бету');
+    expect(updateTitle('0.16.0', '0.16.0-beta.2')).toBe('Вышла OMP 0.16.0 - она заменит бету');
     expect(updateTitle('0.15.4', '0.15.3')).toBe('Доступна версия 0.15.4');
   });
 });

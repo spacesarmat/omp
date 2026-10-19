@@ -120,16 +120,16 @@ describe('classifyFailure', () => {
 
   it('texts in Russian and English', () => {
     applyLanguageSetting('ru');
-    expect(failureText('no-seeders', 4)).toBe('Нет раздающих — раздача сейчас недоступна. Попробуйте другую раздачу.');
+    expect(failureText('no-seeders', 4)).toBe('Нет раздающих - раздача сейчас недоступна. Попробуйте другую раздачу.');
     expect(failureText('server', 2)).toBe('Нет связи с TorrServer. Проверьте, что сервер включён и доступен в сети.');
     expect(failureText('codec', 4)).toBe('Формат или кодек не поддерживается телевизором');
-    expect(failureText('codec', 3)).toBe('Ошибка декодирования — формат не поддерживается телевизором');
+    expect(failureText('codec', 3)).toBe('Ошибка декодирования - формат не поддерживается телевизором');
     expect(failureText('other', 1)).toBe('Воспроизведение прервано');
     applyLanguageSetting('en');
-    expect(failureText('no-seeders', 4)).toBe('No seeders — this torrent is unavailable right now. Try another release.');
+    expect(failureText('no-seeders', 4)).toBe('No seeders - this torrent is unavailable right now. Try another release.');
     expect(failureText('server', 2)).toBe('Cannot reach TorrServer. Check that the server is on and reachable on the network.');
     expect(failureText('codec', 4)).toBe('The TV does not support this format or codec');
-    expect(failureText('codec', 3)).toBe('Decoding error — the TV does not support this format');
+    expect(failureText('codec', 3)).toBe('Decoding error - the TV does not support this format');
     expect(failureText('other', 2)).toBe('Network error while loading the video');
   });
 });

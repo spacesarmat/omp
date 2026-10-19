@@ -30,7 +30,7 @@ export function IssueCard({ run }: { run: Run }) {
     <Card>
       <CardHeader>
         <CardTitle>Выдать код</CardTitle>
-        <CardDescription>Дней — срок новой подписки. Если подписка уже есть, код добавляется к ней, дата окончания не меняется.</CardDescription>
+        <CardDescription>Дней - срок новой подписки. Если подписка уже есть, код добавляется к ней, дата окончания не меняется.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-2 md:grid-cols-5">
@@ -171,7 +171,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
                   </TableCell>
                   <TableCell>{p.days}</TableCell>
                   <TableCell>
-                    {p.bonusSlots ? '+' + p.bonusSlots + ' устр. ' + (p.bonusDays ? 'на ' + p.bonusDays + ' дн.' : 'навсегда') : <span className="text-muted-foreground">—</span>}
+                    {p.bonusSlots ? '+' + p.bonusSlots + ' устр. ' + (p.bonusDays ? 'на ' + p.bonusDays + ' дн.' : 'навсегда') : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Stamp ms={p.createdAt} />
@@ -492,17 +492,17 @@ export function FinancePanel({ home }: { home: HomeData }) {
                     <TableCell className="whitespace-nowrap">
                       <Stamp ms={p.at} />
                     </TableCell>
-                    <TableCell>{p.amount || '—'}</TableCell>
+                    <TableCell>{p.amount || '-'}</TableCell>
                     <TableCell>
                       {p.accountId ? (
                         <a className="text-primary" href={'/admin/?id=' + encodeURIComponent(p.accountId)}>
                           {p.who || p.accountId.slice(0, 8)}
                         </a>
                       ) : (
-                        p.who || '—'
+                        p.who || '-'
                       )}
                     </TableCell>
-                    <TableCell className="break-all font-mono text-xs text-muted-foreground">{p.label || '—'}</TableCell>
+                    <TableCell className="break-all font-mono text-xs text-muted-foreground">{p.label || '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -620,7 +620,7 @@ export function SettingsCard({
       }}
     >
       <p className="text-sm text-muted-foreground">
-        Хранилище: {storage?.engine || '—'}
+        Хранилище: {storage?.engine || '-'}
         {storage?.path ? ' · ' + storage.path : ''}
       </p>
       {SETTING_GROUPS.map((group) => (
@@ -650,7 +650,7 @@ export function SettingsCard({
         <Alert variant="warn">
           <p>
             Базовых устройств станет {lower.to} (сейчас {lower.from}). Затронет подписок без индивидуального лимита: {lower.subscriptions},
-            перестанут работать устройств: {lower.devices} — последние привязанные сверх нового лимита. Ничего не отвязывается, при возврате
+            перестанут работать устройств: {lower.devices} - последние привязанные сверх нового лимита. Ничего не отвязывается, при возврате
             базы они заработают снова.
           </p>
           <div className="mt-2 flex gap-2">
@@ -799,7 +799,7 @@ export function ServicesCard({
           <div>
             <CardTitle>Сервисы VPS</CardTitle>
             <CardDescription>
-              Ключи только на сервере. Телефон ходит через billing при активной подписке. TorrServer на VPS — для мониторинга, не для пользователей.
+              Ключи только на сервере. Телефон ходит через billing при активной подписке. TorrServer на VPS - для мониторинга, не для пользователей.
               {checkedAt ? ' Проверено ' + when(checkedAt) + '.' : ''}
             </CardDescription>
           </div>
@@ -874,7 +874,7 @@ function ServiceBox({ title, row, fallback, note, checking }: { title: string; r
         <span className="font-medium">{title}</span>
         <HealthBadge row={row} checking={checking} />
       </div>
-      <div className="truncate text-xs text-muted-foreground">{row?.url || fallback || '—'}</div>
+      <div className="truncate text-xs text-muted-foreground">{row?.url || fallback || '-'}</div>
       <div className="text-xs text-muted-foreground">{note}</div>
     </div>
   );
@@ -1063,7 +1063,7 @@ export function FailsPanel() {
                     <Stamp ms={f.at} />
                   </TableCell>
                   <TableCell>{failReason(f.reason)}</TableCell>
-                  <TableCell className="font-mono text-xs">{f.deviceId ? f.deviceId.slice(0, 8) : '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{f.deviceId ? f.deviceId.slice(0, 8) : '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1089,7 +1089,7 @@ export function SecurityCard({
       <Card>
         <CardHeader>
           <CardTitle>Сессии</CardTitle>
-          <CardDescription>Вход только через Telegram. Время — МСК.</CardDescription>
+          <CardDescription>Вход только через Telegram. Время - МСК.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table className="min-w-[36rem]">

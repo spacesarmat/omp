@@ -126,7 +126,7 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     setHealth('nnmclub', { state: 'error', at: 1, message: CF });
     setHealth('fake-plain', { state: 'error', at: 1, message: CF });
     await mountWith(screen());
-    expect(hint('NNM-Club')!.textContent).toBe('Войдите через браузер — кнопка «Войти»');
+    expect(hint('NNM-Club')!.textContent).toBe('Войдите через браузер - кнопка «Войти»');
     expect(hint('NNM-Club')!.querySelector('button')).toBeNull();
     expect(hint('Kinozal')).toBeNull();
     const other = hint('Anidub')!;
@@ -140,7 +140,7 @@ describe('phone «Источники поиска»: one list, sign-in on the ro
     site = fakeSite(kinozalSite, { 'nnmclub.browser': '1' });
     setHealth('nnmclub', { state: 'error', at: 1, message: CF });
     await mountWith(screen());
-    expect(hint('NNM-Club')!.textContent).toBe('Войдите через браузер заново — «Выйти», затем «Войти»');
+    expect(hint('NNM-Club')!.textContent).toBe('Войдите через браузер заново - «Выйти», затем «Войти»');
   });
 
   it('exactly one general hint, at the bottom, naming no site', async () => {
@@ -349,7 +349,7 @@ describe('phone «Источники поиска» in English', () => {
     await mountWith(screen());
     expect(note('Kinozal')!.textContent).toBe('sign-in needed · Cloudflare');
     expect(inRow('Kinozal', 'Sign in')).toBeTruthy();
-    expect(hint('NNM-Club')!.textContent).toBe('Sign in with the browser — the “Sign in” button');
+    expect(hint('NNM-Club')!.textContent).toBe('Sign in with the browser - the “Sign in” button');
     const other = hint('Anidub')!;
     expect(other.querySelector('span')!.textContent).toBe('Connect Anidub through Jackett, Prowlarr or FlareSolverr');
     expect(other.querySelector('button')!.textContent).toBe('How');

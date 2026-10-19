@@ -21,7 +21,7 @@ export function clipMessage(s: string): string {
 }
 
 export function helpText(): string {
-  const lines = COMMANDS.map((c) => '/' + c.command + ' — ' + escapeHtml(c.description));
+  const lines = COMMANDS.map((c) => '/' + c.command + ' - ' + escapeHtml(c.description));
   return '🤖 <b>OMP admin</b>\n' + lines.join('\n');
 }
 
@@ -93,11 +93,11 @@ export function runIcon(run: { status: string; conclusion: string | null }): str
 
 export function formatCi(items: { title: string; run: RunInfo | null; error?: string }[], now: number): string {
   const lines = items.map((it) => {
-    if (it.error) return '⚠️ <b>' + escapeHtml(it.title) + '</b> — ' + escapeHtml(it.error);
-    if (!it.run) return '▫️ <b>' + escapeHtml(it.title) + '</b> — запусков нет';
+    if (it.error) return '⚠️ <b>' + escapeHtml(it.title) + '</b> - ' + escapeHtml(it.error);
+    if (!it.run) return '▫️ <b>' + escapeHtml(it.title) + '</b> - запусков нет';
     const r = it.run;
     const what = r.display_title ? ' · ' + escapeHtml(clipText(r.display_title, 60)) : '';
-    return runIcon(r) + ' <b>' + escapeHtml(it.title) + '</b> — ' + when(r.created_at, now) + what + ' · ' + link(r.html_url, '#' + (r.run_number || ''));
+    return runIcon(r) + ' <b>' + escapeHtml(it.title) + '</b> - ' + when(r.created_at, now) + what + ' · ' + link(r.html_url, '#' + (r.run_number || ''));
   });
   return '⚙️ <b>Последние запуски</b>\n' + lines.join('\n');
 }
@@ -118,7 +118,7 @@ export interface ReleaseInfo {
 /** «08.10.2026» in Moscow time, or «—». */
 export function moscowDate(iso: string | null | undefined): string {
   const t = Date.parse(iso || '');
-  if (!isFinite(t)) return '—';
+  if (!isFinite(t)) return '-';
   const d = new Date(t + 3 * 3600 * 1000);
   const p = (n: number) => (n < 10 ? '0' : '') + n;
   return p(d.getUTCDate()) + '.' + p(d.getUTCMonth() + 1) + '.' + d.getUTCFullYear();
@@ -139,7 +139,7 @@ export function formatVersions(feeds: { file: string; title: string; version: st
     if (!f.version) return '⚠️ ' + head + escapeHtml(f.error || 'нет версии');
     const rel = byTag['v' + f.version] || byTag[f.version];
     const date = rel ? moscowDate(rel.published_at || rel.created_at) : 'релиз не найден';
-    return (f.version.indexOf('-') >= 0 ? '🧪 ' : '📦 ') + head + (rel ? link(rel.html_url, f.version) : escapeHtml(f.version)) + ' — ' + date;
+    return (f.version.indexOf('-') >= 0 ? '🧪 ' : '📦 ') + head + (rel ? link(rel.html_url, f.version) : escapeHtml(f.version)) + ' - ' + date;
   });
   return '🗂 <b>Версии в фидах обновлений</b>\n' + lines.join('\n');
 }
@@ -162,7 +162,7 @@ function releaseBlock(label: string, r: ReleaseInfo | undefined): string {
   const assets = r.assets
     .slice()
     .sort((a, b) => b.download_count - a.download_count)
-    .map((a) => '  • ' + escapeHtml(a.name) + ' — ' + a.download_count);
+    .map((a) => '  • ' + escapeHtml(a.name) + ' - ' + a.download_count);
   return '<b>' + label + '</b> ' + link(r.html_url, r.tag_name) + ' (' + moscowDate(r.published_at) + '): ⬇️ ' + sum(r) + (assets.length ? '\n' + assets.join('\n') : '');
 }
 
@@ -173,7 +173,7 @@ export function formatStats(s: RepoStats): string {
     '📊 <b>Статистика OMP</b>',
     releaseBlock('Стабильная', latestStable(published)),
     releaseBlock('Бета', latestBeta(published)),
-    '⬇️ Всего скачиваний: ' + total + ' (' + published.length + ' релизов)\n⭐ Звёзд: ' + s.stars + '\n🐞 Открытых issues: ' + (s.openIssues === null ? '—' : s.openIssues),
+    '⬇️ Всего скачиваний: ' + total + ' (' + published.length + ' релизов)\n⭐ Звёзд: ' + s.stars + '\n🐞 Открытых issues: ' + (s.openIssues === null ? '-' : s.openIssues),
   ];
   if (!s.monitorIssues.length) parts.push('🔧 Открытых issues монитора парсеров: 0');
   else parts.push('🔧 Открытых issues монитора парсеров: ' + s.monitorIssues.length + '\n' + s.monitorIssues.map((i) => '  • ' + link(i.html_url, '#' + i.number + ' ' + i.title)).join('\n'));

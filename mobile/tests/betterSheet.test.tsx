@@ -209,7 +209,7 @@ describe('«Найти в лучшем качестве» · few seeds, packs, f
     expect(rows[1].querySelector('[data-low-seeds]')!.textContent).toBe('мало сидов');
     click(rows[1].querySelector('.m-btn-primary'));
     await flush();
-    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('У раздачи мало сидов — получить её может не получиться');
+    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('У раздачи мало сидов - получить её может не получиться');
     expect(replaceMock).not.toHaveBeenCalled();
   });
 
@@ -229,7 +229,7 @@ describe('«Найти в лучшем качестве» · few seeds, packs, f
     click(byText('Заменить'));
     await flush();
     expect(el.querySelector('[data-block="better-failure"]')!.textContent).toBe(
-      'Не удалось получить раздачу: TorrServer не дождался данных — возможно, мало сидов. Ваша раздача не тронута.',
+      'Не удалось получить раздачу: TorrServer не дождался данных - возможно, мало сидов. Ваша раздача не тронута.',
     );
     expect(el.querySelectorAll('[data-better-row]').length).toBe(1);
   });
@@ -246,7 +246,7 @@ describe('«Найти в лучшем качестве» · few seeds, packs, f
       click(byText('Заменить'));
       await flush();
       const fail = el.querySelector('[data-block="better-failure"]')!;
-      expect(fail.textContent).toContain('Сайт не отдал раздачу — нужен вход в Kinozal. Ваша раздача не тронута.');
+      expect(fail.textContent).toContain('Сайт не отдал раздачу - нужен вход в Kinozal. Ваша раздача не тронута.');
       click(Array.from(fail.querySelectorAll('button')).find((b) => b.textContent === 'Войти'));
       expect(currentRoute.value).toEqual({ name: 'sourceSite', id: 'locked' });
     } finally {
@@ -299,7 +299,7 @@ describe('«Найти в лучшем качестве» in English', () => {
     expect(el.querySelector('[data-low-seeds]')!.textContent).toBe('few seeds');
     click(el.querySelector('[data-better-row] .m-btn-primary'));
     await flush();
-    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('This release has few seeds — getting it may not work');
+    expect(el.querySelector('[data-block="low-seeds"]')!.textContent).toBe('This release has few seeds - getting it may not work');
     click(byText('Replace'));
     await flush();
     const fail = el.querySelector('[data-block="better-failure"]')!.textContent!;

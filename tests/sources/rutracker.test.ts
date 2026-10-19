@@ -74,7 +74,7 @@ describe('rutracker', () => {
   it('detects a captcha and asks to sign in in the browser', async () => {
     const site = fakeSite(server({ loginPage: 'rutracker-login-captcha.html' }));
     await expect(rutracker.login!('u', 'p', site.ctx)).rejects.toThrow(rutrackerCaptcha());
-    expect(rutrackerCaptcha()).toBe('RuTracker просит капчу — нажмите «Войти через браузер»');
+    expect(rutrackerCaptcha()).toBe('RuTracker просит капчу - нажмите «Войти через браузер»');
     expect(site.secrets).toEqual({});
   });
 

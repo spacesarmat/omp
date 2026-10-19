@@ -2,7 +2,7 @@
 
 <p align="center"><img src="assets/logo.svg" width="128" alt="OMP"></p>
 
-<h1 align="center">OMP — Open Movie Player</h1>
+<h1 align="center">OMP - Open Movie Player</h1>
 
 <p align="center">A media player for LG TVs (webOS 4.0+), Android TV and Android phones. It plays movies and series from <a href="https://github.com/YouROK/TorrServer">TorrServer</a> on the home network.</p>
 
@@ -10,9 +10,9 @@
 
 ## Platforms
 
-- **LG webOS 4.0+** — roughly TVs from 2018 onward. OMP does not need root.
-- **Android TV and Google TV** — Android 8 or newer. The same APK as the phone.
-- **Android phone** — Android 8 or newer.
+- **LG webOS 4.0+** - roughly TVs from 2018 onward. OMP does not need root.
+- **Android TV and Google TV** - Android 8 or newer. The same APK as the phone.
+- **Android phone** - Android 8 or newer.
 
 Samsung (Tizen) is not supported yet. Xiaomi, Sber and Yandex boxes use the same APK; the install assistant on the phone shows the steps.
 

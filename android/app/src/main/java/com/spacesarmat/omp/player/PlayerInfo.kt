@@ -304,7 +304,7 @@ object PlayerInfoText {
      * narrow and the average is no more precise than that), «≈8,4» below; («—», «») when unknown.
      */
     fun bitrateTile(b: InfoBitrate?): Pair<String, String> {
-        if (b == null) return "—" to ""
+        if (b == null) return "-" to ""
         if (!b.approximate) return bitrateParts(b.bps)
         val mbit = b.bps / 1_000_000.0
         return APPROX + num(mbit, mbit < 10) to I18n.s("info.mbit")
@@ -337,7 +337,7 @@ object PlayerInfoText {
         val chip = ArrayList<String>()
         if (media.videoCodec.isNotEmpty()) chip.add(media.videoCodec)
         if (media.width > 0 && media.height > 0) chip.add("${media.width}×${media.height}")
-        val none = "—" to ""
+        val none = "-" to ""
         val seeds = if (stats == null) none else "${stats.seeders} / ${stats.activePeers}" to ""
         val down = if (stats == null) none else rateParts(stats.downSpeed)
         val rate = bitrateTile(bitrate(media.bitrate, probeBps, fileBytes, durationMs))
@@ -370,9 +370,9 @@ object PlayerInfoText {
                 InfoTile(I18n.s("info.download"), down.first, down.second),
                 InfoTile(I18n.s("info.bitrate"), rate.first, rate.second),
             ),
-            sound = soundText.ifEmpty { "—" },
+            sound = soundText.ifEmpty { "-" },
             bufferFill = fill,
-            buffer = if (bufferParts.isEmpty()) "—" else bufferParts.joinToString(" · "),
+            buffer = if (bufferParts.isEmpty()) "-" else bufferParts.joinToString(" · "),
         )
     }
 }

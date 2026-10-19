@@ -130,9 +130,9 @@ class PlayerInfoTest {
         assertEquals("Film", p.title)
         assertEquals("", p.hdr)
         assertEquals("", p.chip)
-        assertEquals(listOf("—", "—", "—"), p.tiles.map { it.value })
-        assertEquals("—", p.sound)
-        assertEquals("—", p.buffer)
+        assertEquals(listOf("-", "-", "-"), p.tiles.map { it.value })
+        assertEquals("-", p.sound)
+        assertEquals("-", p.buffer)
         assertEquals(0.0, p.bufferFill, 0.0)
         val decoded = PlayerInfoText.panel("", EngineMediaInfo(passthrough = false), EngineTrack("a", "eng", null, "DTS", 0), TorrentStats())
         assertEquals("DTS · декодируется", decoded.sound)
@@ -170,7 +170,7 @@ class PlayerInfoTest {
         // TorrServer stops answering: «нет данных», not the last numbers
         s.answer(H, null)
         assertNull(s.stats)
-        assertEquals("—", PlayerInfoText.panel("", EngineMediaInfo(), null, s.stats).tiles[0].value)
+        assertEquals("-", PlayerInfoText.panel("", EngineMediaInfo(), null, s.stats).tiles[0].value)
         // a late answer for another torrent is ignored
         s.answer(H, good)
         s.forTorrent("b".repeat(40))
@@ -272,14 +272,14 @@ class PlayerInfoTest {
         assertEquals("15,1" to "Мбит/с", PlayerInfoText.bitrateTile(InfoBitrate(15_100_000, false)))
         assertEquals("≈15" to "Мбит/с", PlayerInfoText.bitrateTile(InfoBitrate(15_100_000, true)))
         assertEquals("≈8,4" to "Мбит/с", PlayerInfoText.bitrateTile(InfoBitrate(8_400_000, true)))
-        assertEquals("—" to "", PlayerInfoText.bitrateTile(null))
+        assertEquals("-" to "", PlayerInfoText.bitrateTile(null))
         // in the panel
         fun tile(engine: Long, probe: Long, bytes: Long, ms: Long) =
             PlayerInfoText.panel("", EngineMediaInfo(bitrate = engine), null, null, probe, bytes, ms).tiles[2]
         assertEquals(InfoTile("Битрейт", "15,1", "Мбит/с"), tile(15_100_000, 9_000_000, size, dur))
         assertEquals(InfoTile("Битрейт", "9,0", "Мбит/с"), tile(0, 9_000_000, size, dur))
         assertEquals(InfoTile("Битрейт", "≈15", "Мбит/с"), tile(0, 0, size, dur))
-        assertEquals(InfoTile("Битрейт", "—", ""), tile(0, 0, 0, dur))
+        assertEquals(InfoTile("Битрейт", "-", ""), tile(0, 0, 0, dur))
         I18n.lang = "en"
         assertEquals(InfoTile("Bitrate", "≈8.4", "Mbit/s"), PlayerInfoText.panel("", EngineMediaInfo(), null, null, 0, 1_050_000_000L, 1_000_000L).tiles[2])
     }

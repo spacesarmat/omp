@@ -39,12 +39,12 @@ describe('TorrServer states in the UI language', () => {
     expect(swarmText({ stat: 1, connected_seeders: 1, active_peers: 1 })).toBe('подключено: 1 сид · 1 пир');
     expect(swarmText({ stat: 3, connected_seeders: 0, active_peers: 0 })).toBe('подключено: 0 сидов · 0 пиров');
     expect(swarmText({ stat: 5, data: saved })).toBe('44 сида (трекер)');
-    expect(swarmText({ stat: 5 })).toBe('—');
-    expect(swarmText({})).toBe('—');
+    expect(swarmText({ stat: 5 })).toBe('-');
+    expect(swarmText({})).toBe('-');
     lang.value = 'en';
     expect(swarmText({ stat: 3, connected_seeders: 12, active_peers: 3 })).toBe('connected: 12 seeds · 3 peers');
     expect(swarmText({ stat: 4, data: saved })).toBe('44 seeds (tracker)');
-    expect(swarmText({})).toBe('—');
+    expect(swarmText({})).toBe('-');
   });
 
   it('formats sizes and speeds per language', () => {

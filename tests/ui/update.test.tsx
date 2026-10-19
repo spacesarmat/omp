@@ -259,7 +259,7 @@ describe('UpdateScreen on Android TV', () => {
     installButton(host).click();
     await until(() => !!host.querySelector('.dialog-title'));
     expect(host.querySelector('.dialog-title')!.textContent).toBe(
-      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» — установка продолжится',
+      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» - установка продолжится',
     );
     expect(calls).toHaveLength(0);
     const go = Array.from(host.querySelectorAll('.dialog-option')).find((x) => x.textContent === 'Продолжить') as HTMLElement;

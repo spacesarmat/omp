@@ -1,4 +1,4 @@
-# Default dub per series («Озвучка») — report
+# Default dub per series («Озвучка») - report
 
 Branch `feat/series-dub` (from `origin/main`).
 

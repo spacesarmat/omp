@@ -503,9 +503,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     if (cues) root.push({ label: t('tvPlayer.offsetRow', { v: formatOffset(subOffset) }), value: 'offset' });
     if (chapters.length) root.push({ label: t('tvPlayer.chaptersRow', { n: chapters.length }), value: 'chapters' });
     const now = v.currentTime;
-    const credits = prefs.mc && vs.duration > prefs.mc ? formatDuration(vs.duration - prefs.mc) : '—';
+    const credits = prefs.mc && vs.duration > prefs.mc ? formatDuration(vs.duration - prefs.mc) : '-';
     root.push(
-      { label: t('tvPlayer.markIntroStartRow', { v: pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '—' }), value: 'mark-intro-start' },
+      { label: t('tvPlayer.markIntroStartRow', { v: pendingIntro.current !== null ? formatDuration(pendingIntro.current) : prefs.mi ? formatDuration(prefs.mi[0]) : '-' }), value: 'mark-intro-start' },
       { label: t('tvPlayer.markIntroEndRow', { v: (pendingIntro.current !== null ? t('tvPlayer.pendingStart', { t: formatDuration(pendingIntro.current) }) : '') + t('tvPlayer.atNow', { t: formatDuration(now) }) }), value: 'mark-intro-end' },
       { label: t('tvPlayer.markCreditsRow', { v: credits }), value: 'mark-credits' },
     );

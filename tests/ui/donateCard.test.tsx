@@ -67,13 +67,13 @@ describe('DonateCard', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 ' + DONATE_QR.size + ' ' + DONATE_QR.size);
     expect(host.querySelector('rect')!.getAttribute('fill')).toBe('#fff');
     expect(host.textContent).toContain('Нравится OMP?');
-    expect(host.textContent).toContain('Поддержите разработку — наведите камеру телефона на код');
+    expect(host.textContent).toContain('Поддержите разработку - наведите камеру телефона на код');
     expect(host.textContent).toContain('boosty.to/djmaker');
     expect(host.querySelector('[tabindex], .focusable, button, a')).toBeNull();
     render(h(DonateCard, { mode: 'credits', raised: true }), host);
     expect(host.querySelector('.donate-card.donate-credits.raised')).not.toBeNull();
     expect(host.textContent).toContain('Досмотрели? Спасибо!');
-    expect(host.textContent).toContain('OMP бесплатный и без рекламы. Поддержать — по коду с телефона');
+    expect(host.textContent).toContain('OMP бесплатный и без рекламы. Поддержать - по коду с телефона');
     render(h(DonateCard, { mode: null }), host);
     expect(host.innerHTML).toBe('');
   });

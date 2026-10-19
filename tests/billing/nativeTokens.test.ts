@@ -180,7 +180,7 @@ describe('device tokens through the Android app', () => {
     const app = fakeApp(() => ({ ok: false, error: 'gone', code: 'revoked' }));
     const site = fakeSite((c) => page(RSS, c.url));
     await expect(ompJackettSource().search('q', { ...site.ctx, billing: app })).rejects.toThrow(
-      'Устройство отключено — введите новый код',
+      'Устройство отключено - введите новый код',
     );
     expect(billingSession()).toBeNull();
     expect(billingNotice()).toBe('revoked');
@@ -306,10 +306,10 @@ describe('device tokens through the Android app', () => {
 
   it('extra_expired: «Доп. устройство не продлено» on activation and on search', async () => {
     const act = fakeSite((c) => page(JSON.stringify({ error: 'extra_expired' }), c.url, 409), {});
-    await expect(activateCode(act.ctx, 'ABCD-EFGH')).rejects.toThrow('Доп. устройство не продлено — продлите его в боте');
+    await expect(activateCode(act.ctx, 'ABCD-EFGH')).rejects.toThrow('Доп. устройство не продлено - продлите его в боте');
     onPair(20 * HOUR);
     const search = fakeSite((c) => page(JSON.stringify({ error: 'extra_expired' }), c.url, 403));
-    await expect(ompJackettSource().search('q', search.ctx)).rejects.toThrow('Доп. устройство не продлено — продлите его в боте');
+    await expect(ompJackettSource().search('q', search.ctx)).rejects.toThrow('Доп. устройство не продлено - продлите его в боте');
     expect(billingSession()).not.toBeNull();
   });
 });

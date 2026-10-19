@@ -119,7 +119,7 @@ describe('Kinozal', () => {
   });
 
   it('normalizes the query like Jackett', () => {
-    expect(kinozalQuery('Маяк: часть 2 — финал!')).toBe('Маяк часть 2 финал');
+    expect(kinozalQuery('Маяк: часть 2 - финал!')).toBe('Маяк часть 2 финал');
     expect(kinozalQuery('Гавань S01')).toBe('Гавань 1');
     expect(kinozalQuery('Гавань S01E02')).toBe('Гавань 1 2');
     expect(kinozalQuery('ёж-2025')).toBe('ёж 2025');
@@ -247,7 +247,7 @@ describe('Kinozal', () => {
     const captcha = '<html><body><form action="/takelogin.php"><img src="/captcha.php?r=1"><input name="captcha"></form></body></html>';
     const site = fakeSite((c) => page(captcha, c.url));
     const e = await kinozal.login!('u', 'p', site.ctx).then(() => null, (x: unknown) => x);
-    expect((e as Error).message).toBe('Kinozal просит капчу — нажмите «Войти через браузер»');
+    expect((e as Error).message).toBe('Kinozal просит капчу - нажмите «Войти через браузер»');
     expect(siteLoginCode(e)).toBe('captcha');
     const turnstile = fakeSite((c) => page('<form><div class="cf-turnstile" data-sitekey="x"></div></form>', c.url));
     expect(siteLoginCode(await kinozal.login!('u', 'p', turnstile.ctx).then(() => null, (x: unknown) => x))).toBe('captcha');

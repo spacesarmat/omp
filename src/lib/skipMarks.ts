@@ -83,8 +83,8 @@ export function marksValid(m: TvMarks): boolean {
 
 /** The value of a row as shown: «0:45», or «—» when the mark is not set. */
 export function markText(m: TvMarks, row: MarkRow): string {
-  if (row === 'last') return m.mc === null ? '—' : formatDuration(m.mc);
-  return m.mi ? formatDuration(row === 'from' ? m.mi[0] : m.mi[1]) : '—';
+  if (row === 'last') return m.mc === null ? '-' : formatDuration(m.mc);
+  return m.mi ? formatDuration(row === 'from' ? m.mi[0] : m.mi[1]) : '-';
 }
 
 /** A key press in the dialog counts as held: auto-repeat, or a third same-direction press each within this many ms of the last. */

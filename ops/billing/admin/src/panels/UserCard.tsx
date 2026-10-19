@@ -64,11 +64,11 @@ export function UserCard({
                 <CopyBtn value={tg} />
               </>
             ) : (
-              '—'
+              '-'
             )}
           </p>
           <p>
-            <span className="text-muted-foreground">Почта</span> {user.account.email || '—'}
+            <span className="text-muted-foreground">Почта</span> {user.account.email || '-'}
           </p>
           <p>
             <span className="text-muted-foreground">Создан</span> <Stamp ms={user.account.createdAt} />
@@ -101,7 +101,7 @@ export function UserCard({
         <CardHeader>
           <CardTitle>Написать пользователю</CardTitle>
           <CardDescription>
-            {tg ? 'Сообщение уйдёт в Telegram-бота и появится во вкладке «Поддержка».' : 'У аккаунта нет Telegram — сначала нужна привязка в боте.'}
+            {tg ? 'Сообщение уйдёт в Telegram-бота и появится во вкладке «Поддержка».' : 'У аккаунта нет Telegram - сначала нужна привязка в боте.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -177,7 +177,7 @@ export function UserCard({
       <Card>
         <CardHeader>
           <CardTitle>Свободные коды</CardTitle>
-          <CardDescription>Коды ещё не привязанных слотов, открываются кнопкой «Показать». Привязанные — выше, в «Устройствах».</CardDescription>
+          <CardDescription>Коды ещё не привязанных слотов, открываются кнопкой «Показать». Привязанные - выше, в «Устройствах».</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {freeCodes.length === 0 ? <p className="text-muted-foreground">Нет свободных кодов</p> : null}
@@ -237,9 +237,9 @@ export function UserCard({
                     <TableCell className="whitespace-nowrap">
                       <Stamp ms={p.at} />
                     </TableCell>
-                    <TableCell>{p.amount || '—'}</TableCell>
-                    <TableCell className="font-mono text-xs">{p.label || '—'}</TableCell>
-                    <TableCell>{p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : '—'}</TableCell>
+                    <TableCell>{p.amount || '-'}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.label || '-'}</TableCell>
+                    <TableCell>{p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : '-'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

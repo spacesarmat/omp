@@ -57,7 +57,7 @@ describe('search sources in English', () => {
     );
     expect(JSON.stringify([tv, tvErrors()])).not.toMatch(CYR);
     expect(tvSiteNote(false, false, null).text).toBe('off');
-    expect(tvSiteNote(true, true, null).text).toBe('check needed — pass it on the phone');
+    expect(tvSiteNote(true, true, null).text).toBe('check needed - pass it on the phone');
     expect(tvSiteNote(true, false, null).text).toBe('Cloudflare bypass');
     const until = new Date(2026, 9, 5, 22, 40).getTime();
     expect(clearanceText(until, until - 1000)).toBe('check passed · valid until 22:40');
@@ -71,7 +71,7 @@ describe('search sources in English', () => {
     expect(byMessage!.message).toBe('The site asks for a Cloudflare check to be passed by hand');
     const byCode = toCloudflareError({ code: 'cloudflare', message: 'x' }, 'https://r.example/');
     expect(byCode!.message).toBe(cfFailed());
-    expect(toCloudflareError({ message: 'Сайт закрыт проверкой Cloudflare — пройти её не удалось' }, 'https://r.example/')!.code).toBe('cloudflare');
+    expect(toCloudflareError({ message: 'Сайт закрыт проверкой Cloudflare - пройти её не удалось' }, 'https://r.example/')!.code).toBe('cloudflare');
     expect(isCfInteractiveMessage(byMessage!.message)).toBe(true);
     expect(toCloudflareError(new Error('other'), 'https://r.example/')).toBeNull();
   });
@@ -84,7 +84,7 @@ describe('search sources in English', () => {
     expect(tvFlareLines(null, null).state).toBe(tvFlareNone());
     expect(tvFlareLines('http://192.168.1.1:8191', { url: 'http://192.168.1.1:8191', check: { ok: true, version: '3.4.0', ms: 1 }, at: 1 })).toEqual({
       where: '192.168.1.1:8191 · version 3.4',
-      state: 'Working — a fallback for sites behind Cloudflare',
+      state: 'Working - a fallback for sites behind Cloudflare',
       tone: 'ok',
     });
     expect(phoneFlareNote(null, null).text).toBe('not set · a fallback for sites behind Cloudflare');
@@ -124,9 +124,9 @@ describe('search sources in English', () => {
 
   it('sites: sign-in and page errors', async () => {
     expect(rutrackerBadLogin()).toBe('Wrong username or password');
-    expect(rutrackerCaptcha()).toBe('RuTracker asks for a captcha — tap “Sign in with browser”');
+    expect(rutrackerCaptcha()).toBe('RuTracker asks for a captcha - tap “Sign in with browser”');
     expect(siteBadLogin()).toBe('Wrong username or password');
-    expect(siteCaptcha('Kinozal')).toBe('Kinozal asks for a captcha — tap “Sign in with browser”');
+    expect(siteCaptcha('Kinozal')).toBe('Kinozal asks for a captcha - tap “Sign in with browser”');
     expect(siteLoginError('captcha', 'Kinozal').message).toBe(siteCaptcha('Kinozal'));
     expect(challenge()).toBe('The site is behind a browser check (Cloudflare), try later');
     expect(parseError()).toBe('Could not parse the site page');

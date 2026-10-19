@@ -75,7 +75,7 @@ describe('postRelease', () => {
     expect(media[0].caption).toBeUndefined();
     const text = media[1].caption as string;
     expect(media[1].parse_mode).toBe('HTML');
-    expect(text).toContain('Файл OMP-1.2.3-arm64.apk больше 50 МБ — скачать: https://github.com/spacesarmat/omp/releases/download/v1.2.3/OMP-1.2.3-arm64.apk');
+    expect(text).toContain('Файл OMP-1.2.3-arm64.apk больше 50 МБ - скачать: https://github.com/spacesarmat/omp/releases/download/v1.2.3/OMP-1.2.3-arm64.apk');
     expect(text).toContain('OMP-1.2.3.apk');
     expect(logs.filter((l) => l.includes('forward it manually'))).toHaveLength(2);
   });

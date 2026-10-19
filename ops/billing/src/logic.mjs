@@ -649,7 +649,7 @@ export function isAdminChat(settings, chatId) {
 const SUPPORT_CAP = 400;
 
 export const SUPPORT_CLOSED_TEXT =
-  'Диалог с поддержкой завершён. Если вопрос останется — нажмите «Поддержка» и напишите снова.';
+  'Диалог с поддержкой завершён. Если вопрос останется - нажмите «Поддержка» и напишите снова.';
 
 export function appendSupportMessage(state, { telegramId, text, direction, now, via }) {
   const body = String(text || '').trim().slice(0, 2000);
@@ -2098,9 +2098,9 @@ export function adminDashboard(state, now) {
   if (!s.jacredUrl) alerts.push({ level: 'warn', text: 'Не задан адрес JacRed' });
   if (!s.jacredApiKey) alerts.push({ level: 'warn', text: 'Не задан API-ключ JacRed' });
   if (Number(s.priceRub) > 0 && !s.yoomoneyWallet) alerts.push({ level: 'bad', text: 'Цена задана, но кошелёк ЮMoney пуст' });
-  if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'Публичный адрес не задан — ссылки «Открыть в OMP» в боте без http' });
+  if (!s.publicOrigin) alerts.push({ level: 'warn', text: 'Публичный адрес не задан - ссылки «Открыть в OMP» в боте без http' });
   if (!String(s.adminTelegramIds || '').trim()) {
-    alerts.push({ level: 'warn', text: 'Не указаны Telegram id администраторов — вход в панель и админ-кабинет в боте недоступны' });
+    alerts.push({ level: 'warn', text: 'Не указаны Telegram id администраторов - вход в панель и админ-кабинет в боте недоступны' });
   }
 
   const soon = now + 2 * DAY;

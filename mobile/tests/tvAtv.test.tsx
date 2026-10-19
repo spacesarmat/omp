@@ -185,7 +185,7 @@ describe('Tv screen with Android TV', () => {
     pairAnswer = { status: 403, body: '{"error":"expired"}' };
     await act(async () => button(dialog()!, 'Подключить').click());
     await flush();
-    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe('Код устарел — нажмите «Новый код» на телевизоре');
+    expect(dialog()!.querySelector('[role="alert"]')?.textContent).toBe('Код устарел - нажмите «Новый код» на телевизоре');
     expect(tvs.value).toEqual([]);
   });
 
@@ -231,7 +231,7 @@ describe('Tv screen with Android TV', () => {
     await flush();
     expect(dialog()).toBeNull();
     expect(tvs.value.find((t) => t.ip === '192.168.1.40')).toMatchObject({ kind: 'atv' });
-    expect(card(el, 'Гостиная').querySelector('.m-error')?.textContent).toBe('Телевизор забыл этот телефон — подключитесь заново кодом');
+    expect(card(el, 'Гостиная').querySelector('.m-error')?.textContent).toBe('Телевизор забыл этот телефон - подключитесь заново кодом');
   });
 
   it('a TV that forgot the phone shows the error, the next tap asks for a code', async () => {
@@ -241,7 +241,7 @@ describe('Tv screen with Android TV', () => {
     await flush();
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
     await flush();
-    expect(card(el, 'Гостиная').querySelector('.m-error')?.textContent).toBe('Телевизор забыл этот телефон — подключитесь заново кодом');
+    expect(card(el, 'Гостиная').querySelector('.m-error')?.textContent).toBe('Телевизор забыл этот телефон - подключитесь заново кодом');
     await act(async () => (card(el, 'Гостиная').querySelector('.m-tv-main') as HTMLButtonElement).click());
     expect(dialog()?.textContent).toContain('Гостиная · Android TV');
   });

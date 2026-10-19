@@ -44,7 +44,7 @@ describe('time', () => {
     expect(ago('2026-10-08T11:15:00Z', NOW)).toBe('45 мин назад');
     expect(ago('2026-10-08T09:00:00Z', NOW)).toBe('3 ч назад');
     expect(ago('2026-10-05T12:00:00Z', NOW)).toBe('3 дн назад');
-    expect(when('nonsense', NOW)).toBe('—');
+    expect(when('nonsense', NOW)).toBe('-');
     expect(moscowDate('2026-10-07T22:30:00Z')).toBe('08.10.2026');
   });
 });
@@ -60,7 +60,7 @@ describe('monitor table', () => {
       { title: '🔎 Парсеры', at: '2026-10-08T09:00:00Z', now: NOW },
     );
     expect(text.split('\n')).toEqual([
-      '🔎 Парсеры — 08.10 12:00 МСК (3 ч назад)',
+      '🔎 Парсеры - 08.10 12:00 МСК (3 ч назад)',
       '✅ Rutor: 100 / 99 / 100 результатов',
       '❌ torrent.by: Поиск: не нашёл таблицу',
       '🚫 NNM-Club: бан IP',
@@ -97,10 +97,10 @@ describe('monitor table', () => {
   it('notify: the finished run table, or «failed» without a report', () => {
     const report = { at: '2026-10-08T11:00:00Z', reports: [{ id: 'rutor', name: 'Rutor', status: 'OK', detail: '100' }] };
     const text = notifyText(report, { runUrl: 'https://github.com/x/runs/5' });
-    expect(text.split('\n')[0]).toMatch(/^🔎 Проверка парсеров готова — /);
+    expect(text.split('\n')[0]).toMatch(/^🔎 Проверка парсеров готова - /);
     expect(text).toContain('✅ Rutor: 100');
     expect(text.endsWith('https://github.com/x/runs/5')).toBe(true);
-    expect(notifyText(null, { runUrl: 'https://github.com/x/runs/5' })).toBe('❌ Проверка парсеров не дошла до конца — отчёта нет.\nhttps://github.com/x/runs/5');
+    expect(notifyText(null, { runUrl: 'https://github.com/x/runs/5' })).toBe('❌ Проверка парсеров не дошла до конца - отчёта нет.\nhttps://github.com/x/runs/5');
     expect(notifyText(report, { dryRun: true })).toContain('(без сохранения)');
   });
 });
@@ -126,9 +126,9 @@ describe('/ci', () => {
     );
     expect(text.split('\n')).toEqual([
       '⚙️ <b>Последние запуски</b>',
-      '✅ <b>CI (main)</b> — 08.10 12:00 МСК (3 ч назад) · Merge pull request #67 · <a href="https://github.com/spacesarmat/omp/actions/runs/1">#42</a>',
-      '⏳ <b>Release</b> — 08.10 12:00 МСК (3 ч назад) · <a href="https://github.com/spacesarmat/omp/actions/runs/1">#7</a>',
-      '⚠️ <b>Parser monitor</b> — GitHub /x: HTTP 403',
+      '✅ <b>CI (main)</b> - 08.10 12:00 МСК (3 ч назад) · Merge pull request #67 · <a href="https://github.com/spacesarmat/omp/actions/runs/1">#42</a>',
+      '⏳ <b>Release</b> - 08.10 12:00 МСК (3 ч назад) · <a href="https://github.com/spacesarmat/omp/actions/runs/1">#7</a>',
+      '⚠️ <b>Parser monitor</b> - GitHub /x: HTTP 403',
     ]);
   });
 });
@@ -145,9 +145,9 @@ describe('/versions', () => {
       [rel('v0.19.0-beta.6', true, '2026-10-07T20:00:00Z', []), rel('v0.18.2', false, '2026-10-01T10:00:00Z', [])],
     );
     const lines = text.split('\n');
-    expect(lines[1]).toBe('📦 <b>LG</b> (update.json): <a href="https://github.com/spacesarmat/omp/releases/tag/v0.18.2">0.18.2</a> — 01.10.2026');
-    expect(lines[2]).toBe('🧪 <b>LG бета</b> (update-beta.json): <a href="https://github.com/spacesarmat/omp/releases/tag/v0.19.0-beta.6">0.19.0-beta.6</a> — 07.10.2026');
-    expect(lines[3]).toBe('📦 <b>Android</b> (update-android.json): 0.17.0 — релиз не найден');
+    expect(lines[1]).toBe('📦 <b>LG</b> (update.json): <a href="https://github.com/spacesarmat/omp/releases/tag/v0.18.2">0.18.2</a> - 01.10.2026');
+    expect(lines[2]).toBe('🧪 <b>LG бета</b> (update-beta.json): <a href="https://github.com/spacesarmat/omp/releases/tag/v0.19.0-beta.6">0.19.0-beta.6</a> - 07.10.2026');
+    expect(lines[3]).toBe('📦 <b>Android</b> (update-android.json): 0.17.0 - релиз не найден');
     expect(lines[4]).toBe('⚠️ <b>Android бета</b> (update-android-beta.json): файла нет');
   });
 });
@@ -165,7 +165,7 @@ describe('/stats', () => {
       openIssues: 3,
       monitorIssues: [{ number: 70, title: 'Парсер torrent.by сломан', html_url: 'https://github.com/spacesarmat/omp/issues/70' }],
     });
-    expect(text).toContain('<b>Стабильная</b> <a href="https://github.com/spacesarmat/omp/releases/tag/v0.18.2">v0.18.2</a> (01.10.2026): ⬇️ 70\n  • OMP-0.18.2-arm64.apk — 40\n  • OMP-0.18.2-webOS.ipk — 30');
+    expect(text).toContain('<b>Стабильная</b> <a href="https://github.com/spacesarmat/omp/releases/tag/v0.18.2">v0.18.2</a> (01.10.2026): ⬇️ 70\n  • OMP-0.18.2-arm64.apk - 40\n  • OMP-0.18.2-webOS.ipk - 30');
     expect(text).toContain('<b>Бета</b> <a href="https://github.com/spacesarmat/omp/releases/tag/v0.19.0-beta.6">v0.19.0-beta.6</a> (07.10.2026): ⬇️ 17');
     expect(text).toContain('⬇️ Всего скачиваний: 187 (3 релизов)');
     expect(text).toContain('⭐ Звёзд: 12');

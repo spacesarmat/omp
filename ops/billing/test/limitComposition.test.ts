@@ -448,7 +448,7 @@ describe('admin HTTP', () => {
     const home = await call(t.app, 'GET', '/admin/api/home', { cookie });
     expect((home.data as { settings: { baseDevices: number } }).settings.baseDevices).toBe(3);
     const acts = after.audit.map((a: { action: string; detail?: string }) => a.action + ':' + (a.detail || ''));
-    expect(acts.some((a: string) => a.indexOf('bonus_grant:Бонусные устройства: +1 навсегда — за отзыв') === 0)).toBe(true);
+    expect(acts.some((a: string) => a.indexOf('bonus_grant:Бонусные устройства: +1 навсегда - за отзыв') === 0)).toBe(true);
     expect(acts.some((a: string) => a.indexOf('bonus_remove:') === 0)).toBe(true);
     expect(acts).toContain('settings_save:Базовых устройств: 2 → 3');
   });

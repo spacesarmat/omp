@@ -58,7 +58,7 @@ class PlayerSessionTest {
         assertNull(ui.warnings)
         engine.listener?.onPlaybackWarnings(listOf(PlayerWarning.DOLBY_VISION, PlayerWarning.HDR_ON_SDR))
         assertEquals(
-            "Dolby Vision не поддерживается — показывается HDR10\nЭкран без HDR — цвета будут преобразованы",
+            "Dolby Vision не поддерживается - показывается HDR10\nЭкран без HDR - цвета будут преобразованы",
             ui.warnings,
         )
     }
@@ -175,7 +175,7 @@ class PlayerSessionTest {
         session.showClassified(FailureKind.NO_SEEDERS, ErrorKind.UNSUPPORTED_FORMAT)
         assertEquals(FailureKind.NO_SEEDERS, session.shownFailure)
         assertEquals(ErrorKind.UNSUPPORTED_FORMAT, session.error)
-        assertEquals("Нет раздающих — раздача сейчас недоступна. Попробуйте другую раздачу.", session.errorText())
+        assertEquals("Нет раздающих - раздача сейчас недоступна. Попробуйте другую раздачу.", session.errorText())
         session.showClassified(FailureKind.BUFFERING, ErrorKind.NETWORK)
         assertNull(session.shownFailure)
         assertNull(session.error)

@@ -76,7 +76,7 @@ async function call(token, method, body) {
 }
 
 function printInfo(info) {
-  console.log('Webhook: ' + (info.url || '(нет — бот работает через getUpdates)'));
+  console.log('Webhook: ' + (info.url || '(нет - бот работает через getUpdates)'));
   if (info.url) {
     console.log('  ожидают доставки: ' + (info.pending_update_count || 0));
     console.log('  типы обновлений: ' + (info.allowed_updates || ['все']).join(', '));

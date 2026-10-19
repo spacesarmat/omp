@@ -218,7 +218,7 @@ describe('play label and skip panel', () => {
     expect((play!.textContent || '').trim()).toBe('Слушать');
     expect(host.querySelector('.skip-block')).toBeNull();
     expect(host.querySelector('.torrent-head .badge')).toBeNull();
-    expect(host.querySelector('.hints')!.textContent).toContain('OK — слушать');
+    expect(host.querySelector('.hints')!.textContent).toContain('OK - слушать');
   });
 });
 

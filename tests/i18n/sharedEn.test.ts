@@ -142,13 +142,13 @@ describe('shared modules in English', () => {
     expect(devmode.actions.map((a) => a.label)).toContain('Install OMP and Homebrew Channel');
     expect(texts(devmode)).not.toMatch(CYR);
     const old = installPlan({ ...lg, paired: true, productName: 'webOSTV 3.0', model: undefined });
-    expect(old.notes[0]).toBe('OMP needs webOS 4.0 or newer — roughly TVs from 2018 on. OMP does not work on webOS 3.0.');
+    expect(old.notes[0]).toBe('OMP needs webOS 4.0 or newer - roughly TVs from 2018 on. OMP does not work on webOS 3.0.');
     const atv: AtvFacts = { kind: 'atv', name: 'Box', ip: '1.1.1.2', model: 'Google TV', cast: 'tv', ompVersion: null, sdkInt: 29, abi: 'armeabi-v7a' };
     const p = installPlan(atv);
     expect(p.actions[0].label).toBe('Install OMP');
     expect(p.notes.join('\n')).not.toMatch(CYR);
     expect(texts(p)).not.toMatch(CYR);
-    expect(abiNote('arm64-v8a')).toBe('arm64 — the built-in TorrServer will work.');
+    expect(abiNote('arm64-v8a')).toBe('arm64 - the built-in TorrServer will work.');
     expect(texts(installPlan({ kind: 'samsung', name: 'S', ip: '1.1.1.3' }))).not.toMatch(CYR);
   });
 });

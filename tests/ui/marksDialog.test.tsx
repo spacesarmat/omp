@@ -62,7 +62,7 @@ describe('TV marks dialog', () => {
 
   it('shows a dash for marks that are not set', async () => {
     mount({ mi: null, mc: null });
-    expect(values()).toEqual(['—', '—', '—']);
+    expect(values()).toEqual(['-', '-', '-']);
   });
 
   it('steps the focused row by 5 s with left/right and takes the key', async () => {

@@ -65,7 +65,7 @@ describe('LocalServer screen', () => {
     setLocalServerDeps(deps({ vpn: true }));
     const el = mount();
     await flush();
-    expect(el.textContent).toContain('Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
+    expect(el.textContent).toContain('Включён VPN - другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
     setLocalServerDeps(deps());
     const el2 = mount();
     await flush();
@@ -247,7 +247,7 @@ describe('LocalServer screen', () => {
     setLocalServerDeps(d.deps);
     const el = mount();
     await flush();
-    expect(el.textContent).toContain('Вышла новая версия встроенного TorrServer — MatriX.146.');
+    expect(el.textContent).toContain('Вышла новая версия встроенного TorrServer - MatriX.146.');
     expect(button(el, 'Обновить TorrServer (~61 МБ)')).toBeTruthy();
     await act(async () => button(el, 'Запустить текущую версию')!.click());
     await flush();
@@ -410,7 +410,7 @@ describe('LocalServer screen in English', () => {
     const steps = Array.from(el.querySelectorAll('.m-step-label')).map((n) => n.textContent);
     expect(steps.slice(1)).toEqual(['Starting in the background', 'Checking the connection', 'Connecting OMP']);
     expect(el.textContent).toContain('Address for the TV');
-    expect(el.textContent).toContain('VPN is on — other devices may not see the server.');
+    expect(el.textContent).toContain('VPN is on - other devices may not see the server.');
     expect(el.textContent).toContain('On the TV: Sign in → “Find on network”.');
     expect(btn(el, 'Open the catalog')).toBeTruthy();
     expect(el.textContent).not.toMatch(CYR);
@@ -426,7 +426,7 @@ describe('LocalServer screen in English', () => {
     setLocalServerDeps(offerDeps({ binary: 'outdated' }));
     const el2 = mount();
     await flush();
-    expect(el2.textContent).toContain('A new version of the built-in TorrServer is out — MatriX.146.');
+    expect(el2.textContent).toContain('A new version of the built-in TorrServer is out - MatriX.146.');
     expect(btn(el2, 'Update TorrServer')).toBeTruthy();
     expect(btn(el2, 'Run the current version')).toBeTruthy();
     setLocalServerDeps(offerDeps({ binary: 'missing', mobileData: true }));

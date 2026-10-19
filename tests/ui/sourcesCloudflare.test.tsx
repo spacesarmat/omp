@@ -93,7 +93,7 @@ describe('Android TV «Источники поиска»: «Сайты за Clou
     expect(host.textContent).toContain('Сайты за Cloudflare');
     expect(row('kinozal').textContent).toContain('обход Cloudflare · проверка пройдена · действует до 22:40');
     expect(row('kinozal').querySelector('.src-act')!.textContent).toBe('вкл');
-    expect(row('rustorka').querySelector('.src-note-warn')!.textContent).toBe('нужна проверка — пройдите на телефоне');
+    expect(row('rustorka').querySelector('.src-note-warn')!.textContent).toBe('нужна проверка - пройдите на телефоне');
   });
 
   it('OK on a site waiting for a check opens it; once passed the note clears', async () => {
