@@ -765,7 +765,8 @@ function extendPaid(state, sub, days, now, extras) {
   const next = { ...sub, paidUntil, extendedAt: now };
   const n = Math.max(0, Math.floor(Number(extras) || 0));
   if (n > 0) {
-    next.extraSlots = n;
+    // A slot bought after this link was quoted is kept: the renewal never cuts the slot count (P1-1).
+    next.extraSlots = Math.max(n, activeExtras(state, sub, now));
     next.extraUntil = paidUntil;
   }
   return next;
@@ -805,15 +806,47 @@ export function renewableExtras(state, sub, now) {
 
 export function renewalPrice(state, sub, now, opts) {
   const prices = priceText(state.settings);
-  const extras = opts && opts.withExtras === false ? 0 : renewableExtras(state, sub, now);
+  const add = opts && opts.addExtra > 0 ? Math.floor(opts.addExtra) : 0;
+  const extras = (opts && opts.withExtras === false ? 0 : renewableExtras(state, sub, now)) + add;
+  const gross = prices.price + extras * prices.extra;
+  const credit = creditUse(sub, gross);
   return {
     days: prices.days,
     base: prices.price,
     extraRub: prices.extra,
     extras,
+    addExtra: add,
     extraSum: extras * prices.extra,
-    total: prices.price + extras * prices.extra,
+    gross,
+    credit,
+    total: gross - credit,
   };
+}
+
+/** Smallest sum a renewal link asks for once a credit is taken off. */
+export const CREDIT_MIN_PAY = 10;
+
+/** Rubles credited to `sub` (late extra-slot payments), taken off its next renewal. */
+export function creditOf(sub) {
+  return Math.max(0, Math.floor(Number(sub && sub.creditRub) || 0));
+}
+
+/** Part of the credit a renewal of `gross` uses: all of it, as long as at least CREDIT_MIN_PAY is left to pay. */
+function creditUse(sub, gross) {
+  const have = creditOf(sub);
+  if (!have || !(gross > 0)) return 0;
+  return Math.max(0, Math.min(have, gross - CREDIT_MIN_PAY));
+}
+
+/**
+ * Extra slots active now whose paid date is behind the subscription (left out of a base-only renewal).
+ * They still work until extraUntil + grace. A new slot bought now pays for them too, see quotePurchase.
+ */
+export function lapsingExtras(state, sub, now) {
+  if (!sub) return 0;
+  const active = activeExtras(state, sub, now);
+  if (!active) return 0;
+  return (Number(sub.extraUntil) || 0) < (Number(sub.paidUntil) || 0) ? active : 0;
 }
 
 export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now }) {
@@ -841,7 +874,10 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       error: 'unaccepted',
       pending: true,
     });
-    return { state: { ...input, payments: input.payments.concat([held]) }, result: { error: 'unaccepted', pending: true } };
+    return {
+      state: { ...input, payments: input.payments.concat([held]) },
+      result: { error: 'unaccepted', pending: true, accountId: held.accountId || '', amount: String(amount || '') },
+    };
   }
   // The accepted notice replaces the held row for the same operation.
   const state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
@@ -851,8 +887,9 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
   let act = mark;
   let quoted = null;
   let quotedExtras = 0;
+  let quote = null;
   if (mark.indexOf('buy:') === 0) {
-    const quote = (state.purchases || []).find((p) => p.id === mark.slice(4));
+    quote = (state.purchases || []).find((p) => p.id === mark.slice(4)) || null;
     if (!quote) {
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
@@ -876,21 +913,59 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
-    if (!covers(act)) return rejectAmount(state, row);
-    const subscriptions = state.subscriptions.map((s) => (s.id === id ? extendPaid(state, s, days, now, quotedExtras) : s));
-    const next = subscriptions.find((s) => s.id === id);
+    // The credit this link took off. Paid a second time, the part already used up must be paid in money.
+    const usedCredit = quote ? Math.max(0, Math.floor(Number(quote.credit) || 0)) : 0;
+    const haveCredit = creditOf(sub);
+    const missing = Math.max(0, usedCredit - haveCredit);
+    const need = (quoted !== null ? quoted : priceOf(state, act)) + missing;
+    if (!paymentCovers(amount, currency, need)) return rejectAmount(state, row);
+    const next = extendPaid(state, sub, days, now, quotedExtras);
+    const took = Math.min(usedCredit, haveCredit);
+    if (took > 0) next.creditRub = haveCredit - took;
+    let paid = {
+      ...state,
+      payments: state.payments.concat([stampPayment(state, row)]),
+      subscriptions: state.subscriptions.map((s) => (s.id === id ? next : s)),
+    };
+    // «Продлить + устройство»: the new slot gets its code right away.
+    let code = '';
+    if (quote && Number(quote.addExtra) > 0) {
+      const slot = slotCode(paid, next, now);
+      paid = slot.state;
+      code = slot.code;
+    }
     return {
-      state: { ...state, payments: state.payments.concat([stampPayment(state, row)]), subscriptions },
-      result: { kind: 'renew', subscriptionId: id, paidUntil: next ? next.paidUntil : 0, extras: quotedExtras },
+      state: paid,
+      result: {
+        kind: 'renew',
+        subscriptionId: id,
+        paidUntil: next.paidUntil,
+        extras: quotedExtras > 0 ? next.extraSlots : 0,
+        credit: took,
+        code,
+      },
     };
   }
   if (act.indexOf('dev:') === 0) {
     const id = act.slice(4);
-    if (!state.subscriptions.find((s) => s.id === id)) {
+    const own = state.subscriptions.find((s) => s.id === id);
+    if (!own) {
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
     if (!covers(act)) return rejectAmount(state, row);
+    // State check: a slot is sold only while the subscription is paid. A link paid in the grace period or
+    // after the end (an old message) becomes a credit toward the next renewal instead of a dead slot (P1-2).
+    const access = subAccess(state, own, now);
+    if (!access.paid) {
+      const credit = Math.round(quoted !== null ? quoted : priceOf(state, act));
+      const total = creditOf(own) + credit;
+      const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, creditRub: total } : s));
+      return {
+        state: { ...state, payments: state.payments.concat([stampPayment(state, { ...row, credited: credit })]), subscriptions },
+        result: { kind: 'credit', subscriptionId: id, credit, creditTotal: total, grace: access.grace },
+      };
+    }
     // A monthly slot: it lasts until paidUntil and is renewed together with the subscription.
     const subscriptions = state.subscriptions.map((s) =>
       s.id === id
@@ -1842,7 +1917,8 @@ export function revokeCode(state, codeId) {
  * Subscription as the bot, /v1/me and the panel show it.
  * `active` means access (paid or grace); `paid` is before paidUntil; `inGrace` is the grace period.
  * `deviceLimit` is the limit at `now` (included devices + extra slots that count), `baseLimit` the included ones.
- * A bound device over that limit has `overLimit` and gets no access until the slot is renewed.
+ * A bound device over that limit has `overLimit` and gets no access until the slot is renewed; `overReason` says why:
+ * 'extra_expired' (a lapsed extra slot would hold it) or 'device_limit'.
  */
 export function subscriptionView(state, accountId, now) {
   const sub = anySub(state, accountId);
@@ -1862,13 +1938,19 @@ export function subscriptionView(state, accountId, now) {
     baseLimit: Number(sub.deviceLimit) || 0,
     extraSlots: extras,
     extraUntil: extras ? Number(sub.extraUntil) || 0 : 0,
-    devices: codes.map((c) => ({
-      id: c.id,
-      bound: !!c.deviceId,
-      deviceId: c.deviceId,
-      boundAt: c.boundAt,
-      overLimit: !!c.deviceId && !codeWithinLimit(state, sub, c, now),
-    })),
+    lapsingExtras: lapsingExtras(state, sub, now),
+    credit: creditOf(sub),
+    devices: codes.map((c) => {
+      const overLimit = !!c.deviceId && !codeWithinLimit(state, sub, c, now);
+      return {
+        id: c.id,
+        bound: !!c.deviceId,
+        deviceId: c.deviceId,
+        boundAt: c.boundAt,
+        overLimit,
+        overReason: overLimit ? overLimitReason(state, sub, c, now) : '',
+      };
+    }),
   };
 }
 
@@ -1880,21 +1962,43 @@ const PURCHASE_CAP = 2000;
  * A renewal (`sub`) includes every extra slot that still counts (base + extra × slots) unless
  * `withExtras` is false. The quote keeps how many slots it paid for.
  */
-export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras }) {
+export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras, addExtra }) {
   const at = now || Date.now();
   const prices = priceText(state.settings);
   if (kind !== 'new' && kind !== 'sub' && kind !== 'dev') return { state, result: { error: 'bad_label' } };
   let price = kind === 'dev' ? prices.extra : prices.price;
   if (!(price > 0)) return { state, result: { error: 'no_price' } };
   let extras = 0;
-  if (kind === 'sub') {
-    const sub = (state.subscriptions || []).find((s) => s.id === subscriptionId);
-    if (sub) {
-      const quote = renewalPrice(state, sub, at, { withExtras: withExtras !== false });
-      price = quote.total;
-      extras = quote.extras;
-    }
+  let credit = 0;
+  let add = 0;
+  const sub = kind === 'new' ? null : (state.subscriptions || []).find((s) => s.id === subscriptionId) || null;
+  if (kind === 'sub' && sub) {
+    add = addExtra > 0 ? Math.floor(addExtra) : 0;
+    const quote = renewalPrice(state, sub, at, { withExtras: withExtras !== false, addExtra: add });
+    price = quote.total;
+    extras = quote.extras;
+    credit = quote.credit;
   }
+  if (kind === 'dev' && sub) {
+    // Slots left out of a base-only renewal are paid along with the new one, so they all run to paidUntil.
+    extras = 1 + lapsingExtras(state, sub, at);
+    price = prices.extra * extras;
+  }
+  const same = (p) =>
+    p.kind === kind &&
+    (p.accountId || '') === (accountId || '') &&
+    (p.subscriptionId || '') === (subscriptionId || '') &&
+    Number(p.price) === price &&
+    (Number(p.extras) || 0) === extras &&
+    (Number(p.credit) || 0) === credit &&
+    (Number(p.addExtra) || 0) === add &&
+    (Number(p.paidUntil) || 0) === (sub ? Number(sub.paidUntil) || 0 : 0) &&
+    at - (Number(p.at) || 0) < QUOTE_REUSE_MS &&
+    at >= (Number(p.at) || 0);
+  // A double tap or a second look at the same screen reuses the unpaid link instead of piling up quotes.
+  const paidIds = paidQuoteIds(state.payments);
+  const reuse = (state.purchases || []).find((p) => same(p) && !paidIds[p.id]);
+  if (reuse) return { state, result: { label: 'buy:' + reuse.id, price, id: reuse.id, extras, credit, addExtra: add } };
   const row = {
     id: randomId(),
     kind,
@@ -1902,22 +2006,34 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     subscriptionId: subscriptionId || '',
     price,
     extras,
+    credit,
+    addExtra: add,
+    /** State check at payment time: the subscription end this link was quoted against. */
+    paidUntil: sub ? Number(sub.paidUntil) || 0 : 0,
     currency: '643',
     at,
   };
   const purchases = trimPurchases((state.purchases || []).concat([row]), state.payments);
-  return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, price, id: row.id, extras } };
+  return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, price, id: row.id, extras, credit, addExtra: add } };
+}
+
+/** An unpaid quote with the same terms is handed out again for this long. */
+export const QUOTE_REUSE_MS = 24 * 60 * 60 * 1000;
+
+function paidQuoteIds(payments) {
+  const paid = {};
+  (payments || []).forEach((p) => {
+    if (!p || p.error || p.pending) return;
+    const label = String(p.label || '');
+    if (label.indexOf('buy:') === 0) paid[label.slice(4)] = true;
+  });
+  return paid;
 }
 
 /** Drop oldest paid quotes once the list is past the cap. Unpaid quotes stay: their payment link can still be used. */
 function trimPurchases(purchases, payments) {
   if (purchases.length <= PURCHASE_CAP) return purchases;
-  const paid = {};
-  (payments || []).forEach((p) => {
-    if (p.error) return;
-    const label = String(p.label || '');
-    if (label.indexOf('buy:') === 0) paid[label.slice(4)] = true;
-  });
+  const paid = paidQuoteIds(payments);
   const out = purchases.slice();
   let i = 0;
   while (out.length > PURCHASE_CAP && i < out.length) {
@@ -2056,8 +2172,9 @@ export function mskDateTime(ms) {
 
 /** Days before the Moscow expiry day: 3 days before, the day before, and the expiry day itself. */
 export const REMINDER_OFFSETS = { d3: 3, d1: 1, d0: 0 };
-/** A reminder goes out from 10:00 MSK on its day until the end of that day; a missed day is skipped. */
+/** A reminder goes out from 10:00 MSK on its day; a missed one is sent only until 12:00 MSK, then skipped. */
 export const REMINDER_HOUR = 10;
+export const REMINDER_LATEST_HOUR = 12;
 /** The «grace ended» notice stays due at least this long after its time, so a 23:59 end is not missed. */
 export const END_WINDOW_MS = 60 * 60 * 1000;
 /** Telegram failures before a reminder is given up for this expiry date. */
@@ -2087,7 +2204,7 @@ export function dueReminders(state, now) {
       const kind = kinds[k];
       const day = expiryDay - REMINDER_OFFSETS[kind] * DAY;
       const dueAt = day + REMINDER_HOUR * 60 * 60 * 1000;
-      if (now < dueAt || now >= day + DAY) continue;
+      if (now < dueAt || now >= day + REMINDER_LATEST_HOUR * 60 * 60 * 1000) continue;
       if (started > dueAt) continue;
       if (kind === 'd0' ? !subAccess(state, sub, now).access : !(sub.paidUntil > now)) continue;
       if (mark && mark.sent && mark.sent[kind]) continue;
@@ -2097,8 +2214,8 @@ export function dueReminders(state, now) {
     const endAt = accessUntil(state, sub);
     const endDay = mskDayStart(endAt);
     const endDue = Math.max(endAt, endDay + REMINDER_HOUR * 60 * 60 * 1000);
-    // Until the end of that day; a late-evening end still gets END_WINDOW_MS of ticks.
-    const endStop = Math.max(endDay + DAY, endDue + END_WINDOW_MS);
+    // A missed notice is sent until 12:00 MSK; an end later in the day still gets END_WINDOW_MS of ticks.
+    const endStop = Math.max(endDay + REMINDER_LATEST_HOUR * 60 * 60 * 1000, endDue + END_WINDOW_MS);
     if (now >= endDue && now < endStop && !(mark && mark.sent && mark.sent.end)) {
       out.push({ subscriptionId: sub.id, accountId: account.id, telegramId: String(account.telegramId), kind: 'end', paidUntil: sub.paidUntil });
     }

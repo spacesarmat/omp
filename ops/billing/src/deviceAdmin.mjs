@@ -322,5 +322,5 @@ export function rejectPendingPayment(state, { operationId, now, actor }) {
   });
   const accountId = row.accountId || purposeOf(state, row.label).accountId || '';
   const detail = 'Платёж отклонён: ' + (row.amount || '?') + ' ₽' + (accountId ? ' (' + who(state, accountId) + ')' : '');
-  return { state: audited({ ...state, payments }, actor, 'payment_reject', detail, accountId, now), result: { ok: true, accountId } };
+  return { state: audited({ ...state, payments }, actor, 'payment_reject', detail, accountId, now), result: { ok: true, accountId, amount: String(row.amount || '') } };
 }
