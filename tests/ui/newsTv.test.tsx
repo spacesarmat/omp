@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtin, no @types/node in this project
+import { readFileSync } from 'node:fs';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
@@ -535,6 +537,28 @@ describe('TV «Подписки» segment', () => {
     await click(inDialog('Поиск'));
     expect(subRows(host).map((r) => text(r.querySelector('.title')))).toEqual(['Ёлки']);
     expect(text(host.querySelector('[data-fk="news-subs-find"]'))).toBe('Найти подписку: «ЕЛК»');
+  });
+
+  it('a subscription paused on the phone (no OMP subscription, over 10) is dimmed with «на паузе — нужна подписка OMP»', async () => {
+    const list = SUBS.map((s, i) => (i === 2 ? { ...s, paused: true } : s));
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: list }] });
+    const host = await mountSubs();
+    const rows = subRows(host);
+    expect(rows.map((r) => r.classList.contains('news-sub-paused'))).toEqual([false, false, true]);
+    expect(text(rows[2].querySelector('.news-sub-paused-note'))).toBe('на паузе — нужна подписка OMP');
+    expect(rows[0].querySelector('.news-sub-paused-note')).toBeNull();
+    // the row stays usable: remove and the switches are still there
+    expect(subEl(host, 's3', 'remove')).not.toBeNull();
+  });
+
+  it('the paused style: label 24px, only the title line dimmed, nothing Chromium 53 lacks', () => {
+    const css: string = readFileSync('src/styles.css', 'utf8');
+    const rules: string[] = css.split('\n').filter((l) => l.indexOf('news-sub-paused') >= 0);
+    expect(rules).toEqual([
+      '.news-sub-paused .news-sub-line1 { opacity: 0.5; }',
+      '.news-sub-paused-note { margin-top: 6px; font-size: 24px; font-weight: 700; color: var(--accent); }',
+    ]);
+    rules.forEach((r) => expect(r).not.toMatch(/\bgap:|aspect-ratio|\binset\b|:has\(|vw|vh|rem/));
   });
 });
 

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ACCESS_KEY, DEFAULT_GRACE_MS, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { saveBillingSession } from '../../src/billing/session';
-import { activeSubs, canAddSub, checkedSubs, FREE_SUBS_MAX, isSubPaused, pausedSubIds, subsLimitReached, subsQuota } from '../../src/monitor/limit';
-import { addSubscription, loadSubs, removeSubscription, saveSubs } from '../../src/monitor/subs';
+import { activeSubs, canAddSub, checkedSubs, FREE_SUBS_MAX, isSubPaused, PAUSED_KEY, pausedSubIds, subsLimitReached, subsQuota, syncPaused } from '../../src/monitor/limit';
+import { addSubscription, loadSubs, rememberSeen, removeSubscription, saveSubs, seenKeys } from '../../src/monitor/subs';
 import { clearBilling } from '../../src/sources/ompJackett';
 import type { Subscription } from '../../src/monitor/types';
 
@@ -122,5 +122,40 @@ describe('entitlement switching', () => {
     clearBilling();
     expect(localStorage.getItem(ACCESS_KEY)).toBe('null');
     expect(ompSubscribed(NOW)).toBe(false);
+  });
+});
+
+describe('leaving the pause: a quiet first check', () => {
+  it('a subscription that was paused forgets its seen results when the pause ends; the others keep theirs', () => {
+    saveSubs(many(11));
+    rememberSeen('s1', ['a'], ['rutor']);
+    rememberSeen('s11', ['b'], ['rutor']);
+    expect(checkedSubs(NOW).map((s) => s.id)).not.toContain('s11'); // the gate records the pause
+    expect(JSON.parse(localStorage.getItem(PAUSED_KEY)!)).toEqual({ s11: true });
+    expect(seenKeys('s11')).toEqual(['b']);
+    subscribe();
+    expect(isSubPaused('s11', NOW)).toBe(false);
+    expect(seenKeys('s11')).toBeNull(); // the next check is silent, like the very first
+    expect(seenKeys('s1')).toEqual(['a']);
+    expect(JSON.parse(localStorage.getItem(PAUSED_KEY)!)).toEqual({});
+  });
+
+  it('only a recorded pause counts: a subscription never seen paused keeps its results', () => {
+    saveSubs(many(11));
+    rememberSeen('s11', ['b'], ['rutor']);
+    subscribe();
+    expect(checkedSubs(NOW)).toHaveLength(11);
+    expect(seenKeys('s11')).toEqual(['b']);
+  });
+
+  it('deleting an older one unpauses the next quietly too; a deleted paused one is just dropped', () => {
+    saveSubs(many(12));
+    rememberSeen('s11', ['b'], ['rutor']);
+    syncPaused(loadSubs(), false);
+    removeSubscription('s12');
+    removeSubscription('s1');
+    expect(isSubPaused('s11', NOW)).toBe(false);
+    expect(seenKeys('s11')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(PAUSED_KEY)!)).toEqual({});
   });
 });

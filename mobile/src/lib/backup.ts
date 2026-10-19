@@ -148,6 +148,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.localServer.skipPin', // skipped TorrServer pin offer: per device, like tsp.update
   'tsp.seenVersion', // «Что нового» was shown
   'tsp.subsSeen', // what monitoring has already seen: rebuilt on the first run
+  'tsp.subsPaused', // subscriptions paused by the free cap at the last check: rebuilt on the next one
   'tsp.monitorFound',
   'tsp.monitorLast',
   'tsp.monitorEpisodeCursor',

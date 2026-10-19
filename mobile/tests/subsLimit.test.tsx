@@ -226,6 +226,49 @@ describe('the background check', () => {
   });
 });
 
+describe('the background check after the pause', () => {
+  const results = (titles: string[]) => titles.map((Title, i) => ({ Title, Categories: '', Size: '1 ГБ', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + String(i + 1).repeat(40).slice(0, 40), Hash: '', Peer: 0, Seed: 10, source: 'rutor' }));
+  function host(notes: string[]): MonitorHost {
+    return {
+      start: () => Promise.resolve({ action: null, deadline: Date.now() + 180_000, journal: [] }),
+      http: () => Promise.reject(new Error('no network in tests')),
+      secretGet: () => Promise.resolve({ value: null }),
+      notify: (n: { title: string }) => {
+        notes.push(n.title);
+        return Promise.resolve(true);
+      },
+      setCleartext: () => Promise.resolve(),
+      persist: () => Promise.resolve(),
+      finish: () => undefined,
+    } as unknown as MonitorHost;
+  }
+  const search = (pages: { [q: string]: ReturnType<typeof results> }): SearchFn => (query) => ({
+    sourceIds: ['rutor'], results: () => (pages[query] || []).slice(), pending: () => [], answered: () => ['rutor'], failed: () => [], done: Promise.resolve(), cancel: () => undefined,
+  });
+
+  it('what came out during the pause is recorded silently; later releases are reported again', async () => {
+    saveSubs(many(11));
+    const q = 'Сериал 11';
+    const pages: { [q: string]: ReturnType<typeof results> } = { [q]: results(['Сериал 11 серия 1']) };
+    // checked once while the subscription was on: its seen results exist
+    subscribe();
+    await runMonitor({ host: host([]), client: () => null, feed: { from: [] }, check: { search: search(pages) } });
+    clearBilling();
+    const paused: string[] = [];
+    await runMonitor({ host: host(paused), client: () => null, feed: { from: [] }, check: { search: search(pages) } });
+    // released during the pause
+    pages[q] = results(['Сериал 11 серия 1', 'Сериал 11 серия 2', 'Сериал 11 серия 3']);
+    subscribe();
+    const back: string[] = [];
+    await runMonitor({ host: host(back), client: () => null, feed: { from: [] }, check: { search: search(pages) } });
+    expect(back).toEqual([]);
+    pages[q] = results(['Сериал 11 серия 1', 'Сериал 11 серия 2', 'Сериал 11 серия 3', 'Сериал 11 серия 4']);
+    const later: string[] = [];
+    await runMonitor({ host: host(later), client: () => null, feed: { from: [] }, check: { search: search(pages) } });
+    expect(later).toEqual(['Сериал 11: 1 новая раздача']);
+  });
+});
+
 describe('/v1/me feeds the cached state', () => {
   it('an inactive answer (e.g. over the device limit) turns the cap on; an active one in grace keeps it off', async () => {
     subscribe();

@@ -769,12 +769,14 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
       {!shown.length && <div class="empty">{t('tv.subs.noMatch', { q: tvGlyphs(filter) })}</div>}
       <FocusGroup focusKey="NEWS-SUBS" className="news-subs-list">
         {shown.map((s) => (
-          <div key={s.id} class="news-sub" data-sub={s.id}>
+          <div key={s.id} class={'news-sub' + (s.paused ? ' news-sub-paused' : '')} data-sub={s.id} data-paused={s.paused ? '' : undefined}>
             <div class="news-sub-info">
               <div class="news-sub-line1">
                 <span class="title">{tvGlyphs(s.query)}</span>
                 <span class="search-chip">{subQuality(s.quality)}</span>
               </div>
+              {/* over the phone's free cap (no OMP subscription): kept, not checked */}
+              {s.paused && <div class="news-sub-paused-note">{t('monitor.limit.paused')}</div>}
               {s.unseen > 0 && <div class="news-new news-sub-fresh">{tp('tv.subs.fresh', s.unseen)}</div>}
             </div>
             <FocusGroup focusKey={'NEWS-SUB-' + s.id} className="news-sub-actions">

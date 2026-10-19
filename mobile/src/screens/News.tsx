@@ -32,7 +32,7 @@ import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, unse
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
-import { FREE_SUBS_MAX, pausedSubIds, subsLimitReached, subsQuota } from '../../../src/monitor/limit';
+import { FREE_SUBS_MAX, subsLimitReached, subsQuota, syncPaused } from '../../../src/monitor/limit';
 import { ompSubscribed } from '../../../src/billing/entitlement';
 import { billingSession, onBillingChange } from '../../../src/billing/session';
 import { fetchBillingAccount } from '../../../src/sources/ompJackett';
@@ -239,7 +239,8 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const [limitOpen, setLimitOpen] = useState(false);
   const subs = loadSubs();
   const subscribed = ompSubscribed();
-  const paused = pausedSubIds(subs, subscribed);
+  // also records the pause, so a subscription that leaves it gets a quiet first check (limit.ts)
+  const paused = syncPaused(subs, subscribed);
   const quota = subsQuota(subs, subscribed);
   const searching = !!query.trim();
   const shownSubs = filterSubs(sortSubs(subs, sort), query);
