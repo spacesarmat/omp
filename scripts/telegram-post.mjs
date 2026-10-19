@@ -1,22 +1,16 @@
-// Posts a release to the Telegram channel: photo + changelog + buttons, then every build file as a reply
-// (files over the bot limit, or that Telegram refuses, are only logged: the post's buttons link every build).
+// Posts a release to the Telegram channel: photo + changelog + buttons, nothing else. No files are attached: the
+// buttons link every build and the GitHub release page.
 // A stable release with docs/screenshots/release-<version>/ goes as a photo album (cover + screenshots, changelog on
-// the first photo), then the files and a short message with the buttons, both as replies to the first photo.
-// Usage (release workflow): node scripts/telegram-post.mjs <tag> [build dir, default build]
+// the first photo), then a short message with the buttons as a reply to the first photo.
+// Usage (release workflow): node scripts/telegram-post.mjs <tag>
 // Env: TELEGRAM_BOT_TOKEN (secret), TELEGRAM_CHAT_ID (@channel or id). Without them it does nothing.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { changelogNotes } from './hb-lib.mjs';
 import { readChangelogUtf8 } from './changelog-encoding.mjs';
-import { buildCaption, buildKeyboard, buildFiles, routeFiles, oversizeLogLine } from './telegram-lib.mjs';
+import { buildCaption, buildKeyboard } from './telegram-lib.mjs';
 
-const type = (name) => (name.endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream');
-
-/**
- * Posts the release. `root` is the repo root (CHANGELOG.md, src/lib/donate.ts, screenshots), `dir` the build dir.
- * Resolves to the number of files that could not be attached (the buttons still link them).
- */
 function caller(token, doFetch) {
   return async function call(method, form) {
     let r;
@@ -33,7 +27,7 @@ function caller(token, doFetch) {
 }
 
 /**
- * Pins the release post silently (only the post with the description, never the files). A failure is only logged.
+ * Pins the release post silently (the post with the description). A failure is only logged.
  * Telegram then adds a «… pinned a message» line to the channel; the billing bot (@OMPBILLINGBOT, ops/billing) polls
  * this bot's updates and deletes that line. This script never polls the bot's updates and never sets a webhook: the
  * token is the billing bot's, and a second poller would take its updates away (409) or change its allowed update types.
@@ -112,7 +106,11 @@ async function sendAlbum(call, chat, { caption, album }) {
   return msgs[0].message_id;
 }
 
-export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
+/**
+ * Posts the release. `root` is the repo root (CHANGELOG.md, src/lib/donate.ts, screenshots).
+ * Resolves to 1 when the buttons of an album post could not be sent (the post then has no download links), else 0.
+ */
+export async function postRelease({ tag, root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
   const post = releasePost(tag, root, log);
   const { version, keyboard, album } = post;
@@ -135,7 +133,7 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   }
   await pinPost(call, chat, postId, log);
 
-  let { failed } = await sendFiles({ call, chat, replyTo: postId, version, dir, log });
+  let failed = 0;
   if (buttons) {
     // the buttons are the only download links of an album post: one retry, then the run reports a failure
     for (let attempt = 1; ; attempt++) {
@@ -164,116 +162,6 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
 }
 
 /**
- * Sends the build files as a reply to the release post: one album of documents (Telegram shows it as a single
- * block). If Telegram refuses the album the files go one by one. Files over the bot limit or refused are only logged
- * (no text links: the post's buttons carry every build). Resolves to { failed: files Telegram refused, skipped: files
- * over the bot limit (not attached) }.
- */
-async function sendFiles({ call, chat, replyTo, version, dir, log }) {
-  const files = [];
-  for (const name of buildFiles(version)) {
-    const path = join(dir, name);
-    if (existsSync(path)) files.push({ name, path, size: statSync(path).size });
-    else log(`Telegram: ${name} not found, skipped`);
-  }
-  const { upload, link } = routeFiles(files);
-  link.forEach((f) => log(oversizeLogLine(f)));
-  // over the bot limit: not attached here, maybe forwarded by hand
-  const skipped = link.length;
-  const blob = (f) => new Blob([readFileSync(f.path)], { type: type(f.name) });
-  const base = () => {
-    const form = new FormData();
-    form.set('chat_id', chat);
-    form.set('reply_parameters', JSON.stringify({ message_id: replyTo }));
-    return form;
-  };
-
-  if (upload.length >= 2) {
-    // a request holds at most 50 MB, so each file is uploaded on its own (silently) and the album is built from
-    // the uploaded file ids; the temporary messages are deleted right after
-    const temp = [];
-    try {
-      const ids = [];
-      for (const f of upload) {
-        const form = new FormData();
-        form.set('chat_id', chat);
-        form.set('disable_notification', 'true');
-        form.set('document', blob(f), f.name);
-        const m = await call('sendDocument', form);
-        temp.push(m.message_id);
-        ids.push(m.document.file_id);
-      }
-      const form = base();
-      form.set('media', JSON.stringify(ids.map((id) => ({ type: 'document', media: id }))));
-      await call('sendMediaGroup', form);
-      log(`Telegram: attached ${upload.map((f) => f.name).join(', ')} as one block`);
-      await deleteMessages(call, chat, temp, log);
-      return { failed: 0, skipped };
-    } catch (e) {
-      log(`${e.message}, sending the files one by one`);
-      await deleteMessages(call, chat, temp, log);
-    }
-  } else if (upload.length === 1) {
-    try {
-      const form = base();
-      form.set('document', blob(upload[0]), upload[0].name);
-      await call('sendDocument', form);
-      log(`Telegram: attached ${upload[0].name}`);
-      return { failed: 0, skipped };
-    } catch (e) {
-      log(String(e.message));
-      log(oversizeLogLine(upload[0]));
-      return { failed: 1, skipped };
-    }
-  }
-
-  let failed = 0;
-  for (const f of upload) {
-    try {
-      const doc = base();
-      doc.set('document', blob(f), f.name);
-      await call('sendDocument', doc);
-      log(`Telegram: attached ${f.name}`);
-    } catch (e) {
-      failed++;
-      log(String(e.message));
-      log(oversizeLogLine(f));
-    }
-  }
-  return { failed, skipped };
-}
-
-async function deleteMessages(call, chat, ids, log) {
-  if (!ids.length) return;
-  const form = new FormData();
-  form.set('chat_id', chat);
-  form.set('message_ids', JSON.stringify(ids));
-  try {
-    await call('deleteMessages', form);
-  } catch (e) {
-    log(`${e.message} (the bot needs the «delete messages» right)`);
-  }
-}
-
-/**
- * Sends the files of an already posted release again as one block (reply to the post) and then deletes the old
- * file messages, only when every build file was attached again (a refused or oversize file, which may have been
- * forwarded by hand, keeps the old messages). Resolves to the number of files that could not be attached.
- */
-export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build', token, chat, fetch: doFetch = fetch, log = console.log }) {
-  const call = caller(token, doFetch);
-  const version = tag.replace(/^v/, '');
-  const { failed, skipped } = await sendFiles({ call, chat, replyTo: messageId, version, dir, log });
-  if (deleteIds.length && failed + skipped) {
-    log(`Telegram: ${failed + skipped} file(s) not attached, kept the old file messages ${deleteIds.join(', ')}`);
-  } else if (deleteIds.length) {
-    await deleteMessages(call, chat, deleteIds, log);
-    log(`Telegram: deleted the old file messages ${deleteIds.join(', ')}`);
-  }
-  return failed;
-}
-
-/**
  * Replaces the picture of an already posted release (caption and buttons are sent again: Telegram drops them
  * otherwise) and pins it. For an album release `messageId` is the first photo (the cover): only it is replaced, and
  * no buttons are sent (an album message cannot carry them; they live in the separate reply).
@@ -293,19 +181,20 @@ export async function replacePhoto({ tag, messageId, root = '.', token, chat, fe
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [tag, dir = 'build'] = process.argv.slice(2);
+  // a second argument that is not a --mode (the old «build» dir) is ignored: no files are posted
+  const [tag, mode = ''] = process.argv.slice(2);
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) {
     console.log('Telegram: no TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID, skipping');
     process.exit(0);
   }
-  if (!tag) throw new Error('usage: telegram-post.mjs <tag> [build dir] | <tag> --edit-photo <id> | <tag> --repost-files <id> <dir> [ids] | <tag> --delete <ids>');
+  if (!tag) throw new Error('usage: telegram-post.mjs <tag> | <tag> --edit-photo <id> | <tag> --delete <ids>');
   const parseIds = (ids = '') => ids.split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => {
     const [a, b = a] = p.split('-').map(Number);
     return Array.from({ length: b - a + 1 }, (_, i) => a + i);
   });
-  if (dir === '--delete') {
+  if (mode === '--delete') {
     // <tag> --delete <message ids, comma separated or a-b>
     const ids = parseIds(process.argv[4]);
     if (!ids.length || ids.some((n) => !(n > 0))) throw new Error('--delete <ids>');
@@ -319,18 +208,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`Telegram: deleted ${ids.join(', ')}`);
     process.exit(0);
   }
-  if (dir === '--repost-files') {
-    // <tag> --repost-files <post id> <build dir> [old message ids, comma separated or a-b]
-    const [messageId, filesDir, ids = ''] = process.argv.slice(4);
-    const deleteIds = parseIds(ids);
-    if (!(Number(messageId) > 0) || !filesDir || deleteIds.some((n) => !(n > 0))) throw new Error('--repost-files <post id> <dir> [ids]');
-    const failed = await repostFiles({ tag, messageId: Number(messageId), deleteIds, dir: filesDir, token, chat }).catch((e) => {
-      console.log(String(e.message));
-      return -1;
-    });
-    process.exit(failed ? 1 : 0);
-  }
-  if (dir === '--edit-photo') {
+  if (mode === '--edit-photo') {
     const messageId = Number(process.argv[4]);
     if (!Number.isInteger(messageId) || messageId <= 0) throw new Error('--edit-photo needs a message id');
     await replacePhoto({ tag, messageId, token, chat }).catch((e) => {
@@ -339,7 +217,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     process.exit(0);
   }
-  const failed = await postRelease({ tag, dir, token, chat }).catch((e) => {
+  // an unknown or removed --mode (e.g. the old --repost-files) must not fall through to a new post
+  if (mode.startsWith('--')) {
+    console.log(`Telegram: unknown mode ${mode}, nothing posted`);
+    process.exit(2);
+  }
+  const failed = await postRelease({ tag, token, chat }).catch((e) => {
     console.log(String(e.message));
     return -1;
   });

@@ -5,8 +5,9 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
-import { postRelease, replacePhoto, repostFiles, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
-import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
+// @ts-ignore
+import { spawnSync } from 'node:child_process';
+import { postRelease, replacePhoto, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
 
@@ -50,50 +51,24 @@ function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Resp
 const names = (calls: Call[]) => calls.map((c) => c.method + (c.method === 'sendDocument' ? ':' + (c.form.get('document') as File).name : ''));
 
 describe('postRelease', () => {
-  it('posts the photo, uploads small files in order and only logs the big ones (no text links)', async () => {
-    const root = setup({
-      'OMP-1.2.3-arm64.apk': UPLOAD_MAX + 1,
-      'OMP-1.2.3-armv7.apk': 10,
-      'OMP-1.2.3-webOS.ipk': 20,
-      'OMP-1.2.3.apk': UPLOAD_MAX + 5,
-    });
+  it('posts only the photo with the caption and the buttons: no files, no links text, even with builds in build/', async () => {
+    const root = setup({ 'OMP-1.2.3-arm64.apk': 30, 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20, 'OMP-1.2.3.apk': 40 });
     const calls: Call[] = [];
     const logs: string[] = [];
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
+    const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages']);
-    expect(calls[2].form.get('disable_notification')).toBe('true');
-    expect(JSON.parse(String(calls[5].form.get('message_ids')))).toEqual([103, 104]);
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
     expect(calls[1].form.get('message_id')).toBe('7');
     expect(calls[1].form.get('disable_notification')).toBe('true');
-    expect(String(calls[0].form.get('caption'))).toContain('• Первое');
-    expect(String(calls[0].form.get('reply_markup'))).toContain('OMP-1.2.3-arm64.apk');
-    const album = calls[4].form;
-    expect(JSON.parse(String(album.get('reply_parameters')))).toEqual({ message_id: 7 });
-    const media = JSON.parse(String(album.get('media')));
-    expect(media.map((m: { type: string; media: string }) => [m.type, m.media])).toEqual([['document', 'id:OMP-1.2.3-armv7.apk'], ['document', 'id:OMP-1.2.3-webOS.ipk']]);
-    expect(media.every((m: { caption?: string }) => m.caption === undefined)).toBe(true);
     const caption = String(calls[0].form.get('caption'));
+    expect(caption).toContain('• Первое');
     expect(caption).not.toMatch(/<a |https?:|GitHub/);
     const urls = JSON.parse(String(calls[0].form.get('reply_markup'))).inline_keyboard.flat().map((b: { url: string }) => b.url);
-    expect(urls).toContain('https://github.com/spacesarmat/omp/releases/download/v1.2.3/OMP-1.2.3.apk');
+    for (const f of ['OMP-1.2.3-arm64.apk', 'OMP-1.2.3-armv7.apk', 'OMP-1.2.3-webOS.ipk', 'OMP-1.2.3.apk']) {
+      expect(urls).toContain(`https://github.com/spacesarmat/omp/releases/download/v1.2.3/${f}`);
+    }
     expect(urls).toContain('https://github.com/spacesarmat/omp/releases/tag/v1.2.3');
-    expect(logs.filter((l) => l.includes('forward it manually'))).toHaveLength(2);
-  });
-
-  it('only logs a file Telegram refuses (no links message), logs missing files, and never leaks the token', async () => {
-    const root = setup({ 'OMP-1.2.3-armv7.apk': 10 });
-    const calls: Call[] = [];
-    const logs: string[] = [];
-    const refuse = (m: string) =>
-      m === 'sendDocument' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 })
-        : m === 'pinChatMessage' ? new Response(JSON.stringify({ ok: false, description: 'not enough rights' }), { status: 400 }) : null;
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
-    expect(failed).toBe(1);
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk']);
-    expect(logs.some((l) => l.includes('pinChatMessage'))).toBe(true);
-    expect(logs).toContain('Telegram: OMP-1.2.3-arm64.apk not found, skipped');
-    expect(logs.some((l) => l.includes('forward it manually'))).toBe(true);
+    expect(logs.some((l) => /forward it manually|not found, skipped/.test(l))).toBe(false);
     expect(logs.join('\n')).not.toContain(TOKEN);
   });
 
@@ -104,7 +79,7 @@ describe('postRelease', () => {
     };
     let msg = '';
     try {
-      await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: boom as any, log: () => {} });
+      await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: boom as any, log: () => {} });
     } catch (e: any) {
       msg = String(e.message);
     }
@@ -131,61 +106,6 @@ describe('replacePhoto', () => {
   });
 });
 
-describe('files as one block', () => {
-  it('falls back to one file per message when Telegram refuses the album', async () => {
-    const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20, 'OMP-1.2.3.apk': UPLOAD_MAX + 5 });
-    const calls: Call[] = [];
-    const logs: string[] = [];
-    const refuse = (m: string) => (m === 'sendMediaGroup' ? new Response(JSON.stringify({ ok: false, description: 'Request Entity Too Large' }), { status: 413 }) : null);
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
-    expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk']);
-    expect(JSON.parse(String(calls[5].form.get('message_ids')))).toEqual([103, 104]);
-    expect(logs.some((l) => l.includes('one by one'))).toBe(true);
-  });
-
-  it('a single file goes without a caption, the oversize one only in the log', async () => {
-    const root = setup({ 'OMP-1.2.3-webOS.ipk': 20, 'OMP-1.2.3.apk': UPLOAD_MAX + 5 });
-    const calls: Call[] = [];
-    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-webOS.ipk']);
-    expect(calls[2].form.get('caption')).toBeNull();
-  });
-
-  it('reposts the files of a posted release as one block, then deletes the old file messages', async () => {
-    const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20 });
-    const calls: Call[] = [];
-    const failed = await repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9, 10, 11], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
-    expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages', 'deleteMessages']);
-    expect(JSON.parse(String(calls[2].form.get('reply_parameters')))).toEqual({ message_id: 8 });
-    expect(JSON.parse(String(calls[4].form.get('message_ids')))).toEqual([9, 10, 11]);
-  });
-
-  it('keeps the old file messages when a build is over the bot limit (it may have been forwarded by hand)', async () => {
-    const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20, 'OMP-1.2.3.apk': UPLOAD_MAX + 5 });
-    const calls: Call[] = [];
-    const logs: string[] = [];
-    const failed = await repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9, 10], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
-    expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages']);
-    expect(JSON.parse(String(calls[3].form.get('message_ids')))).toEqual([101, 102]);
-    expect(logs).toContain('Telegram: 1 file(s) not attached, kept the old file messages 9, 10');
-  });
-
-  it('keeps the old file messages when the repost fails', async () => {
-    const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20 });
-    const calls: Call[] = [];
-    const down = () => new Error('offline');
-    const logs: string[] = [];
-    const failed = await repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls, down) as any, log: (s: string) => logs.push(s) });
-    expect(failed).toBe(2);
-    expect(names(calls)).not.toContain('deleteMessages');
-    expect(logs).toContain('Telegram: 2 file(s) not attached, kept the old file messages 9');
-    expect(logs.join('\n')).not.toContain(TOKEN);
-  });
-});
-
 describe('photo album of a stable release', () => {
   function withShots(root: string, version: string, shots: string[]) {
     mkdirSync(join(root, `docs/screenshots/release-${version}`), { recursive: true });
@@ -194,14 +114,14 @@ describe('photo album of a stable release', () => {
   }
   const media = (c: Call) => JSON.parse(String(c.form.get('media')));
 
-  it('posts the cover and the screenshots by name, pins the first photo, then the files and the buttons as replies', async () => {
+  it('posts the cover and the screenshots by name, pins the first photo, then only the buttons as a reply', async () => {
     const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20 });
     withShots(root, '1.2.3', ['03-player.png', '01-discover.png', 'notes.txt', '02-search.jpg']);
     const calls: Call[] = [];
     const logs: string[] = [];
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
+    const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendMediaGroup', 'pinChatMessage', 'sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages', 'sendMessage']);
+    expect(names(calls)).toEqual(['sendMediaGroup', 'pinChatMessage', 'sendMessage']);
     const album = calls[0].form;
     const items = media(calls[0]);
     expect(items.map((m: { type: string; media: string }) => [m.type, m.media])).toEqual([0, 1, 2, 3].map((i) => ['photo', `attach://photo${i}`]));
@@ -211,11 +131,10 @@ describe('photo album of a stable release', () => {
     expect(items[0].parse_mode).toBe('HTML');
     expect(items.slice(1).every((m: { caption?: string }) => m.caption === undefined)).toBe(true);
     expect(album.get('reply_markup')).toBeNull();
-    // the first photo of the album is the post: pinned silently, the files and the buttons reply to it
+    // the first photo of the album is the post: pinned silently, the buttons reply to it
     expect(calls[1].form.get('message_id')).toBe('50');
     expect(calls[1].form.get('disable_notification')).toBe('true');
-    expect(JSON.parse(String(calls[4].form.get('reply_parameters')))).toEqual({ message_id: 50 });
-    const buttons = calls[6].form;
+    const buttons = calls[2].form;
     expect(buttons.get('text')).toBe(BUTTONS_TEXT);
     expect(BUTTONS_TEXT).toBe('Скачать и подробности:');
     expect(JSON.parse(String(buttons.get('reply_parameters')))).toEqual({ message_id: 50 });
@@ -232,7 +151,7 @@ describe('photo album of a stable release', () => {
       let left = refusals;
       const refuse = (m: string) => (m === 'sendMessage' && left-- > 0 ? new Response(JSON.stringify({ ok: false, description: 'Too Many Requests' }), { status: 429 }) : null);
       const pauses: number[] = [];
-      const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s), pause: async (ms: number) => { pauses.push(ms); } });
+      const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s), pause: async (ms: number) => { pauses.push(ms); } });
       expect(names(calls).filter((n) => n === 'sendMessage')).toHaveLength(2);
       expect(pauses).toEqual([3000]);
       expect(failed).toBe(refusals === 1 ? 0 : 1);
@@ -246,7 +165,7 @@ describe('photo album of a stable release', () => {
     const root = setup({});
     withShots(root, '1.2.3', Array.from({ length: 12 }, (_, i) => `${String(12 - i).padStart(2, '0')}-shot.png`));
     const calls: Call[] = [];
-    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
+    await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
     expect(media(calls[0])).toHaveLength(ALBUM_MAX);
     expect(ALBUM_MAX).toBe(10);
     const files = Array.from({ length: 10 }, (_, i) => (calls[0].form.get(`photo${i}`) as File).name);
@@ -260,13 +179,12 @@ describe('photo album of a stable release', () => {
     const calls: Call[] = [];
     const logs: string[] = [];
     const refuse = (m: string, f: FormData) => (m === 'sendMediaGroup' && String(f.get('media')).includes('"photo"') ? new Response(JSON.stringify({ ok: false, description: 'Bad Request: wrong file' }), { status: 400 }) : null);
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
+    const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
-    expect(names(calls)).toEqual(['sendMediaGroup', 'sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-webOS.ipk']);
+    expect(names(calls)).toEqual(['sendMediaGroup', 'sendPhoto', 'pinChatMessage']);
     expect((calls[1].form.get('photo') as File).name).toBe('release-1.2.3.png');
     expect(String(calls[1].form.get('reply_markup'))).toContain('inline_keyboard');
     expect(calls[2].form.get('message_id')).toBe('7');
-    expect(JSON.parse(String(calls[3].form.get('reply_parameters')))).toEqual({ message_id: 7 });
     expect(logs.some((l) => l.includes('sendMediaGroup') && l.includes('posting a single photo instead'))).toBe(true);
     expect(logs.join('\n')).not.toContain(TOKEN);
   });
@@ -276,7 +194,7 @@ describe('photo album of a stable release', () => {
     writeFileSync(join(root, 'CHANGELOG.md'), '# Изменения\n\n## 1.2.3-rc.1\n\n- Первое\n');
     withShots(root, '1.2.3-rc.1', ['01-discover.png']);
     const calls: Call[] = [];
-    await postRelease({ tag: 'v1.2.3-rc.1', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
+    await postRelease({ tag: 'v1.2.3-rc.1', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
     expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
     expect((calls[0].form.get('photo') as File).name).toBe('release-1.2.3-rc.1.png');
     expect(calls[0].form.get('reply_markup')).not.toBeNull();
@@ -287,8 +205,8 @@ describe('photo album of a stable release', () => {
       const root = setup({ 'OMP-1.2.3-webOS.ipk': 20 });
       if (shots) withShots(root, '1.2.3', shots);
       const calls: Call[] = [];
-      await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
-      expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage', 'sendDocument:OMP-1.2.3-webOS.ipk']);
+      await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: () => {} });
+      expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
       expect(calls[0].form.get('reply_markup')).not.toBeNull();
     }
   });
@@ -310,7 +228,7 @@ describe('pin and bot updates', () => {
     const root = setup({});
     const calls: Call[] = [];
     const side: Call[] = [];
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: () => undefined });
+    const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: () => undefined });
     expect(failed).toBe(0);
     expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
     expect(side).toEqual([]);
@@ -321,9 +239,21 @@ describe('pin and bot updates', () => {
     const calls: Call[] = [];
     const logs: string[] = [];
     const noPin = (m: string) => (m === 'pinChatMessage' ? new Response(JSON.stringify({ ok: false, description: 'not enough rights' }), { status: 400 }) : null);
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, noPin) as any, log: (s: string) => logs.push(s) });
+    const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, noPin) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
     expect(logs.some((l) => l.includes('pin messages'))).toBe(true);
+  });
+});
+
+describe('command line', () => {
+  it('refuses an unknown or removed --mode (the old --repost-files) instead of posting again', () => {
+    // @ts-ignore node globals
+    const env = { ...process.env, TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_CHAT_ID: '@c' };
+    // @ts-ignore node globals
+    const r = spawnSync(process.execPath, ['scripts/telegram-post.mjs', 'v1.2.3', '--repost-files', '8', 'build'], { env, encoding: 'utf8' });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toContain('unknown mode --repost-files, nothing posted');
+    expect(r.stdout + r.stderr).not.toContain(TOKEN);
   });
 });
 
