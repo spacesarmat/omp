@@ -272,6 +272,13 @@ export function signAccess(secret, row, now) {
  * unknown row), token_expired (signature fine, exp passed), revoked (row revoked).
  */
 export function verifyAccess(db, secret, token, deviceId, now) {
+  const p = parseAccess(secret, token, deviceId, now);
+  if (p.error) return p;
+  return checkAccessRow(p.payload, deviceRow(db, p.payload.dev), deviceId);
+}
+
+/** Signature, shape, device tag and expiry of an access token (no database). `{ payload }` or `{ error }`. */
+export function parseAccess(secret, token, deviceId, now) {
   if (!isAccessToken(token) || token.length > 1024) return { error: 'bad_token' };
   const parts = token.split('.');
   if (parts.length !== 3 || !B64URL.test(parts[1]) || !B64URL.test(parts[2])) return { error: 'bad_token' };
@@ -289,7 +296,11 @@ export function verifyAccess(db, secret, token, deviceId, now) {
   }
   if (!deviceId || p.did !== deviceTag(deviceId)) return { error: 'bad_token' };
   if (now >= p.exp) return { error: 'token_expired' };
-  const row = deviceRow(db, p.dev);
+  return { payload: p };
+}
+
+/** The registry row named by a valid token must still be this device's, on this subscription, and active. */
+export function checkAccessRow(p, row, deviceId) {
   if (!row || row.device_id !== deviceId || row.subscription_id !== p.sub) return { error: 'bad_token' };
   if (row.status !== 'active') return { error: 'revoked', row };
   return { row, exp: p.exp };

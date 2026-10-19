@@ -53,6 +53,7 @@ import {
   unbindCode,
   telegramForDevice,
   unlinkDeviceTelegram,
+  findAccount,
 } from './logic.mjs';
 import {
   adminNotifyEnabled,
@@ -94,20 +95,7 @@ import {
   setDeviceLimit,
   subtractDays,
 } from './deviceAdmin.mjs';
-import {
-  activeRowForCode,
-  setDeviceName,
-  deviceRow,
-  isAccessToken,
-  issuePair,
-  listDevices,
-  refreshPair,
-  setRevokeReason,
-  tokenSecret,
-  touchRow,
-  upgradePair,
-  verifyAccess,
-} from './registry.mjs';
+import { isAccessToken } from './registry.mjs';
 import {
   basicAuthHeader,
   indexerByLink,
@@ -134,7 +122,8 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
-import { readState, registryDb, resolveDbPath, updateState } from './store.mjs';
+import { resolveDbPath } from './store.mjs';
+import { openStore, toStore } from './db/index.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
@@ -267,8 +256,18 @@ function adminActor(admin) {
   return { kind: 'admin', id: '', label: 'панель' };
 }
 
+/** Registry devices of every subscription of an account (the admin user card reads them synchronously). */
+async function accountDevices(store, state, accountId) {
+  const out = new Map();
+  const account = findAccount(state, accountId);
+  if (!account) return out;
+  const subs = state.subscriptions.filter((s) => s.accountId === account.id);
+  for (let i = 0; i < subs.length; i++) out.set(subs[i].id, await store.registry.listDevices(subs[i].id));
+  return out;
+}
+
 function audit(file, action, detail, admin) {
-  return updateState(file, (state) => ({
+  return toStore(file).update((state) => ({
     state: logAudit(state, { action, detail, now: Date.now(), actor: adminActor(admin) }),
   }));
 }
@@ -525,8 +524,10 @@ export function createApp(file, fetchImpl, opts) {
   // Refresh and upgrade are cheap to call but should not be hammered from one address.
   const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
   const legacyOn = legacyTokensEnabled(env);
-  const regDb = () => registryDb(file);
-  const secret = () => tokenSecret(regDb(), env);
+  const store = toStore(file);
+  const reg = store.registry;
+  let secretValue = '';
+  const secret = async () => secretValue || (secretValue = await reg.tokenSecret(env));
   const envSecret = String(env.BILLING_TOKEN_SECRET || '');
   if (envSecret && envSecret.length < 32) {
     process.stderr.write('BILLING_TOKEN_SECRET is shorter than 32 characters and is ignored; the key in billing.db signs tokens\n');
@@ -537,10 +538,10 @@ export function createApp(file, fetchImpl, opts) {
    * legacy opaque token from an app before PR-5. `{ error, status: 401 }` for a bad access token;
    * null for an unknown legacy token (the old 403 behaviour stays).
    */
-  function deviceCaller(state, token, deviceId, now) {
+  async function deviceCaller(state, token, deviceId, now) {
     const device = String(deviceId || '');
     if (isAccessToken(token)) {
-      const v = verifyAccess(regDb(), secret(), token, device, now);
+      const v = await reg.verifyAccess(await secret(), token, device, now);
       if (v.error) return { error: v.error, status: 401 };
       const code = state.codes.find((c) => c.id === v.row.code_id && !c.revoked && c.deviceId === device);
       if (!code) return { error: 'revoked', status: 401 };
@@ -550,26 +551,26 @@ export function createApp(file, fetchImpl, opts) {
     const code = sessionForDevice(state, { token, deviceId: device, now });
     if (!code) return null;
     // A binding revoked in the registry (admin, clone) no longer works with the old token either.
-    const row = activeRowForCode(regDb(), code.id);
+    const row = await reg.activeRowForCode(code.id);
     if (!row || row.device_id !== device) return null;
     return { code, rowId: row.id, legacy: true };
   }
 
   /** lastSeen / truncated IP on the registry row: one small UPDATE at most every 10 minutes, never fails the request. */
-  function noteSeen(rowId, ip, force) {
+  async function noteSeen(rowId, ip, force) {
     if (!rowId) return;
     try {
-      touchRow(regDb(), rowId, { ip, now: Date.now(), force: !!force });
+      await reg.touchRow(rowId, { ip, now: Date.now(), force: !!force });
     } catch (e) {
       /* lastSeen is best effort */
     }
   }
 
   /** Device name the phone sends on activate / refresh / upgrade («Xiaomi 2201117TY»), sanitized. Best effort. */
-  function noteName(rowId, raw) {
+  async function noteName(rowId, raw) {
     if (!rowId || raw === undefined) return;
     try {
-      setDeviceName(regDb(), rowId, raw);
+      await reg.setDeviceName(rowId, raw);
     } catch (e) {
       /* the name is cosmetic */
     }
@@ -578,7 +579,7 @@ export function createApp(file, fetchImpl, opts) {
   /** A rotated refresh token came back: journal and feed only, no unbind and no message to the user. */
   async function markClone(row) {
     try {
-      await updateState(file, (state) => cloneMark(state, { codeId: row.code_id, now: Date.now() }));
+      await store.update((state) => cloneMark(state, { codeId: row.code_id, now: Date.now() }));
     } catch (e) {
       process.stderr.write('token clone mark failed\n');
     }
@@ -620,11 +621,12 @@ export function createApp(file, fetchImpl, opts) {
         return json(
           res,
           200,
-          homePayload(readState(file), file, {
+          homePayload((await store.read()), file, {
             csrf: admin.csrf,
             sessionId: sid,
             ...flash,
             sessions: listSessions(),
+            storage: await store.info(),
           }),
         );
       }
@@ -632,19 +634,19 @@ export function createApp(file, fetchImpl, opts) {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const telegramId = url.searchParams.get('telegramId') || '';
-        return json(res, 200, { telegramId, messages: supportThread(readState(file), telegramId).slice(-80) });
+        return json(res, 200, { telegramId, messages: supportThread((await store.read()), telegramId).slice(-80) });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const services = await probeAllServices(readState(file).settings, net);
+        const services = await probeAllServices((await store.read()).settings, net);
         return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
       }
       if (req.method === 'GET' && path === '/admin/api/reveal') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const codeId = url.searchParams.get('codeId') || '';
-        const state = readState(file);
+        const state = (await store.read());
         const row = (state.codes || []).find((c) => c.id === codeId && !c.revoked && c.plain);
         if (!row) return json(res, 404, { error: 'no_code' });
         await audit(file, 'code_reveal', codeId, admin);
@@ -658,7 +660,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/payments') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const page = pagePayments(readState(file), {
+        const page = pagePayments((await store.read()), {
           q: url.searchParams.get('q') || '',
           from: Number(url.searchParams.get('from')) || 0,
           to: Number(url.searchParams.get('to')) || 0,
@@ -670,7 +672,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/audit') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const page = pageAudit(readState(file), {
+        const page = pageAudit((await store.read()), {
           q: url.searchParams.get('q') || '',
           action: url.searchParams.get('action') || '',
           offset: Number(url.searchParams.get('offset')) || 0,
@@ -681,7 +683,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/fails') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const page = pageFails(readState(file), {
+        const page = pageFails((await store.read()), {
           reason: url.searchParams.get('reason') || '',
           q: url.searchParams.get('q') || '',
           offset: Number(url.searchParams.get('offset')) || 0,
@@ -692,7 +694,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/base-impact') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        return json(res, 200, baseChangeImpact(readState(file), url.searchParams.get('base') || '', Date.now()));
+        return json(res, 200, baseChangeImpact((await store.read()), url.searchParams.get('base') || '', Date.now()));
       }
       if (req.method === 'GET' && path === '/admin/api/user') {
         const admin = adminOf(req);
@@ -700,7 +702,9 @@ export function createApp(file, fetchImpl, opts) {
         const id = url.searchParams.get('id') || '';
         const sid = cookie(req, 'omp_admin');
         const flash = takeFlash(admin, sid);
-        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash, registry: (subId) => listDevices(regDb(), subId) });
+        const state = await store.read();
+        const devices = await accountDevices(store, state, id);
+        const payload = userPayload(state, id, { csrf: admin.csrf, ...flash, registry: (subId) => devices.get(subId) || [] });
         if (!payload) return json(res, 404, { error: 'not_found' });
         return json(res, 200, payload);
       }
@@ -716,7 +720,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && (path === '/admin/subscriptions.csv' || path === '/admin/users.csv' || path === '/admin/promos.csv')) {
         const admin = adminOf(req);
         if (!admin) return send(res, 401, 'login required');
-        const state = readState(file);
+        const state = (await store.read());
         const now = Date.now();
         const csv =
           path === '/admin/users.csv'
@@ -736,28 +740,28 @@ export function createApp(file, fetchImpl, opts) {
         const now = Date.now();
         const from = Number(url.searchParams.get('from')) || now - 30 * 24 * 60 * 60 * 1000;
         const to = Number(url.searchParams.get('to')) || now;
-        const csv = paymentsCsv(readState(file), from, to);
+        const csv = paymentsCsv((await store.read()), from, to);
         return send(res, 200, csv, {
           'content-type': 'text/csv; charset=utf-8',
           'content-disposition': 'attachment; filename="omp-payments.csv"',
         });
       }
       if (req.method === 'POST' && path === '/admin/login/telegram') {
-        const state = readState(file);
+        const state = (await store.read());
         if (!String(state.settings.adminTelegramIds || '').trim()) {
           return json(res, 400, { ok: false, error: 'Сначала укажите Telegram id администраторов в настройках' });
         }
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
         }
-        const started = await updateState(file, (cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const started = await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
         await audit(file, 'login_telegram_start', 'запрос');
         return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
       }
       if (req.method === 'GET' && path === '/admin/login/telegram/status') {
         const token = url.searchParams.get('token') || '';
-        const taken = await updateState(file, (cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
+        const taken = await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
         if (taken.status === 'ok') {
           const id = randomId() + randomId();
           const csrf = randomId();
@@ -779,7 +783,7 @@ export function createApp(file, fetchImpl, opts) {
         const token = url.searchParams.get('token') || '';
         let taken = { status: 'expired' };
         try {
-          taken = await updateState(file, (cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+          taken = await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
         } catch (e) {
           taken = { status: 'expired' };
         }
@@ -830,15 +834,15 @@ export function createApp(file, fetchImpl, opts) {
         // nothing is saved and the answer says what it would do.
         const baseImpact =
           path === '/admin/settings' && !badBase && body.baseDevices !== undefined && body.baseDevices !== ''
-            ? baseChangeImpact(readState(file), body.baseDevices, Date.now())
+            ? baseChangeImpact((await store.read()), body.baseDevices, Date.now())
             : null;
         const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
-          const baseBefore = baseDevices(readState(file).settings);
-          await updateState(file, (state) => ({
+          const baseBefore = baseDevices((await store.read()).settings);
+          await store.update((state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
           }));
-          const baseAfter = baseDevices(readState(file).settings);
+          const baseAfter = baseDevices((await store.read()).settings);
           await audit(
             file,
             path === '/admin/services' ? 'services_save' : 'settings_save',
@@ -849,7 +853,7 @@ export function createApp(file, fetchImpl, opts) {
             admin,
           );
           if (wantsJson(req) && path === '/admin/services') {
-            const services = await probeAllServices(readState(file).settings, net);
+            const services = await probeAllServices((await store.read()).settings, net);
             return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
           }
         }
@@ -867,7 +871,7 @@ export function createApp(file, fetchImpl, opts) {
           extra = { baseImpact };
         }
         if (path === '/admin/find') {
-          const found = adminFind(readState(file), body.q || '', Date.now());
+          const found = adminFind((await store.read()), body.q || '', Date.now());
           if (found) {
             redirectTo = '/admin/?id=' + encodeURIComponent(found.account.id);
             if (wantsJson(req)) return json(res, 200, { ok: true, redirect: redirectTo });
@@ -879,7 +883,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/issue') {
           const days = Number(body.days) || 0;
-          const result = await updateState(file, (state) =>
+          const result = await store.update((state) =>
             issueActivation(state, {
               email: body.email,
               telegramId: body.telegramId,
@@ -904,7 +908,7 @@ export function createApp(file, fetchImpl, opts) {
               : result.reused
                 ? 'Свободный код подписки до ' + until + ' (новый слот не создан)'
                 : 'Код добавлен к подписке до ' + until;
-            const fresh = readState(file);
+            const fresh = (await store.read());
             const text =
               'Код подписки OMP: ' +
               result.code +
@@ -922,7 +926,7 @@ export function createApp(file, fetchImpl, opts) {
           }
         }
         if (path === '/admin/issue-bulk') {
-          const result = await updateState(file, (state) =>
+          const result = await store.update((state) =>
             issueMany(state, { count: body.count, days: Number(body.days) || 0, now: Date.now() }),
           );
           extra = { codes: result.codes || [] };
@@ -933,7 +937,7 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/grant') {
           const days =
             body.days === 'custom' ? Number(body.daysCustom) || 0 : Number(body.days) || 0;
-          const result = await updateState(file, (state) =>
+          const result = await store.update((state) =>
             grantDays(state, { accountId: body.accountId, telegramId: body.telegramId, days, now: Date.now() }),
           );
           if (result.error) flashError = 'Не удалось выдать дни';
@@ -941,7 +945,7 @@ export function createApp(file, fetchImpl, opts) {
             flashed = result.code || '';
             flashText = 'Выдано +' + result.days + ' дн. до ' + mskDate(result.paidUntil);
             if (result.limitReached) flashText += '. Лимит устройств достигнут, новый код не выдан';
-            const fresh = readState(file);
+            const fresh = (await store.read());
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
             if (acc && acc.telegramId) {
               const note = grantUserMessage(fresh.settings.publicOrigin || '', result);
@@ -955,14 +959,14 @@ export function createApp(file, fetchImpl, opts) {
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/message') {
-          const state = readState(file);
+          const state = (await store.read());
           const acc = state.accounts.find((a) => a.id === body.accountId);
           const text = String(body.text || '').trim();
           if (!acc || !acc.telegramId || !text) flashError = 'Нет Telegram или пустой текст';
           else {
             const sent = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
             if (sent.ok) {
-              await updateState(file, (cur) =>
+              await store.update((cur) =>
                 appendSupportMessage(cur, {
                   telegramId: acc.telegramId,
                   text,
@@ -980,7 +984,7 @@ export function createApp(file, fetchImpl, opts) {
           const count = Number(body.count) || 1;
           // 0 days is allowed for a promo that only gives bonus device slots
           const promoDays = body.days === undefined || body.days === '' ? 1 : Number(body.days) || 0;
-          const result = await updateState(file, (state) =>
+          const result = await store.update((state) =>
             count > 1
               ? createPromos(state, {
                   count,
@@ -1010,12 +1014,12 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/promo-revoke') {
-          await updateState(file, (state) => ({ state: revokePromo(state, body.promoId || '') }));
+          await store.update((state) => ({ state: revokePromo(state, body.promoId || '') }));
           flashText = 'Промокод отозван';
           redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/unbind') {
-          await updateState(file, (state) => ({
+          await store.update((state) => ({
             state: logAudit(unbindCode(state, body.codeId || ''), {
               action: 'unbind',
               detail: body.codeId || '',
@@ -1030,16 +1034,16 @@ export function createApp(file, fetchImpl, opts) {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
             // The panel sends the registry row id; a bare codeId (older panel page) still works.
-            const picked = body.deviceRowId ? deviceRow(regDb(), body.deviceRowId) : null;
+            const picked = body.deviceRowId ? await reg.deviceRow(body.deviceRowId) : null;
             const codeId = picked ? picked.code_id : body.codeId || '';
-            const before = activeRowForCode(regDb(), codeId);
+            const before = await reg.activeRowForCode(codeId);
             const out =
               picked && picked.status !== 'active'
                 ? { error: 'not_bound' }
-                : await updateState(file, (state) =>
+                : await store.update((state) =>
                     revokeDevice(state, { accountId: body.accountId || '', codeId, now: Date.now(), actor: adminActor(admin) }),
                   );
-            if (out.ok && before) setRevokeReason(regDb(), before.id, 'admin');
+            if (out.ok && before) await reg.setRevokeReason(before.id, 'admin');
             if (out.error === 'not_bound') flashError = 'Устройство уже отвязано';
             else if (out.error) flashError = 'Устройство не найдено';
             else {
@@ -1047,7 +1051,7 @@ export function createApp(file, fetchImpl, opts) {
               if (out.telegramId) {
                 let told = false;
                 try {
-                  const cur = readState(file);
+                  const cur = (await store.read());
                   told = (await telegramSend(cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, { keyboard: mainKeyboard() })).ok;
                 } catch (e) {
                   told = false;
@@ -1059,7 +1063,7 @@ export function createApp(file, fetchImpl, opts) {
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/limit') {
-          const out = await updateState(file, (state) =>
+          const out = await store.update((state) =>
             setDeviceLimit(state, {
               accountId: body.accountId || '',
               limitOverride: body.limitOverride,
@@ -1075,7 +1079,7 @@ export function createApp(file, fetchImpl, opts) {
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/bonus') {
-          const out = await updateState(file, (state) =>
+          const out = await store.update((state) =>
             grantBonus(state, {
               accountId: body.accountId || '',
               count: body.count,
@@ -1093,7 +1097,7 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/bonus-remove') {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
-            const out = await updateState(file, (state) =>
+            const out = await store.update((state) =>
               removeBonus(state, { accountId: body.accountId || '', bonusId: body.bonusId || '', now: Date.now(), actor: adminActor(admin) }),
             );
             if (out.error === 'no_subscription') flashError = 'Нет подписки';
@@ -1105,7 +1109,7 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/subtract') {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
-            const out = await updateState(file, (state) =>
+            const out = await store.update((state) =>
               subtractDays(state, { accountId: body.accountId || '', days: body.days, now: Date.now(), actor: adminActor(admin) }),
             );
             if (out.error === 'no_subscription') flashError = 'Нет подписки';
@@ -1115,7 +1119,7 @@ export function createApp(file, fetchImpl, opts) {
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/swaps-reset') {
-          const out = await updateState(file, (state) =>
+          const out = await store.update((state) =>
             resetSwaps(state, { accountId: body.accountId || '', now: Date.now(), actor: adminActor(admin) }),
           );
           if (out.error) flashError = 'Нет подписки';
@@ -1127,12 +1131,12 @@ export function createApp(file, fetchImpl, opts) {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
             const args = { operationId: body.operationId || '', now: Date.now(), actor: adminActor(admin) };
-            const out = await updateState(file, (state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
+            const out = await store.update((state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
             if (out.error === 'already') flashError = 'Платёж уже обработан';
             else if (out.error === 'not_found') flashError = 'Платёж не найден';
             else if (!confirm) {
               flashText = 'Платёж отклонён';
-              const cur = readState(file);
+              const cur = (await store.read());
               const chat = out.accountId ? telegramOf(cur, out.accountId) : '';
               if (chat) {
                 try {
@@ -1147,7 +1151,7 @@ export function createApp(file, fetchImpl, opts) {
             else {
               flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
               try {
-                await tellPayment(readState(file), out, net);
+                await tellPayment((await store.read()), out, net);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
               }
@@ -1190,11 +1194,11 @@ export function createApp(file, fetchImpl, opts) {
           const text = String(body.text || '').trim();
           if (!telegramId || !text) flashError = 'Нужны Telegram id и текст';
           else {
-            const state = readState(file);
+            const state = (await store.read());
             const sent = await telegramSend(state.settings.botToken, telegramId, text, net);
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
-              await updateState(file, (cur) =>
+              await store.update((cur) =>
                 appendSupportMessage(cur, { telegramId, text, direction: 'out', now: Date.now(), via: 'panel' }),
               );
               flashText = 'Ответ отправлен';
@@ -1204,7 +1208,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/support-close') {
           const telegramId = String(body.telegramId || '').trim();
-          const state = readState(file);
+          const state = (await store.read());
           const rows = supportThread(state, telegramId);
           const closedAt = Number((state.supportClosed || {})[telegramId] || 0);
           const lastAt = rows.reduce((max, row) => Math.max(max, row.at || 0), 0);
@@ -1213,7 +1217,7 @@ export function createApp(file, fetchImpl, opts) {
             const sent = await telegramSend(state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net);
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
-              await updateState(file, (cur) => closeSupportThread(cur, { telegramId, now: Date.now() }));
+              await store.update((cur) => closeSupportThread(cur, { telegramId, now: Date.now() }));
               flashText = 'Диалог завершён';
             }
           }
@@ -1262,17 +1266,17 @@ export function createApp(file, fetchImpl, opts) {
         const wantPair = body.tokens === 'pair';
         if (!wantPair && !legacyOn) return json(res, 403, { error: 'app_update_required' });
         const now = Date.now();
-        const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
+        const result = await store.update((state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
         // device_limit and extra_expired are 409 like other_device (the status older apps know); only apps that ask
         // for the token pair ever get extra_expired.
         const conflict = result.error === 'other_device' || result.error === 'device_limit' || result.error === 'extra_expired';
         if (result.error) return json(res, conflict ? 409 : 403, result);
-        const row = activeRowForCode(regDb(), result.codeId);
-        if (row) noteSeen(row.id, clientIp(req), true);
-        if (row) noteName(row.id, body.name);
+        const row = await reg.activeRowForCode(result.codeId);
+        if (row) await noteSeen(row.id, clientIp(req), true);
+        if (row) await noteName(row.id, body.name);
         if (!wantPair) return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
         if (!row) return json(res, 403, { error: 'revoked' });
-        return json(res, 200, { ...issuePair(regDb(), secret(), row, now).pair, paidUntil: result.paidUntil });
+        return json(res, 200, { ...(await reg.issuePair(await secret(), row, now)).pair, paidUntil: result.paidUntil });
       }
       if (req.method === 'POST' && path === '/v1/token/refresh') {
         const wait = tokenLimit.check(clientIp(req), '');
@@ -1282,12 +1286,12 @@ export function createApp(file, fetchImpl, opts) {
         }
         const body = await readBody(req);
         const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
-        const out = refreshPair(regDb(), secret(), { refreshToken: body.refreshToken, deviceId, now: Date.now() });
+        const out = await reg.refreshPair(await secret(), { refreshToken: body.refreshToken, deviceId, now: Date.now() });
         if (out.clone && out.cloneLog) await markClone(out.row);
         if (out.error) return json(res, 401, { error: out.error });
-        noteSeen(out.row.id, clientIp(req), false);
-        if (!out.clone) noteName(out.row.id, body.name);
-        return json(res, 200, { ...out.pair, paidUntil: paidUntilOf(readState(file), out.row) });
+        await noteSeen(out.row.id, clientIp(req), false);
+        if (!out.clone) await noteName(out.row.id, body.name);
+        return json(res, 200, { ...out.pair, paidUntil: paidUntilOf((await store.read()), out.row) });
       }
       if (req.method === 'POST' && path === '/v1/token/upgrade') {
         const wait = tokenLimit.check(clientIp(req), '');
@@ -1300,20 +1304,20 @@ export function createApp(file, fetchImpl, opts) {
         const token = bearer(req);
         if (!token || isAccessToken(token)) return json(res, 401, { error: 'bad_token' });
         const now = Date.now();
-        const up = await updateState(file, (state) => legacyUpgrade(state, { token, deviceId, now }));
+        const up = await store.update((state) => legacyUpgrade(state, { token, deviceId, now }));
         if (up.error) return json(res, 401, { error: up.error });
-        const row = activeRowForCode(regDb(), up.codeId);
+        const row = await reg.activeRowForCode(up.codeId);
         if (!row || row.device_id !== deviceId) return json(res, 401, { error: 'revoked' });
-        const pair = upgradePair(regDb(), secret(), { row, now, again: up.again, since: up.since });
-        noteSeen(row.id, clientIp(req), false);
-        noteName(row.id, body.name);
-        return json(res, 200, { ...pair, paidUntil: paidUntilOf(readState(file), row) });
+        const pair = await reg.upgradePair(await secret(), { row, now, again: up.again, since: up.since });
+        await noteSeen(row.id, clientIp(req), false);
+        await noteName(row.id, body.name);
+        return json(res, 200, { ...pair, paidUntil: paidUntilOf((await store.read()), row) });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
-        const result = await updateState(file, (state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
+        const result = await store.update((state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
         if (result.error) return json(res, 400, result);
-        const state = readState(file);
+        const state = (await store.read());
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);
         return json(res, 200, { token: result.token, deepLink, expiresAt: result.expiresAt });
       }
@@ -1324,29 +1328,29 @@ export function createApp(file, fetchImpl, opts) {
         // A token that is sent must belong to this device. A paid-up session is not needed to unlink,
         // so an expired subscription still matches on the session itself.
         if (token) {
-          const caller = deviceCaller(readState(file), token, deviceId, Date.now());
+          const caller = await deviceCaller((await store.read()), token, deviceId, Date.now());
           if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
         }
         if (!token && strictLinkClear) return json(res, 401, { error: 'token_required' });
-        const result = await updateState(file, (state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
+        const result = await store.update((state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
         return json(res, 200, result);
       }
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = readState(file);
+        const state = (await store.read());
         const now = Date.now();
         let account = null;
         let paidUntil = 0;
         if (token) {
           // The token only has to belong to this device: an expired or over-limit phone still learns its status.
-          const caller = deviceCaller(state, token, device, now);
+          const caller = await deviceCaller(state, token, device, now);
           // A bad access token is 401 (refresh it); an unknown legacy token falls back to the deviceId as before.
           if (caller && caller.error) return json(res, 401, { error: caller.error });
           const row = caller ? caller.code : null;
           const own = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
-          if (caller) noteSeen(caller.rowId, clientIp(req), false);
+          if (caller) await noteSeen(caller.rowId, clientIp(req), false);
           if (own) {
             account = state.accounts.find((a) => a.id === own.accountId) || null;
             paidUntil = own.paidUntil;
@@ -1385,13 +1389,13 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const deviceId = req.headers['x-device-id'] || body.deviceId;
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = readState(file);
+        const state = (await store.read());
         const now = Date.now();
-        const caller = deviceCaller(state, token, deviceId, now);
+        const caller = await deviceCaller(state, token, deviceId, now);
         if (caller && caller.error) return json(res, 401, { error: caller.error });
         const session = caller ? codeAccess(state, caller.code, now) : null;
         if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
-        noteSeen(caller.rowId, clientIp(req), false);
+        await noteSeen(caller.rowId, clientIp(req), false);
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
         const rateKey = String(deviceId || token || '').slice(0, 64);
@@ -1443,13 +1447,13 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = readState(file);
+        const state = (await store.read());
         const now = Date.now();
-        const caller = deviceCaller(state, token, deviceId, now);
+        const caller = await deviceCaller(state, token, deviceId, now);
         if (caller && caller.error) return json(res, 401, { error: caller.error });
         const session = caller ? codeAccess(state, caller.code, now) : null;
         if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
-        noteSeen(caller.rowId, clientIp(req), false);
+        await noteSeen(caller.rowId, clientIp(req), false);
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);
@@ -1475,10 +1479,10 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);
-        const state = readState(file);
+        const state = (await store.read());
         const now = Date.now();
         if (!notificationOk(body, state.settings.yoomoneySecret)) {
-          await updateState(file, (cur) => ({
+          await store.update((cur) => ({
             state: logWebhook(cur, {
               kind: 'bad_signature',
               operationId: body.operation_id || '',
@@ -1490,7 +1494,7 @@ export function createApp(file, fetchImpl, opts) {
           process.stderr.write('yoomoney bad signature\n');
           return send(res, 400, 'bad signature');
         }
-        const applied = await updateState(file, (cur) =>
+        const applied = await store.update((cur) =>
           applyPayment(cur, {
             operationId: body.operation_id,
             label: body.label,
@@ -1500,7 +1504,7 @@ export function createApp(file, fetchImpl, opts) {
             now,
           }),
         );
-        const freshPay = readState(file);
+        const freshPay = (await store.read());
         if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
@@ -1546,8 +1550,9 @@ export function listen(file, port, fetchImpl, opts) {
 }
 
 export async function refreshMissingProfiles(file, token, net, opts) {
+  const store = toStore(file);
   const timeoutMs = (opts && opts.timeoutMs) || TG_SEND_TIMEOUT_MS;
-  const state = readState(file);
+  const state = (await store.read());
   const missing = (state.accounts || [])
     .filter((a) => a.telegramId && !a.telegramUsername && !a.telegramName)
     .slice(0, 30);
@@ -1574,7 +1579,7 @@ export async function refreshMissingProfiles(file, token, net, opts) {
   }
   const useful = found.filter((row) => row.username || row.name);
   if (!useful.length) return;
-  await updateState(file, (latest) => {
+  await store.update((latest) => {
     let next = latest;
     for (let i = 0; i < useful.length; i++) next = rememberTelegramProfile(next, useful[i], Date.now()).state;
     return { state: next };
@@ -1582,6 +1587,7 @@ export async function refreshMissingProfiles(file, token, net, opts) {
 }
 
 export async function pollBot(file, fetchImpl, opts) {
+  const store = toStore(file);
   if (!botPollEnabled()) {
     process.stderr.write(botPollDisabledLine());
     return;
@@ -1610,7 +1616,7 @@ export async function pollBot(file, fetchImpl, opts) {
     if (maxLoops && loops >= maxLoops) return;
     loops += 1;
     try {
-      const state = readState(file);
+      const state = (await store.read());
       const token = state.settings.botToken;
       if (!token) {
         await sleep(5000);
@@ -1680,7 +1686,8 @@ export async function pollBot(file, fetchImpl, opts) {
               lastName: msg.from.last_name || '',
             }
           : null;
-        const replied = await updateState(file, (cur) => {
+        const info = await deviceInfo(file);
+        const replied = await store.update((cur) => {
           const out = botReply(cur, {
             chatId,
             text: msg.text || '',
@@ -1689,7 +1696,7 @@ export async function pollBot(file, fetchImpl, opts) {
             replyTo,
             from,
             pad,
-            info: deviceInfo(file),
+            info,
           });
           return { state: out.state, result: { messages: out.messages, pad: out.pad } };
         });
@@ -1707,7 +1714,7 @@ export async function pollBot(file, fetchImpl, opts) {
               timeoutMs: sendTimeoutMs,
             });
             if (row.supportNotify && sent.messageId) {
-              await updateState(file, (cur) => ({
+              await store.update((cur) => ({
                 state: rememberSupportReply(cur, {
                   adminChatId: row.chatId,
                   messageId: sent.messageId,
@@ -1729,14 +1736,16 @@ export async function pollBot(file, fetchImpl, opts) {
 }
 
 /** (codeId) → { name, lastSeenAt } from the device registry for the bot's device list. Best effort. */
-function deviceInfo(file) {
+async function deviceInfo(file) {
+  let rows = new Map();
+  try {
+    rows = await toStore(file).registry.activeRowsByCode();
+  } catch (e) {
+    /* names and lastSeen are cosmetic */
+  }
   return (codeId) => {
-    try {
-      const row = activeRowForCode(registryDb(file), codeId);
-      return row ? { name: String(row.name || ''), lastSeenAt: Number(row.last_seen_at) || 0 } : null;
-    } catch (e) {
-      return null;
-    }
+    const row = rows.get(codeId);
+    return row ? { name: String(row.name || ''), lastSeenAt: Number(row.last_seen_at) || 0 } : null;
   };
 }
 
@@ -1745,6 +1754,7 @@ function deviceInfo(file) {
  * so a second tap on «Да» reaches the state check and is told the button is stale.
  */
 export async function handleCallback(file, token, cq, net, timeoutMs) {
+  const store = toStore(file);
   const chat = cq && cq.message && cq.message.chat;
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
@@ -1755,8 +1765,9 @@ export async function handleCallback(file, token, cq, net, timeoutMs) {
   const chatId = String(chat.id);
   let out = null;
   try {
-    out = await updateState(file, (cur) => {
-      const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info: deviceInfo(file) });
+    const info = await deviceInfo(file);
+    out = await store.update((cur) => {
+      const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info });
       return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
     });
   } catch (e) {
@@ -1794,9 +1805,10 @@ export async function handleCallback(file, token, cq, net, timeoutMs) {
  * @returns {Promise<{ sent: number, failed: number }>}
  */
 export async function runReminders(file, fetchImpl, now) {
+  const store = toStore(file);
   const net = fetchImpl || fetch;
   const at = now || Date.now();
-  const claimed = await updateState(file, (state) => {
+  const claimed = await store.update((state) => {
     if (!state.settings.botToken) return { state, result: { rows: [], messages: [], token: '' } };
     const rows = dueReminders(state, at);
     let next = state;
@@ -1825,7 +1837,7 @@ export async function runReminders(file, fetchImpl, now) {
     } else {
       failed += 1;
       process.stderr.write('reminder failed kind=' + row.kind + '\n');
-      await updateState(file, (state) => ({ state: releaseReminder(state, row) }));
+      await store.update((state) => ({ state: releaseReminder(state, row) }));
     }
   }
   return { sent, failed };
@@ -1885,7 +1897,8 @@ function envServiceDefaults() {
 
 /** Copy service URLs from the environment. Admin passwords are not created or printed. */
 export async function ensureAdmin(file) {
-  const state = readState(file);
+  const store = toStore(file);
+  const state = (await store.read());
   const env = envServiceDefaults();
   const need =
     (env.jackettUrl && !state.settings.jackettUrl) ||
@@ -1893,7 +1906,7 @@ export async function ensureAdmin(file) {
     (env.torrserverUrl && !state.settings.torrserverUrl) ||
     (env.publicOrigin && !state.settings.publicOrigin);
   if (!need) return;
-  await updateState(file, (s) => ({
+  await store.update((s) => ({
     state: {
       ...s,
       settings: {
@@ -1907,13 +1920,29 @@ export async function ensureAdmin(file) {
   }));
 }
 
+/** «ECONNREFUSED» or the server's message; a connect failure to several addresses is an AggregateError. */
+function storeErrorText(e) {
+  const first = e && Array.isArray(e.errors) && e.errors.length ? e.errors[0] : e;
+  const code = first && first.code ? String(first.code) : '';
+  const msg = first && first.message ? String(first.message) : String(first || 'error');
+  return code && msg.indexOf(code) < 0 ? code + ' ' + msg : msg;
+}
+
 const started = process.argv[1] && process.argv[1].endsWith('server.mjs');
 if (started) {
-  const file = dataFile();
   const port = Number(process.env.PORT || 8787);
-  ensureAdmin(file).then(() => listen(file, port)).then(() => {
-    process.stdout.write('billing listening on ' + port + '\n');
-  });
-  pollBot(file);
-  startReminders(file);
+  // BILLING_STORE=postgres + BILLING_DATABASE_URL, otherwise billing.db at BILLING_DATA (dataFile()).
+  openStore(process.env, dataFile())
+    .then(async (store) => {
+      await ensureAdmin(store);
+      await listen(store, port);
+      process.stdout.write('billing listening on ' + port + ' (store: ' + store.engine + ')\n');
+      pollBot(store);
+      startReminders(store);
+    })
+    .catch((e) => {
+      // Never the connection string: the error code and message only (pg puts no password in them).
+      process.stderr.write('billing store failed to open: ' + storeErrorText(e) + '\n');
+      process.exit(1);
+    });
 }

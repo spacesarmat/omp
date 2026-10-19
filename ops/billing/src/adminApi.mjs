@@ -138,7 +138,8 @@ export function homePayload(state, file, opts) {
     audit: (state.audit || []).slice(-40).reverse(),
     series: dailySeries(state, now, 90),
     settings: publicAdminSettings(s),
-    storage: storageInfo(file),
+    // The server passes the store's info (SQLite or Postgres); a bare path is the SQLite file.
+    storage: (opts && opts.storage) || (typeof file === 'string' ? storageInfo(file) : null),
   };
 }
 

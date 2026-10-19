@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected — enter a new code”; clearer “devices taken”, “extra device not renewed” and “update the app” errors
 - [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
 - Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
+- Billing: the store can be switched to Postgres (`BILLING_STORE=postgres`); SQLite stays the default, and both are covered by tests
 
 ## 0.20.4
 
