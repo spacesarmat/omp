@@ -337,6 +337,7 @@ export async function createPgStore({ connectionString, schema, max }) {
     activeRowForCode: (codeId) => reg.activeRowForCode(pool, codeId),
     activeRowsByCode: () => reg.activeRowsByCode(pool),
     listDevices: (subscriptionId) => reg.listDevices(pool, subscriptionId),
+    authStats: () => reg.authStats(pool),
     revokeRow: (id, reason, now) => reg.revokeRow(pool, id, reason, now),
     setRevokeReason: (id, reason) => reg.setRevokeReason(pool, id, reason),
     touchRow: (id, opts) => reg.touchRow(pool, id, opts),

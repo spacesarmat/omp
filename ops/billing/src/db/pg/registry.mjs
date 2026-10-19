@@ -56,6 +56,24 @@ export async function listDevices(q, subscriptionId) {
   });
 }
 
+/** Counts of active devices by token kind: refresh (new pair) vs legacy (old opaque). For the admin home prep before strict tokens. */
+export async function authStats(q) {
+  const r = (
+    await q.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE live > 0)::int AS refresh,
+         COUNT(*) FILTER (WHERE live = 0)::int AS legacy
+       FROM (
+         SELECT d.id,
+           (SELECT COUNT(*) FROM refresh_tokens t WHERE t.device_row_id = d.id AND t.revoked = 0 AND t.rotated_at = 0) AS live
+         FROM devices d WHERE d.status = 'active'
+       ) x`,
+    )
+  ).rows[0] || { total: 0, refresh: 0, legacy: 0 };
+  return { total: Number(r.total) || 0, refresh: Number(r.refresh) || 0, legacy: Number(r.legacy) || 0 };
+}
+
 export async function revokeRow(q, id, reason, now) {
   const at = Number(now) || Date.now();
   const res = await q.query("UPDATE devices SET status = 'revoked', revoked_at = $1, revoke_reason = $2 WHERE id = $3 AND status = 'active'", [

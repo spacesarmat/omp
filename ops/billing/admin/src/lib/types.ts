@@ -114,7 +114,17 @@ export type HomeData = {
   csrf: string;
   sessionId: string;
   flash?: Flash;
-  stats?: { accounts: number; activeSubs: number; payments30: number; revenue30: number };
+  stats?: {
+    accounts: number;
+    activeSubs: number;
+    payments30: number;
+    revenue30: number;
+    /** Active devices with a live refresh token (new apps). */
+    devicesRefresh?: number;
+    /** Active devices still on the old opaque token. */
+    devicesLegacy?: number;
+    devicesBound?: number;
+  };
   alerts?: { level: string; text: string; accountId?: string }[];
   events?: FeedEvent[];
   finance?: {
