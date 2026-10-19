@@ -40,12 +40,6 @@ function upToPhones(state) {
   return 'до ' + n + (n === 1 ? ' телефона' : ' телефонов');
 }
 
-/** «на 2 телефонах» */
-function onPhones(state) {
-  const n = baseDevices(state && state.settings);
-  return 'на ' + n + (n === 1 ? ' телефоне' : ' телефонах');
-}
-
 /** «+30 дней» / «+1 устройство навсегда» / both. */
 function promoText(p) {
   const parts = [];
@@ -519,7 +513,7 @@ export function paymentUserMessage(state, result) {
       rub(result.credit) +
       ' получена, но ' +
       (result.grace ? 'подписка сейчас в льготном периоде' : 'подписка уже закончилась') +
-      ' - отдельно доп. устройство не подключить.\nМы зачли ' +
+      '.\nДоп. устройство можно купить только вместе с активной подпиской.\nМы зачли ' +
       rub(result.credit) +
       (result.creditTotal > result.credit ? ' (всего зачёт ' + rub(result.creditTotal) + ')' : '') +
       ': сумма вычтется из следующего продления. Нажмите «Оплатить».';
@@ -1069,7 +1063,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'price') {
     const grace = graceDays(cur.settings);
     say(
-      'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ': поиск в Jackett и JacRed ' + onPhones(cur) + '.' +
+      'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + ': поиск в Jackett и JacRed.' +
         '\nПодписка нужна только на телефоне - на ТВ она не нужна.' +
         (prices.extra ? '\nДоп. устройство - ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
         (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает - можно спокойно продлить.' : '') +
@@ -1093,11 +1087,24 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       if (renewal.quote.extras > 0) {
         const base = checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, 'OMP, продление');
         buttons.push([urlButton('Только подписка - ' + rub(base.price), base.url)]);
-        tail = sub.active
-          ? '\nТолько подписка: доп. устройство перестанет работать после ' +
-            mskDateTime((Number(subRow.extraUntil) || 0) + graceDays(cur.settings) * 86400000) +
-            ' (привязка сохранится).'
-          : '\nТолько подписка: доп. устройство останется отключённым (привязка сохранится).';
+        const extraUntil = Number(subRow && subRow.extraUntil) || 0;
+        if (!sub.active) {
+          tail = '\nТолько подписка: доп. устройство останется отключённым (привязка сохранится).';
+        } else if (extraUntil > 0) {
+          tail =
+            '\nТолько подписка: доп. устройство перестанет работать после ' +
+            mskDateTime(extraUntil + graceDays(cur.settings) * 86400000) +
+            ' (привязка сохранится).';
+        } else {
+          // extras counted but no end date stored - still say when, using the paid period
+          const paidUntil = Number(sub.paidUntil) || 0;
+          tail =
+            paidUntil > 0
+              ? '\nТолько подписка: доп. устройство перестанет работать после ' +
+                mskDateTime(paidUntil + graceDays(cur.settings) * 86400000) +
+                ' (привязка сохранится).'
+              : '\nТолько подписка: доп. устройство перестанет работать после окончания текущего периода (привязка сохранится).';
+        }
       }
       say(head + renewal.text + tail, { inline: rows(buttons) });
     }
