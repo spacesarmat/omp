@@ -5,6 +5,7 @@ import {
   adminDashboard,
   bonusActive,
   bonusRows,
+  creditOf,
   dailySeries,
   limitBreakdown,
   limitOverrideOf,
@@ -61,6 +62,7 @@ function subRows(state, now) {
         limitOverride: limitOverrideOf(sub),
         extraSlots: activeExtras(state, sub, now),
         extraUntil: Number(sub.extraUntil) || 0,
+        creditRub: creditOf(sub),
         inGrace: access.grace,
         accessUntil: access.accessUntil,
         bound,
@@ -260,6 +262,7 @@ export function userPayload(state, accountId, opts) {
           ...limitPayload(state, subRow, now),
           extraSlots: sub.extraSlots,
           extraUntil: sub.extraUntil || 0,
+          creditRub: creditOf(subRow),
           bound: boundCount,
           overLimit: boundCount > sub.deviceLimit,
           swaps: swaps
