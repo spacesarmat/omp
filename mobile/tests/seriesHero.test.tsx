@@ -113,7 +113,7 @@ describe('series screen with TMDB', () => {
     expect((el.querySelector('.m-sh-backdrop img') as HTMLImageElement).src).toBe(SHOW.backdrop);
     expect((el.querySelector('img.m-sh-poster') as HTMLImageElement).src).toBe(SHOW.poster);
     expect(el.querySelector('.m-series-title')!.textContent).toBe('Тёмная материя');
-    expect(el.querySelector('.m-sh-meta')!.textContent).toBe('2024–2026 · ★ 7,6 · Фантастика, Драма');
+    expect(el.querySelector('.m-sh-meta')!.textContent).toBe('2024-2026 · ★ 7,6 · Фантастика, Драма');
     expect(el.querySelector('.m-sh-overview')!.textContent).toBe(SHOW.overview);
     expect(el.querySelector('.m-series-hero')).toBeTruthy();
     expect(el.querySelector('.m-series-head')).toBeNull();
@@ -121,7 +121,7 @@ describe('series screen with TMDB', () => {
 
   it('the meta line in English', () => {
     applyLanguageSetting('en');
-    expect(heroMeta(SHOW)).toBe('2024–2026 · ★ 7.6 · Фантастика, Драма');
+    expect(heroMeta(SHOW)).toBe('2024-2026 · ★ 7.6 · Фантастика, Драма');
     expect(heroMeta({ ...SHOW, seasons: [{ number: 1, episodes: 8, year: 2024, aired: 8 }], rating: 0, genres: [] })).toBe('2024');
   });
 
@@ -171,7 +171,7 @@ describe('series screen with TMDB', () => {
     await flush();
     expect(chips().map((c) => c.textContent)).toEqual(['Season 1', 'Season 2', '+Season 3']);
     expect(el.querySelector('.m-sh-caption')!.textContent).toBe('10 episodes · 2025');
-    expect(el.querySelector('.m-sh-meta')!.textContent).toBe('2024–2026 · ★ 7.6 · Фантастика, Драма');
+    expect(el.querySelector('.m-sh-meta')!.textContent).toBe('2024-2026 · ★ 7.6 · Фантастика, Драма');
     act(() => chips()[2].click());
     expect(el.textContent).toContain('This season is not in your library');
     expect(button('Find torrents')).toBeTruthy();

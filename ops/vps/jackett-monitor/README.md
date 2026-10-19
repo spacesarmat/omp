@@ -29,7 +29,7 @@ works again, the monitor turns it back on by itself.
   - the Jackett container is stopped.
 
   It sends one more message when Jackett recovers.
-- **Weekly update**: runs are skipped on Sunday 03:45–04:45 MSK, when the image update restarts Jackett,
+- **Weekly update**: runs are skipped on Sunday 03:45-04:45 MSK, when the image update restarts Jackett,
   and for 10 minutes after the Jackett container starts. A lock file stops two runs from overlapping.
 
 ## Files on the VPS

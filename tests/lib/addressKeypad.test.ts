@@ -47,7 +47,7 @@ describe('address keypad: editing', () => {
 });
 
 describe('address keypad: remote keys and arrows', () => {
-  it('digit key codes: 48–57 and the numpad', () => {
+  it('digit key codes: 48-57 and the numpad', () => {
     expect(digitOfKeyCode(48)).toBe('0');
     expect(digitOfKeyCode(57)).toBe('9');
     expect(digitOfKeyCode(96)).toBe('0');

@@ -288,7 +288,7 @@ describe('«Новое» · Подписки', () => {
     await mount({ seg: 'subs' });
     const card = el.querySelector('.m-ep-card')!;
     expect(card.textContent).toContain('Starbound Frontier · Сезон 2');
-    expect(card.textContent).toContain('Вышли серии 9–10 · у вас 1–8');
+    expect(card.textContent).toContain('Вышли серии 9-10 · у вас 1-8');
     // looked at
     expect(unseenCount('episodes')).toBe(0);
     click(byText('Не следить'));
@@ -525,7 +525,7 @@ describe('News in English', () => {
     expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Subscriptions · 2 new');
     const card = el.querySelector('.m-ep-card')!;
     expect(card.textContent).toContain('Starbound Frontier · Season 2');
-    expect(card.textContent).toContain('Episodes 9–10 are out · you have 1–8');
+    expect(card.textContent).toContain('Episodes 9-10 are out · you have 1-8');
     expect(byText('Replace…')).toBeTruthy();
     expect(byText('Stop following')).toBeTruthy();
     expect(el.querySelector('[aria-label="Replace the release: Starbound Frontier"]')).toBeTruthy();

@@ -123,14 +123,14 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
         I18n.load(context)
         // a staged login left by a process that died mid-transfer is never verified: drop it
         inbox.dropStaged()
-        // 8095 may be taken (another OMP build on the same box): the next free one of 8096–8099, advertised in NSD
+        // 8095 may be taken (another OMP build on the same box): the next free one of 8096-8099, advertised in NSD
         val bound = ControlPorts.bindFirst(PORTS) { p ->
             val s = ControlServer(p, router::precheck) { router.route(it) }
             s.start()
             s
         }
         if (bound == null) {
-            Log.w(TAG, "control server not started: ports ${PORTS.first()}–${PORTS.last()} taken")
+            Log.w(TAG, "control server not started: ports ${PORTS.first()}-${PORTS.last()} taken")
             return
         }
         server = bound.second

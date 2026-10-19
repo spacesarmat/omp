@@ -50,7 +50,7 @@ const PULL_TRIGGER = 64;
 const PULL_HOLD = 56;
 const pullOf = (dy: number) => (dy > 0 ? Math.min(PULL_MAX, dy * PULL_DAMP) : 0);
 const titleOf = (t: Torrent) => displayTitle(t);
-// the short name and its meta («2 сезон · серии 1–6 из 10», the year); the torrent screen shows the full title
+// the short name and its meta («2 сезон · серии 1-6 из 10», the year); the torrent screen shows the full title
 function ShortTitle({ tor }: { tor: Torrent }) {
   const s = libraryTitle(tor);
   return (
@@ -72,7 +72,7 @@ function TileName({ tor, g }: { tor: Torrent; g?: SeriesGroup | null }) {
   return <>{card && card.title ? card.title : libraryTitle(g ? g.named : tor).title}</>;
 }
 
-/** The line under a tile's name: «2 сезон · серии 1–6 из 10» or the year; for a series card «2 сезона», «2 раздачи». */
+/** The line under a tile's name: «2 сезон · серии 1-6 из 10» or the year; for a series card «2 сезона», «2 раздачи». */
 function tileMeta(tor: Torrent, g?: SeriesGroup | null): string {
   return g ? groupLabel(g) : libraryTitle(tor).meta;
 }

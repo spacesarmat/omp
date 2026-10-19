@@ -546,7 +546,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     fields: [
       ['priceRub', 'Цена, ₽'],
       ['periodDays', 'Период, дней'],
-      ['baseDevices', 'Базовых устройств в подписке (1–20; кроме индивидуальных лимитов)'],
+      ['baseDevices', 'Базовых устройств в подписке (1-20; кроме индивидуальных лимитов)'],
       ['extraDeviceRub', 'Доп. устройство, ₽ в месяц'],
       ['graceDays', 'Льготный период, дней'],
       ['publicPromo', 'Промокод на пробный день (бот покажет, пока он действует)'],
@@ -555,8 +555,8 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
   {
     title: 'Бэкапы Postgres',
     fields: [
-      ['backupEveryHours', 'Делать дамп каждые, часов (1–168)'],
-      ['backupKeepDays', 'Хранить дампы, дней (1–365; последний не удаляется)'],
+      ['backupEveryHours', 'Делать дамп каждые, часов (1-168)'],
+      ['backupKeepDays', 'Хранить дампы, дней (1-365; последний не удаляется)'],
     ],
   },
 ];

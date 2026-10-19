@@ -193,9 +193,9 @@ export function revokeNoticeText(device) {
 
 /**
  * Admin limit form: the individual limit and the paid extra slots.
- * `limitOverride`: a whole number 1–LIMIT_MAX («индивидуальный лимит», replaces the global base and is not touched
+ * `limitOverride`: a whole number 1-LIMIT_MAX («индивидуальный лимит», replaces the global base and is not touched
  * when the base in the settings changes), or '' / null to go back to the global base; undefined keeps it.
- * `extraSlots`: monthly extra slots (0–LIMIT_MAX); set here they run until paidUntil, like bought ones.
+ * `extraSlots`: monthly extra slots (0-LIMIT_MAX); set here they run until paidUntil, like bought ones.
  * Bonus slots are separate (grantBonus). Lowering the limit unbinds nothing: the newest devices over it stop working.
  */
 export function setDeviceLimit(state, { accountId, limitOverride, extraSlots, now, actor }) {
@@ -233,7 +233,7 @@ export function setDeviceLimit(state, { accountId, limitOverride, extraSlots, no
 export const BONUS_MAX_DAYS = 3650;
 
 /**
- * Admin «Бонусные устройства»: `count` free slots (1–LIMIT_MAX), forever (`days` empty / 0) or for `days` days.
+ * Admin «Бонусные устройства»: `count` free slots (1-LIMIT_MAX), forever (`days` empty / 0) or for `days` days.
  * They are not part of the renewal price and outlive changes of the global base. `reason` is shown in the panel.
  */
 export function grantBonus(state, { accountId, count, days, reason, now, actor }) {

@@ -163,11 +163,11 @@ describe('releaseKind: tracker categories first', () => {
 describe('kind badge', () => {
   it('names the kind with the parts that are known', () => {
     expect(resultKindLabel({ Title: 'Джентльмены / The Gentlemen (2019)' })).toBe('Фильм');
-    expect(resultKindLabel({ Title: 'Джентльмены / The Gentlemen / Сезон: 2 / Серии: 1-8 из 8 [2026, WEB-DL 1080p]' })).toBe('Сериал · S02 · 1–8 из 8');
+    expect(resultKindLabel({ Title: 'Джентльмены / The Gentlemen / Сезон: 2 / Серии: 1-8 из 8 [2026, WEB-DL 1080p]' })).toBe('Сериал · S02 · 1-8 из 8');
     expect(resultKindLabel({ Title: 'The.Gentlemen.S01.2160p.WEB-DL' })).toBe('Сериал · S01');
     expect(resultKindLabel({ Title: 'Шоу', Categories: 'Сериалы' })).toBe('Сериал');
-    expect(kindLabel({ kind: 'series', season: [1, 3] })).toBe('Сериал · S01–S03');
-    expect(kindLabel({ kind: 'series', episodes: { from: 1, to: 6 } })).toBe('Сериал · 1–6');
+    expect(kindLabel({ kind: 'series', season: [1, 3] })).toBe('Сериал · S01-S03');
+    expect(kindLabel({ kind: 'series', episodes: { from: 1, to: 6 } })).toBe('Сериал · 1-6');
     expect(kindLabel({ kind: 'series', season: 3, episodes: { from: 5, to: 5 } })).toBe('Сериал · S03 · серия 5');
     expect(resultKindLabel({ Title: 'Просто название' })).toBe('');
   });

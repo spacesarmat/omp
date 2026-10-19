@@ -172,7 +172,7 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
 /** Android TV: drops a token the TV no longer accepts (only while it is still `token`), so the next tap asks for a code. */
 /**
  * Android TVs found on the network (NSD `_omp._tcp`): a saved one at the same IP takes the port it advertises now —
- * the TV moves to 8096–8099 when 8095 is taken. True when a saved TV changed.
+ * the TV moves to 8096-8099 when 8095 is taken. True when a saved TV changed.
  */
 export function updateAtvPorts(found: { ip: string; port: number }[]): boolean {
   let changed = false;

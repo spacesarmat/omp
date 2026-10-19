@@ -16,7 +16,7 @@ import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../..
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 
-/** Tiles per row. The safe width is 1728px (96–1824); the CSS column count matches. */
+/** Tiles per row. The safe width is 1728px (96-1824); the CSS column count matches. */
 export const VIEW_COLS: { [v in LibraryView]: number } = { large: 6, small: 9, list: 1, compact: 1 };
 /** The height of a row of each view, px (poster, title, meta and the gap under it). */
 const ROW_PX: { [v in LibraryView]: number } = { large: 560, small: 420, list: 140, compact: 70 };

@@ -102,12 +102,12 @@ export function freshText(n: number): string {
   return tp('monitor.fresh', n);
 }
 
-/** «1–8», «5». */
+/** «1-8», «5». */
 export function rangeOf(from: number | undefined, to: number): string {
-  return from !== undefined && from < to ? from + '–' + to : String(to);
+  return from !== undefined && from < to ? from + '-' + to : String(to);
 }
 
-/** «Вышли серии 9–10 · у вас 1–8» (or «Вышла серия 10 · у вас 1–9»). */
+/** «Вышли серии 9-10 · у вас 1-8» (or «Вышла серия 10 · у вас 1-9»). */
 export function episodesLine(e: EpisodesInfo, haveFrom = 1): string {
   const first = e.haveTo + 1;
   const news = first >= e.to ? t('monitor.episodeOut', { to: e.to }) : t('monitor.episodesOut', { from: first, to: e.to });
@@ -124,7 +124,7 @@ export function betterLine(b: BetterInfo): string {
   return t('monitor.youHave', { news: qualityText(b.got), range: qualityText(b.have) });
 }
 
-/** «Серии 1–10 из 10» from a release title; '' when it has no episode numbers. */
+/** «Серии 1-10 из 10» from a release title; '' when it has no episode numbers. */
 export function rangeText(title: string): string {
   const r = parseEpisodeRange(title);
   if (r.to === undefined) return '';

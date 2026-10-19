@@ -974,7 +974,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     ],
     more: [
       'The phone and the TV must be in the same Wi‑Fi network. The server is open without a password and visible to all devices of this network.',
-      'TorrServer is downloaded once and stored in the private OMP folder. When a new version is pinned in OMP, “Update” appears in Settings. On Android 10 and newer the server is started through the system loader, on Android 8–9 - directly.',
+      'TorrServer is downloaded once and stored in the private OMP folder. When a new version is pinned in OMP, “Update” appears in Settings. On Android 10 and newer the server is started through the system loader, on Android 8-9 - directly.',
     ],
   },
   'ts-settings': {
@@ -1016,12 +1016,12 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'new-episodes': {
     q: 'New episodes and the “Replace” button',
     short: [
-      'For series from the catalog OMP looks for a fuller torrent itself: a card “Episodes 9–10 are out · you have 1–8” appears.',
+      'For series from the catalog OMP looks for a fuller torrent itself: a card “Episodes 9-10 are out · you have 1-8” appears.',
       '“Replace” adds the new torrent and moves into it the history, the stop positions, “Skip” and the category.',
       '“Stop following” turns the check off for this series.',
     ],
     more: [
-      'For series from the catalog OMP looks for a fuller torrent of the same series and season itself. If new episodes are out, a card “Episodes 9–10 are out · you have 1–8” appears in “New” on the “Subscriptions” tab.',
+      'For series from the catalog OMP looks for a fuller torrent of the same series and season itself. If new episodes are out, a card “Episodes 9-10 are out · you have 1-8” appears in “New” on the “Subscriptions” tab.',
       '“Replace” adds the new torrent to the server and moves into it the watch history, the stop positions, the “Skip” settings and the category. The old torrent is removed from the server only after the new one is added successfully: if something goes wrong, the old one stays in place. The name and the poster are taken from the new torrent.',
       '“Watch on TV” on the new episodes card first does the replace, and then starts playback. If there are several suitable torrents, you can choose “Another release” in the replace window.',
       '“Stop following” turns off the new episodes check for this series. For all series at once it can be turned off in Settings → “Follow new releases” (the monitoring icon in the “New” header).',

@@ -399,7 +399,7 @@ describe('marks from the menu (LG)', () => {
     const call = saveSkipMock.mock.calls[0];
     expect(call[1]).toEqual({ hash: H });
     expect(call[2]).toEqual({ mi: [45, 135] });
-    await until(hasText(host, 'Отмечено: заставка 0:45–2:15'));
+    await until(hasText(host, 'Отмечено: заставка 0:45-2:15'));
     // the new mark is already in effect
     at(50);
     await until(hasText(host, 'Пропустить заставку'));

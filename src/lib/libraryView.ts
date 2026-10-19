@@ -87,12 +87,12 @@ function looksRaw(s: string): boolean {
 export interface LibraryTitle {
   /** The name to show: the first title variant without season, year and release details. */
   title: string;
-  /** Short details: «2 сезон · серии 1–6 из 10» for a series, the year for a film; '' when none. */
+  /** Short details: «2 сезон · серии 1-6 из 10» for a series, the year for a film; '' when none. */
   meta: string;
 }
 
 /**
- * A short title for the library rows: «Темная материя» + «2 сезон · серии 1–6 из 10» from a tracker string.
+ * A short title for the library rows: «Темная материя» + «2 сезон · серии 1-6 из 10» from a tracker string.
  * A name the user typed (no tracker marks) and one derived from the files stay as they are.
  */
 export function libraryTitle(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): LibraryTitle {

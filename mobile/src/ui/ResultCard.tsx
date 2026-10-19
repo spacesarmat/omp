@@ -41,7 +41,7 @@ const pageLink = (r: SourceResult): string => (/^https?:\/\//i.test(r.detailUrl 
  * A found release, compact: the poster down the whole card; the short title with its meta, quality chips,
  * «source · size · seeds», the date with the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ». A tap on the
  * card opens «Подробнее»: the full tracker title, the category, the same actions as full buttons and «Открыть на сайте».
- * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1–8 из 8»), none when it is unknown.
+ * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1-8 из 8»), none when it is unknown.
  */
 export function ResultCard(p: {
   r: SourceResult;

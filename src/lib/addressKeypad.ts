@@ -60,7 +60,7 @@ export function keypadEditAtEnd(value: string, key: KeypadKey): string {
   return keypadEdit({ value, start: value.length, end: value.length }, key).value;
 }
 
-/** Digit keys of a remote or a keyboard: 48–57 (LG, Android TV KEYCODE_0..9 in the WebView), numpad 96–105. */
+/** Digit keys of a remote or a keyboard: 48-57 (LG, Android TV KEYCODE_0..9 in the WebView), numpad 96-105. */
 export function digitOfKeyCode(code: number): KeypadKey | null {
   if (code >= 48 && code <= 57) return String(code - 48) as KeypadKey;
   if (code >= 96 && code <= 105) return String(code - 96) as KeypadKey;

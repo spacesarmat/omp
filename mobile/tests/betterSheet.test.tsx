@@ -217,7 +217,7 @@ describe('«Найти в лучшем качестве» · few seeds, packs, f
     found = () => Promise.resolve([row({ Title: 'Дом дракона (2024) Сезоны 1-3 WEB-DL 2160p' })]);
     await mountTorrent(show);
     await openBetter();
-    expect(el.querySelector('[data-better-row]')!.textContent).toContain('сезоны 1–3');
+    expect(el.querySelector('[data-better-row]')!.textContent).toContain('сезоны 1-3');
   });
 
   it('a timeout: says why, the list stays for another pick', async () => {

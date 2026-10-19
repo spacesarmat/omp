@@ -87,7 +87,7 @@ describe('TV person screen', () => {
   it('shows the years of a person who has died', async () => {
     stub.person = vi.fn(() => Promise.resolve({ ...card, death: '2010-02-03' }));
     const host = await mount();
-    expect(text(host.querySelector('.person-job'))).toBe('Актёр · 1970–2010');
+    expect(text(host.querySelector('.person-job'))).toBe('Актёр · 1970-2010');
   });
 
   it('lists the library title first, marked, with the roles in the meta line', async () => {

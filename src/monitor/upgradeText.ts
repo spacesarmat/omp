@@ -13,7 +13,7 @@ export function qualityOrUnknown(title: string): string {
   return qualityLabel(title) || t('torrent.better.unknown');
 }
 
-/** «сезоны 1–3» / «все сезоны» when a series candidate holds more than the torrent's season. */
+/** «сезоны 1-3» / «все сезоны» when a series candidate holds more than the torrent's season. */
 export function coverageNote(lib: LibraryTorrent, r: SourceResult): string {
   const s = seasonsCovered(lib, r);
   if (!s) return '';

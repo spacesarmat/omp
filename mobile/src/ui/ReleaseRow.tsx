@@ -1,4 +1,4 @@
-// The parts of a found-release row: the short title with its meta («Тёмная материя · 2 сезон · серии 1–6 из 10»),
+// The parts of a found-release row: the short title with its meta («Тёмная материя · 2 сезон · серии 1-6 из 10»),
 // quality chips, the full tracker title (one muted line, the whole of it on tap: people pick releases by it) and a
 // small poster that is looked up only once the row is on screen.
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -19,7 +19,7 @@ export function ReleaseName({ raw, class: cls = 'm-result-title' }: { raw: strin
   );
 }
 
-/** The quality chips; `kind` («Фильм», «Сериал · S02 · 1–8 из 8») comes first, framed. */
+/** The quality chips; `kind` («Фильм», «Сериал · S02 · 1-8 из 8») comes first, framed. */
 export function ReleaseChips({ raw, kind }: { raw: string; kind?: string }) {
   const chips = releaseChips(raw);
   if (!chips.length && !kind) return null;

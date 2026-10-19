@@ -12,7 +12,7 @@ RuTracker, Kinozal, Rustorka. Jackett/Prowlarr и поиск самого TorrSe
 
 Для каждого источника:
 
-- 2–3 фиксированных запроса («Джентльмены», «Interstellar», «Во все тяжкие»; для Anidub - «Наруто», «Атака титанов»);
+- 2-3 фиксированных запроса («Джентльмены», «Interstellar», «Во все тяжкие»; для Anidub - «Наруто», «Атака титанов»);
 - не меньше N результатов (порог свой у каждого источника);
 - у ≥ 90 % результатов есть название, размер, сиды (число), магнет или ссылка на .torrent/страницу раздачи, категория
   (где сайт её даёт); хотя бы у одного результата сиды > 0;
@@ -75,7 +75,7 @@ RuTracker, Kinozal, Rustorka. Jackett/Prowlarr и поиск самого TorrSe
   проверка упала - тогда «❌ не дошла до конца» со ссылкой).
 - Из Telegram: админ-бот (`ops/admin-bot/`), команда `/check` или `/check rutor` - запускает этот workflow с
   `notify=true`; таблицу присылает сам workflow (шаг «Report to the admin», `scripts/parser-monitor/notify.mjs`):
-  Cloudflare Worker не может ждать 5–40 минут запуска. `/status` показывает последнюю сохранённую таблицу.
+  Cloudflare Worker не может ждать 5-40 минут запуска. `/status` показывает последнюю сохранённую таблицу.
 - Локально: `npm run monitor:parsers` (сеть нужна, issue и Telegram не трогает). Переменные окружения:
   `MONITOR_SOURCES=rutor,anidub`, логины из таблицы выше, `MONITOR_OUT` - папка вывода.
 
@@ -97,7 +97,7 @@ RuTracker, Kinozal, Rustorka. Jackett/Prowlarr и поиск самого TorrSe
 
 torrent.by отдаёт только свой сертификат, без промежуточного Let's Encrypt YE1. Браузер дотягивает его сам (AIA),
 Node - нет, поэтому на раннере каждый запрос падал с `UNABLE_TO_VERIFY_LEAF_SIGNATURE` и до парсера дело не доходило.
-Теперь для torrent.by (и только для него) монитор доверяет тем же промежуточным YE1–YE3, что лежат в Android-приложении
+Теперь для torrent.by (и только для него) монитор доверяет тем же промежуточным YE1-YE3, что лежат в Android-приложении
 (`android/app/src/main/res/raw/letsencrypt_ye.crt`, см. `network_security_config.xml`): `scripts/parser-monitor/tlsFetch.mjs`
 ходит туда через `node:https` с `ca` = корни Node + этот файл и `allowPartialTrustChain` (их корня ISRG Root YE
 в Node пока нет). Сертификат сайта по-прежнему проверяется полностью: подпись, имя, срок. `NODE_EXTRA_CA_CERTS` не

@@ -5854,7 +5854,7 @@ git commit -m "feat: add settings screen for playback, subtitles and TorrServer 
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173 - стрелки, Enter, Esc (Назад), Пробел, F1–F4 (цветные), i (статистика), n/p (серии)
+npm run dev      # http://localhost:5173 - стрелки, Enter, Esc (Назад), Пробел, F1-F4 (цветные), i (статистика), n/p (серии)
 npm test
 npm run build    # legacy-бандл для Chromium 53+ в dist/
 ```

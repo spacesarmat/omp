@@ -82,7 +82,7 @@ export function sortLabel(s: SubsSort): string {
   return t(SORT_LABEL[s] || 'news.sortAdded');
 }
 
-/** A–Я, Russian then English, case-insensitive, ё = е, «2» before «10». */
+/** A-Я, Russian then English, case-insensitive, ё = е, «2» before «10». */
 const nameCollator = new Intl.Collator(['ru', 'en'], { sensitivity: 'base', numeric: true });
 
 export function compareName(a: string, b: string): number {

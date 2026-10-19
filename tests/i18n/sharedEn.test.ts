@@ -96,7 +96,7 @@ describe('shared modules in English', () => {
     expect(e.ok ? '' : e.error).toBe('Enter a title');
     const long = checkTitle('x'.repeat(201));
     expect(long.ok ? '' : long.error).toBe('At most 200 characters');
-    expect(skipStatus(true, { i: false, c: false, mi: [45, 135] })).toBe('from the file chapters · manual: intro 0:45–2:15');
+    expect(skipStatus(true, { i: false, c: false, mi: [45, 135] })).toBe('from the file chapters · manual: intro 0:45-2:15');
     expect(skipStatus(false, { i: false, c: false })).toBe('not set');
     const f = (path: string, id: number) => ({ id, path, length: 1000 });
     // the persisted title stays Russian whatever the UI language

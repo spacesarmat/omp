@@ -66,7 +66,7 @@ for (const c of candidates()) {
 }
 if (!jdk) {
   console.error(
-    'Нужна Java 21–24 (JDK 21 LTS). Установите Temurin 21: winget install EclipseAdoptium.Temurin.21.JDK\n' +
+    'Нужна Java 21-24 (JDK 21 LTS). Установите Temurin 21: winget install EclipseAdoptium.Temurin.21.JDK\n' +
       'Java 21-24 (JDK 21 LTS) is required; Capacitor 8 and AGP 9 cannot build on 17 or older. ' +
       'Install Temurin 21 and/or set JAVA_HOME.',
   );

@@ -62,7 +62,7 @@ function fakeSpawn(opts: { code?: number; stderr?: string; write?: boolean } = {
 const URL_ = 'postgres://billing:s%40cret-pw@postgres:5432/billing';
 
 describe('Postgres backups: settings', () => {
-  it('backupEveryHours 1–168 (24) and backupKeepDays 1–365 (30); bad values keep the current one', () => {
+  it('backupEveryHours 1-168 (24) and backupKeepDays 1-365 (30); bad values keep the current one', () => {
     expect(backupEveryHours({})).toBe(24);
     expect(backupKeepDays({})).toBe(30);
     expect(backupEveryHours({ backupEveryHours: 6 })).toBe(6);

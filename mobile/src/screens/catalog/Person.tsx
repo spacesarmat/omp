@@ -22,7 +22,7 @@ const BACK = 'M15 5l-7 7l7 7';
 
 type Job = 'acting' | 'directing';
 
-/** «1970–2010» / «род. 1970» / ''. */
+/** «1970-2010» / «род. 1970» / ''. */
 function yearsText(p: PersonCard): string {
   const from = p.birth.slice(0, 4);
   const to = p.death.slice(0, 4);

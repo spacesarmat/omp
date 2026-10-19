@@ -5,7 +5,7 @@ export const TITLE_MAX = 200;
 
 export type TitleCheck = { ok: true; title: string } | { ok: false; error: string };
 
-/** A title typed by the user: trimmed, 1–200 characters. */
+/** A title typed by the user: trimmed, 1-200 characters. */
 export function checkTitle(raw: string): TitleCheck {
   const title = (raw || '').replace(/\s+/g, ' ').trim();
   if (!title) return { ok: false, error: t('errors.enterTitle') };

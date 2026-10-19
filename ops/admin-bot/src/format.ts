@@ -183,7 +183,7 @@ export function formatStats(s: RepoStats): string {
 // ---------- /check ----------
 
 export function checkStarted(names: string[]): string {
-  return '🚀 Запустил проверку' + (names.length ? ': ' + escapeHtml(names.join(', ')) : ' всех парсеров') + '…\nТаблицу пришлю сюда, когда workflow закончится (обычно 3–15 мин).';
+  return '🚀 Запустил проверку' + (names.length ? ': ' + escapeHtml(names.join(', ')) : ' всех парсеров') + '…\nТаблицу пришлю сюда, когда workflow закончится (обычно 3-15 мин).';
 }
 
 export function unknownSources(unknown: string[], known: string[]): string {

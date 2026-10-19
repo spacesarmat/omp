@@ -13,7 +13,7 @@ object PlayerBuffer {
     const val MIN_BYTES = 16 * 1024 * 1024
     const val MAX_BYTES = 64 * 1024 * 1024
 
-    /** A quarter of a [memoryClassMb] heap, clamped to 16–64 MB. */
+    /** A quarter of a [memoryClassMb] heap, clamped to 16-64 MB. */
     fun capBytes(memoryClassMb: Int): Int {
         val quarter = memoryClassMb.toLong() * 1024 * 1024 / 4
         return quarter.coerceIn(MIN_BYTES.toLong(), MAX_BYTES.toLong()).toInt()

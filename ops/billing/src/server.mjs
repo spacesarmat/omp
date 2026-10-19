@@ -860,7 +860,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
         const body = await readBody(req);
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
-        // settings.baseDevices: a whole number 1–20; a bad value keeps the current one and says so
+        // settings.baseDevices: a whole number 1-20; a bad value keeps the current one and says so
         const badBase = path === '/admin/settings' && body.baseDevices !== undefined && body.baseDevices !== '' && !validBase(body.baseDevices);
         // Lowering the base cuts every subscription without an individual limit: only with confirm=yes. Without it
         // nothing is saved and the answer says what it would do.
@@ -897,7 +897,7 @@ export function createApp(file, fetchImpl, opts) {
         let extra = null;
         if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 - оставлено прежнее значение';
         if (path === '/admin/settings' && !lowerBlocked && badBackupSetting(body)) {
-          flashError = 'Бэкап Postgres: каждые 1–168 часов, хранить 1–365 дней (целые числа) - оставлено прежнее значение';
+          flashError = 'Бэкап Postgres: каждые 1-168 часов, хранить 1-365 дней (целые числа) - оставлено прежнее значение';
         }
         if (lowerBlocked) {
           flashError =

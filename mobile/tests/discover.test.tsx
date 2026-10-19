@@ -651,7 +651,7 @@ describe('«Обзор»: sort, filters, title and year', () => {
     expect(filtersBtn().textContent).toBe('Фильтры');
   });
 
-  it('a year range from–to', async () => {
+  it('a year range from-to', async () => {
     fake();
     mount(<Discover />);
     await flush();

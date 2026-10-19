@@ -138,8 +138,8 @@ function two(n: number): string {
 }
 
 /**
- * The episodes of a season as one code: «S13E07», «S13E07–E08» (consecutive), «S13E07, E09» (apart),
- * «S13E07–E08, E10» (both).
+ * The episodes of a season as one code: «S13E07», «S13E07-E08» (consecutive), «S13E07, E09» (apart),
+ * «S13E07-E08, E10» (both).
  */
 export function episodesCode(season: number, episodes: number[]): string {
   const eps = episodes.slice().sort((a, b) => a - b);
@@ -148,7 +148,7 @@ export function episodesCode(season: number, episodes: number[]): string {
   while (i < eps.length) {
     let j = i;
     while (j + 1 < eps.length && eps[j + 1] === eps[j] + 1) j++;
-    runs.push('E' + two(eps[i]) + (j > i ? '–E' + two(eps[j]) : ''));
+    runs.push('E' + two(eps[i]) + (j > i ? '-E' + two(eps[j]) : ''));
     i = j + 1;
   }
   return 'S' + two(season) + runs.join(', ');
@@ -177,7 +177,7 @@ export function dayRows(entries: CalEntry[]): CalRow[] {
   return rows;
 }
 
-/** The row's line: «S13E07 · name», «S13E07–E08». */
+/** The row's line: «S13E07 · name», «S13E07-E08». */
 export function rowLine(row: CalRow): string {
   return episodesCode(row.season, row.episodes) + (row.name ? ' · ' + row.name : '');
 }

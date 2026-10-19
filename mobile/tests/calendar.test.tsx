@@ -196,17 +196,17 @@ describe('calendar data', () => {
 
   it('episode codes: one, consecutive, apart, both', () => {
     expect(episodesCode(13, [7])).toBe('S13E07');
-    expect(episodesCode(13, [8, 7])).toBe('S13E07–E08');
-    expect(episodesCode(13, [7, 8, 9])).toBe('S13E07–E09');
+    expect(episodesCode(13, [8, 7])).toBe('S13E07-E08');
+    expect(episodesCode(13, [7, 8, 9])).toBe('S13E07-E09');
     expect(episodesCode(13, [7, 9])).toBe('S13E07, E09');
-    expect(episodesCode(2, [1, 2, 4])).toBe('S02E01–E02, E04');
+    expect(episodesCode(2, [1, 2, 4])).toBe('S02E01-E02, E04');
   });
 
   it('the episodes of a day of one show and season make one row; the name only for a lone episode with a real one', () => {
     const named = (n: number, name: string, card: CatalogCard = FROST, s = 13): CalEntry =>
       ({ show: show(card), season: s, episode: n, name: name, airDate: '2026-10-08', status: 'future' });
     const rows = dayRows([named(7, 'Эпизод 7'), named(8, 'Возвращение'), named(1, 'Начало', HARBOR, 1), named(9, 'Серия 9')]);
-    expect(rows.map(rowLine)).toEqual(['S13E07–E09', 'S01E01 · Начало']);
+    expect(rows.map(rowLine)).toEqual(['S13E07-E09', 'S01E01 · Начало']);
     expect(rowLine(dayRows([named(7, 'Эпизод 7')])[0])).toBe('S13E07');
     expect(rowLine(dayRows([named(7, 'Episode 7')])[0])).toBe('S13E07');
     expect(rowLine(dayRows([named(7, 'Возвращение')])[0])).toBe('S13E07 · Возвращение');

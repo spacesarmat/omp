@@ -32,7 +32,7 @@ describe('deriveName', () => {
   });
   it('names several seasons as a range', () => {
     const files = [f('Moon.Garden.S01E01.720p.mkv', 1), f('Moon.Garden.S03E02.720p.mkv', 2), f('Moon.Garden.S02E01.720p.mkv', 3)];
-    expect(deriveName(files, 'x')).toBe('Moon Garden · Сезоны 1–3');
+    expect(deriveName(files, 'x')).toBe('Moon Garden · Сезоны 1-3');
   });
   it('uses the release folder for numbered episodes in season folders', () => {
     const files = [f('Silver Lake/Season 2/01 - Pilot.mkv', 1), f('Silver Lake/Season 2/02 - Next.mkv', 2)];

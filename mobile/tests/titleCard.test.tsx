@@ -232,19 +232,19 @@ describe('TitleCard: series', () => {
     serve(SHOW);
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – выходит · Выходит · ★ 8,0');
+    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 - выходит · Выходит · ★ 8,0');
     expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика');
     act(() => render(null, el));
     serve({ ...SHOW, airing: false, status: 'ended', lastAirDate: '2026-03-01', genres: ['фантастика', 'драма'] });
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – 2026 · Завершён · ★ 8,0');
+    expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 - 2026 · Завершён · ★ 8,0');
     expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика, драма');
   });
 
   it('seriesDates uses the first air year and «выходит» while airing', () => {
-    expect(seriesDates(SHOW)).toBe('2024 – выходит');
-    expect(seriesDates({ ...SHOW, airing: false, firstAirDate: '2019-01-02', lastAirDate: '2024-05-01' })).toBe('2019 – 2024');
+    expect(seriesDates(SHOW)).toBe('2024 - выходит');
+    expect(seriesDates({ ...SHOW, airing: false, firstAirDate: '2019-01-02', lastAirDate: '2024-05-01' })).toBe('2019 - 2024');
     expect(defaultSeason(SHOW.seasons)).toBe(3);
     expect(defaultSeason([])).toBe(1);
   });
@@ -431,7 +431,7 @@ describe('TitleCard in English', () => {
       serve({ ...SHOW, title: 'Frost Pass', airing: true });
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
-      expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 – airing · Airing · ★ 8.0');
+      expect(el.querySelector('.m-tc-meta')!.textContent).toBe('2024 - airing · Airing · ★ 8.0');
       expect(el.querySelector('.m-tc-genres')!.textContent).toBe('фантастика');
       expect(button('Find torrents')).toBeTruthy();
       expect(button('Want to watch')).toBeTruthy();

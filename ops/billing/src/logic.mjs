@@ -9,13 +9,13 @@ const ATTEMPT_CAP = 200;
  */
 export const DEVICE_BASE = 2;
 
-/** Base devices of every subscription unless an admin set an individual limit: `settings.baseDevices`, 1–20. */
+/** Base devices of every subscription unless an admin set an individual limit: `settings.baseDevices`, 1-20. */
 export const BASE_DEVICES_DEFAULT = 2;
 export const BASE_DEVICES_MAX = 20;
 /** Bonus slots of one subscription: at most this many entries are kept (the oldest expired ones go first). */
 const BONUS_ROWS_MAX = 50;
 
-/** Days of access after paidUntil while the user renews. `settings.graceDays` overrides it (0–30). */
+/** Days of access after paidUntil while the user renews. `settings.graceDays` overrides it (0-30). */
 export const GRACE_DAYS_DEFAULT = 3;
 
 /** Moscow has no DST since 2014: calendar days and reminder hours use a fixed UTC+3. */
@@ -106,7 +106,7 @@ function liveSub(state, accountId, now) {
   );
 }
 
-/** Grace period in days from settings: a number 0–30, default GRACE_DAYS_DEFAULT. */
+/** Grace period in days from settings: a number 0-30, default GRACE_DAYS_DEFAULT. */
 export function graceDays(settings) {
   const raw = settings ? settings.graceDays : undefined;
   if (raw === undefined || raw === null || raw === '') return GRACE_DAYS_DEFAULT;
@@ -144,7 +144,7 @@ export function activeExtras(state, sub, now) {
   return now < (Number(sub.extraUntil) || 0) + graceMs(state) ? n : 0;
 }
 
-/** Global base devices from the admin settings (default 2, 1–20). */
+/** Global base devices from the admin settings (default 2, 1-20). */
 export function baseDevices(settings) {
   const raw = settings ? settings.baseDevices : undefined;
   if (raw === undefined || raw === null || raw === '') return BASE_DEVICES_DEFAULT;
@@ -2383,7 +2383,7 @@ export function priceText(settings) {
   return { days, price, extra };
 }
 
-/** Promo text: letters and digits, 4–24 chars. Shown as entered (uppercased). */
+/** Promo text: letters and digits, 4-24 chars. Shown as entered (uppercased). */
 export function normalizePromo(code) {
   return String(code || '')
     .toUpperCase()

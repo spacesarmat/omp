@@ -20,7 +20,7 @@ data class DonateQr(val modules: Int, val bits: String, val label: String) {
         const val PAUSE = 1
         const val CREDITS = 2
 
-        /** Null when absent or malformed (size 21–177, a row string of exactly modules² «0»/«1»). */
+        /** Null when absent or malformed (size 21-177, a row string of exactly modules² «0»/«1»). */
         fun parse(o: JSONObject?): DonateQr? {
             if (o == null) return null
             val n = o.optInt("modules", 0)

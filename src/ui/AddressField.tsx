@@ -126,7 +126,7 @@ function KeypadField(p: AddressFieldProps & { open: boolean; setOpen: (v: boolea
     return 'spatial';
   }, 80);
 
-  // the remote's number keys (LG 48–57; Android TV KEYCODE_0..9 reach the WebView as 48–57) type digits
+  // the remote's number keys (LG 48-57; Android TV KEYCODE_0..9 reach the WebView as 48-57) type digits
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active.current) return;

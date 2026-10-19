@@ -429,7 +429,7 @@ describe('TV search: film / series', () => {
     mount();
     await searchDune();
     expect(badgeOf(RAW_HD)).toBe('Фильм');
-    expect(badgeOf(SERIES)).toBe('Сериал · S01 · 1–6 из 6');
+    expect(badgeOf(SERIES)).toBe('Сериал · S01 · 1-6 из 6');
     expect(badgeOf(BARE)).toBeNull();
   });
 

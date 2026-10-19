@@ -152,12 +152,12 @@ function nextRow(rows: FileRow[]): FileRow | null {
 
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** «2024–2026 · ★ 7,6 · Фантастика, Драма». */
+/** «2024-2026 · ★ 7,6 · Фантастика, Драма». */
 function heroMeta(card: CatalogCard): string {
   const end = card.seasons.reduce((m, s) => Math.max(m, s.year || 0), 0);
   const now = new Date().getFullYear();
   const last = end > now ? now : end;
-  const years = !card.year ? '' : last > card.year ? card.year + '–' + last : String(card.year);
+  const years = !card.year ? '' : last > card.year ? card.year + '-' + last : String(card.year);
   return [years, card.rating > 0 ? '★ ' + fmtNumber(card.rating, 1) : '', card.genres.slice(0, 2).map(capital).join(', ')]
     .filter(Boolean)
     .join(' · ');

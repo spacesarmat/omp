@@ -31,7 +31,7 @@ type Job = 'acting' | 'directing';
 
 const tileKey = (c: Credit) => 'person-tile-' + c.kind + '-' + c.id;
 
-/** «1970–2010» / «род. 1970» / ''. */
+/** «1970-2010» / «род. 1970» / ''. */
 function yearsText(p: PersonCard): string {
   const from = p.birth.slice(0, 4);
   const to = p.death.slice(0, 4);

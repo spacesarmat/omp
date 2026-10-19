@@ -4,8 +4,8 @@
  * On when both BILLING_PG_BACKUP_DIR and BILLING_DATABASE_URL are set (the NUC compose mounts
  * /opt/omp-backups/pg there). Dumps are `pg_dump -Fc` files named billing-YYYYMMDD-HHMMSS.dump (MSK),
  * mode 600, written to a .part file first and renamed when pg_dump succeeds.
- * Frequency and retention are admin settings: backupEveryHours (1–168, default 24) and
- * backupKeepDays (1–365, default 30); the newest dump is never deleted.
+ * Frequency and retention are admin settings: backupEveryHours (1-168, default 24) and
+ * backupKeepDays (1-365, default 30); the newest dump is never deleted.
  * The password goes to pg_dump through PGPASSWORD, never on the command line or in a log.
  */
 import { spawn } from 'node:child_process';
@@ -33,11 +33,11 @@ export function validBackupKeepDays(v) {
   return whole(v, 1, 365, null) !== null;
 }
 
-/** Hours between dumps (1–168, default 24). */
+/** Hours between dumps (1-168, default 24). */
 export function backupEveryHours(settings) {
   return whole(settings && settings.backupEveryHours, 1, 168, BACKUP_DEFAULTS.everyHours);
 }
-/** Days a dump is kept (1–365, default 30). */
+/** Days a dump is kept (1-365, default 30). */
 export function backupKeepDays(settings) {
   return whole(settings && settings.backupKeepDays, 1, 365, BACKUP_DEFAULTS.keepDays);
 }

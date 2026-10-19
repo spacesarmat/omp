@@ -143,7 +143,7 @@ describe('subscriptions search helpers', () => {
     expect(compareSubs(list[2], list[3], 'added')).toBeLessThan(0);
   });
 
-  it('orders names A–Я for Russian and English, ignoring case and ё/е, with numbers in order', () => {
+  it('orders names A-Я for Russian and English, ignoring case and ё/е, with numbers in order', () => {
     expect(compareName('Дюна', 'дюна')).toBe(0);
     expect(compareName('Ёлка', 'елка')).toBe(0);
     expect(compareName('Аватар', 'Бета')).toBeLessThan(0);
