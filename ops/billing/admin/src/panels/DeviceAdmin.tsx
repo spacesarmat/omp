@@ -115,7 +115,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
             </TableHeader>
             <TableBody>
               {devices.map((d) => (
-                <TableRow key={d.codeId}>
+                <TableRow key={d.id || d.codeId}>
                   <TableCell className="font-mono">
                     {d.deviceId}…{' '}
                     {d.overLimit ? (
@@ -123,6 +123,20 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                         сверх лимита, не работает
                       </Badge>
                     ) : null}
+                    {d.cloneAt ? (
+                      <Badge variant="warn" className="ml-1" title="Использованный ключ этого устройства пришёл повторно. Если это не потеря сети — отзовите устройство.">
+                        возможен клон{d.cloneCount && d.cloneCount > 1 ? ' ×' + d.cloneCount : ''}
+                      </Badge>
+                    ) : null}
+                    <div className="font-sans text-xs text-muted-foreground">
+                      {d.auth === 'refresh' ? 'новые токены' : 'старый токен'}
+                      {d.cloneAt ? (
+                        <>
+                          {' · клон: '}
+                          <Stamp ms={d.cloneAt} />
+                        </>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Stamp ms={d.boundAt} />
@@ -137,7 +151,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                       variant="destructive"
                       question={<>Отозвать {d.deviceId}…? Поиск на нём перестанет работать сразу, пользователь получит сообщение в Telegram.</>}
                       yes="Да, отозвать"
-                      onYes={() => void run('/admin/device-revoke', { accountId: user.account.id, codeId: d.codeId, confirm: 'yes' })}
+                      onYes={() => void run('/admin/device-revoke', { accountId: user.account.id, deviceRowId: d.id || '', codeId: d.codeId, confirm: 'yes' })}
                     />
                   </TableCell>
                 </TableRow>

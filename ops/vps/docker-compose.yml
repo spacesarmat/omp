@@ -55,6 +55,10 @@ services:
       BILLING_ACTIVATE_CODE_MAX: ${BILLING_ACTIVATE_CODE_MAX:-10}
       BILLING_ACTIVATE_WINDOW_SEC: ${BILLING_ACTIVATE_WINDOW_SEC:-600}
       BILLING_LINK_CLEAR_REQUIRE_TOKEN: ${BILLING_LINK_CLEAR_REQUIRE_TOKEN:-0}
+      # HMAC key for device access tokens (set in .env, 32+ chars; empty = key kept in billing.db).
+      BILLING_TOKEN_SECRET: ${BILLING_TOKEN_SECRET:-}
+      # 0 = refuse the old long-lived device tokens (apps before the token update). Leave 1 for now.
+      BILLING_LEGACY_TOKENS: ${BILLING_LEGACY_TOKENS:-1}
       TZ: ${TZ:-Europe/Moscow}
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080

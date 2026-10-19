@@ -34,8 +34,9 @@ import {
   openAppUrl,
   paymentsCsv,
   revokePromo,
+  codeAccess,
+  legacyUpgrade,
   sessionForDevice,
-  sessionOk,
   rememberSupportReply,
   rememberTelegramProfile,
   startAdminPanelLogin,
@@ -64,6 +65,7 @@ import {
   botPollDisabledLine,
   botPollEnabled,
   botPollSnapshot,
+  notePollError,
   conflictLogLine,
   isGetUpdatesConflict,
   noteBotPollOk,
@@ -76,12 +78,24 @@ import {
   rejectPendingPayment,
   resetSwaps,
   revokeDevice,
+  cloneMark,
   revokeNoticeText,
-  seenDue,
   setDeviceLimit,
   subtractDays,
-  touchDevice,
 } from './deviceAdmin.mjs';
+import {
+  activeRowForCode,
+  deviceRow,
+  isAccessToken,
+  issuePair,
+  listDevices,
+  refreshPair,
+  setRevokeReason,
+  tokenSecret,
+  touchRow,
+  upgradePair,
+  verifyAccess,
+} from './registry.mjs';
 import {
   basicAuthHeader,
   indexerByLink,
@@ -98,6 +112,7 @@ import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import {
   activateLimitConfig,
+  tokenLimitConfig,
   clientIp,
   createActivateLimiter,
   createRateLimit,
@@ -106,7 +121,7 @@ import {
   probeAllServices,
   sourceEnabled,
 } from './services.mjs';
-import { readState, resolveDbPath, updateState } from './store.mjs';
+import { readState, registryDb, resolveDbPath, updateState } from './store.mjs';
 import { notificationOk } from './yoomoney.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
@@ -320,25 +335,82 @@ async function fetchDownload(net, url, headers) {
   return { kind: 'file', status, res: first };
 }
 
+/** getUpdates long-polls 25 s; the request as a whole gets 40 s. */
+export const TG_POLL_TIMEOUT_MS = 40000;
+/** sendMessage and getChat. */
+export const TG_SEND_TIMEOUT_MS = 15000;
+
+/**
+ * One Telegram Bot API call with a hard deadline: `{ res, data }` (data is {} when the body is not
+ * JSON). AbortSignal.timeout aborts a real fetch; the race also ends a fetch that ignores the signal,
+ * so a stuck connection can never hang the bot loop. Rejects with name TimeoutError.
+ */
+export async function telegramCall(net, url, init, timeoutMs) {
+  const signal = AbortSignal.timeout(Math.max(1, Number(timeoutMs) || TG_SEND_TIMEOUT_MS));
+  let onAbort = null;
+  const expired = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const err = new Error('telegram request timed out');
+      err.name = 'TimeoutError';
+      reject(err);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  const work = (async () => {
+    const res = await net(url, { ...(init || {}), signal });
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = {};
+    }
+    return { res, data: data || {} };
+  })();
+  // A request that fails after the deadline must not become an unhandled rejection.
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function telegramSend(token, chatId, text, fetchImpl, opts) {
   if (!token || !chatId) return { ok: false, messageId: 0 };
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
   if (opts && opts.parseMode) body.parse_mode = opts.parseMode;
   if (opts && opts.inline) body.reply_markup = opts.inline;
   else if (opts && opts.keyboard) body.reply_markup = opts.keyboard;
-  const res = await fetchImpl('https://api.telegram.org/bot' + token + '/sendMessage', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch (e) {
-    data = {};
-  }
+  const { res, data } = await telegramCall(
+    fetchImpl,
+    'https://api.telegram.org/bot' + token + '/sendMessage',
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+    (opts && opts.timeoutMs) || TG_SEND_TIMEOUT_MS,
+  );
   const messageId = data && data.result && data.result.message_id ? data.result.message_id : 0;
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
+}
+
+/**
+ * BILLING_LEGACY_TOKENS: old opaque tokens (apps before PR-5) are accepted unless this is 0 / false /
+ * off / no. Off: those tokens get 401 legacy_disabled and /v1/activate without tokens: "pair" is
+ * refused; /v1/token/upgrade still works so a late phone can move over.
+ */
+export function legacyTokensEnabled(env) {
+  const raw = String((env && env.BILLING_LEGACY_TOKENS) || '')
+    .trim()
+    .toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/** `/health`: process up, plus bot polling without secrets (seconds since the last good getUpdates, null if none yet). */
+export function healthPayload(now) {
+  const poll = botPollSnapshot(now);
+  return {
+    ok: true,
+    botPollEnabled: !!poll.enabled,
+    botPollOkAgoSec: poll.enabled && poll.lastOkAt ? Math.max(0, Math.floor(((now || Date.now()) - poll.lastOkAt) / 1000)) : null,
+  };
 }
 
 /**
@@ -384,12 +456,9 @@ function paymentWho(state, result) {
   return acc.telegramId || acc.email || acc.id || '';
 }
 
-/** Why a session is refused: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
-function denyReason(state, token, deviceId) {
-  const now = Date.now();
-  const row = sessionForDevice(state, { token, deviceId });
-  if (!row) return 'expired';
-  const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
+/** Why a bound code has no search access: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
+function denyReason(state, row, now) {
+  const sub = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
   if (sub && subAccess(state, sub, now).access && !codeWithinLimit(state, sub, row, now)) return 'device_limit';
   return 'expired';
 }
@@ -398,25 +467,6 @@ function denyReason(state, token, deviceId) {
 function confirmed(body) {
   const v = body && body.confirm;
   return v === true || v === 'yes' || v === '1' || v === 1 || v === 'true';
-}
-
-/**
- * lastSeen / lastIp for an authenticated device request. The state is one JSON document, so this
- * writes only when the stored mark is older than SEEN_EVERY_MS; `busy` keeps parallel requests
- * of one device from writing twice. A failure here never fails the request.
- */
-async function noteSeen(file, state, codeId, ip, busy, force) {
-  if (!codeId || busy.has(codeId)) return;
-  const now = Date.now();
-  if (!force && !seenDue(state, codeId, now)) return;
-  busy.add(codeId);
-  try {
-    await updateState(file, (cur) => ({ state: touchDevice(cur, { codeId, ip, now, force }) }));
-  } catch (e) {
-    /* lastSeen is best effort */
-  } finally {
-    busy.delete(codeId);
-  }
 }
 
 function tellPayment(state, result, fetchImpl) {
@@ -465,7 +515,62 @@ export function createApp(file, fetchImpl, opts) {
   const env = (opts && opts.env) || process.env;
   const activateLimit = createActivateLimiter(activateLimitConfig(env));
   const strictLinkClear = linkClearRequiresToken(env);
-  const seenBusy = new Set();
+  // Refresh and upgrade are cheap to call but should not be hammered from one address.
+  const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
+  const legacyOn = legacyTokensEnabled(env);
+  const regDb = () => registryDb(file);
+  const secret = () => tokenSecret(regDb(), env);
+  const envSecret = String(env.BILLING_TOKEN_SECRET || '');
+  if (envSecret && envSecret.length < 32) {
+    process.stderr.write('BILLING_TOKEN_SECRET is shorter than 32 characters and is ignored; the key in billing.db signs tokens\n');
+  }
+
+  /**
+   * The device behind a bearer token: an access token (checked against the registry row) or a
+   * legacy opaque token from an app before PR-5. `{ error, status: 401 }` for a bad access token;
+   * null for an unknown legacy token (the old 403 behaviour stays).
+   */
+  function deviceCaller(state, token, deviceId, now) {
+    const device = String(deviceId || '');
+    if (isAccessToken(token)) {
+      const v = verifyAccess(regDb(), secret(), token, device, now);
+      if (v.error) return { error: v.error, status: 401 };
+      const code = state.codes.find((c) => c.id === v.row.code_id && !c.revoked && c.deviceId === device);
+      if (!code) return { error: 'revoked', status: 401 };
+      return { code, rowId: v.row.id };
+    }
+    if (!legacyOn) return { error: 'legacy_disabled', status: 401 };
+    const code = sessionForDevice(state, { token, deviceId: device, now });
+    if (!code) return null;
+    // A binding revoked in the registry (admin, clone) no longer works with the old token either.
+    const row = activeRowForCode(regDb(), code.id);
+    if (!row || row.device_id !== device) return null;
+    return { code, rowId: row.id, legacy: true };
+  }
+
+  /** lastSeen / truncated IP on the registry row: one small UPDATE at most every 10 minutes, never fails the request. */
+  function noteSeen(rowId, ip, force) {
+    if (!rowId) return;
+    try {
+      touchRow(regDb(), rowId, { ip, now: Date.now(), force: !!force });
+    } catch (e) {
+      /* lastSeen is best effort */
+    }
+  }
+
+  /** A rotated refresh token came back: journal and feed only, no unbind and no message to the user. */
+  async function markClone(row) {
+    try {
+      await updateState(file, (state) => cloneMark(state, { codeId: row.code_id, now: Date.now() }));
+    } catch (e) {
+      process.stderr.write('token clone mark failed\n');
+    }
+  }
+
+  function paidUntilOf(state, row) {
+    const sub = row ? state.subscriptions.find((s) => s.id === row.subscription_id) : null;
+    return sub ? sub.paidUntil : 0;
+  }
   return async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -481,7 +586,7 @@ export function createApp(file, fetchImpl, opts) {
         res.headOnly = true;
         req.method = 'GET';
       }
-      if (req.method === 'GET' && path === '/health') return json(res, 200, { ok: true });
+      if (req.method === 'GET' && path === '/health') return json(res, 200, healthPayload(Date.now()));
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));
         return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
@@ -573,7 +678,7 @@ export function createApp(file, fetchImpl, opts) {
         const id = url.searchParams.get('id') || '';
         const sid = cookie(req, 'omp_admin');
         const flash = takeFlash(admin, sid);
-        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash });
+        const payload = userPayload(readState(file), id, { csrf: admin.csrf, ...flash, registry: (subId) => listDevices(regDb(), subId) });
         if (!payload) return json(res, 404, { error: 'not_found' });
         return json(res, 200, payload);
       }
@@ -884,9 +989,17 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/device-revoke') {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
-            const out = await updateState(file, (state) =>
-              revokeDevice(state, { accountId: body.accountId || '', codeId: body.codeId || '', now: Date.now(), actor: adminActor(admin) }),
-            );
+            // The panel sends the registry row id; a bare codeId (older panel page) still works.
+            const picked = body.deviceRowId ? deviceRow(regDb(), body.deviceRowId) : null;
+            const codeId = picked ? picked.code_id : body.codeId || '';
+            const before = activeRowForCode(regDb(), codeId);
+            const out =
+              picked && picked.status !== 'active'
+                ? { error: 'not_bound' }
+                : await updateState(file, (state) =>
+                    revokeDevice(state, { accountId: body.accountId || '', codeId, now: Date.now(), actor: adminActor(admin) }),
+                  );
+            if (out.ok && before) setRevokeReason(regDb(), before.id, 'admin');
             if (out.error === 'not_bound') flashError = 'Устройство уже отвязано';
             else if (out.error) flashError = 'Устройство не найдено';
             else {
@@ -1065,11 +1178,51 @@ export function createApp(file, fetchImpl, opts) {
           res.setHeader('retry-after', String(wait));
           return json(res, 429, { error: 'rate' });
         }
-        const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now: Date.now() }));
+        // An app that sends tokens: "pair" gets refresh/access only; older apps get the opaque token as before.
+        const wantPair = body.tokens === 'pair';
+        if (!wantPair && !legacyOn) return json(res, 403, { error: 'app_update_required' });
+        const now = Date.now();
+        const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
         // device_limit is 409 like other_device: the current app then says the code is tied to another device.
         if (result.error) return json(res, result.error === 'other_device' || result.error === 'device_limit' ? 409 : 403, result);
-        await noteSeen(file, null, result.codeId, clientIp(req), seenBusy, true);
-        return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
+        const row = activeRowForCode(regDb(), result.codeId);
+        if (row) noteSeen(row.id, clientIp(req), true);
+        if (!wantPair) return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
+        if (!row) return json(res, 403, { error: 'revoked' });
+        return json(res, 200, { ...issuePair(regDb(), secret(), row, now).pair, paidUntil: result.paidUntil });
+      }
+      if (req.method === 'POST' && path === '/v1/token/refresh') {
+        const wait = tokenLimit.check(clientIp(req), '');
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const out = refreshPair(regDb(), secret(), { refreshToken: body.refreshToken, deviceId, now: Date.now() });
+        if (out.clone && out.cloneLog) await markClone(out.row);
+        if (out.error) return json(res, 401, { error: out.error });
+        noteSeen(out.row.id, clientIp(req), false);
+        return json(res, 200, { ...out.pair, paidUntil: paidUntilOf(readState(file), out.row) });
+      }
+      if (req.method === 'POST' && path === '/v1/token/upgrade') {
+        const wait = tokenLimit.check(clientIp(req), '');
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const token = bearer(req);
+        if (!token || isAccessToken(token)) return json(res, 401, { error: 'bad_token' });
+        const now = Date.now();
+        const up = await updateState(file, (state) => legacyUpgrade(state, { token, deviceId, now }));
+        if (up.error) return json(res, 401, { error: up.error });
+        const row = activeRowForCode(regDb(), up.codeId);
+        if (!row || row.device_id !== deviceId) return json(res, 401, { error: 'revoked' });
+        const pair = upgradePair(regDb(), secret(), { row, now, again: up.again, since: up.since });
+        noteSeen(row.id, clientIp(req), false);
+        return json(res, 200, { ...pair, paidUntil: paidUntilOf(readState(file), row) });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
@@ -1085,7 +1238,10 @@ export function createApp(file, fetchImpl, opts) {
         const token = bearer(req);
         // A token that is sent must belong to this device. A paid-up session is not needed to unlink,
         // so an expired subscription still matches on the session itself.
-        if (token && !sessionForDevice(readState(file), { token, deviceId })) return json(res, 401, { error: 'bad_token' });
+        if (token) {
+          const caller = deviceCaller(readState(file), token, deviceId, Date.now());
+          if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        }
         if (!token && strictLinkClear) return json(res, 401, { error: 'token_required' });
         const result = await updateState(file, (state) => unlinkDeviceTelegram(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
@@ -1100,9 +1256,12 @@ export function createApp(file, fetchImpl, opts) {
         let paidUntil = 0;
         if (token) {
           // The token only has to belong to this device: an expired or over-limit phone still learns its status.
-          const row = sessionForDevice(state, { token, deviceId: device });
+          const caller = deviceCaller(state, token, device, now);
+          // A bad access token is 401 (refresh it); an unknown legacy token falls back to the deviceId as before.
+          if (caller && caller.error) return json(res, 401, { error: caller.error });
+          const row = caller ? caller.code : null;
           const own = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
-          if (row) await noteSeen(file, state, row.id, clientIp(req), seenBusy, false);
+          if (caller) noteSeen(caller.rowId, clientIp(req), false);
           if (own) {
             account = state.accounts.find((a) => a.id === own.accountId) || null;
             paidUntil = own.paidUntil;
@@ -1142,9 +1301,12 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId;
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        const session = sessionOk(state, { token, deviceId, now: Date.now() });
-        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
-        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
+        const now = Date.now();
+        const caller = deviceCaller(state, token, deviceId, now);
+        if (caller && caller.error) return json(res, 401, { error: caller.error });
+        const session = caller ? codeAccess(state, caller.code, now) : null;
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        noteSeen(caller.rowId, clientIp(req), false);
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
         const rateKey = String(deviceId || token || '').slice(0, 64);
@@ -1197,9 +1359,12 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        const session = sessionOk(state, { token, deviceId, now: Date.now() });
-        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
-        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
+        const now = Date.now();
+        const caller = deviceCaller(state, token, deviceId, now);
+        if (caller && caller.error) return json(res, 401, { error: caller.error });
+        const session = caller ? codeAccess(state, caller.code, now) : null;
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        noteSeen(caller.rowId, clientIp(req), false);
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);
@@ -1285,7 +1450,8 @@ export function listen(file, port, fetchImpl, opts) {
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
 }
 
-export async function refreshMissingProfiles(file, token, net) {
+export async function refreshMissingProfiles(file, token, net, opts) {
+  const timeoutMs = (opts && opts.timeoutMs) || TG_SEND_TIMEOUT_MS;
   const state = readState(file);
   const missing = (state.accounts || [])
     .filter((a) => a.telegramId && !a.telegramUsername && !a.telegramName)
@@ -1294,10 +1460,12 @@ export async function refreshMissingProfiles(file, token, net) {
   const found = [];
   for (let i = 0; i < missing.length; i++) {
     try {
-      const res = await net(
+      const { data } = await telegramCall(
+        net,
         'https://api.telegram.org/bot' + token + '/getChat?chat_id=' + encodeURIComponent(missing[i].telegramId),
+        {},
+        timeoutMs,
       );
-      const data = await res.json();
       if (!data.ok || !data.result) continue;
       const chat = data.result;
       found.push({
@@ -1335,6 +1503,13 @@ export async function pollBot(file, fetchImpl, opts) {
   const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const nowFn = (opts && opts.now) || (() => Date.now());
   const maxLoops = opts && opts.maxLoops ? opts.maxLoops : 0;
+  const pollTimeoutMs = (opts && opts.pollTimeoutMs) || TG_POLL_TIMEOUT_MS;
+  const sendTimeoutMs = (opts && opts.sendTimeoutMs) || TG_SEND_TIMEOUT_MS;
+  /** At most one stderr line a minute for failed polls; never the URL or error text (they can carry the token). */
+  const pollFailed = (kind) => {
+    const line = notePollError(kind, nowFn());
+    if (line) process.stderr.write(line);
+  };
   let loops = 0;
   for (;;) {
     if (maxLoops && loops >= maxLoops) return;
@@ -1348,7 +1523,7 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       if (Date.now() - sweptAt > 10 * 60 * 1000) {
         sweptAt = Date.now();
-        await refreshMissingProfiles(file, token, net);
+        await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
       if (Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
         servicesAt = Date.now();
@@ -1363,8 +1538,12 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       let updates = [];
       try {
-        const res = await net('https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset);
-        const data = await res.json();
+        const { res, data } = await telegramCall(
+          net,
+          'https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset,
+          {},
+          pollTimeoutMs,
+        );
         if (isGetUpdatesConflict(res, data)) {
           const noted = noteGetUpdatesConflict(state.settings, nowFn());
           if (noted.log) process.stderr.write(conflictLogLine());
@@ -1373,12 +1552,14 @@ export async function pollBot(file, fetchImpl, opts) {
           continue;
         }
         if (!data || !data.ok) {
+          pollFailed('http ' + (Number(res && res.status) || 0) + (data && data.error_code ? ' code ' + Number(data.error_code) : ''));
           await sleep(5000);
           continue;
         }
         noteBotPollOk(nowFn());
         updates = Array.isArray(data.result) ? data.result : [];
       } catch (e) {
+        pollFailed(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 'timeout' : 'network');
         await sleep(5000);
         continue;
       }
@@ -1421,6 +1602,7 @@ export async function pollBot(file, fetchImpl, opts) {
               keyboard: row.keyboard,
               inline: row.inline,
               parseMode: row.parseMode,
+              timeoutMs: sendTimeoutMs,
             });
             if (row.supportNotify && sent.messageId) {
               await updateState(file, (cur) => ({
@@ -1433,11 +1615,12 @@ export async function pollBot(file, fetchImpl, opts) {
               }));
             }
           } catch (e) {
-            /* Telegram unreachable from NAS — keep polling */
+            /* Telegram unreachable or timed out — keep polling */
           }
         }
       }
     } catch (e) {
+      pollFailed('loop');
       await sleep(5000);
     }
   }

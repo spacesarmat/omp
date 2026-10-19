@@ -71,12 +71,19 @@ export type PendingPayment = {
 };
 
 export type DeviceRow = {
+  /** Registry row id; revoke sends it. Empty only for payloads without the registry. */
+  id?: string;
   codeId: string;
   deviceId: string;
   boundAt?: number;
   lastSeenAt?: number;
   /** Masked on the server: «95.24.113.*». */
   lastIp?: string;
+  /** 'refresh': the app already uses refresh/access tokens; 'legacy': the old long-lived token. */
+  auth?: 'refresh' | 'legacy';
+  /** Last time a used refresh token of this device came back (suspected copy), 0 if never. */
+  cloneAt?: number;
+  cloneCount?: number;
   overLimit?: boolean;
 };
 

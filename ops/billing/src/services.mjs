@@ -281,6 +281,11 @@ export function activateLimitConfig(env) {
   };
 }
 
+/** /v1/token/refresh and /v1/token/upgrade: per IP only (tokens are random, there is nothing to guess). */
+export function tokenLimitConfig(env) {
+  return { ipMax: envInt(env, 'BILLING_TOKEN_IP_MAX', 60), codeMax: 0, windowMs: 10 * 60 * 1000 };
+}
+
 /** Per-IP and per-code limiters for /v1/activate. `check` returns 0 when allowed, else Retry-After seconds. */
 export function createActivateLimiter(config, opts) {
   const cfg = config || activateLimitConfig({});

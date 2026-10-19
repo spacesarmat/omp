@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { registrySchema, syncRegistry } from './registry.mjs';
 import { DEVICE_BASE, enrichActors, GRACE_DAYS_DEFAULT, migrateDeviceBase, migrateExtraSlots, migrateTruncatedIps } from './logic.mjs';
 
 export function emptyState() {
@@ -115,6 +116,12 @@ function openDb(file) {
   `);
   try {
     migrateFromJson(db, dbPath);
+    // Device registry (PR-4): tables, then one sync from the snapshot. The first run is the migration.
+    registrySchema(db);
+    const row = db.prepare('SELECT data FROM snapshot WHERE id = 1').get();
+    if (row && typeof row.data === 'string' && row.data) {
+      inTransaction(db, () => syncRegistry(db, normalizeState(JSON.parse(row.data)), Date.now()));
+    }
   } catch (e) {
     try {
       db.close();
@@ -214,14 +221,39 @@ export function readState(file) {
   return normalizeState(parsed);
 }
 
+function inTransaction(db, fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    fn();
+    db.exec('COMMIT');
+  } catch (e) {
+    try {
+      db.exec('ROLLBACK');
+    } catch (e2) {
+      /* already rolled back */
+    }
+    throw e;
+  }
+}
+
+/** Snapshot write and registry sync commit together. */
 export function writeState(file, state) {
   const db = openDb(file);
-  const data = JSON.stringify(normalizeState(state));
+  const next = normalizeState(state);
+  const data = JSON.stringify(next);
   const now = Date.now();
-  db.prepare(
-    `INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-  ).run(data, now);
+  inTransaction(db, () => {
+    db.prepare(
+      `INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+    ).run(data, now);
+    syncRegistry(db, next, now);
+  });
+}
+
+/** The open database for the device registry and token tables (src/registry.mjs). */
+export function registryDb(file) {
+  return openDb(file);
 }
 
 /** Storage info for the admin UI. */
