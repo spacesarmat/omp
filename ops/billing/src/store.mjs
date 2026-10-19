@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { DEVICE_BASE, enrichActors, GRACE_DAYS_DEFAULT, migrateDeviceBase, migrateExtraSlots } from './logic.mjs';
+import { DEVICE_BASE, enrichActors, GRACE_DAYS_DEFAULT, migrateDeviceBase, migrateExtraSlots, migrateTruncatedIps } from './logic.mjs';
 
 export function emptyState() {
   return {
@@ -166,7 +166,7 @@ function migrateFromJson(db, dbPath) {
 
 function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return migrateExtraSlots(migrateDeviceBase(enrichActors(base)));
+  if (!parsed || typeof parsed !== 'object') return migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(base))));
   const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
@@ -196,7 +196,7 @@ function normalizeState(parsed) {
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return migrateExtraSlots(migrateDeviceBase(enrichActors(next)));
+  return migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(next))));
 }
 
 export function readState(file) {

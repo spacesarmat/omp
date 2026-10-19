@@ -54,6 +54,7 @@ import {
   adminNotifyEnabled,
   botDeepLink,
   botReply,
+  mainKeyboard,
   paymentAdminNotices,
   reminderMessage,
   serviceDownNotices,
@@ -75,6 +76,7 @@ import {
   rejectPendingPayment,
   resetSwaps,
   revokeDevice,
+  revokeNoticeText,
   seenDue,
   setDeviceLimit,
   subtractDays,
@@ -887,7 +889,19 @@ export function createApp(file, fetchImpl, opts) {
             );
             if (out.error === 'not_bound') flashError = 'Устройство уже отвязано';
             else if (out.error) flashError = 'Устройство не найдено';
-            else flashText = 'Устройство ' + out.device + '… отозвано: токен больше не действует, для слота выпущен новый код';
+            else {
+              flashText = 'Устройство ' + out.device + '… отозвано: токен больше не действует, для слота выпущен новый код';
+              if (out.telegramId) {
+                let told = false;
+                try {
+                  const cur = readState(file);
+                  told = (await telegramSend(cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, { keyboard: mainKeyboard() })).ok;
+                } catch (e) {
+                  told = false;
+                }
+                flashText += told ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
+              } else flashText += '. У пользователя нет Telegram, сообщение не отправлено';
+            }
           }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }

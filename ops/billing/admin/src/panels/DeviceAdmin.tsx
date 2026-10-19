@@ -95,8 +95,9 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
           ) : null}
         </CardTitle>
         <CardDescription>
-          «Последний раз» — поиск, скачивание или проверка подписки с этого устройства (обновляется не чаще раза в 10 минут). IP скрыт
-          частично. «Отозвать» отвязывает устройство и сразу гасит его токен, для слота выпускается новый код.
+          «Последний раз» — поиск, скачивание или проверка подписки с этого устройства (обновляется не чаще раза в 10 минут). IP хранится
+          без последней части. «Отозвать» отвязывает устройство и сразу гасит его токен, для слота выпускается новый код, пользователю
+          уходит сообщение в Telegram.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -134,7 +135,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                     <ConfirmAction
                       label="Отозвать"
                       variant="destructive"
-                      question={<>Отозвать {d.deviceId}…? Поиск на нём перестанет работать сразу.</>}
+                      question={<>Отозвать {d.deviceId}…? Поиск на нём перестанет работать сразу, пользователь получит сообщение в Telegram.</>}
                       yes="Да, отозвать"
                       onYes={() => void run('/admin/device-revoke', { accountId: user.account.id, codeId: d.codeId, confirm: 'yes' })}
                     />

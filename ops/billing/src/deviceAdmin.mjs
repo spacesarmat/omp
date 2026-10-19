@@ -11,6 +11,7 @@ import {
   mainSubscription,
   mskDate,
   telegramDisplay,
+  truncateIp,
   unbindCode,
 } from './logic.mjs';
 
@@ -35,18 +36,9 @@ function intIn(value, min, max) {
   return n;
 }
 
-/** «95.24.113.*» / «2a02:6b8:c0e::*». The full address never leaves the server. */
+/** «95.24.113.*» / «2a02:6b8:c0e::*». Stored this way already; also safe on an older full address. */
 export function maskIp(ip) {
-  const raw = String(ip || '').trim();
-  if (!raw) return '';
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(raw);
-  const v4 = mapped ? mapped[1] : raw;
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) return v4.split('.').slice(0, 3).join('.') + '.*';
-  if (raw.indexOf(':') >= 0) {
-    const groups = raw.split('%')[0].split(':').filter((g, i) => g !== '' || i === 0);
-    return groups.slice(0, 3).join(':') + '::*';
-  }
-  return '*';
+  return truncateIp(ip);
 }
 
 function codeById(state, codeId) {
@@ -69,7 +61,8 @@ export function touchDevice(state, { codeId, ip, now, force }) {
   if (!force && !seenDue(state, codeId, now)) return state;
   const row = codeById(state, codeId);
   if (!row || row.revoked || !row.deviceId) return state;
-  const addr = String(ip || '').slice(0, 64);
+  // Only the truncated address is stored: «95.24.113.*».
+  const addr = truncateIp(ip);
   const codes = state.codes.map((c) => (c.id === codeId ? { ...c, lastSeenAt: now, lastIp: addr || c.lastIp || '' } : c));
   return { ...state, codes };
 }
@@ -174,8 +167,18 @@ export function revokeDevice(state, { accountId, codeId, now, actor }) {
   const next = unbindCode(state, codeId);
   return {
     state: audited(next, actor, 'device_revoke', 'Отозвано устройство ' + device + '… (' + who(state, accountId) + ')', accountId, now),
-    result: { ok: true, device },
+    result: { ok: true, device, telegramId: (findAccount(state, accountId) || {}).telegramId || '' },
   };
+}
+
+/** Telegram notice to the owner after an admin revoked one of their devices. */
+export function revokeNoticeText(device) {
+  return (
+    'Устройство ' +
+    device +
+    '… отключено администратором: поиск OMP на нём больше не работает.\n' +
+    'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы — «Поддержка».'
+  );
 }
 
 /** «2» or «2 + 1 доп.» */

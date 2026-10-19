@@ -258,6 +258,38 @@ export function migrateExtraSlots(state) {
   return { ...state, subscriptions, meta: { ...meta, extraMonthly: 1 } };
 }
 
+/**
+ * Client IP without its last part: «95.24.113.*», IPv6 the first three groups «2a02:6b8:c0e::*».
+ * Only this form is stored. A value already in this form comes back unchanged.
+ */
+export function truncateIp(ip) {
+  const raw = String(ip || '').trim().slice(0, 64);
+  if (!raw) return '';
+  if (/^\d+\.\d+\.\d+\.\*$/.test(raw) || /^[0-9a-f:]+::\*$/i.test(raw)) return raw;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(raw);
+  const v4 = mapped ? mapped[1] : raw;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) return v4.split('.').slice(0, 3).join('.') + '.*';
+  if (raw.indexOf(':') >= 0) {
+    const groups = raw.split('%')[0].split(':').filter((g, i) => g !== '' || i === 0);
+    return groups.slice(0, 3).join(':').toLowerCase() + '::*';
+  }
+  return '*';
+}
+
+/** Additive migration: a full lastIp stored by an earlier build is cut to truncateIp. Idempotent. */
+export function migrateTruncatedIps(state) {
+  if (!state || !Array.isArray(state.codes)) return state;
+  let changed = false;
+  const codes = state.codes.map((c) => {
+    if (!c || typeof c !== 'object' || !c.lastIp) return c;
+    const cut = truncateIp(c.lastIp);
+    if (cut === c.lastIp) return c;
+    changed = true;
+    return { ...c, lastIp: cut };
+  });
+  return changed ? { ...state, codes } : state;
+}
+
 function issue(state, subscriptionId, now) {
   const plain = randomCode();
   const row = {
@@ -1445,6 +1477,12 @@ const LOGIN_FEED = {
   logout: 1,
 };
 
+/** Service actions stay in the journal («Журнал») but not on the home timeline. */
+const FEED_HIDDEN = {
+  code_reveal: 1,
+  settings_save: 1,
+};
+
 /** Admin actions on a subscription store a full sentence in `detail`; the feed shows it as is. */
 const DETAIL_FEED = {
   device_revoke: 1,
@@ -1465,10 +1503,8 @@ const ADMIN_FEED_LABEL = {
   message: 'Сообщение пользователю',
   support_reply: 'Ответ в поддержке',
   support_close: 'Диалог поддержки закрыт',
-  settings_save: 'Сохранены настройки',
   services_save: 'Сохранены сервисы',
   session_revoke: 'Завершена сессия админа',
-  code_reveal: 'Показан код',
 };
 
 function adminFeedText(row) {
@@ -1558,7 +1594,7 @@ export function adminDashboard(state, now) {
   const audit = state.audit || [];
   for (let i = 0; i < audit.length; i++) {
     const row = audit[i];
-    if (!row || !row.action) continue;
+    if (!row || !row.action || FEED_HIDDEN[row.action]) continue;
     const actor = normalizeActor(row.actor) || actorFromAuditDetail(row) || { kind: 'admin', id: '', label: 'админ' };
     events.push({
       at: row.at || 0,

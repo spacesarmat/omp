@@ -27,7 +27,11 @@ import {
   deviceCode,
   ensureTelegramAccount,
   issueCliAdminLogin,
+  logAudit,
+  migrateTruncatedIps,
+  pageAudit,
   quotePurchase,
+  truncateIp,
   sessionForDevice,
   sessionOk,
 } from '../src/logic.mjs';
@@ -78,14 +82,14 @@ describe('lastSeen / lastIp', () => {
     const first = touchDevice(s.state, { codeId: s.codeId, ip: '95.24.113.7', now: NOW });
     const row = first.codes.find((c: { id: string }) => c.id === s.codeId);
     expect(row.lastSeenAt).toBe(NOW);
-    expect(row.lastIp).toBe('95.24.113.7');
+    expect(row.lastIp).toBe('95.24.113.*');
     const again = touchDevice(first, { codeId: s.codeId, ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS - 1 });
     expect(again).toBe(first);
     const later = touchDevice(first, { codeId: s.codeId, ip: '1.2.3.4', now: NOW + SEEN_EVERY_MS });
     expect(later).not.toBe(first);
     const moved = later.codes.find((c: { id: string }) => c.id === s.codeId);
     expect(moved.lastSeenAt).toBe(NOW + SEEN_EVERY_MS);
-    expect(moved.lastIp).toBe('1.2.3.4');
+    expect(moved.lastIp).toBe('1.2.3.*');
     // A free (unbound) code is never touched.
     const free = deviceCode(later, s.subscriptionId, NOW);
     const freeId = free.codeId;
@@ -103,6 +107,36 @@ describe('lastSeen / lastIp', () => {
     expect(user.devices[0].lastSeenAt).toBeGreaterThan(0);
     expect(JSON.stringify(user)).not.toContain('95.24.113.7');
     expect(JSON.stringify(user)).not.toContain(DEV_A);
+  });
+});
+
+describe('stored IPs are truncated', () => {
+  it('cuts the last part of IPv4 and keeps three IPv6 groups, idempotently', () => {
+    expect(truncateIp('95.24.113.7')).toBe('95.24.113.*');
+    expect(truncateIp('95.24.113.*')).toBe('95.24.113.*');
+    expect(truncateIp('::ffff:10.1.2.3')).toBe('10.1.2.*');
+    expect(truncateIp('2A02:6B8:C0E:500:1:2:3:4')).toBe('2a02:6b8:c0e::*');
+    expect(truncateIp('2a02:6b8:c0e::*')).toBe('2a02:6b8:c0e::*');
+    expect(truncateIp('')).toBe('');
+  });
+
+  it('migrates full addresses written by an earlier build when the snapshot is read', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'omp-ipmig-')), 'billing.db');
+    const s = withDevice();
+    const b = bindAnother(s.state, s.subscriptionId, DEV_B, NOW);
+    const raw = {
+      ...b.state,
+      codes: b.state.codes.map((c: { id: string }) =>
+        c.id === s.codeId ? { ...c, lastSeenAt: NOW, lastIp: '95.24.113.7' } : c.id === b.codeId ? { ...c, lastSeenAt: NOW, lastIp: '2a02:6b8:c0e:500::1' } : c,
+      ),
+    };
+    // Written as is, the way an older server would have stored it.
+    writeState(file, raw);
+    const read = readState(file);
+    expect(read.codes.find((c: { id: string }) => c.id === s.codeId).lastIp).toBe('95.24.113.*');
+    expect(read.codes.find((c: { id: string }) => c.id === b.codeId).lastIp).toBe('2a02:6b8:c0e::*');
+    expect(JSON.stringify(read)).not.toContain('95.24.113.7');
+    expect(migrateTruncatedIps(read)).toBe(read);
   });
 });
 
@@ -166,6 +200,24 @@ describe('admin: revoke, limit, subtract', () => {
     for (const bad of [0, -1, 2.5, 'abc', 3651]) {
       expect(subtractDays(out.state, { accountId: s.accountId, days: bad, now: NOW, actor: ADMIN }).result.error).toBe('bad_args');
     }
+  });
+});
+
+describe('event feed', () => {
+  it('hides «Показан код» and «Сохранены настройки» but keeps them in the journal', () => {
+    const s = withDevice();
+    let st = logAudit(s.state, { action: 'code_reveal', detail: s.codeId, now: NOW, actor: ADMIN });
+    st = logAudit(st, { action: 'settings_save', detail: 'ok', now: NOW + 1, actor: ADMIN });
+    st = logAudit(st, { action: 'services_save', detail: 'ok', now: NOW + 2, actor: ADMIN });
+    st = revokeDevice(st, { accountId: s.accountId, codeId: s.codeId, now: NOW + 3, actor: ADMIN }).state;
+    const admin = adminDashboard(st, NOW + MIN).events.filter((e: { kind: string }) => e.kind === 'admin');
+    const texts = admin.map((e: { text: string }) => e.text);
+    expect(texts.some((t: string) => t === 'Показан код' || t === 'code_reveal')).toBe(false);
+    expect(texts.some((t: string) => t === 'Сохранены настройки' || t === 'settings_save')).toBe(false);
+    expect(texts).toContain('Сохранены сервисы');
+    expect(texts.some((t: string) => t.indexOf('Отозвано устройство') === 0)).toBe(true);
+    const journal = pageAudit(st, { limit: 50 }).audit.map((r: { action: string }) => r.action);
+    expect(journal).toEqual(expect.arrayContaining(['code_reveal', 'settings_save', 'services_save', 'device_revoke']));
   });
 });
 
@@ -426,26 +478,27 @@ describe('admin http: devices and payments', () => {
     expect(me.status).toBe(200);
     const seen1 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
     expect(seen1.lastSeenAt).toBeGreaterThan(0);
-    expect(seen1.lastIp).toBe('95.24.113.7');
+    expect(seen1.lastIp).toBe('95.24.113.*');
     // Inside 10 minutes: nothing is written, even from another IP.
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
     const seen2 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
     expect(seen2.lastSeenAt).toBe(seen1.lastSeenAt);
-    expect(seen2.lastIp).toBe('95.24.113.7');
+    expect(seen2.lastIp).toBe('95.24.113.*');
     // 11 minutes later the next authenticated request updates it.
     await updateState(t.file, (st: State) => ({
       state: { ...st, codes: st.codes.map((c: { id: string }) => (c.id === t.codeId ? { ...c, lastSeenAt: Date.now() - 11 * MIN } : c)) },
     }));
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, 'x-forwarded-for': '1.2.3.4' }, body: { q: 'x' } });
     const seen3 = readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId);
-    expect(seen3.lastIp).toBe('1.2.3.4');
+    expect(seen3.lastIp).toBe('1.2.3.*');
+    expect(JSON.stringify(readState(t.file))).not.toContain('1.2.3.4');
     expect(Date.now() - seen3.lastSeenAt).toBeLessThan(MIN);
     // A bad token records nothing.
     await updateState(t.file, (st: State) => ({
-      state: { ...st, codes: st.codes.map((c: { id: string }) => (c.id === t.codeId ? { ...c, lastSeenAt: 1, lastIp: 'x' } : c)) },
+      state: { ...st, codes: st.codes.map((c: { id: string }) => (c.id === t.codeId ? { ...c, lastSeenAt: 1, lastIp: '9.9.9.*' } : c)) },
     }));
     await call(t.app, 'POST', '/v1/search', { headers: { ...auth, authorization: 'Bearer bad' }, body: { q: 'x' } });
-    expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).lastIp).toBe('x');
+    expect(readState(t.file).codes.find((c: { id: string }) => c.id === t.codeId).lastIp).toBe('9.9.9.*');
 
     const card = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     expect(card.body).not.toContain('1.2.3.4');
@@ -458,6 +511,15 @@ describe('admin http: devices and payments', () => {
       body: { csrf, accountId: t.accountId, codeId: t.codeId, confirm: 'yes' },
     });
     expect((revoked.data as { ok?: boolean }).ok).toBe(true);
+    expect((revoked.data as { flash?: { text?: string } }).flash?.text).toContain('Пользователю отправлено сообщение');
+    const notice = t.sent.map((b) => JSON.parse(b)).find((b: { text: string }) => b.text.indexOf('отключено администратором') >= 0);
+    expect(notice).toBeTruthy();
+    expect(notice.chat_id).toBe('42');
+    expect(notice.text).toBe(
+      'Устройство aaaaaaaa… отключено администратором: поиск OMP на нём больше не работает.\n' +
+        'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы — «Поддержка».',
+    );
+    expect(t.sent.filter((b) => b.indexOf('отключено администратором') >= 0)).toHaveLength(1);
     const search = await call(t.app, 'POST', '/v1/search', { headers: auth, body: { q: 'x' } });
     expect(search.status).toBe(403);
     const torrent = await call(t.app, 'POST', '/v1/torrent', { headers: auth, body: { link: 'x' } });
@@ -467,6 +529,19 @@ describe('admin http: devices and payments', () => {
     const home = await call(t.app, 'GET', '/admin/api/home', { cookie });
     const events = (home.data && (home.data.events as { kind: string; text: string }[])) || [];
     expect(events.some((e) => e.kind === 'admin' && e.text.indexOf('Отозвано устройство') === 0)).toBe(true);
+  });
+
+  it('revokes a device of an account without Telegram and sends nothing', async () => {
+    const t = await setup();
+    const { cookie, csrf } = await adminCookie(t.app, t.file);
+    await updateState(t.file, (st: State) => ({
+      state: { ...st, accounts: st.accounts.map((a: { id: string }) => (a.id === t.accountId ? { ...a, telegramId: '' } : a)) },
+    }));
+    t.sent.length = 0;
+    const out = await call(t.app, 'POST', '/admin/device-revoke', { cookie, body: { csrf, accountId: t.accountId, codeId: t.codeId, confirm: 'yes' } });
+    expect((out.data as { ok?: boolean }).ok).toBe(true);
+    expect((out.data as { flash?: { text?: string } }).flash?.text).toContain('нет Telegram');
+    expect(t.sent).toHaveLength(0);
   });
 
   it('confirms a held payment once over HTTP and tells the user once', async () => {
