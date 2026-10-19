@@ -1,5 +1,6 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
 import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
+import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 
 /** settings.baseDevices from the form: a whole number 1–20. */
 export function validBase(v) {
@@ -70,6 +71,8 @@ export function publicAdminSettings(settings) {
     baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
+    backupEveryHours: backupEveryHours(s),
+    backupKeepDays: backupKeepDays(s),
   };
   return out;
 }
@@ -124,6 +127,9 @@ export function mergeSettings(prev, body) {
     // 1–20; an empty or bad value keeps the current one
     baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),
+    // Postgres dumps: whole hours 1–168 and days 1–365; an empty or bad value keeps the current one
+    backupEveryHours: b.backupEveryHours !== undefined && validBackupEveryHours(b.backupEveryHours) ? Number(b.backupEveryHours) : backupEveryHours(cur),
+    backupKeepDays: b.backupKeepDays !== undefined && validBackupKeepDays(b.backupKeepDays) ? Number(b.backupKeepDays) : backupKeepDays(cur),
     /** Promo the bot advertises as a trial day; shown only while it exists and has uses left. */
     publicPromo: String(b.publicPromo !== undefined ? b.publicPromo : cur.publicPromo || '')
       .toUpperCase()

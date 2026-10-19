@@ -252,6 +252,14 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml run --rm --no-dep
 - Ресурсы NUC: Postgres 17 с такими настройками ~80–150 МБ RAM; база на текущих объёмах — десятки МБ.
 - Контейнер `postgres` поднимается **заранее** (пустой) — за день-два до окна, чтобы проверить healthcheck, бэкап и восстановление.
 
+### 4.1 Как сделано в PR 4
+- Сервис `postgres` — в `docker-compose.nuc.yml` (прод — NUC; VPS-файл не трогаем), база и пользователь `omp_billing`, `postgres:17-alpine`, данные `./data/postgres`, healthcheck `pg_isready`, параметры из списка выше.
+- Отдельная сеть `pg` с `internal: true`: в ней только `postgres` и `billing`; порт не публикуется. `postgres` добавлен в `NO_PROXY` биллинга.
+- Биллинг получает `BILLING_DATABASE_URL`, `BILLING_STORE: ${BILLING_STORE:-sqlite}` (переключение — правкой этого значения по умолчанию, ранбук), `BILLING_READONLY: ${BILLING_READONLY:-0}` и каталог бэкапов.
+- `depends_on: postgres` у биллинга **нет**: пока хранилище SQLite, сломанный Postgres не должен мешать биллингу стартовать; на Postgres биллинг при недоступной базе завершается с кодом 1 и перезапускается (`restart: unless-stopped`).
+- `BILLING_PG_PASSWORD` обязателен (`:?`): без строки в `.env` compose не запускает ничего — строка добавляется до копирования файла (ранбук, раздел 0).
+- Ранбук запуска, переключения, отката и восстановления: [postgres-cutover.md](postgres-cutover.md).
+
 ---
 
 ## 5. Бэкапы
@@ -298,6 +306,13 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
 6. Переключение: `ALTER DATABASE omp_billing RENAME TO omp_billing_old; ALTER DATABASE omp_billing_restore RENAME TO omp_billing;`
 7. `docker compose … up -d billing`, проверка `/health`, админка, бот. `omp_billing_old` удалить через неделю.
 - Раз в месяц — пробное восстановление в `omp_billing_restore` с отчётом в лог.
+
+### 5.1 Как сделано в PR 4 (отличия от скрипта выше)
+- `pg_dump` запускает **сам биллинг** (`src/pgBackup.mjs`), а не cron на хосте: настройки `backupEveryHours`/`backupKeepDays` он читает из своего хранилища, статус отдаёт админке и `/health` без таблицы `kv`. В образ добавлен `postgresql-client-17` из PGDG (в Debian bookworm — только 15).
+- Включается, когда заданы `BILLING_PG_BACKUP_DIR` (в compose — `/backups/pg` = `/opt/omp-backups/pg`) и `BILLING_DATABASE_URL`. Планировщик смотрит раз в 10 минут; дамп `pg_dump -Fc` в `.part`, затем `chmod 600` и переименование в `billing-YYYYMMDD-HHMMSS.dump` (МСК). Пароль — через `PGPASSWORD`, не в аргументах.
+- Срок хранения по умолчанию 30 дней; самый свежий дамп не удаляется.
+- Свежесть: `/health` → `pgBackupOk`, `pgBackupAgoSec` (поле `ok` не меняется); на главной админки — красное предупреждение, если дампа нет дольше `backupEveryHours + 3 ч` или `pg_dump` упал; в настройках — время и размер последнего дампа. Уведомления в Telegram пока нет.
+- До переключения дампится пустая база — так проверяется весь путь заранее.
 
 ---
 

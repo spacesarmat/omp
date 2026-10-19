@@ -125,6 +125,8 @@ import {
 import { resolveDbPath } from './store.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { notificationOk } from './yoomoney.mjs';
+import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
+import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
@@ -434,13 +436,30 @@ export function legacyTokensEnabled(env) {
 }
 
 /** `/health`: process up, plus bot polling without secrets (seconds since the last good getUpdates, null if none yet). */
-export function healthPayload(now) {
+export function healthPayload(now, extra) {
   const poll = botPollSnapshot(now);
-  return {
+  const x = extra || {};
+  const out = {
     ok: true,
     botPollEnabled: !!poll.enabled,
     botPollOkAgoSec: poll.enabled && poll.lastOkAt ? Math.max(0, Math.floor(((now || Date.now()) - poll.lastOkAt) / 1000)) : null,
   };
+  // Postgres dumps (only when BILLING_PG_BACKUP_DIR is set): pgBackupOk is false when the newest dump is stale.
+  if (x.backup && x.backup.enabled) {
+    out.pgBackupOk = !x.backup.stale;
+    out.pgBackupAgoSec = x.backup.ageSec;
+  }
+  if (x.readOnly) out.readOnly = true;
+  return out;
+}
+
+/** POST routes that only read: they keep working in BILLING_READONLY mode. */
+const READ_ONLY_POSTS = new Set(['/v1/search', '/v1/torrent']);
+
+/** An admin settings form with a backupEveryHours / backupKeepDays value outside the allowed range. */
+function badBackupSetting(body) {
+  const set = (v) => v !== undefined && v !== '';
+  return (set(body.backupEveryHours) && !validBackupEveryHours(body.backupEveryHours)) || (set(body.backupKeepDays) && !validBackupKeepDays(body.backupKeepDays));
 }
 
 /**
@@ -524,8 +543,10 @@ export function createApp(file, fetchImpl, opts) {
   // Refresh and upgrade are cheap to call but should not be hammered from one address.
   const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
   const legacyOn = legacyTokensEnabled(env);
-  const store = toStore(file);
+  const readOnly = !!(opts && opts.readOnly);
+  const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
   const reg = store.registry;
+  const backups = (opts && opts.pgBackups) || null;
   let secretValue = '';
   const secret = async () => secretValue || (secretValue = await reg.tokenSecret(env));
   const envSecret = String(env.BILLING_TOKEN_SECRET || '');
@@ -604,7 +625,16 @@ export function createApp(file, fetchImpl, opts) {
         res.headOnly = true;
         req.method = 'GET';
       }
-      if (req.method === 'GET' && path === '/health') return json(res, 200, healthPayload(Date.now()));
+      if (req.method === 'GET' && path === '/health') {
+        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status() : null, readOnly }));
+      }
+      if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
+        // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
+        // Search and torrent only read, so the apps keep playing; a write that slips through is refused by the store.
+        res.setHeader('retry-after', '600');
+        if (path === '/v1/yoomoney') return send(res, 503, 'read only');
+        return json(res, 503, { error: 'read_only' });
+      }
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));
         return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
@@ -627,6 +657,8 @@ export function createApp(file, fetchImpl, opts) {
             ...flash,
             sessions: listSessions(),
             storage: await store.info(),
+            backup: backups ? backups.status((await store.read()).settings) : null,
+            readOnly,
           }),
         );
       }
@@ -864,6 +896,9 @@ export function createApp(file, fetchImpl, opts) {
         let redirectTo = '/admin';
         let extra = null;
         if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 — оставлено прежнее значение';
+        if (path === '/admin/settings' && !lowerBlocked && badBackupSetting(body)) {
+          flashError = 'Бэкап Postgres: каждые 1–168 часов, хранить 1–365 дней (целые числа) — оставлено прежнее значение';
+        }
         if (lowerBlocked) {
           flashError =
             'Снижение базы ' + baseImpact.from + ' → ' + baseImpact.to + ' требует подтверждения: затронет подписок: ' +
@@ -1534,6 +1569,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       return send(res, 404, 'not found');
     } catch (e) {
+      if (isReadOnlyError(e)) return json(res, 503, { error: 'read_only' });
       return json(res, 500, { error: 'down' });
     }
   };
@@ -1961,9 +1997,16 @@ if (started) {
   // BILLING_STORE=postgres + BILLING_DATABASE_URL, otherwise billing.db at BILLING_DATA (dataFile()).
   openStore(process.env, dataFile())
     .then(async (store) => {
-      await ensureAdmin(store);
-      await listen(store, port);
-      process.stdout.write('billing listening on ' + port + ' (store: ' + store.engine + ')\n');
+      const readOnly = readOnlyMode(process.env);
+      if (!readOnly) await ensureAdmin(store);
+      const cfg = backupConfig(process.env);
+      // Dumps read the database only, so they run in read-only mode too.
+      const pgBackups = cfg ? startPgBackups(cfg, async () => (await store.read()).settings) : null;
+      await listen(store, port, undefined, { readOnly, pgBackups });
+      process.stdout.write(
+        'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
+      );
+      if (readOnly) return;
       pollBot(store);
       startReminders(store);
       startRetention(store);

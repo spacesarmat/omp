@@ -4,10 +4,50 @@
 #   so no ACME attempts for domains that still point at the VPS.
 # - billing: (cutover 2026-10-19) Telegram block removed; NUC is the only bot poller.
 #   VPS omp-billing is stopped.
+# - postgres: billing database for the move off SQLite (docs/billing/postgres-cutover.md). Internal network
+#   only, no published port, data in ./data/postgres. Needs BILLING_PG_PASSWORD in .env (hex, generated on the
+#   server, never printed): compose refuses to start anything without it. Billing keeps BILLING_STORE=sqlite
+#   until the cutover; BILLING_READONLY=1 (set for one `up`) is the cutover's read-only window.
 services:
   billing:
     environment:
       BILLING_BOT_POLL: "1"   # NUC is the only getUpdates poller (VPS omp-billing stopped)
+      BILLING_STORE: ${BILLING_STORE:-sqlite}
+      BILLING_DATABASE_URL: postgres://omp_billing:${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}@postgres:5432/omp_billing
+      BILLING_READONLY: ${BILLING_READONLY:-0}
+      # pg_dump every backupEveryHours (admin settings) into /opt/omp-backups/pg, mode 600
+      BILLING_PG_BACKUP_DIR: /backups/pg
+      # base list + postgres (pg does not use the HTTP proxy; listed so nothing ever routes it via warp)
+      NO_PROXY: jackett,jacred,torrserver,caddy,postgres,localhost,127.0.0.1
+    volumes:
+      - /opt/omp-backups/pg:/backups/pg
+    networks:
+      - omp
+      - pg
+  postgres:
+    image: postgres:17-alpine
+    container_name: omp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: omp_billing
+      POSTGRES_DB: omp_billing
+      POSTGRES_PASSWORD: ${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      TZ: UTC
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=30", "-c", "log_min_duration_statement=500"]
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    shm_size: 128m
+    stop_grace_period: 1m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U omp_billing -d omp_billing -h 127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - pg
+    # no ports: only billing reaches it, over the internal "pg" network
   caddy:
     ports: !override
       - "80:80"
@@ -66,3 +106,8 @@ services:
     network_mode: "service:warp-tunnel"
     depends_on:
       - warp-tunnel
+
+networks:
+  # billing <-> postgres only; internal: no route out, nothing published
+  pg:
+    internal: true

@@ -16,6 +16,7 @@ import {
   telegramDisplay,
 } from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
+import { backupAlert } from './pgBackup.mjs';
 import { storageInfo } from './store.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -122,7 +123,7 @@ export function homePayload(state, file, opts) {
       payments30: finance.summary.month.count,
       revenue30: finance.summary.month.sum,
     },
-    alerts: dash.alerts || [],
+    alerts: homeAlerts(dash.alerts || [], opts),
     events: (dash.events || []).slice(0, 80),
     finance: {
       summary: finance.summary,
@@ -140,7 +141,19 @@ export function homePayload(state, file, opts) {
     settings: publicAdminSettings(s),
     // The server passes the store's info (SQLite or Postgres); a bare path is the SQLite file.
     storage: (opts && opts.storage) || (typeof file === 'string' ? storageInfo(file) : null),
+    // Postgres dumps: null when BILLING_PG_BACKUP_DIR is not set (file names and sizes only, no paths with secrets).
+    backup: (opts && opts.backup) || null,
+    readOnly: !!(opts && opts.readOnly),
   };
+}
+
+/** Dashboard alerts plus the cutover read-only mode and a stale Postgres backup. */
+function homeAlerts(alerts, opts) {
+  const out = alerts.slice();
+  if (opts && opts.readOnly) out.unshift({ level: 'bad', text: 'Биллинг в режиме только чтения (переключение хранилища): изменения не сохраняются' });
+  const text = backupAlert(opts && opts.backup);
+  if (text) out.unshift({ level: 'bad', text });
+  return out;
 }
 
 /**

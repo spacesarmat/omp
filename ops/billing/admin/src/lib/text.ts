@@ -170,3 +170,17 @@ export const FAIL_FILTERS: [string, string][] = [
   ['device_limit', 'Лимит устройств'],
   ['extra_expired', 'Доп. устройство не продлено'],
 ];
+
+/** 1 536 → «1,5 КБ». */
+export function bytesText(n?: number) {
+  const v = Number(n) || 0;
+  if (v < 1024) return v + ' Б';
+  const units = ['КБ', 'МБ', 'ГБ'];
+  let x = v / 1024;
+  let i = 0;
+  while (x >= 1024 && i < units.length - 1) {
+    x /= 1024;
+    i++;
+  }
+  return x.toFixed(x < 10 ? 1 : 0).replace('.', ',') + ' ' + units[i];
+}
