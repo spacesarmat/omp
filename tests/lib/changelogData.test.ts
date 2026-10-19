@@ -22,6 +22,14 @@ describe('changelogData', () => {
     expect(getChangelog()).toBe(getChangelog());
   });
 
+  it('no platform and no language shows a «[tech]» bullet, though the raw changelog has them', () => {
+    expect(CHANGELOG.some((e) => e.items.some((i) => /^\[tech\]/i.test(i)))).toBe(true);
+    (['lg', 'atv', 'phone'] as const).forEach((p) => {
+      expect(JSON.stringify(forPlatform(CHANGELOG, p))).not.toMatch(/\[tech\]/i);
+      expect(JSON.stringify(forPlatform(mergeChangelog(CHANGELOG, CHANGELOG_EN), p))).not.toMatch(/\[tech\]/i);
+    });
+  });
+
   it('the TV never shows a «[phone]» bullet, the phone never a «[tv]» one; no marker is shown', () => {
     const tv = getChangelog();
     setChangelogPlatform('phone');

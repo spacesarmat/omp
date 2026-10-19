@@ -11,15 +11,19 @@ export function escapeHtml(s) {
 
 /** Bullets in the channel post: the first ones of the version in CHANGELOG.md, the rest is on the release page. */
 export const CAPTION_NOTES_MAX = 5;
+/** The caption's only bullet when a release has no user-facing bullet (all «[tech]» or none). */
+export const CAPTION_FALLBACK = 'Исправления и улучшения';
 
 /**
  * Caption: title, the first CAPTION_NOTES_MAX changelog lines as bullets (cut on a whole line so it fits
  * CAPTION_MAX) and a link to the GitHub release. No install steps: the buttons and the release page carry them.
+ * `notes` are the user bullets («[tech]» ones already dropped); none left gives CAPTION_FALLBACK.
  */
 export function buildCaption(version, notes, tag = `v${version}`) {
   const head = `<b>OMP ${escapeHtml(version)}</b>\n`;
   const link = `\n\n<a href="${REPO_URL}/releases/tag/${escapeHtml(tag)}">Все изменения и файлы - на GitHub</a>`;
-  const shown = notes.slice(0, CAPTION_NOTES_MAX);
+  const user = notes.filter((n) => n && n.trim() && !/^\[tech\]/i.test(n.trim()));
+  const shown = (user.length ? user : [CAPTION_FALLBACK]).slice(0, CAPTION_NOTES_MAX);
   let body = '';
   for (const note of shown) {
     const line = `\n• ${escapeHtml(note)}`;

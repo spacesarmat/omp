@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, isTech, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -13,6 +13,20 @@ describe('hb-lib', () => {
   });
   it('release notes list every bullet without the «[phone]» / «[tv]» / «[lg]» / «[atv]» markers', () => {
     expect(changelogNotes('## 0.7.0\n- [phone] Календарь\n- [tv] Пульт\n- [lg] Поиск\n- [atv] Кнопки\n- Общее\n', '0.7.0')).toEqual(['Календарь', 'Пульт', 'Поиск', 'Кнопки', 'Общее']);
+  });
+  it('«[tech]» bullets are skipped unless asked for; a version with only them gives the fixes note in the feeds', () => {
+    const md = '## 0.8.1\n- Общее\n- [tech] Биллинг на Postgres\n- [phone] Телефон\n- [TECH] CI\n\n## 0.8.0\n- [tech] Только админка\n';
+    expect(changelogNotes(md, '0.8.1')).toEqual(['Общее', 'Телефон']);
+    expect(changelogNotes(md, '0.8.1', 'lg')).toEqual(['Общее']);
+    expect(changelogNotes(md, '0.8.1', 'phone')).toEqual(['Общее', 'Телефон']);
+    expect(changelogNotes(md, '0.8.1', undefined, { includeTech: true })).toEqual(['Общее', '[tech] Биллинг на Postgres', 'Телефон', '[TECH] CI']);
+    expect(isTech('[tech] x')).toBe(true);
+    expect(isTech('x [tech]')).toBe(false);
+    expect(changelogNotes(md, '0.8.0')).toEqual([]);
+    expect(changelogNotes(md, '0.8.0', undefined, { includeTech: true })).toEqual(['[tech] Только админка']);
+    expect(feedNotes(md, '0.8.0', 'lg')).toEqual({ notes: [FIXES_NOTE], notesTv: [], notesPhone: [] });
+    const f = feedNotes(md, '0.8.1', 'atv');
+    expect(JSON.stringify(f)).not.toMatch(/\[tech\]/i);
   });
   it('feed notes per platform; `notes` for older apps is the TV list, never phone-only, never a marker', () => {
     const md = '## 0.8.0\n- [phone] Календарь\n- [tv] Пульт\n- Общее\n\n## 0.7.0\n- [phone] Только телефон\n';

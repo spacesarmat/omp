@@ -9,6 +9,7 @@ import {
   escapeHtml,
   CAPTION_MAX,
   CAPTION_NOTES_MAX,
+  CAPTION_FALLBACK,
   UPLOAD_MAX,
 } from '../../scripts/telegram-lib.mjs';
 
@@ -45,6 +46,16 @@ describe('telegram-lib', () => {
     expect(c.length).toBeLessThanOrEqual(CAPTION_MAX);
     expect(c).toContain('на GitHub</a>');
     expect(c).toContain('• Пункт 0');
+  });
+
+  it('no user bullet: «Исправления и улучшения», never a «[tech]» one', () => {
+    const fallback =
+      '<b>OMP 1.0.1</b>\n\n• Исправления и улучшения' +
+      '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v1.0.1">Все изменения и файлы - на GitHub</a>';
+    expect(CAPTION_FALLBACK).toBe('Исправления и улучшения');
+    expect(buildCaption('1.0.1', [])).toBe(fallback);
+    expect(buildCaption('1.0.1', ['[tech] Биллинг', ' '])).toBe(fallback);
+    expect(buildCaption('1.0.1', ['[tech] CI', 'Новое'])).not.toMatch(/tech|CI|Исправления/);
   });
 
   it('cuts a single huge line', () => {

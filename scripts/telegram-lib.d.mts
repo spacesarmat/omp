@@ -3,6 +3,7 @@ export const CAPTION_MAX: number;
 export const UPLOAD_MAX: number;
 export function escapeHtml(s: string): string;
 export const CAPTION_NOTES_MAX: number;
+export const CAPTION_FALLBACK: string;
 export function buildCaption(version: string, notes: string[], tag?: string): string;
 export function buildFiles(version: string): string[];
 export function routeFiles<T extends { size: number }>(files: T[]): { upload: T[]; link: T[] };

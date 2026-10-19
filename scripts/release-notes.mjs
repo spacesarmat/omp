@@ -20,6 +20,7 @@ export function renderReleaseNotes(tag, dir = 'build', root = '.') {
   const sha256 = [ipk, arm64, armv7, universal]
     .filter((name) => existsSync(join(dir, name)))
     .map((name) => ({ name, sha: createHash('sha256').update(readFileSync(join(dir, name))).digest('hex') }));
+  // changelogNotes skips «[tech]» bullets, so the body and its «…и ещё N» count only user-facing ones
   return buildReleaseNotes({
     tag,
     version,

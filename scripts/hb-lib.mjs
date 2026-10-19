@@ -13,11 +13,20 @@ function markShownOn(mark, platform) {
   return mark === platform;
 }
 
+/** A «[tech]» bullet: technical or admin-only, never shown to users (app, feeds, release body, Telegram). */
+export const TECH_MARK = /^\[tech\]\s*/i;
+
+/** Whether a changelog bullet (without its leading "- ") is a «[tech]» one. */
+export function isTech(item) {
+  return TECH_MARK.test(item);
+}
+
 /**
  * Bullet lines under "## <version>" in CHANGELOG.md, without the «[tv]» / «[lg]» / «[atv]» / «[phone]» markers.
  * With `platform` ('lg' | 'atv' | 'phone'): the unmarked bullets and those that platform shows.
+ * «[tech]» bullets are skipped unless `includeTech` is set (then they keep their «[tech]» marker).
  */
-export function changelogNotes(md, version, platform) {
+export function changelogNotes(md, version, platform, { includeTech = false } = {}) {
   const out = [];
   let on = false;
   for (const line of md.split(/\r?\n/)) {
@@ -31,6 +40,10 @@ export function changelogNotes(md, version, platform) {
     const m = /^\s*[-*]\s+(.*\S)\s*$/.exec(line);
     // the markers say which app shows a bullet in «Что нового»; release notes list them all, unmarked
     if (!m) continue;
+    if (isTech(m[1])) {
+      if (includeTech) out.push(m[1]);
+      continue;
+    }
     const mark = /^\[(tv|lg|atv|phone)\]\s*/i.exec(m[1]);
     if (platform && !markShownOn(mark ? mark[1].toLowerCase() : '', platform)) continue;
     out.push(mark ? m[1].slice(mark[0].length) : m[1]);
@@ -40,9 +53,9 @@ export function changelogNotes(md, version, platform) {
 
 /**
  * The notes of one update feed: `notesTv` / `notesPhone` for the apps that read them (0.17.0 and later), and
- * `notes` for older apps — the TV's bullets, «Исправления и улучшения» when there is none. `tv` is the TV that reads
+ * `notes` for older apps: the TV's bullets, «Исправления и улучшения» when there is none. `tv` is the TV that reads
  * the feed: 'lg' for update.json (LG TVs only), 'atv' for update-android.json (the phone and Android TV alike; the
- * phone reads notesPhone). Never a marker.
+ * phone reads notesPhone). Never a marker, never a «[tech]» bullet.
  */
 export function feedNotes(md, version, tv) {
   const notesTv = changelogNotes(md, version, tv);
