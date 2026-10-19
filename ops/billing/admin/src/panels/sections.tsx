@@ -312,6 +312,7 @@ export function SubsPanel({
                 </TableCell>
                 <TableCell>
                   <Devices bound={s.bound} limit={s.deviceLimit} over={s.overLimit} />
+                  {(s.creditRub || 0) > 0 ? <span className="text-xs text-muted-foreground">зачёт {s.creditRub} ₽</span> : null}
                   {s.limitOverride ? (
                     <span className="ml-1 text-xs text-amber-300" title={s.limitText}>
                       индивид.
