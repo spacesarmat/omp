@@ -54,6 +54,7 @@ import {
   telegramForDevice,
   unlinkDeviceTelegram,
   findAccount,
+  accountByTelegram,
 } from './logic.mjs';
 import {
   adminBroadcast,
@@ -66,6 +67,7 @@ import {
   mainKeyboard,
   paymentUserMessage,
   pendingUserText,
+  parseAction,
   rejectUserText,
   paymentAdminNotices,
   reminderMessage,
@@ -127,6 +129,7 @@ import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
+import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
@@ -445,17 +448,18 @@ export function healthPayload(now, extra) {
     botPollEnabled: !!poll.enabled,
     botPollOkAgoSec: poll.enabled && poll.lastOkAt ? Math.max(0, Math.floor(((now || Date.now()) - poll.lastOkAt) / 1000)) : null,
   };
-  // Postgres dumps (only when BILLING_PG_BACKUP_DIR is set): pgBackupOk is false when the newest dump is stale.
+  // Postgres dumps (only when BILLING_PG_BACKUP_DIR is set): pgBackupOk is false when the newest dump is
+  // stale for the configured schedule, or the last pg_dump attempt failed (even if an older dump is still fresh).
   if (x.backup && x.backup.enabled) {
-    out.pgBackupOk = !x.backup.stale;
+    out.pgBackupOk = !x.backup.stale && !x.backup.lastError;
     out.pgBackupAgoSec = x.backup.ageSec;
   }
   if (x.readOnly) out.readOnly = true;
   return out;
 }
 
-/** POST routes that only read: they keep working in BILLING_READONLY mode. */
-const READ_ONLY_POSTS = new Set(['/v1/search', '/v1/torrent']);
+/** POST routes that keep working in BILLING_READONLY mode (search/torrent read; admin Telegram login is in-memory). */
+const READ_ONLY_POSTS = new Set(['/v1/search', '/v1/torrent', '/admin/login/telegram']);
 
 /** An admin settings form with a backupEveryHours / backupKeepDays value outside the allowed range. */
 function badBackupSetting(body) {
@@ -548,6 +552,10 @@ export function createApp(file, fetchImpl, opts) {
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
+  // Pending admin login tokens stay in memory during cutover (same as session cookies).
+  const adminAuth =
+    (opts && opts.adminAuthMem) ||
+    (readOnly ? createAdminAuthMemory({ consumedPath: adminAuthConsumedPath(env) }) : null);
   let secretValue = '';
   const secret = async () => secretValue || (secretValue = await reg.tokenSecret(env));
   const envSecret = String(env.BILLING_TOKEN_SECRET || '');
@@ -627,7 +635,8 @@ export function createApp(file, fetchImpl, opts) {
         req.method = 'GET';
       }
       if (req.method === 'GET' && path === '/health') {
-        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status() : null, readOnly }));
+        const settings = backups ? (await store.read()).settings : null;
+        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly }));
       }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
@@ -789,14 +798,24 @@ export function createApp(file, fetchImpl, opts) {
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
         }
-        const started = await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const started = adminAuth
+          ? adminAuth.startPanel(Date.now())
+          : await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
-        await audit(file, 'login_telegram_start', 'запрос');
+        if (!readOnly) {
+          try {
+            await audit(file, 'login_telegram_start', 'запрос');
+          } catch (e) {
+            /* audit must not block login */
+          }
+        }
         return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
       }
       if (req.method === 'GET' && path === '/admin/login/telegram/status') {
         const token = url.searchParams.get('token') || '';
-        const taken = await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
+        const taken = adminAuth
+          ? adminAuth.takePanel({ token, now: Date.now() })
+          : await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
         if (taken.status === 'ok') {
           const id = randomId() + randomId();
           const csrf = randomId();
@@ -808,7 +827,13 @@ export function createApp(file, fetchImpl, opts) {
             lastSeen: now,
             telegramId: taken.telegramId || '',
           });
-          await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
+          if (!readOnly) {
+            try {
+              await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
+            } catch (e) {
+              /* ignore */
+            }
+          }
           res.setHeader('set-cookie', adminSetCookie(req, id));
           return json(res, 200, { ok: true, status: 'ok' });
         }
@@ -818,7 +843,11 @@ export function createApp(file, fetchImpl, opts) {
         const token = url.searchParams.get('token') || '';
         let taken = { status: 'expired' };
         try {
-          taken = await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+          if (adminAuth) {
+            taken = adminAuth.takeCli(await store.read(), { token, now: Date.now() });
+          } else {
+            taken = await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+          }
         } catch (e) {
           taken = { status: 'expired' };
         }
@@ -1645,6 +1674,8 @@ export async function pollBot(file, fetchImpl, opts) {
   const maxLoops = opts && opts.maxLoops ? opts.maxLoops : 0;
   const pollTimeoutMs = (opts && opts.pollTimeoutMs) || TG_POLL_TIMEOUT_MS;
   const sendTimeoutMs = (opts && opts.sendTimeoutMs) || TG_SEND_TIMEOUT_MS;
+  const adminLoginOnly = !!(opts && opts.adminLoginOnly);
+  const adminAuthMem = (opts && opts.adminAuthMem) || null;
   /** At most one stderr line a minute for failed polls; never the URL or error text (they can carry the token). */
   const pollFailed = (kind) => {
     const line = notePollError(kind, nowFn());
@@ -1661,11 +1692,11 @@ export async function pollBot(file, fetchImpl, opts) {
         await sleep(5000);
         continue;
       }
-      if (Date.now() - sweptAt > 10 * 60 * 1000) {
+      if (!adminLoginOnly && Date.now() - sweptAt > 10 * 60 * 1000) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
-      if (Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+      if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
         servicesAt = Date.now();
         try {
           const probes = await probeAllServices(state.settings, net);
@@ -1707,7 +1738,10 @@ export async function pollBot(file, fetchImpl, opts) {
         const u = updates[i];
         offset = u.update_id + 1;
         if (u.callback_query) {
-          await handleCallback(file, token, u.callback_query, net, sendTimeoutMs);
+          await handleCallback(file, token, u.callback_query, net, sendTimeoutMs, {
+            adminLoginOnly,
+            adminAuthMem,
+          });
           continue;
         }
         const msg = u.message;
@@ -1725,11 +1759,53 @@ export async function pollBot(file, fetchImpl, opts) {
               lastName: msg.from.last_name || '',
             }
           : null;
-        const info = await deviceInfo(file);
+        const text = msg.text || '';
+        if (adminLoginOnly && adminAuthMem) {
+          // Cutover: only /start admin_TOKEN may run; never claim a promo/unbind success without a write.
+          if (parseAction(text).action !== 'admin_login') {
+            try {
+              await telegramSend(
+                token,
+                chatId,
+                'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.',
+                net,
+                { timeoutMs: sendTimeoutMs },
+              );
+            } catch (e) {
+              /* ignore */
+            }
+            continue;
+          }
+          const out = botReply(
+            { ...state, adminLogins: adminAuthMem.panelLogins() },
+            { chatId, text, now: Date.now(), awaiting: wait, replyTo, from, pad, info: () => null },
+          );
+          adminAuthMem.replacePanelLogins(out.state.adminLogins);
+          const rows = out.messages || [];
+          for (let j = 0; j < rows.length; j++) {
+            const row = rows[j];
+            try {
+              await telegramSend(token, row.chatId || chatId, row.text, net, {
+                keyboard: row.keyboard,
+                inline: row.inline,
+                parseMode: row.parseMode,
+                timeoutMs: sendTimeoutMs,
+              });
+            } catch (e) {
+              /* ignore */
+            }
+          }
+          continue;
+        }
+        let info = () => null;
+        if (botNeedsDeviceInfo(text, '')) {
+          const acct = accountByTelegram(state, chatId);
+          info = await deviceInfoForAccount(file, state, acct && acct.id);
+        }
         const replied = await store.update((cur) => {
           const out = botReply(cur, {
             chatId,
-            text: msg.text || '',
+            text,
             now: Date.now(),
             awaiting: wait,
             replyTo,
@@ -1752,7 +1828,7 @@ export async function pollBot(file, fetchImpl, opts) {
               parseMode: row.parseMode,
               timeoutMs: sendTimeoutMs,
             });
-            if (row.supportNotify && sent.messageId) {
+            if (row.supportNotify && sent.messageId && !adminLoginOnly) {
               await store.update((cur) => ({
                 state: rememberSupportReply(cur, {
                   adminChatId: row.chatId,
@@ -1774,11 +1850,40 @@ export async function pollBot(file, fetchImpl, opts) {
   }
 }
 
-/** (codeId) → { name, lastSeenAt } from the device registry for the bot's device list. Best effort. */
-async function deviceInfo(file) {
-  let rows = new Map();
+/** True when this bot turn shows the devices list (needs registry names / lastSeen). */
+function botNeedsDeviceInfo(text, callbackData) {
+  const data = String(callbackData || '');
+  if (
+    data.indexOf('u1:') === 0 ||
+    data.indexOf('y1:') === 0 ||
+    data === 'ua' ||
+    data.indexOf('ya:') === 0
+  ) {
+    return true;
+  }
+  return parseAction(text).action === 'devices';
+}
+
+/**
+ * (codeId) → { name, lastSeenAt } for one account's subscriptions only.
+ * Avoids loading every active device on support messages and other bot turns.
+ */
+async function deviceInfoForAccount(file, state, accountId) {
+  const empty = () => null;
+  if (!accountId) return empty;
+  const account = findAccount(state, accountId);
+  if (!account) return empty;
+  const store = toStore(file);
+  const rows = new Map();
   try {
-    rows = await toStore(file).registry.activeRowsByCode();
+    const subs = (state.subscriptions || []).filter((s) => s.accountId === account.id);
+    for (let i = 0; i < subs.length; i++) {
+      const list = await store.registry.listDevices(subs[i].id);
+      for (let j = 0; j < list.length; j++) {
+        const row = list[j];
+        if (row && row.code_id) rows.set(row.code_id, row);
+      }
+    }
   } catch (e) {
     /* names and lastSeen are cosmetic */
   }
@@ -1792,11 +1897,17 @@ async function deviceInfo(file) {
  * One inline button press. The spinner is always answered; a confirm step removes its own buttons,
  * so a second tap on «Да» reaches the state check and is told the button is stale.
  */
-export async function handleCallback(file, token, cq, net, timeoutMs) {
+export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const store = toStore(file);
+  const adminLoginOnly = !!(opts && opts.adminLoginOnly);
   const chat = cq && cq.message && cq.message.chat;
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
+  if (adminLoginOnly) {
+    // Admin login is /start admin_TOKEN only; never pretend an unbind or pay button worked.
+    await answer('Сейчас обслуживание. Админ-вход - через ссылку в панели.');
+    return;
+  }
   if (!chat || !isPrivateChat(chat) || !cq.from || String(cq.from.id) !== String(chat.id)) {
     await answer('');
     return;
@@ -1804,7 +1915,12 @@ export async function handleCallback(file, token, cq, net, timeoutMs) {
   const chatId = String(chat.id);
   let out = null;
   try {
-    const info = await deviceInfo(file);
+    const state = await store.read();
+    let info = () => null;
+    if (botNeedsDeviceInfo('', cq.data)) {
+      const acct = accountByTelegram(state, chatId);
+      info = await deviceInfoForAccount(file, state, acct && acct.id);
+    }
     out = await store.update((cur) => {
       const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info });
       return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
@@ -2015,11 +2131,22 @@ if (started) {
             },
           })
         : null;
-      await listen(store, port, undefined, { readOnly, pgBackups });
+      // Shared with HTTP login routes so Telegram confirm and browser poll see the same pending tokens.
+      const consumedPath = adminAuthConsumedPath(process.env);
+      if (!readOnly && consumedPath) {
+        // Leaving cutover: move redeemed CLI hashes from the side file into Postgres.
+        await flushCliConsumedToStore(store, consumedPath);
+      }
+      const adminAuthMem = readOnly ? createAdminAuthMemory({ consumedPath }) : null;
+      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem });
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );
-      if (readOnly) return;
+      if (readOnly) {
+        // Only admin panel login confirms: no reminders, retention, or other writes.
+        pollBot(store, undefined, { adminLoginOnly: true, adminAuthMem });
+        return;
+      }
       pollBot(store);
       startReminders(store);
       startRetention(store);
