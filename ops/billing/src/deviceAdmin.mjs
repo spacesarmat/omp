@@ -21,6 +21,7 @@ import {
   truncateIp,
   unbindCode,
 } from './logic.mjs';
+import { randomId } from './crypto.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -117,7 +118,7 @@ export function selfUnbind(state, { accountId, deviceIds, now }) {
     const rows = mine(ids[i]);
     if (!rows.length) continue;
     for (let r = 0; r < rows.length; r++) next = unbindCode(next, rows[r].id);
-    swaps.push({ at: now, device: String(ids[i]).slice(0, 8) });
+    swaps.push({ id: randomId(), at: now, device: String(ids[i]).slice(0, 8) });
     unbound += 1;
   }
   if (!unbound) return { state, result: { error: 'not_found' } };

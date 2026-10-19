@@ -4,3 +4,5 @@
 .env
 *.env
 !env.tunnel.example
+# a symlink is not matched by node_modules/ in the root .gitignore
+node_modules

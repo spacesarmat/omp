@@ -26,7 +26,7 @@ function fail(error, state) {
 }
 
 function attempt(state, row) {
-  const attempts = state.attempts.concat([row]).slice(-ATTEMPT_CAP);
+  const attempts = state.attempts.concat([withRowId(row)]).slice(-ATTEMPT_CAP);
   return { ...state, attempts };
 }
 
@@ -463,6 +463,110 @@ export function migrateLimitModel(state) {
   return { ...state, subscriptions, meta: { ...meta, limitModel: 1 } };
 }
 
+/** `row` with an `id` (a fresh random one when it has none). Rows that already carry one keep it. */
+export function withRowId(row) {
+  if (!row || typeof row !== 'object' || (typeof row.id === 'string' && row.id)) return row;
+  return { ...row, id: randomId() };
+}
+
+/**
+ * Id for a row stored before ids existed: derived from where the row sits and what it holds, so every read of the
+ * same snapshot gives the same id until a write stores it. Same length and alphabet as randomId().
+ */
+function backfillId(scope, index, row, salt) {
+  let body;
+  try {
+    body = JSON.stringify(row);
+  } catch (e) {
+    body = '';
+  }
+  return sha256('row-id\0' + scope + '\0' + index + '\0' + salt + '\0' + body).slice(0, 16);
+}
+
+/**
+ * Rows of `list` with ids. `unique`: a missing, non-string or repeated id is replaced (log-like rows nothing refers
+ * to by id); otherwise only a missing id is filled (entities other rows point at keep theirs, even repeated).
+ * Returns the same array when nothing changed.
+ */
+function idRows(list, scope, unique) {
+  if (!Array.isArray(list) || !list.length) return list;
+  const seen = new Set();
+  let out = null;
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const has = typeof row.id === 'string' && row.id !== '';
+    if (has && (!unique || !seen.has(row.id))) {
+      seen.add(row.id);
+      continue;
+    }
+    const { id: _old, ...rest } = row;
+    let salt = 0;
+    let id = backfillId(scope, i, rest, salt);
+    while (seen.has(id)) id = backfillId(scope, i, rest, ++salt);
+    seen.add(id);
+    if (!out) out = list.slice();
+    out[i] = { ...row, id };
+  }
+  return out || list;
+}
+
+/** Collections whose rows get an id (Postgres primary keys, see docs/billing/postgres-migration-plan.md). */
+const ID_LOGS = ['payments', 'attempts', 'webhooks', 'audit', 'supportMessages'];
+const ID_ENTITIES = ['accounts', 'subscriptions', 'codes', 'purchases', 'promos'];
+
+/**
+ * Stable ids for every row (meta.rowIds = 1). Rows from before (payments, activation attempts, problem webhooks,
+ * audit, device changes in `subscriptions[].swaps`, promo uses in `promos[].uses`) get a derived id; new rows get
+ * randomId() when they are made. Runs on every read and only fills what is missing, so a snapshot written by an
+ * older image (rows without ids) is completed again. Nothing else in a row changes; an older image keeps the ids.
+ */
+export function migrateRowIds(state) {
+  if (!state || typeof state !== 'object') return state;
+  const meta = state.meta && typeof state.meta === 'object' && !Array.isArray(state.meta) ? state.meta : {};
+  let next = null;
+  const set = (key, value) => {
+    if (value === state[key]) return;
+    if (!next) next = { ...state };
+    next[key] = value;
+  };
+  for (let k = 0; k < ID_LOGS.length; k++) set(ID_LOGS[k], idRows(state[ID_LOGS[k]], ID_LOGS[k], true));
+  for (let k = 0; k < ID_ENTITIES.length; k++) set(ID_ENTITIES[k], idRows(state[ID_ENTITIES[k]], ID_ENTITIES[k], false));
+  const subs = (next || state).subscriptions;
+  if (Array.isArray(subs)) {
+    let changed = false;
+    const mapped = subs.map((s, i) => {
+      if (!s || typeof s !== 'object') return s;
+      const scope = 'sub:' + (s.id || i);
+      const swaps = idRows(s.swaps, 'swaps:' + scope, true);
+      const bonusSlots = idRows(s.bonusSlots, 'bonus:' + scope, true);
+      if (swaps === s.swaps && bonusSlots === s.bonusSlots) return s;
+      changed = true;
+      const row = { ...s };
+      if (swaps !== s.swaps) row.swaps = swaps;
+      if (bonusSlots !== s.bonusSlots) row.bonusSlots = bonusSlots;
+      return row;
+    });
+    if (changed) set('subscriptions', mapped);
+  }
+  const promos = (next || state).promos;
+  if (Array.isArray(promos)) {
+    let changed = false;
+    const mapped = promos.map((p, i) => {
+      if (!p || typeof p !== 'object') return p;
+      const uses = idRows(p.uses, 'uses:promo:' + (p.id || i), true);
+      if (uses === p.uses) return p;
+      changed = true;
+      return { ...p, uses };
+    });
+    if (changed) set('promos', mapped);
+  }
+  if (Number(meta.rowIds) >= 1 && !next) return state.meta === meta ? state : { ...state, meta };
+  const out = next || { ...state };
+  out.meta = Number(meta.rowIds) >= 1 ? meta : { ...meta, rowIds: 1 };
+  return out;
+}
+
 /**
  * Client IP without its last part: «95.24.113.*», IPv6 the first three groups «2a02:6b8:c0e::*».
  * Only this form is stored. A value already in this form comes back unchanged.
@@ -848,7 +952,7 @@ function isTrue(v) {
 const WEBHOOK_CAP = 200;
 
 export function logWebhook(state, row) {
-  const webhooks = (state.webhooks || []).concat([row]).slice(-WEBHOOK_CAP);
+  const webhooks = (state.webhooks || []).concat([withRowId(row)]).slice(-WEBHOOK_CAP);
   return { ...state, webhooks };
 }
 
@@ -875,7 +979,7 @@ function actorFromAuditDetail(row) {
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
 export function logAudit(state, { action, detail, now, actor, accountId }) {
-  const row = { at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+  const row = { id: randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
   if (accountId) row.accountId = String(accountId);
@@ -932,7 +1036,7 @@ function priceOf(state, mark) {
 
 function stampPayment(state, row) {
   const at = row && row.at ? row.at : Date.now();
-  const base = { ...row, at };
+  const base = withRowId({ ...row, at });
   if (base.accountId) return base;
   const resolved = resolvePaymentAccount(state, base.label);
   if (!resolved.accountId) return base;
@@ -1074,6 +1178,9 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
   const row = { operationId, label: mark, amount, at: now || Date.now() };
+  // The accepted row takes the held row's id: it is the same payment, settled.
+  const heldId = hadPending ? (input.payments.find((p) => p.operationId === operationId && p.pending) || {}).id : '';
+  if (heldId) row.id = heldId;
   let act = mark;
   let quoted = null;
   let quotedExtras = 0;
@@ -2360,7 +2467,7 @@ export function redeemPromo(state, { code, accountId, now }) {
     paidUntil = created.result.paidUntil;
   }
 
-  const use = { accountId, at: now, subscriptionId, code: activationCode };
+  const use = { id: randomId(), accountId, at: now, subscriptionId, code: activationCode };
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
   return {
     state: { ...next, promos },
