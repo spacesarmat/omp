@@ -105,6 +105,9 @@ export type BonusRow = {
 
 export type SwapInfo = { used: number; left: number; limit: number; nextAt?: number; resetAt?: number };
 
+/** A secret from the server's .env, as the panel may show it: never the value. */
+export type SecretView = { key: string; env: string; label: string; text: string; source: 'env' | 'db' | '' };
+
 export type HomeData = {
   csrf: string;
   sessionId: string;
@@ -136,6 +139,7 @@ export type HomeData = {
   support?: SupportThread[];
   audit?: { at?: number; action: string; detail: string; actor?: FeedActor }[];
   series?: SeriesPoint[];
+  secrets?: SecretView[];
   settings?: Record<string, string | number | boolean>;
   storage?: { engine: string; path: string; bytes: number };
   /** Postgres dumps; null when backups are not configured on the server. */

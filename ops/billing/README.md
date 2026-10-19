@@ -48,7 +48,36 @@ HSTS (`max-age=15552000; includeSubDomains`, без preload), `X-Content-Type-Op
 
 ## Настройки панели
 
-Токен бота, кошелёк и секрет ЮMoney, цены - вкладка **Настройки**. JacRed / Jackett / TorrServer (ops) - вкладка **Сервисы**: URL, ключи (маскируются), вкл/выкл для подписчиков, health-probe. Телефон ходит только в `POST /v1/search` и `POST /v1/torrent` (ключи на устройстве не хранятся).
+Кошелёк ЮMoney, цены - вкладка **Настройки**. JacRed / Jackett / TorrServer (ops) - вкладка **Сервисы**: URL, вкл/выкл для подписчиков, health-probe. Телефон ходит только в `POST /v1/search` и `POST /v1/torrent` (ключи на устройстве не хранятся).
+
+### Секреты - только в `.env`
+
+Секреты не хранятся в базе и не попадают в дампы. Панель показывает их только для чтения: «задан ✅, ****abcd» (последние 4 символа - только у значений от 12 символов) или «не задан», с подсказкой, где менять. Форма настроек их не принимает.
+
+| Настройка | Переменная в `.env` |
+| --- | --- |
+| Токен бота | `BILLING_BOT_TOKEN` |
+| Секрет ЮMoney | `BILLING_YOOMONEY_SECRET` |
+| SMTP-пароль | `BILLING_SMTP_PASS` |
+| Ключ API Jackett | `BILLING_JACKETT_API_KEY` |
+| Ключ API JacRed | `BILLING_JACRED_API_KEY` |
+| Пароль basic-авторизации индексаторов | `BILLING_INDEXER_PASS` |
+| Ключ подписи токенов устройств | `BILLING_TOKEN_SECRET` (32+ символов) |
+
+Поменять: строка в `.env` (права 600, владелец root), затем `docker compose ... up -d --no-deps billing`. При старте billing удаляет из базы копию каждого секрета, который задан в `.env` (и `kv.token_secret`, если задан `BILLING_TOKEN_SECRET`), и пишет в лог только имена. Пока секрета нет в `.env`, используется старое значение из базы, поэтому до переноса ничего не ломается.
+
+Перенос с сервера, где секреты ещё в базе (значения не печатаются, только имена):
+
+```sh
+cd /opt/omp-vps && DC="docker compose -f docker-compose.yml -f docker-compose.nuc.yml"
+sudo install -m 600 .env /opt/omp-backups/env-$(date +%Y%m%d-%H%M%S)      # копия .env
+sudo sh -c "umask 077; $DC run --rm --no-deps -T billing node tools/secretsToEnv.mjs > /root/secrets.add"
+sudo sh -c "cat /root/secrets.add >> .env && rm -f /root/secrets.add"
+sudo $DC run --rm --no-deps -T billing node tools/secretsToEnv.mjs --verify  # каждая строка: same / env only
+sudo $DC up -d --no-deps billing                                             # старт удаляет копии из базы
+```
+
+Старые дампы в `/opt/omp-backups` секреты ещё содержат: храните их как раньше, с правами 600.
 
 ## Устройства, активация, оплата
 

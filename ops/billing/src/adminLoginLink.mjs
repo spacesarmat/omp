@@ -5,12 +5,13 @@
  */
 import { issueCliAdminLogin } from './logic.mjs';
 import { openStore } from './db/index.mjs';
+import { withEnvSecrets } from './envSecrets.mjs';
 
 let store;
 let state;
 try {
   // Same store as the server: Postgres at BILLING_DATABASE_URL.
-  store = await openStore(process.env);
+  store = withEnvSecrets(await openStore(process.env), process.env);
   state = await store.read();
 } catch (e) {
   process.stderr.write('admin login link failed\n');

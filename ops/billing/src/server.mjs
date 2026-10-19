@@ -124,6 +124,7 @@ import {
   sourceEnabled,
 } from './services.mjs';
 import { openStore, toStore } from './db/index.mjs';
+import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
@@ -659,6 +660,8 @@ export function createApp(file, fetchImpl, opts) {
             storage: await store.info(),
             backup: backups ? backups.status((await store.read()).settings) : null,
             readOnly,
+            // Read-only secret rows (set or not, last 4 characters, the .env name); never a value.
+            secrets: secretViews((await store.read()).settings, env),
           }),
         );
       }
@@ -1988,8 +1991,18 @@ if (started) {
   const port = Number(process.env.PORT || 8787);
   // Postgres at BILLING_DATABASE_URL (the only store).
   openStore(process.env)
-    .then(async (store) => {
+    .then(async (raw) => {
       const readOnly = readOnlyMode(process.env);
+      // Secrets come from .env; the database copy of each one .env sets is removed (names only in the log).
+      if (!readOnly) {
+        const out = await moveSecretsOutOfDb(raw, process.env);
+        if (out.moved.length || out.tokenKey) {
+          process.stdout.write(
+            'secrets moved out of the database (now only in .env): ' + out.moved.concat(out.tokenKey ? ['token_secret'] : []).join(', ') + '\n',
+          );
+        }
+      }
+      const store = withEnvSecrets(raw, process.env);
       if (!readOnly) await ensureAdmin(store);
       const cfg = backupConfig(process.env);
       // Dumps read the database only, so they run in read-only mode too.

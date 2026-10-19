@@ -1,6 +1,7 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
 import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
+import { secretText } from './envSecrets.mjs';
 
 /** settings.baseDevices from the form: a whole number 1-20. */
 export function validBase(v) {
@@ -41,29 +42,29 @@ export function walletUnchanged(incoming, current) {
   return !!cur && inc === maskWallet(cur);
 }
 
-/** Settings safe to send to the admin SPA (secrets masked). */
+/** Settings safe to send to the admin SPA. Secrets (they live in .env) only as «задан ✅, ****abcd» / «не задан». */
 export function publicAdminSettings(settings) {
   const s = settings || {};
   const out = {
-    botToken: secretConfigured(s.botToken) ? SECRET_MASK : '',
+    botToken: secretText(s.botToken),
     botUsername: s.botUsername || '',
     publicOrigin: s.publicOrigin || '',
     adminTelegramIds: s.adminTelegramIds || '',
     yoomoneyWallet: maskWallet(s.yoomoneyWallet),
-    yoomoneySecret: secretConfigured(s.yoomoneySecret) ? SECRET_MASK : '',
+    yoomoneySecret: secretText(s.yoomoneySecret),
     adminNotify: s.adminNotify !== false,
     jackettUrl: s.jackettUrl || '',
-    jackettApiKey: secretConfigured(s.jackettApiKey) ? SECRET_MASK : '',
+    jackettApiKey: secretText(s.jackettApiKey),
     jackettEnabled: s.jackettEnabled !== false,
     jacredUrl: s.jacredUrl || '',
-    jacredApiKey: secretConfigured(s.jacredApiKey) ? SECRET_MASK : '',
+    jacredApiKey: secretText(s.jacredApiKey),
     jacredEnabled: s.jacredEnabled !== false,
     torrserverUrl: s.torrserverUrl || '',
     indexerUser: s.indexerUser || '',
-    indexerPass: secretConfigured(s.indexerPass) ? SECRET_MASK : '',
+    indexerPass: secretText(s.indexerPass),
     smtpHost: s.smtpHost || '',
     smtpUser: s.smtpUser || '',
-    smtpPass: secretConfigured(s.smtpPass) ? SECRET_MASK : '',
+    smtpPass: secretText(s.smtpPass),
     smtpFrom: s.smtpFrom || '',
     priceRub: s.priceRub || 0,
     periodDays: s.periodDays || 30,
@@ -77,7 +78,10 @@ export function publicAdminSettings(settings) {
   return out;
 }
 
-/** Merge admin form body into settings, preserving masked secrets. */
+/**
+ * Merge admin form body into settings. Secrets are read-only here (they change in the server's .env):
+ * whatever the form sends for them, the current values stay.
+ */
 export function mergeSettings(prev, body) {
   const cur = prev || {};
   const b = body || {};
@@ -92,7 +96,7 @@ export function mergeSettings(prev, body) {
   };
   const next = {
     ...cur,
-    botToken: keepSecret(b.botToken, cur.botToken),
+    botToken: String(cur.botToken || ''),
     botUsername: (b.botUsername !== undefined ? b.botUsername : cur.botUsername || 'OMPBILLINGBOT').replace(
       /^@/,
       '',
@@ -104,22 +108,22 @@ export function mergeSettings(prev, body) {
         ? String(b.yoomoneyWallet).replace(/\s/g, '')
         : cur.yoomoneyWallet || '',
     adminNotify: b.adminNotify !== undefined ? bool(b.adminNotify, cur.adminNotify !== false) : cur.adminNotify !== false,
-    yoomoneySecret: keepSecret(b.yoomoneySecret, cur.yoomoneySecret),
+    yoomoneySecret: String(cur.yoomoneySecret || ''),
     jackettUrl: String(b.jackettUrl !== undefined ? b.jackettUrl : cur.jackettUrl || '').replace(/\/+$/, ''),
-    jackettApiKey: keepSecret(b.jackettApiKey, cur.jackettApiKey),
+    jackettApiKey: String(cur.jackettApiKey || ''),
     jackettEnabled: bool(b.jackettEnabled, cur.jackettEnabled !== false),
     jacredUrl: String(b.jacredUrl !== undefined ? b.jacredUrl : cur.jacredUrl || '').replace(/\/+$/, ''),
-    jacredApiKey: keepSecret(b.jacredApiKey, cur.jacredApiKey),
+    jacredApiKey: String(cur.jacredApiKey || ''),
     jacredEnabled: bool(b.jacredEnabled, cur.jacredEnabled !== false),
     torrserverUrl: String(b.torrserverUrl !== undefined ? b.torrserverUrl : cur.torrserverUrl || '').replace(
       /\/+$/,
       '',
     ),
     indexerUser: b.indexerUser !== undefined ? b.indexerUser || '' : cur.indexerUser || '',
-    indexerPass: keepSecret(b.indexerPass, cur.indexerPass),
+    indexerPass: String(cur.indexerPass || ''),
     smtpHost: b.smtpHost !== undefined ? b.smtpHost || '' : cur.smtpHost || '',
     smtpUser: b.smtpUser !== undefined ? b.smtpUser || '' : cur.smtpUser || '',
-    smtpPass: keepSecret(b.smtpPass, cur.smtpPass),
+    smtpPass: String(cur.smtpPass || ''),
     smtpFrom: b.smtpFrom !== undefined ? b.smtpFrom || '' : cur.smtpFrom || '',
     priceRub: num(b.priceRub !== undefined ? b.priceRub : cur.priceRub, 0),
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
