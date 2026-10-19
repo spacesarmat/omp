@@ -118,7 +118,7 @@ describe('Android TV transport', () => {
     info.paired = false;
     await expect(connectTv(ATV)).rejects.toThrow(tvForgot());
     expect(tvState.value).toBe('error');
-    expect(tvError.value).toBe('Телевизор забыл этот телефон — подключитесь заново кодом');
+    expect(tvError.value).toBe('Телевизор забыл этот телефон - подключитесь заново кодом');
   });
 
   it('an unreachable TV is «Телевизор не отвечает»', async () => {
@@ -159,7 +159,7 @@ describe('Android TV transport', () => {
     await launchOnTv({ server: 's', torrent: 'h' });
     expect(toast.value).toBe('');
     await vi.advanceTimersByTimeAsync(3000);
-    expect(toast.value).toBe('Откройте OMP на телевизоре — Android не даёт вывести его на экран из фона');
+    expect(toast.value).toBe('Откройте OMP на телевизоре - Android не даёт вывести его на экран из фона');
     expect(atvBackground()).toBe(toast.value);
   });
 
@@ -349,7 +349,7 @@ describe('pairing with an Android TV', () => {
   it('an expired code asks for a new one', async () => {
     route = (c) => (c.url === BASE + '/omp/pair' ? { status: 403, body: '{"error":"expired"}' } : null);
     await expect(pairAtv(FOUND, '1111')).rejects.toThrow(pairExpired());
-    expect(pairExpired()).toBe('Код устарел — нажмите «Новый код» на телевизоре');
+    expect(pairExpired()).toBe('Код устарел - нажмите «Новый код» на телевизоре');
   });
 
   it('an unreachable TV is «Телевизор не отвечает»', async () => {

@@ -203,13 +203,13 @@ describe('«Инфо» in the LG player', () => {
     await until(() => !!panel() && txt('.pi-value')[0] === '9 / 11');
     expect(txt('.pi-label')).toEqual(['Сиды / пиры', 'Загрузка', 'Битрейт']);
     expect(txt('.pi-value')[1]).toBe('3,1 МБ/с');
-    expect(txt('.pi-value')[2]).toBe('—');
+    expect(txt('.pi-value')[2]).toBe('-');
     expect(txt('.pi-chip')).toEqual(['AVC']);
     expect(txt('.pi-line')[0]).toBe('ЗвукAC3 5.1');
     expect(txt('.pi-num')[0]).toContain('522 МБ');
     // TorrServer stops answering: a dash, not the old numbers (refreshed once a second)
     fail = true;
-    await until(() => txt('.pi-value')[0] === '—');
+    await until(() => txt('.pi-value')[0] === '-');
     key('yellow');
     await until(() => !panel());
     key('info');
@@ -241,9 +241,9 @@ describe('hint line', () => {
     const host = mount(h(PlayerHints, { chapters: false }));
     expect(host.querySelectorAll('.keydot circle').length).toBe(4);
     expect(Array.prototype.map.call(host.querySelectorAll('.keydot circle'), (c: Element) => c.getAttribute('fill')).length).toBe(4);
-    expect(text(host)).toBe('АудиоСубтитрыИнфоМенюCH± — серии');
+    expect(text(host)).toBe('АудиоСубтитрыИнфоМенюCH± - серии');
     const chapters = mount(h(PlayerHints, { chapters: true }));
-    expect(text(chapters)).toContain('CH± — главы');
+    expect(text(chapters)).toContain('CH± - главы');
     // at most ~50 characters: fits one line at 1920 next to the buttons
     expect(text(host).length).toBeLessThan(50);
   });
@@ -251,7 +251,7 @@ describe('hint line', () => {
   it('English', () => {
     applyLanguageSetting('en');
     const host = mount(h(PlayerHints, { chapters: true }));
-    expect(text(host)).toBe('AudioSubtitlesInfoMenuCH± — chapters');
+    expect(text(host)).toBe('AudioSubtitlesInfoMenuCH± - chapters');
   });
 
   it('never wraps: one line, cut with an ellipsis at worst', () => {

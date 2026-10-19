@@ -105,7 +105,7 @@ describe('P1-1: an old renewal link never drops a slot bought later', () => {
     expect(dev.result).toMatchObject({ price: 100, extras: 2 });
     const screen = say(dev.state, 'Устройства', NOW + MIN);
     const offer = screen.messages[1] as Msg;
-    expect(offer.text).toContain('Ещё одно устройство — 100 ₽: 50 ₽ за новое и 50 ₽ × 1 за доп. устройство, не продлённое вместе с подпиской.');
+    expect(offer.text).toContain('Ещё одно устройство - 100 ₽: 50 ₽ за новое и 50 ₽ × 1 за доп. устройство, не продлённое вместе с подпиской.');
     expect(urls(offer)[0]).toContain('Оплатить 100 ₽');
     // 50 ₽ is not enough for that link.
     expect(pay(dev.state, dev.result.label, '50', NOW + MIN, 'op-short').result.error).toBe('amount');
@@ -128,13 +128,13 @@ describe('P1-2: an extra-slot payment after the end becomes a credit', () => {
     expect(paid.state.payments[paid.state.payments.length - 1].error).toBeUndefined();
     const note = paymentUserMessage(paid.state, paid.result);
     expect(note.text).toBe(
-      '✅ Оплата 50 ₽ получена, но подписка уже закончилась — отдельно доп. устройство не подключить.\n' +
+      '✅ Оплата 50 ₽ получена, но подписка уже закончилась - отдельно доп. устройство не подключить.\n' +
         'Мы зачли 50 ₽: сумма вычтется из следующего продления. Нажмите «Оплатить».',
     );
     // Shown in the cabinet and in «Оплатить».
-    expect(say(paid.state, 'Кабинет', ended).messages[0].text).toContain('Зачёт: 50 ₽ — вычтем из следующего продления.');
+    expect(say(paid.state, 'Кабинет', ended).messages[0].text).toContain('Зачёт: 50 ₽ - вычтем из следующего продления.');
     const offer = say(paid.state, 'Оплатить', ended).messages[0] as Msg;
-    expect(offer.text).toContain('• зачёт — −50 ₽');
+    expect(offer.text).toContain('• зачёт - −50 ₽');
     expect(offer.text).toContain('Итого: 100 ₽');
     expect(urls(offer)[0]).toContain('Оплатить 100 ₽');
     expect(renewalPrice(paid.state, sub, ended)).toMatchObject({ gross: 150, credit: 50, total: 100 });
@@ -171,11 +171,11 @@ describe('P1-3: grace sells «Продлить + устройство» only', (
     const screen = say(f.state, 'Устройства', grace);
     const texts = screen.messages.map((m: Msg) => m.text).join('\n');
     expect(texts).not.toContain('Ещё одно устройство');
-    expect(texts).toContain('Сейчас льготный период — отдельно устройство не купить.');
+    expect(texts).toContain('Сейчас льготный период - отдельно устройство не купить.');
     expect(texts).toContain('Продление на 30 дней, до 18.12.2026 12:00 МСК:');
-    expect(texts).toContain('• доп. устройство × 1 — 50 ₽');
+    expect(texts).toContain('• доп. устройство × 1 - 50 ₽');
     const offer = screen.messages[1] as Msg;
-    expect(urls(offer)).toEqual([expect.stringContaining('Продлить + устройство — 200 ₽ → https://yoomoney.ru/')]);
+    expect(urls(offer)).toEqual([expect.stringContaining('Продлить + устройство - 200 ₽ → https://yoomoney.ru/')]);
     const quote = screen.state.purchases[screen.state.purchases.length - 1];
     expect(quote).toMatchObject({ kind: 'sub', price: 200, extras: 1, addExtra: 1 });
     const paid = pay(screen.state, 'buy:' + quote.id, '200', grace, 'op-plus');
@@ -191,7 +191,7 @@ describe('P1-3: grace sells «Продлить + устройство» only', (
   it('with an extra slot already, the grace offer is 250 ₽', () => {
     const f = setup({ bound: 3, extras: 1 });
     const screen = say(f.state, 'Устройства', NOW + 31 * DAY);
-    expect(urls(screen.messages[1] as Msg)[0]).toContain('Продлить + устройство — 250 ₽');
+    expect(urls(screen.messages[1] as Msg)[0]).toContain('Продлить + устройство - 250 ₽');
   });
 });
 
@@ -202,7 +202,7 @@ describe('P1-4: held YooMoney payments', () => {
     const held = applyPayment(q.state, { operationId: 'op-h', label: q.result.label, amount: '150.00', currency: '643', unaccepted: 'true', now: NOW });
     expect(held.result).toMatchObject({ pending: true, accountId: f.account, amount: '150.00' });
     expect(pendingUserText('150.00')).toBe(
-      '⏳ Платёж 150.00 ₽ получен и ждёт подтверждения. Подписка продлится сама — платить ещё раз не нужно.\nЕсли что-то не так — «Поддержка».',
+      '⏳ Платёж 150.00 ₽ получен и ждёт подтверждения. Подписка продлится сама - платить ещё раз не нужно.\nЕсли что-то не так - «Поддержка».',
     );
     const admin = paymentAdminNotices({ adminTelegramIds: '99', adminNotify: true }, { pending: true, amount: '150.00', label: q.result.label, who: '42' });
     expect(admin[0].text).toContain('⏳ Платёж 150.00 ₽ ждёт подтверждения. Подписка не продлена.');
@@ -212,7 +212,7 @@ describe('P1-4: held YooMoney payments', () => {
     expect(err[0].text).toContain('Ошибка оплаты: сумма меньше цены');
     const rejected = rejectPendingPayment(held.state, { operationId: 'op-h', now: NOW + MIN, actor: { kind: 'admin', id: '99', label: '99' } });
     expect(rejected.result).toMatchObject({ ok: true, accountId: f.account, amount: '150.00' });
-    expect(rejectUserText('150.00')).toContain('Платёж 150.00 ₽ не подтверждён — подписка не продлена.');
+    expect(rejectUserText('150.00')).toContain('Платёж 150.00 ₽ не подтверждён - подписка не продлена.');
   });
 
   it('the webhook sends the ⏳ message to the payer in Telegram', async () => {
@@ -275,7 +275,7 @@ describe('trial day, gift days, menu', () => {
     // Set but not created yet: still hidden.
     expect(trialPromo(fresh)).toBe('');
     const made = createPromo(fresh, { code: 'DEMO1', days: 1, maxUses: 1, now: NOW }).state;
-    expect(say(made, 'Кабинет').messages[0].text).toContain('Пробный день — промокод DEMO1 в «Промокод».');
+    expect(say(made, 'Кабинет').messages[0].text).toContain('Пробный день - промокод DEMO1 в «Промокод».');
     const used = redeemPromo(made, { code: 'DEMO1', accountId: f.account, now: NOW }).state;
     expect(trialPromo(used)).toBe('');
   });
@@ -304,11 +304,11 @@ describe('trial day, gift days, menu', () => {
   it('the post-grace cabinet says search is off and points to «Оплатить»', () => {
     const f = setup({ bound: 2 });
     const text = say(f.state, 'Кабинет', NOW + 40 * DAY).messages[0].text;
-    expect(text).toContain('Подписка закончилась 18.11.2026 12:00 МСК — поиск отключён на всех устройствах.');
+    expect(text).toContain('Подписка закончилась 18.11.2026 12:00 МСК - поиск отключён на всех устройствах.');
     expect(text).toContain('Привязано устройств: 2. После оплаты они заработают сами, код вводить не нужно.');
     expect(text).toContain('Нажмите «Оплатить».');
     expect(text).not.toContain('«Код»');
-    expect(say(f.state, 'Устройства', NOW + 40 * DAY).messages[0].text).toContain('Нажмите «Оплатить» — устройства заработают сами.');
+    expect(say(f.state, 'Устройства', NOW + 40 * DAY).messages[0].text).toContain('Нажмите «Оплатить» - устройства заработают сами.');
   });
 
   it('the new-subscription message has the end date and the code with a hyphen', () => {
@@ -343,7 +343,7 @@ describe('admin /grant and support limit', () => {
     expect(toUser.text).toContain('Вам добавлено 30 дней. Подписка до 18.12.2026 12:00 МСК.');
     expect(toUser.text).toMatch(/`[A-Z0-9]{4}-[A-Z0-9]{4}`/);
     const toAdmin = ok.messages.find((m: Msg) => m.chatId === '99');
-    expect(toAdmin.text).toContain('Выдано +30 дней — @tester · 42');
+    expect(toAdmin.text).toContain('Выдано +30 дней - @tester · 42');
   });
 
   it('forwards at most 5 support messages per 10 minutes', () => {

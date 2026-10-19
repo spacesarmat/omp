@@ -43,7 +43,7 @@ export function HomeFeed({ events }: { events: FeedEvent[] }) {
       <CardHeader>
         <CardTitle>Лента событий</CardTitle>
         <CardDescription className="space-y-2">
-          <p>Время — МСК. Нажмите на часы, чтобы увидеть секунды.</p>
+          <p>Время - МСК. Нажмите на часы, чтобы увидеть секунды.</p>
           <select
             className={selectClass}
             value={kind}

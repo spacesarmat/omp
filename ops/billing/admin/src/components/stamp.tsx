@@ -12,7 +12,7 @@ export function Stamp({
   toggle?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  if (!ms) return <span className="text-muted-foreground">—</span>;
+  if (!ms) return <span className="text-muted-foreground">-</span>;
   const full = exactStamp(ms);
   const short = variant === 'time' ? clock(ms) : listStamp(ms) + ' МСК';
   const shown = open && toggle ? full : short;

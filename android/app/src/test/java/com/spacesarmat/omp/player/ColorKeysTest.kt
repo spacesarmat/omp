@@ -82,7 +82,7 @@ class ColorKeysTest {
     @Test
     fun hintHasADotPerEntry() {
         val full = ColorKeys.hint(true)
-        assertEquals("● аудио · ● субтитры · ● ночной звук · ● меню · Info — инфо", full.text)
+        assertEquals("● аудио · ● субтитры · ● ночной звук · ● меню · Info - инфо", full.text)
         assertEquals(listOf(ColorKeys.RED, ColorKeys.GREEN, ColorKeys.YELLOW, ColorKeys.BLUE), full.dots)
         assertEquals(full.text.count { it == '●' }, full.dots.size)
         val vlc = ColorKeys.hint(false)
@@ -90,7 +90,7 @@ class ColorKeysTest {
         assertEquals(listOf(ColorKeys.RED, ColorKeys.GREEN, ColorKeys.BLUE), vlc.dots)
         assertEquals(vlc.text.count { it == '●' }, vlc.dots.size)
         I18n.lang = "en"
-        assertEquals("● audio · ● subtitles · ● night sound · ● menu · Info — info", ColorKeys.hint(true).text)
+        assertEquals("● audio · ● subtitles · ● night sound · ● menu · Info - info", ColorKeys.hint(true).text)
         val cyr = Regex("[\u0400-\u04FF]")
         assertTrue(cyr.find(ColorKeys.hint(true).text) == null)
         assertTrue(cyr.find(ColorKeys.nightUnavailable()) == null)

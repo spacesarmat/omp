@@ -321,7 +321,7 @@ describe('«Аудиокниги»', () => {
     await flush();
     expect(loadInfo).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
-    expect(el.querySelector('[data-files="timeout"]')!.textContent).toContain('Не удалось получить список файлов — мало сидов');
+    expect(el.querySelector('[data-files="timeout"]')!.textContent).toContain('Не удалось получить список файлов - мало сидов');
     expect(el.textContent).not.toContain('В раздаче нет звуковых файлов');
     get.mockResolvedValue(bookTorrent());
     act(() => {

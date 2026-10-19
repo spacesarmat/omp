@@ -103,7 +103,7 @@ function loginPage() {
     '<button type="button" class="link-btn">' + icon(22, '<path d="M6 9l6 6 6-6"></path>') + 'Дополнительно: логин и пароль</button>' +
     '<div class="row"><button type="button" class="btn-primary">Подключиться</button><button type="button" class="btn-sec">' + icon(26, SEARCH) + 'Найти в сети</button></div></div>' +
     '<div class="login-note">Поиск проверяет вашу домашнюю сеть на портах 8090 и 5665.<br>Адрес удобно вводить с клавиатуры телефона в LG ThinQ.</div></div>' +
-    '<div class="hint">Стрелки — перемещение · OK — выбрать · Назад — выход</div>';
+    '<div class="hint">Стрелки - перемещение · OK - выбрать · Назад - выход</div>';
 }
 
 var SCENES = {
@@ -111,11 +111,11 @@ var SCENES = {
   'login-history': function () {
     return '<div class="dim">' + loginPage() + '</div>' +
       '<button type="button" class="hist-btn open">' + icon(28, CLOCK) + 'История серверов' + icon(22, CHEVRON_UP, 2.5) + '</button>' +
-      '<div class="servers">' + SERVERS.map(serverCard).join('') + '<div class="servers-hint">OK — подключиться · Назад — закрыть список</div></div>';
+      '<div class="servers">' + SERVERS.map(serverCard).join('') + '<div class="servers-hint">OK - подключиться · Назад - закрыть список</div></div>';
   },
   'library-large': function () {
     var items = ITEMS.map(function (it, i) {
-      return i === 0 ? Object.assign({}, it, { title: 'Starbound Frontier S02 — Полный сезон, режиссёрская версия' }) : it;
+      return i === 0 ? Object.assign({}, it, { title: 'Starbound Frontier S02 - Полный сезон, режиссёрская версия' }) : it;
     });
     return topBar('Все', 'none', 'Крупные постеры') + '<div class="grid">' + items.map(function (it, i) { return tile(it, i, i === 0, true); }).join('') + '</div>';
   },
@@ -133,7 +133,7 @@ var SCENES = {
     return topBar('Все', 'search', 'Крупные постеры') +
       '<div class="sbar"><div class="sbox">' + icon(28, SEARCH, 2, '#9AA1B2') + '<span>star</span><span class="caret"></span></div><div class="scount">Найдено: 2 · ищем по названию и имени файла</div></div>' +
       '<div class="sres">' + res.map(function (it, i) { return tile(it, i === 0 ? 0 : 4, false, false); }).join('') + '</div>' +
-      '<div class="hint">Вниз — к результатам · Назад — очистить и закрыть поиск</div>';
+      '<div class="hint">Вниз - к результатам · Назад - очистить и закрыть поиск</div>';
   }
 };
 

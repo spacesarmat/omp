@@ -72,7 +72,7 @@ describe('TV player in English', () => {
     expect(options).toContain('Audio: default');
     expect(options.some((o) => o.indexOf('Subtitles: ') === 0)).toBe(true);
     expect(options.some((o) => o.indexOf('Subtitle size: ') === 0)).toBe(true);
-    expect(options).toContain('Mark intro start: —');
+    expect(options).toContain('Mark intro start: -');
     expect(options.some((o) => o.indexOf('Mark intro end: now ') === 0)).toBe(true);
     expect(options.some((o) => o.indexOf('Mark credits start: ') === 0)).toBe(true);
     expect(host.textContent).toContain('Player menu');

@@ -122,7 +122,7 @@ describe('FlareSolverr screen', () => {
     expect(el.querySelector('[data-flare-state="ok"]')).toBeTruthy();
   });
 
-  it('«Найти в сети»: several — the user picks one', async () => {
+  it('«Найти в сети»: several - the user picks one', async () => {
     up['http://192.168.1.5:8191/'] = true;
     up['http://192.168.1.6:8191/'] = true;
     hits = [
@@ -213,7 +213,7 @@ describe('FlareSolverr screen in English', () => {
       { ip: '192.168.1.6', port: 8191 },
     ];
     await click(button('Find on network'));
-    expect(el.textContent).toContain('Several found — choose one:');
+    expect(el.textContent).toContain('Several found - choose one:');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });

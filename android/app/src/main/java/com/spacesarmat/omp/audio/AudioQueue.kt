@@ -180,7 +180,7 @@ object AudioQueueParser {
         val end = o.optLong("endMs", 0).coerceAtLeast(0)
         return AudioItem(
             url = url,
-            title = clip(o.optString("title"), MAX_TITLE).ifEmpty { "—" },
+            title = clip(o.optString("title"), MAX_TITLE).ifEmpty { "-" },
             fileId = o.optInt("fileId", 0),
             startMs = start,
             endMs = if (end > start) end else 0,

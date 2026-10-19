@@ -100,11 +100,11 @@ describe('SubSheet', () => {
     type('m-sub-query', 'Дюна');
     type('m-sub-seeds', 'abc');
     click(byText('Сохранить'));
-    expect(error()).toContain('Сидов — целое число от 1');
+    expect(error()).toContain('Сидов - целое число от 1');
     type('m-sub-seeds', '20');
     type('m-sub-size', '-1');
     click(byText('Сохранить'));
-    expect(error()).toContain('Размер — число больше нуля');
+    expect(error()).toContain('Размер - число больше нуля');
     expect(loadSubs()).toEqual([]);
   });
 
@@ -329,7 +329,7 @@ describe('SubFindings in English', () => {
     await flush();
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
     expect(byText('Edit')).toBeTruthy();
-    expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there — OMP will report new releases after it.');
+    expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there - OMP will report new releases after it.');
     rememberSeen(s.id, []);
     addFindings([{ subId: s.id, key: 'new', at: 5, result: row({ Title: 'Dune Part Three', Size: '41 GB' }) }]);
     mount({ id: s.id });

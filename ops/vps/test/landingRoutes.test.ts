@@ -47,7 +47,7 @@ describe('site/404.html', () => {
   it('is a Russian page in the site style that links home and to /en/', () => {
     expect(html).toContain('<html lang="ru">');
     expect(html).toMatch(/<link rel="stylesheet" href="\/style\.css\?v=[\w]+" \/>/);
-    expect(html).toContain('<title>Страница не найдена — OMP</title>');
+    expect(html).toContain('<title>Страница не найдена - OMP</title>');
     expect(html).toContain('<h1>Страница не найдена</h1>');
     expect(html).toContain('href="/en/"');
     expect(html).toMatch(/<a class="button primary" href="\/">/);

@@ -10,7 +10,7 @@ import { monitorTable } from './telegramTable.mjs';
 /** The message for a finished run: the table of report.json, or «the run failed» when there is no report. */
 export function notifyText(report, { runUrl = '', dryRun = false } = {}) {
   if (!report || !Array.isArray(report.reports)) {
-    return '❌ Проверка парсеров не дошла до конца — отчёта нет.' + (runUrl ? '\n' + runUrl : '');
+    return '❌ Проверка парсеров не дошла до конца - отчёта нет.' + (runUrl ? '\n' + runUrl : '');
   }
   const rows = report.reports.map((r) => ({ name: r.name || r.id, status: r.status, detail: r.detail }));
   return monitorTable(rows, { title: '🔎 Проверка парсеров готова' + (dryRun ? ' (без сохранения)' : ''), at: report.at, runUrl });

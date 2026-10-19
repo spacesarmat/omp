@@ -18,7 +18,7 @@ export const CAPTION_NOTES_MAX = 5;
  */
 export function buildCaption(version, notes, tag = `v${version}`) {
   const head = `<b>OMP ${escapeHtml(version)}</b>\n`;
-  const link = `\n\n<a href="${REPO_URL}/releases/tag/${escapeHtml(tag)}">Все изменения и файлы — на GitHub</a>`;
+  const link = `\n\n<a href="${REPO_URL}/releases/tag/${escapeHtml(tag)}">Все изменения и файлы - на GitHub</a>`;
   const shown = notes.slice(0, CAPTION_NOTES_MAX);
   let body = '';
   for (const note of shown) {
@@ -61,13 +61,13 @@ export function downloadUrl(tag, name) {
 /** Closing reply for the builds that do not fit into the bot limit: one line per file with a GitHub link. */
 export function buildLinksMessage(tag, files) {
   return files
-    .map((f) => `Файл ${escapeHtml(f.name)} больше 50 МБ — скачать: ${downloadUrl(tag, f.name)}`)
+    .map((f) => `Файл ${escapeHtml(f.name)} больше 50 МБ - скачать: ${downloadUrl(tag, f.name)}`)
     .join('\n');
 }
 
 /** Log line for the owner, who forwards an oversize build by hand. */
 export function oversizeLogLine(file) {
-  return `Telegram: ${file.name} is ${Math.ceil(file.size / 1_000_000)} MB — forward it manually from GitHub`;
+  return `Telegram: ${file.name} is ${Math.ceil(file.size / 1_000_000)} MB - forward it manually from GitHub`;
 }
 
 /** Buttons under the post: downloads per ABI and for LG, release page, support. */

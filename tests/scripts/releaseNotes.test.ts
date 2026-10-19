@@ -33,7 +33,7 @@ describe('release notes', () => {
     expect(visible.indexOf("### What's new")).toBeLessThan(visible.indexOf('### Download'));
     expect(visible.match(/^- Пункт/gm)).toHaveLength(RELEASE_NOTES_MAX);
     expect(visible.match(/^- Item/gm)).toHaveLength(RELEASE_NOTES_MAX);
-    expect(visible).toContain('…и ещё 5 — в [CHANGELOG]');
+    expect(visible).toContain('…и ещё 5 - в [CHANGELOG]');
     expect(visible).toContain('…and 5 more in the [changelog]');
     expect(visible).toContain('`OMP-1.1.0-arm64.apk`');
     expect(visible).toContain('`OMP-1.1.0-armv7.apk`');

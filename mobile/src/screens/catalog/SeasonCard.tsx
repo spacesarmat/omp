@@ -26,7 +26,7 @@ const BACK = 'M15 5l-7 7l7 7';
 export function episodeHead(n: number, title: string, runtime: number): string {
   const name = title || t('library.episode', { n });
   const dur = runtime > 0 ? fmtDuration(runtime) : '';
-  return n + ' · ' + name + (dur ? ' — ' + dur : '');
+  return n + ' · ' + name + (dur ? ' - ' + dur : '');
 }
 
 function barOf(card: CatalogCard, season: number, episode: number): number {

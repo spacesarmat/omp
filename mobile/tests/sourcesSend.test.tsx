@@ -453,12 +453,12 @@ describe('«Send to the TV» in English', () => {
     act(() => btn('Send to the TV')!.click());
     await flush();
     expect(toast.value).toBe('Sources were sent, but rutracker did not accept the login or password');
-    expect(sentText('captcha')).toBe('Sources were sent, but rutracker asks for a captcha — press “Sign in with the browser”');
+    expect(sentText('captcha')).toBe('Sources were sent, but rutracker asks for a captcha - press “Sign in with the browser”');
     expect(sentText('error')).toBe('Sources were sent; the TV will check the rutracker sign-in during a search');
     expect(sentText(undefined)).toBe('Sent');
     expect(indexersText(2, 1)).toBe('Not all Jackett/Prowlarr connections were saved: 1 of 2');
-    expect(indexersNotSent()).toBe('The Jackett/Prowlarr connections were not sent — update OMP on the TV');
-    expect(cloudflareNotSent()).toBe('The Cloudflare bypass and FlareSolverr settings were not sent — update OMP on the TV');
+    expect(indexersNotSent()).toBe('The Jackett/Prowlarr connections were not sent - update OMP on the TV');
+    expect(cloudflareNotSent()).toBe('The Cloudflare bypass and FlareSolverr settings were not sent - update OMP on the TV');
     expect(loginNotSent()).toBe('The sign-in to rutracker was not sent: the login or password is too long or has invalid characters');
     expect(() => transferPayload([], null)).toThrow('Could not prepare the sources for sending');
   });

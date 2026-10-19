@@ -271,7 +271,7 @@ describe('ServerSettings missing field', () => {
     delete current.PreloadCache;
     await mount();
     await act(async () => btn('Для опытных').click());
-    expect(btn('Предзагрузка').textContent).toContain('—');
+    expect(btn('Предзагрузка').textContent).toContain('-');
     act(() => btn('Предзагрузка').click());
     expect(el.textContent).not.toContain('undefined');
   });

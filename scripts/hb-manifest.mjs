@@ -29,7 +29,7 @@ const { manifest, apps, update } = buildHomebrew({
   sha256,
   size: buf.length,
   title: 'OMP',
-  description: 'Open Movie Player — media player for your own TorrServer',
+  description: 'Open Movie Player - media player for your own TorrServer',
   ...lgNotes,
 });
 

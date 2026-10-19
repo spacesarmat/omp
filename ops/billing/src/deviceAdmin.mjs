@@ -187,7 +187,7 @@ export function revokeNoticeText(device) {
     'Устройство ' +
     device +
     '… отключено администратором: поиск OMP на нём больше не работает.\n' +
-    'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы — «Поддержка».'
+    'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы - «Поддержка».'
   );
 }
 
@@ -247,7 +247,7 @@ export function grantBonus(state, { accountId, count, days, reason, now, actor }
   const changed = replaceSub(state, next);
   const after = limitBreakdown(changed, next, now);
   const detail =
-    'Бонусные устройства: +' + n + (row.until ? ' до ' + mskDate(row.until) : ' навсегда') + (row.reason ? ' — ' + row.reason : '') +
+    'Бонусные устройства: +' + n + (row.until ? ' до ' + mskDate(row.until) : ' навсегда') + (row.reason ? ' - ' + row.reason : '') +
     '; лимит ' + after.total + ' (' + who(state, accountId) + ')';
   return { state: audited(changed, actor, 'bonus_grant', detail, accountId, now), result: { ok: true, bonus: row, total: after.total, text: after.text } };
 }
@@ -354,7 +354,7 @@ export function confirmPendingPayment(state, { operationId, now, actor }) {
   const idx = applied.state.payments.map((p) => String(p.operationId)).lastIndexOf(String(row.operationId));
   const payments = applied.state.payments.map((p, i) => (i === idx ? { ...p, confirmedBy: 'admin', heldAt: Number(row.at) || 0 } : p));
   const accountId = (payments[idx] && payments[idx].accountId) || row.accountId || '';
-  const outcome = applied.result && applied.result.error ? ' — не применён: ' + applied.result.error : '';
+  const outcome = applied.result && applied.result.error ? ' - не применён: ' + applied.result.error : '';
   const detail = 'Платёж подтверждён вручную: ' + (row.amount || '?') + ' ₽' + outcome + (accountId ? ' (' + who(state, accountId) + ')' : '');
   return {
     state: audited({ ...applied.state, payments }, actor, 'payment_confirm', detail, accountId, now),

@@ -335,7 +335,7 @@ def probe_disabled(j, state, iid, info):
         state["indexers"][iid] = {"name": info.get("name", iid), "fail_streak": 0, "last_ok": now_iso(),
                                   "last_error": ""}
         log.info("%s: re-enabled after %d passes", iid, info["ok_streak"])
-        notify(f"Jackett монитор: снова включил {info.get('name', iid)} ({iid}) — "
+        notify(f"Jackett монитор: снова включил {info.get('name', iid)} ({iid}) - "
                f"{OK_THRESHOLD} проверки подряд успешны. Был отключён с {info.get('since')}.")
         return
     # not (yet) trusted: take it out again
@@ -432,7 +432,7 @@ def run(args):
                 try:
                     disable(j, state, iid, name, err)
                     log.info("%s: disabled after %d failed runs", iid, rec["fail_streak"])
-                    notify(f"Jackett монитор: отключил {name} ({iid}) — {FAIL_THRESHOLD} проверки подряд "
+                    notify(f"Jackett монитор: отключил {name} ({iid}) - {FAIL_THRESHOLD} проверки подряд "
                            f"с ошибкой: {err[:200]}. Буду проверять каждые 30 мин и включу сам, когда заработает.")
                 except Exception as e:
                     log.error("%s: disable failed: %s", iid, e)

@@ -28,7 +28,7 @@ export function Login() {
         return;
       }
       if (res.status === 'expired') {
-        setErr('Ссылка устарела — нажмите «Войти через Telegram» ещё раз');
+        setErr('Ссылка устарела - нажмите «Войти через Telegram» ещё раз');
         setTg(null);
         setTgStatus('');
         return;
@@ -54,7 +54,7 @@ export function Login() {
     });
     setBusy(false);
     if (res.status === 403) {
-      setErr('Панель ещё не перезапущена — сервер не знает вход через Telegram.');
+      setErr('Панель ещё не перезапущена - сервер не знает вход через Telegram.');
       return;
     }
     if (!res.ok || !res.token || !res.deepLink) {

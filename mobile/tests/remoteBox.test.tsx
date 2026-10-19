@@ -136,7 +136,7 @@ describe('«Управлять приставкой»', () => {
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
     await flush();
-    expect(form.querySelector('[role=alert]')!.textContent).toBe('Код неверный — проверьте код на экране телевизора');
+    expect(form.querySelector('[role=alert]')!.textContent).toBe('Код неверный - проверьте код на экране телевизора');
     act(() => {
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });

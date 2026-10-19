@@ -91,12 +91,12 @@ describe('«Источники поиска» on LG', () => {
     expect(card.textContent).toContain('на связи');
     expect(card.querySelector('.psrc-pill-ok')).not.toBeNull();
     expect(row('rutracker').textContent).toContain('вход выполнен');
-    expect(row('kinozal').textContent).toContain('проверка Cloudflare — откройте сайт на телефоне');
+    expect(row('kinozal').textContent).toContain('проверка Cloudflare - откройте сайт на телефоне');
     expect(row('nnmclub').textContent).toContain('выключен');
     expect(row('rutracker').querySelector('.src-switch')!.classList.contains('on')).toBe(true);
     expect(row('nnmclub').querySelector('.src-switch')!.classList.contains('on')).toBe(false);
     expect(host.textContent).toContain('Rutor, Jackett');
-    expect(host.textContent).toContain('ОК — включить или выключить сайт · Назад — к поиску');
+    expect(host.textContent).toContain('ОК - включить или выключить сайт · Назад - к поиску');
     // the phone's names are kept for the search rows
     expect(knownSourceName('rutracker')).toBe('RuTracker');
     // the token is never on screen
@@ -138,7 +138,7 @@ describe('«Источники поиска» on LG', () => {
     const card = host.querySelector('.psrc-card') as HTMLElement;
     expect(card.textContent).toContain('не отвечает');
     expect(card.querySelector('.psrc-pill-bad')).not.toBeNull();
-    expect(card.textContent).toContain('Телефон не отвечает — откройте OMP на телефоне');
+    expect(card.textContent).toContain('Телефон не отвечает - откройте OMP на телефоне');
     expect(row('rutracker')).toBeNull();
     await until(() => getCurrentFocusKey() === 'psrc-retry');
     let answer: (v: string) => void = () => undefined;
@@ -245,8 +245,8 @@ describe('stateLine', () => {
   it('maps every state', () => {
     expect(stateLine(s('ok'))).toEqual({ text: 'работает', tone: 'ok' });
     expect(stateLine(s('loggedIn'))).toEqual({ text: 'вход выполнен', tone: 'ok' });
-    expect(stateLine(s('login'))).toEqual({ text: 'нужен вход — войдите на телефоне', tone: 'warn' });
-    expect(stateLine(s('cloudflare'))).toEqual({ text: 'проверка Cloudflare — откройте сайт на телефоне', tone: 'warn' });
+    expect(stateLine(s('login'))).toEqual({ text: 'нужен вход - войдите на телефоне', tone: 'warn' });
+    expect(stateLine(s('cloudflare'))).toEqual({ text: 'проверка Cloudflare - откройте сайт на телефоне', tone: 'warn' });
     expect(stateLine(s('error', 'Сайт недоступен'))).toEqual({ text: 'Сайт недоступен', tone: 'bad' });
     expect(stateLine(s('off'))).toEqual({ text: 'выключен', tone: 'off' });
     expect(stateLine(s('unknown'))).toEqual({ text: 'ещё не проверялся', tone: 'off' });
@@ -260,8 +260,8 @@ describe('stateLine', () => {
   it('English', () => {
     applyLanguageSetting('en');
     try {
-      expect(stateLine(s('login')).text).toBe('sign-in needed — sign in on the phone');
-      expect(stateLine(s('cloudflare')).text).toBe('Cloudflare check — open the site on the phone');
+      expect(stateLine(s('login')).text).toBe('sign-in needed - sign in on the phone');
+      expect(stateLine(s('cloudflare')).text).toBe('Cloudflare check - open the site on the phone');
       expect(stateLine(s('unknown')).text).toBe('not checked yet');
     } finally {
       applyLanguageSetting('ru');

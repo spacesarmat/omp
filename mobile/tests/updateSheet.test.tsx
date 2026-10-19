@@ -215,7 +215,7 @@ describe('«unknown apps» permission', () => {
     const el = mount();
     await act(async () => btn(el, 'Установить').click());
     expect(el.querySelector('[data-allow-hint]')!.textContent).toContain(
-      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» — установка продолжится',
+      'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» - установка продолжится',
     );
     expect(calls).toEqual([]);
     await act(async () => btn(el, 'Продолжить').click());

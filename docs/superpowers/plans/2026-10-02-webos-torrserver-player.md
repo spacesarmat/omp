@@ -1,10 +1,10 @@
-# webOS TorrServer Player — план реализации
+# webOS TorrServer Player - план реализации
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** webOS-приложение (.ipk), которое подключается к TorrServer в локальной сети, показывает его торренты, воспроизводит файлы и M3U-плейлисты нативным плеером ТВ и управляется пультом LG / Magic Remote / LG ThinQ.
 
-**Architecture:** Preact SPA, собранная Vite в legacy-бандл (SystemJS, без ES-модулей) для Chromium 53+. Чистая логика (`src/lib`, `src/api`, `src/store`) покрыта Vitest-тестами; UI (`src/ui`, `src/screens`, `src/player`) использует Norigin Spatial Navigation для пульта и hover/click для указателя. Воспроизведение — `<video>` с URL `/stream` TorrServer; дорожки через `audioTracks`/`textTracks` с fallback на Luna (`PalmServiceBridge`).
+**Architecture:** Preact SPA, собранная Vite в legacy-бандл (SystemJS, без ES-модулей) для Chromium 53+. Чистая логика (`src/lib`, `src/api`, `src/store`) покрыта Vitest-тестами; UI (`src/ui`, `src/screens`, `src/player`) использует Norigin Spatial Navigation для пульта и hover/click для указателя. Воспроизведение - `<video>` с URL `/stream` TorrServer; дорожки через `audioTracks`/`textTracks` с fallback на Luna (`PalmServiceBridge`).
 
 **Tech Stack:** Preact 10, @preact/signals, TypeScript, Vite + @preact/preset-vite + @vitejs/plugin-legacy, @noriginmedia/norigin-spatial-navigation, Vitest + jsdom, @webos-tools/cli.
 
@@ -13,13 +13,13 @@
 ## Global Constraints
 
 - Целевая платформа: webOS 4.0+ → Chromium 53. Сборка: `@vitejs/plugin-legacy` с `targets: ['chrome >= 53']`, `renderModernChunks: false`. В `dist/index.html` не должно быть `type="module"`.
-- CSS: **без CSS Grid и без `gap` у flex** (нет в Chrome 53) — только flexbox + margin. CSS-переменные можно.
-- JS: не наследоваться от `Error` (ломается `instanceof` после транспиляции) — ошибки создаются фабрикой `apiError()`. Не использовать `AbortController` (нет в Chrome 53) — таймауты через `Promise.race`. Прокрутка к элементу — только через `scrollIntoViewSafe()` (`scrollIntoViewIfNeeded` / `scrollIntoView(false)`).
-- Разрешение интерфейса 1920×1080, тёмная тема, все тексты UI — на русском.
-- Ключи localStorage — с префиксом `tsp.`.
+- CSS: **без CSS Grid и без `gap` у flex** (нет в Chrome 53) - только flexbox + margin. CSS-переменные можно.
+- JS: не наследоваться от `Error` (ломается `instanceof` после транспиляции) - ошибки создаются фабрикой `apiError()`. Не использовать `AbortController` (нет в Chrome 53) - таймауты через `Promise.race`. Прокрутка к элементу - только через `scrollIntoViewSafe()` (`scrollIntoViewIfNeeded` / `scrollIntoView(false)`).
+- Разрешение интерфейса 1920×1080, тёмная тема, все тексты UI - на русском.
+- Ключи localStorage - с префиксом `tsp.`.
 - ID приложения webOS: `com.spacesarmat.torrplayer`, версия `0.1.0`.
 - Реальный сервер для ручной проверки: `http://192.168.1.191:5665` (TorrServer MatriX.145.1, CORS `*`).
-- Особенности API (проверено): поиск — `GET /search/?query=` и `GET /torznab/search/?query=` (со слешем, иначе 301); у неактивного торрента нет `file_stats`, файлы — в JSON-строке `data` (`{"TorrServer":{"Files":[...]}}`); `/viewed` принимает `timecode`, но на сервере может быть `TrackTimecode=false` → прогресс дублируется в localStorage.
+- Особенности API (проверено): поиск - `GET /search/?query=` и `GET /torznab/search/?query=` (со слешем, иначе 301); у неактивного торрента нет `file_stats`, файлы - в JSON-строке `data` (`{"TorrServer":{"Files":[...]}}`); `/viewed` принимает `timecode`, но на сервере может быть `TrackTimecode=false` → прогресс дублируется в localStorage.
 - Коммиты: после каждой задачи, сообщение в стиле Conventional Commits, только тема; без строк соавторства (Co-Author) и подписей ИИ.
 
 ## Карта файлов
@@ -27,45 +27,45 @@
 ```
 package.json, tsconfig.json, vite.config.ts, index.html, .gitignore, README.md
 webos/appinfo.json, webos/icon.png, webos/largeIcon.png
-scripts/make-icons.mjs   — генерация PNG-иконок без зависимостей
-scripts/package.mjs      — dist + appinfo → build/*.ipk
-scripts/tv.mjs           — ares-install / ares-launch
-src/main.tsx             — init spatial nav + render
-src/app.tsx              — роутинг экранов, глобальный Back
-src/styles.css           — все стили
-src/lib/format.ts        — байты/скорость/длительность
-src/lib/episodes.ts      — тип файла, SxxEyy, группировка по сезонам, сопоставление субтитров
-src/lib/category.ts      — категории торрентов и результатов поиска
-src/lib/m3u.ts           — парсер M3U, HLS-детект, разбор stream-URL
-src/lib/subtitles.ts     — SRT/VTT/ASS → cues, декодирование UTF-8/CP1251
-src/lib/tracks.ts        — языки, дорожки из ffprobe, выбор по языку
-src/api/types.ts         — типы ответов TorrServer
-src/api/http.ts          — fetch с таймаутом и типизированными ошибками
-src/api/torrserver.ts    — клиент TorrServer
-src/api/discovery.ts     — поиск серверов в подсети
-src/platform/keys.ts     — коды клавиш пульта → действия
-src/platform/luna.ts     — вызовы Luna через PalmServiceBridge
-src/platform/webosMedia.ts — выбор аудио/текстовых дорожек
-src/store/storage.ts     — безопасный localStorage
-src/store/servers.ts     — сохранённые серверы, активный клиент
-src/store/settings.ts    — настройки приложения
-src/store/progress.ts    — прогресс просмотра (локально + /viewed)
-src/store/library.ts     — кэш списка торрентов
-src/ui/keys.ts           — стек обработчиков клавиш, глобальный listener
-src/ui/nav.ts            — стек маршрутов + память фокуса
-src/ui/focus.ts          — restoreFocus, scrollIntoViewSafe
-src/ui/components.tsx    — Focusable, FocusGroup, Button, TextInput, ChoiceRow, Spinner, ErrorView, ProgressBar
-src/ui/dialog.tsx        — choose()/confirmDialog() + DialogHost
-src/ui/toast.tsx         — toast() + ToastHost
-src/player/types.ts      — PlayItem, ExternalSub
-src/player/queue.ts      — очередь воспроизведения из торрента
-src/player/seek.ts       — накопитель перемотки с ускорением
-src/player/stats.ts      — строки статистики, HDR-метка
-src/player/trackOptions.ts — списки дорожек для меню
+scripts/make-icons.mjs   - генерация PNG-иконок без зависимостей
+scripts/package.mjs      - dist + appinfo → build/*.ipk
+scripts/tv.mjs           - ares-install / ares-launch
+src/main.tsx             - init spatial nav + render
+src/app.tsx              - роутинг экранов, глобальный Back
+src/styles.css           - все стили
+src/lib/format.ts        - байты/скорость/длительность
+src/lib/episodes.ts      - тип файла, SxxEyy, группировка по сезонам, сопоставление субтитров
+src/lib/category.ts      - категории торрентов и результатов поиска
+src/lib/m3u.ts           - парсер M3U, HLS-детект, разбор stream-URL
+src/lib/subtitles.ts     - SRT/VTT/ASS → cues, декодирование UTF-8/CP1251
+src/lib/tracks.ts        - языки, дорожки из ffprobe, выбор по языку
+src/api/types.ts         - типы ответов TorrServer
+src/api/http.ts          - fetch с таймаутом и типизированными ошибками
+src/api/torrserver.ts    - клиент TorrServer
+src/api/discovery.ts     - поиск серверов в подсети
+src/platform/keys.ts     - коды клавиш пульта → действия
+src/platform/luna.ts     - вызовы Luna через PalmServiceBridge
+src/platform/webosMedia.ts - выбор аудио/текстовых дорожек
+src/store/storage.ts     - безопасный localStorage
+src/store/servers.ts     - сохранённые серверы, активный клиент
+src/store/settings.ts    - настройки приложения
+src/store/progress.ts    - прогресс просмотра (локально + /viewed)
+src/store/library.ts     - кэш списка торрентов
+src/ui/keys.ts           - стек обработчиков клавиш, глобальный listener
+src/ui/nav.ts            - стек маршрутов + память фокуса
+src/ui/focus.ts          - restoreFocus, scrollIntoViewSafe
+src/ui/components.tsx    - Focusable, FocusGroup, Button, TextInput, ChoiceRow, Spinner, ErrorView, ProgressBar
+src/ui/dialog.tsx        - choose()/confirmDialog() + DialogHost
+src/ui/toast.tsx         - toast() + ToastHost
+src/player/types.ts      - PlayItem, ExternalSub
+src/player/queue.ts      - очередь воспроизведения из торрента
+src/player/seek.ts       - накопитель перемотки с ускорением
+src/player/stats.ts      - строки статистики, HDR-метка
+src/player/trackOptions.ts - списки дорожек для меню
 src/player/useVideoState.ts, useProgressSync.ts, useNextEpisode.ts, useCacheStats.ts
 src/player/Controls.tsx, StatsOverlay.tsx, SubtitleOverlay.tsx, NextBanner.tsx, PlayerError.tsx
 src/screens/Player.tsx, Connect.tsx, Library.tsx, Torrent.tsx, Add.tsx, Playlist.tsx, Settings.tsx
-tests/**                 — Vitest
+tests/**                 - Vitest
 ```
 
 ---
@@ -77,7 +77,7 @@ tests/**                 — Vitest
 - Modify: `.gitignore`
 
 **Interfaces:**
-- Produces: npm-скрипты `dev`, `build`, `test`, `icons`, `package`, `tv:install`, `tv:launch`; `dist/` — legacy-бандл; `build/com.spacesarmat.torrplayer_0.1.0_all.ipk`.
+- Produces: npm-скрипты `dev`, `build`, `test`, `icons`, `package`, `tv:install`, `tv:launch`; `dist/` - legacy-бандл; `build/com.spacesarmat.torrplayer_0.1.0_all.ipk`.
 
 - [ ] **Step 1: Создать package.json**
 
@@ -210,7 +210,7 @@ html, body { margin: 0; background: #0f1115; color: #e8eaf0; font-family: sans-s
 }
 ```
 
-- [ ] **Step 7: scripts/make-icons.mjs — PNG без зависимостей (оранжевый фон, белый треугольник «play»)**
+- [ ] **Step 7: scripts/make-icons.mjs - PNG без зависимостей (оранжевый фон, белый треугольник «play»)**
 
 ```js
 import { deflateSync } from 'node:zlib';
@@ -277,7 +277,7 @@ console.log('icons written');
 import { cpSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 
-if (!existsSync('dist/index.html')) throw new Error('dist/ not found — run vite build first');
+if (!existsSync('dist/index.html')) throw new Error('dist/ not found - run vite build first');
 for (const f of ['appinfo.json', 'icon.png', 'largeIcon.png']) cpSync(`webos/${f}`, `dist/${f}`);
 mkdirSync('build', { recursive: true });
 execSync('npx ares-package dist -o build --no-minify', { stdio: 'inherit' });
@@ -298,7 +298,7 @@ else if (cmd === 'launch') execSync(`npx ares-launch --device ${device} ${id}`, 
 else throw new Error('usage: node scripts/tv.mjs install|launch');
 ```
 
-- [ ] **Step 9: .gitignore — добавить build/**
+- [ ] **Step 9: .gitignore - добавить build/**
 
 Итоговое содержимое `.gitignore`:
 ```
@@ -330,7 +330,7 @@ Run: `npm run icons && npm test && npm run build`
 Expected: `icons written`; 1 тест PASS; сборка без ошибок.
 
 Run: `node -e "const h=require('fs').readFileSync('dist/index.html','utf8'); if(/type=\"module\"/.test(h)) {console.error('FAIL: module script present'); process.exit(1)} console.log('OK legacy-only')"`
-Expected: `OK legacy-only`. Если FAIL — остановиться и сообщить (не обходить вручную).
+Expected: `OK legacy-only`. Если FAIL - остановиться и сообщить (не обходить вручную).
 
 Run: `npm run package`
 Expected: `built build/com.spacesarmat.torrplayer_0.1.0_all.ipk`.
@@ -422,7 +422,7 @@ describe('CATEGORY_TABS', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/lib`
 Expected: FAIL (modules not found)
@@ -485,7 +485,7 @@ export function mapSearchCategory(c: string): string {
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/lib`
 Expected: PASS
@@ -499,7 +499,7 @@ git commit -m "feat: add formatting and category helpers"
 
 ---
 
-### Task 3: lib/episodes — типы файлов, серии, сезоны, субтитры
+### Task 3: lib/episodes - типы файлов, серии, сезоны, субтитры
 
 **Files:**
 - Create: `src/lib/episodes.ts`
@@ -513,7 +513,7 @@ git commit -m "feat: add formatting and category helpers"
   - `interface EpisodeInfo { season: number | null; episode: number | null }`, `parseEpisode(path: string): EpisodeInfo`, `episodeLabel(path: string): string` (`"S01E02"` или `""`)
   - `naturalCompare(a: string, b: string): number`
   - `interface Season { season: number | null; files: TorrentFile[] }`, `groupBySeason(files: TorrentFile[]): Season[]`
-  - `playableFiles(files: TorrentFile[]): TorrentFile[]` — видео, иначе аудио; упорядочено по сезонам/сериям
+  - `playableFiles(files: TorrentFile[]): TorrentFile[]` - видео, иначе аудио; упорядочено по сезонам/сериям
   - `matchSubtitles(video: TorrentFile, subs: TorrentFile[]): TorrentFile[]`, `subtitleLabel(sub: TorrentFile, video: TorrentFile): string`
 
 - [ ] **Step 1: Тесты**
@@ -613,7 +613,7 @@ describe('subtitles matching', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/lib/episodes.test.ts`
 Expected: FAIL (module not found)
@@ -750,7 +750,7 @@ export function subtitleLabel(sub: TorrentFile, video: TorrentFile): string {
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/lib/episodes.test.ts`
 Expected: PASS
@@ -764,7 +764,7 @@ git commit -m "feat: add file kind, episode parsing and subtitle matching"
 
 ---
 
-### Task 4: lib/m3u — плейлисты
+### Task 4: lib/m3u - плейлисты
 
 **Files:**
 - Create: `src/lib/m3u.ts`
@@ -841,7 +841,7 @@ describe('parseStreamUrl', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/lib/m3u.test.ts`
 Expected: FAIL
@@ -951,7 +951,7 @@ export function parseStreamUrl(url: string): { hash: string; fileIndex: number }
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/lib/m3u.test.ts`
 Expected: PASS
@@ -965,7 +965,7 @@ git commit -m "feat: add M3U playlist parser"
 
 ---
 
-### Task 5: lib/subtitles — SRT/VTT/ASS и кодировки
+### Task 5: lib/subtitles - SRT/VTT/ASS и кодировки
 
 **Files:**
 - Create: `src/lib/subtitles.ts`
@@ -977,7 +977,7 @@ git commit -m "feat: add M3U playlist parser"
   - `parseTime(s: string): number`
   - `parseSrt(text: string): Cue[]` (также для VTT), `parseAss(text: string): Cue[]`, `parseSubtitles(text: string, ext: string): Cue[]`
   - `cueAt(cues: Cue[], t: number): string`
-  - `decodeText(buf: ArrayBuffer): string` — UTF-8, при ошибке windows-1251
+  - `decodeText(buf: ArrayBuffer): string` - UTF-8, при ошибке windows-1251
 
 - [ ] **Step 1: Тесты**
 
@@ -1072,7 +1072,7 @@ describe('decodeText', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/lib/subtitles.test.ts`
 Expected: FAIL
@@ -1174,7 +1174,7 @@ export function decodeText(buf: ArrayBuffer): string {
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/lib/subtitles.test.ts`
 Expected: PASS
@@ -1189,7 +1189,7 @@ git commit -m "feat: add SRT/VTT/ASS subtitle parsing with CP1251 fallback"
 
 ---
 
-### Task 6: API — типы, HTTP-слой, клиент TorrServer
+### Task 6: API - типы, HTTP-слой, клиент TorrServer
 
 **Files:**
 - Create: `src/api/types.ts`, `src/api/http.ts`, `src/api/torrserver.ts`
@@ -1201,7 +1201,7 @@ git commit -m "feat: add SRT/VTT/ASS subtitle parsing with CP1251 fallback"
   - Типы `Torrent`, `CacheState`, `ViewedEntry`, `SearchResult`, `FfprobeStream`, `FfprobeResult`, `ServerSettings` (`src/api/types.ts`)
   - `type ApiErrorKind = 'network' | 'timeout' | 'http' | 'parse'`, `interface ApiError { kind; message; status? }`, `apiError(kind, message, status?)`, `isApiError(e): e is ApiError`, `errorMessage(e: unknown): string`, `request<T>(url: string, opts?: HttpOptions): Promise<T>`, `interface HttpOptions { method?: 'GET' | 'POST'; body?: unknown; timeoutMs?: number; auth?: string; responseType?: 'json' | 'text' | 'arraybuffer' }`
   - `interface ServerConfig { url: string; user?: string; password?: string }`, `type SearchSource = 'rutor' | 'torznab'`, `normalizeServerUrl(input: string): string`, `parseTorrentData(data?: string): TorrentFile[]`
-  - `class TorrServerClient` — `baseUrl`, `echo()`, `list()`, `get(hash)`, `add({link,title?,poster?,category?})`, `remove(hash)`, `loadInfo(hash)`, `files(t)`, `streamUrl(hash, fileIndex, name?)`, `videoSrc(url)`, `playlistUrl(hash)`, `allPlaylistUrl()`, `fetchText(url, timeoutMs?)`, `fetchBytes(url, timeoutMs?)`, `ffprobeAvailable()`, `probe(hash, fileIndex)`, `cache(hash)`, `viewedList()`, `setViewed(hash, fileIndex, timecode?)`, `removeViewed(hash, fileIndex?)`, `search(query, source)`, `getSettings()`, `setSettings(sets)`, `resetSettings()`
+  - `class TorrServerClient` - `baseUrl`, `echo()`, `list()`, `get(hash)`, `add({link,title?,poster?,category?})`, `remove(hash)`, `loadInfo(hash)`, `files(t)`, `streamUrl(hash, fileIndex, name?)`, `videoSrc(url)`, `playlistUrl(hash)`, `allPlaylistUrl()`, `fetchText(url, timeoutMs?)`, `fetchBytes(url, timeoutMs?)`, `ffprobeAvailable()`, `probe(hash, fileIndex)`, `cache(hash)`, `viewedList()`, `setViewed(hash, fileIndex, timecode?)`, `removeViewed(hash, fileIndex?)`, `search(query, source)`, `getSettings()`, `setSettings(sets)`, `resetSettings()`
 
 - [ ] **Step 1: Хелпер мока fetch**
 
@@ -1409,7 +1409,7 @@ describe('TorrServerClient', () => {
 });
 ```
 
-- [ ] **Step 4: Run — FAIL**
+- [ ] **Step 4: Run - FAIL**
 
 Run: `npx vitest run tests/api`
 Expected: FAIL (modules not found)
@@ -1747,7 +1747,7 @@ export class TorrServerClient {
 }
 ```
 
-- [ ] **Step 8: Run — PASS**
+- [ ] **Step 8: Run - PASS**
 
 Run: `npx vitest run tests/api`
 Expected: PASS
@@ -1758,7 +1758,7 @@ Run:
 ```bash
 npx tsx -e "import('./src/api/torrserver.ts').then(async m=>{const c=new m.TorrServerClient({url:'192.168.1.191:5665'});console.log(await c.echo());const l=await c.list();console.log(l.length, c.files(l[0]).length);console.log((await c.search('matrix','rutor')).length)})"
 ```
-Expected: версия `MatriX...`, число торрентов > 0, файлов > 0, результатов поиска > 0. (Если `tsx` не установлен, npx установит его временно. Если сервер недоступен — пропустить шаг и указать это в отчёте.)
+Expected: версия `MatriX...`, число торрентов > 0, файлов > 0, результатов поиска > 0. (Если `tsx` не установлен, npx установит его временно. Если сервер недоступен - пропустить шаг и указать это в отчёте.)
 
 - [ ] **Step 10: Commit**
 
@@ -1769,7 +1769,7 @@ git commit -m "feat: add TorrServer API client with timeouts and typed errors"
 
 ---
 
-### Task 7: lib/tracks — языки и дорожки
+### Task 7: lib/tracks - языки и дорожки
 
 **Files:**
 - Create: `src/lib/tracks.ts`
@@ -1780,11 +1780,11 @@ git commit -m "feat: add TorrServer API client with timeouts and typed errors"
 - Produces:
   - `normalizeLang(s?: string): string` (`'rus'|'Russian'|'русский'` → `'ru'`)
   - `guessLangFromName(name: string): string`
-  - `interface TrackInfo { index: number; kind: 'audio' | 'subtitle'; codec: string; language: string; title: string; channels?: number; isDefault: boolean; forced: boolean }` — `index` = порядковый номер среди дорожек того же типа
+  - `interface TrackInfo { index: number; kind: 'audio' | 'subtitle'; codec: string; language: string; title: string; channels?: number; isDefault: boolean; forced: boolean }` - `index` = порядковый номер среди дорожек того же типа
   - `tracksFromProbe(probe: FfprobeResult | null): TrackInfo[]`
   - `describeTrack(t: TrackInfo): string`
-  - `pickTrack(tracks: { language: string; isDefault?: boolean }[], preferred: string): number` — индекс или -1
-  - `findLang(tracks: { language: string }[], lang: string): number` — строгое совпадение или -1
+  - `pickTrack(tracks: { language: string; isDefault?: boolean }[], preferred: string): number` - индекс или -1
+  - `findLang(tracks: { language: string }[], lang: string): number` - строгое совпадение или -1
   - `LANG_OPTIONS: { value: string; label: string }[]`
 
 - [ ] **Step 1: Тесты**
@@ -1858,7 +1858,7 @@ describe('pickTrack / findLang', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/lib/tracks.test.ts`
 Expected: FAIL
@@ -1971,7 +1971,7 @@ export function pickTrack(tracks: { language: string; isDefault?: boolean }[], p
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/lib/tracks.test.ts`
 Expected: PASS
@@ -1985,7 +1985,7 @@ git commit -m "feat: add track language helpers"
 
 ---
 
-### Task 8: Платформа — клавиши пульта, Luna, автопоиск серверов
+### Task 8: Платформа - клавиши пульта, Luna, автопоиск серверов
 
 **Files:**
 - Create: `src/platform/keys.ts`, `src/platform/luna.ts`, `src/platform/webosMedia.ts`, `src/api/discovery.ts`
@@ -2104,7 +2104,7 @@ describe('webosMedia', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/platform tests/api/discovery.test.ts`
 Expected: FAIL
@@ -2341,7 +2341,7 @@ export function getLocalIp(): Promise<string | null> {
 }
 ```
 
-- [ ] **Step 7: Run — PASS**
+- [ ] **Step 7: Run - PASS**
 
 Run: `npx vitest run tests/platform tests/api/discovery.test.ts`
 Expected: PASS
@@ -2355,7 +2355,7 @@ git commit -m "feat: add remote key mapping, Luna bridge, track selection and se
 
 ---
 
-### Task 9: Хранилище — серверы, настройки, прогресс, кэш библиотеки
+### Task 9: Хранилище - серверы, настройки, прогресс, кэш библиотеки
 
 **Files:**
 - Create: `src/store/storage.ts`, `src/store/servers.ts`, `src/store/settings.ts`, `src/store/progress.ts`, `src/store/library.ts`
@@ -2533,7 +2533,7 @@ describe('library store', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/store`
 Expected: FAIL
@@ -2554,7 +2554,7 @@ export function saveJson(key: string, value: unknown): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    // storage full or unavailable — state stays in memory
+    // storage full or unavailable - state stays in memory
   }
 }
 ```
@@ -2818,7 +2818,7 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> }): Promise<Torr
 }
 ```
 
-- [ ] **Step 8: Run — PASS**
+- [ ] **Step 8: Run - PASS**
 
 Run: `npx vitest run tests/store`
 Expected: PASS
@@ -2833,7 +2833,7 @@ git commit -m "feat: add stores for servers, settings, watch progress and librar
 
 ---
 
-### Task 10: UI-основа — клавиши, маршруты, фокус, компоненты, диалоги, стили, App
+### Task 10: UI-основа - клавиши, маршруты, фокус, компоненты, диалоги, стили, App
 
 **Files:**
 - Create: `src/player/types.ts`, `src/ui/keys.ts`, `src/ui/nav.ts`, `src/ui/focus.ts`, `src/ui/components.tsx`, `src/ui/dialog.tsx`, `src/ui/toast.tsx`, `src/app.tsx`
@@ -2850,7 +2850,7 @@ git commit -m "feat: add stores for servers, settings, watch progress and librar
   - Компоненты: `Focusable`, `FocusGroup`, `Button`, `TextInput`, `ChoiceRow`, `Spinner`, `ErrorView`, `ProgressBar`
   - `choose<T>(title: string, options: { label: string; value: T }[], current?: T): Promise<T | null>`, `confirmDialog(text: string, okLabel?: string): Promise<boolean>`, `DialogHost`
   - `toast(text: string, kind?: 'info' | 'error')`, `ToastHost`
-  - `App` — экраны подключаются в `renderRoute()` в последующих задачах
+  - `App` - экраны подключаются в `renderRoute()` в последующих задачах
 
 - [ ] **Step 1: Тесты**
 
@@ -2958,7 +2958,7 @@ describe('nav', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/ui`
 Expected: FAIL
@@ -3121,7 +3121,7 @@ export function takeSavedFocus(): string | undefined {
 }
 ```
 
-Проверить в `node_modules/@noriginmedia/norigin-spatial-navigation/dist/index.d.ts`, что экспортируются `getCurrentFocusKey`, `setFocus`, `doesFocusableExist`, `pause`, `resume`, `useFocusable`, `FocusContext`, `init`. Если какое-то имя отличается — использовать фактическое и указать в отчёте.
+Проверить в `node_modules/@noriginmedia/norigin-spatial-navigation/dist/index.d.ts`, что экспортируются `getCurrentFocusKey`, `setFocus`, `doesFocusableExist`, `pause`, `resume`, `useFocusable`, `FocusContext`, `init`. Если какое-то имя отличается - использовать фактическое и указать в отчёте.
 
 - [ ] **Step 6: src/ui/focus.ts**
 
@@ -3500,7 +3500,7 @@ if (activeServer.value) resetTo({ name: 'library' });
 render(<App />, document.getElementById('app')!);
 ```
 
-- [ ] **Step 12: src/styles.css (замена) — без CSS Grid и без flex `gap`**
+- [ ] **Step 12: src/styles.css (замена) - без CSS Grid и без flex `gap`**
 
 ```css
 :root {
@@ -3811,7 +3811,7 @@ Expected: без ошибок.
 - [ ] **Step 4: Ручная проверка в браузере**
 
 Run: `npm run dev`, открыть `http://localhost:5173`, очистить localStorage (DevTools → Application) и перезагрузить.
-Expected: экран «Подключение»; ввод `192.168.1.191:5665` + Enter → тост «Подключено: MatriX…» (экран библиотеки пока пустой — ок). Перезагрузка → снова экран подключения нельзя увидеть, т.к. сервер активен: очистить `tsp.activeServer` → сервер виден в «Сохранённых» со статусом «онлайн». «Найти в сети» находит `http://192.168.1.191:5665` (из браузера ПК Luna недоступна — используются подсети сохранённых серверов + 192.168.1/0).
+Expected: экран «Подключение»; ввод `192.168.1.191:5665` + Enter → тост «Подключено: MatriX…» (экран библиотеки пока пустой - ок). Перезагрузка → снова экран подключения нельзя увидеть, т.к. сервер активен: очистить `tsp.activeServer` → сервер виден в «Сохранённых» со статусом «онлайн». «Найти в сети» находит `http://192.168.1.191:5665` (из браузера ПК Luna недоступна - используются подсети сохранённых серверов + 192.168.1/0).
 
 - [ ] **Step 5: Commit**
 
@@ -3874,7 +3874,7 @@ describe('buildTorrentQueue', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/player/queue.test.ts`
 Expected: FAIL
@@ -3905,7 +3905,7 @@ export function buildTorrentQueue(c: TorrServerClient, t: Torrent, files: Torren
 }
 ```
 
-- [ ] **Step 4: Run — PASS**
+- [ ] **Step 4: Run - PASS**
 
 Run: `npx vitest run tests/player/queue.test.ts`
 Expected: PASS
@@ -4065,7 +4065,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           </section>
         ))}
       </FocusGroup>
-      <div class="hints">OK — смотреть · 🔴 удалить торрент · Назад — к библиотеке</div>
+      <div class="hints">OK - смотреть · 🔴 удалить торрент · Назад - к библиотеке</div>
     </FocusGroup>
   );
 }
@@ -4237,7 +4237,7 @@ export function LibraryScreen() {
         <Button label="Настройки" onPress={() => navigate({ name: 'settings' })} />
         <Button label="Сервер" onPress={() => navigate({ name: 'connect' })} />
       </FocusGroup>
-      {error && <div class="banner-error">{error} — показан сохранённый список</div>}
+      {error && <div class="banner-error">{error} - показан сохранённый список</div>}
       {!loaded && <Spinner text="Загрузка…" />}
       {cont.length > 0 && (
         <section>
@@ -4263,7 +4263,7 @@ export function LibraryScreen() {
         ))}
       </FocusGroup>
       {loaded && !list.length && <div class="empty">Нет торрентов. Добавьте через «＋ Добавить» или веб-интерфейс TorrServer на телефоне.</div>}
-      <div class="hints">OK — открыть · 🔴 удалить · 🔵 настройки · Назад — выход</div>
+      <div class="hints">OK - открыть · 🔴 удалить · 🔵 настройки · Назад - выход</div>
     </FocusGroup>
   );
 }
@@ -4301,7 +4301,7 @@ git commit -m "feat: add library screen with categories, continue watching and a
 
 ---
 
-### Task 14: Логика плеера — перемотка, статистика, меню дорожек
+### Task 14: Логика плеера - перемотка, статистика, меню дорожек
 
 **Files:**
 - Create: `src/player/seek.ts`, `src/player/stats.ts`, `src/player/trackOptions.ts`
@@ -4456,7 +4456,7 @@ describe('trackOptions', () => {
 });
 ```
 
-- [ ] **Step 2: Run — FAIL**
+- [ ] **Step 2: Run - FAIL**
 
 Run: `npx vitest run tests/player`
 Expected: FAIL для новых файлов (queue.test.ts проходит)
@@ -4622,7 +4622,7 @@ export function defaultSubChoice(
 }
 ```
 
-- [ ] **Step 6: Run — PASS**
+- [ ] **Step 6: Run - PASS**
 
 Run: `npx vitest run tests/player`
 Expected: PASS
@@ -4668,7 +4668,7 @@ export function mediaErrorText(e: MediaError | null): string {
   switch (e ? e.code : 0) {
     case 1: return 'Воспроизведение прервано';
     case 2: return 'Ошибка сети при загрузке видео';
-    case 3: return 'Ошибка декодирования — формат не поддерживается телевизором';
+    case 3: return 'Ошибка декодирования - формат не поддерживается телевизором';
     case 4: return 'Формат или кодек не поддерживается телевизором';
     default: return 'Неизвестная ошибка воспроизведения';
   }
@@ -4921,7 +4921,7 @@ export function NextBanner(p: { seconds: number; title: string; onNext: () => vo
     <div class="next-banner" onClick={p.onNext}>
       <div>Следующая серия через {p.seconds} с</div>
       <div class="meta">{p.title}</div>
-      <div class="meta">OK — сейчас · Назад — остаться</div>
+      <div class="meta">OK - сейчас · Назад - остаться</div>
     </div>
   );
 }
@@ -5306,13 +5306,13 @@ Expected: PASS, сборка без ошибок типов.
 
 Run: `npm run dev` → открыть торрент «Star.Trek.Strange.New.Worlds.S04…» → серия S04E01.
 Expected:
-- видео (H.264/AAC) играет; Пробел — пауза; ←/→ — накопительная перемотка (маркер на полосе, применяется через 0.7 с); удержание → ускорение;
-- `i` — оверлей статистики со скоростью/пирами/кэшем/кодеком;
-- ↑ — меню «Дорожки» (аудио: `UND · AAC 2.0`; субтитры: «Выкл»);
-- Esc при видимой панели скрывает её, повторный Esc — выход к торренту; у серии появилась полоска прогресса;
+- видео (H.264/AAC) играет; Пробел - пауза; ←/→ - накопительная перемотка (маркер на полосе, применяется через 0.7 с); удержание → ускорение;
+- `i` - оверлей статистики со скоростью/пирами/кэшем/кодеком;
+- ↑ - меню «Дорожки» (аудио: `UND · AAC 2.0`; субтитры: «Выкл»);
+- Esc при видимой панели скрывает её, повторный Esc - выход к торренту; у серии появилась полоска прогресса;
 - повторный запуск серии → диалог «Продолжить с …»;
-- `n` — следующая серия.
-(Chrome на ПК не воспроизводит часть MKV-кодеков — это ожидаемо; при ошибке должен показаться экран ошибки с данными ffprobe и кнопками «Повторить»/«Назад».)
+- `n` - следующая серия.
+(Chrome на ПК не воспроизводит часть MKV-кодеков - это ожидаемо; при ошибке должен показаться экран ошибки с данными ffprobe и кнопками «Повторить»/«Назад».)
 
 - [ ] **Step 11: Commit**
 
@@ -5604,7 +5604,7 @@ Expected: без ошибок.
 `npm run dev`:
 - Библиотека → «Плейлист» → «Все торренты сервера» → список всех файлов всех торрентов; OK на элементе запускает плеер, CH+/`n` переходит к следующему.
 - Экран торрента → «Плейлист» → список серий этого торрента.
-- Ввести URL публичного HLS-потока (например `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) → сразу открывается плеер (в Chrome на ПК HLS без MSE не играет — показ экрана ошибки допустим; на ТВ играет нативно).
+- Ввести URL публичного HLS-потока (например `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`) → сразу открывается плеер (в Chrome на ПК HLS без MSE не играет - показ экрана ошибки допустим; на ТВ играет нативно).
 
 - [ ] **Step 5: Commit**
 
@@ -5728,7 +5728,7 @@ export function SettingsScreen() {
       <ChoiceRow label="Цвет" value={s.subColor} options={SUB_COLOR} onChange={(v) => updateSettings({ subColor: v })} />
       <ChoiceRow label="Подложка" value={s.subBackground} options={ON_OFF} onChange={(v) => updateSettings({ subBackground: v })} />
 
-      <h2>Сервер{activeServer.value ? ' — ' + activeServer.value.name : ''}</h2>
+      <h2>Сервер{activeServer.value ? ' - ' + activeServer.value.name : ''}</h2>
       {srvError && <div class="banner-error">{srvError}</div>}
       {srv && (
         <div>
@@ -5827,7 +5827,7 @@ git commit -m "feat: add settings screen for playback, subtitles and TorrServer 
 | Стрелки / OK | Навигация / выбор |
 | Назад | Предыдущий экран |
 | В плеере: OK, ▶/❚❚ | Пауза / продолжить |
-| В плеере: ◀ ▶, ⏪ ⏩ | Перемотка (удержание — быстрее) |
+| В плеере: ◀ ▶, ⏪ ⏩ | Перемотка (удержание - быстрее) |
 | В плеере: ▲ или 🟡 | Аудиодорожки и субтитры |
 | В плеере: 🟢 или Info | Статистика потока |
 | В плеере: CH+ / CH− | Следующий / предыдущий файл |
@@ -5854,7 +5854,7 @@ git commit -m "feat: add settings screen for playback, subtitles and TorrServer 
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173 — стрелки, Enter, Esc (Назад), Пробел, F1–F4 (цветные), i (статистика), n/p (серии)
+npm run dev      # http://localhost:5173 - стрелки, Enter, Esc (Назад), Пробел, F1–F4 (цветные), i (статистика), n/p (серии)
 npm test
 npm run build    # legacy-бандл для Chromium 53+ в dist/
 ```
@@ -5863,7 +5863,7 @@ npm run build    # legacy-бандл для Chromium 53+ в dist/
 
 - Набор поддерживаемых кодеков зависит от модели телевизора; браузер на ПК воспроизводит не всё.
 - Если на TorrServer включена авторизация, на новых webOS (Chromium 59+) видео может не воспроизводиться: браузер блокирует логин/пароль в URL медиафайлов.
-- Графические субтитры (PGS/VobSub) — только встроенные, через декодер ТВ.
+- Графические субтитры (PGS/VobSub) - только встроенные, через декодер ТВ.
 ````
 
 - [ ] **Step 2: Полная проверка**
@@ -5898,7 +5898,7 @@ git push origin main
 Передать пользователю список для проверки на телевизоре:
 1. Установка `npm run tv:install` и запуск.
 2. Автопоиск находит сервер; библиотека загружается.
-3. MKV HEVC 4K HDR — воспроизводится, HDR включается.
+3. MKV HEVC 4K HDR - воспроизводится, HDR включается.
 4. Переключение аудиодорожек (AC3/EAC3/DTS) и встроенных субтитров через ▲.
 5. Внешние SRT в CP1251 отображаются корректно.
 6. Magic Remote: наведение фокусирует, клик открывает; клик по полосе плеера перематывает.

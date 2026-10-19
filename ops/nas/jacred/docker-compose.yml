@@ -46,8 +46,8 @@ x-casaos:
   author: spacesarmat
   category: Downloaders
   description:
-    en_US: JacRed torrent indexer on the NAS (port 9118). Standalone — not linked to OMP billing.
-    ru_RU: Индексатор JacRed на NAS (порт 9118). Отдельно — без связи с OMP billing.
+    en_US: JacRed torrent indexer on the NAS (port 9118). Standalone - not linked to OMP billing.
+    ru_RU: Индексатор JacRed на NAS (порт 9118). Отдельно - без связи с OMP billing.
   developer: OMP
   hostname: ""
   icon: https://cdn.jsdelivr.net/gh/spacesarmat/omp@refactor/code/assets/icon.svg

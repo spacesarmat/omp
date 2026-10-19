@@ -53,7 +53,7 @@ describe('phone modules in English', () => {
       'TVs: 1 (LG)',
       '2 monitoring subscriptions',
       'Search sources: 5 switches',
-      'Indexers (Jackett, Prowlarr): 1 — without API keys, the keys will have to be entered again',
+      'Indexers (Jackett, Prowlarr): 1 - without API keys, the keys will have to be entered again',
       'Favorite playlists: 3',
       'Track choices: 1 torrent',
       'App, monitoring and touchpad settings, catalog view',

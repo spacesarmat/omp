@@ -34,7 +34,7 @@ export function ago(iso, now = Date.now()) {
 /** «07.10 21:57 МСК (3 ч назад)». */
 export function when(iso, now = Date.now()) {
   const abs = moscowTime(iso);
-  return abs ? abs + ' (' + ago(iso, now) + ')' : '—';
+  return abs ? abs + ' (' + ago(iso, now) + ')' : '-';
 }
 
 /**
@@ -43,7 +43,7 @@ export function when(iso, now = Date.now()) {
  */
 export function monitorTable(rows, opts = {}) {
   const now = opts.now === undefined ? Date.now() : opts.now;
-  const head = (opts.title || '🔎 Парсеры') + (opts.at ? ' — ' + when(opts.at, now) : '');
+  const head = (opts.title || '🔎 Парсеры') + (opts.at ? ' - ' + when(opts.at, now) : '');
   if (!rows.length) return head + '\nНет данных о проверках.';
   const lines = rows.map((r) => (ICON[r.status] || '❔') + ' ' + r.name + (r.detail ? ': ' + clipText(r.detail, 110) : ''));
   const counts = ['OK', 'PARTIAL', 'BLOCKED', 'BROKEN']

@@ -162,7 +162,7 @@ describe('torrentby «Ввести код»', () => {
   it('the phone sheet carries the code copy instead of the sign-in one', () => {
     const r = phoneLoginRequest(codeSpec());
     expect(r.title).toBe('Проверочный код torrent.by');
-    expect(r.text).toBe('Введите код с картинки на странице сайта и закройте окно — OMP проверит сайт снова.');
+    expect(r.text).toBe('Введите код с картинки на странице сайта и закройте окно - OMP проверит сайт снова.');
     expect(r.cancel).toBe('Закрыть');
     expect(r.source).toBe('torrentby');
     applyLanguageSetting('en');

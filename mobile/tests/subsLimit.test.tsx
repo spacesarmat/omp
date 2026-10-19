@@ -53,7 +53,7 @@ async function mount(node: preact.ComponentChild) {
   await flush();
 }
 
-const LIMIT_TEXT = 'Без подписки OMP — до 10 подписок. Оформите подписку, чтобы отслеживать больше';
+const LIMIT_TEXT = 'Без подписки OMP - до 10 подписок. Оформите подписку, чтобы отслеживать больше';
 
 beforeEach(() => {
   localStorage.clear();
@@ -125,12 +125,12 @@ describe('the list: quota and pause', () => {
     expect(el.querySelector('[data-subs-quota]')).toBeNull();
   });
 
-  it('above 10: the newest are dimmed «на паузе — нужна подписка OMP»; subscribing lifts it, nothing is deleted', async () => {
+  it('above 10: the newest are dimmed «на паузе - нужна подписка OMP»; subscribing lifts it, nothing is deleted', async () => {
     saveSubs(many(12));
     await mount(<News seg="subs" />);
     const paused = () => Array.from(el.querySelectorAll('.m-sub-row[data-paused]')).map((n) => n.querySelector('.m-sub-q')!.textContent);
     expect(paused().sort()).toEqual(['Сериал 11', 'Сериал 12']);
-    expect(el.querySelector('.m-sub-paused .m-sub-paused-note')!.textContent).toBe('на паузе — нужна подписка OMP');
+    expect(el.querySelector('.m-sub-paused .m-sub-paused-note')!.textContent).toBe('на паузе - нужна подписка OMP');
     expect(el.querySelector('[data-subs-quota]')!.textContent).toBe(' · 12 из 10');
     act(() => subscribe());
     await flush();
@@ -167,7 +167,7 @@ describe('the TV over RPC', () => {
     const rpc = createRpcHandler(d as never);
     await expect(rpc.dispatch('wantAdd', { query: 'Новый фильм' })).rejects.toMatchObject({
       code: 'failed',
-      message: 'На телефоне уже 10 подписок — без подписки OMP больше не добавить.',
+      message: 'На телефоне уже 10 подписок - без подписки OMP больше не добавить.',
     });
     // already followed: answered as before, not refused
     await expect(rpc.dispatch('wantAdd', { query: 'сериал 3' })).resolves.toMatchObject({ created: false });

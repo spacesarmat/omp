@@ -5,7 +5,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - Subscription: the device limit is base devices (set in the admin settings) plus bonus devices (from a promo or the admin, forever or until a date, free) plus bought ones. The bot, the cabinet and the admin panel show the breakdown, and device lists show the phone model
-- [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected — enter a new code”; clearer “devices taken”, “extra device not renewed” and “update the app” errors
+- [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected - enter a new code”; clearer “devices taken”, “extra device not renewed” and “update the app” errors
 - [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
 - Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
 - Billing: the store can be switched to Postgres (`BILLING_STORE=postgres`); SQLite stays the default, and both are covered by tests
@@ -175,20 +175,20 @@ The English translation covers the latest versions only; the full history (in Ru
 ## 0.20.1-beta.1
 
 - [phone] OMP Jackett and JacRed: search and download only through billing (`/v1/search`, `/v1/torrent`); keys removed from the APK
-- [billing] «Services» tab — Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
+- [billing] «Services» tab - Jackett/JacRed/TorrServer health, enable/disable for subscribers, masked secrets
 - [billing] bot: user vs admin pads (`/admin`, «As user»)
-- [billing] user card — message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
+- [billing] user card - message in Telegram; support chat scroll; page scrollbar hidden in the admin UI
 - [ops] VPS: WARP proxy for the Telegram Bot API; search rate limit
 
 ## 0.20.0
 
 - [atv] Built-in player on the 2160 Player engine: 4K, HDR, Dolby Vision as HDR10 without a DV decoder; AC3/E-AC3/DTS/TrueHD passthrough or FFmpeg decode; more formats (M2TS, software decode). VLC and Auto remain
-- [atv] Night audio (yellow key and player menu); Info panel — remote Info key and menu
-- [phone] Watch on the phone — built-in 2160 Player in OMP (resume, Skip marks, episodes, PiP). Video player: Built-in / 2160 Player / Android picker. Background audio
+- [atv] Night audio (yellow key and player menu); Info panel - remote Info key and menu
+- [phone] Watch on the phone - built-in 2160 Player in OMP (resume, Skip marks, episodes, PiP). Video player: Built-in / 2160 Player / Android picker. Background audio
 - [phone] Series card in Discover: dates and status, genres, Watch on TV, creators and cast, seasons on their own screen, similar titles, poster pick; season card with progress
 - [phone] Now on TV: swipe down for the remote, up for the release’s episodes, sideways on an episode to play on the TV; swipe hints; remote settings from the deck
 - [phone] TV keyboard overlays the remote; fast native TorrServer LAN search (ports 8090 and 5665)
-- [phone] Jackett and JacRed OMP on one subscription (keys in the app, search over HTTPS); @OMPBILLINGBOT — payment, code, Telegram link
+- [phone] Jackett and JacRed OMP on one subscription (keys in the app, search over HTTPS); @OMPBILLINGBOT - payment, code, Telegram link
 
 ## 0.20.0-beta.19
 
@@ -315,7 +315,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] The TV library works like the phone's: short titles, a series is one tile, a series screen with the TMDB overview, status and episode names
 - [tv] «Discover» on the TV: new releases from TMDB, film and series cards, «Want to watch» and «In better quality»
 - [lg] The LG TV searches torrent sites through the phone: RuTracker, NNM-Club, Kinozal and others, with your sign-ins
-- [tv] «New» and «Subscriptions» on the TV: OMP's findings from the phone — new episodes, better quality, torrents for subscriptions
+- [tv] «New» and «Subscriptions» on the TV: OMP's findings from the phone - new episodes, better quality, torrents for subscriptions
 - [phone] «Search for the TV»: the phone searches torrents and watches subscriptions for the TV in the background
 
 ### Library and series on the TV
@@ -343,7 +343,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### «New» and subscriptions
 
-- [tv] «New» on the TV: OMP's findings from the phone, with new episodes, better quality and torrents for subscriptions; new episodes replace the old season torrent right away, «Replace» swaps in the better one — watch positions are kept
+- [tv] «New» on the TV: OMP's findings from the phone, with new episodes, better quality and torrents for subscriptions; new episodes replace the old season torrent right away, «Replace» swaps in the better one - watch positions are kept
 - [tv] «Subscriptions» on the TV: check now, notify on/off, «in better quality», remove
 - [tv] «Follow new episodes» and «follow better quality» work right from the TV; «Want to watch» on the TV becomes an OMP subscription on the phone
 - [atv] The «Control from the phone» badge in the Android TV player now shows briefly on a phone command instead of all the time
@@ -361,7 +361,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### Catalog and «Discover»
 
-- [phone] Two-finger zoom in «Catalog» and «Discover» (2, 3 or 4 posters per row): one step per gesture with a smooth transition — cards move to their new places and the text stays sharp
+- [phone] Two-finger zoom in «Catalog» and «Discover» (2, 3 or 4 posters per row): one step per gesture with a smooth transition - cards move to their new places and the text stays sharp
 - [phone] «Catalog»: delete from the menu on a long press, with several torrents selectable at once
 - [phone] Scrolling: «Back» and the tabs return to the same place; on the TV the focus returns to the item you left, and scrolling inside a window no longer scrolls the screen behind it
 - [phone] «Back»: on other tabs it opens «Catalog», in «Discover» it goes to «Mine», on «Mine» a second press minimizes OMP
@@ -371,8 +371,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### Dates and «Calendar»
 
-- [phone] «New» → «Calendar»: the episodes of the next 30 days by day for the series in «Mine» and subscriptions; several episodes of a day in one row «S13E07–E08»; the ones out are marked «out» — «Watch» or «Find»
-- [phone] «Discover»: dates on the tiles — «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8»; the «Digital soon» sort lists films by their digital date in the next 60 days
+- [phone] «New» → «Calendar»: the episodes of the next 30 days by day for the series in «Mine» and subscriptions; several episodes of a day in one row «S13E07–E08»; the ones out are marked «out» - «Watch» or «Find»
+- [phone] «Discover»: dates on the tiles - «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8»; the «Digital soon» sort lists films by their digital date in the next 60 days
 - [phone] Film card: «Cinema · Digital · Disc» with dates; series card: «Upcoming episodes»; the series screen shows announced episodes as muted rows «7. Pyramid · out Oct 8»
 - [phone] A release's category is checked by itself: a series in «Films» moves to «Series», an album to «Music»
 
@@ -386,12 +386,12 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ### Mine and series
 
-- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header — the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
 - [phone] «Mine»: a series' seasons are grouped into one card, by any of their names, including torrents titled only in English or with the English name after brackets («Russian name (season 3…) / Star Trek…»); different series sharing a network or a voice-over («/ AMC», «/ BBC») stay apart; the card takes its name in the interface language (English in English, Russian in Russian)
 - [phone] The torrent card is compact: poster, three lines, round ＋ and ▶TV; details, category and the full title are in a sheet on tap
 - [phone] The series screen: a TMDB backdrop, years · rating · genres, overview, seasons with episode count and year, missing seasons with «Find torrents»
-- [phone] Series screen: a long press on a torrent — «Open», «Watch on TV», «Rename», «Delete» and «Keep only this one» (deletes the season's other torrents, never multi-season packs)
-- [phone] Watching an episode counts in every torrent of the series: watched S04E01 in 1080p — it is marked in 4K too, and «Watch on TV» goes on with the next one
+- [phone] Series screen: a long press on a torrent - «Open», «Watch on TV», «Rename», «Delete» and «Keep only this one» (deletes the season's other torrents, never multi-season packs)
+- [phone] Watching an episode counts in every torrent of the series: watched S04E01 in 1080p - it is marked in 4K too, and «Watch on TV» goes on with the next one
 - [phone] Torrent screen: episode names from TMDB, season chips to switch seasons; «Skip» is folded into one row, and there is a single «Monitoring» block
 - [phone] «Find in better quality» for films and series: a warning when seeds are few, a note for multi-season packs, clear reasons when it fails, «Cancel»; replacing in place keeps your watch positions
 
@@ -399,8 +399,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - Search filters for torrents: resolution, HDR, source, «Hide camrips», size, seeds, voice-over, Russian subtitles, season
 - «Add»: search first, the magnet link is tucked behind «Add by magnet link» under it and opens the field in place
-- «Search sources»: one row style — only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; «Sign in» right on the site row (Kinozal, rustorka, NNM-Club), rutracker gets its site screen too (including «Send the sign-in to the TV»); one list of sites, short hints under a site that Cloudflare has blocked. «No account? Sign up» on the phone, a QR code on the TV
-- Browser sign-in on NNM-Club: an ad on the site's page no longer pulls the sign-in window away — taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
+- «Search sources»: one row style - only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; «Sign in» right on the site row (Kinozal, rustorka, NNM-Club), rutracker gets its site screen too (including «Send the sign-in to the TV»); one list of sites, short hints under a site that Cloudflare has blocked. «No account? Sign up» on the phone, a QR code on the TV
+- Browser sign-in on NNM-Club: an ad on the site's page no longer pulls the sign-in window away - taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
 - torrent.by: works on the phone (the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»); a clear message when it has blocked your IP and an «Enter the code» button; fewer background requests
 - rutracker: a lost sign-in now asks to «Sign in» instead of «The site is closed by a browser check»; rutracker can pass the Cloudflare check like Kinozal and NNM-Club; the log shows why a site failed (response code, sign-in or check page)
 - In the FAQ: «What is «Discover»», «Search filters for torrents», «Better quality», «torrent.by asks for a code»; the answers about Cloudflare, sign-in and accounts are updated (NNM-Club too)
@@ -421,13 +421,13 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - Content no longer hides under the tab bar, the bar hides while the keyboard is open and stays above the cards
 - «Name (2026)» in «Mine» reads «Name · 2026»; the series screen opens on the requested season
-- In the English interface a series badge in «Mine» could say «new season» instead of the next episode date — the series was searched on TMDB by its Russian name
+- In the English interface a series badge in «Mine» could say «new season» instead of the next episode date - the series was searched on TMDB by its Russian name
 - The chips of the chosen filters in «Add» («4K», «seeds ≥ 20») centre their text like the others
 
 ## 0.17.0-beta.8
 
 - [phone] «Remote» connects to the last TV by itself: a TV that is saved but not selected (after the install assistant or a settings restore) no longer needs a trip to «Settings → TV»
-- [phone] When the TV does not answer, «Remote» says «… does not answer — turn the TV on» with «Retry»
+- [phone] When the TV does not answer, «Remote» says «… does not answer - turn the TV on» with «Retry»
 - [phone] Several TVs and boxes: tap the name in «Remote» for the saved list and switch with one tap, without pairing again
 
 ## 0.17.0-beta.7
@@ -435,7 +435,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Android TV boxes with an old system WebView (for example Dune HD) no longer open OMP on a blank screen, and the remote moves the focus on them
 - 4K on boxes with little memory (128 MB per app) no longer stops after 10 seconds with «Could not play the video»; if memory still runs out, «Auto» continues the video in VLC at the same place
 - [tv] If VLC cannot start a file within 20 seconds, the player offers «Back to the built-in player» or waiting
-- [tv] Connecting to TorrServer: a wrong address or port shows «Could not connect to … — check the address and port» instead of nothing; the address field opens a Latin keyboard for addresses
+- [tv] Connecting to TorrServer: a wrong address or port shows «Could not connect to … - check the address and port» instead of nothing; the address field opens a Latin keyboard for addresses
 - [tv] A box names itself by the device name from its settings or «maker model», not a code like «tv175v»
 - [tv] A site behind a Cloudflare check in TV search is one short sentence: sign in on the phone in «Search sources»
 - «What's new» lists only what concerns this device: TV changes on the TV, phone changes on the phone
@@ -445,17 +445,17 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Series screen: episodes show the code and size without the file name; announced episodes of the season follow as muted rows «7. Pyramid · out Oct 8»
 - [phone] «Now on TV», the mini player and «Where to watch?» name the series and the episode («Dark Matter · S02E01 · Quiet Life»), not the file
 - [phone] The release menu on a long press names the quality («Spirit Master · 4K WEB-DL»); sizes everywhere as «5.1 GB»
-- [phone] «Search sources»: spacing between sections, an opaque backing under the status bar, a clearer Jackett card («key from TorrServer» — «Connect» connects at once)
+- [phone] «Search sources»: spacing between sections, an opaque backing under the status bar, a clearer Jackett card («key from TorrServer» - «Connect» connects at once)
 - [phone] Small things: no «0 seeds» when the number is unknown; text links stand out; the keyboard closes after a search; the «Connect TV» button on «Remote» is centred
 
 ## 0.17.0-beta.6
 
-- [phone] «New» → «Calendar»: the episodes of the next 30 days by day («Today», «Tomorrow», «Thu, Oct 8») for the series in «Mine» and series subscriptions; the ones out in the last 3 days are marked «out» — «Watch» when monitoring already found a release, «Find» otherwise; pull down to refresh
-- [phone] «Discover»: dates on the tiles — «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8», «season 2 — Nov 15»
-- [phone] «Discover»: a new «Coming to digital» sort — films released digitally in the next 60 days
+- [phone] «New» → «Calendar»: the episodes of the next 30 days by day («Today», «Tomorrow», «Thu, Oct 8») for the series in «Mine» and series subscriptions; the ones out in the last 3 days are marked «out» - «Watch» when monitoring already found a release, «Find» otherwise; pull down to refresh
+- [phone] «Discover»: dates on the tiles - «digital Nov 12», «in cinemas since Oct 3», «new episode Oct 8», «season 2 - Nov 15»
+- [phone] «Discover»: a new «Coming to digital» sort - films released digitally in the next 60 days
 - [phone] Film card: «Cinemas · Digital · Disc» release dates (the ones to come highlighted); series card: «Upcoming episodes» with dates
 - [phone] «Add»: when a site is behind a Cloudflare check, lost its sign-in or fails its certificate, the warning has an «Open … settings» button that goes straight to that site's page with «Sign in» and the check bypass
-- [phone] Several releases of one thing: on the series screen, a season with two or more releases shows each one's quality, episode (or file) count and size — a tap opens the release menu; after an add OMP says «Already in the library: 4K · 9.7 GB» (films too). OMP never deletes anything by itself. A release with episode files filed under «Movies» joins its series card
+- [phone] Several releases of one thing: on the series screen, a season with two or more releases shows each one's quality, episode (or file) count and size - a tap opens the release menu; after an add OMP says «Already in the library: 4K · 9.7 GB» (films too). OMP never deletes anything by itself. A release with episode files filed under «Movies» joins its series card
 - The torrent category is checked automatically: a series with episodes filed under «Movies» moves to «Series», an album to «Music», an empty category is filled; a category picked by hand in «Add» is never changed; each fix is a line in the log
 
 ## 0.17.0-beta.5
@@ -467,26 +467,26 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.17.0-beta.4
 
-- [phone] A new «Remote»: the header matches the other tabs («Remote», the TV name and state), a big D-pad with side keys — keyboard and «Back» on the left, volume on the right; in «Touchpad» mode the pad takes the free space, with «Back · Home · Menu · Keyboard», playback keys and volume below
-- [phone] Series screen: a long press on a torrent — «Open», «Watch on TV», «Rename», «Delete» and «Keep only this one» (deletes the season's other torrents, never multi-season packs)
-- [phone] Watching an episode counts in every torrent of the series: watched S04E01 in 1080p — it is marked in 4K too, and «Watch on TV» goes on with the next one
+- [phone] A new «Remote»: the header matches the other tabs («Remote», the TV name and state), a big D-pad with side keys - keyboard and «Back» on the left, volume on the right; in «Touchpad» mode the pad takes the free space, with «Back · Home · Menu · Keyboard», playback keys and volume below
+- [phone] Series screen: a long press on a torrent - «Open», «Watch on TV», «Rename», «Delete» and «Keep only this one» (deletes the season's other torrents, never multi-season packs)
+- [phone] Watching an episode counts in every torrent of the series: watched S04E01 in 1080p - it is marked in 4K too, and «Watch on TV» goes on with the next one
 - [phone] «Back»: on other tabs it opens «Catalog», in «Discover» it goes to «Mine», on «Mine» a second press minimizes OMP
-- [phone] Fixed: in the English interface a series badge in «Mine» could say «new season» instead of the next episode date — the series was searched on TMDB by its Russian name
+- [phone] Fixed: in the English interface a series badge in «Mine» could say «new season» instead of the next episode date - the series was searched on TMDB by its Russian name
 
 ## 0.17.0-beta.3
 
 - [phone] «Mine»: a series torrent titled only in English («Star Trek: Strange New Worlds / S2…») now joins the card of the torrents titled «Russian / Original»; the card takes its title from the torrent named in both languages
-- [phone] The status bar (clock, battery) no longer blends into the posters while scrolling — a dark strip lies under it
+- [phone] The status bar (clock, battery) no longer blends into the posters while scrolling - a dark strip lies under it
 - [phone] Fixed: the chips of the chosen filters in «Add» («4K», «seeds ≥ 20») centre their text like the others
 
 ## 0.17.0-beta.2
 
 - [phone] «Discover»: sorting (popular, by rating, by release date, most anticipated) and filters (genre, year, country, minimum rating); talk shows, news and reality are hidden by default; type and year under the poster, long titles neatly cut at two lines; 2, 3 or 4 posters per row
-- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header — the «Mine / Discover» switch shares a row with the buttons, smaller chips
-- [phone] Two-finger zoom in «Catalog»: one step per gesture with a smooth transition — cards move to their new places and the text stays sharp
-- [phone] «Search sources»: one row style — only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; rutracker gets its site screen too (including «Send the sign-in to the TV»)
+- [phone] «Mine»: short, readable titles instead of the tracker string («Dark Matter · season 2 · episodes 1–6 of 10»), a compact header - the «Mine / Discover» switch shares a row with the buttons, smaller chips
+- [phone] Two-finger zoom in «Catalog»: one step per gesture with a smooth transition - cards move to their new places and the text stays sharp
+- [phone] «Search sources»: one row style - only › and the switch on the right, «Sign in» and «Sign out» as a link in the status line; rutracker gets its site screen too (including «Send the sign-in to the TV»)
 - [phone] torrent.by works on the phone again: the site leaves out an intermediate certificate, OMP now carries it itself; a certificate error says «Site certificate error» instead of «not responding»
-- [phone] Browser sign-in: an ad on a site's page (NNM-Club, for example) no longer pulls the sign-in window away — taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
+- [phone] Browser sign-in: an ad on a site's page (NNM-Club, for example) no longer pulls the sign-in window away - taps on the fields work and the keyboard opens; the sign-in page fits the screen width and can be zoomed with two fingers
 - [phone] Tab header: one compact row on all tabs. In «New» the buttons are round, refresh replaces «Check now», and monitoring is a separate icon
 - [phone] «Add»: search first, the magnet link is tucked behind «Add by magnet link» under it and opens the field in place
 - [phone] «New» and search results: short titles, quality badges and posters
@@ -506,7 +506,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Torrent screen: “Skip” is folded into one row, and there is a single “Monitoring” block
 - Search sources: “Sign in” right on the site row (Kinozal, rustorka, NNM-Club), sign-in with the browser on NNM-Club, one list of sites, short hints under a site that Cloudflare has blocked. “No account? Sign up” on the phone, a QR code on the TV, answers in the FAQ. torrent.by: a clear message when it has blocked your IP and an “Enter the code” button; fewer background requests
 - Scrolling: “Back” and the tabs return to the same place; on the TV the focus returns to the item you left, and scrolling inside a window no longer scrolls the screen behind it
-- [phone] Phone remote: the scroll strip on the touchpad is removed — scrolling the page on the TV is a two-finger scroll
+- [phone] Phone remote: the scroll strip on the touchpad is removed - scrolling the page on the TV is a two-finger scroll
 - [phone] In the FAQ: “What is “Discover””, “Search filters for torrents”, “Better quality”, “torrent.by asks for a code”; the answers about Cloudflare, sign-in and accounts are updated (NNM-Club too)
 
 ## 0.16.0
@@ -534,7 +534,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## 0.15.2
 
 - "Sign in with browser" on rutracker: the window closes by itself after you sign in (OMP could not see the sign-in that rutracker keeps for the forum only)
-- Password sign-in blocked by a Cloudflare check (Kinozal, rustorka, rutracker): the hint "The site is blocked by a Cloudflare check — sign in with the browser", and the "Sign in with browser" button becomes the main one, on the phone and on the TV
+- Password sign-in blocked by a Cloudflare check (Kinozal, rustorka, rutracker): the hint "The site is blocked by a Cloudflare check - sign in with the browser", and the "Sign in with browser" button becomes the main one, on the phone and on the TV
 
 ## 0.15.1
 

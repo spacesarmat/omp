@@ -246,7 +246,7 @@ export function codeBlock(origin, code, head) {
     ': `' +
     dashed +
     '`\nНажмите на код, чтобы скопировать, и введите его в OMP на телефоне' +
-    (https ? ' — или кнопка «Открыть в OMP».' : ':\n' + appSchemeUrl(dashed))
+    (https ? ' - или кнопка «Открыть в OMP».' : ':\n' + appSchemeUrl(dashed))
   );
 }
 
@@ -263,7 +263,7 @@ export function trialPromo(state) {
 
 function trialLine(state) {
   const code = trialPromo(state);
-  return code ? '\nПробный день — промокод ' + code + ' в «Промокод».' : '';
+  return code ? '\nПробный день - промокод ' + code + ' в «Промокод».' : '';
 }
 
 /** Maps a button label or /command to an internal action. */
@@ -318,7 +318,7 @@ function devicesLine(sub) {
 }
 
 function creditLine(sub) {
-  return sub && sub.credit > 0 ? '\nЗачёт: ' + rub(sub.credit) + ' — вычтем из следующего продления.' : '';
+  return sub && sub.credit > 0 ? '\nЗачёт: ' + rub(sub.credit) + ' - вычтем из следующего продления.' : '';
 }
 
 /** Subscription head line(s): paid, grace period, or ended. Times are Moscow time. */
@@ -329,11 +329,11 @@ export function subscriptionHead(sub) {
       mskDateTime(sub.paidUntil) +
       '.\nЛьготный период: поиск работает до ' +
       mskDateTime(sub.accessUntil) +
-      '. Продлите — «Оплатить».'
+      '. Продлите - «Оплатить».'
     );
   }
   if (sub.active) return 'Подписка до ' + mskDateTime(sub.paidUntil);
-  return 'Подписка закончилась ' + mskDateTime(sub.paidUntil) + ' — поиск отключён на всех устройствах.';
+  return 'Подписка закончилась ' + mskDateTime(sub.paidUntil) + ' - поиск отключён на всех устройствах.';
 }
 
 function freeSlots(sub) {
@@ -356,7 +356,7 @@ function statusText(state, sub, account, opts) {
       'Подписки нет.' +
       (admin
         ? ''
-        : '\n«Оплатить» — ' +
+        : '\n«Оплатить» - ' +
           rub(prices.price) +
           ' за ' +
           daysText(prices.days) +
@@ -380,9 +380,9 @@ function statusText(state, sub, account, opts) {
   }
   let next = '';
   if (!admin) {
-    if (sub.inGrace) next = '\n«Устройства» — список и коды.';
-    else if (freeSlots(sub) > 0) next = '\n«Устройства» — код для нового устройства и список. «Оплатить» — продлить.';
-    else next = '\nВсе места заняты. «Устройства» — список, отвязка' + (prices.extra ? ' и ещё одно устройство за ' + rub(prices.extra) : '') + '.';
+    if (sub.inGrace) next = '\n«Устройства» - список и коды.';
+    else if (freeSlots(sub) > 0) next = '\n«Устройства» - код для нового устройства и список. «Оплатить» - продлить.';
+    else next = '\nВсе места заняты. «Устройства» - список, отвязка' + (prices.extra ? ' и ещё одно устройство за ' + rub(prices.extra) : '') + '.';
   }
   return tg + subscriptionHead(sub) + '\n' + devicesLine(sub) + creditLine(sub) + list + next;
 }
@@ -395,9 +395,9 @@ export function renewalText(state, subRow, sub, now, opts) {
   const quote = renewalPrice(state, subRow, now, opts);
   const from = sub.active ? sub.paidUntil : now;
   const lines = ['Продление на ' + daysText(quote.days) + ', до ' + mskDateTime(from + quote.days * 86400000) + ':'];
-  lines.push('• подписка — ' + rub(quote.base));
-  if (quote.extras > 0) lines.push('• доп. устройство × ' + quote.extras + ' — ' + rub(quote.extraSum));
-  if (quote.credit > 0) lines.push('• зачёт — −' + rub(quote.credit));
+  lines.push('• подписка - ' + rub(quote.base));
+  if (quote.extras > 0) lines.push('• доп. устройство × ' + quote.extras + ' - ' + rub(quote.extraSum));
+  if (quote.credit > 0) lines.push('• зачёт - −' + rub(quote.credit));
   if (quote.extras > 0 || quote.credit > 0) lines.push('Итого: ' + rub(quote.total));
   return { text: lines.join('\n'), quote };
 }
@@ -419,17 +419,17 @@ function payInline(settings) {
  */
 function graceEndMessage(state, row, subRow, grace, now) {
   const lines = [
-    grace > 0 ? '⚠️ Льготный период закончился — поиск в OMP отключён.' : '⚠️ Подписка OMP закончилась — поиск отключён.',
+    grace > 0 ? '⚠️ Льготный период закончился - поиск в OMP отключён.' : '⚠️ Подписка OMP закончилась - поиск отключён.',
   ];
   const quote = subRow ? renewalPrice(state, subRow, now) : null;
   if (quote && quote.base > 0) {
     lines.push(renewalPriceLine(quote));
     lines.push('Привязанные устройства заработают сами, код вводить не нужно.');
-    if (quote.extras > 0) lines.push('Без доп. устройств — ' + rub(renewalPrice(state, subRow, now, { withExtras: false }).total) + '.');
+    if (quote.extras > 0) lines.push('Без доп. устройств - ' + rub(renewalPrice(state, subRow, now, { withExtras: false }).total) + '.');
   } else {
     lines.push('Продлите подписку, чтобы продолжить.');
   }
-  lines.push('Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.');
+  lines.push('Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.');
   return { chatId: String(row.telegramId), text: lines.join('\n'), keyboard: mainKeyboard(), inline: payInline(state.settings) };
 }
 
@@ -444,8 +444,8 @@ export function reminderMessage(state, row, now) {
   const accessEnd = until + grace * 86400000;
   if (row.kind === 'end') return graceEndMessage(state, row, subRow, grace, now);
   let head = '';
-  if (row.kind === 'd3') head = '⚠️ Подписка OMP заканчивается через 3 дня — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
-  else if (row.kind === 'd1') head = '⚠️ Подписка OMP заканчивается завтра — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
+  if (row.kind === 'd3') head = '⚠️ Подписка OMP заканчивается через 3 дня - ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
+  else if (row.kind === 'd1') head = '⚠️ Подписка OMP заканчивается завтра - ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
   else if (until > now) {
     head = '⚠️ Подписка OMP заканчивается сегодня в ' + mskTime(until) + ' МСК.';
     if (grace > 0) head += '\nПосле этого ещё ' + daysText(grace) + ' льготного периода: поиск будет работать до ' + mskDateTime(accessEnd) + '.';
@@ -456,12 +456,12 @@ export function reminderMessage(state, row, now) {
   const lines = [head];
   const quote = subRow ? renewalPrice(state, subRow, now) : null;
   if (quote && quote.base > 0) lines.push(renewalPriceLine(quote));
-  lines.push('Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.');
+  lines.push('Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.');
   return { chatId: String(row.telegramId), text: lines.join('\n'), keyboard: mainKeyboard(), inline: payInline(state.settings) };
 }
 
 /** Shown instead of a code when every device slot of the subscription is taken. */
-export const DEVICE_LIMIT_TEXT = 'Все места заняты — новый код не выдан. Привязанные устройства продолжают работать.';
+export const DEVICE_LIMIT_TEXT = 'Все места заняты - новый код не выдан. Привязанные устройства продолжают работать.';
 
 /** «Смен устройства осталось: 1 из 2 за 30 дней.» */
 export function swapLeftLine(status) {
@@ -472,11 +472,11 @@ export function swapLeftLine(status) {
 export function swapLimitText(status) {
   const when = Number.isFinite(status.nextAt) && status.nextAt > 0 ? mskDateTime(status.nextAt) : '';
   return (
-    'Сменить устройство сейчас нельзя: самостоятельно — не больше ' +
+    'Сменить устройство сейчас нельзя: самостоятельно - не больше ' +
     status.limit +
     ' раз за 30 дней.' +
-    (when ? '\nСледующая смена — с ' + when + '.' : '') +
-    '\nУже привязанные устройства работают. Если нужно срочно — напишите в «Поддержку».'
+    (when ? '\nСледующая смена - с ' + when + '.' : '') +
+    '\nУже привязанные устройства работают. Если нужно срочно - напишите в «Поддержку».'
   );
 }
 
@@ -502,7 +502,7 @@ export function paymentUserMessage(state, result) {
     text = '✅ Оплата получена. Подписка продлена до ' + mskDateTime(result.paidUntil) + '.';
     if (result.extras > 0) text += '\nДоп. устройств: ' + result.extras + ', тоже до ' + mskDate(result.paidUntil) + '.';
     if (result.credit > 0) text += '\nЗачтено: ' + rub(result.credit) + '.';
-    text += '\nПривязанные устройства продолжают работать — ничего вводить не нужно.';
+    text += '\nПривязанные устройства продолжают работать - ничего вводить не нужно.';
     if (result.code) {
       text += '\n\n' + codeBlock(origin, result.code);
       inline = rows([codeButtonRow(origin, result.code)]);
@@ -512,14 +512,14 @@ export function paymentUserMessage(state, result) {
     if (result.code) {
       text += '\n' + codeBlock(origin, result.code, 'Код для него');
       inline = rows([codeButtonRow(origin, result.code)]);
-    } else text += '\nКод для него — в «Устройства».';
+    } else text += '\nКод для него - в «Устройства».';
   } else if (result.kind === 'credit') {
     text =
       '✅ Оплата ' +
       rub(result.credit) +
       ' получена, но ' +
       (result.grace ? 'подписка сейчас в льготном периоде' : 'подписка уже закончилась') +
-      ' — отдельно доп. устройство не подключить.\nМы зачли ' +
+      ' - отдельно доп. устройство не подключить.\nМы зачли ' +
       rub(result.credit) +
       (result.creditTotal > result.credit ? ' (всего зачёт ' + rub(result.creditTotal) + ')' : '') +
       ': сумма вычтется из следующего продления. Нажмите «Оплатить».';
@@ -534,7 +534,7 @@ export function pendingUserText(amount) {
   return (
     '⏳ Платёж' +
     (sum ? ' ' + sum + ' ₽' : '') +
-    ' получен и ждёт подтверждения. Подписка продлится сама — платить ещё раз не нужно.\nЕсли что-то не так — «Поддержка».'
+    ' получен и ждёт подтверждения. Подписка продлится сама - платить ещё раз не нужно.\nЕсли что-то не так - «Поддержка».'
   );
 }
 
@@ -544,7 +544,7 @@ export function rejectUserText(amount) {
   return (
     'Платёж' +
     (sum ? ' ' + sum + ' ₽' : '') +
-    ' не подтверждён — подписка не продлена.\nЕсли деньги списались, напишите в «Поддержку».'
+    ' не подтверждён - подписка не продлена.\nЕсли деньги списались, напишите в «Поддержку».'
   );
 }
 
@@ -608,7 +608,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
   if (!sub) {
     out.push({
       text:
-        'Подписки нет.\n«Оплатить» — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(state) + '. На ТВ подписка не нужна.' + trialLine(state),
+        'Подписки нет.\n«Оплатить» - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(state) + '. На ТВ подписка не нужна.' + trialLine(state),
     });
     return { state, out };
   }
@@ -630,10 +630,10 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
     lines.push(
       swap.left > 0
         ? swapLeftLine(swap) + ' Отвязанное устройство сразу перестаёт работать.'
-        : 'Смены устройства на 30 дней исчерпаны: следующая — с ' + mskDateTime(swap.nextAt) + '.',
+        : 'Смены устройства на 30 дней исчерпаны: следующая - с ' + mskDateTime(swap.nextAt) + '.',
     );
   }
-  if (!sub.active) lines.push('Нажмите «Оплатить» — устройства заработают сами.');
+  if (!sub.active) lines.push('Нажмите «Оплатить» - устройства заработают сами.');
   else if (code) lines.push('', codeBlock(origin, code));
   else lines.push(DEVICE_LIMIT_TEXT);
 
@@ -662,7 +662,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
       const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
       const text =
         lapsing > 0
-          ? 'Ещё одно устройство — ' +
+          ? 'Ещё одно устройство - ' +
             rub(pay.price) +
             ': ' +
             rub(prices.extra) +
@@ -675,7 +675,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
             ', дальше продлеваются вместе с подпиской: продление станет ' +
             rub(nextRenewal) +
             '.'
-          : 'Ещё одно устройство — ' +
+          : 'Ещё одно устройство - ' +
             rub(prices.extra) +
             ' до ' +
             mskDate(sub.paidUntil) +
@@ -689,8 +689,8 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
       const pay = checkout(state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 }, 'OMP, продление');
       state = pay.state;
       out.push({
-        text: 'Сейчас льготный период — отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text,
-        inline: rows([[urlButton('Продлить + устройство — ' + rub(pay.price), pay.url)]]),
+        text: 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text,
+        inline: rows([[urlButton('Продлить + устройство - ' + rub(pay.price), pay.url)]]),
       });
     }
   }
@@ -707,7 +707,7 @@ export function botCallback(state, { chatId, data, now, info }) {
   const account = accountByTelegram(state, chatId);
   const messages = [];
   const say = (text, extra) => messages.push({ chatId: String(chatId), text, keyboard: mainKeyboard(), ...(extra || {}) });
-  const stale = 'Кнопка устарела — откройте «Устройства» ещё раз.';
+  const stale = 'Кнопка устарела - откройте «Устройства» ещё раз.';
   let cur = state;
   const origin = cur.settings.publicOrigin || '';
   const pay = makeCheckout(cur.settings);
@@ -762,7 +762,7 @@ export function botCallback(state, { chatId, data, now, info }) {
     cur = out.state;
     say(
       label + ' отвязано и больше не работает.\n' +
-        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая — с ' + mskDateTime(out.result.nextAt) + '.'),
+        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.'),
     );
     showDevices();
     return { state: cur, messages, answer: 'Отвязано', clearMarkup: true };
@@ -779,7 +779,7 @@ export function botCallback(state, { chatId, data, now, info }) {
       if (swap.left < bound.length) {
         say(
           'Отвязать все устройства (' + bound.length + ') сейчас нельзя: ' + swapLeftLine(swap).toLowerCase() +
-            (swap.left > 0 ? '\nОтвяжите по одному кнопками «Отвязать N».' : (Number.isFinite(swap.nextAt) && swap.nextAt > 0 ? '\nСледующая смена — с ' + mskDateTime(swap.nextAt) + '.' : '')),
+            (swap.left > 0 ? '\nОтвяжите по одному кнопками «Отвязать N».' : (Number.isFinite(swap.nextAt) && swap.nextAt > 0 ? '\nСледующая смена - с ' + mskDateTime(swap.nextAt) + '.' : '')),
         );
         return { state: cur, messages, answer: '', clearMarkup: false };
       }
@@ -801,7 +801,7 @@ export function botCallback(state, { chatId, data, now, info }) {
     cur = out.state;
     say(
       'Все устройства отвязаны (' + out.result.unbound + ') и больше не работают.\n' +
-        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая — с ' + mskDateTime(out.result.nextAt) + '.'),
+        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.'),
     );
     showDevices();
     return { state: cur, messages, answer: 'Отвязано', clearMarkup: true };
@@ -962,7 +962,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
       }
     } else {
-      say('Вход в админ-панель подтверждён. Вернитесь в браузер — страница откроется сама.');
+      say('Вход в админ-панель подтверждён. Вернитесь в браузер - страница откроется сама.');
     }
     return { state: cur, messages, pad: mode };
   }
@@ -976,13 +976,13 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
 
   if (action === 'user_mode') {
     say(
-      (admin ? 'Режим пользователя — те же кнопки, что у подписчика. /admin — снова админ-кабинет.\n\n' : '') +
+      (admin ? 'Режим пользователя - те же кнопки, что у подписчика. /admin - снова админ-кабинет.\n\n' : '') +
         'Личный кабинет\n\n' +
         statusText(cur, sub, account),
       { adminPad: false },
     );
   } else if (action === 'admin') {
-    say('Админ-кабинет. Сводка, поиск, выдача дней и промокоды.\n«Как пользователь» — проверить кабинет подписчика.', { adminPad: true });
+    say('Админ-кабинет. Сводка, поиск, выдача дней и промокоды.\n«Как пользователь» - проверить кабинет подписчика.', { adminPad: true });
   } else if (action === 'admin_summary') {
     const s = adminSummary(cur, now);
     say(
@@ -1008,7 +1008,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     const target = grantTarget(cur, bits[0]);
     if (!target) {
       say(
-        'Не найден пользователь «' + String(bits[0] || '').slice(0, 64) + '». Проверьте id или @ник — пользователь должен хотя бы раз написать боту. Новый аккаунт не создан.',
+        'Не найден пользователь «' + String(bits[0] || '').slice(0, 64) + '». Проверьте id или @ник - пользователь должен хотя бы раз написать боту. Новый аккаунт не создан.',
         { adminPad: true },
       );
     } else if (!Number.isInteger(days) || days < 1 || days > 3650) {
@@ -1022,7 +1022,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         const note = grantUserMessage(origin, out.result);
         messages.push({ chatId: String(target.telegramId), ...note });
         say(
-          'Выдано +' + daysText(out.result.days) + ' — ' + who + ', подписка до ' + mskDateTime(out.result.paidUntil) + '.\n' +
+          'Выдано +' + daysText(out.result.days) + ' - ' + who + ', подписка до ' + mskDateTime(out.result.paidUntil) + '.\n' +
             (out.result.code ? 'Пользователю отправлены сообщение и код для свободного места.' : 'Пользователю отправлено сообщение. Свободных мест нет, новый код не выдан.'),
           { adminPad: true },
         );
@@ -1053,7 +1053,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (out.result.error === 'bad_promo') say('Промокод не найден или уже не действует.');
     else if (out.result.error === 'already') say('Вы уже активировали этот промокод.');
     else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
-    else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку — «Оплатить».');
+    else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку - «Оплатить».');
     else {
       const b = out.result.bonus;
       const parts = [];
@@ -1069,10 +1069,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'price') {
     const grace = graceDays(cur.settings);
     say(
-      'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ': поиск в Jackett и JacRed ' + onPhones(cur) + '.' +
-        '\nПодписка нужна только на телефоне — на ТВ она не нужна.' +
-        (prices.extra ? '\nДоп. устройство — ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
-        (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает — можно спокойно продлить.' : '') +
+      'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ': поиск в Jackett и JacRed ' + onPhones(cur) + '.' +
+        '\nПодписка нужна только на телефоне - на ТВ она не нужна.' +
+        (prices.extra ? '\nДоп. устройство - ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
+        (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает - можно спокойно продлить.' : '') +
         trialLine(cur),
     );
   } else if (action === 'pay') {
@@ -1080,7 +1080,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     else if (!sub) {
       const p = checkout({ kind: 'new', accountId: account.id }, 'OMP Jackett и JacRed');
       say(
-        'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\nПосле оплаты в этот чат придёт код — введите его в OMP на телефоне.',
+        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.',
         { inline: rows([[urlButton('Оплатить ' + rub(p.price), p.url)]]) },
       );
     } else {
@@ -1092,7 +1092,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       let tail = '';
       if (renewal.quote.extras > 0) {
         const base = checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, 'OMP, продление');
-        buttons.push([urlButton('Только подписка — ' + rub(base.price), base.url)]);
+        buttons.push([urlButton('Только подписка - ' + rub(base.price), base.url)]);
         tail = sub.active
           ? '\nТолько подписка: доп. устройство перестанет работать после ' +
             mskDateTime((Number(subRow.extraUntil) || 0) + graceDays(cur.settings) * 86400000) +
@@ -1109,7 +1109,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     say('Напишите сообщение для администратора одним текстом.', { await: { kind: 'support' } });
   } else if (action === 'support' && arg) {
     if (supportTooFast(cur, chatId, now)) {
-      say('Слишком много сообщений подряд — подождите 10 минут. Предыдущие сообщения администратор уже получил.');
+      say('Слишком много сообщений подряд - подождите 10 минут. Предыдущие сообщения администратор уже получил.');
       return { state: cur, messages, pad: mode };
     }
     const saved = appendSupportMessage(cur, { telegramId: String(chatId), text: arg, direction: 'in', now, via: 'bot' });
@@ -1124,7 +1124,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         : 'Сообщение сохранено. Администраторы в панели ещё не указаны.',
     );
     if (notify) {
-      const note = 'Поддержка · ' + (telegramDisplay(account) || chatId) + '\n' + arg + '\n\nОтветьте на это сообщение — текст уйдёт пользователю.';
+      const note = 'Поддержка · ' + (telegramDisplay(account) || chatId) + '\n' + arg + '\n\nОтветьте на это сообщение - текст уйдёт пользователю.';
       for (let i = 0; i < admins.length; i++) {
         messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(), supportNotify: String(chatId) });
       }
@@ -1132,7 +1132,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'unknown') {
     say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(cur, sub, account));
   } else {
-    const hint = admin && mode === 'user' ? '\n\nВы админ. /admin — админ-кабинет.' : '';
+    const hint = admin && mode === 'user' ? '\n\nВы админ. /admin - админ-кабинет.' : '';
     say('Личный кабинет\n\n' + statusText(cur, sub, account) + hint);
   }
   return { state: cur, messages, pad: mode };

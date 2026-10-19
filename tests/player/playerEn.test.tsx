@@ -48,10 +48,10 @@ describe('player in English', () => {
     expect(s).toContain('Audio');
     expect(s).toContain('Subtitles');
     expect(s).toContain('Info');
-    expect(s).toContain('CH± — chapters');
+    expect(s).toContain('CH± - chapters');
     expect(CYR.test(s)).toBe(false);
     const e = text(<Controls {...base} chapters={[]} chapterIdx={-1} />);
-    expect(e).toContain('CH± — episodes');
+    expect(e).toContain('CH± - episodes');
     expect(CYR.test(e)).toBe(false);
   });
 
@@ -67,8 +67,8 @@ describe('player in English', () => {
     ];
     expect(all[0]).toContain('Next episode in 5 s');
     expect(all[1]).toContain('Skip intro');
-    expect(all[2]).toBe('Intro skipped · UndoOK — undo');
-    expect(all[3]).toBe('S01E02Seeds / peers—Download—Bitrate—Audio—Buffer—');
+    expect(all[2]).toBe('Intro skipped · UndoOK - undo');
+    expect(all[3]).toBe('S01E02Seeds / peers-Download-Bitrate-Audio-Buffer-');
     expect(all[4]).toContain('Buffering…');
     expect(all[5]).toContain('Connecting… peers: 0, speed 0 B/s');
     expect(all[6]).toContain('Retry');
@@ -108,7 +108,7 @@ describe('player in English', () => {
     expect(push(vlcUnavailable())).toBe('VLC is not available on this device');
     expect(push(engineLogText({ index: 0, engine: 'vlc', reason: 'ass' }) || '')).toBe('player: switching to VLC (ASS subtitles)');
     const panel = infoPanel({ title: '', probe: null, audioIndex: -1, cache: { Capacity: 100, Filled: 50, PiecesLength: 1, PiecesCount: 1, Torrent: { download_speed: 1048576, active_peers: 3, total_peers: 7, connected_seeders: 2 } } as any, bufferedSec: 4 });
-    expect(panel.tiles.map((x) => x.value + ' ' + x.unit)).toEqual(['2 / 3 ', '1.0 MB/s', '— ']);
+    expect(panel.tiles.map((x) => x.value + ' ' + x.unit)).toEqual(['2 / 3 ', '1.0 MB/s', '- ']);
     expect(panel.buffer).toBe('50 B · 4 s');
     strings.push(...panel.tiles.map((x) => x.label + x.unit), panel.buffer);
     expect(push(mediaErrorText(null))).toBe('Unknown playback error');

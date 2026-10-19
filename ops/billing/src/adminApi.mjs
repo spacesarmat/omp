@@ -22,7 +22,7 @@ import { storageInfo } from './store.mjs';
 const DAY = 24 * 60 * 60 * 1000;
 
 function day(ms) {
-  if (!ms) return '—';
+  if (!ms) return '-';
   return new Date(ms).toISOString().slice(0, 10);
 }
 

@@ -236,7 +236,7 @@ describe('phone: «Источники поиска» with the sites behind Cloud
     const p = posts()[0];
     expect(p.body.rutracker).toEqual({ username: 'rt', password: PASSWORD });
     expect(p.body.logins).toEqual({ kinozal: { username: 'kino', password: PASSWORD } });
-    expect(toast.value).toContain('Kinozal просит капчу — нажмите «Войти через браузер»');
+    expect(toast.value).toContain('Kinozal просит капчу - нажмите «Войти через браузер»');
     // the TV verified rutracker's login but could not write it: the site results still show
     answer = () => ({ body: JSON.stringify({ ok: true, rutracker: 'error', rutrackerNotStored: true, logins: { kinozal: 'ok' } }) });
     act(() => btn('Передать на телевизор')!.click());
@@ -318,7 +318,7 @@ describe('phone: site screen in English', () => {
     expect(withLoginsLabel(['Kinozal', 'rutracker'])).toBe('Together with the sign-in to Kinozal, rutracker');
     expect(loginsNotSent(['Kinozal'], false)).toBe('The sign-in to Kinozal was not sent: the login or password is too long or has invalid characters');
     expect(loginsNotSent(['Kinozal'], true)).toBe('Site sign-ins were not sent: too much data for the TV');
-    expect(sitesNotSent()).toBe('Sign-ins to sites behind Cloudflare were not sent — update OMP on the TV');
+    expect(sitesNotSent()).toBe('Sign-ins to sites behind Cloudflare were not sent - update OMP on the TV');
     expect(rutrackerNotStored()).toBe('The TV could not save the rutracker sign-in: secure storage is unavailable');
     expect(siteLoginNote()).toContain('Without signing in');
     expect(sendLogin()).toBe('Send the sign-in to the TV');

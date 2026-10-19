@@ -68,7 +68,7 @@ describe('wantAction', () => {
     await flush();
     expect(isWanted('movie', 7)).toBe(true);
     expect(calls).toEqual([{ method: 'wantAdd', params: { query: 'Дюна 2021' } }]);
-    expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть» — OMP на телефоне сообщит о раздачах']]);
+    expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть» - OMP на телефоне сообщит о раздачах']]);
   });
 
   it('without a phone saves locally and says to connect one; a failing phone says the same', async () => {
@@ -89,7 +89,7 @@ describe('wantAction', () => {
 
   it('a phone at its subscription cap (no OMP subscription) is quoted instead of «connect a phone»', async () => {
     savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
-    const why = 'На телефоне уже 10 подписок — без подписки OMP больше не добавить.';
+    const why = 'На телефоне уже 10 подписок - без подписки OMP больше не добавить.';
     setRpcTransport(() => Promise.resolve(JSON.stringify({ ok: false, error: { code: 'failed', message: why } })));
     expect(wantAction(title)).toBe(true);
     await flush();

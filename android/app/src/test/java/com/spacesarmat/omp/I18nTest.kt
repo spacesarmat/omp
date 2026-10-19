@@ -59,10 +59,10 @@ class I18nTest {
     @Test
     fun cloudflareTextsMatchTheDictionaries() {
         I18n.lang = "en"
-        assertEquals("The site is behind a Cloudflare check — it could not be passed", I18n.s("errors.cfFailed"))
+        assertEquals("The site is behind a Cloudflare check - it could not be passed", I18n.s("errors.cfFailed"))
         assertEquals("The site asks for a Cloudflare check to be passed by hand", I18n.s("errors.cfInteractive"))
         I18n.lang = "ru"
-        assertEquals("Сайт закрыт проверкой Cloudflare — пройти её не удалось", I18n.s("errors.cfFailed"))
+        assertEquals("Сайт закрыт проверкой Cloudflare - пройти её не удалось", I18n.s("errors.cfFailed"))
         assertEquals("Сайт просит пройти проверку Cloudflare вручную", I18n.s("errors.cfInteractive"))
     }
 

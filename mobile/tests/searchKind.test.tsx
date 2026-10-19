@@ -166,7 +166,7 @@ describe('phone search: kind badge and filter', () => {
     await search('dune');
     click(kindButton('Сериалы'));
     expect(titles()).toEqual([]);
-    expect(el.querySelector('[data-empty]')!.textContent).toBe('Нет раздач этого типа — выберите «Все»');
+    expect(el.querySelector('[data-empty]')!.textContent).toBe('Нет раздач этого типа - выберите «Все»');
   });
 });
 

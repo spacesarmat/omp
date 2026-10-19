@@ -22,7 +22,7 @@ try {
   const pem = readFileSync(keyPath);
   const code = supportCode(month, pem);
   const src = readFileSync(new URL('../src/lib/donate.ts', import.meta.url), 'utf8');
-  if (src.indexOf("'" + publicKeyOf(pem) + "'") < 0) console.error('Внимание: ключ не совпадает с SUPPORT_PUBLIC_KEY в src/lib/donate.ts — приложение этот код не примет');
+  if (src.indexOf("'" + publicKeyOf(pem) + "'") < 0) console.error('Внимание: ключ не совпадает с SUPPORT_PUBLIC_KEY в src/lib/donate.ts - приложение этот код не примет');
   console.log(code);
 } catch (e) {
   console.error(e && e.message ? e.message : String(e));

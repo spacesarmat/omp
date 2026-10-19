@@ -70,7 +70,7 @@ describe('Settings', () => {
     expect(set).toHaveBeenLastCalledWith(false);
     expect(tvSearchOn.value).toBe(false);
     expect(sw.getAttribute('aria-checked')).toBe('false');
-    expect(row.textContent).toContain('Выключено — телевизор ищет только через свой сервер');
+    expect(row.textContent).toContain('Выключено - телевизор ищет только через свой сервер');
   });
 
   it('everyday groups come first; technical settings are one step away', () => {
@@ -280,7 +280,7 @@ describe('Settings: TorrServer on the phone', () => {
     localServer.value = { supported: true, running: true };
     const el = mount();
     await flush();
-    expect(el.textContent).toContain('Включён VPN — другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
+    expect(el.textContent).toContain('Включён VPN - другие устройства могут не видеть сервер. Разрешите в VPN доступ к локальной сети или выключите его.');
     fake({ running: true });
     localServer.value = { supported: true, running: true };
     const el2 = mount();
@@ -462,7 +462,7 @@ describe('Settings: OMP on the TV', () => {
     await flush();
     const row = el.querySelector('[data-row="tv-omp"]')!;
     expect(row.textContent).toContain('OMP на телевизоре');
-    expect(row.textContent).toContain('0.11.4 — есть 0.12.0');
+    expect(row.textContent).toContain('0.11.4 - есть 0.12.0');
     act(() => btn(el, 'Обновить на ТВ').click());
     await flush();
     expect(open).toHaveBeenCalledTimes(1);
@@ -623,7 +623,7 @@ describe('Settings in English', () => {
     await flush();
     const row = el.querySelector('[data-row="tv-omp"]')!;
     expect(row.textContent).toContain('OMP on the TV');
-    expect(row.textContent).toContain('0.10.0 — 0.11.4 is available');
+    expect(row.textContent).toContain('0.10.0 - 0.11.4 is available');
     act(() => btn(el, 'Update on the TV').click());
     await flush();
     expect(toast.value).toBe('OMP is open on the TV');
@@ -670,7 +670,7 @@ describe('Settings: «Плеер для видео»', () => {
     expect(settings.value.phonePlayer).toBe('embedded');
     // the TV's own setting is not touched
     expect(settings.value.videoPlayer).toBe('builtin');
-    expect(row.textContent).toContain('Встроенный — экран 2160 Player прямо в OMP');
+    expect(row.textContent).toContain('Встроенный - экран 2160 Player прямо в OMP');
     expect(row.textContent).toContain('«Выбор Android» откроет видео в приложении, которое вы выберете');
   });
 

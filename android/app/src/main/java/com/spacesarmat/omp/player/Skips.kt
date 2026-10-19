@@ -141,10 +141,10 @@ fun markRows(info: ItemSkip?, nowMs: Long, durMs: Long): List<String> {
     val start = when {
         pending != null -> formatClock(pending)
         mi != null -> formatClock(mi.startMs)
-        else -> "—"
+        else -> "-"
     }
     val end = if (pending != null) I18n.s("player.markStartVal", "a" to formatClock(pending), "b" to formatClock(nowMs)) else I18n.s("player.markNowVal", "b" to formatClock(nowMs))
-    val credits = if (mc != null && durMs > mc * 1000) formatClock(durMs - mc * 1000) else "—"
+    val credits = if (mc != null && durMs > mc * 1000) formatClock(durMs - mc * 1000) else "-"
     return listOf(
         I18n.s("player.markIntroStart", "v" to start),
         I18n.s("player.markIntroEnd", "v" to end),

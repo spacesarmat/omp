@@ -1,8 +1,8 @@
 # Админ-бот OMP (Telegram + Cloudflare Worker)
 
-Маленький бот для администратора: в Telegram пишешь команду — бот смотрит GitHub и отвечает. Работает как
+Маленький бот для администратора: в Telegram пишешь команду - бот смотрит GitHub и отвечает. Работает как
 **Cloudflare Worker** (бесплатный тариф), Telegram присылает ему сообщения по **webhook**. Это **тот же бот OMP**,
-что публикует релизы в канал (тот же токен, что секрет репозитория `TELEGRAM_BOT_TOKEN`) — нового бота заводить не нужно.
+что публикует релизы в канал (тот же токен, что секрет репозитория `TELEGRAM_BOT_TOKEN`) - нового бота заводить не нужно.
 
 | Команда | Что делает |
 |---|---|
@@ -24,34 +24,34 @@
 сообщение «… закрепил(а) сообщение» и удалял его из канала. Как теперь:
 
 - **Worker сам удаляет эти сообщения.** Telegram присылает ему служебный пост канала (`channel_post` с
-  `pinned_message`) — бот удаляет его, если канал совпадает с `CHANNEL_ID` из `wrangler.toml` (по умолчанию
+  `pinned_message`) - бот удаляет его, если канал совпадает с `CHANNEL_ID` из `wrangler.toml` (по умолчанию
   `@ompplyaer`). Удаляется любое «закрепил сообщение» в этом канале (и при ручном закреплении тоже); остальные посты
-  канала бот не трогает. Пустой `CHANNEL_ID` — бот канал не трогает вообще.
+  канала бот не трогает. Пустой `CHANNEL_ID` - бот канал не трогает вообще.
 - **Скрипт релиза больше не зависит от `getUpdates`.** Перед поиском он спрашивает `getWebhookInfo`: если webhook
-  есть — пишет в лог `a webhook is set (admin bot…)` и ничего не ищет. Если `getUpdates` всё же вернул 409 — то же
+  есть - пишет в лог `a webhook is set (admin bot…)` и ничего не ищет. Если `getUpdates` всё же вернул 409 - то же
   самое. Без webhook (бот откатили) всё работает как раньше, через `getUpdates`.
 - **Публикация в канал не изменилась**: `sendPhoto`/`sendMediaGroup`/`sendDocument`/`pinChatMessage` от workflow
   работают и с webhook.
 
 Для этого webhook подписан на `message` и `channel_post` (это задаёт скрипт из шага 7), а бот должен оставаться
-админом канала с правом удалять сообщения (он уже такой — релизы удаляли эти строки и раньше).
+админом канала с правом удалять сообщения (он уже такой - релизы удаляли эти строки и раньше).
 
 ## Что понадобится
 
 - Компьютер с Node.js 24 и этой папкой репозитория (`git clone https://github.com/spacesarmat/omp`, затем `npm ci`).
 - Токен бота OMP: в Telegram откройте **@BotFather** → `/mybots` → бот OMP → **API Token**. Это тот же токен, что
   лежит в секрете репозитория `TELEGRAM_BOT_TOKEN` (GitHub не показывает значения секретов, поэтому берём у BotFather).
-  **Не нажимайте «Revoke»** — иначе релизы перестанут публиковаться, пока не обновите секрет на GitHub.
+  **Не нажимайте «Revoke»** - иначе релизы перестанут публиковаться, пока не обновите секрет на GitHub.
 - Минут 20.
 
-Все команды ниже — в терминале (Windows: PowerShell; macOS/Linux: Terminal). Секреты нигде не набираются в самой
-команде: wrangler и наш скрипт спрашивают их отдельно, со скрытым вводом, — в истории терминала их не остаётся.
+Все команды ниже - в терминале (Windows: PowerShell; macOS/Linux: Terminal). Секреты нигде не набираются в самой
+команде: wrangler и наш скрипт спрашивают их отдельно, со скрытым вводом, - в истории терминала их не остаётся.
 
 ## Шаг 1. Бесплатный аккаунт Cloudflare
 
 1. Откройте https://dash.cloudflare.com/sign-up, зарегистрируйтесь (почта + пароль), подтвердите почту.
 2. В панели слева: **Compute (Workers)** → **Workers & Pages**. При первом входе Cloudflare попросит выбрать
-   поддомен вида `<имя>.workers.dev` — придумайте любое. Карту привязывать не нужно: бесплатного тарифа
+   поддомен вида `<имя>.workers.dev` - придумайте любое. Карту привязывать не нужно: бесплатного тарифа
    (100 000 запросов в день) хватает с огромным запасом.
 
 ## Шаг 2. Токен GitHub (`GH_TOKEN`)
@@ -63,21 +63,21 @@
    - **Expiration**: например, 1 год (за неделю до конца GitHub пришлёт письмо; потом повторите шаг 2 и шаг 5 только для `GH_TOKEN`).
    - **Resource owner**: `spacesarmat`.
    - **Repository access**: **Only select repositories** → `spacesarmat/omp`.
-   - **Repository permissions** — ровно эти, всё остальное «No access»:
+   - **Repository permissions** - ровно эти, всё остальное «No access»:
 
      | Разрешение | Уровень | Зачем |
      |---|---|---|
-     | **Actions** | **Read and write** | `/ci` и `/status` читают запуски workflow; `/check` запускает «Parser monitor» (workflow_dispatch — это запись) |
-     | **Contents** | **Read-only** | `/status` читает `parser-monitor.json` из ветки `monitor-state`, `/versions` — фиды из `gh-pages`; `/versions` и `/stats` — релизы и счётчики скачиваний |
+     | **Actions** | **Read and write** | `/ci` и `/status` читают запуски workflow; `/check` запускает «Parser monitor» (workflow_dispatch - это запись) |
+     | **Contents** | **Read-only** | `/status` читает `parser-monitor.json` из ветки `monitor-state`, `/versions` - фиды из `gh-pages`; `/versions` и `/stats` - релизы и счётчики скачиваний |
      | **Issues** | **Read-only** | `/stats`: число открытых issues и открытые issues с меткой `parser-monitor` |
      | **Metadata** | **Read-only** | обязательное (GitHub ставит само): звёзды и сведения о репозитории |
 
-3. **Generate token** → скопируйте токен (`github_pat_…`). GitHub покажет его один раз — не закрывайте страницу до шага 5
+3. **Generate token** → скопируйте токен (`github_pat_…`). GitHub покажет его один раз - не закрывайте страницу до шага 5
    (или сохраните в менеджер паролей).
 
 ## Шаг 3. Секрет webhook (`WEBHOOK_SECRET`)
 
-Любая случайная строка — по ней Worker узнаёт, что запрос пришёл от Telegram. Сгенерируйте:
+Любая случайная строка - по ней Worker узнаёт, что запрос пришёл от Telegram. Сгенерируйте:
 
 ```
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
@@ -87,7 +87,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 ## Шаг 4. Wrangler и вход в Cloudflare
 
-Wrangler — консольная программа Cloudflare. Ставить её не обязательно: `npx wrangler …` скачает её сама
+Wrangler - консольная программа Cloudflare. Ставить её не обязательно: `npx wrangler …` скачает её сама
 (или один раз `npm i -g wrangler`, тогда можно писать просто `wrangler …`).
 
 ```
@@ -95,7 +95,7 @@ cd ops/admin-bot
 npx wrangler login
 ```
 
-Откроется браузер → **Allow**. В терминале появится «Successfully logged in». Все следующие команды `wrangler` —
+Откроется браузер → **Allow**. В терминале появится «Successfully logged in». Все следующие команды `wrangler` -
 из папки `ops/admin-bot`.
 
 Проверьте `wrangler.toml`: `CHANNEL_ID` - канал OMP, тот же, что переменная репозитория `TELEGRAM_CHAT_ID`
@@ -129,7 +129,7 @@ npx wrangler secret put WEBHOOK_SECRET
 
 ## Шаг 6. (Проверка) Worker жив
 
-Откройте в браузере `https://omp-admin-bot.<имя>.workers.dev` — должно быть «Not found». Это нормально: Worker
+Откройте в браузере `https://omp-admin-bot.<имя>.workers.dev` - должно быть «Not found». Это нормально: Worker
 принимает только запросы Telegram.
 
 ## Шаг 7. Подключить бота к Worker (webhook + меню команд)
@@ -141,25 +141,25 @@ npm run admin-bot:webhook -- https://omp-admin-bot.<имя>.workers.dev
 ```
 
 Скрипт спросит токен бота и `WEBHOOK_SECRET` (ввод скрыт), затем:
-- `setWebhook` — адрес Worker, секрет, типы обновлений `message` и `channel_post`;
-- `setMyCommands` — меню команд (кнопка «/» в Telegram), видно **только в вашем чате**;
-- покажет `getWebhookInfo` — адрес и последнюю ошибку, если была.
+- `setWebhook` - адрес Worker, секрет, типы обновлений `message` и `channel_post`;
+- `setMyCommands` - меню команд (кнопка «/» в Telegram), видно **только в вашем чате**;
+- покажет `getWebhookInfo` - адрес и последнюю ошибку, если была.
 
-(Если удобнее, токен и секрет можно задать переменными окружения `TELEGRAM_BOT_TOKEN` и `WEBHOOK_SECRET` — тогда
-скрипт ничего не спрашивает. Но не набирайте их значения прямо в команде — они останутся в истории.)
+(Если удобнее, токен и секрет можно задать переменными окружения `TELEGRAM_BOT_TOKEN` и `WEBHOOK_SECRET` - тогда
+скрипт ничего не спрашивает. Но не набирайте их значения прямо в команде - они останутся в истории.)
 
 ## Шаг 8. Проверить
 
-1. В Telegram откройте чат с ботом OMP и отправьте `/help` — придёт список команд.
-2. `/status` — таблица парсеров, `/ci` — последние запуски. `/check rutor` — через несколько секунд в сообщении
+1. В Telegram откройте чат с ботом OMP и отправьте `/help` - придёт список команд.
+2. `/status` - таблица парсеров, `/ci` - последние запуски. `/check rutor` - через несколько секунд в сообщении
    появится ссылка на запуск, а через 3–15 минут бот пришлёт таблицу.
-3. С другого аккаунта бот не отвечает ничего — так и должно быть.
+3. С другого аккаунта бот не отвечает ничего - так и должно быть.
 
 Если бот молчит:
-- `npm run admin-bot:webhook -- --info` — строка «последняя ошибка» (например, `403` — `WEBHOOK_SECRET` в Worker и в
+- `npm run admin-bot:webhook -- --info` - строка «последняя ошибка» (например, `403` - `WEBHOOK_SECRET` в Worker и в
   webhook разные: повторите шаг 7 с тем же значением, что в шаге 5);
-- `npx wrangler tail` (из `ops/admin-bot`) — живой лог Worker, отправьте команду ещё раз и смотрите;
-- «⚠️ Не получилось: GitHub …: HTTP 403/404» в ответе — у `GH_TOKEN` не те разрешения или не тот репозиторий (шаг 2).
+- `npx wrangler tail` (из `ops/admin-bot`) - живой лог Worker, отправьте команду ещё раз и смотрите;
+- «⚠️ Не получилось: GitHub …: HTTP 403/404» в ответе - у `GH_TOKEN` не те разрешения или не тот репозиторий (шаг 2).
 
 ## Откат
 
@@ -169,20 +169,20 @@ npm run admin-bot:webhook -- https://omp-admin-bot.<имя>.workers.dev
 npm run admin-bot:webhook -- --delete
 ```
 
-Это `deleteWebhook` + удаление меню команд. Worker после этого просто не получает сообщений; удалить его совсем —
-`npx wrangler delete` из `ops/admin-bot` (или в панели Cloudflare). Вернуть бота — снова шаг 7.
+Это `deleteWebhook` + удаление меню команд. Worker после этого просто не получает сообщений; удалить его совсем -
+`npx wrangler delete` из `ops/admin-bot` (или в панели Cloudflare). Вернуть бота - снова шаг 7.
 
 ## Обновить бота
 
 После изменений в `ops/admin-bot/` (или в `scripts/parser-monitor/telegramTable.mjs`, `src/sources/sourceNames.ts`,
-которые он использует): `git pull`, затем из `ops/admin-bot` — `npx wrangler deploy`. Секреты и webhook остаются.
-Поменять список команд в меню — `src/commandList.mjs`, затем снова шаг 7.
+которые он использует): `git pull`, затем из `ops/admin-bot` - `npx wrangler deploy`. Секреты и webhook остаются.
+Поменять список команд в меню - `src/commandList.mjs`, затем снова шаг 7.
 
 ## Как это устроено
 
-- `src/index.ts` — вход Worker: только POST с верным секретом, ответ Telegram всегда 200 (иначе он повторяет запрос).
-- `src/bot.ts` — команды; `src/commands.ts` — разбор команд, фильтр админа, служебные посты канала;
-  `src/format.ts` — тексты ответов; `src/github.ts`, `src/telegram.ts` — API.
+- `src/index.ts` - вход Worker: только POST с верным секретом, ответ Telegram всегда 200 (иначе он повторяет запрос).
+- `src/bot.ts` - команды; `src/commands.ts` - разбор команд, фильтр админа, служебные посты канала;
+  `src/format.ts` - тексты ответов; `src/github.ts`, `src/telegram.ts` - API.
 - `/check`: Worker после ответа может работать ещё только ~30 секунд (`ctx.waitUntil`), а проверка идёт минуты.
   Поэтому бот запускает workflow с флажком `notify=true`, а таблицу по окончании отправляет сам workflow
   (шаг «Report to the admin» → `scripts/parser-monitor/notify.mjs`, в чат `MONITOR_TG_CHAT`, по умолчанию `536445442`).

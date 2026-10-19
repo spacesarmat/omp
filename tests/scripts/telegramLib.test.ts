@@ -24,7 +24,7 @@ describe('telegram-lib', () => {
     const c = buildCaption('0.14.1', ['Поддержать OMP', 'Окна <выбора>']);
     expect(c).toBe(
       '<b>OMP 0.14.1</b>\n\n• Поддержать OMP\n• Окна &lt;выбора&gt;' +
-        '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v0.14.1">Все изменения и файлы — на GitHub</a>',
+        '\n\n<a href="https://github.com/spacesarmat/omp/releases/tag/v0.14.1">Все изменения и файлы - на GitHub</a>',
     );
   });
 
@@ -76,14 +76,14 @@ describe('telegram-lib', () => {
   it('names every oversize file with its GitHub link in the closing reply', () => {
     const m = buildLinksMessage('v0.14.1', [{ name: 'OMP-0.14.1-arm64.apk' }, { name: 'OMP-0.14.1.apk' }]);
     expect(m).toBe(
-      `Файл OMP-0.14.1-arm64.apk больше 50 МБ — скачать: ${DL}/OMP-0.14.1-arm64.apk\n` +
-        `Файл OMP-0.14.1.apk больше 50 МБ — скачать: ${DL}/OMP-0.14.1.apk`,
+      `Файл OMP-0.14.1-arm64.apk больше 50 МБ - скачать: ${DL}/OMP-0.14.1-arm64.apk\n` +
+        `Файл OMP-0.14.1.apk больше 50 МБ - скачать: ${DL}/OMP-0.14.1.apk`,
     );
   });
 
   it('logs the size in MB for a manual forward', () => {
     expect(oversizeLogLine({ name: 'OMP-0.14.1-arm64.apk', size: 67_200_000 })).toBe(
-      'Telegram: OMP-0.14.1-arm64.apk is 68 MB — forward it manually from GitHub',
+      'Telegram: OMP-0.14.1-arm64.apk is 68 MB - forward it manually from GitHub',
     );
   });
 

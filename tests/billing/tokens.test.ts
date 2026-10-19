@@ -158,7 +158,7 @@ describe('device tokens on the phone', () => {
     saveBillingSession({ ...billingSession()!, accessExp: Date.now() - 1 });
     const calls = site.calls.length;
     await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow(
-      'Ключ подписки не сохранился на телефоне — введите код заново',
+      'Ключ подписки не сохранился на телефоне - введите код заново',
     );
     expect(site.calls.length).toBe(calls);
     expect(billingSession()).toBeNull();
@@ -306,7 +306,7 @@ describe('device tokens on the phone', () => {
       onPair(-1);
       saveBillingAccess({ active: true, accessUntil: 2e12 });
       const site = fakeSite((c) => page(JSON.stringify({ error: code }), c.url, 401), { [REFRESH_SECRET]: 'r1.cur' });
-      await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Устройство отключено — введите новый код');
+      await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Устройство отключено - введите новый код');
       expect(billingSession()).toBeNull();
       expect(billingNotice()).toBe('revoked');
       expect(ompSubscribed()).toBe(false);

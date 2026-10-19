@@ -39,7 +39,7 @@ function bullets(notes, max, more) {
  */
 export function buildReleaseNotes({ tag, version, ru, en, prevTag, sha256 = [] }) {
   const raw = `https://raw.githubusercontent.com/${REPO}/${tag}/docs/screenshots`;
-  const ruMore = (n) => `- …и ещё ${n} — в [CHANGELOG](${REPO_URL}/blob/${tag}/CHANGELOG.md)`;
+  const ruMore = (n) => `- …и ещё ${n} - в [CHANGELOG](${REPO_URL}/blob/${tag}/CHANGELOG.md)`;
   const enMore = (n) => `- …and ${n} more in the [changelog](${REPO_URL}/blob/${tag}/CHANGELOG.en.md)`;
   const out = [
     `## OMP ${tag}`,
@@ -53,10 +53,10 @@ export function buildReleaseNotes({ tag, version, ru, en, prevTag, sha256 = [] }
     '### Скачать',
     '',
     `- Телефон: \`OMP-${version}-arm64.apk\``,
-    `- Приставка Android TV: \`OMP-${version}-armv7.apk\` (если не уверены — \`OMP-${version}.apk\`)`,
+    `- Приставка Android TV: \`OMP-${version}-armv7.apk\` (если не уверены - \`OMP-${version}.apk\`)`,
     `- LG webOS: \`OMP-${version}-webOS.ipk\``,
     '',
-    `Как установить — в [README](${REPO_URL}#установка). Уже установленный OMP сам предложит обновление.`,
+    `Как установить - в [README](${REPO_URL}#установка). Уже установленный OMP сам предложит обновление.`,
     '',
     '---',
     '',

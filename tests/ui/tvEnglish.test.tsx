@@ -94,11 +94,11 @@ describe('TV screens in English', () => {
     expect(buttons(host)).toContain('Connect');
     expect(buttons(host)).toContain('Find on network');
     expect(text).toContain('Server history');
-    expect(text).toContain('Back — exit');
+    expect(text).toContain('Back - exit');
     expect(text).not.toMatch(CYR);
     (host.querySelector('.history-btn') as HTMLElement).click();
     await flush();
-    expect(host.textContent).toContain('OK — connect · Back — close the list');
+    expect(host.textContent).toContain('OK - connect · Back - close the list');
     (host.querySelector('.hist-card .button') as HTMLElement).click();
     await flush();
     text = host.textContent || '';
@@ -124,8 +124,8 @@ describe('TV screens in English', () => {
     await flush();
     const text = host.textContent || '';
     expect(text).toContain('No torrents. Add them via "Add" or the TorrServer web interface on the phone.');
-    expect(text).toContain('OK — open');
-    expect(text).toContain('Back — exit');
+    expect(text).toContain('OK - open');
+    expect(text).toContain('Back - exit');
     expect(text).not.toMatch(CYR);
     expect(host.querySelector('[aria-label="Add"]') || host.textContent).toBeTruthy();
   });
@@ -171,8 +171,8 @@ describe('TV screens in English', () => {
     expect(text).toContain('Skip the intro automatically');
     expect(text).toContain('Intro and credits');
     expect(text).toContain('Season 2');
-    expect(text).toContain('OK — watch');
-    expect(text).toContain('Back — to the library');
+    expect(text).toContain('OK - watch');
+    expect(text).toContain('Back - to the library');
     expect(text).not.toMatch(CYR);
   });
 
@@ -282,7 +282,7 @@ describe('TV screens in English', () => {
       expect(host.querySelectorAll('.disc-tile').length).toBe(1);
       expect(text).toContain('Dark Matter');
       expect(text).toContain('2024 · Series');
-      expect(text).toContain('OK — details');
+      expect(text).toContain('OK - details');
       expect(text).not.toMatch(CYR);
       const aria = Array.prototype.map.call(host.querySelectorAll('[aria-label]'), (e: Element) => e.getAttribute('aria-label')).join('|');
       expect(aria).not.toMatch(CYR);
@@ -386,8 +386,8 @@ describe('TV screens in English', () => {
     expect(host.querySelectorAll('.faq-list .faq-q').length).toBeGreaterThan(0);
     expect(text).toContain('Help');
     expect(text).toContain('Installation');
-    expect(text).toContain('◀ ▶ — section');
-    expect(host.querySelector('.hints')!.textContent).toBe('▲ ▼ — question · ◀ ▶ — section · Back — to settings');
+    expect(text).toContain('◀ ▶ - section');
+    expect(host.querySelector('.hints')!.textContent).toBe('▲ ▼ - question · ◀ ▶ - section · Back - to settings');
     expect(text).not.toMatch(CYR);
   });
 
@@ -475,7 +475,7 @@ describe('TV screens in English', () => {
     expect(buttons(host)).toContain('Search');
     expect(buttons(host)).toContain('Magnet or link');
     expect(buttons(host)).toContain('Sources');
-    expect(text).toContain('OK — add and watch');
+    expect(text).toContain('OK - add and watch');
     expect(text).not.toMatch(CYR);
   });
 
@@ -608,7 +608,7 @@ describe('TV screens in English', () => {
       expect(text).toContain('New episode S02E05');
       expect(text).toContain('Better quality: 1080p → 4K');
       expect(text).toContain('Subscription «Dune»');
-      expect(text).toContain('OK — watch');
+      expect(text).toContain('OK - watch');
       expect(text).not.toMatch(CYR);
     });
 
@@ -628,7 +628,7 @@ describe('TV screens in English', () => {
       expect(text).toContain('Check now');
       expect(text).toContain('Remove');
       expect(text).toContain('Find a subscription');
-      expect(text).toContain('OK — toggle or choose');
+      expect(text).toContain('OK - toggle or choose');
       expect(text).not.toMatch(CYR);
     });
 

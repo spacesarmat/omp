@@ -78,7 +78,7 @@ describe('TV torrent card · Пропуск', () => {
   it('saves a switch at once', async () => {
     saveMock.mockResolvedValue({ i: false, c: true });
     await mount();
-    act(() => row('Пропускать титры — сразу следующая серия').click());
+    act(() => row('Пропускать титры - сразу следующая серия').click());
     expect(saveMock.mock.calls[0][2]).toEqual({ c: true });
     expect(row('Пропускать титры').querySelector('[role=switch]')!.getAttribute('aria-checked')).toBe('true');
     await flush();
@@ -142,7 +142,7 @@ describe('TV torrent card · marks dialog', () => {
     await mount();
     const r = row('Заставка и титры');
     expect(r.getAttribute('role')).toBe('button');
-    expect(r.getAttribute('aria-label')).toBe('Заставка и титры — задать вручную');
+    expect(r.getAttribute('aria-label')).toBe('Заставка и титры - задать вручную');
     expect(r.textContent).not.toContain('ОК');
   });
 

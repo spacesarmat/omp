@@ -90,7 +90,7 @@ describe('TV search', () => {
     expect(fake).not.toHaveBeenCalled();
     expect(host.querySelectorAll('.list-item')).toHaveLength(1);
     expect(host.querySelector('.search-note')!.textContent).toBe(
-      'Сайты ищет телефон с OMP — подключите его к этому телевизору. Сейчас ищем через TorrServer',
+      'Сайты ищет телефон с OMP - подключите его к этому телевизору. Сейчас ищем через TorrServer',
     );
     expect(host.querySelector('.search-by')!.textContent).toBe('Ищет TorrServer · ');
   });
@@ -238,7 +238,7 @@ describe('TV search on Android TV: focus and stale searches', () => {
     act(() => button('Искать').click());
     await flush();
     const hint = host.querySelector('.search-hint')!;
-    expect(hint.textContent).toBe('NNM-Club закрыт проверкой Cloudflare — войдите на него на телефоне в «Источниках поиска»');
+    expect(hint.textContent).toBe('NNM-Club закрыт проверкой Cloudflare - войдите на него на телефоне в «Источниках поиска»');
   });
 
   it('a site asking for a verification code says so and where to enter it', async () => {

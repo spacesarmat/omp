@@ -158,6 +158,6 @@ describe('commands', () => {
     const f = fakeFetch();
     await handleUpdate(update(536445442, '/nope'), ENV, deps(f));
     await handleUpdate(update(536445442, 'привет'), ENV, deps(f));
-    expect(f.tg().map((s) => s.body.text)).toEqual(['Нет такой команды. /help — список.', 'Не понял. /help — список команд.']);
+    expect(f.tg().map((s) => s.body.text)).toEqual(['Нет такой команды. /help - список.', 'Не понял. /help - список команд.']);
   });
 });

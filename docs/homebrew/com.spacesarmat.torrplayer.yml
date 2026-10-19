@@ -1,4 +1,4 @@
-title: OMP — Open Movie Player
+title: OMP - Open Movie Player
 iconUri: https://raw.githubusercontent.com/spacesarmat/omp/main/webos/largeIcon.png
 manifestUrl: https://github.com/spacesarmat/omp/releases/latest/download/com.spacesarmat.torrplayer.manifest.json
 category: multimedia
@@ -6,7 +6,7 @@ pool: main
 requirements:
   webosRelease: '>=4.0'
 description: |
-  # OMP — Open Movie Player
+  # OMP - Open Movie Player
 
   A remote-friendly media player for LG webOS that plays media from **your own
   [TorrServer](https://github.com/YouROK/TorrServer)** instance on the local network.

@@ -142,7 +142,7 @@ describe('nnmclub', () => {
     expect((e as Error).message).toBe('Неверный логин или пароль');
     expect(bad.secrets).toEqual({});
     const cap = fakeSite(server({ loginPage: CAPTCHA_PAGE }));
-    await expect(nnmclub.login!('tester', PASS, cap.ctx)).rejects.toThrow('NNM-Club просит капчу — нажмите «Войти через браузер»');
+    await expect(nnmclub.login!('tester', PASS, cap.ctx)).rejects.toThrow('NNM-Club просит капчу - нажмите «Войти через браузер»');
     expect(cap.secrets).toEqual({});
   });
 

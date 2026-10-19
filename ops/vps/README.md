@@ -62,7 +62,7 @@ Both pages carry a title and description, `meta keywords`, `canonical`, hreflang
 
 ## Emergency admin login
 
-The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused — leave `.env` as it is.
+The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused - leave `.env` as it is.
 
 If Telegram is down, mint a one-time link from the VPS shell. It lives 10 minutes, works once, and is written to the admin journal as actor `cli`. The command prints the URL on stdout and does not write the token into the container log or the database (only a hash is stored).
 

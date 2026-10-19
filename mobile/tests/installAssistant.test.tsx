@@ -159,7 +159,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-describe('Install assistant — device list', () => {
+describe('Install assistant - device list', () => {
   it('lists LG and Android TVs with their state, hides speakers', async () => {
     const el = mount(<InstallAssistant />);
     expect(el.textContent).toContain('Ищу устройства…');
@@ -170,7 +170,7 @@ describe('Install assistant — device list', () => {
     expect(rows[0]).toContain('OLED55C1 · LG webOS');
     expect(rows[0]).toContain('Подключусь и проверю, что установлено');
     expect(rows[1]).toContain('OMP не найден');
-    expect(rows[2]).toContain('OMP 0.12.1 — есть 0.13.1');
+    expect(rows[2]).toContain('OMP 0.12.1 - есть 0.13.1');
     expect(el.textContent).not.toContain('Ищу устройства…');
     expect(el.textContent).toContain('Samsung (Tizen) пока не поддерживается.');
   });
@@ -229,13 +229,13 @@ describe('Install assistant — device list', () => {
   });
 });
 
-describe('Install assistant — LG steps', () => {
+describe('Install assistant - LG steps', () => {
   it('pairs, reads the TV and shows the Developer Mode path; outside the Android app «Установить» is off', async () => {
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     expect(el.textContent).toContain('Проверяю телевизор…');
     await flush();
     expect(el.querySelector('.m-bar-title')!.textContent).toBe('LG «Гостиная»');
-    expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · без root — ставим через режим разработчика');
+    expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · без root - ставим через режим разработчика');
     const steps = Array.from(el.querySelectorAll('.m-install-step'));
     expect(steps.map((s) => s.className.split(' ').pop())).toEqual(['current', 'todo', 'todo', 'todo', 'todo', 'todo']);
     expect(steps[0].getAttribute('aria-current')).toBe('step');
@@ -273,7 +273,7 @@ describe('Install assistant — LG steps', () => {
     lg.answers['ssap://com.webos.applicationManager/listApps'] = apps({ id: 'com.spacesarmat.torrplayer', version: '0.12.1' });
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     await flush();
-    expect(el.textContent).toContain('Версия 0.12.1 — есть 0.13.1');
+    expect(el.textContent).toContain('Версия 0.12.1 - есть 0.13.1');
     expect(probed).toEqual([]);
     click(button(el, 'Обновить на ТВ'));
     await flush();
@@ -296,7 +296,7 @@ describe('Install assistant — LG steps', () => {
     lg.decline = false;
     click(button(el, 'Подключиться снова'));
     await flush();
-    expect(el.textContent).toContain('без root — ставим через режим разработчика');
+    expect(el.textContent).toContain('без root - ставим через режим разработчика');
   });
 
   it('the FAQ link opens that question', async () => {
@@ -312,7 +312,7 @@ describe('Install assistant — LG steps', () => {
   });
 });
 
-describe('Install assistant — Android TV steps', () => {
+describe('Install assistant - Android TV steps', () => {
   it('no OMP: the debugging steps and the arm64 note', async () => {
     const el = mount(<InstallAssistant />);
     await flush();
@@ -338,14 +338,14 @@ describe('Install assistant — Android TV steps', () => {
     });
     const el = mount(<InstallAssistant ip="192.168.1.66" kind="atv" />);
     await flush();
-    expect(el.textContent).toContain('Версия 0.12.0 — есть 0.13.1');
+    expect(el.textContent).toContain('Версия 0.12.0 - есть 0.13.1');
     click(button(el, 'Обновить на ТВ'));
     await flush();
     expect(el.textContent).toContain('Подключите телефон к этому телевизору кодом');
   });
 });
 
-describe('Install assistant — entry points', () => {
+describe('Install assistant - entry points', () => {
   it('Settings has «Установить OMP на телевизор»', () => {
     const el = mount(<Settings />);
     click(button(el, 'Установить OMP на телевизор'));
@@ -385,7 +385,7 @@ describe('Install assistant — entry points', () => {
   });
 });
 
-describe('Install assistant — the current TV', () => {
+describe('Install assistant - the current TV', () => {
   const A = '192.168.1.50';
 
   async function connectA() {
@@ -417,7 +417,7 @@ describe('Install assistant — the current TV', () => {
     await flush();
     click(button(document.querySelector('[role="dialog"]') as HTMLElement, 'Подключиться'));
     await flush();
-    expect(el.textContent).toContain('без root — ставим через режим разработчика');
+    expect(el.textContent).toContain('без root - ставим через режим разработчика');
     expect(sessionIp.value).toBe(LG_IP);
     expect(activeTvIp.value).toBe(A);
     // a recheck does not ask again
@@ -475,7 +475,7 @@ describe('Install assistant — the current TV', () => {
   });
 });
 
-describe('Install assistant — more', () => {
+describe('Install assistant - more', () => {
   it('leaving the list stops the native search', async () => {
     const el = mount(<InstallAssistant />);
     await flush();
@@ -561,7 +561,7 @@ function check(box: HTMLInputElement, on: boolean) {
   box.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-describe('Install assistant — install from the phone', () => {
+describe('Install assistant - install from the phone', () => {
   it('LG: needs the code, sends it once, shows progress and the result with Homebrew Channel', async () => {
     clearLog();
     const inst = fakeInstaller();
@@ -710,7 +710,7 @@ describe('Install assistant — install from the phone', () => {
     click(button(el, 'Установить OMP'));
     expect(inst.reqs).toEqual([{ method: 'atv-adb', ip: ATV_IP }]);
     expect(el.textContent).toContain('Подключаюсь к телевизору');
-    expect(el.textContent).toContain('Если на ТВ появится «Разрешить отладку?» — нажмите «Разрешить».');
+    expect(el.textContent).toContain('Если на ТВ появится «Разрешить отладку?» - нажмите «Разрешить».');
     await act(async () => inst.reject('adb-closed'));
     await flush();
     expect(el.querySelector('[role="alert"]')!.textContent).toContain('порту 5555');
@@ -727,7 +727,7 @@ describe('Install assistant — install from the phone', () => {
     await act(async () => inst.reject('unreachable'));
     await flush();
     const alert = el.querySelector('[role="alert"]')!.textContent!;
-    expect(alert).toContain('Телевизор не отвечает — проверьте IP и что он включён');
+    expect(alert).toContain('Телевизор не отвечает - проверьте IP и что он включён');
     expect(alert).not.toContain('Разрешить');
     expect(button(el, 'Скачать APK')).toBeDefined();
   });
@@ -767,7 +767,7 @@ describe('Install assistant in English', () => {
     const rows = Array.from(el.querySelectorAll('.m-install-dev')).map((n) => n.textContent);
     expect(rows[0]).toContain('I will connect and check what is installed');
     expect(rows[1]).toContain('OMP not found');
-    expect(rows[2]).toContain('OMP 0.12.1 — 0.13.1 is available');
+    expect(rows[2]).toContain('OMP 0.12.1 - 0.13.1 is available');
     expect(el.textContent).toContain('Samsung (Tizen) is not supported yet.');
     expect(button(el, 'Search again')).toBeTruthy();
     expect(el.textContent).not.toMatch(CYR);
@@ -792,7 +792,7 @@ describe('Install assistant in English', () => {
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     expect(el.textContent).toContain('Checking the TV…');
     await flush();
-    expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · no root — install through Developer Mode');
+    expect(el.textContent).toContain('OLED55C1RLA · webOS 6.0 · no root - install through Developer Mode');
     expect(el.querySelectorAll('.m-install-step').length).toBe(6);
     expect(button(el, 'Install OMP and Homebrew Channel')).toBeTruthy();
     expect(el.textContent).toContain('Code (Passphrase) from the Developer Mode app');
@@ -808,7 +808,7 @@ describe('Install assistant in English', () => {
     });
     const el = mount(<InstallAssistant ip="192.168.1.66" kind="atv" />);
     await flush();
-    expect(el.textContent).toContain('Version 0.12.0 — 0.13.1 is available');
+    expect(el.textContent).toContain('Version 0.12.0 - 0.13.1 is available');
     click(button(el, 'Update on the TV'));
     await flush();
     expect(el.textContent).toContain('Connect the phone to this TV with the code in the “TV” section');

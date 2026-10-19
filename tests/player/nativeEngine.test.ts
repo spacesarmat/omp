@@ -29,7 +29,7 @@ describe('engine choice', () => {
   it('settings choices: names and texts of the mockup', () => {
     expect(playerEngineOptions().map((o) => o.value)).toEqual(['auto', 'builtin', 'vlc']);
     expect(playerEngineOptions().map((o) => o.name)).toEqual(['Авто', 'Встроенный', 'VLC']);
-    expect(playerEngineOptions()[0].text).toBe('Встроенный плеер; если он не может открыть файл или в нём субтитры ASS — VLC с того же места');
+    expect(playerEngineOptions()[0].text).toBe('Встроенный плеер; если он не может открыть файл или в нём субтитры ASS - VLC с того же места');
     expect(isPlayerEngine('auto')).toBe(true);
     expect(isPlayerEngine('mpv')).toBe(false);
   });

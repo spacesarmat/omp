@@ -95,7 +95,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
           ) : null}
         </CardTitle>
         <CardDescription>
-          «Последний раз» — поиск, скачивание или проверка подписки с этого устройства (обновляется не чаще раза в 10 минут). IP хранится
+          «Последний раз» - поиск, скачивание или проверка подписки с этого устройства (обновляется не чаще раза в 10 минут). IP хранится
           без последней части. «Отозвать» отвязывает устройство и сразу гасит его токен, для слота выпускается новый код, пользователю
           уходит сообщение в Telegram.
         </CardDescription>
@@ -125,7 +125,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                       </Badge>
                     ) : null}
                     {d.cloneAt ? (
-                      <Badge variant="warn" className="ml-1" title="Использованный ключ этого устройства пришёл повторно. Если это не потеря сети — отзовите устройство.">
+                      <Badge variant="warn" className="ml-1" title="Использованный ключ этого устройства пришёл повторно. Если это не потеря сети - отзовите устройство.">
                         возможен клон{d.cloneCount && d.cloneCount > 1 ? ' ×' + d.cloneCount : ''}
                       </Badge>
                     ) : null}
@@ -145,7 +145,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                   <TableCell className="whitespace-nowrap">
                     <SeenCell ms={d.lastSeenAt} />
                   </TableCell>
-                  <TableCell className="font-mono text-xs">{d.lastIp || '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{d.lastIp || '-'}</TableCell>
                   <TableCell>
                     <ConfirmAction
                       label="Отозвать"
@@ -215,9 +215,9 @@ export function LimitCard({ user, run }: { user: UserData; run: Run }) {
         </CardTitle>
         <CardDescription>
           Сейчас: {sub.limitText || sub.deviceLimit}
-          {sub.extraSlots ? ', купленные до ' + listStamp(sub.extraUntil || 0) + ' МСК' : ''}. Лимит = база + бонусные + купленные. База —
-          общая из настроек ({globalBase}), если не задан индивидуальный лимит: он заменяет базу и не меняется, когда меняют общую. Бонусные —
-          бесплатно, навсегда или до даты, в цену продления не входят. Купленные (доп.) — помесячные: выданные здесь действуют до конца
+          {sub.extraSlots ? ', купленные до ' + listStamp(sub.extraUntil || 0) + ' МСК' : ''}. Лимит = база + бонусные + купленные. База -
+          общая из настроек ({globalBase}), если не задан индивидуальный лимит: он заменяет базу и не меняется, когда меняют общую. Бонусные -
+          бесплатно, навсегда или до даты, в цену продления не входят. Купленные (доп.) - помесячные: выданные здесь действуют до конца
           оплаченного периода и дальше продлеваются вместе с подпиской.
         </CardDescription>
       </CardHeader>
@@ -280,7 +280,7 @@ export function LimitCard({ user, run }: { user: UserData; run: Run }) {
                       )}
                     </TableCell>
                     <TableCell>
-                      {b.reason || <span className="text-muted-foreground">—</span>}
+                      {b.reason || <span className="text-muted-foreground">-</span>}
                       {b.source === 'promo' ? null : <span className="text-xs text-muted-foreground"> · вручную</span>}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
@@ -352,7 +352,7 @@ export function SubtractDaysCard({ user, run }: { user: UserData; run: Run }) {
           question={
             <>
               Убавить {n} дн.? Подписка будет до {listStamp(after)} МСК
-              {after <= Date.now() ? ' — это уже в прошлом' : ''}.
+              {after <= Date.now() ? ' - это уже в прошлом' : ''}.
             </>
           }
           yes="Да, убавить"
@@ -390,7 +390,7 @@ export function PendingPayments({
         </CardTitle>
         <CardDescription>
           ЮMoney держит эти переводы, пока их не примут в кошельке, и подписку они не продлили. Примите перевод в кошельке и нажмите
-          «Подтвердить платёж» — он применится один раз. «Отклонить» — если перевод отклонён или возвращён.
+          «Подтвердить платёж» - он применится один раз. «Отклонить» - если перевод отклонён или возвращён.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

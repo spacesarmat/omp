@@ -376,7 +376,7 @@ export async function runProbe(p: Probe, opts: RunOptions): Promise<SourceReport
           }
         }
       }
-      log(p.source.name + ': вход — ' + login);
+      log(p.source.name + ': вход - ' + login);
     }
   }
 
@@ -390,7 +390,7 @@ export async function runProbe(p: Probe, opts: RunOptions): Promise<SourceReport
   for (const q of p.queries) {
     const r = await check('поиск «' + q + '»', http, p, secrets, timeoutMs, () => p.source.search(q, ctx));
     checks.push(r.check);
-    log(p.source.name + ' «' + q + '»: ' + r.check.status + ' — ' + r.check.detail);
+    log(p.source.name + ' «' + q + '»: ' + r.check.status + ' - ' + r.check.detail);
     const list = (r.value as SourceResult[] | null) || [];
     if (!sample && r.check.status === 'OK' && list.length) sample = list.filter((x) => x.Seed > 0)[0] || list[0];
     await sleep(pauseMs);
@@ -399,7 +399,7 @@ export async function runProbe(p: Probe, opts: RunOptions): Promise<SourceReport
   if (sample) {
     const s = sample;
     link = (await check('ссылка на раздачу', http, p, secrets, timeoutMs, () => p.link(s, ctx, http))).check;
-    log(p.source.name + ' ссылка: ' + link.status + ' — ' + link.detail);
+    log(p.source.name + ' ссылка: ' + link.status + ' - ' + link.detail);
   }
   const v = sourceStatus(checks, link, login);
   return { id: p.source.id, name: p.source.name, status: v.status, detail: v.detail, login, checks, link, at };

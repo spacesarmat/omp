@@ -396,7 +396,7 @@ describe('Add category', () => {
     expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
     expect(byText('Прочее')).toBeTruthy();
     // the «Поделиться» hint: one muted line under the magnet row
-    expect(block.textContent).toContain('Ссылки magnet из браузера открываются в OMP сами — через «Поделиться».');
+    expect(block.textContent).toContain('Ссылки magnet из браузера открываются в OMP сами - через «Поделиться».');
   });
 
   it('a shared link opens the screen with the magnet field already open', () => {
@@ -972,7 +972,7 @@ describe('Add in English', () => {
     expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
     click(el.querySelector('[data-magnet-open]')!);
     expect(byText('Add')).toBeTruthy();
-    expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own — via “Share”.');
+    expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own - via “Share”.');
     const magnet = el.querySelector<HTMLInputElement>('input[aria-label="Magnet link or hash"]')!;
     expect(magnet.placeholder).toBe('Magnet link or hash');
     type('input[aria-label="Magnet link or hash"]', HASH);

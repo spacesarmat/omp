@@ -203,8 +203,8 @@ describe('Backup screen in English', () => {
     expect(el.querySelector('h1')!.textContent).toBe('Backup');
     expect(el.textContent).toContain('What is saved');
     expect(el.textContent).toContain('TorrServer servers and their names');
-    expect(el.textContent).toContain('Tracker passwords and cookies — enter them again');
-    expect(el.textContent).toContain('History and “Skip” — they are on TorrServer');
+    expect(el.textContent).toContain('Tracker passwords and cookies - enter them again');
+    expect(el.textContent).toContain('History and “Skip” - they are on TorrServer');
     expect(btn(el, 'Save the backup…')).toBeTruthy();
     expect(btn(el, 'Restore from a file…')).toBeTruthy();
     expect(el.querySelector('[aria-label="Backup file"]')).toBeTruthy();

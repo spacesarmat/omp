@@ -1,4 +1,4 @@
-// «Подписка OMP» card: a binding the server dropped shows «Устройство отключено — введите новый код» above the code
+// «Подписка OMP» card: a binding the server dropped shows «Устройство отключено - введите новый код» above the code
 // field; a new code clears it and keeps the token pair.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
@@ -51,7 +51,7 @@ describe('OMP subscription card', () => {
     await act(async () => render(<OmpJackettCard />, el));
     await flush();
     const notice = el.querySelector('[data-notice="revoked"]');
-    expect(notice && notice.textContent).toBe('Устройство отключено — введите новый код');
+    expect(notice && notice.textContent).toBe('Устройство отключено - введите новый код');
 
     const input = el.querySelector('#omp-code') as HTMLInputElement;
     act(() => {
@@ -73,6 +73,6 @@ describe('OMP subscription card', () => {
     await act(async () => render(<OmpJackettCard />, el));
     await flush();
     const notice = el.querySelector('[data-notice="keystore"]');
-    expect(notice && notice.textContent).toBe('Ключ подписки не сохранился на телефоне — введите код заново');
+    expect(notice && notice.textContent).toBe('Ключ подписки не сохранился на телефоне - введите код заново');
   });
 });

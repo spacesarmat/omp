@@ -337,7 +337,7 @@ describe('notification texts in English', () => {
     // a button with no saved finding and no server
     const host = fakeHost({ action: { kind: 'add', subId: 'nope', key: 'nope' } });
     const s = await runMonitor(deps(host, { client: () => null }));
-    expect(s.action!.message).toBe('The finding is no longer available — open OMP');
+    expect(s.action!.message).toBe('The finding is no longer available - open OMP');
     expect(s.action!.message).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
@@ -526,7 +526,7 @@ describe('«Лучшее качество» in the background', () => {
     addFindings([f]);
     const r = await runAction(deps(fakeHost(), { client: () => fakeClient([], true) }), { kind: 'replace', subId: BETTER_ID, key: f.key });
     expect(r.ok).toBe(false);
-    expect(r.message).not.toBe('Находка больше не доступна — откройте OMP');
+    expect(r.message).not.toBe('Находка больше не доступна - откройте OMP');
     expect(findingsOf(BETTER_ID)).toHaveLength(1);
   });
 

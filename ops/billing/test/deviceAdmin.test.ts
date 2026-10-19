@@ -338,16 +338,16 @@ describe('self-service device changes in the bot', () => {
     // The freed slot gets a new code, a new phone takes it.
     const b = bindAnother(one.state, s.subscriptionId, DEV_B, NOW + DAY);
     const two = press(b.state, 'y1:' + b.codeId + ':bbbbbbbb', NOW + DAY);
-    expect(two.messages[0].text).toContain('Это была последняя смена на 30 дней: следующая — с 18.11.2026 12:00 МСК.');
+    expect(two.messages[0].text).toContain('Это была последняя смена на 30 дней: следующая - с 18.11.2026 12:00 МСК.');
     const c = bindAnother(two.state, s.subscriptionId, DEV_C, NOW + 2 * DAY);
     const third = chat(c.state, 'Устройства', NOW + 2 * DAY);
-    expect(third.messages[0].text).toContain('Смены устройства на 30 дней исчерпаны: следующая — с 18.11.2026 12:00 МСК.');
+    expect(third.messages[0].text).toContain('Смены устройства на 30 дней исчерпаны: следующая - с 18.11.2026 12:00 МСК.');
     expect(buttons(third.messages[0]).filter((d) => d.indexOf('u1:') === 0)).toEqual([]);
     const tap = press(c.state, 'u1:' + c.codeId, NOW + 2 * DAY);
     expect(tap.messages[0].text).toBe(
-      'Сменить устройство сейчас нельзя: самостоятельно — не больше 2 раз за 30 дней.\n' +
-        'Следующая смена — с 18.11.2026 12:00 МСК.\n' +
-        'Уже привязанные устройства работают. Если нужно срочно — напишите в «Поддержку».',
+      'Сменить устройство сейчас нельзя: самостоятельно - не больше 2 раз за 30 дней.\n' +
+        'Следующая смена - с 18.11.2026 12:00 МСК.\n' +
+        'Уже привязанные устройства работают. Если нужно срочно - напишите в «Поддержку».',
     );
     // Even a stale confirm button is refused, and the phone stays bound.
     const sneaky = press(c.state, 'y1:' + c.codeId + ':cccccccc', NOW + 2 * DAY);
@@ -384,7 +384,7 @@ describe('self-service device changes in the bot', () => {
     expect(sessionOk(stale.state, { token: c.token, deviceId: DEV_C, now: NOW + MIN })).not.toBeNull();
     // Cancel and garbage only clear the buttons.
     expect(press(b.state, 'ux', NOW)).toMatchObject({ answer: 'Отменено', clearMarkup: true, messages: [] });
-    expect(press(b.state, 'zz:1', NOW).answer).toBe('Кнопка устарела — откройте «Устройства» ещё раз.');
+    expect(press(b.state, 'zz:1', NOW).answer).toBe('Кнопка устарела - откройте «Устройства» ещё раз.');
     // A chat without an account (never wrote to the bot) gets no change.
     expect(press(b.state, 'ua', NOW, '777').messages).toEqual([]);
     const done = press(ask.state, yes, NOW + MIN);
@@ -427,7 +427,7 @@ describe('self-service device changes in the bot', () => {
     const x = bindAnother(used.state, s.subscriptionId, DEV_A, NOW + MIN);
     const y = bindAnother(x.state, s.subscriptionId, DEV_C, NOW + MIN);
     const code = chat(y.state, 'Код', NOW + 2 * MIN);
-    expect(code.messages[0].text).toContain('Смены устройства на 30 дней исчерпаны: следующая — с 18.11.2026 12:00 МСК.');
+    expect(code.messages[0].text).toContain('Смены устройства на 30 дней исчерпаны: следующая - с 18.11.2026 12:00 МСК.');
   });
 });
 
@@ -599,7 +599,7 @@ describe('admin http: devices and payments', () => {
     expect(notice.chat_id).toBe('42');
     expect(notice.text).toBe(
       'Устройство aaaaaaaa… отключено администратором: поиск OMP на нём больше не работает.\n' +
-        'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы — «Поддержка».',
+        'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы - «Поддержка».',
     );
     expect(t.sent.filter((b) => b.indexOf('отключено администратором') >= 0)).toHaveLength(1);
     const search = await call(t.app, 'POST', '/v1/search', { headers: auth, body: { q: 'x' } });
