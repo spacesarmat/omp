@@ -127,11 +127,11 @@ describe('composition', () => {
     const f = setup({ bound: 2 });
     expect(deviceLimitNow(f.state, subOf(f.state, f.sub), NOW)).toBe(2);
     expect(say(f.state, 'Кабинет')).toContain('Устройства: 2 из 2');
-    expect(say(f.state, 'Цены')).toContain('на 2 телефонах');
+    expect(say(f.state, 'Цены')).toContain('до 2 телефонов');
     const three = { ...f.state, settings: { ...f.state.settings, baseDevices: 3 } };
     expect(deviceLimitNow(three, subOf(three, f.sub), NOW)).toBe(3);
     expect(say(three, 'Кабинет')).toContain('Устройства: 2 из 3');
-    expect(say(three, 'Цены')).toContain('на 3 телефонах');
+    expect(say(three, 'Цены')).toContain('до 3 телефонов');
     expect(bind(three, f.sub, DEVS[2], NOW + 10).error).toBeUndefined();
     // a subscription without one gets «до N телефонов» in the bot
     const fresh = account(three, '77');
