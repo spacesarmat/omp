@@ -11,6 +11,7 @@ import { grantBonus, removeBonus, setDeviceLimit } from '../src/deviceAdmin.mjs'
 import { activeRowForCode, deviceNameOf, listDevices } from '../src/registry.mjs';
 import {
   activate,
+  baseChangeImpact,
   codeWithinLimit,
   createPromo,
   createSubscription,
@@ -478,5 +479,81 @@ describe('admin HTTP', () => {
     const { cookie } = await adminCookie(t.app, t.file);
     const user = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     expect((user.data as { devices: { name: string }[] }).devices[0].name).toBe('Xiaomi 13T');
+  });
+});
+
+describe('lowering the global base', () => {
+  /** Five accounts: plain (2 bound), individual limit (2 bound), expired (2 bound), permanent bonus (2 bound), one phone. */
+  function crowd() {
+    let state: State = emptyState();
+    const subs: Record<string, string> = {};
+    const make = (tg: string, bound: number, at = NOW) => {
+      const a = account(state, tg);
+      const created = createSubscription(a.state, { accountId: a.accountId, now: at, days: 30 });
+      state = created.state;
+      const id = created.result.subscriptionId as string;
+      for (let i = 0; i < bound; i++) state = bind(state, id, tg.slice(0, 1).repeat(31) + i, at + i).state;
+      subs[tg] = id;
+      return a.accountId;
+    };
+    make('11', 2);
+    const own = make('22', 2);
+    state = setDeviceLimit(state, { accountId: own, limitOverride: 2, now: NOW, actor: ADMIN }).state;
+    make('33', 2, NOW - 60 * DAY);
+    const gift = make('44', 2);
+    state = grantBonus(state, { accountId: gift, count: 1, days: '', now: NOW, actor: ADMIN }).state;
+    make('55', 1);
+    return { state, subs };
+  }
+
+  it('counts paying subscriptions without an individual limit that lose devices, and those devices', () => {
+    const { state } = crowd();
+    expect(baseChangeImpact(state, 1, NOW)).toEqual({ from: 2, to: 1, lowering: true, subscriptions: 1, devices: 1 });
+    expect(baseChangeImpact(state, 3, NOW)).toMatchObject({ lowering: false, subscriptions: 0, devices: 0 });
+    expect(baseChangeImpact(state, 2, NOW)).toMatchObject({ lowering: false, subscriptions: 0, devices: 0 });
+    // an expired dated bonus adds nothing to the count
+    const plain = state.subscriptions.find((x: Sub) => deviceLimitNow(state, x, NOW) === 2 && x.limitOverride === null)!;
+    const withDated = patchSub(state, plain.id, {
+      bonusSlots: [{ id: 'old', count: 1, until: NOW - DAY, reason: '', grantedAt: NOW - 9 * DAY, source: 'admin' }],
+    });
+    expect(baseChangeImpact(withDated, 1, NOW)).toMatchObject({ subscriptions: 1, devices: 1 });
+  });
+
+  it('the server saves a lower base only with confirm=yes and says what it does; raising needs no confirm', async () => {
+    const t = httpSetup();
+    const st = readState(t.file);
+    let state = st;
+    for (const d of [DEVS[0], DEVS[1]]) state = bind(state, t.sub, d, Date.now()).state;
+    writeState(t.file, state);
+    const { cookie, csrf } = await adminCookie(t.app, t.file);
+    expect((await call(t.app, 'GET', '/admin/api/base-impact?base=1')).status).toBe(401);
+    const impact = await call(t.app, 'GET', '/admin/api/base-impact?base=1', { cookie });
+    expect(impact.data).toEqual({ from: 2, to: 1, lowering: true, subscriptions: 1, devices: 1 });
+
+    const asked = await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '1', priceRub: '999' } });
+    const flash = (asked.data as { flash?: { error?: string } }).flash?.error || '';
+    expect(flash).toContain('Снижение базы 2 → 1 требует подтверждения');
+    expect(flash).toContain('затронет подписок: 1, перестанут работать устройств: 1');
+    expect((asked.data as { extra?: { baseImpact?: unknown } }).extra?.baseImpact).toMatchObject({
+      subscriptions: 1,
+      devices: 1,
+    });
+    // nothing at all was saved
+    expect(readState(t.file).settings).toMatchObject({ baseDevices: 2, priceRub: 0 });
+
+    const forged = await call(t.app, 'POST', '/admin/settings', {
+      cookie,
+      body: { csrf: 'wrong', baseDevices: '1', confirm: 'yes' },
+    });
+    expect(forged.status).toBe(403);
+    await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '1', confirm: 'yes' } });
+    const after = readState(t.file);
+    expect(after.settings.baseDevices).toBe(1);
+    expect(after.audit.map((a: { detail?: string }) => a.detail)).toContain(
+      'Базовых устройств: 2 → 1 (подписок затронуто: 1, устройств отключено: 1)',
+    );
+    const up = await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '2' } });
+    expect((up.data as { flash?: { error?: string } }).flash?.error || '').toBe('');
+    expect(readState(t.file).settings.baseDevices).toBe(2);
   });
 });

@@ -25,6 +25,7 @@ import {
   logWebhook,
   codeWithinLimit,
   overLimitReason,
+  baseChangeImpact,
   baseDevices,
   deviceAccess,
   dueReminders,
@@ -688,6 +689,11 @@ export function createApp(file, fetchImpl, opts) {
         });
         return json(res, 200, page);
       }
+      if (req.method === 'GET' && path === '/admin/api/base-impact') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        return json(res, 200, baseChangeImpact(readState(file), url.searchParams.get('base') || '', Date.now()));
+      }
       if (req.method === 'GET' && path === '/admin/api/user') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
@@ -820,7 +826,14 @@ export function createApp(file, fetchImpl, opts) {
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
         // settings.baseDevices: a whole number 1–20; a bad value keeps the current one and says so
         const badBase = path === '/admin/settings' && body.baseDevices !== undefined && body.baseDevices !== '' && !validBase(body.baseDevices);
-        if (path === '/admin/settings' || path === '/admin/services') {
+        // Lowering the base cuts every subscription without an individual limit: only with confirm=yes. Without it
+        // nothing is saved and the answer says what it would do.
+        const baseImpact =
+          path === '/admin/settings' && !badBase && body.baseDevices !== undefined && body.baseDevices !== ''
+            ? baseChangeImpact(readState(file), body.baseDevices, Date.now())
+            : null;
+        const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
+        if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
           const baseBefore = baseDevices(readState(file).settings);
           await updateState(file, (state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
@@ -829,7 +842,10 @@ export function createApp(file, fetchImpl, opts) {
           await audit(
             file,
             path === '/admin/services' ? 'services_save' : 'settings_save',
-            baseAfter !== baseBefore ? 'Базовых устройств: ' + baseBefore + ' → ' + baseAfter : 'ok',
+            baseAfter !== baseBefore
+              ? 'Базовых устройств: ' + baseBefore + ' → ' + baseAfter +
+                  (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
+              : 'ok',
             admin,
           );
           if (wantsJson(req) && path === '/admin/services') {
@@ -844,6 +860,12 @@ export function createApp(file, fetchImpl, opts) {
         let redirectTo = '/admin';
         let extra = null;
         if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 — оставлено прежнее значение';
+        if (lowerBlocked) {
+          flashError =
+            'Снижение базы ' + baseImpact.from + ' → ' + baseImpact.to + ' требует подтверждения: затронет подписок: ' +
+            baseImpact.subscriptions + ', перестанут работать устройств: ' + baseImpact.devices + '. Настройки не сохранены.';
+          extra = { baseImpact };
+        }
         if (path === '/admin/find') {
           const found = adminFind(readState(file), body.q || '', Date.now());
           if (found) {

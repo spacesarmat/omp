@@ -252,6 +252,34 @@ export function limitBreakdown(state, sub, now) {
   };
 }
 
+/**
+ * What lowering the global base to `nextBase` would do now: subscriptions without an individual limit that still
+ * give access (paid or grace) and would have more bound devices than their new limit, and how many of their devices
+ * stop working (bound now within the limit, over it after). Expired subscriptions do not count: their devices are off.
+ */
+export function baseChangeImpact(state, nextBase, now) {
+  const at = now === undefined ? Date.now() : now;
+  const from = baseDevices(state && state.settings);
+  const to = baseDevices({ baseDevices: nextBase });
+  let subscriptions = 0;
+  let devices = 0;
+  if (to < from) {
+    const next = { ...state, settings: { ...state.settings, baseDevices: to } };
+    const subs = state.subscriptions || [];
+    for (let i = 0; i < subs.length; i++) {
+      const sub = subs[i];
+      if (!sub || limitOverrideOf(sub) !== null || !subAccess(state, sub, at).access) continue;
+      const bound = boundDevices(state, sub.id);
+      const lost = Math.max(0, bound - deviceLimitNow(next, sub, at)) - Math.max(0, bound - deviceLimitNow(state, sub, at));
+      if (lost > 0) {
+        subscriptions++;
+        devices += lost;
+      }
+    }
+  }
+  return { from, to, lowering: to < from, subscriptions, devices };
+}
+
 /** A new bonus row (the caller stores it). `days` 0 / empty = forever. */
 export function bonusRow({ count, days, reason, source, now }) {
   const n = Math.floor(Number(days) || 0);

@@ -554,9 +554,14 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
   },
 ];
 
+type BaseImpact = { from: number; to: number; lowering: boolean; subscriptions: number; devices: number };
+
 export function SettingsCard({ run, settings, storage }: { run: Run; settings: Record<string, string | number | boolean>; storage?: HomeData['storage'] }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
+  /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
+  const [lower, setLower] = useState<BaseImpact | null>(null);
+  const save = (confirm: boolean) => run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) });
   useEffect(() => {
     const o: Record<string, string> = {};
     for (const group of SETTING_GROUPS) {
@@ -570,7 +575,17 @@ export function SettingsCard({ run, settings, storage }: { run: Run; settings: R
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        void run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false' });
+        const next = Number(form.baseDevices);
+        const cur = Number(settings.baseDevices);
+        if (Number.isInteger(next) && next >= 1 && Number.isFinite(cur) && next < cur) {
+          void api<BaseImpact>('/admin/api/base-impact?base=' + encodeURIComponent(String(next))).then(
+            (impact) => setLower(impact && impact.lowering ? impact : null),
+            () => toast('Не удалось посчитать, кого затронет снижение'),
+          );
+          return;
+        }
+        setLower(null);
+        void save(false);
       }}
     >
       <p className="text-sm text-muted-foreground">
@@ -599,6 +614,31 @@ export function SettingsCard({ run, settings, storage }: { run: Run; settings: R
           </CardContent>
         </Card>
       ))}
+      {lower ? (
+        <Alert variant="warn">
+          <p>
+            Базовых устройств станет {lower.to} (сейчас {lower.from}). Затронет подписок без индивидуального лимита: {lower.subscriptions},
+            перестанут работать устройств: {lower.devices} — последние привязанные сверх нового лимита. Ничего не отвязывается, при возврате
+            базы они заработают снова.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setLower(null);
+                void save(true);
+              }}
+            >
+              Да, снизить до {lower.to}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setLower(null)}>
+              Отмена
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
       <Button type="submit">Сохранить</Button>
     </form>
   );
