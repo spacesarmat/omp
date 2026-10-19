@@ -10,6 +10,7 @@ import {
   migrateDeviceBase,
   migrateExtraSlots,
   migrateLimitModel,
+  migrateRowIds,
   migrateTruncatedIps,
 } from './logic.mjs';
 
@@ -84,8 +85,9 @@ export function emptyState() {
      * Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored.
      * extraMonthly: extra devices are monthly slots (extraSlots/extraUntil), not part of deviceLimit.
      * limitModel: the limit is settings.baseDevices (or limitOverride) + bonusSlots + extra slots.
+     * rowIds: every row has a stable `id` (payments, attempts, webhooks, audit, swaps, promo uses, …).
      */
-    meta: { deviceBase: DEVICE_BASE, extraMonthly: 1, limitModel: 1 },
+    meta: { deviceBase: DEVICE_BASE, extraMonthly: 1, limitModel: 1, rowIds: 1 },
   };
 }
 
@@ -185,7 +187,7 @@ function migrateFromJson(db, dbPath) {
 
 function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(base))));
+  if (!parsed || typeof parsed !== 'object') return migrateRowIds(migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(base)))));
   const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
@@ -215,7 +217,7 @@ function normalizeState(parsed) {
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return migrateTruncatedIps(migrateLimitModel(migrateExtraSlots(migrateDeviceBase(enrichActors(next)))));
+  return migrateRowIds(migrateTruncatedIps(migrateLimitModel(migrateExtraSlots(migrateDeviceBase(enrichActors(next))))));
 }
 
 export function readState(file) {

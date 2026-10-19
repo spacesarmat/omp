@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Subscription: the device limit is base devices (set in the admin settings) plus bonus devices (from a promo or the admin, forever or until a date, free) plus bought ones. The bot, the cabinet and the admin panel show the breakdown, and device lists show the phone model
 - [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected — enter a new code”; clearer “devices taken”, “extra device not renewed” and “update the app” errors
 - [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
+- Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
 
 ## 0.20.4
 
