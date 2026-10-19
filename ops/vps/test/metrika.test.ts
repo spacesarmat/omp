@@ -39,7 +39,8 @@ const METRIKA_FRAME_HOSTS = [
 const read = (p: string) => readFileSync(p, 'utf8');
 
 function inlineScripts(html: string) {
-  return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+  // JSON-LD is a data block, not executed, so CSP script-src does not apply to it.
+  return [...html.matchAll(/<script(?![^>]*\bsrc=)(?![^>]*application\/ld\+json)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 }
 
 function sha256(text: string) {

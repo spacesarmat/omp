@@ -54,6 +54,10 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 
 On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy it over the existing file in place (`cp`, not `mv` or `rsync`, so the single-file bind mount keeps the same inode), reload Caddy, then copy `site/`.
 
+## Landing SEO
+
+Both pages carry a title and description, `meta keywords`, `canonical`, hreflang ru/en/x-default, Open Graph and Twitter tags with `assets/og-image.jpg` (1200×630, the hero scene), and one JSON-LD `SoftwareApplication` block. JSON-LD is a data block, so CSP `script-src` does not apply and the Metrika hash is unchanged. `site/robots.txt` points at `site/sitemap.xml`; update `lastmod` there when page copy changes. `test/seo.test.ts` checks the tags, the image size, the JSON-LD and the sitemap. They ship with `site/`, so no Caddy change is needed.
+
 ## Emergency admin login
 
 The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused — leave `.env` as it is.

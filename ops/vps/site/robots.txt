@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://omp-player.online/sitemap.xml

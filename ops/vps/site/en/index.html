@@ -5,15 +5,62 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="OMP - Open Movie Player. Movies and series from TorrServer on LG webOS, Android TV and Android. Your phone is the remote and a second screen."
+      content="Stream torrents on your TV: OMP is a free, open-source TorrServer player for LG webOS, Android TV and Android. 4K, HDR, Dolby Vision; your phone is the remote."
     />
     <meta name="theme-color" content="#111310" />
-    <title>OMP - a free player for TorrServer on LG webOS and Android TV</title>
+    <title>OMP — torrent player for TorrServer on LG webOS and Android TV</title>
+    <meta name="keywords" content="torrent player, TorrServer, TorrServe, TorrServer player, stream torrents on TV, torrents on Android TV, torrents on LG webOS, Android TV torrent player, media player for Android TV, 4K HDR Dolby Vision, phone as a remote, Lampa alternative, OMP, Open Movie Player" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://omp-player.online/en/" />
     <link rel="alternate" hreflang="ru" href="https://omp-player.online/" />
     <link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
     <link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
-    <link rel="stylesheet" href="/style.css?v=20261018a" />
+    <link rel="stylesheet" href="/style.css?v=20261019a" />
     <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="OMP — Open Movie Player" />
+    <meta property="og:title" content="OMP — torrent player for TorrServer on LG webOS and Android TV" />
+    <meta property="og:description" content="Stream torrents on your TV: OMP is a free, open-source TorrServer player for LG webOS, Android TV and Android. 4K, HDR, Dolby Vision; your phone is the remote." />
+    <meta property="og:url" content="https://omp-player.online/en/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="ru_RU" />
+    <meta property="og:image" content="https://omp-player.online/assets/og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="OMP on a TV: a TorrServer movie catalog and the phone as a remote" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OMP — torrent player for TorrServer on LG webOS and Android TV" />
+    <meta name="twitter:description" content="Stream torrents on your TV: OMP is a free, open-source TorrServer player for LG webOS, Android TV and Android. 4K, HDR, Dolby Vision; your phone is the remote." />
+    <meta name="twitter:image" content="https://omp-player.online/assets/og-image.jpg" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "OMP",
+      "alternateName": "Open Movie Player",
+      "description": "Stream torrents on your TV: OMP is a free, open-source TorrServer player for LG webOS, Android TV and Android. 4K, HDR, Dolby Vision; your phone is the remote.",
+      "url": "https://omp-player.online/en/",
+      "image": "https://omp-player.online/assets/og-image.jpg",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "LG webOS 4.0+, Android TV, Google TV, Android 8+",
+      "downloadUrl": "https://github.com/spacesarmat/omp/releases/latest",
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "isAccessibleForFree": true,
+      "inLanguage": [
+        "ru",
+        "en"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "RUB"
+      },
+      "sameAs": [
+        "https://github.com/spacesarmat/omp",
+        "https://t.me/ompplyaer"
+      ]
+    }
+    </script>
 <!-- Yandex.Metrika counter -->
 <script type="text/javascript">
     (function(m,e,t,r,i,k,a){
@@ -57,8 +104,8 @@
           <div class="eyebrow"><i></i> FREE · NO ADS · OPEN SOURCE</div>
           <h1>Home cinema.<br /><em>Your phone is the remote.</em></h1>
           <p>
-            Movies and series from TorrServer on LG webOS, Android TV and Android. Pick a title on your
-            phone — watch in 4K, HDR and Dolby Vision.
+            A player for TorrServer: movies and series from torrents on LG webOS, Android TV and Android,
+            without waiting for a full download. Pick a title on your phone — watch in 4K, HDR and Dolby Vision.
           </p>
           <div class="actions">
             <a
@@ -87,11 +134,11 @@
               fetchpriority="high"
             />
             <div class="television">
-              <img class="film" src="/assets/film.webp" alt="A sample science-fiction landscape" />
+              <img class="film" src="/assets/film.webp" alt="A movie frame on the TV screen in the OMP demo" />
               <img
                 class="tv-ui"
                 src="/assets/tv-ui.webp"
-                alt="The OMP player, with chapters and audio tracks"
+                alt="The OMP player on a TV: chapters, audio tracks and subtitles"
               />
               <button
                 class="screen-control"
@@ -110,7 +157,7 @@
             <div class="phone-area">
               <div class="phone">
                 <div class="speaker"></div>
-                <img id="phone-screen" src="/assets/remote.webp" alt="The OMP remote on a phone" />
+                <img id="phone-screen" src="/assets/remote.webp" alt="The OMP remote on an Android phone" />
                 <button id="phone-play" type="button" aria-label="Pause or play the demo"></button>
               </div>
               <div class="phone-caption">
@@ -132,10 +179,10 @@
             </div>
           </div>
           <div class="screen-tabs" role="group" aria-label="Phone screen">
-            <button type="button" data-screen="remote" data-alt="The OMP remote on a phone" class="active" aria-pressed="true">Remote</button>
-            <button type="button" data-screen="catalog" data-alt="The OMP catalog on a phone" aria-pressed="false">Catalog</button>
-            <button type="button" data-screen="discover" data-alt="New releases in OMP Discover" aria-pressed="false">Discover</button>
-            <button type="button" data-screen="playing" data-alt="Now playing in OMP" aria-pressed="false">Now playing</button>
+            <button type="button" data-screen="remote" data-alt="The OMP remote on an Android phone" class="active" aria-pressed="true">Remote</button>
+            <button type="button" data-screen="catalog" data-alt="The OMP catalog of TorrServer movies and series on a phone" aria-pressed="false">Catalog</button>
+            <button type="button" data-screen="discover" data-alt="New releases from TMDB in OMP Discover" aria-pressed="false">Discover</button>
+            <button type="button" data-screen="playing" data-alt="Now playing in OMP: control playback on the TV" aria-pressed="false">Now playing</button>
           </div>
         </div>
       </section>
@@ -266,7 +313,7 @@
             </ul>
           </article>
           <article data-reveal style="--reveal-delay: 1">
-            <h3>Android TV</h3>
+            <h3>Android TV and Google TV</h3>
             <ul>
               <li>2160 Player: 4K, HDR, Dolby Vision</li>
               <li>Sound to a receiver</li>
@@ -283,6 +330,58 @@
               <li>Watch on the phone itself</li>
             </ul>
           </article>
+        </div>
+      </section>
+
+      <section class="faq wrap" id="faq">
+        <div class="eyebrow" data-reveal>QUESTIONS</div>
+        <h2 data-reveal>OMP questions, answered</h2>
+        <div class="faq-list">
+          <details data-reveal style="--reveal-delay: 0">
+            <summary><h3>What is OMP?</h3></summary>
+            <p>
+              OMP (Open Movie Player) is a free, open-source media player for LG webOS TVs, Android TV and
+              Android phones. It plays movies and series from TorrServer on your home network, and your phone
+              is the remote and a second screen. No ads.
+            </p>
+          </details>
+          <details data-reveal style="--reveal-delay: 1">
+            <summary><h3>How do I watch torrents on my TV?</h3></summary>
+            <p>
+              TorrServer fetches a torrent piece by piece and streams the video over your network, so a movie
+              starts before the download is complete. Install OMP on the TV, connect TorrServer and pick a
+              movie or an episode on your phone.
+            </p>
+          </details>
+          <details data-reveal style="--reveal-delay: 2">
+            <summary><h3>Do I need a separate TorrServer?</h3></summary>
+            <p>
+              Not necessarily. On an arm64 Android phone, OMP downloads TorrServer from GitHub and runs it for
+              you. The phone, the TV and the server must be on the same Wi-Fi network.
+            </p>
+          </details>
+          <details data-reveal style="--reveal-delay: 3">
+            <summary><h3>Which TVs and boxes are supported?</h3></summary>
+            <p>
+              LG TVs on webOS 4.0 or later (roughly 2018 and newer, no root needed), and Android TV and Google
+              TV on Android 8 or later. Xiaomi, Sber and Yandex boxes take the same APK. Samsung (Tizen) is not
+              supported yet.
+            </p>
+          </details>
+          <details data-reveal style="--reveal-delay: 4">
+            <summary><h3>How do I install OMP?</h3></summary>
+            <p>
+              The easiest way is from the phone: Settings → “Install OMP on TV”. The phone finds LG and
+              Android TV devices on the network and installs OMP itself. Files for a manual install are in the
+              latest GitHub release;
+              <a
+                href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install"
+                target="_blank"
+                rel="noopener noreferrer"
+                >see the install guide</a
+              >.
+            </p>
+          </details>
         </div>
       </section>
 
@@ -341,6 +440,6 @@
       </div>
       <p class="copyright">© 2026 OMP · Open Movie Player</p>
     </footer>
-    <script src="/app.js?v=20261018a"></script>
+    <script src="/app.js?v=20261019a"></script>
   </body>
 </html>
