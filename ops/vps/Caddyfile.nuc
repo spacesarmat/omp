@@ -18,24 +18,30 @@
 # its own directive so only the delete is deferred: that strips Caddy's and
 # the upstream Server header on responses that are actually written.
 # handle_errors repeats the snippet for those 401s and for dial failures.
-# X-Frame-Options is DENY: the admin SPA, landing, Jackett, and JacRed are
-# not embedded in frames.
-(security_headers) {
+# X-Frame-Options is DENY: the admin SPA, Jackett, and JacRed are not
+# embedded in frames. The landing imports security_headers_common only:
+# X-Frame-Options cannot list hosts, so the landing CSP frame-ancestors lets
+# the Yandex.Metrika click and link maps frame it instead.
+(security_headers_common) {
 	header {
 		Strict-Transport-Security "max-age=15552000; includeSubDomains"
 		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 	}
 	header -Server
 }
 
+(security_headers) {
+	import security_headers_common
+	header X-Frame-Options DENY
+}
+
 # Project landing page (apex + www)
 http://omp-player.online, http://www.omp-player.online {
 	encode gzip
-	import security_headers
+	import security_headers_common
 	handle_errors {
-		import security_headers
+		import security_headers_common
 	}
 	root * /srv/site
 	# /en and /en/ are the English page. try_files accepts only regular files,
@@ -48,8 +54,10 @@ http://omp-player.online, http://www.omp-player.online {
 	# exact body of that inline script, so any edit to it needs a new hash
 	# (test/metrika.test.ts checks it). mc.yandex.* and yastatic.net load tag.js
 	# and take hits; blob:/mc.yandex.* frames are for Webvisor and click maps.
+	# frame-ancestors is the Metrika interface list from Yandex's CSP guide
+	# (yandex.ru/support/metrica/ru/code/install-counter-csp).
 	header {
-		Content-Security-Policy "default-src 'self'; img-src 'self' data: https://mc.yandex.ru https://mc.yandex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-alD0sL5UfIYDtuIvR5sJhTMFzr5FVJHpH8pwgT0X7aE=' https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.ru wss://mc.yandex.com https://yastatic.net; child-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: https://mc.yandex.ru https://mc.yandex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-alD0sL5UfIYDtuIvR5sJhTMFzr5FVJHpH8pwgT0X7aE=' https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.ru wss://mc.yandex.com https://yastatic.net; child-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-ancestors 'self' https://metrika.yandex.ru https://analytics.yandex.by https://analytics.yandex.com https://analytics.yandex.com.tr https://analytics.yandex.kz https://analytics.yandex.ru https://metr.yandex.by https://metr.yandex.com https://metr.yandex.com.tr https://metr.yandex.kz https://metr.yandex.ru https://metrica.ya.ru https://metrica.yandex https://metrica.yandex.by https://metrica.yandex.com https://metrica.yandex.com.tr https://metrica.yandex.kz https://metrica.yandex.ru https://metrika.ya.ru https://metrika.yandex https://metrika.yandex.by https://metrika.yandex.com https://metrika.yandex.com.tr https://metrika.yandex.kz https://metrika.yandex.uz; base-uri 'self'; form-action 'self'"
 	}
 }
 

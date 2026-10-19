@@ -709,9 +709,12 @@ note_fail() {
   log "health: $1"
 }
 
+# The landing has no X-Frame-Options: its CSP frame-ancestors lets the
+# Yandex.Metrika click map frame it. Every other host must send DENY.
 check_security_headers() {
   local file="$1"
   local label="$2"
+  local frame="${3:-deny}"
   local got
   got="$(header_value "$file" "Strict-Transport-Security")"
   if [[ "$got" != "max-age=15552000; includeSubDomains" ]]; then
@@ -722,7 +725,15 @@ check_security_headers() {
     note_fail "${label} X-Content-Type-Options is '${got}'"
   fi
   got="$(header_value "$file" "X-Frame-Options")"
-  if [[ "$got" != "DENY" ]]; then
+  if [[ "$frame" == landing ]]; then
+    if [[ -n "$got" ]]; then
+      note_fail "${label} X-Frame-Options is '${got}', want none"
+    fi
+    got="$(header_value "$file" "Content-Security-Policy")"
+    if [[ "$got" != *"frame-ancestors 'self' https://metrika.yandex.ru "* ]]; then
+      note_fail "${label} Content-Security-Policy has no Metrika frame-ancestors"
+    fi
+  elif [[ "$got" != "DENY" ]]; then
     note_fail "${label} X-Frame-Options is '${got}'"
   fi
   got="$(header_value "$file" "Referrer-Policy")"
@@ -811,7 +822,11 @@ check_request() {
       note_fail "${method} ${url} Allow is '${allow}'"
     fi
   fi
-  check_security_headers "$hdr" "${method} ${url}"
+  if [[ "$host" == "$LANDING_HOST" ]]; then
+    check_security_headers "$hdr" "${method} ${url}" landing
+  else
+    check_security_headers "$hdr" "${method} ${url}"
+  fi
 }
 
 health_once() {

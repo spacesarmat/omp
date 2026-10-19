@@ -8,6 +8,34 @@ const CADDYFILES = ['ops/vps/Caddyfile', 'ops/vps/Caddyfile.nuc'];
 const NOSCRIPT =
   '<noscript><div><img src="https://mc.yandex.ru/watch/113673968" style="position:absolute; left:-9999px;" alt="" /></div></noscript>\n<!-- /Yandex.Metrika counter -->';
 
+const METRIKA_FRAME_HOSTS = [
+  'metrika.yandex.ru',
+  'analytics.yandex.by',
+  'analytics.yandex.com',
+  'analytics.yandex.com.tr',
+  'analytics.yandex.kz',
+  'analytics.yandex.ru',
+  'metr.yandex.by',
+  'metr.yandex.com',
+  'metr.yandex.com.tr',
+  'metr.yandex.kz',
+  'metr.yandex.ru',
+  'metrica.ya.ru',
+  'metrica.yandex',
+  'metrica.yandex.by',
+  'metrica.yandex.com',
+  'metrica.yandex.com.tr',
+  'metrica.yandex.kz',
+  'metrica.yandex.ru',
+  'metrika.ya.ru',
+  'metrika.yandex',
+  'metrika.yandex.by',
+  'metrika.yandex.com',
+  'metrika.yandex.com.tr',
+  'metrika.yandex.kz',
+  'metrika.yandex.uz',
+];
+
 const read = (p: string) => readFileSync(p, 'utf8');
 
 function inlineScripts(html: string) {
@@ -62,7 +90,8 @@ describe('Yandex.Metrika on the public site', () => {
     expect(csp['connect-src']).toContain('https://yastatic.net');
     expect(csp['frame-src']).toContain('blob:');
     expect(csp['default-src']).toEqual(["'self'"]);
-    expect(csp['frame-ancestors']).toEqual(["'none'"]);
+    // Yandex's frame-ancestors list for the Metrika interface (click and link maps).
+    expect(csp['frame-ancestors']).toEqual(["'self'", ...METRIKA_FRAME_HOSTS.map((h) => 'https://' + h)]);
   });
 
   it('stays off billing, Jackett and JacRed', () => {

@@ -191,8 +191,12 @@ case "$method" in
     fi
     ;;
 esac
+frame=\$'X-Frame-Options: DENY\\r\\n'
+if [[ "$url" != *"billing."* && "\${DEPLOY_TEST_LANDING_DENY:-}" != 1 ]]; then
+  frame=\$'Content-Security-Policy: default-src \\'self\\'; frame-ancestors \\'self\\' https://metrika.yandex.ru https://metrika.yandex.by\\r\\n'
+fi
 if [[ -n "$dump" ]]; then
-  printf 'HTTP/1.1 %s\\r\\nStrict-Transport-Security: max-age=15552000; includeSubDomains\\r\\nX-Content-Type-Options: nosniff\\r\\nX-Frame-Options: DENY\\r\\nReferrer-Policy: strict-origin-when-cross-origin\\r\\n%sContent-Type: text/plain\\r\\n\\r\\n' "$status" "$allow" > "$dump"
+  printf 'HTTP/1.1 %s\\r\\nStrict-Transport-Security: max-age=15552000; includeSubDomains\\r\\nX-Content-Type-Options: nosniff\\r\\n%sReferrer-Policy: strict-origin-when-cross-origin\\r\\n%sContent-Type: text/plain\\r\\n\\r\\n' "$status" "$frame" "$allow" > "$dump"
 fi
 if [[ -n "$out" ]]; then
   printf '%s' "$body" > "$out"
@@ -591,6 +595,16 @@ describe('ops/vps deploy', () => {
     expect(log(box.dockerLog)).toContain('up -d billing');
   });
 
+  it('fails health when the landing still sends X-Frame-Options DENY', () => {
+    const box = world(release({ 'ops/vps/site/index.html': 'new landing\n' }), { DEPLOY_TEST_LANDING_DENY: '1' });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toContain("X-Frame-Options is 'DENY', want none");
+    expect(result.stdout).toContain('Content-Security-Policy has no Metrika frame-ancestors');
+    expect(result.stdout).not.toMatch(/billing\.omp-player\.online\/\S* X-Frame-Options/);
+    expect(readFileSync(path.join(box.root, 'site/index.html'), 'utf8')).toBe('old landing\n');
+  });
+
   it('reloads the restored Caddyfile before rollback health checks', () => {
     const box = world(
       release({
@@ -807,7 +821,12 @@ tar.close()
         return;
       }
       const page = Buffer.from(req.url === '/admin' ? '<html>admin</html>' : '<html>landing</html>');
-      res.writeHead(200, { ...headers, 'Content-Type': 'text/html', 'Content-Length': String(page.length) });
+      const pageHeaders: Record<string, string> = { ...headers };
+      if (!String(req.headers.host || '').startsWith('billing.')) {
+        delete pageHeaders['X-Frame-Options'];
+        pageHeaders['Content-Security-Policy'] = "default-src 'self'; frame-ancestors 'self' https://metrika.yandex.ru https://metrika.yandex.by";
+      }
+      res.writeHead(200, { ...pageHeaders, 'Content-Type': 'text/html', 'Content-Length': String(page.length) });
       if (req.method === 'HEAD') res.end();
       else res.end(page);
     });
