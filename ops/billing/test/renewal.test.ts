@@ -28,6 +28,7 @@ import {
   redeemPromo,
   releaseReminder,
   REMINDER_TRIES,
+  renewableExtras,
   renewalPrice,
   sessionOk,
   subAccess,
@@ -274,17 +275,74 @@ describe('monthly extra device', () => {
     expect(sessionOk(again.state, { token: f.tokens.C, deviceId: DEV_C, now: lapse + DAY })).toBeTruthy();
   });
 
-  it('when everything lapses, renewing later drops the old slot from the price', () => {
+  it('after grace the renewal still offers the lapsed slot: 200 ₽ brings it and the bound device back', () => {
     const f = threeDevices();
-    const t = NOW + 40 * DAY;
+    const t = NOW + 40 * DAY; // paidUntil + 10 days: grace is over
     const sub = subOf(f.state, f.sub);
     expect(subAccess(f.state, sub, t).access).toBe(false);
+    expect(activeExtras(f.state, sub, t)).toBe(0);
+    expect(renewableExtras(f.state, sub, t)).toBe(1);
+    expect(renewalPrice(f.state, sub, t)).toMatchObject({ base: 150, extras: 1, extraSum: 50, total: 200 });
+    expect(sessionOk(f.state, { token: f.tokens.C, deviceId: DEV_C, now: t })).toBeNull();
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: t });
+    expect(q.result).toMatchObject({ price: 200, extras: 1 });
+    const renewed = pay(q.state, q.result.label, '200.00', t, 'op-late');
+    expect(renewed.result).toMatchObject({ kind: 'renew', extras: 1, paidUntil: t + 30 * DAY });
+    const after = subOf(renewed.state, f.sub);
+    expect(after).toMatchObject({ extraSlots: 1, extraUntil: t + 30 * DAY, deviceLimit: 2 });
+    // All three bound phones work again with their old tokens; no new code was minted.
+    for (const [dev, token] of [[DEV_A, f.tokens.A], [DEV_B, f.tokens.B], [DEV_C, f.tokens.C]]) {
+      expect(sessionOk(renewed.state, { token, deviceId: dev, now: t + DAY })).toBeTruthy();
+    }
+    expect(renewed.state.codes).toHaveLength(f.state.codes.length);
+  });
+
+  it('after grace a 150 ₽ renewal (base only) leaves the extra device off, bound, and not offered again', () => {
+    const f = threeDevices();
+    const t = NOW + 40 * DAY;
+    const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: t, withExtras: false });
     expect(q.result).toMatchObject({ price: 150, extras: 0 });
-    const renewed = pay(q.state, q.result.label, '150', t, 'op-late');
+    const renewed = pay(q.state, q.result.label, '150', t, 'op-base-late');
     expect(renewed.result.paidUntil).toBe(t + 30 * DAY);
     expect(sessionOk(renewed.state, { token: f.tokens.C, deviceId: DEV_C, now: t + DAY })).toBeNull();
     expect(sessionOk(renewed.state, { token: f.tokens.A, deviceId: DEV_A, now: t + DAY })).toBeTruthy();
+    expect(sessionOk(renewed.state, { token: f.tokens.B, deviceId: DEV_B, now: t + DAY })).toBeTruthy();
+    expect(renewed.state.codes.filter((c: { deviceId: string }) => c.deviceId === DEV_C)).toHaveLength(1);
+    // The dropped slot is not in later renewals any more; «Код» sells a new one.
+    const sub = subOf(renewed.state, f.sub);
+    expect(renewalPrice(renewed.state, sub, t + DAY).total).toBe(150);
+    expect(renewalPrice(renewed.state, sub, t + 40 * DAY).total).toBe(150);
+  });
+
+  it('after grace the amount must cover the quote: 150 ₽ for a 200 ₽ quote is refused, ~3% fee is fine', () => {
+    const f = threeDevices();
+    const t = NOW + 40 * DAY;
+    const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: t });
+    const short = pay(q.state, q.result.label, '150.00', t, 'op-short-late');
+    expect(short.result.error).toBe('amount');
+    expect(subOf(short.state, f.sub).paidUntil).toBe(NOW + 30 * DAY);
+    expect(sessionOk(short.state, { token: f.tokens.A, deviceId: DEV_A, now: t })).toBeNull();
+    const fee = pay(q.state, q.result.label, '194.00', t, 'op-fee-late');
+    expect(fee.result).toMatchObject({ kind: 'renew', extras: 1 });
+    const under = pay(q.state, q.result.label, '193.00', t, 'op-under-late');
+    expect(under.result.error).toBe('amount');
+    const rub = applyPayment(q.state, { operationId: 'op-usd', label: q.result.label, amount: '200', currency: '840', now: t });
+    expect(rub.result.error).toBe('amount');
+  });
+
+  it('after grace the bot offers 200 ₽ with a breakdown and «Без доп. устройств — 150 ₽»; «Подписка» renews too', () => {
+    const f = threeDevices();
+    const t = NOW + 40 * DAY;
+    for (const press of ['Продлить', 'Подписка']) {
+      const reply = botReply(f.state, { chatId: '42', text: press, now: t });
+      const texts = reply.messages.map((m: { text: string }) => m.text);
+      expect(texts[0]).toContain('• подписка — 150 ₽');
+      expect(texts[0]).toContain('• доп. устройство × 1 — 50 ₽');
+      expect(texts[0]).toContain('Итого: 200 ₽');
+      expect(texts[0]).toContain('sum=200');
+      expect(texts[1]).toContain('Без доп. устройств — 150 ₽. Доп. устройство тогда останется отключённым (привязка сохранится)');
+      expect(texts[1]).toContain('sum=150');
+    }
   });
 
   it('gift days carry an active slot along, so a gift never cuts off a paid device', () => {
@@ -494,7 +552,7 @@ describe('grace end notice', () => {
     expect(dueReminders(renewed, nextEnd).map((r: { kind: string }) => r.kind)).toEqual(['end']);
   });
 
-  it('text: grace ended, price, the lapsed extra slot and a «Продлить» button', () => {
+  it('text: grace ended, price with the lapsed extra slot and a «Продлить» button', () => {
     const f = threeDevices(); // paidUntil 18.11 03:00 MSK, extra slot until the same date
     const at = msk('2026-11-21T10:00:00');
     const rows = dueReminders(f.state, at);
@@ -502,16 +560,16 @@ describe('grace end notice', () => {
     const msg = reminderMessage(f.state, rows[0], at);
     expect(msg.text).toBe(
       'Льготный период закончился — поиск в OMP отключён.\n' +
-        'Продлите подписку, чтобы продолжить: 150 ₽ на 30 дн.\n' +
-        'Доп. устройство × 1 тоже отключено: после продления верните его кнопкой «Код» — ещё 50 ₽ в месяц за каждое.\n' +
+        'Продлите подписку, чтобы продолжить: 200 ₽ на 30 дн. (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
+        'Привязанные устройства заработают сами, код вводить не нужно. Без доп. устройств — 150 ₽.\n' +
         'Нажмите «Продлить» — ссылка на оплату придёт в этот чат.',
     );
+    expect(msg.text).not.toContain('«Код»');
     expect(msg.inline.inline_keyboard[0][0]).toEqual({ text: 'Продлить', url: 'https://t.me/OMPBILLINGBOT?start=renew' });
-    // A slot still paid past the end (renewed separately) stays in the price.
-    const longer = withSub(f.state, f.sub, { extraUntil: msk('2026-12-01T00:00:00') });
-    const t2 = reminderMessage(longer, dueReminders(longer, at)[0], at).text;
-    expect(t2).toContain('200 ₽ на 30 дн. (подписка 150 ₽ + доп. устройство 50 ₽ × 1).');
-    expect(t2).not.toContain('тоже отключено');
+    // A slot dropped by an earlier base-only renewal is not offered: plain 150 ₽.
+    const dropped = withSub(f.state, f.sub, { extraUntil: NOW + 10 * DAY });
+    const t2 = reminderMessage(dropped, dueReminders(dropped, at)[0], at).text;
+    expect(t2).toContain('Продлите подписку, чтобы продолжить: 150 ₽ на 30 дн.\nНажмите');
     const plain = expiringAt(msk('2026-11-18T03:00:00'));
     plain.state.settings.graceDays = 0;
     const p = reminderMessage(plain.state, dueReminders(plain.state, msk('2026-11-18T10:00:00'))[0], msk('2026-11-18T10:00:00'));

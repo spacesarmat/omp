@@ -282,19 +282,15 @@ function graceEndMessage(state, row, subRow, grace, now) {
       ? 'Льготный период закончился — поиск в OMP отключён.'
       : 'Подписка OMP закончилась — поиск отключён.',
   ];
+  // The renewal brings back the extra slots that lapsed with the subscription (same price as before).
   const quote = subRow ? renewalPrice(state, subRow, now) : null;
-  // Slots that ran with this subscription and lapsed with it (not ones dropped in an earlier cycle).
-  const withSub = subRow && (Number(subRow.extraUntil) || 0) >= (Number(subRow.paidUntil) || 0);
-  const lapsed = withSub ? Math.max(0, Math.floor(Number(subRow.extraSlots) || 0) - (quote ? quote.extras : 0)) : 0;
   if (quote && quote.base > 0) {
     let price = 'Продлите подписку, чтобы продолжить: ' + rub(quote.total) + ' на ' + quote.days + ' дн.';
-    if (quote.extras > 0) price += ' (подписка ' + rub(quote.base) + ' + доп. устройство ' + rub(quote.extraRub) + ' × ' + quote.extras + ').';
-    lines.push(price);
-    if (lapsed > 0 && quote.extraRub > 0) {
-      lines.push(
-        'Доп. устройство × ' + lapsed + ' тоже отключено: после продления верните его кнопкой «Код» — ещё ' + rub(quote.extraRub) + ' в месяц за каждое.',
-      );
+    if (quote.extras > 0) {
+      price += ' (подписка ' + rub(quote.base) + ' + доп. устройство ' + rub(quote.extraRub) + ' × ' + quote.extras + ').';
+      price += '\nПривязанные устройства заработают сами, код вводить не нужно. Без доп. устройств — ' + rub(quote.base) + '.';
     }
+    lines.push(price);
   } else {
     lines.push('Продлите подписку, чтобы продолжить.');
   }
@@ -438,6 +434,9 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       arg = String(text || '').trim();
     }
   }
+
+  // An ended subscription is renewed, not bought anew: the renewal keeps its extra slots and devices.
+  if (action === 'pay' && sub && !sub.active && wallet && prices.price) action = 'renew';
 
   if (replyTo && admin) {
     const target = supportReplyTarget(cur, chatId, replyTo);
@@ -625,9 +624,11 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         say(
           'Без доп. устройств — ' +
             rub(renewal.quote.base) +
-            '. Доп. устройство тогда перестанет работать после ' +
-            mskDateTime(sub.extraUntil + graceDays(cur.settings) * 86400000) +
-            ' (привязка сохранится):\n' +
+            (sub.active
+              ? '. Доп. устройство тогда перестанет работать после ' +
+                mskDateTime((Number(subRow.extraUntil) || 0) + graceDays(cur.settings) * 86400000) +
+                ' (привязка сохранится):\n'
+              : '. Доп. устройство тогда останется отключённым (привязка сохранится):\n') +
             checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, 'OMP, продление'),
         );
       }
