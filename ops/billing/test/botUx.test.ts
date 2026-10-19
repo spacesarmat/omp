@@ -125,7 +125,8 @@ describe('P1-2: an extra-slot payment after the end becomes a credit', () => {
     expect(paid.state.payments[paid.state.payments.length - 1].error).toBeUndefined();
     const note = paymentUserMessage(paid.state, paid.result);
     expect(note.text).toBe(
-      '✅ Оплата 50 ₽ получена, но подписка уже закончилась - отдельно доп. устройство не подключить.\n' +
+      '✅ Оплата 50 ₽ получена, но подписка уже закончилась.\n' +
+        'Доп. устройство можно купить только вместе с активной подпиской.\n' +
         'Мы зачли 50 ₽: сумма вычтется из следующего продления. Нажмите «Оплатить».',
     );
     // Shown in the cabinet and in «Оплатить».

@@ -53,6 +53,21 @@ describe('admin payload hides codes', () => {
     expect(JSON.stringify(user)).not.toContain(start.code.replace(/-/g, ''));
   });
 
+  it('shows subscription credit in the user card and the list', () => {
+    const start = seeded();
+    const subId = start.state.subscriptions[0].id;
+    const withCredit = {
+      ...start.state,
+      subscriptions: start.state.subscriptions.map((s: { id: string }) =>
+        s.id === subId ? { ...s, creditRub: 50 } : s,
+      ),
+    };
+    const user = userPayload(withCredit, start.account.id, {});
+    expect(user.subscription.creditRub).toBe(50);
+    const home = homePayload(withCredit, '/tmp/billing.db', {});
+    expect(home.subscriptions.find((s: { id: string }) => s.id === subId).creditRub).toBe(50);
+  });
+
   it('keeps the real subscription expiry when another code is issued', () => {
     const start = seeded();
     // The first code is on a phone, so the second device slot gets a new code.

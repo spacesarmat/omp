@@ -49,6 +49,8 @@ export type SubRow = {
   active: boolean;
   status: string;
   overLimit?: boolean;
+  /** Rubles credited toward the next renewal (late extra-slot payments). */
+  creditRub?: number;
 };
 
 export type FeedActor = { kind: string; id?: string; label?: string };
@@ -198,6 +200,8 @@ export type UserData = {
     bonus?: BonusRow[];
     extraSlots?: number;
     extraUntil?: number;
+    /** Rubles credited toward the next renewal. */
+    creditRub?: number;
     bound?: number;
     overLimit?: boolean;
     swaps?: SwapInfo | null;

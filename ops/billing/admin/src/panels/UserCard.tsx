@@ -81,6 +81,11 @@ export function UserCard({
                 {user.subscription.limitText ? ' (' + user.subscription.limitText + ')' : ''}
               </span>
               <SubStatus status={status} />
+              {(user.subscription.creditRub || 0) > 0 ? (
+                <span className="text-muted-foreground">
+                  зачёт {user.subscription.creditRub} ₽
+                </span>
+              ) : null}
               {inGrace && user.subscription.accessUntil ? (
                 <span className="text-muted-foreground">
                   льготный период до <Stamp ms={user.subscription.accessUntil} />
