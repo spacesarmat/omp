@@ -1866,3 +1866,41 @@ footer .copyright {
     padding-inline: 10px;
   }
 }
+
+/* 404 page (site/404.html, served by Caddy handle_errors) */
+.notfound {
+  min-height: calc(100vh - 108px - 160px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 0 72px;
+}
+
+.notfound-code {
+  margin: 0;
+  font-size: clamp(96px, 18vw, 180px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -6px;
+  color: var(--yellow);
+}
+
+.notfound h1 {
+  margin: 18px 0 8px;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -1px;
+}
+
+.notfound > p:not(.notfound-code) {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .notfound .actions {
+    flex-direction: column;
+    gap: 14px;
+  }
+}

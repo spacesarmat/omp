@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const COUNTER = '113673968';
-const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html'];
+const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html'];
 const CADDYFILES = ['ops/vps/Caddyfile', 'ops/vps/Caddyfile.nuc'];
 const NOSCRIPT =
   '<noscript><div><img src="https://mc.yandex.ru/watch/113673968" style="position:absolute; left:-9999px;" alt="" /></div></noscript>\n<!-- /Yandex.Metrika counter -->';
@@ -48,8 +48,11 @@ function sha256(text: string) {
 }
 
 function landingCsp(caddy: string) {
-  const start = caddy.indexOf('omp-player.online, ');
-  const block = caddy.slice(start, caddy.indexOf('billing.omp-player.online', start));
+  // The landing CSP lives in the (landing_csp) snippet, imported by the apex
+  // site and its handle_errors (the 404 page).
+  const start = caddy.indexOf('(landing_csp) {');
+  expect(start).toBeGreaterThan(-1);
+  const block = caddy.slice(start, caddy.indexOf('\n}\n', start));
   const m = block.match(/Content-Security-Policy "([^"]+)"/);
   expect(m).toBeTruthy();
   return Object.fromEntries(

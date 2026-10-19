@@ -36,29 +36,48 @@
 	header X-Frame-Options DENY
 }
 
-# Project landing page (apex + www)
-http://omp-player.online, http://www.omp-player.online {
-	encode gzip
-	import security_headers_common
-	handle_errors {
-		import security_headers_common
-	}
-	root * /srv/site
-	# /en and /en/ are the English page. try_files accepts only regular files,
-	# so a directory request would otherwise fall through to the Russian index.
-	@en path /en /en/
-	rewrite @en /en/index.html
-	file_server
-	try_files {path} /index.html
-	# Yandex.Metrika (counter 113673968, inline in site/*.html): the sha256 is the
-	# exact body of that inline script, so any edit to it needs a new hash
-	# (test/metrika.test.ts checks it). mc.yandex.* and yastatic.net load tag.js
-	# and take hits; blob:/mc.yandex.* frames are for Webvisor and click maps.
-	# frame-ancestors is the Metrika interface list from Yandex's CSP guide
-	# (yandex.ru/support/metrica/ru/code/install-counter-csp).
+# Project landing page: apex only, www redirects to it below.
+# Yandex.Metrika (counter 113673968, inline in site/*.html): the sha256 is the
+# exact body of that inline script, so any edit to it needs a new hash
+# (test/metrika.test.ts checks it). mc.yandex.* and yastatic.net load tag.js
+# and take hits; blob:/mc.yandex.* frames are for Webvisor and click maps.
+# frame-ancestors is the Metrika interface list from Yandex's CSP guide
+# (yandex.ru/support/metrica/ru/code/install-counter-csp).
+# The snippet is imported in handle_errors too, so the 404 page gets the
+# same policy as the pages.
+(landing_csp) {
 	header {
 		Content-Security-Policy "default-src 'self'; img-src 'self' data: https://mc.yandex.ru https://mc.yandex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-alD0sL5UfIYDtuIvR5sJhTMFzr5FVJHpH8pwgT0X7aE=' https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.ru wss://mc.yandex.com https://yastatic.net; child-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-ancestors 'self' https://metrika.yandex.ru https://analytics.yandex.by https://analytics.yandex.com https://analytics.yandex.com.tr https://analytics.yandex.kz https://analytics.yandex.ru https://metr.yandex.by https://metr.yandex.com https://metr.yandex.com.tr https://metr.yandex.kz https://metr.yandex.ru https://metrica.ya.ru https://metrica.yandex https://metrica.yandex.by https://metrica.yandex.com https://metrica.yandex.com.tr https://metrica.yandex.kz https://metrica.yandex.ru https://metrika.ya.ru https://metrika.yandex https://metrika.yandex.by https://metrika.yandex.com https://metrika.yandex.com.tr https://metrika.yandex.kz https://metrika.yandex.uz; base-uri 'self'; form-action 'self'"
 	}
+}
+
+http://omp-player.online {
+	encode gzip
+	import security_headers_common
+	import landing_csp
+	root * /srv/site
+	# /en and /en/ both serve the English page directly (no /en -> /en/ hop).
+	@en path /en /en/
+	rewrite @en /en/index.html
+	file_server
+	# Unknown paths get a real 404 with site/404.html (no SPA fallback, so
+	# search engines do not index soft-404 copies of the home page).
+	handle_errors {
+		import security_headers_common
+		import landing_csp
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			rewrite * /404.html
+			file_server
+		}
+	}
+}
+
+# One canonical host for search engines: www answers with a 301 to the apex,
+# keeping the path and query ({uri}).
+http://www.omp-player.online {
+	import security_headers
+	redir https://omp-player.online{uri} permanent
 }
 
 http://billing.omp-player.online {

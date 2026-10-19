@@ -6,7 +6,8 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 | Host | Upstream |
 |------|----------|
-| `omp-player.online` / `www` | static `site/` (landing) |
+| `omp-player.online` | static `site/` (landing); unknown paths are a real 404 with `site/404.html` |
+| `www.omp-player.online` | 301 to `https://omp-player.online{uri}` (path and query kept) |
 | `billing.omp-player.online` | `billing:8787` |
 | `jackett.omp-player.online` | `jackett:9117` (+ basic auth) |
 | `jacred.omp-player.online` | `jacred:9117` (+ basic auth) |
