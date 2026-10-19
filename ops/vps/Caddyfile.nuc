@@ -44,8 +44,12 @@ http://omp-player.online, http://www.omp-player.online {
 	rewrite @en /en/index.html
 	file_server
 	try_files {path} /index.html
+	# Yandex.Metrika (counter 113673968, inline in site/*.html): the sha256 is the
+	# exact body of that inline script, so any edit to it needs a new hash
+	# (test/metrika.test.ts checks it). mc.yandex.* and yastatic.net load tag.js
+	# and take hits; blob:/mc.yandex.* frames are for Webvisor and click maps.
 	header {
-		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: https://mc.yandex.ru https://mc.yandex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'sha256-alD0sL5UfIYDtuIvR5sJhTMFzr5FVJHpH8pwgT0X7aE=' https://mc.yandex.ru https://mc.yandex.com https://yastatic.net; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://mc.yandex.ru https://mc.yandex.com wss://mc.yandex.ru wss://mc.yandex.com https://yastatic.net; child-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-src blob: https://mc.yandex.ru https://mc.yandex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 	}
 }
 

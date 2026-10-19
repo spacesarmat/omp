@@ -48,6 +48,12 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 - `cloudflared` runs tunnel `omp-nuc` (omp-player.online, www, billing, jackett, jacred -> `http://nuc-caddy:80`); `cloudflared-home-nas` is a replica connector for tunnel `home-nas` (music.omp-player.online -> NAS `192.168.1.191:8880`). Ingress is managed in Cloudflare.
 - Tokens live only in `tunnel.env` and `tunnel-home-nas.env` (root, mode 600, see `tunnel.env.example`); they are git-ignored.
 
+## Yandex.Metrika on the landing
+
+`site/index.html` and `site/en/index.html` carry counter 113673968 (inline script in `<head>`, noscript pixel at the start of `<body>`). The landing CSP in `Caddyfile` and `Caddyfile.nuc` allows that inline script by its `sha256` and allows `mc.yandex.ru`, `mc.yandex.com`, and `yastatic.net` (scripts, hits, pixels, Webvisor frames). Any edit to the inline script needs a new hash in both Caddyfiles; `test/metrika.test.ts` fails until they match. Billing, Jackett, and JacRed have no counter.
+
+On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy it over the existing file in place (`cp`, not `mv` or `rsync`, so the single-file bind mount keeps the same inode), reload Caddy, then copy `site/`.
+
 ## Emergency admin login
 
 The billing panel signs in through Telegram only. `POST /admin/login` rejects a password. `BILLING_ADMIN_PASSWORD`, if it is still set in `.env`, is unused — leave `.env` as it is.
