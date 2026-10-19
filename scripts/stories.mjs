@@ -55,7 +55,7 @@ const slides = [
    <div class="phone" style="top:860px;right:80px;transform:rotate(4deg)"><img src="${SHOTS}android-install-steps.png"></div>`,
   // 7 — finale
   `<div class="glow" style="top:auto;bottom:-600px"></div>
-   <div class="top" style="top:200px;text-align:center"><div class="kicker">Бесплатно и без рекламы</div><h1>Открытый код.<br>Новые версии - в канале</h1></div>
+   <div class="top" style="top:200px;text-align:center"><div class="kicker">Бесплатно, с подпиской без рекламы</div><h1>Открытый код.<br>Новые версии - в канале</h1></div>
    <div style="position:absolute;top:780px;left:0;right:0;display:flex;justify-content:center"><div style="width:480px;height:480px;padding:28px;background:#fff;border-radius:40px">${qr}</div></div>
    <div style="position:absolute;top:1320px;left:90px;right:90px;text-align:center">
      <p style="color:#E8EAF0;font-weight:700;font-size:48px;margin:0">t.me/ompplyaer</p>
