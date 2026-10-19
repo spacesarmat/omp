@@ -81,7 +81,7 @@ export function ChangelogPanel() {
           </label>
           {data?.ok ? (
             <span className="ml-auto text-xs text-muted-foreground">
-              {techTotal} тех. пунктов · загружено <Stamp ms={data.fetchedAt} />
+              {techTotal} тех. пунктов · загружено <Stamp ms={lang === 'en' ? data.enFetchedAt : data.fetchedAt} />
             </span>
           ) : null}
         </div>
@@ -90,6 +90,11 @@ export function ChangelogPanel() {
         {data?.ok && data.stale ? (
           <Alert variant="warn">
             Показана сохранённая копия: GitHub не ответил{data.error ? ' (' + data.error + ')' : ''}.
+          </Alert>
+        ) : null}
+        {data?.ok && lang === 'en' && data.enStale ? (
+          <Alert variant="warn">
+            Английский текст из сохранённой копии{data.enFetchedAt ? '' : ' (не загружался)'}: CHANGELOG.en.md не ответил{data.enError ? ' (' + data.enError + ')' : ''}.
           </Alert>
         ) : null}
         {data === null && !err ? (

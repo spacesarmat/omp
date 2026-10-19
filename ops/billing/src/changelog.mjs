@@ -52,15 +52,39 @@ export function parseChangelogSections(md) {
   return out.filter((s) => s.items.length > 0);
 }
 
+/** The body as text, at most CHANGELOG_MAX_BYTES bytes: a bigger answer is refused while it downloads. */
+async function readLimited(res) {
+  const len = Number((res.headers && typeof res.headers.get === 'function' && res.headers.get('content-length')) || 0);
+  if (len > CHANGELOG_MAX_BYTES) throw new Error('too large');
+  const reader = res.body && typeof res.body.getReader === 'function' ? res.body.getReader() : null;
+  if (!reader) {
+    const text = await res.text();
+    if (typeof text === 'string' && Buffer.byteLength(text, 'utf8') > CHANGELOG_MAX_BYTES) throw new Error('too large');
+    return text;
+  }
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > CHANGELOG_MAX_BYTES) {
+      await reader.cancel().catch(() => {});
+      throw new Error('too large');
+    }
+    chunks.push(value);
+  }
+  return new TextDecoder('utf-8').decode(Buffer.concat(chunks.map((c) => Buffer.from(c))));
+}
+
 async function fetchText(net, url, timeoutMs) {
   const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
   const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {
     const res = await net(url, { headers: { accept: 'text/plain' }, signal: ctrl ? ctrl.signal : undefined });
     if (!res || !res.ok) throw new Error('HTTP ' + ((res && res.status) || 0));
-    const text = await res.text();
+    const text = await readLimited(res);
     if (typeof text !== 'string' || !text) throw new Error('empty');
-    if (text.length > CHANGELOG_MAX_BYTES) throw new Error('too large');
     return text;
   } finally {
     if (timer) clearTimeout(timer);
@@ -69,8 +93,9 @@ async function fetchText(net, url, timeoutMs) {
 
 /**
  * The changelog source the admin route reads. `get()` resolves to
- * `{ ok, stale, fetchedAt, checkedAt, error, source, ru, en }`: `ok` false only when nothing was ever fetched,
- * `stale` when the copy is older than the cache window because the last fetch failed.
+ * `{ ok, stale, fetchedAt, checkedAt, error, source, ru, en, enFetchedAt, enStale, enError }`: `ok` false only when
+ * nothing was ever fetched, `stale` when the copy is older than the cache window because the last fetch failed.
+ * The English file is tracked on its own: a failed English fetch keeps the previous English copy with `enStale`.
  * One fetch at a time; GitHub is asked at most once per CACHE_MS (once per RETRY_MS after a failure).
  */
 export function createChangelogSource(opts = {}) {
@@ -80,7 +105,8 @@ export function createChangelogSource(opts = {}) {
   const retryMs = opts.retryMs ?? CHANGELOG_RETRY_MS;
   const timeoutMs = opts.timeoutMs ?? CHANGELOG_TIMEOUT_MS;
   const sources = opts.sources || CHANGELOG_SOURCES;
-  let good = null; // { ru, en, fetchedAt }
+  let good = null; // { ru, en, fetchedAt, enFetchedAt }
+  let enError = '';
   let lastTry = 0;
   let lastError = '';
   let inflight = null;
@@ -94,12 +120,16 @@ export function createChangelogSource(opts = {}) {
       if (!ru.length) throw new Error('no versions');
       // the English file is optional: without it the tab shows Russian only
       let en = good ? good.en : [];
+      let enFetchedAt = good ? good.enFetchedAt : 0;
       try {
         en = parseChangelogSections(await fetchText(net, sources.en, timeoutMs));
+        enFetchedAt = now();
+        enError = '';
       } catch (e) {
-        /* keep the previous English copy */
+        // keep the previous English copy, marked stale in the view
+        enError = String((e && e.name === 'AbortError' ? 'timeout' : e && e.message) || e || 'error');
       }
-      good = { ru, en, fetchedAt: now() };
+      good = { ru, en, fetchedAt: now(), enFetchedAt };
       lastError = '';
     } catch (e) {
       lastError = String((e && e.name === 'AbortError' ? 'timeout' : e && e.message) || e || 'error');
@@ -117,6 +147,9 @@ export function createChangelogSource(opts = {}) {
       source: sources.ru,
       ru: good ? good.ru : [],
       en: good ? good.en : [],
+      enFetchedAt: good ? good.enFetchedAt : 0,
+      enStale: !!good && !!enError,
+      enError,
     };
   }
 

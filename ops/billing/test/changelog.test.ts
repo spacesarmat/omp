@@ -134,6 +134,61 @@ describe('changelog source (GitHub main, cached)', () => {
     expect(r.en).toEqual([]);
   });
 
+  it('a failed English refresh keeps the old English copy marked stale with its own age', async () => {
+    let enDown = false;
+    const s = setup((url) => (url === CHANGELOG_SOURCES.en && enDown ? textRes('', 500) : textRes(url === CHANGELOG_SOURCES.ru ? RU : EN)));
+    const first = await s.src.get();
+    expect(first).toMatchObject({ enStale: false, enError: '', enFetchedAt: first.fetchedAt });
+    enDown = true;
+    s.tick(11 * 60 * 1000);
+    const next = await s.src.get();
+    expect(next.stale).toBe(false);
+    expect(next.fetchedAt).toBe(s.at());
+    expect(next).toMatchObject({ enStale: true, enError: 'HTTP 500', enFetchedAt: first.fetchedAt });
+    expect(next.en).toEqual(first.en);
+  });
+
+  it('refuses a body over 2 MB: by content-length, while streaming, and counted in bytes', async () => {
+    const big = '# Изменения\n\n## 1.0.0\n\n- ' + 'я'.repeat(1_100_000) + '\n';
+    expect(big.length).toBeLessThan(2 * 1024 * 1024);
+    const bytes = setup(() => textRes(big));
+    expect(await bytes.src.get()).toMatchObject({ ok: false, error: 'too large' });
+    const header = setup(() => ({ ...textRes(RU), headers: { get: (k: string) => (k === 'content-length' ? String(3 * 1024 * 1024) : null) } }));
+    expect(await header.src.get()).toMatchObject({ ok: false, error: 'too large' });
+    let cancelled = false;
+    let reads = 0;
+    const chunk = new Uint8Array(512 * 1024);
+    const stream = setup(() => ({
+      ...textRes(''),
+      headers: { get: () => null },
+      body: {
+        getReader: () => ({
+          read: async () => {
+            reads++;
+            return reads > 100 ? { done: true, value: undefined } : { done: false, value: chunk };
+          },
+          cancel: async () => {
+            cancelled = true;
+          },
+        }),
+      },
+    }));
+    expect(await stream.src.get()).toMatchObject({ ok: false, error: 'too large' });
+    expect(cancelled).toBe(true);
+    expect(reads).toBeLessThan(10);
+    const ok = setup((url) => ({
+      ...textRes(''),
+      headers: { get: () => null },
+      body: (() => {
+        const data = [new TextEncoder().encode(url === CHANGELOG_SOURCES.ru ? RU : EN)];
+        return { getReader: () => ({ read: async () => (data.length ? { done: false, value: data.shift() } : { done: true, value: undefined }), cancel: async () => {} }) };
+      })(),
+    }));
+    const r = await ok.src.get();
+    expect(r.ok).toBe(true);
+    expect(r.ru[1].items[2].text).toBe('Биллинг на Postgres 17');
+  });
+
   it('one fetch for concurrent tab opens', async () => {
     const s = setup((url) => textRes(url === CHANGELOG_SOURCES.ru ? RU : EN));
     await Promise.all([s.src.get(), s.src.get(), s.src.get()]);

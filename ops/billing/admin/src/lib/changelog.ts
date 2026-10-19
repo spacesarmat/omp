@@ -11,6 +11,9 @@ export type ChangelogPayload = {
   source?: string;
   ru?: ChangelogSection[];
   en?: ChangelogSection[];
+  enFetchedAt?: number;
+  enStale?: boolean;
+  enError?: string;
   auth?: boolean;
 };
 
