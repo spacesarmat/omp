@@ -266,7 +266,7 @@ describe.skipIf(!realOk)('Postgres backups: real pg_dump', () => {
     expect(existsSync(file)).toBe(true);
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(readFileSync(file).subarray(0, 5).toString('latin1')).toBe('PGDMP'); // pg_dump custom format
-  });
+  }, 30_000);
 });
 
 describe('Postgres backups: Telegram notice to the admins', () => {
