@@ -1,5 +1,7 @@
 # Биллинг: Postgres на NUC — запуск, бэкапы, переключение, восстановление
 
+**Статус:** переключено 19.10.2026 в 17:13 МСК (только чтение — 75 с). Биллинг работает на Postgres, `billing.db` больше не пишется; бэкапы до переключения — `/opt/omp-backups/billing-20261019-171052` и `…-171229`.
+
 Ранбук к разделам 4–6 [плана](postgres-migration-plan.md). Все команды — на NUC в `/opt/omp-vps`, от root (`sudo -i`).
 Сокращение: `dc` = `docker compose -f docker-compose.yml -f docker-compose.nuc.yml`.
 

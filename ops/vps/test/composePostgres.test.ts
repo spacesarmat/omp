@@ -38,8 +38,8 @@ describe('NUC compose: postgres for billing', () => {
     expect(pg).toContain('POSTGRES_PASSWORD: ${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}');
   });
 
-  it('billing gets BILLING_DATABASE_URL and backups, but stays on SQLite and read-write by default', () => {
-    expect(billing).toContain('BILLING_STORE: ${BILLING_STORE:-sqlite}');
+  it('billing runs on Postgres (since the cutover), read-write by default, with backups', () => {
+    expect(billing).toContain('BILLING_STORE: ${BILLING_STORE:-postgres}');
     expect(billing).toContain('BILLING_READONLY: ${BILLING_READONLY:-0}');
     expect(billing).toContain('BILLING_DATABASE_URL: postgres://omp_billing:${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}@postgres:5432/omp_billing');
     expect(billing).toContain('BILLING_PG_BACKUP_DIR: /backups/pg');
