@@ -67,6 +67,7 @@ import {
   mainKeyboard,
   paymentUserMessage,
   pendingUserText,
+  parseAction,
   rejectUserText,
   paymentAdminNotices,
   reminderMessage,
@@ -128,7 +129,7 @@ import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
-import { createAdminAuthMemory } from './adminAuthMemory.mjs';
+import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
@@ -552,7 +553,9 @@ export function createApp(file, fetchImpl, opts) {
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
   // Pending admin login tokens stay in memory during cutover (same as session cookies).
-  const adminAuth = (opts && opts.adminAuthMem) || (readOnly ? createAdminAuthMemory() : null);
+  const adminAuth =
+    (opts && opts.adminAuthMem) ||
+    (readOnly ? createAdminAuthMemory({ consumedPath: adminAuthConsumedPath(env) }) : null);
   let secretValue = '';
   const secret = async () => secretValue || (secretValue = await reg.tokenSecret(env));
   const envSecret = String(env.BILLING_TOKEN_SECRET || '');
@@ -1757,34 +1760,61 @@ export async function pollBot(file, fetchImpl, opts) {
             }
           : null;
         const text = msg.text || '';
+        if (adminLoginOnly && adminAuthMem) {
+          // Cutover: only /start admin_TOKEN may run; never claim a promo/unbind success without a write.
+          if (parseAction(text).action !== 'admin_login') {
+            try {
+              await telegramSend(
+                token,
+                chatId,
+                'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.',
+                net,
+                { timeoutMs: sendTimeoutMs },
+              );
+            } catch (e) {
+              /* ignore */
+            }
+            continue;
+          }
+          const out = botReply(
+            { ...state, adminLogins: adminAuthMem.panelLogins() },
+            { chatId, text, now: Date.now(), awaiting: wait, replyTo, from, pad, info: () => null },
+          );
+          adminAuthMem.replacePanelLogins(out.state.adminLogins);
+          const rows = out.messages || [];
+          for (let j = 0; j < rows.length; j++) {
+            const row = rows[j];
+            try {
+              await telegramSend(token, row.chatId || chatId, row.text, net, {
+                keyboard: row.keyboard,
+                inline: row.inline,
+                parseMode: row.parseMode,
+                timeoutMs: sendTimeoutMs,
+              });
+            } catch (e) {
+              /* ignore */
+            }
+          }
+          continue;
+        }
         let info = () => null;
-        if (!adminLoginOnly && botNeedsDeviceInfo(text, '')) {
+        if (botNeedsDeviceInfo(text, '')) {
           const acct = accountByTelegram(state, chatId);
           info = await deviceInfoForAccount(file, state, acct && acct.id);
         }
-        let replied;
-        if (adminLoginOnly && adminAuthMem) {
-          const out = botReply(
-            { ...state, adminLogins: adminAuthMem.panelLogins() },
-            { chatId, text, now: Date.now(), awaiting: wait, replyTo, from, pad, info },
-          );
-          adminAuthMem.replacePanelLogins(out.state.adminLogins);
-          replied = { messages: out.messages, pad: out.pad };
-        } else {
-          replied = await store.update((cur) => {
-            const out = botReply(cur, {
-              chatId,
-              text,
-              now: Date.now(),
-              awaiting: wait,
-              replyTo,
-              from,
-              pad,
-              info,
-            });
-            return { state: out.state, result: { messages: out.messages, pad: out.pad } };
+        const replied = await store.update((cur) => {
+          const out = botReply(cur, {
+            chatId,
+            text,
+            now: Date.now(),
+            awaiting: wait,
+            replyTo,
+            from,
+            pad,
+            info,
           });
-        }
+          return { state: out.state, result: { messages: out.messages, pad: out.pad } };
+        });
         awaiting.delete(chatId);
         if (replied && replied.pad) pads.set(chatId, replied.pad);
         const rows = replied && replied.messages ? replied.messages : replied || [];
@@ -1823,9 +1853,15 @@ export async function pollBot(file, fetchImpl, opts) {
 /** True when this bot turn shows the devices list (needs registry names / lastSeen). */
 function botNeedsDeviceInfo(text, callbackData) {
   const data = String(callbackData || '');
-  if (data === 'devices' || data.indexOf('unbind') === 0 || data.indexOf('devices') === 0) return true;
-  const t = String(text || '').trim().toLowerCase();
-  return t === 'устройства' || t === 'devices';
+  if (
+    data.indexOf('u1:') === 0 ||
+    data.indexOf('y1:') === 0 ||
+    data === 'ua' ||
+    data.indexOf('ya:') === 0
+  ) {
+    return true;
+  }
+  return parseAction(text).action === 'devices';
 }
 
 /**
@@ -1864,10 +1900,14 @@ async function deviceInfoForAccount(file, state, accountId) {
 export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const store = toStore(file);
   const adminLoginOnly = !!(opts && opts.adminLoginOnly);
-  const adminAuthMem = (opts && opts.adminAuthMem) || null;
   const chat = cq && cq.message && cq.message.chat;
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
+  if (adminLoginOnly) {
+    // Admin login is /start admin_TOKEN only; never pretend an unbind or pay button worked.
+    await answer('Сейчас обслуживание. Админ-вход - через ссылку в панели.');
+    return;
+  }
   if (!chat || !isPrivateChat(chat) || !cq.from || String(cq.from.id) !== String(chat.id)) {
     await answer('');
     return;
@@ -1877,23 +1917,14 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   try {
     const state = await store.read();
     let info = () => null;
-    if (!adminLoginOnly && botNeedsDeviceInfo('', cq.data)) {
+    if (botNeedsDeviceInfo('', cq.data)) {
       const acct = accountByTelegram(state, chatId);
       info = await deviceInfoForAccount(file, state, acct && acct.id);
     }
-    if (adminLoginOnly && adminAuthMem) {
-      const r = botCallback(
-        { ...state, adminLogins: adminAuthMem.panelLogins() },
-        { chatId, data: cq.data, now: Date.now(), info },
-      );
-      adminAuthMem.replacePanelLogins(r.state.adminLogins);
-      out = { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup };
-    } else {
-      out = await store.update((cur) => {
-        const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info });
-        return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
-      });
-    }
+    out = await store.update((cur) => {
+      const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info });
+      return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
+    });
   } catch (e) {
     await answer('Не получилось, попробуйте ещё раз.');
     return;
@@ -2101,7 +2132,12 @@ if (started) {
           })
         : null;
       // Shared with HTTP login routes so Telegram confirm and browser poll see the same pending tokens.
-      const adminAuthMem = readOnly ? createAdminAuthMemory() : null;
+      const consumedPath = adminAuthConsumedPath(process.env);
+      if (!readOnly && consumedPath) {
+        // Leaving cutover: move redeemed CLI hashes from the side file into Postgres.
+        await flushCliConsumedToStore(store, consumedPath);
+      }
+      const adminAuthMem = readOnly ? createAdminAuthMemory({ consumedPath }) : null;
       await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem });
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
