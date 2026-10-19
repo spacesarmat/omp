@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { normalizeState } from '../../state.mjs';
+import { LOG_TABLES, expiredLogCounts, pruneLogs, retentionCutoffs } from '../../retention.mjs';
 import { decodeRow, encodeRow } from './mapper.mjs';
 import * as reg from './registry.mjs';
 import { migrate } from './schema.mjs';
@@ -68,7 +69,7 @@ async function insertMany(q, table, cols, rows, conflict) {
 }
 
 /** Load the whole state from the tables: { raw (as stored), meta (per-table row hashes and ords) }. */
-async function loadAll(q) {
+export async function loadAll(q) {
   const raw = {};
   const meta = {};
   for (let s = 0; s < COLLECTIONS.length; s++) {
@@ -128,7 +129,7 @@ async function loadAll(q) {
 }
 
 /** Write the difference between what is stored (meta) and `next`; returns the new meta. */
-async function writeDiff(q, meta, next) {
+export async function writeDiff(q, meta, next) {
   const nextMeta = {};
   for (let s = 0; s < COLLECTIONS.length; s++) {
     const spec = COLLECTIONS[s];
@@ -235,7 +236,7 @@ async function writeKeyValues(q, table, kc, old, obj) {
   return m;
 }
 
-async function storeVersion(q) {
+export async function storeVersion(q) {
   const r = await q.query("SELECT value FROM kv WHERE key = 'store_version'");
   return r.rows[0] ? String(r.rows[0].value) : '0';
 }
@@ -244,7 +245,8 @@ async function storeVersion(q) {
  * Open (and migrate) a Postgres store. `schema` (tests) puts every table in that schema.
  * The connection string is used only to connect: never logged, never in info().
  */
-export async function createPgStore({ connectionString, schema, max }) {
+/** A migrated pool. `schema` (tests) puts every table in that schema. Shared by the store and the data migration. */
+export async function openPool({ connectionString, schema, max }) {
   const config = { connectionString, types, max: max || 5 };
   if (schema) config.options = '-c search_path=' + quoteIdent(schema).replace(/ /g, '\\ ');
   if (schema) {
@@ -259,7 +261,21 @@ export async function createPgStore({ connectionString, schema, max }) {
   const pool = new pg.Pool(config);
   // An idle client that loses the server must not crash the process; the next query reconnects.
   pool.on('error', () => {});
-  await migrate(pool);
+  try {
+    await migrate(pool);
+  } catch (e) {
+    await pool.end().catch(() => {});
+    throw e;
+  }
+  return pool;
+}
+
+/**
+ * Open (and migrate) a Postgres store. `schema` (tests) puts every table in that schema.
+ * The connection string is used only to connect: never logged, never in info().
+ */
+export async function createPgStore({ connectionString, schema, max }) {
+  const pool = await openPool({ connectionString, schema, max });
 
   /** { version, state (normalized, JSON), meta } of the last load or write. */
   let cache = null;
@@ -350,6 +366,22 @@ export async function createPgStore({ connectionString, schema, max }) {
     async close() {
       await chain;
       await pool.end();
+    },
+    /**
+     * Log retention (retention.mjs): expired rows leave the state (one write, only when something expired),
+     * then rows already out of the state (live = false) past the same cutoff are deleted. Returns the counts.
+     */
+    async retention(now) {
+      const at = Number(now) || Date.now();
+      const expired = expiredLogCounts(await read(), at);
+      if (Object.values(expired).some((n) => n > 0)) await update((s) => ({ state: pruneLogs(s, at) }));
+      const cut = retentionCutoffs(at);
+      const deleted = {};
+      for (const [name, table] of Object.entries(LOG_TABLES)) {
+        const r = await pool.query('DELETE FROM ' + table + ' WHERE NOT live AND at < $1', [cut[name]]);
+        deleted[name] = r.rowCount;
+      }
+      return { expired, deleted };
     },
     /** Tests: run SQL on the store's pool (same schema). */
     query: (sql, params) => pool.query(sql, params),

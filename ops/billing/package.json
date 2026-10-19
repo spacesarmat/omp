@@ -6,7 +6,8 @@
     "start": "node src/server.mjs",
     "admin-login-link": "node src/adminLoginLink.mjs",
     "build:admin": "npm --prefix admin ci && npm --prefix admin run build",
-    "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts"
+    "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts",
+    "migrate:pg": "node src/migrateToPostgres.mjs"
   },
   "dependencies": {
     "nodemailer": "^7.0.6",

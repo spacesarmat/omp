@@ -177,35 +177,30 @@ interface RegistryRepo {
 
 ## 3. Перенос данных из `billing.db`
 
-Скрипт `ops/billing/scripts/migrate-sqlite-to-pg.mjs`, запускается в образе биллинга (там есть Node 24 и `node:sqlite`):
+Скрипт `ops/billing/src/migrateToPostgres.mjs` (логика — `src/db/pg/fromSqlite.mjs`), запускается в образе биллинга (Node 24, `node:sqlite`, `pg`). По умолчанию — сухой прогон:
 
 ```
 docker compose -f docker-compose.yml -f docker-compose.nuc.yml run --rm --no-deps \
-  -e BILLING_STORE=postgres billing node scripts/migrate-sqlite-to-pg.mjs \
-  --source /data/billing.migrate.db [--dry-run] [--force]
+  -e BILLING_DATABASE_URL=… billing node src/migrateToPostgres.mjs --from /data/billing.db [--apply] [--report /data/pgmig.json]
 ```
 
-### 3.1 Алгоритм
-1. **Источник — копия**: `billing.migrate.db`, сделанная из `billing.db` при остановленных записях (`VACUUM INTO` через node-скрипт или `cp` при остановленном контейнере). Посчитать `sha256` файла.
-2. Прочитать снапшот **через тот же `normalizeState()`**, что и прод (применятся все `migrate*`, включая `migrateLimitModel` из #147), + таблицы `devices`, `refresh_tokens`, `kv`.
-3. Применить миграции схемы PG (`schema_migrations`).
-4. **Защита от затирания**: если `kv.cutover_at` уже стоит (PG стал основным) — отказ без `--force`.
-5. Одна транзакция: `TRUNCATE` всех бизнес-таблиц → вставка в порядке FK (accounts → subscriptions → bonus/swaps/reminders → codes → sessions → devices → refresh_tokens → purchases → payments → promos → журналы → токены → settings → kv). `promos[].uses` **не переносятся** (решение Andy): `promo_uses` остаётся пустой. Чтобы погашенные одноразовые промокоды не ожили, промо, у которого `uses.length >= maxUses`, переносится как `revoked = true`; остальные — как есть. Пакетная вставка через `INSERT … SELECT * FROM unnest(...)` / `COPY`.
-6. Сверка (3.2) **внутри той же транзакции**; при любом расхождении — `ROLLBACK` и отчёт. При успехе — запись в `migration_runs` и `COMMIT`.
+### 3.1 Алгоритм (как сделано в PR 3)
+1. **Источник — копия**: скрипт сам снимает копию `billing.db` через SQLite backup API (согласованная даже при работающем биллинге), читает её только на чтение и удаляет. Снапшот, `devices`, `refresh_tokens`, `kv.token_secret`.
+2. **Подготовка**: `normalizeState()` (все `migrate*`); **отказ** (ничего не пишется), если в сохранённом снапшоте есть строки без ключа (`id`, у токен-коллекций `hash`/`token`/`key`), повторяющиеся ключи (в т.ч. `swaps`/`bonusSlots` внутри подписки) или два проведённых платежа с одним `operation_id`. Промо: история `uses` не переносится; исчерпанное (`uses ≥ maxUses`, т.е. и погашенный одноразовый) → `revoked`; частично использованное → `maxUses = maxUses − uses` (общее число активаций не растёт). Журналы — по срокам хранения (аудит и ЮMoney 1 год, попытки 90 дней).
+3. **Одна транзакция** на **пустой** цели (иначе отказ) под advisory-блокировкой записи: строки реестра и ключ токенов копируются как есть (телефоны сохраняют токены), стейт пишется тем же diff-писателем, что и `PgStore`, `syncRegistry` (обязан ничего не менять), `store_version = 1`.
+4. **Сверка** (3.2) в той же транзакции; любое расхождение → `ROLLBACK`.
+5. `--apply` → `COMMIT`; без него — `ROLLBACK` всегда (сухой прогон можно гонять хоть по боевой базе Postgres).
 
-Идемпотентность: повторный прогон с тем же источником даёт то же содержимое (TRUNCATE + reload в одной транзакции); `--dry-run` всегда завершает `ROLLBACK`, оставляя только отчёт.
+Отдельного `migration_runs`/`cutover_at` нет: защита от затирания — отказ на непустой цели; отчёт пишется в файл (`--report`).
 
-### 3.2 Сверка
-- **Количества** по каждой коллекции и таблице: `snapshot.accounts.length == count(accounts)` и т.д., `devices` и `refresh_tokens` — 1:1.
-- **Чексуммы по подписке**: канонический JSON (ключи отсортированы, ms, `null/0/''` нормализованы одинаково) из SQLite-стейта и из стейта, **заново загруженного из PG через `PgStore`**:
-  `sub + её activation_codes + bonus_slots + swaps + reminders + devices(+ refresh_tokens hashes)` → `sha256`. Должны совпасть все.
-- **Поведенческая сверка на фиксированном `now`** (момент запуска) для каждой подписки, сравнение старого и нового стейта:
-  `deviceLimitNow`, `limitBreakdown(...).text` и `.total`, `subAccess` (paid/grace/accessUntil), `activeExtras`, `activeBonus`, `boundDevices`, `codeWithinLimit` для каждого привязанного кода, `renewalPrice` (с доп. устройствами и без), `creditOf`, `swapStatus`.
-- **Глобальные**: `financeReport(now)` (суммы день/неделя/месяц), `dueReminders(now)`, `adminSummary(now)` — равны.
-- **Платежи**: `sha256` отсортированного списка `(operation_id, label, amount_raw, at, error, pending)`; нарушение уникального индекса по `operation_id` → перенос падает с отчётом.
-- **Промокоды**: сравниваются определения (код, дни, лимит, бонусы, отозван) с учётом правила «исчерпанный → отозван»; `uses` из сверки исключены, в чексуммах подписок промо-активации не участвуют (бонусные слоты от промо — участвуют, они живут в подписке).
-- **Настройки**: сравнение по ключам; в отчёт попадают только имена ключей и `совпало/нет`, **значения секретов не печатаются никогда**.
-- Отчёт: JSON + короткий человекочитаемый вывод (числа и id подписок с расхождениями, без персональных данных и секретов).
+### 3.2 Сверка (как сделано)
+- **Количества и точное содержимое** каждой коллекции: ожидаемый стейт vs стейт, заново загруженный из таблиц (канонический JSON с отсортированными ключами).
+- **Чексумма по подписке**: `подписка + её коды + покупки`.
+- **Поведение на фиксированном `now`** для каждой подписки против исходного стейта: `subAccess`, `deviceLimitNow`, `limitBreakdown().text`, `boundDevices`, `activeBonus`, `activeExtras`, `renewalPrice`, `creditOf`, `codeWithinLimit` каждого привязанного кода, `swapStatus`. Глобально: `financeReport().summary` и `dueReminders()`.
+- **Реестр**: строки `devices` и `refresh_tokens` 1:1, ключ токенов совпадает, `syncRegistry` ничего не изменил; уникальный индекс по `operation_id` на месте.
+- **Настройки**: совпадение целиком; в отчёте — только число ключей. Отчёт содержит числа, id и короткие хэши, без значений настроек, токенов и строки подключения.
+
+Сроки хранения журналов на работающем Postgres: `PgStore.retention()` раз в сутки (таймер в `server.mjs`, только для Postgres): просроченные строки уходят из стейта, строки с `live = false` старше срока удаляются.
 
 ### 3.3 Обратного экспорта нет
 По решению Andy долгого периода отката нет, поэтому `pg-to-sqlite.mjs` не пишем. Страховка — бэкап `billing.db` перед переключением и проверенная процедура восстановления из него (раздел 6.3).

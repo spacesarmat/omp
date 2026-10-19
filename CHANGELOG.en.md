@@ -10,6 +10,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
 - Billing: the store can be switched to Postgres (`BILLING_STORE=postgres`); SQLite stays the default, and both are covered by tests
 - Subscription: a phone unbound and bound again right away no longer gets “This device was disconnected”
+- Billing: a SQLite → Postgres data migration script with verification and a dry run; on Postgres logs are kept for a year (sign-in attempts for 90 days)
 
 ## 0.20.4
 

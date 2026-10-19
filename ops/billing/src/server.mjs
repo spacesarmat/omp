@@ -1879,6 +1879,33 @@ export function startReminders(file, fetchImpl, opts) {
   };
 }
 
+const RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Daily log retention (src/retention.mjs) on a store that supports it (Postgres). The SQLite store keeps its
+ * capped arrays as before. Prints counts only. Returns a stop function.
+ */
+export function startRetention(store, opts) {
+  if (!store || typeof store.retention !== 'function') return () => {};
+  const tick = () => {
+    store
+      .retention(Date.now())
+      .then((r) => {
+        const total = Object.values(r.expired).concat(Object.values(r.deleted)).reduce((a, b) => a + b, 0);
+        if (total) process.stdout.write('log retention: expired ' + JSON.stringify(r.expired) + ', deleted ' + JSON.stringify(r.deleted) + '\n');
+      })
+      .catch(() => process.stderr.write('log retention failed\n'));
+  };
+  const first = setTimeout(tick, (opts && opts.firstMs) || 5 * 60 * 1000);
+  const timer = setInterval(tick, (opts && opts.everyMs) || RETENTION_EVERY_MS);
+  if (first.unref) first.unref();
+  if (timer.unref) timer.unref();
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
+
 export function dataFile() {
   const fromEnv = process.env.BILLING_DATA;
   if (fromEnv) return resolveDbPath(fromEnv);
@@ -1939,6 +1966,7 @@ if (started) {
       process.stdout.write('billing listening on ' + port + ' (store: ' + store.engine + ')\n');
       pollBot(store);
       startReminders(store);
+      startRetention(store);
     })
     .catch((e) => {
       // Never the connection string: the error code and message only (pg puts no password in them).
