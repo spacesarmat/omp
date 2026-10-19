@@ -3,16 +3,12 @@ import {
   buildCaption,
   buildKeyboard,
   buildFiles,
-  routeFiles,
-  oversizeLogLine,
   escapeHtml,
   CAPTION_MAX,
   CAPTION_NOTES_MAX,
   CAPTION_FALLBACK,
-  UPLOAD_MAX,
 } from '../../scripts/telegram-lib.mjs';
 
-const MB = 1024 * 1024;
 const DL = 'https://github.com/spacesarmat/omp/releases/download/v0.14.1';
 
 describe('telegram-lib', () => {
@@ -57,31 +53,13 @@ describe('telegram-lib', () => {
     expect(c.length).toBeLessThanOrEqual(CAPTION_MAX);
   });
 
-  it('lists the build files in posting order: arm64, armv7, ipk, universal', () => {
+  it('lists the build files: arm64, armv7, ipk, universal', () => {
     expect(buildFiles('0.14.1')).toEqual([
       'OMP-0.14.1-arm64.apk',
       'OMP-0.14.1-armv7.apk',
       'OMP-0.14.1-webOS.ipk',
       'OMP-0.14.1.apk',
     ]);
-  });
-
-  it('routes files by the bot limit and keeps the order', () => {
-    const files = [
-      { name: 'a', size: 67 * MB },
-      { name: 'b', size: 36 * MB },
-      { name: 'c', size: UPLOAD_MAX },
-      { name: 'd', size: UPLOAD_MAX + 1 },
-    ];
-    const r = routeFiles(files);
-    expect(r.upload.map((f) => f.name)).toEqual(['b', 'c']);
-    expect(r.link.map((f) => f.name)).toEqual(['a', 'd']);
-  });
-
-  it('logs the size in MB for a manual forward', () => {
-    expect(oversizeLogLine({ name: 'OMP-0.14.1-arm64.apk', size: 67_200_000 })).toBe(
-      'Telegram: OMP-0.14.1-arm64.apk is 68 MB - forward it manually from GitHub',
-    );
   });
 
   it('builds per-ABI, universal, ipk, GitHub release and support buttons: a button for every build file', () => {

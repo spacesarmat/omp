@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Telegram release post without files: only photo, caption and buttons (builds and release page via buttons); the file replies, the file repost (telegram-fix: files) and the «forward it manually» log are removed
 - [tech] Telegram release post without text links: the caption holds only the change bullets, the files and the GitHub release page are buttons only (new universal APK button), no separate message linking the big files
 - [tech] One Telegram bot, @OMPBILLINGBOT, for billing and channel posts: billing requests its update types explicitly and deletes the «pinned a message» line itself; the release script no longer polls the bot
 - [tech] Parser monitor (GitHub Actions) removed together with the admin bot's /status and /check; /stats and /ci no longer show it

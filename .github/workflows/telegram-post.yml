@@ -1,7 +1,7 @@
 # Posts an existing GitHub release to the Telegram channel, the same way the Release workflow does
 # (scripts/telegram-post.mjs). For a release whose Telegram step failed. Run by hand only.
 # Scripts and CHANGELOG come from the branch the workflow runs on (main), so a fixed caption script and «[tech]»
-# markers added after the tag apply; the files posted are the release assets of the input tag.
+# markers added after the tag apply. No files are attached: the buttons link the release assets of the input tag.
 name: Telegram post (existing release)
 on:
   workflow_dispatch:
@@ -74,10 +74,6 @@ jobs:
           else
             echo "::warning::channel preview unavailable, check skipped"
           fi
-      - name: Download the release files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "$TAG" --dir build --pattern 'OMP-*' && ls -l build
       - name: Post to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -87,5 +83,5 @@ jobs:
             echo "::error::TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing"
             exit 1
           fi
-          node scripts/telegram-post.mjs "$TAG" build
+          node scripts/telegram-post.mjs "$TAG"
           echo "Posted $TAG to the Telegram channel. Do not run again for this tag." >> "$GITHUB_STEP_SUMMARY"

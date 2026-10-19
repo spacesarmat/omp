@@ -1,9 +1,8 @@
 // Release post for the Telegram channel (pure helpers; scripts/telegram-post.mjs does the network part).
 
 export const REPO_URL = 'https://github.com/spacesarmat/omp';
-/** Telegram limits: photo caption 1024 characters, bot uploads 50 MB (kept at 50,000,000 bytes, the conservative reading). */
+/** Telegram limit: photo caption 1024 characters. */
 export const CAPTION_MAX = 1024;
-export const UPLOAD_MAX = 50_000_000;
 
 export function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -40,7 +39,7 @@ export function buildCaption(version, notes) {
   return head + body;
 }
 
-/** Build files in the order they are posted as replies: arm64 APK, armv7 APK, ipk, universal APK. */
+/** Build files of a release (each one has a download button, none is attached): arm64 APK, armv7 APK, ipk, universal APK. */
 export function buildFiles(version) {
   return [
     `OMP-${version}-arm64.apk`,
@@ -50,21 +49,8 @@ export function buildFiles(version) {
   ];
 }
 
-/** Splits [{name, size}] (post order kept): up to the bot limit are uploaded, the rest are only reachable by the buttons. */
-export function routeFiles(files) {
-  const upload = [];
-  const link = [];
-  for (const f of files) (f.size <= UPLOAD_MAX ? upload : link).push(f);
-  return { upload, link };
-}
-
 export function downloadUrl(tag, name) {
   return `${REPO_URL}/releases/download/${tag}/${name}`;
-}
-
-/** Log line for the owner, who forwards an oversize build by hand. */
-export function oversizeLogLine(file) {
-  return `Telegram: ${file.name} is ${Math.ceil(file.size / 1_000_000)} MB - forward it manually from GitHub`;
 }
 
 /**

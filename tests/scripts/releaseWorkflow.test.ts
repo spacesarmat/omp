@@ -43,11 +43,20 @@ describe('release workflow asset names', () => {
 });
 
 describe('Telegram step', () => {
-  it('posts the whole build dir, never fails the release and keeps the token in env', () => {
+  it('posts the release without files, never fails the release and keeps the token in env', () => {
     const step = yml.slice(yml.indexOf('- name: Post to Telegram'));
     expect(step).toContain('continue-on-error: true');
-    expect(step).toContain('node scripts/telegram-post.mjs "$TAG" build');
+    expect(step).toMatch(/node scripts\/telegram-post\.mjs "\$TAG"\n/);
     expect(step).toContain('TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}');
+  });
+});
+
+describe('Telegram post workflows attach no files', () => {
+  it('telegram-post.yml and telegram-fix.yml neither download release files nor repost them', () => {
+    for (const name of ['telegram-post.yml', 'telegram-fix.yml']) {
+      const w = readFileSync(`.github/workflows/${name}`, 'utf8');
+      expect(w).not.toMatch(/gh release download|--repost-files|telegram-post\.mjs "\$TAG" build/);
+    }
   });
 });
 
