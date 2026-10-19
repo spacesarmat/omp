@@ -191,8 +191,8 @@ export function App() {
                 [d.stats?.activeSubs ?? 0, 'активных'],
                 [d.stats?.payments30 ?? 0, 'оплат / 30 дн.'],
                 [Math.round(d.stats?.revenue30 || 0), '₽ / 30 дн.'],
-                [d.stats?.devicesRefresh ?? 0, 'новые токены'],
-                [d.stats?.devicesLegacy ?? 0, 'старые токены'],
+                [d.stats?.devicesRefresh == null ? '-' : d.stats.devicesRefresh, 'новые токены'],
+                [d.stats?.devicesLegacy == null ? '-' : d.stats.devicesLegacy, 'старые токены'],
               ] as const
             ).map(([v, l]) => (
               <Card key={l}>

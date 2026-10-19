@@ -671,7 +671,15 @@ export function createApp(file, fetchImpl, opts) {
             readOnly,
             // Read-only secret rows (set or not, last 4 characters, the .env name); never a value.
             secrets: secretViews((await store.read()).settings, env),
-            tokenStats: typeof reg.authStats === 'function' ? await reg.authStats().catch(() => ({ total: 0, refresh: 0, legacy: 0 })) : { total: 0, refresh: 0, legacy: 0 },
+            tokenStats: await (async () => {
+              if (typeof reg.authStats !== 'function') return null;
+              try {
+                return await reg.authStats();
+              } catch (e) {
+                process.stderr.write('tokenStats: ' + ((e && e.message) || e) + '\n');
+                return null;
+              }
+            })(),
           }),
         );
       }

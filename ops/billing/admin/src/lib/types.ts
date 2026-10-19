@@ -120,10 +120,10 @@ export type HomeData = {
     payments30: number;
     revenue30: number;
     /** Active devices with a live refresh token (new apps). */
-    devicesRefresh?: number;
+    devicesRefresh?: number | null;
     /** Active devices still on the old opaque token. */
-    devicesLegacy?: number;
-    devicesBound?: number;
+    devicesLegacy?: number | null;
+    devicesBound?: number | null;
   };
   alerts?: { level: string; text: string; accountId?: string }[];
   events?: FeedEvent[];

@@ -123,10 +123,10 @@ export function homePayload(state, file, opts) {
       activeSubs: state.subscriptions.filter((x) => x.paidUntil > now).length,
       payments30: finance.summary.month.count,
       revenue30: finance.summary.month.sum,
-      // Device token kinds (prep before BILLING_LEGACY_TOKENS=0): refresh = new pair, legacy = old opaque.
-      devicesRefresh: (opts && opts.tokenStats && opts.tokenStats.refresh) || 0,
-      devicesLegacy: (opts && opts.tokenStats && opts.tokenStats.legacy) || 0,
-      devicesBound: (opts && opts.tokenStats && opts.tokenStats.total) || 0,
+      // Device token kinds (prep before BILLING_LEGACY_TOKENS=0). null = count failed (do not show as zero).
+      devicesRefresh: opts && opts.tokenStats ? opts.tokenStats.refresh || 0 : null,
+      devicesLegacy: opts && opts.tokenStats ? opts.tokenStats.legacy || 0 : null,
+      devicesBound: opts && opts.tokenStats ? opts.tokenStats.total || 0 : null,
     },
     alerts: homeAlerts(dash.alerts || [], opts),
     events: (dash.events || []).slice(0, 80),

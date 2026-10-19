@@ -74,8 +74,8 @@ describe('admin payload hides codes', () => {
     expect(home.stats.devicesRefresh).toBe(3);
     expect(home.stats.devicesLegacy).toBe(2);
     const empty = homePayload(start.state, '/tmp/billing.db', {});
-    expect(empty.stats.devicesRefresh).toBe(0);
-    expect(empty.stats.devicesLegacy).toBe(0);
+    expect(empty.stats.devicesRefresh).toBe(null);
+    expect(empty.stats.devicesLegacy).toBe(null);
   });
 
   it('keeps the real subscription expiry when another code is issued', () => {
