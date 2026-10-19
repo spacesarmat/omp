@@ -33,7 +33,7 @@ docker exec omp-billing node --input-type=module -e "import { backupConfig, runD
 ```
 
 Частота и срок хранения — админка (`backupEveryHours` 1–168, по умолчанию 24; `backupKeepDays` 1–365, по умолчанию 30; самый свежий дамп не удаляется никогда).
-Планировщик в биллинге смотрит раз в 10 минут. Свежесть: `/health` → `pgBackupOk` / `pgBackupAgoSec`; дамп старше `backupEveryHours + 3 ч` (или ошибка `pg_dump`) — красное предупреждение на главной админки.
+Планировщик в биллинге смотрит раз в 10 минут. Свежесть: `/health` → `pgBackupOk` / `pgBackupAgoSec`; дамп старше `backupEveryHours + 3 ч` (или ошибка `pg_dump`) — красное предупреждение на главной админки и одно сообщение админам в Telegram (и одно, когда снова в порядке).
 
 ## 1. Переключение на Postgres (окно ~15 минут, ночью)
 

@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   backupAlert,
+  backupNotice,
+  backupProblem,
   backupConfig,
   backupDue,
   backupEveryHours,
@@ -246,5 +248,55 @@ describe.skipIf(!realOk)('Postgres backups: real pg_dump', () => {
     expect(existsSync(file)).toBe(true);
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(readFileSync(file).subarray(0, 5).toString('latin1')).toBe('PGDMP'); // pg_dump custom format
+  });
+});
+
+describe('Postgres backups: Telegram notice to the admins', () => {
+  it('one notice when a problem starts, one when it is over', () => {
+    const dir = tmp();
+    const fresh = () => backupStatus(dir, {}, NOW, '');
+    expect(backupProblem(fresh())).toBe('Бэкапов Postgres ещё нет');
+    let n = backupNotice(false, fresh());
+    expect(n).toEqual({ alerted: true, text: '⚠️ Бэкапов Postgres ещё нет' });
+    expect(backupNotice(true, fresh())).toEqual({ alerted: true, text: '' });
+    const name = dump(dir, NOW - HOUR, 99);
+    n = backupNotice(true, fresh());
+    expect(n).toEqual({ alerted: false, text: '✅ Бэкап Postgres снова в порядке: ' + name + ', 99 байт' });
+    expect(backupNotice(false, fresh())).toEqual({ alerted: false, text: '' });
+    // a failed pg_dump is a problem even while the last dump is still fresh
+    const failed = backupStatus(dir, {}, NOW, 'pg_dump exit 1: boom');
+    expect(backupNotice(false, failed)).toEqual({ alerted: true, text: '⚠️ Бэкап Postgres не удался: pg_dump exit 1: boom' });
+    expect(backupProblem({ enabled: false } as never)).toBe('');
+  });
+
+  it('the scheduler sends the notice once per episode and retries a failed send', async () => {
+    const dir = tmp();
+    const sent: string[] = [];
+    let failSend = true;
+    let code = 1;
+    const spawnImpl = (bin: string, args: string[], o: { env: Record<string, string> }) => fakeSpawn({ code, stderr: 'boom' }).impl(bin, args, o);
+    const b = startPgBackups({ dir, url: URL_ }, async () => ({}), {
+      spawn: spawnImpl,
+      firstDelayMs: 1e9,
+      everyMs: 1e9,
+      log: () => {},
+      onAlert: async (t: string) => {
+        if (failSend) throw new Error('telegram down');
+        sent.push(t);
+      },
+    });
+    await b.tick(); // fails, the notice cannot be sent
+    expect(sent).toEqual([]);
+    failSend = false;
+    await b.tick(); // still failing: the notice goes out now
+    await b.tick(); // same episode: nothing new
+    expect(sent).toEqual(['⚠️ Бэкапов Postgres ещё нет: pg_dump exit 1: boom']);
+    code = 0;
+    await b.tick(); // dump works
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toMatch(/^✅ Бэкап Postgres снова в порядке: billing-\d{8}-\d{6}\.dump, \d+ байт$/);
+    await b.tick(); // not due, all fine: nothing
+    expect(sent).toHaveLength(2);
+    b.stop();
   });
 });

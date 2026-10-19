@@ -145,6 +145,28 @@ export function backupAlert(status) {
     (status.lastError ? ': ' + status.lastError : '');
 }
 
+/** Problem text for a Telegram notice: a stale backup (backupAlert) or a failed pg_dump; '' when all is well. */
+export function backupProblem(status) {
+  if (!status || !status.enabled) return '';
+  const stale = backupAlert(status);
+  if (stale) return stale;
+  return status.lastError ? 'Бэкап Postgres не удался: ' + status.lastError : '';
+}
+
+/**
+ * One Telegram notice per episode: when a problem starts, and once when it is over.
+ * Returns { alerted, text } — text is '' when nothing should be sent.
+ */
+export function backupNotice(alerted, status) {
+  const problem = backupProblem(status);
+  if (problem && !alerted) return { alerted: true, text: '⚠️ ' + problem };
+  if (!problem && alerted) {
+    const last = status && status.last;
+    return { alerted: false, text: '✅ Бэкап Postgres снова в порядке' + (last ? ': ' + last.name + ', ' + last.size + ' байт' : '') };
+  }
+  return { alerted, text: '' };
+}
+
 /**
  * Run pg_dump into dir. Resolves { ok, name, size } or { ok: false, error } (error has no secrets:
  * the exit code and the last line of pg_dump's stderr, which never holds the password).
@@ -215,13 +237,31 @@ export function startPgBackups(cfg, getSettings, opts) {
   const o = opts || {};
   const log = o.log || ((s) => process.stdout.write(s + '\n'));
   let lastError = '';
+  let lastSettings = {};
+  let alerted = false;
   let busy = null;
+  /** Telegram notice to the admins (opts.onAlert) when a problem starts or ends; a failed send is retried next tick. */
+  async function notify() {
+    if (!o.onAlert) return;
+    const n = backupNotice(alerted, backupStatus(cfg.dir, lastSettings, Date.now(), lastError));
+    if (!n.text) return;
+    try {
+      await o.onAlert(n.text);
+      alerted = n.alerted;
+    } catch {
+      /* next tick */
+    }
+  }
   async function tick(force) {
     if (busy) return busy;
     busy = (async () => {
       const settings = (await getSettings()) || {};
+      lastSettings = settings;
       const now = Date.now();
-      if (!force && !backupDue(cfg.dir, settings, now)) return null;
+      if (!force && !backupDue(cfg.dir, settings, now)) {
+        await notify();
+        return null;
+      }
       const r = await runDump(cfg, now, o);
       if (r.ok) {
         lastError = '';
@@ -231,6 +271,7 @@ export function startPgBackups(cfg, getSettings, opts) {
         lastError = r.error;
         process.stderr.write('pg backup failed: ' + r.error + '\n');
       }
+      await notify();
       return r;
     })()
       .catch((e) => {
@@ -247,7 +288,7 @@ export function startPgBackups(cfg, getSettings, opts) {
   if (first.unref) first.unref();
   if (every.unref) every.unref();
   return {
-    status: (settings, now) => backupStatus(cfg.dir, settings, now ?? Date.now(), lastError),
+    status: (settings, now) => backupStatus(cfg.dir, settings || lastSettings, now ?? Date.now(), lastError),
     runNow: () => tick(true),
     tick: () => tick(false),
     stop: () => {

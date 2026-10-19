@@ -56,6 +56,7 @@ import {
   findAccount,
 } from './logic.mjs';
 import {
+  adminBroadcast,
   adminNotifyEnabled,
   botCallback,
   botDeepLink,
@@ -2001,7 +2002,15 @@ if (started) {
       if (!readOnly) await ensureAdmin(store);
       const cfg = backupConfig(process.env);
       // Dumps read the database only, so they run in read-only mode too.
-      const pgBackups = cfg ? startPgBackups(cfg, async () => (await store.read()).settings) : null;
+      // A stale or failed backup is told to the admins in Telegram once (and once when it is fine again).
+      const pgBackups = cfg
+        ? startPgBackups(cfg, async () => (await store.read()).settings, {
+            onAlert: async (text) => {
+              const st = await store.read();
+              await notifyAdmins(st, adminBroadcast(st.settings, text), fetch);
+            },
+          })
+        : null;
       await listen(store, port, undefined, { readOnly, pgBackups });
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
