@@ -425,9 +425,12 @@ describe.skipIf(!PG_URL)('postgres only', () => {
     const info = await store.info();
     expect(info.engine).toBe('postgres');
     expect(info.bytes).toBeGreaterThan(0);
+    // Only these fields: nothing from the connection string except the database name.
     const u = new URL(PG_URL);
+    expect(Object.keys(info).sort()).toEqual(['bytes', 'database', 'engine', 'path']);
+    expect(info.database).toBe(decodeURIComponent(u.pathname.slice(1)));
+    expect(info.path).toBe(info.database);
     const text = JSON.stringify(info);
-    if (u.password) expect(text).not.toContain(u.password);
     expect(text).not.toContain(u.hostname);
     expect(text).not.toContain('@');
   });
