@@ -54,9 +54,15 @@ import {
 } from './logic.mjs';
 import {
   adminNotifyEnabled,
+  botCallback,
   botDeepLink,
   botReply,
+  grantUserMessage,
+  isPrivateChat,
   mainKeyboard,
+  paymentUserMessage,
+  pendingUserText,
+  rejectUserText,
   paymentAdminNotices,
   reminderMessage,
   serviceDownNotices,
@@ -392,6 +398,24 @@ async function telegramSend(token, chatId, text, fetchImpl, opts) {
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
 }
 
+/** Any other Bot API method with the same deadline as sendMessage. Errors are swallowed by the caller. */
+async function telegramMethod(token, method, body, fetchImpl, timeoutMs) {
+  if (!token) return { ok: false };
+  const { res, data } = await telegramCall(
+    fetchImpl,
+    'https://api.telegram.org/bot' + token + '/' + method,
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+    timeoutMs || TG_SEND_TIMEOUT_MS,
+  );
+  return { ok: !!(res.ok && data.ok !== false) };
+}
+
+/** Account behind a payment label (buy:/sub:/dev:/new:), '' when unknown. */
+function telegramOfPayment(state, row) {
+  const accountId = (row && row.accountId) || '';
+  return accountId ? telegramOf(state, accountId) : '';
+}
+
 /**
  * BILLING_LEGACY_TOKENS: old opaque tokens (apps before PR-5) are accepted unless this is 0 / false /
  * off / no. Off: those tokens get 401 legacy_disabled and /v1/activate without tokens: "pair" is
@@ -482,39 +506,9 @@ function tellPayment(state, result, fetchImpl) {
     : '';
   const chat = telegramOf(state, accountId);
   if (!chat) return Promise.resolve();
-  const origin = state.settings.publicOrigin || '';
-  let text = '';
-  let inline = null;
-  if (result.kind === 'new' && result.code) {
-    const link = openAppUrl(origin, result.code);
-    text =
-      'Код подписки OMP: `' +
-      result.code +
-      '`\n' +
-      link +
-      '\nДолгое нажатие на код — копировать.';
-    if (link.indexOf('http') === 0) inline = { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] };
-  }
-  if (result.kind === 'device' && result.code) {
-    const link = openAppUrl(origin, result.code);
-    text =
-      'Доп. устройство подключено до ' +
-      mskDate(result.extraUntil) +
-      ', дальше продлевается вместе с подпиской.\nКод для нового устройства: `' +
-      result.code +
-      '`\n' +
-      link;
-    if (link.indexOf('http') === 0) inline = { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] };
-  }
-  if (result.kind === 'device' && !result.code) {
-    text = 'Доп. устройство оплачено до ' + mskDate(result.extraUntil) + '. Нажмите «Код» в боте, чтобы получить код.';
-  }
-  if (result.kind === 'renew') {
-    text = 'Подписка продлена до ' + mskDateTime(result.paidUntil) + '.';
-    if (result.extras > 0) text += '\nДоп. устройств: ' + result.extras + ', тоже до ' + mskDate(result.paidUntil) + '.';
-  }
-  if (!text) return Promise.resolve();
-  return telegramSend(state.settings.botToken, chat, text, fetchImpl, { parseMode: 'Markdown', inline });
+  const msg = paymentUserMessage(state, result);
+  if (!msg) return Promise.resolve();
+  return telegramSend(state.settings.botToken, chat, msg.text, fetchImpl, { parseMode: msg.parseMode, inline: msg.inline, keyboard: msg.keyboard });
 }
 
 export function createApp(file, fetchImpl, opts) {
@@ -902,29 +896,13 @@ export function createApp(file, fetchImpl, opts) {
             if (result.limitReached) flashText += '. Лимит устройств достигнут, новый код не выдан';
             const fresh = readState(file);
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
-            if (acc && acc.telegramId && !result.code && result.limitReached) {
-              await telegramSend(
-                fresh.settings.botToken,
-                acc.telegramId,
-                'Админ выдал +' + result.days + ' дн. Подписка до ' + mskDate(result.paidUntil) + '.',
-                net,
-              );
-            }
-            if (acc && acc.telegramId && result.code) {
-              const link = openAppUrl(fresh.settings.publicOrigin || '', result.code);
-              await telegramSend(
-                fresh.settings.botToken,
-                acc.telegramId,
-                'Админ выдал +' + result.days + ' дн.\nКод: `' + result.code + '`\n' + link,
-                net,
-                {
-                  parseMode: 'Markdown',
-                  inline:
-                    link.indexOf('http') === 0
-                      ? { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] }
-                      : null,
-                },
-              );
+            if (acc && acc.telegramId) {
+              const note = grantUserMessage(fresh.settings.publicOrigin || '', result);
+              try {
+                await telegramSend(fresh.settings.botToken, acc.telegramId, note.text, net, { parseMode: note.parseMode, inline: note.inline, keyboard: note.keyboard });
+              } catch (e) {
+                /* days are granted; the notice is best effort */
+              }
             }
           }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
@@ -1069,7 +1047,19 @@ export function createApp(file, fetchImpl, opts) {
             const out = await updateState(file, (state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
             if (out.error === 'already') flashError = 'Платёж уже обработан';
             else if (out.error === 'not_found') flashError = 'Платёж не найден';
-            else if (!confirm) flashText = 'Платёж отклонён';
+            else if (!confirm) {
+              flashText = 'Платёж отклонён';
+              const cur = readState(file);
+              const chat = out.accountId ? telegramOf(cur, out.accountId) : '';
+              if (chat) {
+                try {
+                  const told = await telegramSend(cur.settings.botToken, chat, rejectUserText(out.amount), net, { keyboard: mainKeyboard() });
+                  flashText += told.ok ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
+                } catch (e) {
+                  flashText += '. Сообщение в Telegram не ушло';
+                }
+              }
+            }
             else if (out.error) flashError = 'Платёж снят с ожидания, но не применён: ' + out.error;
             else {
               flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
@@ -1426,6 +1416,16 @@ export function createApp(file, fetchImpl, opts) {
         );
         const freshPay = readState(file);
         if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
+        if (applied.pending) {
+          const chat = telegramOfPayment(freshPay, applied);
+          if (chat) {
+            try {
+              await telegramSend(freshPay.settings.botToken, chat, pendingUserText(applied.amount), net, { keyboard: mainKeyboard() });
+            } catch (e) {
+              /* the payment is held either way; the notice is best effort */
+            }
+          }
+        }
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
           await notifyAdmins(
             freshPay,
@@ -1575,8 +1575,14 @@ export async function pollBot(file, fetchImpl, opts) {
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
         offset = u.update_id + 1;
+        if (u.callback_query) {
+          await handleCallback(file, token, u.callback_query, net, sendTimeoutMs);
+          continue;
+        }
         const msg = u.message;
         if (!msg || !msg.chat) continue;
+        // Groups and channels: no answer and no account.
+        if (!isPrivateChat(msg.chat)) continue;
         const chatId = String(msg.chat.id);
         const wait = awaiting.get(chatId) || null;
         const pad = pads.get(chatId) || null;
@@ -1597,6 +1603,7 @@ export async function pollBot(file, fetchImpl, opts) {
             replyTo,
             from,
             pad,
+            info: deviceInfo(file),
           });
           return { state: out.state, result: { messages: out.messages, pad: out.pad } };
         });
@@ -1631,6 +1638,66 @@ export async function pollBot(file, fetchImpl, opts) {
     } catch (e) {
       pollFailed('loop');
       await sleep(5000);
+    }
+  }
+}
+
+/** (codeId) → { name, lastSeenAt } from the device registry for the bot's device list. Best effort. */
+function deviceInfo(file) {
+  return (codeId) => {
+    try {
+      const row = activeRowForCode(registryDb(file), codeId);
+      return row ? { name: String(row.name || ''), lastSeenAt: Number(row.last_seen_at) || 0 } : null;
+    } catch (e) {
+      return null;
+    }
+  };
+}
+
+/**
+ * One inline button press. The spinner is always answered; a confirm step removes its own buttons,
+ * so a second tap on «Да» reaches the state check and is told the button is stale.
+ */
+export async function handleCallback(file, token, cq, net, timeoutMs) {
+  const chat = cq && cq.message && cq.message.chat;
+  const answer = (text) =>
+    telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
+  if (!chat || !isPrivateChat(chat) || !cq.from || String(cq.from.id) !== String(chat.id)) {
+    await answer('');
+    return;
+  }
+  const chatId = String(chat.id);
+  let out = null;
+  try {
+    out = await updateState(file, (cur) => {
+      const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info: deviceInfo(file) });
+      return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
+    });
+  } catch (e) {
+    await answer('Не получилось, попробуйте ещё раз.');
+    return;
+  }
+  await answer(out.answer);
+  if (out.clearMarkup && cq.message.message_id) {
+    await telegramMethod(
+      token,
+      'editMessageReplyMarkup',
+      { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } },
+      net,
+      timeoutMs,
+    ).catch(() => ({ ok: false }));
+  }
+  const rows = out.messages || [];
+  for (let m = 0; m < rows.length; m++) {
+    try {
+      await telegramSend(token, rows[m].chatId, rows[m].text, net, {
+        keyboard: rows[m].keyboard,
+        inline: rows[m].inline,
+        parseMode: rows[m].parseMode,
+        timeoutMs,
+      });
+    } catch (e) {
+      /* Telegram unreachable or timed out — keep polling */
     }
   }
 }

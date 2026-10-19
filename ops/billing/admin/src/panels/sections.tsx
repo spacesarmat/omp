@@ -527,6 +527,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['periodDays', 'Период, дней'],
       ['extraDeviceRub', 'Доп. устройство, ₽ в месяц'],
       ['graceDays', 'Льготный период, дней'],
+      ['publicPromo', 'Промокод на пробный день (бот покажет, пока он действует)'],
     ],
   },
 ];

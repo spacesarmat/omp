@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
-import { botReply } from '../src/bot.mjs';
+import { botCallback, botReply } from '../src/bot.mjs';
 import {
   confirmPendingPayment,
   maskIp,
@@ -299,35 +299,91 @@ describe('self-service device changes in the bot', () => {
   function chat(state: State, text: string, now: number, awaiting?: { kind: string }) {
     return botReply(state, { chatId: '42', text, now, awaiting: awaiting || null });
   }
+  function press(state: State, data: string, now: number, chatId = '42') {
+    return botCallback(state, { chatId, data, now });
+  }
+  /** callback_data of every inline button of a bot message. */
+  function buttons(msg: { inline?: { inline_keyboard: { callback_data?: string }[][] } }): string[] {
+    return ((msg.inline && msg.inline.inline_keyboard) || []).flat().map((b) => b.callback_data || '').filter(Boolean);
+  }
 
-  it('allows 2 changes per rolling 30 days, then says when the next one is possible', () => {
+  it('allows 2 changes per rolling 30 days through inline buttons, then says when the next one is possible', () => {
     const s = withDevice();
-    let state = s.state;
-    const ask = chat(state, 'Отвязать', NOW);
-    expect(ask.messages[0].text).toContain('Смен устройства осталось: 2 из 2 за 30 дней.');
-    const one = chat(ask.state, 'aaaa', NOW, { kind: 'unlink_device' });
-    expect(one.messages[0].text).toContain('Устройство aaaaaaaa… отвязано.');
+    // «Отвязать» from an old keyboard opens «Устройства».
+    const list = chat(s.state, 'Отвязать', NOW);
+    expect(list.messages[0].text).toContain('Смен устройства осталось: 2 из 2 за 30 дней.');
+    expect(buttons(list.messages[0])).toContain('u1:' + s.codeId);
+    expect(list.messages[0].await).toBeUndefined();
+    const ask = press(list.state, 'u1:' + s.codeId, NOW);
+    expect(ask.messages[0].text).toContain('Это 1 смена из 2 за 30 дней (останется 1).');
+    const yes = 'y1:' + s.codeId + ':aaaaaaaa';
+    expect(buttons(ask.messages[0])).toEqual([yes, 'ux']);
+    // Asking changes nothing yet.
+    expect(sessionOk(ask.state, { token: s.token, deviceId: DEV_A, now: NOW })).not.toBeNull();
+    const one = press(ask.state, yes, NOW);
+    expect(one.clearMarkup).toBe(true);
+    expect(one.messages[0].text).toContain('Устройство 1 (aaaaaaaa…) отвязано');
     expect(one.messages[0].text).toContain('Смен устройства осталось: 1 из 2');
-    state = one.state;
-    // The freed slot gets a new code («Код»), a new phone takes it.
-    const b = bindAnother(state, s.subscriptionId, DEV_B, NOW + DAY);
-    const two = chat(b.state, 'bbbb', NOW + DAY, { kind: 'unlink_device' });
+    expect(sessionOk(one.state, { token: s.token, deviceId: DEV_A, now: NOW })).toBeNull();
+    // A second tap on the same «Да» is stale: nothing more is counted.
+    const again = press(one.state, yes, NOW + MIN);
+    expect(again.answer).toBe('Устройство уже отвязано или сменилось.');
+    expect(swapStatus(again.state.subscriptions[0], NOW + MIN, 1).used).toBe(1);
+    // The freed slot gets a new code, a new phone takes it.
+    const b = bindAnother(one.state, s.subscriptionId, DEV_B, NOW + DAY);
+    const two = press(b.state, 'y1:' + b.codeId + ':bbbbbbbb', NOW + DAY);
     expect(two.messages[0].text).toContain('Это была последняя смена на 30 дней: следующая — с 18.11.2026 12:00 МСК.');
     const c = bindAnother(two.state, s.subscriptionId, DEV_C, NOW + 2 * DAY);
-    const third = chat(c.state, 'Отвязать', NOW + 2 * DAY);
-    expect(third.messages[0].text).toBe(
+    const third = chat(c.state, 'Устройства', NOW + 2 * DAY);
+    expect(third.messages[0].text).toContain('Смены устройства на 30 дней исчерпаны: следующая — с 18.11.2026 12:00 МСК.');
+    expect(buttons(third.messages[0]).filter((d) => d.indexOf('u1:') === 0)).toEqual([]);
+    const tap = press(c.state, 'u1:' + c.codeId, NOW + 2 * DAY);
+    expect(tap.messages[0].text).toBe(
       'Сменить устройство сейчас нельзя: самостоятельно — не больше 2 раз за 30 дней.\n' +
         'Следующая смена — с 18.11.2026 12:00 МСК.\n' +
         'Уже привязанные устройства работают. Если нужно срочно — напишите в «Поддержку».',
     );
-    expect(third.messages[0].await).toBeUndefined();
-    // Even a stale «unlink_device» prompt is refused, and the phone stays bound.
-    const sneaky = chat(c.state, 'cccc', NOW + 2 * DAY, { kind: 'unlink_device' });
+    // Even a stale confirm button is refused, and the phone stays bound.
+    const sneaky = press(c.state, 'y1:' + c.codeId + ':cccccccc', NOW + 2 * DAY);
     expect(sneaky.messages[0].text).toContain('Сменить устройство сейчас нельзя');
     expect(sessionOk(sneaky.state, { token: c.token, deviceId: DEV_C, now: NOW + 2 * DAY })).not.toBeNull();
     // 30 days after the first change one is possible again.
-    const later = chat(c.state, 'Отвязать', NOW + SWAP_WINDOW_MS + 1);
+    const later = chat(c.state, 'Устройства', NOW + SWAP_WINDOW_MS + 1);
     expect(later.messages[0].text).toContain('Смен устройства осталось: 1 из 2');
+  });
+
+  it('ignores prefix text after the old «Отвязать» prompt', () => {
+    const s = withDevice();
+    const typed = chat(s.state, 'aaaa', NOW, { kind: 'unlink_device' });
+    expect(typed.messages[0].text).toContain('Не понял');
+    expect(sessionOk(typed.state, { token: s.token, deviceId: DEV_A, now: NOW })).not.toBeNull();
+  });
+
+  it('confirms «Отвязать все» with the change cost and refuses a stale or unknown button', () => {
+    const s = withDevice();
+    const b = bindAnother(s.state, s.subscriptionId, DEV_B, NOW);
+    const list = chat(b.state, 'Устройства', NOW);
+    expect(buttons(list.messages[0])).toContain('ua');
+    const ask = press(list.state, 'ua', NOW);
+    expect(ask.messages[0].text).toContain('Отвязать все устройства (2)? Они сразу перестанут работать.');
+    expect(ask.messages[0].text).toContain('Это 2 смены из 2 за 30 дней (останется 0).');
+    const yes = buttons(ask.messages[0])[0];
+    expect(yes.indexOf('ya:')).toBe(0);
+    // The set changed after the question (one phone replaced): the old «Да» is stale.
+    const out = selfUnbind(ask.state, { accountId: s.accountId, deviceIds: [DEV_A], now: NOW });
+    const c = bindAnother(out.state, s.subscriptionId, DEV_C, NOW + MIN);
+    const stale = press(c.state, yes, NOW + MIN);
+    expect(stale.answer).toBe('Список устройств изменился.');
+    expect(stale.clearMarkup).toBe(true);
+    expect(sessionOk(stale.state, { token: c.token, deviceId: DEV_C, now: NOW + MIN })).not.toBeNull();
+    // Cancel and garbage only clear the buttons.
+    expect(press(b.state, 'ux', NOW)).toMatchObject({ answer: 'Отменено', clearMarkup: true, messages: [] });
+    expect(press(b.state, 'zz:1', NOW).answer).toBe('Кнопка устарела — откройте «Устройства» ещё раз.');
+    // A chat without an account (never wrote to the bot) gets no change.
+    expect(press(b.state, 'ua', NOW, '777').messages).toEqual([]);
+    const done = press(ask.state, yes, NOW + MIN);
+    expect(done.messages[0].text).toContain('Все устройства отвязаны (2)');
+    expect(sessionOk(done.state, { token: b.token, deviceId: DEV_B, now: NOW + MIN })).toBeNull();
   });
 
   it('counts the swaps in the timeline and lets the admin reset the counter', () => {
@@ -353,7 +409,7 @@ describe('self-service device changes in the bot', () => {
     const b = bindAnother(s.state, s.subscriptionId, DEV_B, NOW);
     const one = selfUnbind(b.state, { accountId: s.accountId, deviceIds: [DEV_A], now: NOW });
     const c = bindAnother(one.state, s.subscriptionId, DEV_C, NOW + MIN);
-    const all = chat(c.state, 'все', NOW + 2 * MIN, { kind: 'unlink_device' });
+    const all = press(c.state, 'ua', NOW + 2 * MIN);
     expect(all.messages[0].text).toContain('Отвязать все устройства (2) сейчас нельзя: смен устройства осталось: 1 из 2');
     expect(sessionOk(all.state, { token: b.token, deviceId: DEV_B, now: NOW + 3 * MIN })).not.toBeNull();
   });

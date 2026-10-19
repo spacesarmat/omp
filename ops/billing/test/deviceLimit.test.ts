@@ -170,8 +170,10 @@ describe('device limit', () => {
     const promoState = createPromo(f.state, { code: 'BOT1', days: 1, maxUses: 5, now: NOW }).state;
     const promo = botReply(promoState, { chatId: '42', text: '/promo BOT1', now: NOW });
     const promoText = promo.messages.map((m: { text: string }) => m.text).join('\n');
-    expect(promoText).toContain('Промокод принят');
-    expect(promoText).toContain(DEVICE_LIMIT_TEXT);
+    expect(promoText).toContain('Промокод принят: +1 день');
+    // A gift on a full subscription only says the devices keep working.
+    expect(promoText).toContain('Привязанные устройства продолжают работать.');
+    expect(codesOf(promo.state, f.sub)).toHaveLength(2);
   });
 
   it('bot «Код» hands out a code while a slot is free', () => {
@@ -179,7 +181,10 @@ describe('device limit', () => {
     const a = activate(start.state, { code: start.code, deviceId: DEV_A, now: NOW });
     const out = botReply(a.state, { chatId: '42', text: 'Код', now: NOW });
     const text = out.messages.map((m: { text: string }) => m.text).join('\n');
-    expect(text).toContain('Код подписки');
+    expect(text).toContain('Код для нового устройства: `');
+    expect(text).toMatch(/`[A-Z0-9]{4}-[A-Z0-9]{4}`/);
+    // A slot is free, so no «one more device» offer yet.
+    expect(text).not.toContain('Ещё одно устройство');
     expect(codesOf(out.state, start.sub)).toHaveLength(2);
   });
 });

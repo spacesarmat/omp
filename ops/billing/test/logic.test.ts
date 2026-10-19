@@ -213,14 +213,22 @@ describe('Jackett proxy', () => {
 });
 
 describe('bot', () => {
-  it('shows the pay link from the Подписка button and attaches the cabinet keyboard', () => {
+  it('shows the pay button from «Оплатить» (and the old «Подписка») and attaches the cabinet keyboard', () => {
     const state = emptyState();
     state.settings.yoomoneyWallet = '41001';
     state.settings.priceRub = 100;
-    const out = botReply(state, { chatId: 7, text: 'Подписка', now: NOW });
-    expect(out.messages[0].text).toContain('https://yoomoney.ru/quickpay/confirm?');
-    expect(out.messages[0].text).toContain('label=buy%3A');
+    const out = botReply(state, { chatId: 7, text: 'Оплатить', now: NOW });
+    expect(out.messages[0].text).not.toContain('yoomoney.ru');
+    expect(out.messages[0].text).toContain('На ТВ подписка не нужна.');
+    const button = out.messages[0].inline.inline_keyboard[0][0];
+    expect(button.text).toBe('Оплатить 100 ₽');
+    expect(button.url).toContain('https://yoomoney.ru/quickpay/confirm?');
+    expect(button.url).toContain('label=buy%3A');
     expect(out.state.purchases).toHaveLength(1);
+    // The old button label does the same and a double tap reuses the unpaid link.
+    const old = botReply(out.state, { chatId: 7, text: 'Подписка', now: NOW + 1000 });
+    expect(old.messages[0].inline.inline_keyboard[0][0].url).toBe(button.url);
+    expect(old.state.purchases).toHaveLength(1);
     expect(out.state.purchases[0].price).toBe(100);
     expect(out.messages[0].keyboard.keyboard[0][0].text).toBe('Кабинет');
   });
@@ -234,9 +242,16 @@ describe('bot', () => {
     expect(ask.messages[0].await).toEqual({ kind: 'promo' });
     const out = botReply(ask.state, { chatId: 9, text: 'DEMO1', now: NOW, awaiting: { kind: 'promo' } });
     expect(out.messages[0].text).toContain('Промокод принят');
-    expect(out.messages[0].text).toMatch(/[A-Z2-9]{4}-[A-Z2-9]{4}/);
-    expect(out.messages[0].text).toContain('http://192.168.1.191:8787/go/');
+    expect(out.messages[0].text).toMatch(/`[A-Z2-9]{4}-[A-Z2-9]{4}`/);
+    // The link sits on the «Открыть в OMP» button, not in the text.
+    expect(out.messages[0].text).not.toContain('/go/');
     expect(out.messages[0].inline.inline_keyboard[0][0].url).toContain('/go/');
+    // Without a public origin there is no button, so the omp:// link is in the text.
+    state.settings.publicOrigin = '';
+    const two = createPromo(state, { code: 'DEMO2', days: 1, maxUses: 1, now: NOW });
+    const bare = botReply(two.state, { chatId: 9, text: '/promo DEMO2', now: NOW });
+    expect(bare.messages[0].text).toContain('omp://billing?code=');
+    expect(bare.messages[0].inline).toBeUndefined();
     expect(out.state.promos[0].uses).toHaveLength(1);
     const again = botReply(out.state, { chatId: 9, text: '/promo DEMO1', now: NOW + 1000 });
     expect(again.messages[0].text).toContain('уже активировали');
@@ -282,7 +297,7 @@ describe('bot', () => {
     expect(userPad.messages[0].text).toContain('Режим пользователя');
     const keys = userPad.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text);
     expect(keys).toContain('Кабинет');
-    expect(keys).toContain('Подписка');
+    expect(keys).toEqual(['Кабинет', 'Оплатить', 'Устройства', 'Промокод', 'Цены', 'Поддержка']);
     expect(keys).not.toContain('Сводка');
     expect(keys).not.toContain('Админ');
     const stay = botReply(userPad.state, {
@@ -382,8 +397,8 @@ describe('bot', () => {
     start.state.settings.yoomoneyWallet = '410011';
     start.state.settings.priceRub = 100;
     const out = botReply(start.state, { chatId: '42', text: '/start renew', now: NOW });
-    expect(out.messages[0].text).toContain('Продление на 30 дн.');
-    expect(out.messages[0].text).toContain('yoomoney.ru');
+    expect(out.messages[0].text).toContain('Продление на 30 дней');
+    expect(out.messages[0].inline.inline_keyboard[0][0].url).toContain('yoomoney.ru');
   });
 
   it('stores support text and notifies every admin', () => {
@@ -414,7 +429,7 @@ describe('bot', () => {
       now: NOW,
     });
     const reply = botReply(mapped, { chatId: '99', text: 'проверьте код', now: NOW + 2, replyTo: 55 });
-    expect(reply.messages.some((m: { chatId: string; text: string }) => m.chatId === '7' && m.text === 'проверьте код')).toBe(
+    expect(reply.messages.some((m: { chatId: string; text: string }) => m.chatId === '7' && m.text === 'Поддержка OMP:\nпроверьте код')).toBe(
       true,
     );
     expect(reply.state.supportMessages.some((m: { direction: string }) => m.direction === 'out')).toBe(true);

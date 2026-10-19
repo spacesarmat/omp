@@ -62,6 +62,7 @@ export function publicAdminSettings(settings) {
     periodDays: s.periodDays || 30,
     extraDeviceRub: s.extraDeviceRub || 0,
     graceDays: graceDays(s),
+    publicPromo: s.publicPromo || '',
   };
   return out;
 }
@@ -114,6 +115,11 @@ export function mergeSettings(prev, body) {
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
     extraDeviceRub: num(b.extraDeviceRub !== undefined ? b.extraDeviceRub : cur.extraDeviceRub, 0),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),
+    /** Promo the bot advertises as a trial day; shown only while it exists and has uses left. */
+    publicPromo: String(b.publicPromo !== undefined ? b.publicPromo : cur.publicPromo || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 24),
   };
   return next;
 }

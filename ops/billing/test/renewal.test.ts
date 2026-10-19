@@ -212,15 +212,20 @@ describe('monthly extra device', () => {
     expect(renewalPrice(two, subOf(two, f.sub), NOW).total).toBe(250);
     const q = quotePurchase(f.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: NOW });
     expect(q.result).toMatchObject({ price: 200, extras: 1 });
-    const reply = botReply(f.state, { chatId: '42', text: 'Продлить', now: NOW });
-    const texts = reply.messages.map((m: { text: string }) => m.text);
-    expect(texts[0]).toContain('Продление на 30 дн., до 18.12.2026:');
-    expect(texts[0]).toContain('• подписка — 150 ₽');
-    expect(texts[0]).toContain('• доп. устройство × 1 — 50 ₽');
-    expect(texts[0]).toContain('Итого: 200 ₽');
-    expect(texts[0]).toContain('sum=200');
-    expect(texts[1]).toContain('Без доп. устройств — 150 ₽');
-    expect(texts[1]).toContain('sum=150');
+    const reply = botReply(f.state, { chatId: '42', text: 'Оплатить', now: NOW });
+    expect(reply.messages).toHaveLength(1);
+    const msg = reply.messages[0];
+    expect(msg.text).toContain('Продление на 30 дней, до 18.12.2026 03:00 МСК:');
+    expect(msg.text).toContain('• подписка — 150 ₽');
+    expect(msg.text).toContain('• доп. устройство × 1 — 50 ₽');
+    expect(msg.text).toContain('Итого: 200 ₽');
+    expect(msg.text).toContain('Только подписка: доп. устройство перестанет работать после 21.11.2026 03:00 МСК (привязка сохранится).');
+    expect(msg.text).not.toContain('yoomoney');
+    const [full, base] = msg.inline.inline_keyboard.map((r: { text: string; url: string }[]) => r[0]);
+    expect(full.text).toBe('Оплатить 200 ₽');
+    expect(full.url).toContain('sum=200');
+    expect(base.text).toBe('Только подписка — 150 ₽');
+    expect(base.url).toContain('sum=150');
   });
 
   it('renewal with the extra slot moves it to the new paidUntil; 150 ₽ for a 200 ₽ quote is refused', () => {
@@ -263,7 +268,8 @@ describe('monthly extra device', () => {
     expect(issue.result.error).toBe('device_limit');
     const cab = botReply(renewed, { chatId: '42', text: 'Кабинет', now: lapse });
     expect(cab.messages[0].text).toContain('Устройства: 3 из 2');
-    expect(cab.messages[0].text).toContain('cccccccc… (не работает: доп. устройство не продлено)');
+    const devs = botReply(renewed, { chatId: '42', text: 'Устройства', now: lapse });
+    expect(devs.messages[0].text).toContain('3) cccccccc… · не работает: доп. устройство не продлено');
     // The renewal price no longer includes the lapsed slot.
     expect(renewalPrice(renewed, sub, lapse).total).toBe(150);
     // Buying the slot again brings C back without a new code.
@@ -333,15 +339,17 @@ describe('monthly extra device', () => {
   it('after grace the bot offers 200 ₽ with a breakdown and «Без доп. устройств — 150 ₽»; «Подписка» renews too', () => {
     const f = threeDevices();
     const t = NOW + 40 * DAY;
-    for (const press of ['Продлить', 'Подписка']) {
+    for (const press of ['Оплатить', 'Продлить', 'Подписка', '/start renew']) {
       const reply = botReply(f.state, { chatId: '42', text: press, now: t });
-      const texts = reply.messages.map((m: { text: string }) => m.text);
-      expect(texts[0]).toContain('• подписка — 150 ₽');
-      expect(texts[0]).toContain('• доп. устройство × 1 — 50 ₽');
-      expect(texts[0]).toContain('Итого: 200 ₽');
-      expect(texts[0]).toContain('sum=200');
-      expect(texts[1]).toContain('Без доп. устройств — 150 ₽. Доп. устройство тогда останется отключённым (привязка сохранится)');
-      expect(texts[1]).toContain('sum=150');
+      const msg = reply.messages[0];
+      expect(msg.text).toContain('Подписка закончилась 18.11.2026 03:00 МСК — поиск отключён на всех устройствах.');
+      expect(msg.text).toContain('• подписка — 150 ₽');
+      expect(msg.text).toContain('• доп. устройство × 1 — 50 ₽');
+      expect(msg.text).toContain('Итого: 200 ₽');
+      expect(msg.text).toContain('Только подписка: доп. устройство останется отключённым (привязка сохранится).');
+      const urls = msg.inline.inline_keyboard.map((r: { url: string }[]) => r[0].url);
+      expect(urls[0]).toContain('sum=200');
+      expect(urls[1]).toContain('sum=150');
     }
   });
 
@@ -355,14 +363,18 @@ describe('monthly extra device', () => {
 
   it('bot «Код» explains the monthly price of one more device', () => {
     const f = threeDevices();
-    const reply = botReply(f.state, { chatId: '42', text: 'Код', now: NOW });
-    const text = reply.messages.map((m: { text: string }) => m.text).join('\n');
-    expect(text).toContain('Устройства: 3 из 3 (2 в подписке + 1 доп. до 18.11.2026)');
-    expect(text).toContain('Ещё одно устройство — 50 ₽ до 18.11.2026');
-    expect(text).toContain('продление станет 250 ₽');
+    for (const press of ['Устройства', 'Код']) {
+      const reply = botReply(f.state, { chatId: '42', text: press, now: NOW });
+      const text = reply.messages.map((m: { text: string }) => m.text).join('\n');
+      expect(text).toContain('Устройства: 3 из 3 (2 в подписке + 1 доп. до 18.11.2026)');
+      expect(text).toContain('Ещё одно устройство — 50 ₽ до 18.11.2026');
+      expect(text).toContain('продление станет 250 ₽');
+      expect(reply.messages[1].inline.inline_keyboard[0][0].text).toBe('Оплатить 50 ₽');
+    }
     const price = botReply(f.state, { chatId: '42', text: 'Цены', now: NOW });
     expect(price.messages[0].text).toContain('Доп. устройство — 50 ₽ в месяц');
-    expect(price.messages[0].text).toContain('3 дн. льготного периода');
+    expect(price.messages[0].text).toContain('После окончания ещё 3 дня поиск работает');
+    expect(price.messages[0].text).toContain('на ТВ она не нужна');
   });
 });
 
@@ -404,18 +416,21 @@ function expiringAt(until: number) {
 const msk = (iso: string) => Date.parse(iso + '+03:00');
 
 describe('renewal reminders', () => {
-  it('3 days before, the day before and the expiry day, from 10:00 MSK until the end of that day', () => {
+  it('3 days before, the day before and the expiry day, from 10:00 MSK; a missed one only until 12:00 MSK', () => {
     const until = msk('2026-10-25T15:00:00');
     const f = expiringAt(until);
     const due = (iso: string) => dueReminders(f.state, msk(iso)).map((r: { kind: string }) => r.kind);
     expect(due('2026-10-22T09:59:59')).toEqual([]);
     expect(due('2026-10-22T10:00:00')).toEqual(['d3']);
-    expect(due('2026-10-22T23:59:59')).toEqual(['d3']);
+    expect(due('2026-10-22T11:59:59')).toEqual(['d3']);
+    expect(due('2026-10-22T12:00:00')).toEqual([]);
+    expect(due('2026-10-22T23:59:59')).toEqual([]);
     expect(due('2026-10-23T00:00:00')).toEqual([]);
     expect(due('2026-10-23T12:00:00')).toEqual([]);
     expect(due('2026-10-24T10:00:00')).toEqual(['d1']);
     expect(due('2026-10-25T10:00:00')).toEqual(['d0']);
-    expect(due('2026-10-25T16:00:00')).toEqual(['d0']);
+    expect(due('2026-10-25T11:00:00')).toEqual(['d0']);
+    expect(due('2026-10-25T16:00:00')).toEqual([]);
     expect(due('2026-10-26T10:00:00')).toEqual([]);
   });
 
@@ -448,21 +463,21 @@ describe('renewal reminders', () => {
     const m3 = reminderMessage(f.state, d3[0], msk('2026-11-15T10:00:00'));
     expect(m3.chatId).toBe('42');
     expect(m3.text).toBe(
-      'Подписка OMP заканчивается через 3 дня — 18.11.2026 в 03:00 МСК.\n' +
-        'Продление на 30 дн.: 200 ₽ (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
-        'Нажмите «Продлить» — ссылка на оплату придёт в этот чат.',
+      '⚠️ Подписка OMP заканчивается через 3 дня — 18.11.2026 в 03:00 МСК.\n' +
+        'Продление на 30 дней: 200 ₽ (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
+        'Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.',
     );
-    expect(m3.inline.inline_keyboard[0][0]).toEqual({ text: 'Продлить', url: 'https://t.me/OMPBILLINGBOT?start=renew' });
+    expect(m3.inline.inline_keyboard[0][0]).toEqual({ text: 'Оплатить', url: 'https://t.me/OMPBILLINGBOT?start=pay' });
     const d1 = dueReminders(f.state, msk('2026-11-17T10:00:00'));
     expect(reminderMessage(f.state, d1[0], msk('2026-11-17T10:00:00')).text).toContain('заканчивается завтра — 18.11.2026 в 03:00 МСК');
     const plain = expiringAt(until);
     const p1 = dueReminders(plain.state, msk('2026-11-17T10:00:00'));
-    expect(reminderMessage(plain.state, p1[0], msk('2026-11-17T10:00:00')).text).toContain('Продление на 30 дн.: 150 ₽.');
+    expect(reminderMessage(plain.state, p1[0], msk('2026-11-17T10:00:00')).text).toContain('Продление на 30 дней: 150 ₽.');
     const d0 = expiringAt(msk('2026-11-18T18:00:00'));
     const r0 = dueReminders(d0.state, msk('2026-11-18T10:00:00'));
     const t0 = reminderMessage(d0.state, r0[0], msk('2026-11-18T10:00:00')).text;
-    expect(t0).toContain('Подписка OMP заканчивается сегодня в 18:00 МСК.');
-    expect(t0).toContain('После этого ещё 3 дн. льготного периода: поиск будет работать до 21.11.2026 18:00 МСК.');
+    expect(t0).toContain('⚠️ Подписка OMP заканчивается сегодня в 18:00 МСК.');
+    expect(t0).toContain('После этого ещё 3 дня льготного периода: поиск будет работать до 21.11.2026 18:00 МСК.');
   });
 
   it('each reminder goes once per expiry date; a renewal starts a new cycle', () => {
@@ -513,14 +528,15 @@ describe('renewal reminders', () => {
 describe('grace end notice', () => {
   const kinds = (state: State, iso: string) => dueReminders(state, msk(iso)).map((r: { kind: string }) => r.kind);
 
-  it('comes from 10:00 MSK when grace ended in the night, until the end of that day', () => {
+  it('comes from 10:00 MSK when grace ended in the night, and only until 12:00 MSK', () => {
     // paidUntil 22.10 02:00 MSK → grace ends 25.10 02:00 MSK.
     const f = expiringAt(msk('2026-10-22T02:00:00'));
     expect(kinds(f.state, '2026-10-25T01:59:59')).toEqual([]);
     expect(kinds(f.state, '2026-10-25T02:00:00')).toEqual([]);
     expect(kinds(f.state, '2026-10-25T09:59:59')).toEqual([]);
     expect(kinds(f.state, '2026-10-25T10:00:00')).toEqual(['end']);
-    expect(kinds(f.state, '2026-10-25T23:59:59')).toEqual(['end']);
+    expect(kinds(f.state, '2026-10-25T11:59:59')).toEqual(['end']);
+    expect(kinds(f.state, '2026-10-25T12:00:00')).toEqual([]);
     expect(kinds(f.state, '2026-10-26T00:00:00')).toEqual([]);
     expect(kinds(f.state, '2026-10-27T10:00:00')).toEqual([]);
   });
@@ -559,21 +575,22 @@ describe('grace end notice', () => {
     expect(rows.map((r: { kind: string }) => r.kind)).toEqual(['end']);
     const msg = reminderMessage(f.state, rows[0], at);
     expect(msg.text).toBe(
-      'Льготный период закончился — поиск в OMP отключён.\n' +
-        'Продлите подписку, чтобы продолжить: 200 ₽ на 30 дн. (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
-        'Привязанные устройства заработают сами, код вводить не нужно. Без доп. устройств — 150 ₽.\n' +
-        'Нажмите «Продлить» — ссылка на оплату придёт в этот чат.',
+      '⚠️ Льготный период закончился — поиск в OMP отключён.\n' +
+        'Продление на 30 дней: 200 ₽ (подписка 150 ₽ + доп. устройство 50 ₽ × 1).\n' +
+        'Привязанные устройства заработают сами, код вводить не нужно.\n' +
+        'Без доп. устройств — 150 ₽.\n' +
+        'Нажмите «Оплатить» — ссылка на оплату придёт в этот чат.',
     );
     expect(msg.text).not.toContain('«Код»');
-    expect(msg.inline.inline_keyboard[0][0]).toEqual({ text: 'Продлить', url: 'https://t.me/OMPBILLINGBOT?start=renew' });
+    expect(msg.inline.inline_keyboard[0][0]).toEqual({ text: 'Оплатить', url: 'https://t.me/OMPBILLINGBOT?start=pay' });
     // A slot dropped by an earlier base-only renewal is not offered: plain 150 ₽.
     const dropped = withSub(f.state, f.sub, { extraUntil: NOW + 10 * DAY });
     const t2 = reminderMessage(dropped, dueReminders(dropped, at)[0], at).text;
-    expect(t2).toContain('Продлите подписку, чтобы продолжить: 150 ₽ на 30 дн.\nНажмите');
+    expect(t2).toContain('Продление на 30 дней: 150 ₽.\nПривязанные устройства заработают сами, код вводить не нужно.\nНажмите');
     const plain = expiringAt(msk('2026-11-18T03:00:00'));
     plain.state.settings.graceDays = 0;
     const p = reminderMessage(plain.state, dueReminders(plain.state, msk('2026-11-18T10:00:00'))[0], msk('2026-11-18T10:00:00'));
-    expect(p.text).toContain('Подписка OMP закончилась — поиск отключён.');
+    expect(p.text).toContain('⚠️ Подписка OMP закончилась — поиск отключён.');
   });
 
   it('the runner sends it once, and not on a BILLING_BOT_POLL=0 copy', async () => {
