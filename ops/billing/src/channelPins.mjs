@@ -32,3 +32,8 @@ export function pinNotice(update, channel) {
   if (typeof post.message_id !== 'number') return null;
   return { chatId: post.chat.id, messageId: post.message_id };
 }
+
+/** Stderr line when the pin notice could not be deleted (no token, no Telegram error text). */
+export function pinNoticeFailedLine(messageId) {
+  return 'telegram: could not delete the channel pin notice ' + Number(messageId) + ' (the bot needs the «delete messages» right in the channel)\n';
+}

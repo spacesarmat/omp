@@ -85,7 +85,7 @@ import {
   noteGetUpdatesConflict,
 } from './botPoll.mjs';
 import { createChangelogSource } from './changelog.mjs';
-import { ALLOWED_UPDATES, channelFromEnv, pinNotice } from './channelPins.mjs';
+import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
@@ -1765,9 +1765,11 @@ export async function pollBot(file, fetchImpl, opts) {
           // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
           const notice = pinNotice(u, channel);
           if (notice) {
-            await telegramMethod(token, 'deleteMessage', { chat_id: notice.chatId, message_id: notice.messageId }, net, sendTimeoutMs).catch(
-              () => undefined,
+            const del = await telegramMethod(token, 'deleteMessage', { chat_id: notice.chatId, message_id: notice.messageId }, net, sendTimeoutMs).catch(
+              () => ({ ok: false }),
             );
+            // no token or error text in the log line: only that the pin notice stayed
+            if (!del.ok) process.stderr.write(pinNoticeFailedLine(notice.messageId));
           }
           continue;
         }

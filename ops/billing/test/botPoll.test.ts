@@ -368,6 +368,29 @@ describe('pollBot: update types and the channel pin notice', () => {
     expect(calls.filter((c) => c.url.indexOf('/getUpdates') >= 0)[1].url).toContain('offset=4');
   });
 
+  it('logs a token-free line when Telegram refuses the delete', async () => {
+    const file = await dbFile();
+    const log = captureStderr();
+    const fetchImpl = async (url: string) => {
+      if (String(url).indexOf('/getUpdates') >= 0) {
+        return jsonResponse(200, {
+          ok: true,
+          result: [{ update_id: 1, channel_post: { message_id: 88, chat: { id: -1009, type: 'channel', username: 'ompplyaer' }, pinned_message: { message_id: 87 } } }],
+        });
+      }
+      if (String(url).indexOf('/deleteMessage') >= 0) return jsonResponse(400, { ok: false, description: 'Bad Request: message can not be deleted' });
+      return jsonResponse(200, { ok: true, result: true });
+    };
+    try {
+      await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW, channel: '@ompplyaer' });
+      const text = log.lines.join('');
+      expect(text).toContain('could not delete the channel pin notice 88');
+      expect(text).not.toContain(TOKEN);
+    } finally {
+      log.restore();
+    }
+  });
+
   it('an empty channel setting deletes nothing', async () => {
     const file = await dbFile();
     const calls: string[] = [];

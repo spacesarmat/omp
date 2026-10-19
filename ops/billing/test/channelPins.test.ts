@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLOWED_UPDATES, DEFAULT_CHANNEL, channelFromEnv, isChannel, pinNotice } from '../src/channelPins.mjs';
+import { ALLOWED_UPDATES, DEFAULT_CHANNEL, channelFromEnv, isChannel, pinNotice, pinNoticeFailedLine } from '../src/channelPins.mjs';
 
 const post = (chat: object, pinned = true, id: unknown = 88) => ({
   update_id: 9,
@@ -43,5 +43,11 @@ describe('pin notice', () => {
     expect(pinNotice(post({ username: 'ompplyaer' }, true, 'x'), '@ompplyaer')).toBeNull();
     expect(pinNotice({ update_id: 1, message: { message_id: 1, chat: { id: 5, type: 'private' }, pinned_message: {} } } as any, '@ompplyaer')).toBeNull();
     expect(pinNotice({ update_id: 1 } as any, '@ompplyaer')).toBeNull();
+  });
+});
+
+describe('pin notice failure log', () => {
+  it('names the message and the missing right, nothing else', () => {
+    expect(pinNoticeFailedLine(88)).toBe('telegram: could not delete the channel pin notice 88 (the bot needs the «delete messages» right in the channel)\n');
   });
 });
