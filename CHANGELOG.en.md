@@ -9,6 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
 - Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
 - Billing: the store can be switched to Postgres (`BILLING_STORE=postgres`); SQLite stays the default, and both are covered by tests
+- Subscription: a phone unbound and bound again right away no longer gets “This device was disconnected”
 
 ## 0.20.4
 

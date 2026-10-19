@@ -832,6 +832,16 @@ export function issueMany(state, { count, days, now }) {
  * `legacy: false` (a client that asked for the token pair) binds the code without an opaque
  * session token; the server then issues refresh/access from the registry row.
  */
+/**
+ * boundAt of a new binding: `now`, but always later than the slot's previous binding. The registry tells a
+ * new binding from a revoked one by (code, device, boundAt), so an unbind and a rebind of the same phone in
+ * the same millisecond must not reuse the old boundAt (it would stay revoked and the phone would get 403).
+ */
+export function nextBoundAt(code, now) {
+  const last = Number(code && code.lastBoundAt) || 0;
+  return now > last ? now : last + 1;
+}
+
 export function activate(state, { code, deviceId, now, legacy }) {
   if (!deviceOk(deviceId) || normalizeCode(code).length !== 8) return fail('bad_code', state);
   const hash = codeHash(code);
@@ -857,7 +867,7 @@ export function activate(state, { code, deviceId, now, legacy }) {
     return fail(why, recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: why, accountId: sub.accountId }));
   }
   const codes = state.codes.map((c) =>
-    c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
+    c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: nextBoundAt(c, now), plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
   );
   const token = legacy === false ? '' : randomId() + randomId();
   const kept = state.sessions.filter((s) => s.codeId !== row.id);
@@ -1655,7 +1665,19 @@ export function unbindCode(state, codeId) {
     ...state,
     accounts,
     codes: state.codes.map((c) =>
-      c.id === codeId ? { ...c, deviceId: '', boundAt: 0, plain, hash: codeHash(plain), lastSeenAt: 0, lastIp: '' } : c,
+      c.id === codeId
+        ? {
+            ...c,
+            deviceId: '',
+            boundAt: 0,
+            // The next binding of this slot gets a later boundAt (see activate), even within the same millisecond.
+            lastBoundAt: Math.max(Number(c.boundAt) || 0, Number(c.lastBoundAt) || 0),
+            plain,
+            hash: codeHash(plain),
+            lastSeenAt: 0,
+            lastIp: '',
+          }
+        : c,
     ),
     sessions: state.sessions.filter((s) => s.codeId !== codeId),
   };
