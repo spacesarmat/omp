@@ -14,6 +14,11 @@ export interface BillingAccount {
   paidUntil: number;
   active: boolean;
   deviceLimit: number;
+  /** After paidUntil, inside the grace period: search still works until accessUntil. */
+  inGrace?: boolean;
+  accessUntil?: number;
+  /** This phone is bound but over the device limit (an extra slot was not renewed). */
+  overLimit?: boolean;
   /** Which paid indexers the server currently exposes for this subscription. */
   sources?: { jackett: boolean; jacred: boolean };
 }

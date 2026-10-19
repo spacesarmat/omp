@@ -114,6 +114,7 @@ export function Brand() {
 
 export function SubStatus({ status }: { status: string }) {
   if (status === 'expired') return <Badge variant="bad">истекла</Badge>;
+  if (status === 'grace') return <Badge variant="warn">льготный период</Badge>;
   if (status === 'expiring') return <Badge variant="warn">истекает</Badge>;
   if (status === 'soon') return <Badge variant="warn">до 7 дней</Badge>;
   if (status === 'unbound') return <Badge variant="secondary">без устройства</Badge>;

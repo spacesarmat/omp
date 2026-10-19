@@ -12,7 +12,12 @@ import {
   deviceCode,
   ensureTelegramAccount,
   formatCode,
+  graceDays,
+  mskDate,
+  mskDateTime,
+  mskTime,
   rememberTelegramProfile,
+  renewalPrice,
   telegramDisplay,
   grantDays,
   isAdminChat,
@@ -208,25 +213,101 @@ export function parseAction(text) {
   return { action: 'unknown', arg: raw };
 }
 
+/** «Устройства: 2 из 3 (2 в подписке + 1 доп. до 18.11.2026)» */
+function devicesLine(sub) {
+  const used = sub.devices.filter((d) => d.bound).length;
+  let line = 'Устройства: ' + used + ' из ' + sub.deviceLimit;
+  if (sub.extraSlots > 0) {
+    line += ' (' + sub.baseLimit + ' в подписке + ' + sub.extraSlots + ' доп. до ' + mskDate(sub.extraUntil) + ')';
+  }
+  return line;
+}
+
+/** Subscription head line(s): paid, grace period, or ended. Times are Moscow time. */
+export function subscriptionHead(sub) {
+  if (sub.inGrace) {
+    return (
+      'Подписка закончилась ' +
+      mskDateTime(sub.paidUntil) +
+      '.\nЛьготный период: поиск работает до ' +
+      mskDateTime(sub.accessUntil) +
+      '. Продлите — «Продлить».'
+    );
+  }
+  if (sub.active) return 'Подписка до ' + mskDateTime(sub.paidUntil);
+  return 'Подписка закончилась ' + mskDate(sub.paidUntil);
+}
+
 function statusText(sub, account) {
   const tg = account && account.telegramId ? 'Telegram: ' + (telegramDisplay(account) || account.telegramId) + '\n' : '';
   if (!sub) return tg + 'Подписки нет.\n«Подписка» — оплата, «Промокод» — пробный день.';
-  const when = new Date(sub.paidUntil).toISOString().slice(0, 10);
-  const used = sub.devices.filter((d) => d.bound).length;
   const devices = sub.devices
     .filter((d) => d.bound)
-    .map((d) => (d.deviceId || '').slice(0, 8) + '…')
+    .map((d) => (d.deviceId || '').slice(0, 8) + '…' + (d.overLimit ? ' (не работает: доп. устройство не продлено)' : ''))
     .join(', ');
   return (
     tg +
-    (sub.active ? 'Подписка до ' + when : 'Подписка закончилась ' + when) +
-    '\nУстройства: ' +
-    used +
-    ' из ' +
-    sub.deviceLimit +
+    subscriptionHead(sub) +
+    '\n' +
+    devicesLine(sub) +
     (devices ? '\nПривязаны: ' + devices : '') +
     '\n«Код» — показать код или ссылку в OMP.'
   );
+}
+
+/**
+ * Renewal breakdown for the bot: base + extra slots that still count.
+ * «Продление на 30 дн., до 18.11.2026:\n• подписка — 150 ₽\n• доп. устройство × 1 — 50 ₽\nИтого: 200 ₽»
+ */
+export function renewalText(state, subRow, sub, now) {
+  const quote = renewalPrice(state, subRow, now);
+  const from = sub.active ? sub.paidUntil : now;
+  const lines = ['Продление на ' + quote.days + ' дн., до ' + mskDate(from + quote.days * 86400000) + ':'];
+  lines.push('• подписка — ' + rub(quote.base));
+  if (quote.extras > 0) {
+    lines.push('• доп. устройство × ' + quote.extras + ' — ' + rub(quote.extraSum));
+    lines.push('Итого: ' + rub(quote.total));
+  }
+  return { text: lines.join('\n'), quote };
+}
+
+/**
+ * Telegram reminder before / on the expiry day. `row` comes from dueReminders.
+ * @returns {{ chatId, text, keyboard, inline }}
+ */
+export function reminderMessage(state, row, now) {
+  const subRow = (state.subscriptions || []).find((s) => s.id === row.subscriptionId);
+  const grace = graceDays(state.settings);
+  const until = row.paidUntil;
+  const accessEnd = until + grace * 86400000;
+  let head = '';
+  if (row.kind === 'd3') head = 'Подписка OMP заканчивается через 3 дня — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
+  else if (row.kind === 'd1') head = 'Подписка OMP заканчивается завтра — ' + mskDate(until) + ' в ' + mskTime(until) + ' МСК.';
+  else if (until > now) {
+    head = 'Подписка OMP заканчивается сегодня в ' + mskTime(until) + ' МСК.';
+    if (grace > 0) head += '\nПосле этого ещё ' + grace + ' дн. льготного периода: поиск будет работать до ' + mskDateTime(accessEnd) + '.';
+  } else {
+    head = 'Подписка OMP закончилась сегодня в ' + mskTime(until) + ' МСК.';
+    if (grace > 0) head += '\nЛьготный период: поиск работает до ' + mskDateTime(accessEnd) + '.';
+  }
+  const lines = [head];
+  const quote = subRow ? renewalPrice(state, subRow, now) : null;
+  if (quote && quote.base > 0) {
+    if (quote.extras > 0) {
+      lines.push(
+        'Продление на ' + quote.days + ' дн.: ' + rub(quote.total) + ' (подписка ' + rub(quote.base) + ' + доп. устройство ' + rub(quote.extraRub) + ' × ' + quote.extras + ').',
+      );
+    } else {
+      lines.push('Продление на ' + quote.days + ' дн.: ' + rub(quote.base) + '.');
+    }
+  }
+  lines.push('Нажмите «Продлить» — ссылка на оплату придёт в этот чат.');
+  return {
+    chatId: String(row.telegramId),
+    text: lines.join('\n'),
+    keyboard: mainKeyboard(),
+    inline: { inline_keyboard: [[{ text: 'Продлить', url: botDeepLink(state.settings, 'renew') }]] },
+  };
 }
 
 /** Shown instead of a code when every device slot of the subscription is taken. */
@@ -422,7 +503,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     cur = out.state;
     if (out.result.error) say('Не вышло. Нужны telegramId и число дней.', { adminPad: true });
     else {
-      const head = 'Выдано +' + out.result.days + ' дн. до ' + new Date(out.result.paidUntil).toISOString().slice(0, 10) + '.\n';
+      const head = 'Выдано +' + out.result.days + ' дн. до ' + mskDate(out.result.paidUntil) + '.\n';
       if (out.result.code) {
         say(head + codeMessage(origin, out.result.code), {
           adminPad: true,
@@ -456,7 +537,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     else if (out.result.error === 'already') say('Вы уже активировали этот промокод.');
     else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
     else {
-      const until = new Date(out.result.paidUntil).toISOString().slice(0, 10);
+      const until = mskDate(out.result.paidUntil);
       const head = 'Промокод принят (+' + out.result.days + ' дн., до ' + until + ').\n\n';
       if (out.result.code) {
         say(head + codeMessage(origin, out.result.code), { inline: codeButtons(origin, out.result.code), parseMode: 'Markdown' });
@@ -465,14 +546,20 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       }
     }
   } else if (action === 'price') {
+    const grace = graceDays(cur.settings);
     say(
       'OMP (Jackett и JacRed) — ' +
         rub(prices.price) +
         ' за ' +
         prices.days +
-        ' дн.\nДополнительное устройство — ' +
-        rub(prices.extra) +
-        '.\nПромокод на день — «Промокод».',
+        ' дн., до ' +
+        DEVICE_BASE +
+        ' устройств.' +
+        (prices.extra
+          ? '\nДоп. устройство — ' + rub(prices.extra) + ' в месяц: действует до конца оплаченного периода и продлевается вместе с подпиской.'
+          : '') +
+        (grace > 0 ? '\nПосле окончания ещё ' + grace + ' дн. льготного периода: поиск работает, можно спокойно продлить.' : '') +
+        '\nПромокод на день — «Промокод».',
     );
   } else if (action === 'pay') {
     if (!wallet || !prices.price) say('Оплата ещё не настроена. Можно ввести промокод.');
@@ -493,12 +580,20 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (!sub) say('Подписки ещё нет. Нажмите «Подписка».');
     else if (!wallet || !prices.price) say('Оплата ещё не настроена.');
     else {
-      say(
-        'Продлить до ' +
-          new Date(Math.max(sub.paidUntil, now) + prices.days * 86400000).toISOString().slice(0, 10) +
-          ':\n' +
-          checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id }, 'OMP, продление'),
-      );
+      const subRow = cur.subscriptions.find((s) => s.id === sub.id);
+      const renewal = renewalText(cur, subRow, sub, now);
+      const head = sub.inGrace ? subscriptionHead(sub) + '\n\n' : '';
+      say(head + renewal.text + '\n' + checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id }, 'OMP, продление'));
+      if (renewal.quote.extras > 0) {
+        say(
+          'Без доп. устройств — ' +
+            rub(renewal.quote.base) +
+            '. Доп. устройство тогда перестанет работать после ' +
+            mskDateTime(sub.extraUntil + graceDays(cur.settings) * 86400000) +
+            ' (привязка сохранится):\n' +
+            checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, 'OMP, продление'),
+        );
+      }
     }
   } else if (action === 'code') {
     if (!sub || !sub.active) say('Сначала нужна действующая подписка. «Подписка» или «Промокод».');
@@ -509,12 +604,18 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       if (slot.code) {
         say(codeMessage(origin, slot.code), { inline: codeButtons(origin, slot.code), parseMode: 'Markdown' });
       } else {
-        const used = sub.devices.filter((d) => d.bound).length;
-        say('Устройства: ' + used + ' из ' + sub.deviceLimit + '.\n' + DEVICE_LIMIT_TEXT);
+        say(devicesLine(sub) + '.\n' + DEVICE_LIMIT_TEXT);
       }
       if (wallet && prices.extra) {
+        const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
         say(
-          'Ещё одно устройство:\n' +
+          'Ещё одно устройство — ' +
+            rub(prices.extra) +
+            ' до ' +
+            mskDate(Math.max(sub.paidUntil, sub.extraUntil || 0)) +
+            ' (конец оплаченного периода). Дальше оно продлевается вместе с подпиской: продление станет ' +
+            rub(nextRenewal) +
+            '.\n' +
             checkout({ kind: 'dev', accountId: account.id, subscriptionId: sub.id }, 'OMP, устройство'),
         );
       }

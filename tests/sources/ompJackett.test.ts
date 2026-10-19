@@ -56,6 +56,38 @@ describe('omp Jackett source', () => {
     await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Этот код уже привязан к другому устройству');
   });
 
+  it('says the device slots are full on device_limit', async () => {
+    const site = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 409));
+    await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Все устройства подписки заняты');
+  });
+
+  it('keeps paid sources in the grace period and reads the grace end', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 1e12 });
+    const site = fakeSite((c) =>
+      page(JSON.stringify({ active: true, inGrace: true, paidUntil: 1e12, accessUntil: 1e12 + 3 * 864e5, sources: { jackett: true, jacred: true } }), c.url),
+    );
+    const acc = await fetchBillingAccount(site.ctx);
+    expect(acc).toMatchObject({ active: true, inGrace: true, accessUntil: 1e12 + 3 * 864e5, overLimit: false });
+    await refreshOmpJackettSources(site.ctx);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(billingSession()?.token).toBe('tok-1');
+  });
+
+  it('an over-limit phone keeps its session but turns paid sources off', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const site = fakeSite((c) =>
+      page(JSON.stringify({ active: false, overLimit: true, paidUntil: 2e12, sources: { jackett: false, jacred: false } }), c.url),
+    );
+    await refreshOmpJackettSources(site.ctx);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(billingSession()?.token).toBe('tok-1');
+    const search = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 403));
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    await expect(ompJackettSource().search('q', search.ctx)).rejects.toThrow('Доп. устройство не продлено');
+  });
+
   it('searches through the billing proxy when the subscription is active', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     syncOmpJackett();

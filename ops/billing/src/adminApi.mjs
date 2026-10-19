@@ -1,4 +1,4 @@
-import { accountCard, adminDashboard, dailySeries, financeReport, supportThreads, telegramDisplay } from './logic.mjs';
+import { accountCard, activeExtras, adminDashboard, dailySeries, deviceLimitNow, financeReport, subAccess, supportThreads, telegramDisplay } from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
 import { storageInfo } from './store.mjs';
 
@@ -9,8 +9,8 @@ function day(ms) {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function subStatus(sub, bound, now) {
-  if (!(sub.paidUntil > now)) return 'expired';
+function subStatus(state, sub, bound, now) {
+  if (!(sub.paidUntil > now)) return subAccess(state, sub, now).grace ? 'grace' : 'expired';
   const left = sub.paidUntil - now;
   // soon/expiring stay visible as expiry. «Без устройства» matches bound === 0 on its own.
   if (left <= DAY) return 'expiring';
@@ -27,7 +27,9 @@ function subRows(state, now) {
       const account = state.accounts.find((a) => a.id === sub.accountId) || {};
       const codes = state.codes.filter((c) => c.subscriptionId === sub.id && !c.revoked);
       const bound = codes.filter((c) => c.deviceId).length;
-      const active = sub.paidUntil > now;
+      const access = subAccess(state, sub, now);
+      const active = access.access;
+      const limit = deviceLimitNow(state, sub, now);
       return {
         id: sub.id,
         accountId: sub.accountId,
@@ -38,11 +40,15 @@ function subRows(state, now) {
         paidUntil: sub.paidUntil,
         paidUntilText: day(sub.paidUntil),
         createdAt: sub.createdAt || 0,
-        deviceLimit: sub.deviceLimit,
+        deviceLimit: limit,
+        extraSlots: activeExtras(state, sub, now),
+        extraUntil: Number(sub.extraUntil) || 0,
+        inGrace: access.grace,
+        accessUntil: access.accessUntil,
         bound,
         active,
-        status: subStatus(sub, bound, now),
-        overLimit: bound > (sub.deviceLimit || 0),
+        status: subStatus(state, sub, bound, now),
+        overLimit: bound > limit,
       };
     });
 }

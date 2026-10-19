@@ -382,7 +382,7 @@ describe('bot', () => {
     start.state.settings.yoomoneyWallet = '410011';
     start.state.settings.priceRub = 100;
     const out = botReply(start.state, { chatId: '42', text: '/start renew', now: NOW });
-    expect(out.messages[0].text).toContain('Продлить');
+    expect(out.messages[0].text).toContain('Продление на 30 дн.');
     expect(out.messages[0].text).toContain('yoomoney.ru');
   });
 

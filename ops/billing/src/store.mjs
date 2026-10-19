@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { DEVICE_BASE, enrichActors, migrateDeviceBase } from './logic.mjs';
+import { DEVICE_BASE, enrichActors, GRACE_DAYS_DEFAULT, migrateDeviceBase, migrateExtraSlots } from './logic.mjs';
 
 export function emptyState() {
   return {
@@ -37,7 +37,10 @@ export function emptyState() {
       smtpFrom: '',
       priceRub: 0,
       periodDays: 30,
+      /** Monthly price of one extra device slot; renewed together with the subscription. */
       extraDeviceRub: 0,
+      /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */
+      graceDays: GRACE_DAYS_DEFAULT,
     },
     accounts: [],
     subscriptions: [],
@@ -65,8 +68,11 @@ export function emptyState() {
     outbox: [],
     /** Quoted YooMoney checkouts. The label is buy:<id>; the price is the one quoted, not a later settings change. */
     purchases: [],
-    /** Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored. */
-    meta: { deviceBase: DEVICE_BASE },
+    /**
+     * Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored.
+     * extraMonthly: extra devices are monthly slots (extraSlots/extraUntil), not part of deviceLimit.
+     */
+    meta: { deviceBase: DEVICE_BASE, extraMonthly: 1 },
   };
 }
 
@@ -160,7 +166,7 @@ function migrateFromJson(db, dbPath) {
 
 function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return migrateDeviceBase(enrichActors(base));
+  if (!parsed || typeof parsed !== 'object') return migrateExtraSlots(migrateDeviceBase(enrichActors(base)));
   const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
@@ -190,7 +196,7 @@ function normalizeState(parsed) {
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return migrateDeviceBase(enrichActors(next));
+  return migrateExtraSlots(migrateDeviceBase(enrichActors(next)));
 }
 
 export function readState(file) {

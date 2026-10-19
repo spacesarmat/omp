@@ -36,6 +36,9 @@ interface MeBody {
   telegramId?: string;
   paidUntil?: number;
   active?: boolean;
+  inGrace?: boolean;
+  accessUntil?: number;
+  overLimit?: boolean;
   deviceLimit?: number;
   sources?: { jackett?: boolean; jacred?: boolean };
 }
@@ -63,6 +66,7 @@ function billingError(status: number, text: string): Error {
   const body = parseBody<ErrorBody>(text);
   if (body.error === 'disabled') return new Error(t('sources.billing.disabled'));
   if (body.error === 'rate' || status === 429) return new Error(t('sources.billing.rate'));
+  if (body.error === 'device_limit') return new Error(t('sources.billing.overLimit'));
   if (body.error === 'expired' || status === 401 || status === 403) return new Error(t('sources.billing.expired'));
   return new Error(t('sources.billing.down'));
 }
@@ -76,6 +80,7 @@ export function activateCode(ctx: SourceContext, code: string): Promise<BillingS
   return billingPost(ctx, '/v1/activate', { code: code, deviceId: deviceId() }, { timeoutMs: 15000 }).then(
     (res) => {
       const body = parseBody<ActivateBody>(res.text);
+      if (body.error === 'device_limit') throw new Error(t('sources.billing.deviceLimit'));
       if (res.status === 409 || body.error === 'other_device') throw new Error(t('sources.billing.otherDevice'));
       if (body.error === 'expired') throw new Error(t('sources.billing.expired'));
       if (!body.token) throw new Error(t('sources.billing.badCode'));
@@ -147,6 +152,9 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         telegramId: body.telegramId || '',
         paidUntil,
         active: !!body.active,
+        inGrace: !!body.inGrace,
+        accessUntil: body.accessUntil || 0,
+        overLimit: !!body.overLimit,
         deviceLimit: body.deviceLimit || 0,
         sources: hasSources
           ? sources
