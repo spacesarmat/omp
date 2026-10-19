@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { adminId, adminMessage, isChannel, parseCommand, parseSources, pinNotice, type TgUpdate } from '../src/commands';
+import { adminId, adminMessage, isChannel, parseCommand, pinNotice, type TgUpdate } from '../src/commands';
 import { checkSecret, checkUrl, commandsBody, webhookBody } from '../scripts/webhook.mjs';
 import { COMMANDS } from '../src/commandList.mjs';
 
-const KNOWN = ['rutor', 'nnmclub', 'anidub', 'bigfangroup', 'torrentby', 'rutracker', 'kinozal', 'rustorka'];
 const msg = (chatId: number, text: string, extra: object = {}): TgUpdate => ({
   update_id: 1,
   message: { message_id: 10, chat: { id: chatId, type: 'private' }, from: { id: chatId }, text, ...extra },
@@ -11,15 +10,15 @@ const msg = (chatId: number, text: string, extra: object = {}): TgUpdate => ({
 
 describe('parseCommand', () => {
   it('reads the command and its arguments', () => {
-    expect(parseCommand('/status')).toEqual({ name: 'status', args: '' });
-    expect(parseCommand('  /check   rutor, anidub ')).toEqual({ name: 'check', args: 'rutor, anidub' });
+    expect(parseCommand('/stats')).toEqual({ name: 'stats', args: '' });
+    expect(parseCommand('  /ci   main, beta ')).toEqual({ name: 'ci', args: 'main, beta' });
     expect(parseCommand('/CI')).toEqual({ name: 'ci', args: '' });
   });
 
   it('takes /cmd@this_bot and drops commands to other bots', () => {
-    expect(parseCommand('/status@omp_bot', 'omp_bot')).toEqual({ name: 'status', args: '' });
-    expect(parseCommand('/status@OMP_Bot rutor', '@omp_bot')).toEqual({ name: 'status', args: 'rutor' });
-    expect(parseCommand('/status@other_bot', 'omp_bot')).toBeNull();
+    expect(parseCommand('/stats@omp_bot', 'omp_bot')).toEqual({ name: 'stats', args: '' });
+    expect(parseCommand('/stats@OMP_Bot beta', '@omp_bot')).toEqual({ name: 'stats', args: 'beta' });
+    expect(parseCommand('/stats@other_bot', 'omp_bot')).toBeNull();
   });
 
   it('is null for a text that is not a command', () => {
@@ -65,18 +64,6 @@ describe('pin notice', () => {
   });
 });
 
-describe('parseSources', () => {
-  it('takes ids and display-like spellings, comma or space separated, without repeats', () => {
-    expect(parseSources('', KNOWN)).toEqual({ ids: [], unknown: [] });
-    expect(parseSources('rutor', KNOWN)).toEqual({ ids: ['rutor'], unknown: [] });
-    expect(parseSources('Rutor, torrent.by  NNM-Club rutor', KNOWN)).toEqual({ ids: ['rutor', 'torrentby', 'nnmclub'], unknown: [] });
-  });
-
-  it('names the unknown ones', () => {
-    expect(parseSources('rutor, piratebay', KNOWN)).toEqual({ ids: ['rutor'], unknown: ['piratebay'] });
-  });
-});
-
 describe('webhook setup script', () => {
   it('asks Telegram only for messages and channel posts, with the secret', () => {
     const body = webhookBody('https://omp-admin-bot.x.workers.dev/', 's'.repeat(32));
@@ -87,7 +74,7 @@ describe('webhook setup script', () => {
   it('registers the command menu for the admin chat only', () => {
     const body = commandsBody('536445442');
     expect(body.scope).toEqual({ type: 'chat', chat_id: 536445442 });
-    expect(body.commands.map((c) => c.command)).toEqual(['status', 'check', 'versions', 'stats', 'ci', 'help']);
+    expect(body.commands.map((c) => c.command)).toEqual(['versions', 'stats', 'ci', 'help']);
     // Telegram: 1-32 chars a-z0-9_, description 1-256
     COMMANDS.forEach((c) => {
       expect(c.command).toMatch(/^[a-z0-9_]{1,32}$/);

@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Parser monitor (GitHub Actions) removed together with the admin bot's /status and /check; /stats and /ci no longer show it
 - [tech] Billing: admin login works under BILLING_READONLY (in-memory sessions and tokens), /health uses backupEveryHours, a failed pg_dump sets pgBackupOk false and alerts immediately; bot deviceInfo only when showing devices.
 - [tech] Billing: the admin user card and subscription list show the credit (RUB toward the next renewal)
 - [tech] Billing: admin home shows counts of devices on new vs legacy tokens (prep for strict checks; flags stay off)

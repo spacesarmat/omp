@@ -2,10 +2,8 @@
 // Plain .mjs so the Node setup script can import it without a TypeScript step.
 
 export const COMMANDS = [
-  { command: 'status', description: 'Последняя таблица монитора парсеров' },
-  { command: 'check', description: 'Проверить парсеры сейчас: /check или /check rutor' },
   { command: 'versions', description: 'Версии в фидах обновлений и даты релизов' },
   { command: 'stats', description: 'Скачивания, звёзды, открытые issues' },
-  { command: 'ci', description: 'Последние запуски CI, Release, монитора' },
+  { command: 'ci', description: 'Последние запуски CI и Release' },
   { command: 'help', description: 'Список команд' },
 ];

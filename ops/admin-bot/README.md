@@ -6,11 +6,9 @@
 
 | Команда | Что делает |
 |---|---|
-| `/status` | последняя таблица монитора парсеров (`parser-monitor.json` в ветке `monitor-state`) и время проверки |
-| `/check` или `/check rutor` | запускает workflow «Parser monitor» (все источники или указанные); таблицу пришлёт сам workflow, когда закончит (обычно 3-15 мин) |
 | `/versions` | версии в `update.json`, `update-android.json`, `update-beta.json`, `update-android-beta.json` (ветка `gh-pages`) и даты релизов |
-| `/stats` | скачивания по файлам последнего стабильного и последнего бета-релиза, всего скачиваний, звёзды, открытые issues, открытые issues монитора парсеров |
-| `/ci` | последние запуски CI (main), Release, Parser monitor: ✅ / ❌ / ⏳, когда, ссылка |
+| `/stats` | скачивания по файлам последнего стабильного и последнего бета-релиза, всего скачиваний, звёзды, открытые issues |
+| `/ci` | последние запуски CI (main) и Release: ✅ / ❌ / ⏳, когда, ссылка |
 | `/help` | список команд |
 
 Бот отвечает **только** в чат из секрета `ADMIN_CHAT_ID` (ваша личка с ботом = Telegram user id). Всем остальным -
@@ -67,9 +65,9 @@
 
      | Разрешение | Уровень | Зачем |
      |---|---|---|
-     | **Actions** | **Read and write** | `/ci` и `/status` читают запуски workflow; `/check` запускает «Parser monitor» (workflow_dispatch - это запись) |
-     | **Contents** | **Read-only** | `/status` читает `parser-monitor.json` из ветки `monitor-state`, `/versions` - фиды из `gh-pages`; `/versions` и `/stats` - релизы и счётчики скачиваний |
-     | **Issues** | **Read-only** | `/stats`: число открытых issues и открытые issues с меткой `parser-monitor` |
+     | **Actions** | **Read-only** | `/ci` читает запуски workflow |
+     | **Contents** | **Read-only** | `/versions` - фиды из `gh-pages`; `/versions` и `/stats` - релизы и счётчики скачиваний |
+     | **Issues** | **Read-only** | `/stats`: число открытых issues |
      | **Metadata** | **Read-only** | обязательное (GitHub ставит само): звёзды и сведения о репозитории |
 
 3. **Generate token** → скопируйте токен (`github_pat_…`). GitHub покажет его один раз - не закрывайте страницу до шага 5
@@ -151,8 +149,7 @@ npm run admin-bot:webhook -- https://omp-admin-bot.<имя>.workers.dev
 ## Шаг 8. Проверить
 
 1. В Telegram откройте чат с ботом OMP и отправьте `/help` - придёт список команд.
-2. `/status` - таблица парсеров, `/ci` - последние запуски. `/check rutor` - через несколько секунд в сообщении
-   появится ссылка на запуск, а через 3-15 минут бот пришлёт таблицу.
+2. `/versions` - версии в фидах обновлений, `/stats` - скачивания, `/ci` - последние запуски.
 3. С другого аккаунта бот не отвечает ничего - так и должно быть.
 
 Если бот молчит:
@@ -174,17 +171,12 @@ npm run admin-bot:webhook -- --delete
 
 ## Обновить бота
 
-После изменений в `ops/admin-bot/` (или в `scripts/parser-monitor/telegramTable.mjs`, `src/sources/sourceNames.ts`,
-которые он использует): `git pull`, затем из `ops/admin-bot` - `npx wrangler deploy`. Секреты и webhook остаются.
+После изменений в `ops/admin-bot/`: `git pull`, затем из `ops/admin-bot` - `npx wrangler deploy`. Секреты и webhook остаются.
 Поменять список команд в меню - `src/commandList.mjs`, затем снова шаг 7.
 
 ## Как это устроено
 
 - `src/index.ts` - вход Worker: только POST с верным секретом, ответ Telegram всегда 200 (иначе он повторяет запрос).
 - `src/bot.ts` - команды; `src/commands.ts` - разбор команд, фильтр админа, служебные посты канала;
-  `src/format.ts` - тексты ответов; `src/github.ts`, `src/telegram.ts` - API.
-- `/check`: Worker после ответа может работать ещё только ~30 секунд (`ctx.waitUntil`), а проверка идёт минуты.
-  Поэтому бот запускает workflow с флажком `notify=true`, а таблицу по окончании отправляет сам workflow
-  (шаг «Report to the admin» → `scripts/parser-monitor/notify.mjs`, в чат `MONITOR_TG_CHAT`, по умолчанию `536445442`).
-  Бот за эти ~25 секунд только находит новый запуск и дописывает ссылку на него в своё сообщение.
+  `src/format.ts` - тексты ответов, `src/time.ts` - время по Москве; `src/github.ts`, `src/telegram.ts` - API.
 - Тесты: `ops/admin-bot/test/` (в общем `npm test`, без сети).

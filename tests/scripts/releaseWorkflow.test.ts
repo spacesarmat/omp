@@ -79,7 +79,7 @@ function jobEnvBlocks(yml: string): string[] {
 
 describe('TMDB_API_KEY scope', () => {
   it('is not on any workflow job env', () => {
-    const names = ['release.yml', 'ci.yml', 'torrserver-update.yml', 'parser-monitor.yml', 'vps-deploy.yml', 'billing-image.yml', 'telegram-fix.yml', 'telegram-post.yml'];
+    const names = ['release.yml', 'ci.yml', 'torrserver-update.yml', 'vps-deploy.yml', 'billing-image.yml', 'telegram-fix.yml', 'telegram-post.yml'];
     names.forEach((name) => {
       const text = readFileSync('.github/workflows/' + name, 'utf8');
       jobEnvBlocks(text).forEach((block) => {
