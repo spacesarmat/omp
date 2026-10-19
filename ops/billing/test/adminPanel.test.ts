@@ -66,6 +66,7 @@ describe('admin payload hides codes', () => {
     expect(user.subscription.creditRub).toBe(50);
     const home = homePayload(withCredit, '/tmp/billing.db', {});
     expect(home.subscriptions.find((s: { id: string }) => s.id === subId).creditRub).toBe(50);
+  });
 
   it('puts token kind counts from tokenStats onto the home stats', () => {
     const start = seeded();
