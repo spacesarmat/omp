@@ -3,8 +3,8 @@
 //
 // Only the app's own page refreshes (startBillingKeepAlive): it alone can write the Keystore. The hidden pages
 // (background check, TV search server) share localStorage, use the access token found there and never rotate.
-import { billingPost } from "./client";
-import { rekeyBillingAccess, saveBillingAccess } from "./entitlement";
+import { billingPost } from './client';
+import { rekeyBillingAccess, saveBillingAccess } from './entitlement';
 import {
   billingSession,
   deviceId,
@@ -15,12 +15,13 @@ import {
   setBillingNotice,
   type BillingNotice,
   type BillingSession,
-} from "./session";
-import { t } from "../i18n";
-import type { HttpResponse, SourceContext } from "../sources/types";
+} from './session';
+import { t } from '../i18n';
+import { log } from '../lib/log';
+import type { HttpResponse, SourceContext } from '../sources/types';
 
 /** Keystore key of the refresh token. */
-export const REFRESH_SECRET = "billing.refresh";
+export const REFRESH_SECRET = 'billing.refresh';
 /** The access token (24 h) is renewed when less than this is left. */
 export const REFRESH_EARLY_MS = 2 * 60 * 60 * 1000;
 /** A refresh or upgrade whose answer was lost is sent again once, with the same token, inside the server's 60 s grace. */
@@ -29,7 +30,7 @@ export const LOST_RETRY_MS = 3000;
 export const RETRY_LATER_MS = 5 * 60 * 1000;
 const KEEP_ALIVE_MS = 30 * 60 * 1000;
 /** Answers after which this binding is gone for good: a new code is needed. */
-const GONE = ["revoked", "refresh_expired", "bad_token", "upgraded"];
+const GONE = ['revoked', 'refresh_expired', 'bad_token', 'upgraded'];
 
 export interface TokenPair {
   refreshToken: string;
@@ -40,10 +41,13 @@ export interface TokenPair {
 }
 
 let refresher = false;
+/** Android (the default): the refresh token lives in the Keystore only. Off in the browser build. */
+let keystoreOnly = true;
+/** Android, after a refused Keystore write: the refresh token of this binding, in memory only. */
+let memoryRefresh: { id: string; token: string } | null = null;
 let inflight: Promise<BillingSession> | null = null;
 let failedAt = 0;
-let wait = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+let wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The app's own page may rotate tokens (the hidden pages may not). */
 export function allowBillingRefresh(on: boolean): void {
@@ -51,12 +55,21 @@ export function allowBillingRefresh(on: boolean): void {
 }
 
 /** Tests: no real pause before the lost-answer retry, and a clean state. */
-export function resetBillingTokens(
-  pause?: (ms: number) => Promise<void>,
-): void {
+export function resetBillingTokens(pause?: (ms: number) => Promise<void>): void {
   inflight = null;
   failedAt = 0;
+  memoryRefresh = null;
+  keystoreOnly = true;
   if (pause) wait = pause;
+}
+
+/** Android build (true) or browser build (false): only the browser may keep the refresh token in localStorage. */
+export function useBillingKeystore(on: boolean): void {
+  keystoreOnly = on;
+}
+
+function onAndroid(ctx: SourceContext): boolean {
+  return keystoreOnly && !!ctx.secrets;
 }
 
 function canRefresh(ctx: SourceContext): boolean {
@@ -66,9 +79,9 @@ function canRefresh(ctx: SourceContext): boolean {
 export function errorOf(text: string): string {
   try {
     const v = JSON.parse(text) as { error?: unknown };
-    return v && typeof v.error === "string" ? v.error : "";
+    return v && typeof v.error === 'string' ? v.error : '';
   } catch (e) {
-    return "";
+    return '';
   }
 }
 
@@ -79,43 +92,28 @@ export function pairOf(text: string): TokenPair | null {
   } catch (e) {
     return null;
   }
-  if (
-    !v ||
-    typeof v.refreshToken !== "string" ||
-    typeof v.accessToken !== "string"
-  )
-    return null;
-  if (
-    !v.refreshToken ||
-    !v.accessToken ||
-    typeof v.accessExpiresAt !== "number"
-  )
-    return null;
+  if (!v || typeof v.refreshToken !== 'string' || typeof v.accessToken !== 'string') return null;
+  if (!v.refreshToken || !v.accessToken || typeof v.accessExpiresAt !== 'number') return null;
   return {
     refreshToken: v.refreshToken,
     accessToken: v.accessToken,
     accessExpiresAt: v.accessExpiresAt,
-    refreshExpiresAt:
-      typeof v.refreshExpiresAt === "number" ? v.refreshExpiresAt : 0,
-    paidUntil: typeof v.paidUntil === "number" ? v.paidUntil : undefined,
+    refreshExpiresAt: typeof v.refreshExpiresAt === 'number' ? v.refreshExpiresAt : 0,
+    paidUntil: typeof v.paidUntil === 'number' ? v.paidUntil : undefined,
   };
 }
 
 function newId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
-  let out = "";
-  for (let i = 0; i < bytes.length; i++)
-    out += ("0" + bytes[i].toString(16)).slice(-2);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2);
   return out;
 }
 
 /** An error this module made (its text is meant for the user as is); anything else is «сервер не отвечает». */
 export function isTokenError(e: unknown): e is Error {
-  return (
-    e instanceof Error &&
-    (e as Error & { billingToken?: boolean }).billingToken === true
-  );
+  return e instanceof Error && (e as Error & { billingToken?: boolean }).billingToken === true;
 }
 
 function tokenFailure(text: string): Error {
@@ -125,69 +123,93 @@ function tokenFailure(text: string): Error {
 }
 
 function downError(): Error {
-  return tokenFailure(t("sources.billing.down"));
+  return tokenFailure(t('sources.billing.down'));
 }
 
 function goneError(): Error {
-  return tokenFailure(t("sources.billing.revoked"));
+  return tokenFailure(t('sources.billing.revoked'));
 }
 
-/** '' when the Keystore took it; the token itself when it has to stay in the session. */
-function storeRefresh(ctx: SourceContext, token: string): Promise<string> {
-  if (!ctx.secrets) return Promise.resolve(token);
-  return ctx.secrets.set(REFRESH_SECRET, token).then(
-    () => "",
-    () => token,
+interface Stored {
+  /** Browser build: the token to keep in the session. Never set on Android. */
+  local?: string;
+  /** Android: the Keystore refused it, the token is in memory only. */
+  volatile?: boolean;
+}
+
+/**
+ * Android: the Keystore or nowhere. A refused write keeps the token in memory for this run of the app and logs the
+ * failure (never the value); after a restart the code is asked again. The browser build keeps it in the session.
+ */
+function storeRefresh(ctx: SourceContext, token: string, id: string): Promise<Stored> {
+  const store = ctx.secrets;
+  if (!store) return Promise.resolve({ local: token });
+  if (!onAndroid(ctx)) {
+    return store.set(REFRESH_SECRET, token).then(
+      () => ({}),
+      () => ({ local: token }),
+    );
+  }
+  return store.set(REFRESH_SECRET, token).then(
+    () => {
+      memoryRefresh = null;
+      return {};
+    },
+    () => {
+      memoryRefresh = { id, token };
+      log('warn', 'app', t('log.billingKeystoreFailed'));
+      return { volatile: true };
+    },
   );
 }
 
 function readRefresh(ctx: SourceContext, s: BillingSession): Promise<string> {
+  const store = ctx.secrets;
+  if (store && onAndroid(ctx)) {
+    if (memoryRefresh && memoryRefresh.id === s.id) return Promise.resolve(memoryRefresh.token);
+    if (s.volatile) return Promise.resolve('');
+    // a Keystore error rejects (the caller says the server is unreachable): only a missing token is final
+    return store.get(REFRESH_SECRET).then((v) => v || '');
+  }
   if (s.refresh) return Promise.resolve(s.refresh);
-  if (!ctx.secrets) return Promise.resolve("");
-  // a Keystore error rejects (the caller says the server is unreachable): only a missing token is final
-  return ctx.secrets.get(REFRESH_SECRET).then((v) => v || "");
+  if (!store) return Promise.resolve('');
+  return store.get(REFRESH_SECRET).then((v) => v || '');
+}
+
+/** Android: a session whose refresh token was in memory only, after a restart: nothing is left to renew it with. */
+function lostOnRestart(ctx: SourceContext, s: BillingSession): boolean {
+  return onAndroid(ctx) && !!s.volatile && !(memoryRefresh && memoryRefresh.id === s.id);
 }
 
 /** Saves a fresh pair: the refresh token to the Keystore, the access token to the session. `prev` keeps the binding id. */
-export function savePair(
-  ctx: SourceContext,
-  pair: TokenPair,
-  prev: BillingSession | null,
-): Promise<BillingSession> {
-  return storeRefresh(ctx, pair.refreshToken).then((local) => {
-    const id = prev && prev.id ? prev.id : newId();
+export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession> {
+  const id = prev && prev.id ? prev.id : newId();
+  return storeRefresh(ctx, pair.refreshToken, id).then((stored) => {
     if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
     const row: BillingSession = {
-      token: "",
-      paidUntil:
-        typeof pair.paidUntil === "number"
-          ? pair.paidUntil
-          : prev
-            ? prev.paidUntil
-            : 0,
+      token: '',
+      paidUntil: typeof pair.paidUntil === 'number' ? pair.paidUntil : prev ? prev.paidUntil : 0,
       id,
       access: pair.accessToken,
       accessExp: pair.accessExpiresAt,
       refreshExp: pair.refreshExpiresAt,
     };
-    if (local) row.refresh = local;
+    if (stored.local) row.refresh = stored.local;
+    if (stored.volatile) row.volatile = true;
     saveBillingSession(row);
-    setBillingNotice("");
+    setBillingNotice('');
     emitBillingChange();
     return row;
   });
 }
 
 /** Forgets the binding on this phone (tokens and the cached /v1/me answer). `notice` says why on the code screen. */
-export function dropDeviceTokens(
-  ctx: SourceContext | null,
-  notice: BillingNotice,
-): void {
+export function dropDeviceTokens(ctx: SourceContext | null, notice: BillingNotice): void {
   saveBillingAccess(null);
   saveBillingSession(null);
   setBillingNotice(notice);
-  if (ctx && ctx.secrets)
-    ctx.secrets.delete(REFRESH_SECRET).then(undefined, () => undefined);
+  memoryRefresh = null;
+  if (ctx && ctx.secrets) ctx.secrets.delete(REFRESH_SECRET).then(undefined, () => undefined);
   emitBillingChange();
 }
 
@@ -216,49 +238,34 @@ function postTwice(
   body: { [key: string]: string },
   headers: { [name: string]: string },
 ): Promise<HttpResponse> {
-  const send = () =>
-    billingPost(ctx, path, body, { headers, timeoutMs: 15000 });
+  const send = () => billingPost(ctx, path, body, { headers, timeoutMs: 15000 });
   return send().then(undefined, () => wait(LOST_RETRY_MS).then(send));
 }
 
-function takePair(
-  ctx: SourceContext,
-  s: BillingSession,
-  res: HttpResponse,
-): Promise<BillingSession> {
+function takePair(ctx: SourceContext, s: BillingSession, res: HttpResponse): Promise<BillingSession> {
   if (res.status >= 200 && res.status < 300) {
     const pair = pairOf(res.text);
     const cur = billingSession();
     // the user disconnected or entered another code while this was on the way
-    if (!pair || !cur || sessionKey(cur) !== sessionKey(s))
-      return Promise.reject(downError());
+    if (!pair || !cur || sessionKey(cur) !== sessionKey(s)) return Promise.reject(downError());
     failedAt = 0;
     return savePair(ctx, pair, cur);
   }
   if (res.status === 401 && GONE.indexOf(errorOf(res.text)) >= 0) {
-    dropDeviceTokens(ctx, "revoked");
+    dropDeviceTokens(ctx, 'revoked');
     return Promise.reject(goneError());
   }
   failedAt = Date.now();
-  if (res.status === 429)
-    return Promise.reject(tokenFailure(t("sources.billing.rate")));
+  if (res.status === 429) return Promise.reject(tokenFailure(t('sources.billing.rate')));
   return Promise.reject(downError());
 }
 
-function upgradeLegacy(
-  ctx: SourceContext,
-  s: BillingSession,
-): Promise<BillingSession> {
+function upgradeLegacy(ctx: SourceContext, s: BillingSession): Promise<BillingSession> {
   const headers = {
-    Authorization: "Bearer " + s.token,
-    "X-Device-Id": deviceId(),
+    Authorization: 'Bearer ' + s.token,
+    'X-Device-Id': deviceId(),
   };
-  return postTwice(
-    ctx,
-    "/v1/token/upgrade",
-    { deviceId: deviceId() },
-    headers,
-  ).then(
+  return postTwice(ctx, '/v1/token/upgrade', { deviceId: deviceId() }, headers).then(
     (res) => {
       // an old server without the route, or a blip: the legacy token keeps working, try again later
       if (res.status === 404 || res.status === 429 || res.status >= 500) {
@@ -278,25 +285,19 @@ function upgradeLegacy(
  * New access/refresh pair (the refresh token rotates). One at a time: callers that come while one runs share it.
  * A legacy session is moved to the pair instead (once). Rejects with «устройство отключено» when the binding is gone.
  */
-export function refreshDeviceTokens(
-  ctx: SourceContext,
-): Promise<BillingSession> {
+export function refreshDeviceTokens(ctx: SourceContext): Promise<BillingSession> {
   return single(() => {
     const s = billingSession();
-    if (!s) return Promise.reject(tokenFailure(t("sources.billing.badCode")));
+    if (!s) return Promise.reject(tokenFailure(t('sources.billing.badCode')));
     if (isLegacySession(s)) return upgradeLegacy(ctx, s);
     return readRefresh(ctx, s).then(
       (refreshToken) => {
         if (!refreshToken) {
-          dropDeviceTokens(ctx, "revoked");
-          throw goneError();
+          const lost = lostOnRestart(ctx, s);
+          dropDeviceTokens(ctx, lost ? 'keystore' : 'revoked');
+          throw lost ? tokenFailure(t('sources.billing.keystoreLost')) : goneError();
         }
-        return postTwice(
-          ctx,
-          "/v1/token/refresh",
-          { refreshToken, deviceId: deviceId() },
-          { "X-Device-Id": deviceId() },
-        ).then(
+        return postTwice(ctx, '/v1/token/refresh', { refreshToken, deviceId: deviceId() }, { 'X-Device-Id': deviceId() }).then(
           (res) => takePair(ctx, s, res),
           () => {
             failedAt = Date.now();
@@ -315,7 +316,7 @@ export function refreshDeviceTokens(
 /** The bearer token for the next call: renewed ahead of expiry on the app's own page. '' without a session. */
 export function deviceBearer(ctx: SourceContext): Promise<string> {
   const s = billingSession();
-  if (!s) return Promise.resolve("");
+  if (!s) return Promise.resolve('');
   if (!canRefresh(ctx)) return Promise.resolve(s.access || s.token);
   const now = Date.now();
   const lately = now - failedAt < RETRY_LATER_MS;
@@ -324,23 +325,21 @@ export function deviceBearer(ctx: SourceContext): Promise<string> {
     return refreshDeviceTokens(ctx).then((row) => row.access || row.token);
   }
   const left = (s.accessExp || 0) - now;
-  if (left > REFRESH_EARLY_MS || (left > 0 && lately))
-    return Promise.resolve(s.access || "");
+  if (left > REFRESH_EARLY_MS || (left > 0 && lately)) return Promise.resolve(s.access || '');
   return refreshDeviceTokens(ctx).then(
     (row) => row.access || row.token,
     (e) => {
       // an early refresh that failed on the way: the current token still works
       const cur = billingSession();
-      if (cur && cur.access && (cur.accessExp || 0) > Date.now())
-        return cur.access;
+      if (cur && cur.access && (cur.accessExp || 0) > Date.now()) return cur.access;
       throw e;
     },
   );
 }
 
 export function deviceHeaders(bearer: string): { [name: string]: string } {
-  const headers: { [name: string]: string } = { "X-Device-Id": deviceId() };
-  if (bearer) headers.Authorization = "Bearer " + bearer;
+  const headers: { [name: string]: string } = { 'X-Device-Id': deviceId() };
+  if (bearer) headers.Authorization = 'Bearer ' + bearer;
   return headers;
 }
 
@@ -356,16 +355,11 @@ export function withDeviceToken(
     run(deviceHeaders(bearer)).then((res) => {
       if (res.status !== 401 || !bearer) return res;
       const code = errorOf(res.text);
-      if (code === "revoked") {
-        if (billingSession()) dropDeviceTokens(ctx, "revoked");
+      if (code === 'revoked') {
+        if (billingSession()) dropDeviceTokens(ctx, 'revoked');
         return res;
       }
-      if (
-        code !== "token_expired" &&
-        code !== "bad_token" &&
-        code !== "legacy_disabled"
-      )
-        return res;
+      if (code !== 'token_expired' && code !== 'bad_token' && code !== 'legacy_disabled') return res;
       const s = billingSession();
       if (!s) return res;
       if (!canRefresh(ctx)) {
@@ -373,10 +367,7 @@ export function withDeviceToken(
         return next && next !== bearer ? run(deviceHeaders(next)) : res;
       }
       // an unknown legacy token is not ours to renew; a pair session never gets legacy_disabled
-      if (
-        isLegacySession(s) ? code === "bad_token" : code === "legacy_disabled"
-      )
-        return res;
+      if (isLegacySession(s) ? code === 'bad_token' : code === 'legacy_disabled') return res;
       return refreshDeviceTokens(ctx).then(
         (row) => {
           const next = row.access || row.token;
@@ -399,21 +390,29 @@ function needsWork(s: BillingSession, now: number): boolean {
  * The app's own page: allows token rotation and keeps the access token fresh (at start, when the app comes back to
  * the foreground and every 30 minutes), so the hidden pages always find a working one. Moves a legacy session once.
  */
-export function startBillingKeepAlive(ctxOf: () => SourceContext): () => void {
+export function startBillingKeepAlive(ctxOf: () => SourceContext, opts?: { keystore?: boolean }): () => void {
   refresher = true;
+  keystoreOnly = !opts || opts.keystore !== false;
   const tick = () => {
     const s = billingSession();
-    if (!s || !needsWork(s, Date.now())) return;
-    deviceBearer(ctxOf()).then(undefined, () => undefined);
+    if (!s) return;
+    const ctx = ctxOf();
+    // the refresh token was in memory only and the app restarted: ask for the code now, saying why
+    if (lostOnRestart(ctx, s)) {
+      dropDeviceTokens(ctx, 'keystore');
+      return;
+    }
+    if (!needsWork(s, Date.now())) return;
+    deviceBearer(ctx).then(undefined, () => undefined);
   };
   tick();
   const timer = setInterval(tick, KEEP_ALIVE_MS);
   const onVisible = () => {
-    if (document.visibilityState === "visible") tick();
+    if (document.visibilityState === 'visible') tick();
   };
-  document.addEventListener("visibilitychange", onVisible);
+  document.addEventListener('visibilitychange', onVisible);
   return () => {
     clearInterval(timer);
-    document.removeEventListener("visibilitychange", onVisible);
+    document.removeEventListener('visibilitychange', onVisible);
   };
 }

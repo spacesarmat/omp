@@ -21,12 +21,17 @@ export interface BillingSession {
   accessExp?: number;
   /** Expiry of the refresh token, unix ms. */
   refreshExp?: number;
-  /** Refresh token kept here only when the Keystore is missing or refused the write. */
+  /** Browser build only (no Keystore): the refresh token. On Android it is never stored here. */
   refresh?: string;
+  /** Android: the Keystore refused the refresh token, it lives in memory only (a restart needs the code again). */
+  volatile?: boolean;
 }
 
-/** Why the session was dropped by the server: shown above the code field until a new code works. */
-export type BillingNotice = '' | 'revoked';
+/**
+ * Why the session was dropped, shown above the code field until a new code works: `revoked` by the server,
+ * `keystore` when the refresh token could not be kept in the Keystore and the app restarted.
+ */
+export type BillingNotice = '' | 'revoked' | 'keystore';
 
 export interface BillingAccount {
   telegramId: string;
@@ -79,7 +84,7 @@ export function isLegacySession(row: BillingSession): boolean {
 }
 
 export function billingNotice(): BillingNotice {
-  return loadJson<BillingNotice>(NOTICE_KEY, '', (v) => v === '' || v === 'revoked');
+  return loadJson<BillingNotice>(NOTICE_KEY, '', (v) => v === '' || v === 'revoked' || v === 'keystore');
 }
 
 export function setBillingNotice(notice: BillingNotice): void {

@@ -219,9 +219,9 @@ export function OmpJackettCard() {
               <div class="m-error" role="alert">
                 {error}
               </div>
-            ) : billingNotice() === 'revoked' ? (
-              <div class="m-error" role="alert" data-notice="revoked">
-                {t('sources.billing.revoked')}
+            ) : billingNotice() ? (
+              <div class="m-error" role="alert" data-notice={billingNotice()}>
+                {billingNotice() === 'keystore' ? t('sources.billing.keystoreLost') : t('sources.billing.revoked')}
               </div>
             ) : null}
             <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void connect()}>

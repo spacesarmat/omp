@@ -32,7 +32,8 @@ logStart(t('history.phone'));
 // the phone app runs on Android: the built-in tracker parsers work through its native http
 registerBuiltinSources();
 // OMP subscription: only this page rotates the device tokens (it can write the Keystore); keeps the access token fresh
-startBillingKeepAlive(phoneSourceContext);
+// the refresh token lives in the Keystore only on Android; the browser build keeps it in localStorage
+startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)
 initPhoneRpc({
   connectedLg: () => (tvState.value === 'connected' && tvKind() !== 'atv' ? sessionIp.value : null),
