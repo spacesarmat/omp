@@ -162,6 +162,17 @@ describe('files as one block', () => {
     expect(JSON.parse(String(calls[4].form.get('message_ids')))).toEqual([9, 10, 11]);
   });
 
+  it('keeps the old file messages when a build is over the bot limit (it may have been forwarded by hand)', async () => {
+    const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20, 'OMP-1.2.3.apk': UPLOAD_MAX + 5 });
+    const calls: Call[] = [];
+    const logs: string[] = [];
+    const failed = await repostFiles({ tag: 'v1.2.3', messageId: 8, deleteIds: [9, 10], dir: join(root, 'build'), token: TOKEN, chat: '@c', fetch: fakeFetch(calls) as any, log: (s: string) => logs.push(s) });
+    expect(failed).toBe(0);
+    expect(names(calls)).toEqual(['sendDocument:OMP-1.2.3-armv7.apk', 'sendDocument:OMP-1.2.3-webOS.ipk', 'sendMediaGroup', 'deleteMessages']);
+    expect(JSON.parse(String(calls[3].form.get('message_ids')))).toEqual([101, 102]);
+    expect(logs).toContain('Telegram: 1 file(s) not attached, kept the old file messages 9, 10');
+  });
+
   it('keeps the old file messages when the repost fails', async () => {
     const root = setup({ 'OMP-1.2.3-armv7.apk': 10, 'OMP-1.2.3-webOS.ipk': 20 });
     const calls: Call[] = [];
@@ -210,6 +221,25 @@ describe('photo album of a stable release', () => {
     expect(JSON.parse(String(buttons.get('reply_parameters')))).toEqual({ message_id: 50 });
     expect(String(buttons.get('reply_markup'))).toContain('OMP-1.2.3-armv7.apk');
     expect(logs).toContain('Telegram: posted 1.2.3 as an album of 4 photos');
+  });
+
+  it('retries the buttons of an album once, then counts them as failed (they are the only download links)', async () => {
+    for (const refusals of [1, 2]) {
+      const root = setup({ 'OMP-1.2.3-webOS.ipk': 20 });
+      withShots(root, '1.2.3', ['01-discover.png']);
+      const calls: Call[] = [];
+      const logs: string[] = [];
+      let left = refusals;
+      const refuse = (m: string) => (m === 'sendMessage' && left-- > 0 ? new Response(JSON.stringify({ ok: false, description: 'Too Many Requests' }), { status: 429 }) : null);
+      const pauses: number[] = [];
+      const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, refuse) as any, log: (s: string) => logs.push(s), pause: async (ms: number) => { pauses.push(ms); } });
+      expect(names(calls).filter((n) => n === 'sendMessage')).toHaveLength(2);
+      expect(pauses).toEqual([3000]);
+      expect(failed).toBe(refusals === 1 ? 0 : 1);
+      expect(logs.some((l) => l.includes('retrying the buttons'))).toBe(true);
+      expect(logs.some((l) => l.includes('the buttons were not posted'))).toBe(refusals === 2);
+      expect(logs.join('\n')).not.toContain(TOKEN);
+    }
   });
 
   it('takes at most 10 photos: the cover and the first 9 screenshots', async () => {

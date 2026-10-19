@@ -135,18 +135,29 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
   }
   await pinPost(call, chat, postId, log);
 
-  const failed = await sendFiles({ call, chat, replyTo: postId, version, dir, log });
+  let { failed } = await sendFiles({ call, chat, replyTo: postId, version, dir, log });
   if (buttons) {
-    const form = new FormData();
-    form.set('chat_id', chat);
-    form.set('text', BUTTONS_TEXT);
-    form.set('reply_parameters', JSON.stringify({ message_id: postId }));
-    form.set('reply_markup', JSON.stringify(keyboard));
-    try {
-      await call('sendMessage', form);
-      log('Telegram: posted the buttons');
-    } catch (e) {
-      log(`${e.message} (the buttons were not posted)`);
+    // the buttons are the only download links of an album post: one retry, then the run reports a failure
+    for (let attempt = 1; ; attempt++) {
+      const form = new FormData();
+      form.set('chat_id', chat);
+      form.set('text', BUTTONS_TEXT);
+      form.set('reply_parameters', JSON.stringify({ message_id: postId }));
+      form.set('reply_markup', JSON.stringify(keyboard));
+      try {
+        await call('sendMessage', form);
+        log('Telegram: posted the buttons');
+        break;
+      } catch (e) {
+        if (attempt < 2) {
+          log(`${e.message}, retrying the buttons`);
+          await pause(3000);
+          continue;
+        }
+        log(`${e.message} (the buttons were not posted: the album has no download links, post them by hand)`);
+        failed++;
+        break;
+      }
     }
   }
   return failed;
@@ -155,7 +166,8 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
 /**
  * Sends the build files as a reply to the release post: one album of documents (Telegram shows it as a single
  * block). If Telegram refuses the album the files go one by one. Files over the bot limit or refused are only logged
- * (no text links: the post's buttons carry every build). Resolves to the number of files that could not be attached.
+ * (no text links: the post's buttons carry every build). Resolves to { failed: files Telegram refused, skipped: files
+ * over the bot limit (not attached) }.
  */
 async function sendFiles({ call, chat, replyTo, version, dir, log }) {
   const files = [];
@@ -166,6 +178,8 @@ async function sendFiles({ call, chat, replyTo, version, dir, log }) {
   }
   const { upload, link } = routeFiles(files);
   link.forEach((f) => log(oversizeLogLine(f)));
+  // over the bot limit: not attached here, maybe forwarded by hand
+  const skipped = link.length;
   const blob = (f) => new Blob([readFileSync(f.path)], { type: type(f.name) });
   const base = () => {
     const form = new FormData();
@@ -194,7 +208,7 @@ async function sendFiles({ call, chat, replyTo, version, dir, log }) {
       await call('sendMediaGroup', form);
       log(`Telegram: attached ${upload.map((f) => f.name).join(', ')} as one block`);
       await deleteMessages(call, chat, temp, log);
-      return 0;
+      return { failed: 0, skipped };
     } catch (e) {
       log(`${e.message}, sending the files one by one`);
       await deleteMessages(call, chat, temp, log);
@@ -205,11 +219,11 @@ async function sendFiles({ call, chat, replyTo, version, dir, log }) {
       form.set('document', blob(upload[0]), upload[0].name);
       await call('sendDocument', form);
       log(`Telegram: attached ${upload[0].name}`);
-      return 0;
+      return { failed: 0, skipped };
     } catch (e) {
       log(String(e.message));
       log(oversizeLogLine(upload[0]));
-      return 1;
+      return { failed: 1, skipped };
     }
   }
 
@@ -226,7 +240,7 @@ async function sendFiles({ call, chat, replyTo, version, dir, log }) {
       log(oversizeLogLine(f));
     }
   }
-  return failed;
+  return { failed, skipped };
 }
 
 async function deleteMessages(call, chat, ids, log) {
@@ -243,15 +257,15 @@ async function deleteMessages(call, chat, ids, log) {
 
 /**
  * Sends the files of an already posted release again as one block (reply to the post) and then deletes the old
- * file messages, only when every file went through (otherwise the old messages stay). Resolves to the number of
- * files that could not be attached.
+ * file messages, only when every build file was attached again (a refused or oversize file, which may have been
+ * forwarded by hand, keeps the old messages). Resolves to the number of files that could not be attached.
  */
 export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build', token, chat, fetch: doFetch = fetch, log = console.log }) {
   const call = caller(token, doFetch);
   const version = tag.replace(/^v/, '');
-  const failed = await sendFiles({ call, chat, replyTo: messageId, version, dir, log });
-  if (deleteIds.length && failed) {
-    log(`Telegram: ${failed} file(s) not attached, kept the old file messages ${deleteIds.join(', ')}`);
+  const { failed, skipped } = await sendFiles({ call, chat, replyTo: messageId, version, dir, log });
+  if (deleteIds.length && failed + skipped) {
+    log(`Telegram: ${failed + skipped} file(s) not attached, kept the old file messages ${deleteIds.join(', ')}`);
   } else if (deleteIds.length) {
     await deleteMessages(call, chat, deleteIds, log);
     log(`Telegram: deleted the old file messages ${deleteIds.join(', ')}`);
