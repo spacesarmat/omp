@@ -9,6 +9,7 @@ import { api, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
 import { personLabel, problemKind } from '@/lib/text';
 import type { UserData } from '@/lib/types';
+import { DevicesCard, LimitCard, OverLimitAlert, PendingPayments, SubtractDaysCard } from '@/panels/DeviceAdmin';
 
 const DAY_KEY = 'omp-grant-days';
 
@@ -39,7 +40,9 @@ export function UserCard({
   const active = !!user.subscription?.active;
   const until = user.subscription?.paidUntil || 0;
   const expiring = active && until > 0 && until - Date.now() <= 24 * 60 * 60 * 1000;
-  const status = !user.subscription ? '' : !active ? 'expired' : expiring ? 'expiring' : 'active';
+  const inGrace = !!user.subscription?.inGrace;
+  const status = !user.subscription ? '' : inGrace ? 'grace' : !active ? 'expired' : expiring ? 'expiring' : 'active';
+  const freeCodes = (user.codes || []).filter((c) => !c.bound);
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-4 px-4 py-6">
@@ -73,14 +76,25 @@ export function UserCard({
           {user.subscription ? (
             <p className="flex flex-wrap items-center gap-2">
               Подписка до <Stamp ms={user.subscription.paidUntil} />
-              <span className="text-muted-foreground">устройств {user.subscription.deviceLimit}</span>
+              <span className="text-muted-foreground">
+                устройств {user.subscription.bound ?? 0} из {user.subscription.deviceLimit}
+              </span>
               <SubStatus status={status} />
+              {inGrace && user.subscription.accessUntil ? (
+                <span className="text-muted-foreground">
+                  льготный период до <Stamp ms={user.subscription.accessUntil} />
+                </span>
+              ) : null}
             </p>
           ) : (
             <p className="text-muted-foreground">Нет подписки</p>
           )}
         </CardContent>
       </Card>
+
+      <OverLimitAlert user={user} />
+      <PendingPayments rows={user.pending || []} run={run} accountId={user.account.id} />
+      {user.subscription ? <DevicesCard user={user} run={run} /> : null}
 
       <Card>
         <CardHeader>
@@ -152,14 +166,17 @@ export function UserCard({
         </CardContent>
       </Card>
 
+      <SubtractDaysCard key={'sub-' + (user.subscription?.paidUntil || 0)} user={user} run={run} />
+      <LimitCard key={'lim-' + (user.subscription?.baseLimit ?? '') + '-' + (user.subscription?.extraSlots ?? '')} user={user} run={run} />
+
       <Card>
         <CardHeader>
-          <CardTitle>Коды</CardTitle>
-          <CardDescription>Непривязанный код открывается кнопкой «Показать». После привязки к устройству код стирается.</CardDescription>
+          <CardTitle>Свободные коды</CardTitle>
+          <CardDescription>Коды ещё не привязанных слотов, открываются кнопкой «Показать». Привязанные — выше, в «Устройствах».</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {(user.codes || []).length === 0 ? <p className="text-muted-foreground">Нет кодов</p> : null}
-          {(user.codes || []).map((c) => {
+          {freeCodes.length === 0 ? <p className="text-muted-foreground">Нет свободных кодов</p> : null}
+          {freeCodes.map((c) => {
             const open = shown[c.id];
             return (
               <div key={c.id} className="flex flex-wrap items-center gap-2 text-sm">
@@ -185,23 +202,6 @@ export function UserCard({
                     <a href={open.openUrl} target="_blank" rel="noreferrer">
                       Открыть
                     </a>
-                  </Button>
-                ) : null}
-                {c.bound ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      setShown((prev) => {
-                        if (!prev[c.id]) return prev;
-                        const next = { ...prev };
-                        delete next[c.id];
-                        return next;
-                      });
-                      void run('/admin/unbind', { codeId: c.id, accountId: user.account.id });
-                    }}
-                  >
-                    Сбросить
                   </Button>
                 ) : null}
               </div>

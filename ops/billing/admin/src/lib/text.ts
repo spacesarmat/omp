@@ -43,12 +43,14 @@ const EVENT_KIND: Record<string, string> = {
   activate: 'активация',
   fail: 'отказ',
   admin: 'админ',
+  device: 'устройство',
 };
 
 const FAIL_REASON: Record<string, string> = {
   bad_code: 'неверный код',
   expired: 'подписка истекла',
   other_device: 'чужое устройство',
+  device_limit: 'лимит устройств',
 };
 
 const AUDIT_ACTION: Record<string, string> = {
@@ -71,6 +73,12 @@ const AUDIT_ACTION: Record<string, string> = {
   password_change: 'смена пароля',
   session_revoke: 'завершение сессии',
   code_reveal: 'показ кода',
+  device_revoke: 'отзыв устройства',
+  limit_set: 'смена лимита устройств',
+  days_subtract: 'убавление дней',
+  payment_confirm: 'подтверждение платежа',
+  payment_reject: 'отклонение платежа',
+  swaps_reset: 'сброс счётчика смен',
 };
 
 const PROBLEM_KIND: Record<string, string> = {
@@ -81,7 +89,21 @@ const PROBLEM_KIND: Record<string, string> = {
   webhook: 'уведомление',
   no_account: 'нет аккаунта',
   no_subscription: 'нет подписки',
+  unaccepted: 'ждёт подтверждения',
+  rejected: 'отклонён',
 };
+
+const PURCHASE_KIND: Record<string, string> = {
+  new: 'новая подписка',
+  sub: 'продление',
+  dev: 'доп. устройство',
+};
+
+/** «продление · 200 ₽» for a held payment. */
+export function purchaseKind(kind?: string, price?: number) {
+  const name = (kind && PURCHASE_KIND[kind]) || 'метка не найдена';
+  return price ? name + ' · ' + price + ' ₽' : name;
+}
 
 export function eventKind(kind: string) {
   return EVENT_KIND[kind] || kind;
@@ -124,6 +146,12 @@ export const AUDIT_FILTERS: [string, string][] = [
   ['issue', 'Выдача кода'],
   ['promo_create', 'Промо'],
   ['code_reveal', 'Показ кода'],
+  ['device_revoke', 'Отзыв устройства'],
+  ['limit_set', 'Лимит устройств'],
+  ['days_subtract', 'Убавление дней'],
+  ['payment_confirm', 'Подтверждение платежа'],
+  ['payment_reject', 'Отклонение платежа'],
+  ['swaps_reset', 'Сброс смен'],
   ['message', 'Сообщение'],
   ['settings_save', 'Настройки'],
 ];
@@ -133,4 +161,5 @@ export const FAIL_FILTERS: [string, string][] = [
   ['bad_code', 'Неверный код'],
   ['expired', 'Подписка истекла'],
   ['other_device', 'Чужое устройство'],
+  ['device_limit', 'Лимит устройств'],
 ];
