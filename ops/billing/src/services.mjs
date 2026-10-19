@@ -1,4 +1,5 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
+import { graceDays } from './logic.mjs';
 
 export const SECRET_MASK = '••••••••';
 
@@ -60,6 +61,7 @@ export function publicAdminSettings(settings) {
     priceRub: s.priceRub || 0,
     periodDays: s.periodDays || 30,
     extraDeviceRub: s.extraDeviceRub || 0,
+    graceDays: graceDays(s),
   };
   return out;
 }
@@ -111,6 +113,7 @@ export function mergeSettings(prev, body) {
     priceRub: num(b.priceRub !== undefined ? b.priceRub : cur.priceRub, 0),
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
     extraDeviceRub: num(b.extraDeviceRub !== undefined ? b.extraDeviceRub : cur.extraDeviceRub, 0),
+    graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),
   };
   return next;
 }

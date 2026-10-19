@@ -23,6 +23,14 @@ import {
   usersCsv,
   logAudit,
   logWebhook,
+  codeWithinLimit,
+  deviceAccess,
+  dueReminders,
+  markReminder,
+  mskDate,
+  mskDateTime,
+  releaseReminder,
+  subAccess,
   openAppUrl,
   paymentsCsv,
   revokePromo,
@@ -42,7 +50,15 @@ import {
   telegramForDevice,
   unlinkDeviceTelegram,
 } from './logic.mjs';
-import { adminNotifyEnabled, botDeepLink, botReply, paymentAdminNotices, serviceDownNotices, telegramOf } from './bot.mjs';
+import {
+  adminNotifyEnabled,
+  botDeepLink,
+  botReply,
+  paymentAdminNotices,
+  reminderMessage,
+  serviceDownNotices,
+  telegramOf,
+} from './bot.mjs';
 import {
   botPollDisabledLine,
   botPollEnabled,
@@ -356,6 +372,16 @@ function paymentWho(state, result) {
   return acc.telegramId || acc.email || acc.id || '';
 }
 
+/** Why a session is refused: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
+function denyReason(state, token, deviceId) {
+  const now = Date.now();
+  const row = sessionForDevice(state, { token, deviceId });
+  if (!row) return 'expired';
+  const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
+  if (sub && subAccess(state, sub, now).access && !codeWithinLimit(state, sub, row, now)) return 'device_limit';
+  return 'expired';
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -377,10 +403,22 @@ function tellPayment(state, result, fetchImpl) {
   }
   if (result.kind === 'device' && result.code) {
     const link = openAppUrl(origin, result.code);
-    text = 'Код для нового устройства: `' + result.code + '`\n' + link;
+    text =
+      'Доп. устройство подключено до ' +
+      mskDate(result.extraUntil) +
+      ', дальше продлевается вместе с подпиской.\nКод для нового устройства: `' +
+      result.code +
+      '`\n' +
+      link;
     if (link.indexOf('http') === 0) inline = { inline_keyboard: [[{ text: 'Открыть в OMP', url: link }]] };
   }
-  if (result.kind === 'renew') text = 'Подписка продлена до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
+  if (result.kind === 'device' && !result.code) {
+    text = 'Доп. устройство оплачено до ' + mskDate(result.extraUntil) + '. Нажмите «Код» в боте, чтобы получить код.';
+  }
+  if (result.kind === 'renew') {
+    text = 'Подписка продлена до ' + mskDateTime(result.paidUntil) + '.';
+    if (result.extras > 0) text += '\nДоп. устройств: ' + result.extras + ', тоже до ' + mskDate(result.paidUntil) + '.';
+  }
   if (!text) return Promise.resolve();
   return telegramSend(state.settings.botToken, chat, text, fetchImpl, { parseMode: 'Markdown', inline });
 }
@@ -669,7 +707,7 @@ export function createApp(file, fetchImpl, opts) {
           } else if (result.error || !result.code) flashError = 'Не удалось выдать код';
           else {
             flashed = result.code;
-            const until = new Date(result.paidUntil).toISOString().slice(0, 10);
+            const until = mskDate(result.paidUntil);
             flashText = result.created
               ? 'Новая подписка на ' + result.days + ' дн. до ' + until
               : result.reused
@@ -710,7 +748,7 @@ export function createApp(file, fetchImpl, opts) {
           if (result.error) flashError = 'Не удалось выдать дни';
           else {
             flashed = result.code || '';
-            flashText = 'Выдано +' + result.days + ' дн. до ' + new Date(result.paidUntil).toISOString().slice(0, 10);
+            flashText = 'Выдано +' + result.days + ' дн. до ' + mskDate(result.paidUntil);
             if (result.limitReached) flashText += '. Лимит устройств достигнут, новый код не выдан';
             const fresh = readState(file);
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
@@ -718,7 +756,7 @@ export function createApp(file, fetchImpl, opts) {
               await telegramSend(
                 fresh.settings.botToken,
                 acc.telegramId,
-                'Админ выдал +' + result.days + ' дн. Подписка до ' + new Date(result.paidUntil).toISOString().slice(0, 10) + '.',
+                'Админ выдал +' + result.days + ' дн. Подписка до ' + mskDate(result.paidUntil) + '.',
                 net,
               );
             }
@@ -939,27 +977,35 @@ export function createApp(file, fetchImpl, opts) {
         const now = Date.now();
         let account = null;
         let paidUntil = 0;
-        let active = false;
         if (token) {
-          const sess = sessionOk(state, { token, deviceId: device, now });
-          if (sess) {
-            account = state.accounts.find((a) => a.id === sess.subscription.accountId) || null;
-            paidUntil = sess.subscription.paidUntil;
-            active = paidUntil > now;
+          // The token only has to belong to this device: an expired or over-limit phone still learns its status.
+          const row = sessionForDevice(state, { token, deviceId: device });
+          const own = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
+          if (own) {
+            account = state.accounts.find((a) => a.id === own.accountId) || null;
+            paidUntil = own.paidUntil;
           }
         }
         const viaToken = !!account;
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
         const view = subscriptionView(state, account.id, now);
-        const isActive = view ? view.active : active;
+        // A bound phone over the current device limit (an extra slot was not renewed) has no access.
+        const mine = deviceAccess(state, device, now);
+        const overLimit = !!(mine && mine.overLimit && view && mine.subscription.id === view.id);
+        const isActive = (view ? view.active : false) && !overLimit;
         const telegramId = telegramForDevice(account, device);
         return json(res, 200, {
           telegramId,
           linked: !!telegramId,
           paidUntil: view ? view.paidUntil : paidUntil,
           active: isActive,
+          inGrace: !!(view && view.inGrace) && !overLimit,
+          accessUntil: view ? view.accessUntil : 0,
+          overLimit,
           deviceLimit: view ? view.deviceLimit : 0,
+          extraSlots: view ? view.extraSlots : 0,
+          extraUntil: view ? view.extraUntil : 0,
           // Other devices' ids only go to a caller with a valid token; a bare deviceId gets the count via deviceLimit only.
           devices:
             view && viaToken ? view.devices.map((d) => ({ bound: d.bound, deviceId: d.bound ? (d.deviceId || '').slice(0, 8) : '' })) : [],
@@ -974,7 +1020,7 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId;
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
+        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: denyReason(state, token, deviceId) });
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
         const rateKey = String(deviceId || token || '').slice(0, 64);
@@ -1027,7 +1073,7 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: 'expired' });
+        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: denyReason(state, token, deviceId) });
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);
@@ -1270,6 +1316,85 @@ export async function pollBot(file, fetchImpl, opts) {
   }
 }
 
+/**
+ * Claim the reminders due at `now` (marked before sending, so a second tick or a restart does not
+ * repeat them), send them, and free a claim that Telegram did not take (retried up to REMINDER_TRIES).
+ * @returns {Promise<{ sent: number, failed: number }>}
+ */
+export async function runReminders(file, fetchImpl, now) {
+  const net = fetchImpl || fetch;
+  const at = now || Date.now();
+  const claimed = await updateState(file, (state) => {
+    if (!state.settings.botToken) return { state, result: { rows: [], messages: [], token: '' } };
+    const rows = dueReminders(state, at);
+    let next = state;
+    const messages = [];
+    for (let i = 0; i < rows.length; i++) {
+      messages.push(reminderMessage(state, rows[i], at));
+      next = markReminder(next, { ...rows[i], now: at });
+    }
+    return { state: next, result: { rows, messages, token: state.settings.botToken } };
+  });
+  let sent = 0;
+  let failed = 0;
+  for (let i = 0; i < claimed.rows.length; i++) {
+    const row = claimed.rows[i];
+    const msg = claimed.messages[i];
+    let ok = false;
+    try {
+      const out = await telegramSend(claimed.token, msg.chatId, msg.text, net, { inline: msg.inline, keyboard: msg.keyboard });
+      ok = out.ok;
+    } catch (e) {
+      ok = false;
+    }
+    if (ok) {
+      sent += 1;
+      process.stderr.write('reminder sent kind=' + row.kind + '\n');
+    } else {
+      failed += 1;
+      process.stderr.write('reminder failed kind=' + row.kind + '\n');
+      await updateState(file, (state) => ({ state: releaseReminder(state, row) }));
+    }
+  }
+  return { sent, failed };
+}
+
+export const REMINDER_EVERY_MS = 10 * 60 * 1000;
+
+/**
+ * In-process reminder timer. Only the instance that polls the bot (BILLING_BOT_POLL on) sends,
+ * so a standby copy of the server never duplicates a reminder. Returns a stop function.
+ */
+export function startReminders(file, fetchImpl, opts) {
+  const env = (opts && opts.env) || process.env;
+  if (!botPollEnabled(env)) {
+    process.stderr.write('subscription reminders off: BILLING_BOT_POLL=0 on this instance\n');
+    return () => {};
+  }
+  const every = (opts && opts.everyMs) || REMINDER_EVERY_MS;
+  const clock = (opts && opts.now) || (() => Date.now());
+  let busy = false;
+  const tick = () => {
+    if (busy) return;
+    busy = true;
+    runReminders(file, fetchImpl, clock())
+      .catch(() => {
+        /* a failed tick must not stop the timer */
+      })
+      .then(() => {
+        busy = false;
+      });
+  };
+  const first = setTimeout(tick, (opts && opts.firstMs) || 30 * 1000);
+  const timer = setInterval(tick, every);
+  if (first.unref) first.unref();
+  if (timer.unref) timer.unref();
+  return () => {
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
+
 export function dataFile() {
   const fromEnv = process.env.BILLING_DATA;
   if (fromEnv) return resolveDbPath(fromEnv);
@@ -1318,4 +1443,5 @@ if (started) {
     process.stdout.write('billing listening on ' + port + '\n');
   });
   pollBot(file);
+  startReminders(file);
 }

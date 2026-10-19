@@ -175,10 +175,13 @@ export function OmpJackettCard() {
         {session && session.token ? (
           <>
             <div class="m-src-row" data-paid-until={day((account && account.paidUntil) || session.paidUntil)}>
-              {t('sources.billing.paidUntil', {
-                date: day((account && account.paidUntil) || session.paidUntil) || '—',
-              })}
+              {account && account.inGrace
+                ? t('sources.billing.grace', { date: day(account.paidUntil), until: day(account.accessUntil || 0) || '—' })
+                : t('sources.billing.paidUntil', {
+                    date: day((account && account.paidUntil) || session.paidUntil) || '—',
+                  })}
             </div>
+            {account && account.overLimit ? <div class="m-src-row m-note">{t('sources.billing.overLimit')}</div> : null}
             <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
               <button
                 type="button"

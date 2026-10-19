@@ -216,6 +216,7 @@ export function SubsPanel({
                 ['active', 'Активные'],
                 ['week', 'Истекают за 7 дней'],
                 ['unbound', 'Без устройства'],
+                ['grace', 'Льготный период'],
                 ['expired', 'Истекшие'],
               ] as const
             ).map(([id, label]) => (
@@ -524,7 +525,8 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     fields: [
       ['priceRub', 'Цена, ₽'],
       ['periodDays', 'Период, дней'],
-      ['extraDeviceRub', 'Доп. устройство, ₽'],
+      ['extraDeviceRub', 'Доп. устройство, ₽ в месяц'],
+      ['graceDays', 'Льготный период, дней'],
     ],
   },
 ];

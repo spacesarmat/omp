@@ -10,6 +10,7 @@ import {
   createPromo,
   createSubscription,
   DEVICE_BASE,
+  deviceLimitNow,
   financeReport,
   grantDays,
   issueActivation,
@@ -149,7 +150,11 @@ describe('device limit', () => {
     const applied = applyPayment(quote.state, { operationId: 'op-dev', label: quote.result.label, amount: '50.00', currency: '643', now: NOW });
     expect(applied.result.kind).toBe('device');
     expect(applied.result.code).toBeTruthy();
-    expect(applied.state.subscriptions[0].deviceLimit).toBe(3);
+    // PR-2: the extra device is a monthly slot until paidUntil; the included limit stays 2.
+    expect(applied.state.subscriptions[0].deviceLimit).toBe(2);
+    expect(applied.state.subscriptions[0].extraSlots).toBe(1);
+    expect(applied.state.subscriptions[0].extraUntil).toBe(applied.state.subscriptions[0].paidUntil);
+    expect(deviceLimitNow(applied.state, applied.state.subscriptions[0], NOW)).toBe(3);
     const c = activate(applied.state, { code: applied.result.code, deviceId: DEV_C, now: NOW });
     expect(c.result.token).toBeTruthy();
   });
