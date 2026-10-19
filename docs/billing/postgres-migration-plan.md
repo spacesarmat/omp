@@ -10,11 +10,13 @@
 | Окно переключения | будняя ночь, 03:00–04:00 МСК, пользователей не предупреждаем |
 | Пароль базы | отдельная строка `BILLING_PG_PASSWORD` в `/opt/omp-vps/.env`, генерируется на сервере, нигде не печатается |
 | Данные PG | `/opt/omp-vps/data/postgres` (bind) |
-| Бэкапы | ежечасно с хранением 48 ч + ежедневно 30 дней, копия на NAS |
-| Секреты в `settings` | выносятся в `.env` отдельной задачей позже (не в этом переезде) |
+| Бэкапы | раз в сутки; частота и срок хранения настраиваются в админке; копии на NAS пока нет |
+| Секреты в `settings` | выносятся в `.env` отдельным PR позже; админка показывает их только для чтения: «задан ✅, ****xxxx» |
 | ЮMoney в окне | отвечаем 503, ЮMoney повторяет уведомление |
 | Хранение журналов | аудит 1 год, попытки активации 90 дней |
-| Путь отката на SQLite | держим 4 недели после переключения |
+| Откат на SQLite | долгого периода нет: переходим сразу. Остаётся только бэкап перед переключением и возможность восстановиться из него; SQLite-путь убираем вскоре после переключения |
+| Уникальность платежей | реальных платежей ещё нет → уникальный индекс по `operation_id` создаётся сразу |
+| История промокодов | не переносится, начинаем с чистого листа; активации Andy выдаёт вручную в админке. Определения промокодов переносятся (это просто) |
 | Версия | PostgreSQL 17 |
 
 ---
@@ -50,7 +52,7 @@
 |---|---|---|
 | `schema_migrations` | `version text`, `applied_at` | PK `version` |
 | `kv` | `key text`, `value text` | PK `key`. `token_secret`, `store_version` (счётчик записей), `cutover_at`, флаги `meta.*` |
-| `settings` | `key text`, `value jsonb`, `updated_at` | PK `key`. JSONB оправдан: ~35 разнородных настроек (числа, строки, bool), меняются из админки, схема гибкая. Валидация — в коде (`baseDevices()`, `graceDays()` и т.п.). Внимание: тут же лежат секреты (`botToken`, `yoomoneySecret`, `smtpPass`, `jackettApiKey`, `indexerPass`, `adminHash/Salt`) — см. вопросы |
+| `settings` | `key text`, `value jsonb`, `updated_at` | PK `key`. JSONB оправдан: ~35 разнородных настроек (числа, строки, bool), меняются из админки, схема гибкая. Валидация — в коде (`baseDevices()`, `graceDays()` и т.п.). Внимание: тут же лежат секреты (`botToken`, `yoomoneySecret`, `smtpPass`, `jackettApiKey`, `indexerPass`, `adminHash/Salt`). Перенос в `.env` — отдельный PR после переезда; админка тогда показывает их только для чтения: «задан ✅, ****xxxx» (последние 4 символа) |
 | `migration_runs` | `id`, `source_sha256`, `started_at`, `finished_at`, `report jsonb` | Журнал прогонов переноса (отчёт сверки — JSONB оправдан, это документ) |
 | `legacy_state` | `key text`, `value jsonb` | Неизвестные top-level ключи снапшота и `outbox` (сейчас не используется кодом). Если при dry-run пусто — таблица остаётся пустой |
 
@@ -76,9 +78,9 @@
 | Таблица | Колонки | Ключи / индексы |
 |---|---|---|
 | `purchases` | `id`, `kind CHECK in ('new','sub','dev')`, `account_id`, `subscription_id`, `price numeric`, `extras`, `credit`, `add_extra`, `paid_until`, `currency`, `at` | PK `id`; индексы `(account_id, at)`, `(subscription_id, at)` |
-| `payments` | `id` (новый стабильный id), `operation_id`, `label`, `purchase_id NULL` FK (из `buy:<id>`), `account_id NULL`, `amount numeric`, `amount_raw text`, `currency`, `at`, `error NULL`, `pending bool`, `credited int NULL`, `extra` | PK `id`; индексы `(at)`, `(account_id, at)`, `(operation_id)`; **частичный уникальный** `(operation_id) WHERE NOT pending AND coalesce(error,'') <> 'rejected'` — защита от двойного зачисления на уровне БД (повторяет `seenPayment`). Включать только если dry-run на копии прода не нашёл нарушений |
+| `payments` | `id` (новый стабильный id), `operation_id`, `label`, `purchase_id NULL` FK (из `buy:<id>`), `account_id NULL`, `amount numeric`, `amount_raw text`, `currency`, `at`, `error NULL`, `pending bool`, `credited int NULL`, `extra` | PK `id`; индексы `(at)`, `(account_id, at)`, `(operation_id)`; **частичный уникальный** `(operation_id) WHERE NOT pending AND coalesce(error,'') <> 'rejected'` — защита от двойного зачисления на уровне БД (повторяет `seenPayment`). Создаётся сразу (реальных платежей ещё нет); если на копии прода найдутся тестовые дубли — перенос падает с отчётом, дубли разбираются до окна |
 | `promos` | `id`, `code`, `days`, `max_uses`, `bonus_slots`, `bonus_days`, `created_at`, `revoked` | PK `id`; `UNIQUE (code) WHERE NOT revoked` |
-| `promo_uses` | `promo_id` FK, `account_id` FK, `subscription_id`, `code` (сейчас там лежит выданный код активации), `at` | PK `(promo_id, account_id)` — «один аккаунт не активирует промо дважды» становится ограничением; `max_uses` проверяется под блокировкой строки промо |
+| `promo_uses` | `promo_id` FK, `account_id` FK, `subscription_id`, `code` (сейчас там лежит выданный код активации), `at` | PK `(promo_id, account_id)` — «один аккаунт не активирует промо дважды» становится ограничением; `max_uses` проверяется под блокировкой строки промо. **При переносе пустая** (решение Andy), заполняется только новыми активациями |
 
 **Журналы и поддержка** (append-only, без потолка в БД; потолок — только при загрузке в стейт, чистка — ретенцией)
 | Таблица | Колонки | Индексы |
@@ -175,7 +177,7 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml run --rm --no-dep
 2. Прочитать снапшот **через тот же `normalizeState()`**, что и прод (применятся все `migrate*`, включая `migrateLimitModel` из #147), + таблицы `devices`, `refresh_tokens`, `kv`.
 3. Применить миграции схемы PG (`schema_migrations`).
 4. **Защита от затирания**: если `kv.cutover_at` уже стоит (PG стал основным) — отказ без `--force`.
-5. Одна транзакция: `TRUNCATE` всех бизнес-таблиц → вставка в порядке FK (accounts → subscriptions → bonus/swaps/reminders → codes → sessions → devices → refresh_tokens → purchases → payments → promos → promo_uses → журналы → токены → settings → kv). Пакетная вставка через `INSERT … SELECT * FROM unnest(...)` / `COPY`.
+5. Одна транзакция: `TRUNCATE` всех бизнес-таблиц → вставка в порядке FK (accounts → subscriptions → bonus/swaps/reminders → codes → sessions → devices → refresh_tokens → purchases → payments → promos → журналы → токены → settings → kv). `promos[].uses` **не переносятся** (решение Andy): `promo_uses` остаётся пустой. Чтобы погашенные одноразовые промокоды не ожили, промо, у которого `uses.length >= maxUses`, переносится как `revoked = true`; остальные — как есть. Пакетная вставка через `INSERT … SELECT * FROM unnest(...)` / `COPY`.
 6. Сверка (3.2) **внутри той же транзакции**; при любом расхождении — `ROLLBACK` и отчёт. При успехе — запись в `migration_runs` и `COMMIT`.
 
 Идемпотентность: повторный прогон с тем же источником даёт то же содержимое (TRUNCATE + reload в одной транзакции); `--dry-run` всегда завершает `ROLLBACK`, оставляя только отчёт.
@@ -187,12 +189,13 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml run --rm --no-dep
 - **Поведенческая сверка на фиксированном `now`** (момент запуска) для каждой подписки, сравнение старого и нового стейта:
   `deviceLimitNow`, `limitBreakdown(...).text` и `.total`, `subAccess` (paid/grace/accessUntil), `activeExtras`, `activeBonus`, `boundDevices`, `codeWithinLimit` для каждого привязанного кода, `renewalPrice` (с доп. устройствами и без), `creditOf`, `swapStatus`.
 - **Глобальные**: `financeReport(now)` (суммы день/неделя/месяц), `dueReminders(now)`, `adminSummary(now)` — равны.
-- **Платежи**: `sha256` отсортированного списка `(operation_id, label, amount_raw, at, error, pending)`; список нарушений будущего уникального индекса по `operation_id` (если есть — индекс не создаётся, вопрос Andy).
+- **Платежи**: `sha256` отсортированного списка `(operation_id, label, amount_raw, at, error, pending)`; нарушение уникального индекса по `operation_id` → перенос падает с отчётом.
+- **Промокоды**: сравниваются определения (код, дни, лимит, бонусы, отозван) с учётом правила «исчерпанный → отозван»; `uses` из сверки исключены, в чексуммах подписок промо-активации не участвуют (бонусные слоты от промо — участвуют, они живут в подписке).
 - **Настройки**: сравнение по ключам; в отчёт попадают только имена ключей и `совпало/нет`, **значения секретов не печатаются никогда**.
 - Отчёт: JSON + короткий человекочитаемый вывод (числа и id подписок с расхождениями, без персональных данных и секретов).
 
-### 3.3 Обратный экспорт (для отката)
-`scripts/pg-to-sqlite.mjs`: PG → новый `billing.db` (снапшот JSON + `devices`/`refresh_tokens`/`kv`) с той же сверкой в обратную сторону. Тест в CI: SQLite → PG → SQLite даёт идентичные чексуммы.
+### 3.3 Обратного экспорта нет
+По решению Andy долгого периода отката нет, поэтому `pg-to-sqlite.mjs` не пишем. Страховка — бэкап `billing.db` перед переключением и проверенная процедура восстановления из него (раздел 6.3).
 
 ---
 
@@ -245,43 +248,48 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml run --rm --no-dep
 
 ## 5. Бэкапы
 
-Скрипт `ops/vps/pg-backup.sh` (в репо) → на NUC `/usr/local/bin/omp-pg-backup`, cron `/etc/cron.d/omp-pg-backup`:
+По умолчанию **раз в сутки**; частота и срок хранения **настраиваются в админке** (решение Andy). Копии на NAS пока нет.
+
+- Новые настройки (таблица `settings`, раздел админки «Хранилище»): `backupEveryHours` (по умолчанию 24, 1–168) и `backupKeepDays` (по умолчанию 30, 1–365). Админка показывает время, размер и результат последнего дампа.
+- Скрипт `ops/vps/pg-backup.sh` (в репо) → на NUC `/usr/local/bin/omp-pg-backup`, cron **каждый час** только проверяет, пора ли:
 
 ```sh
 #!/bin/sh
 set -eu
 umask 077
 DIR=/opt/omp-backups/pg
+PSQL="docker exec omp-postgres psql -U omp_billing -d omp_billing -Atq -c"
+EVERY=$($PSQL "select coalesce((select value::text::int from settings where key='backupEveryHours'),24)")
+KEEP=$($PSQL "select coalesce((select value::text::int from settings where key='backupKeepDays'),30)")
+mkdir -p "$DIR"
+LAST=$(find "$DIR" -maxdepth 1 -name 'billing-*.dump' -mmin -$((EVERY * 60 - 5)) | head -1)
+[ -n "$LAST" ] && [ "${1:-}" != "--now" ] && exit 0          # ещё рано
 TS=$(date +%Y%m%d-%H%M)
-mkdir -p "$DIR/hourly" "$DIR/daily"
 TMP="$DIR/.billing-$TS.dump.tmp"
 docker exec omp-postgres pg_dump -U omp_billing -d omp_billing -Fc -Z 6 > "$TMP"
 docker exec -i omp-postgres pg_restore --list < "$TMP" > /dev/null   # дамп читается
-mv "$TMP" "$DIR/hourly/billing-$TS.dump"
-[ "$(date +%H)" = "03" ] && cp "$DIR/hourly/billing-$TS.dump" "$DIR/daily/"
-find "$DIR/hourly" -name '*.dump' -mtime +2  -delete     # ~48 часовых
-find "$DIR/daily"  -name '*.dump' -mtime +30 -delete     # 30 суточных
-# копия на NAS (хост и путь — из конфигурации, не IP)
-if [ -n "${NAS_BACKUP_TARGET:-}" ]; then rsync -a --delete "$DIR/" "$NAS_BACKUP_TARGET/"; fi
+mv "$TMP" "$DIR/billing-$TS.dump"
+find "$DIR" -maxdepth 1 -name 'billing-*.dump' -mtime +"$KEEP" -delete
+$PSQL "insert into kv(key,value) values('backup_last', '$TS $(stat -c %s "$DIR/billing-$TS.dump")') on conflict(key) do update set value=excluded.value"
 ```
 
 cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.log 2>&1`
 
-- Дампы содержат секреты из `settings` и персональные данные → каталог `root:root 700`, файлы `600`.
-- Перед каждой выкаткой биллинга — внеочередной дамп (`/opt/omp-backups/pg/predeploy-<ts>.dump`) рядом с привычным `billing-<ts>`.
-- Мониторинг: `/health` или jackett-monitor проверяет, что свежайший дамп младше 2 часов, иначе уведомление админу в Telegram.
-- Копия на NAS (решение Andy): после успешного дампа `rsync` каталога на NAS по имени хоста (не по IP), на NAS хранятся те же 48 ч + 30 дней. Детали доступа — открытый вопрос ниже.
-- Позже (не сейчас): WAL-архив для восстановления на момент времени.
+- Значения из настроек читаются как числа и проверяются в коде админки (диапазоны), поэтому в shell не попадает произвольный текст.
+- Дампы содержат секреты из `settings` (пока они не вынесены в `.env`) и персональные данные → каталог `root:root 700`, файлы `600`.
+- Перед каждой выкаткой биллинга и перед окном переключения — внеочередной дамп `omp-pg-backup --now` рядом с привычным `billing-<ts>`.
+- Мониторинг: `/health` сообщает возраст последнего дампа из `kv.backup_last`; старше `backupEveryHours + 2 ч` → уведомление админу в Telegram.
+- Позже (не сейчас): копия вне NUC, WAL-архив для восстановления на момент времени.
 
-**Восстановление** (вписать в `ops/vps/README.md`):
+**Восстановление из дампа PG** (вписать в `ops/vps/README.md`):
 1. `docker compose … stop billing`
-2. Дамп на всякий случай: `omp-pg-backup`
+2. Дамп текущего состояния на всякий случай: `omp-pg-backup --now`
 3. `docker exec omp-postgres dropdb -U omp_billing --if-exists omp_billing_restore && docker exec omp-postgres createdb -U omp_billing omp_billing_restore`
-4. `docker exec -i omp-postgres pg_restore -U omp_billing -d omp_billing_restore --no-owner < /opt/omp-backups/pg/…/billing-XXXX.dump`
+4. `docker exec -i omp-postgres pg_restore -U omp_billing -d omp_billing_restore --no-owner < /opt/omp-backups/pg/billing-XXXX.dump`
 5. Проверка: `node scripts/verify-pg.mjs --db omp_billing_restore` (количества, чексуммы, лимиты).
 6. Переключение: `ALTER DATABASE omp_billing RENAME TO omp_billing_old; ALTER DATABASE omp_billing_restore RENAME TO omp_billing;`
 7. `docker compose … up -d billing`, проверка `/health`, админка, бот. `omp_billing_old` удалить через неделю.
-- Раз в месяц — пробное восстановление в `omp_billing_restore` (можно тем же cron, с отчётом в лог).
+- Раз в месяц — пробное восстановление в `omp_billing_restore` с отчётом в лог.
 
 ---
 
@@ -310,17 +318,14 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
    - S21: поиск работает, refresh токена проходит.
    - Админка: платежи, промо, аудит на месте (только просмотр, настройки не трогать).
    - Логи `omp-billing` и `omp-postgres` без ошибок 30 мин; через час — первый плановый дамп появился.
-7. Старый `billing.db` остаётся на месте и **не используется** (заморожен) до конца периода отката.
+7. Бэкап `billing.db` из шага 1 хранится в `/opt/omp-backups` (не удаляется); сам `billing.db` больше не используется.
 
-### 6.3 Откат на SQLite
+### 6.3 Откат
+Долгого периода отката нет (решение Andy): переходим на Postgres сразу.
 - **До шага 5**: просто снять read-only — данные не менялись.
-- **После переключения** (в течение периода отката — 4 недели, решение Andy):
-  1. read-only + poll off;
-  2. `pg-to-sqlite.mjs` → новый `billing.db` со сверкой;
-  3. `BILLING_STORE=sqlite` → `up -d billing`; при необходимости — образ по тегу `rollback-<ts>` (#147 совместим с откатом: `deviceLimit` зеркалится).
-  Записи, сделанные в PG, сохраняются.
-- **Аварийно** (PG недоступен и экспорт невозможен): вернуть замороженный `billing.db` + сверить платежи за период с историей ЮMoney вручную. Только как крайняя мера.
-- Код SQLite-хранилища удаляется отдельным PR после 4 недель.
+- **Сразу после переключения, если проверки шага 6 не прошли**: `BILLING_STORE=sqlite` → `up -d billing` на том же образе (SQLite-путь ещё в коде), `billing.db` не менялся. Записи за эти минуты (если были) сверяются вручную; ЮMoney — по истории операций.
+- **Позже**: восстановление только из дампов PG (раздел 5). Восстановление из предпереключательного бэкапа `billing.db` возможно (тот же образ или тег `rollback-<ts>`), но с потерей всего, что записано в PG после окна, — крайняя мера.
+- SQLite-путь удаляется отдельным PR **вскоре после переключения** (предложение: через 3–7 дней спокойной работы).
 
 ---
 
@@ -341,7 +346,8 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
 - Существующие ~270 тестов переводятся на фабрику стора (`await createTestStore()`) вместо путей к `billing.db`.
 - Новые тесты:
   - **контракт репозитория**: одинаковые сценарии на обоих сторах (чтение/запись, diff, журналы не удаляются при обрезке, кэш и версия);
-  - **перенос**: фикстуры `billing.db` (синтетические, без реальных данных), включая старые формы (без `meta`, `deviceBase: 1`, без `limitModel`, полный IP) → migrate → сверка 0; повторный прогон даёт то же; SQLite → PG → SQLite идентично;
+  - **перенос**: фикстуры `billing.db` (синтетические, без реальных данных), включая старые формы (без `meta`, `deviceBase: 1`, без `limitModel`, полный IP) → migrate → сверка 0; повторный прогон даёт то же; история промо не переносится, исчерпанные промо приходят отозванными; дубль `operation_id` → перенос падает;
+  - **бэкап и восстановление**: `pg_dump` → `pg_restore` в чистую базу → `verify-pg` без расхождений;
   - **конкурентность** (только PG): две активации на последний слот — ровно одна успешна; параллельные погашения промо с `maxUses=1`; дубль вебхука с тем же `operation_id` — одно зачисление; параллельный refresh одного токена;
   - **лимит устройств**: для набора подписок (база, override, бонусы навсегда/до даты/истёкшие, купленные в льготном периоде) `deviceLimitNow` и `limitBreakdown` одинаковы на обоих сторах;
   - **read-only режим**: записи → 503, поиск работает.
@@ -356,11 +362,13 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
 | 1 | **Стабильные id строк** (на SQLite) | `id` у всех строк при создании, бэкфилл `migrateRowIds` / `meta.rowIds`, тесты. Поведение не меняется | 0,5 дня (в работе) |
 | 1b | **Store interface + async** (на SQLite) | `createStore`, `SqliteStore`, все `readState` → `await store.read()`, `registry` async. Поведение не меняется | 2 дня |
 | 2 | **PgStore + схема** | SQL-миграции, `pg` Pool, маппер стейт↔строки, diff-запись, advisory lock, кэш по `store_version`, реестр на PG; CI-матрица sqlite/postgres; по умолчанию `sqlite` | 4–5 дней |
-| 3 | **Перенос и откат** | `migrate-sqlite-to-pg.mjs`, `verify-pg.mjs`, `pg-to-sqlite.mjs`, `BILLING_READONLY`, движок в `/health` и админке; фикстуры | 2–3 дня |
-| 4 | **ops: Postgres и бэкапы** | сервис `postgres` в `ops/vps/docker-compose*.yml`, `NO_PROXY`, `pg-backup.sh` + cron, инструкция восстановления, README | 1 день |
+| 3 | **Перенос** | `migrate-sqlite-to-pg.mjs`, `verify-pg.mjs`, `BILLING_READONLY`, движок в `/health` и админке; настройки `backupEveryHours`/`backupKeepDays` и последний дамп в админке; фикстуры | 2 дня |
+| 4 | **ops: Postgres и бэкапы** | сервис `postgres` в `ops/vps/docker-compose*.yml`, `NO_PROXY`, `pg-backup.sh` (частота и хранение из настроек) + cron, инструкция восстановления, README | 1 день |
 | — | Подготовка прода | одобрение `.env`, запуск пустого PG, проверка бэкапа, репетиция на копии | 0,5 дня |
 | — | **Окно переключения** | раздел 6 | ~1 час |
-| 5 | Уборка (через 2–4 недели) | удаление SQLite-пути, точечные SQL-запросы для горячих путей, row-level блокировки, ретенция журналов, хэширование `links`/`adminLogins` | 1–2 недели, по частям |
+| 5 | Удаление SQLite-пути (через 3–7 дней после окна) | `store.mjs`/`node:sqlite`, CI-матрица только postgres | 1 день |
+| 6 | Секреты в `.env` | `botToken`, `yoomoneySecret`, SMTP, ключи индексаторов → `.env`; админка: «задан ✅, ****xxxx» только для чтения; правка `.env` — с одобрения Andy | 1–2 дня |
+| 7 | Уборка | точечные SQL-запросы для горячих путей, row-level блокировки, ретенция журналов (аудит 1 год, попытки 90 дней), хэширование `links`/`adminLogins` | 1–2 недели, по частям |
 
 Итого до переключения: **~2–2,5 недели** работы (PR 1–4) + репетиция + окно.
 
@@ -368,13 +376,13 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
 | Риск | Мера |
 |---|---|
 | Регрессии при переводе ~74 мест на async (гонки между `await`) | Решения о записи только внутри `update(fn)`; PR 1 отдельно на SQLite, тесты без изменений поведения |
-| Ошибки маппинга ms↔timestamptz, `0/''`↔`NULL`, `until:null` (бонус навсегда) | Поведенческая сверка лимитов/доступа/цен на фиксированном `now`, round-trip тест |
+| Ошибки маппинга ms↔timestamptz, `0/''`↔`NULL`, `until:null` (бонус навсегда) | Поведенческая сверка лимитов/доступа/цен на фиксированном `now`, тест «стейт → PG → стейт» |
 | Потеря неизвестных полей | Колонки `extra jsonb`, `legacy_state`, чексуммы по каноническому JSON |
-| Дубли `operation_id` в старых платежах ломают уникальный индекс | Проверка на репетиции; индекс включается только при чистых данных |
-| Потеря уведомления ЮMoney в окне | 503 + повтор ЮMoney или очередь в файл; после окна сверка с историей ЮMoney |
+| Тестовые дубли `operation_id` ломают уникальный индекс | Реальных платежей нет; перенос падает с отчётом на репетиции, дубли разбираются до окна |
+| Потеря уведомления ЮMoney в окне | 503 + повтор ЮMoney; после окна сверка с историей ЮMoney |
 | Секреты в дампах и отчётах | Права 600/700, отчёты без значений, пароль генерируется на сервере без вывода |
-| Дополнительный сервис на одном NUC (отказ диска/контейнера) | Ежечасные дампы, мониторинг свежести, копия вне NUC, пробное восстановление |
-| Откат после записей в PG | Обратный экспорт со сверкой; SQLite-путь живёт 2–4 недели |
+| Дополнительный сервис на одном NUC (отказ диска/контейнера) | Ежесуточные (настраиваемые) дампы, мониторинг свежести, пробное восстановление; копии вне NUC пока нет — диск NUC единственная точка отказа |
+| Откат после записей в PG | Долгого отката нет по решению Andy: только восстановление из дампов PG; быстрый возврат на SQLite — лишь сразу после окна |
 | Два процесса пишут в одну базу (например, случайно поднятый биллинг на VPS) | Advisory lock + проверка версии кэша; VPS-биллинг не имеет доступа к PG (порт не открыт) |
 | Будущий апгрейд 17 → 18 | Через `pg_dump`/`pg_restore` по той же инструкции, отдельное окно |
 | Права на `data/postgres` (uid 70) | Создание каталога в PR 4/инструкции, проверка заранее |
@@ -385,7 +393,6 @@ cron: `17 * * * * root /usr/local/bin/omp-pg-backup >> /var/log/omp-pg-backup.lo
 
 Решённые вопросы — в таблице «Решения Andy» в начале. Осталось:
 
-1. **Уникальность платежей**: если на копии прода найдутся дубли `operation_id`, разбираем их вручную перед окном или переносим как есть без уникального индекса? (Предложение: разбираем вручную, индекс нужен.)
-2. **Промокоды**: в истории активаций хранится сам выданный код активации. Оставить или хранить только ссылку на код? (Предложение: при переносе оставить как есть, убрать отдельной задачей.)
-3. **Копия на NAS**: по какому имени хоста и в какой каталог, каким пользователем (SSH-ключ только на запись в этот каталог)? Нужно имя хоста, а не IP.
-4. **Хранение проблемных вебхуков**: не обсуждалось; предложение — 1 год, как аудит.
+1. **Исчерпанные промокоды**: история активаций не переносится, поэтому одноразовый промокод, который уже погасили, снова стал бы рабочим. Предложение: такие промо переносить как отозванные. Ок?
+2. **Хранение проблемных вебхуков**: не обсуждалось; предложение — 1 год, как аудит.
+3. **Когда удалять SQLite-путь**: предложение — через 3–7 дней спокойной работы на Postgres.
