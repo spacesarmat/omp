@@ -1,19 +1,12 @@
 // What the bot does with one Telegram update. The Worker entry (index.ts) checks the webhook secret first.
-import { BUILTIN_SOURCE_NAMES } from '../../../src/sources/sourceNames';
-import { adminMessage, parseCommand, parseSources, pinNotice, type TgUpdate } from './commands';
+import { adminMessage, parseCommand, pinNotice, type TgUpdate } from './commands';
 import {
   FEEDS,
-  checkStarted,
   errorText,
   formatCi,
   formatStats,
-  formatStatus,
   formatVersions,
   helpText,
-  link,
-  unknownSources,
-  type MonitorStateFile,
-  type RunInfo,
 } from './format';
 import { GitHub, type Fetch } from './github';
 import { Telegram } from './telegram';
@@ -31,7 +24,7 @@ export interface Env {
   GITHUB_REPO?: string;
   /** Var: the OMP channel (@name or id) whose «pinned a message» notices the bot deletes; empty = none. */
   CHANNEL_ID?: string;
-  /** Var: the bot's @username, to tell «/status@this_bot» from commands to other bots in a group; optional. */
+  /** Var: the bot's @username, to tell «/stats@this_bot» from commands to other bots in a group; optional. */
   BOT_USERNAME?: string;
 }
 
@@ -44,12 +37,9 @@ export interface Deps {
   log: (line: string) => void;
 }
 
-export const MONITOR_WORKFLOW = 'parser-monitor.yml';
-export const MONITOR_STATE_BRANCH = 'monitor-state';
 const WORKFLOWS: { title: string; file: string; branch?: string }[] = [
   { title: 'CI (main)', file: 'ci.yml', branch: 'main' },
   { title: 'Release', file: 'release.yml' },
-  { title: 'Parser monitor', file: MONITOR_WORKFLOW },
 ];
 
 export async function handleUpdate(update: TgUpdate, env: Env, deps: Deps): Promise<void> {
@@ -78,13 +68,6 @@ export async function handleUpdate(update: TgUpdate, env: Env, deps: Deps): Prom
       case 'help':
         await tg.send(chatId, helpText());
         return;
-      case 'status':
-        await tg.typing(chatId);
-        await tg.send(chatId, await statusText(gh, deps.now()));
-        return;
-      case 'check':
-        await check(tg, gh, chatId, cmd.args, deps);
-        return;
       case 'versions':
         await tg.typing(chatId);
         await tg.send(chatId, await versionsText(gh));
@@ -106,65 +89,6 @@ export async function handleUpdate(update: TgUpdate, env: Env, deps: Deps): Prom
   }
 }
 
-async function lastMonitorRun(gh: GitHub): Promise<RunInfo | null> {
-  try {
-    return (await gh.runs(MONITOR_WORKFLOW))[0] || null;
-  } catch (e) {
-    return null;
-  }
-}
-
-export async function statusText(gh: GitHub, now: number): Promise<string> {
-  const [raw, run] = await Promise.all([gh.file('parser-monitor.json', MONITOR_STATE_BRANCH), lastMonitorRun(gh)]);
-  let state: MonitorStateFile | null = null;
-  if (raw) {
-    try {
-      state = JSON.parse(raw) as MonitorStateFile;
-    } catch (e) {
-      throw new Error('parser-monitor.json не читается');
-    }
-  }
-  return formatStatus(state, BUILTIN_SOURCE_NAMES, run, now);
-}
-
-/**
- * /check: starts the monitor workflow with notify=true. A run takes 3-40 minutes and a Worker may keep working only
- * ~30 s after answering, so the workflow itself sends the table when it finishes (scripts/parser-monitor/notify.mjs).
- * Here, after the answer, the bot only looks for the new run for a few seconds and adds its link to the message.
- */
-async function check(tg: Telegram, gh: GitHub, chatId: number, args: string, deps: Deps): Promise<void> {
-  const known = Object.keys(BUILTIN_SOURCE_NAMES);
-  const { ids, unknown } = parseSources(args, known);
-  if (unknown.length) {
-    await tg.send(chatId, unknownSources(unknown, known));
-    return;
-  }
-  const started = deps.now();
-  await gh.dispatch(MONITOR_WORKFLOW, 'main', { sources: ids.join(','), summary: 'false', dry_run: 'false', notify: 'true' });
-  const text = checkStarted(ids.map((id) => BUILTIN_SOURCE_NAMES[id]));
-  const messageId = await tg.send(chatId, text);
-  deps.waitUntil(addRunLink(tg, gh, chatId, messageId, text, started, deps));
-}
-
-/** Finds the run the dispatch created (GitHub shows it after a few seconds) and adds its link to the message. */
-export async function addRunLink(tg: Telegram, gh: GitHub, chatId: number, messageId: number, text: string, started: number, deps: Deps): Promise<void> {
-  for (let i = 0; i < 6; i++) {
-    await deps.sleep(4000);
-    let runs: RunInfo[] = [];
-    try {
-      runs = await gh.runs(MONITOR_WORKFLOW, { event: 'workflow_dispatch', perPage: 3 });
-    } catch (e) {
-      continue;
-    }
-    // GitHub's clock and ours may differ a little
-    const run = runs.filter((r) => Date.parse(r.created_at) >= started - 15000)[0];
-    if (run) {
-      await tg.edit(chatId, messageId, text + '\n' + link(run.html_url, 'Запуск #' + (run.run_number || ''))).catch(() => undefined);
-      return;
-    }
-  }
-}
-
 export async function versionsText(gh: GitHub): Promise<string> {
   const feeds = await Promise.all(
     FEEDS.map(async (f) => {
@@ -182,8 +106,8 @@ export async function versionsText(gh: GitHub): Promise<string> {
 }
 
 export async function statsText(gh: GitHub): Promise<string> {
-  const [releases, repo, openIssues, monitorIssues] = await Promise.all([gh.releases(5), gh.repoInfo(), gh.openIssueCount(), gh.openIssues('parser-monitor')]);
-  return formatStats({ releases, stars: repo.stargazers_count, openIssues, monitorIssues });
+  const [releases, repo, openIssues] = await Promise.all([gh.releases(5), gh.repoInfo(), gh.openIssueCount()]);
+  return formatStats({ releases, stars: repo.stargazers_count, openIssues });
 }
 
 export async function ciText(gh: GitHub, now: number): Promise<string> {

@@ -28,7 +28,7 @@ export interface Command {
 }
 
 /**
- * «/check rutor» → { name: 'check', args: 'rutor' }; «/status@omp_bot» → { name: 'status', args: '' }. A command
+ * «/ci now» → { name: 'ci', args: 'now' }; «/stats@omp_bot» → { name: 'stats', args: '' }. A command
  * addressed to another bot (@other_bot) and a text that is not a command → null.
  */
 export function parseCommand(text: string | undefined, botUsername?: string): Command | null {
@@ -71,24 +71,4 @@ export function pinNotice(update: TgUpdate, channel: string | undefined): { chat
   const post = update && update.channel_post;
   if (!post || !post.pinned_message || !isChannel(post.chat, channel)) return null;
   return { chatId: post.chat.id, messageId: post.message_id };
-}
-
-/**
- * /check arguments → source ids. «rutor», «rutor,anidub», «Rutor Anidub» → ['rutor', 'anidub']; empty → [] (all).
- * Unknown ids are returned apart, so the bot can name them.
- */
-export function parseSources(args: string, known: string[]): { ids: string[]; unknown: string[] } {
-  const words = args
-    .toLowerCase()
-    .split(/[\s,;]+/)
-    .map((w) => w.trim())
-    .filter(Boolean);
-  const ids: string[] = [];
-  const unknown: string[] = [];
-  words.forEach((w) => {
-    const id = known.indexOf(w) >= 0 ? w : known.filter((k) => k.replace(/[^a-z0-9]/g, '') === w.replace(/[^a-z0-9]/g, ''))[0];
-    if (!id) unknown.push(w);
-    else if (ids.indexOf(id) < 0) ids.push(id);
-  });
-  return { ids, unknown };
 }

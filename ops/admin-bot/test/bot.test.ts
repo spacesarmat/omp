@@ -62,12 +62,13 @@ describe('webhook request', () => {
     expect(f.tg()).toHaveLength(1);
     expect(f.tg()[0].url).toBe('https://api.telegram.org/bot123:TEST-TOKEN/sendMessage');
     expect(f.tg()[0].body.chat_id).toBe(536445442);
-    expect(f.tg()[0].body.text).toContain('/status');
+    expect(f.tg()[0].body.text).toContain('/versions');
+    expect(f.tg()[0].body.text).not.toContain('/check');
   });
 
   it('ignores everyone else silently (200, no message)', async () => {
     const f = fakeFetch();
-    const res = await handleRequest(post(update(111, '/status')), ENV, { waitUntil: () => undefined }, f.fn as any);
+    const res = await handleRequest(post(update(111, '/stats')), ENV, { waitUntil: () => undefined }, f.fn as any);
     expect(res.status).toBe(200);
     expect(f.sent).toHaveLength(0);
   });
@@ -93,57 +94,37 @@ describe('pin notices in the channel', () => {
 });
 
 describe('commands', () => {
-  it('/status reads parser-monitor.json of monitor-state with the token', async () => {
+  it('/versions reads the gh-pages feeds with the token', async () => {
     const f = fakeFetch({
-      '/repos/spacesarmat/omp/contents/parser-monitor.json?ref=monitor-state': JSON.stringify({
-        updated: '2026-10-08T09:00:00Z',
-        sources: { rutor: { status: 'OK', detail: '100 / 99 / 100 результатов' }, torrentby: { status: 'BLOCKED', detail: 'бан IP' } },
-      }),
-      '/repos/spacesarmat/omp/actions/workflows/parser-monitor.yml/runs': { workflow_runs: [] },
+      '/repos/spacesarmat/omp/contents/update.json?ref=gh-pages': JSON.stringify({ version: '0.20.5' }),
+      '/repos/spacesarmat/omp/releases': [],
     });
-    await handleUpdate(update(536445442, '/status'), ENV, deps(f));
-    const gh = f.sent.find((s) => s.url.includes('/contents/parser-monitor.json'))!;
+    await handleUpdate(update(536445442, '/versions'), ENV, deps(f));
+    const gh = f.sent.find((s) => s.url.includes('/contents/update.json'))!;
     expect(gh.headers.Authorization).toBe('Bearer gh-test');
     expect(gh.headers['User-Agent']).toBe('omp-admin-bot');
     const reply = f.tg().find((s) => s.url.endsWith('/sendMessage'))!.body;
     expect(reply.parse_mode).toBe('HTML');
-    expect(reply.text).toContain('✅ Rutor: 100 / 99 / 100 результатов');
-    expect(reply.text).toContain('🚫 torrent.by: бан IP');
-    expect(reply.text).toContain('08.10 12:00 МСК (3 ч назад)');
-  });
-
-  it('/check rutor starts the monitor with notify and later adds the run link', async () => {
-    const f = fakeFetch({
-      '/repos/spacesarmat/omp/actions/workflows/parser-monitor.yml/dispatches': new Response(null, { status: 204 }),
-      '/repos/spacesarmat/omp/actions/workflows/parser-monitor.yml/runs': {
-        workflow_runs: [{ html_url: 'https://github.com/spacesarmat/omp/actions/runs/99', status: 'queued', conclusion: null, created_at: '2026-10-08T12:00:03Z', run_number: 99 }],
-      },
-    });
-    const later: Promise<unknown>[] = [];
-    await handleUpdate(update(536445442, '/check rutor'), ENV, deps(f, later));
-    const dispatch = f.sent.find((s) => s.url.endsWith('/dispatches'))!;
-    expect(dispatch.method).toBe('POST');
-    expect(dispatch.body).toEqual({ ref: 'main', inputs: { sources: 'rutor', summary: 'false', dry_run: 'false', notify: 'true' } });
-    expect(f.tg()[0].body.text).toContain('🚀 Запустил проверку: Rutor');
-    await Promise.all(later);
-    const edit = f.tg().find((s) => s.url.endsWith('/editMessageText'))!;
-    expect(edit.body.message_id).toBe(500);
-    expect(edit.body.text).toContain('<a href="https://github.com/spacesarmat/omp/actions/runs/99">Запуск #99</a>');
-  });
-
-  it('/check with an unknown source starts nothing', async () => {
-    const f = fakeFetch();
-    await handleUpdate(update(536445442, '/check piratebay'), ENV, deps(f));
-    expect(f.sent.some((s) => s.url.includes('api.github.com'))).toBe(false);
-    expect(f.tg()[0].body.text).toContain('Не знаю источник: piratebay');
+    expect(reply.text).toContain('0.20.5');
   });
 
   it('a GitHub error becomes a short message without the token', async () => {
-    const f = fakeFetch({ '/repos/spacesarmat/omp/actions/workflows/parser-monitor.yml/dispatches': new Response('{"message":"Resource not accessible"}', { status: 403 }) });
-    await handleUpdate(update(536445442, '/check'), ENV, deps(f));
-    const text = f.tg()[0].body.text as string;
-    expect(text).toContain('⚠️ Не получилось: GitHub запуск parser-monitor.yml: HTTP 403 Resource not accessible');
+    const f = fakeFetch({
+      '/repos/spacesarmat/omp/releases': new Response('{"message":"Resource not accessible"}', { status: 403 }),
+      '/repos/spacesarmat/omp': { stargazers_count: 1, open_issues_count: 0 },
+    });
+    await handleUpdate(update(536445442, '/stats'), ENV, deps(f));
+    const text = f.tg().find((s) => s.url.endsWith('/sendMessage'))!.body.text as string;
+    expect(text).toContain('⚠️ Не получилось: GitHub /releases: HTTP 403');
     expect(text).not.toContain('gh-test');
+  });
+
+  it('the removed monitor commands are unknown now and call nothing on GitHub', async () => {
+    const f = fakeFetch();
+    await handleUpdate(update(536445442, '/status'), ENV, deps(f));
+    await handleUpdate(update(536445442, '/check rutor'), ENV, deps(f));
+    expect(f.sent.some((s) => s.url.includes('api.github.com'))).toBe(false);
+    expect(f.tg().map((s) => s.body.text)).toEqual(['Нет такой команды. /help - список.', 'Нет такой команды. /help - список.']);
   });
 
   it('/ci asks for the main CI runs on main', async () => {
@@ -151,6 +132,7 @@ describe('commands', () => {
     await handleUpdate(update(536445442, '/ci'), ENV, deps(f));
     expect(f.sent.some((s) => s.url.includes('/actions/workflows/ci.yml/runs?per_page=1&branch=main'))).toBe(true);
     expect(f.sent.some((s) => s.url.includes('/actions/workflows/release.yml/runs'))).toBe(true);
+    expect(f.sent.some((s) => s.url.includes('parser-monitor'))).toBe(false);
     expect(f.tg().find((s) => s.url.endsWith('/sendMessage'))!.body.text).toContain('запусков нет');
   });
 

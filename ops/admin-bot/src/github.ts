@@ -1,6 +1,5 @@
 // GitHub REST calls of the admin bot. Token: GH_TOKEN, a fine-grained token on spacesarmat/omp only with
-// Actions: read and write (workflow runs, workflow_dispatch), Contents: read (gh-pages feeds, monitor-state, releases),
-// Issues: read, Metadata: read (stars). Errors never contain the token.
+// Actions: read (workflow runs), Contents: read (gh-pages feeds, releases), Issues: read, Metadata: read (stars). Errors never contain the token.
 import type { ReleaseInfo, RunInfo } from './format';
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -69,13 +68,6 @@ export class GitHub {
     return typeof j.total_count === 'number' ? j.total_count : null;
   }
 
-  async openIssues(label: string): Promise<{ number: number; title: string; html_url: string }[]> {
-    const list = await this.json<{ number: number; title: string; html_url: string; pull_request?: unknown }[]>(
-      '/issues?state=open&per_page=100&labels=' + encodeURIComponent(label),
-    );
-    return list.filter((i) => !i.pull_request);
-  }
-
   /** The newest runs of a workflow file (e.g. 'ci.yml'). */
   async runs(workflow: string, q: { branch?: string; event?: string; perPage?: number } = {}): Promise<RunInfo[]> {
     let path = '/actions/workflows/' + workflow + '/runs?per_page=' + (q.perPage || 1);
@@ -85,18 +77,4 @@ export class GitHub {
     return j.workflow_runs || [];
   }
 
-  /** workflow_dispatch: inputs are strings (GitHub takes «true»/«false» for boolean inputs). */
-  async dispatch(workflow: string, ref: string, inputs: { [k: string]: string }): Promise<void> {
-    const path = '/repos/' + this.repo + '/actions/workflows/' + workflow + '/dispatches';
-    const res = await this.request('POST', path, { body: { ref, inputs } });
-    if (res.status !== 204 && !res.ok) {
-      let msg = '';
-      try {
-        msg = ((await res.json()) as { message?: string }).message || '';
-      } catch (e) {
-        /* no body */
-      }
-      throw new Error('GitHub запуск ' + workflow + ': HTTP ' + res.status + (msg ? ' ' + msg : ''));
-    }
-  }
 }

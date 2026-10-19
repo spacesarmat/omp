@@ -1,6 +1,6 @@
 // The bot's answers (Telegram HTML). Pure functions over the GitHub data (unit tested).
 import { COMMANDS } from './commandList.mjs';
-import { ICON, clipText, monitorTable, moscowTime, when } from '../../../scripts/parser-monitor/telegramTable.mjs';
+import { clipText, when } from './time';
 
 /** Telegram's message limit is 4096 characters. */
 export const MAX_TEXT = 4000;
@@ -25,19 +25,7 @@ export function helpText(): string {
   return '🤖 <b>OMP admin</b>\n' + lines.join('\n');
 }
 
-// ---------- /status ----------
-
-export interface MonitorSourceState {
-  status: string;
-  streak?: number;
-  since?: string;
-  detail?: string;
-}
-
-export interface MonitorStateFile {
-  updated?: string;
-  sources?: { [id: string]: MonitorSourceState };
-}
+// ---------- /ci ----------
 
 export interface RunInfo {
   html_url: string;
@@ -49,31 +37,6 @@ export interface RunInfo {
   event?: string;
   display_title?: string;
 }
-
-/** The rows of the monitor table: the known sources in the app's order first, then any others. */
-export function stateRows(state: MonitorStateFile, names: { [id: string]: string }): { name: string; status: string; detail: string }[] {
-  const sources = (state && state.sources) || {};
-  const ids = Object.keys(names).filter((id) => sources[id]);
-  Object.keys(sources).forEach((id) => {
-    if (ids.indexOf(id) < 0) ids.push(id);
-  });
-  return ids.map((id) => {
-    const s = sources[id];
-    let detail = s.detail || '';
-    if (s.status !== 'OK' && (s.streak || 0) > 1) detail += ' (' + s.streak + ' проверки подряд, с ' + moscowTime(s.since) + ')';
-    return { name: names[id] || id, status: s.status, detail };
-  });
-}
-
-export function formatStatus(state: MonitorStateFile | null, names: { [id: string]: string }, lastRun: RunInfo | null, now: number): string {
-  const parts: string[] = [];
-  if (!state) parts.push('🔎 Парсеры\nСостояние монитора ещё не сохранено (ветка monitor-state пуста).');
-  else parts.push(escapeHtml(monitorTable(stateRows(state, names), { title: '🔎 Парсеры, последняя проверка', at: state.updated, now })));
-  if (lastRun) parts.push('Последний запуск: ' + runIcon(lastRun) + ' ' + when(lastRun.created_at, now) + ' · ' + link(lastRun.html_url, '#' + (lastRun.run_number || '')));
-  return clipMessage(parts.join('\n\n'));
-}
-
-// ---------- /ci ----------
 
 /** ✅ success, ❌ failure / timed out, ⏳ queued or running, ⚪ cancelled, ⏭ skipped. */
 export function runIcon(run: { status: string; conclusion: string | null }): string {
@@ -150,7 +113,6 @@ export interface RepoStats {
   releases: ReleaseInfo[];
   stars: number;
   openIssues: number | null;
-  monitorIssues: { number: number; title: string; html_url: string }[];
 }
 
 export const latestStable = (rs: ReleaseInfo[]): ReleaseInfo | undefined => rs.filter((r) => !r.draft && !r.prerelease)[0];
@@ -175,23 +137,10 @@ export function formatStats(s: RepoStats): string {
     releaseBlock('Бета', latestBeta(published)),
     '⬇️ Всего скачиваний: ' + total + ' (' + published.length + ' релизов)\n⭐ Звёзд: ' + s.stars + '\n🐞 Открытых issues: ' + (s.openIssues === null ? '-' : s.openIssues),
   ];
-  if (!s.monitorIssues.length) parts.push('🔧 Открытых issues монитора парсеров: 0');
-  else parts.push('🔧 Открытых issues монитора парсеров: ' + s.monitorIssues.length + '\n' + s.monitorIssues.map((i) => '  • ' + link(i.html_url, '#' + i.number + ' ' + i.title)).join('\n'));
   return clipMessage(parts.join('\n\n'));
-}
-
-// ---------- /check ----------
-
-export function checkStarted(names: string[]): string {
-  return '🚀 Запустил проверку' + (names.length ? ': ' + escapeHtml(names.join(', ')) : ' всех парсеров') + '…\nТаблицу пришлю сюда, когда workflow закончится (обычно 3-15 мин).';
-}
-
-export function unknownSources(unknown: string[], known: string[]): string {
-  return '🤔 Не знаю источник: ' + escapeHtml(unknown.join(', ')) + '\nЕсть: ' + escapeHtml(known.join(', '));
 }
 
 export function errorText(e: unknown): string {
   return '⚠️ Не получилось: ' + escapeHtml(e instanceof Error ? e.message : String(e));
 }
 
-export { ICON };

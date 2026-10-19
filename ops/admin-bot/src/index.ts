@@ -1,5 +1,5 @@
 // OMP admin bot: a Cloudflare Worker that receives the OMP Telegram bot's updates by webhook.
-// Answers only ADMIN_CHAT_ID (/status /check /versions /stats /ci /help), deletes the «pinned a message» notices in the
+// Answers only ADMIN_CHAT_ID (/versions /stats /ci /help), deletes the «pinned a message» notices in the
 // OMP channel, ignores everything else. Setup: ops/admin-bot/README.md.
 import { handleUpdate, type Env } from './bot';
 import type { TgUpdate } from './commands';
