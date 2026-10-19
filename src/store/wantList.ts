@@ -8,6 +8,7 @@ import { toast } from '../ui/toast';
 import { torrentQuery, type CatalogTitle, type Kind } from '../catalog/tmdb';
 import { phoneLink } from '../phone/phoneStore';
 import { phoneWantAdd } from '../phone/monitor';
+import { PhoneRpcError } from '../phone/rpc';
 
 export const WANT_KEY = 'tsp.tvWant';
 export const WANT_MAX = 500;
@@ -82,6 +83,13 @@ export function wantAction(x: CatalogTitle): boolean {
     local();
     return on;
   }
-  phoneWantAdd(torrentQuery(x)).then(() => toast(t('tv.want.addedPhone')), local);
+  phoneWantAdd(torrentQuery(x)).then(
+    () => toast(t('tv.want.addedPhone')),
+    (e) => {
+      // the phone refused with its own words (e.g. the subscription cap without OMP): say so instead of «connect a phone»
+      if (e instanceof PhoneRpcError && e.code === 'failed' && e.message) toast(t('tv.want.added') + ' ' + e.message);
+      else local();
+    },
+  );
   return on;
 }

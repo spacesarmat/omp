@@ -176,6 +176,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.phoneLink', // TV: the address and token of the phone that serves its search, per device
   'tsp.billingDevice', // paid Jackett: install id, per device
   'tsp.billingSession', // paid Jackett: session token, never in a copy
+  'tsp.billingAccess', // OMP subscription state from /v1/me (the monitoring cap), per session
   'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
   'tsp.billingOrigin', // paid Jackett: last working public/LAN origin, per device
 ];

@@ -4,13 +4,14 @@ import { Icon } from '../ui/Icon';
 import { LaunchError } from '../ui/LaunchError';
 import { SubSheet } from '../ui/SubSheet';
 import { useResultRows } from '../ui/useResultRows';
-import { goBack } from '../nav';
+import { goBack, navigate } from '../nav';
 import { monitorVersion, reloadMonitor } from '../monitor/ui';
 import { subRule } from '../monitor/text';
 import { checkSubNow, checkingSubs, loadSubsSort, sortFindings } from '../monitor/subsView';
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { findingsOf, getSubscription, markFindingsSeen, seenKeys } from '../../../src/monitor/subs';
+import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
 
 const BACK = 'M15 5l-7 7 7 7';
 
@@ -24,6 +25,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   const [prompt, setPrompt] = useState(!!watch);
   const rows = useResultRows();
   const busy = checkingSubs.value.indexOf(id) >= 0;
+  const paused = !!sub && isSubPaused(id);
 
   useEffect(() => {
     const unseen = findingsOf(id).filter((f) => !f.seen);
@@ -59,9 +61,20 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
       ) : (
         <>
           <div class="m-muted m-small">{subRule(sub)}</div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-sub-check" data-check-sub disabled={busy} onClick={() => void checkSubNow(id)}>
-            {busy ? t('news.checking') : t('news.checkNow')}
-          </button>
+          {paused ? (
+            <>
+              <div class="m-small m-sub-paused-note" data-sub-paused>
+                {t('monitor.limit.pausedCheck', { n: FREE_SUBS_MAX })}
+              </div>
+              <button type="button" class="m-btn m-btn-primary m-btn-sm m-sub-check" onClick={() => navigate({ name: 'account' })}>
+                {t('monitor.limit.go')}
+              </button>
+            </>
+          ) : (
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm m-sub-check" data-check-sub disabled={busy} onClick={() => void checkSubNow(id)}>
+              {busy ? t('news.checking') : t('news.checkNow')}
+            </button>
+          )}
           {target && prompt && (
             <WatchPrompt title={shortTitle(target.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => void rows.add(target.result, true)} />
           )}

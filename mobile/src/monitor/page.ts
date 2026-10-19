@@ -27,6 +27,9 @@ import { checkNewEpisodes, isWatchedSeries, seriesQuery, type LibraryTorrent } f
 import { replaceWithResult, type ReplaceClient } from '../../../src/monitor/replace';
 import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type MonitorSummary } from '../../../src/monitor/settings';
 import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
+import { checkedSubs, FREE_SUBS_MAX } from '../../../src/monitor/limit';
+import { billingSession } from '../../../src/billing/session';
+import { fetchBillingAccount } from '../../../src/sources/ompJackett';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
 import { SOURCE_TIMEOUT_MS } from '../../../src/sources/search';
@@ -227,8 +230,10 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
       },
     );
 
-  // subscriptions, two at a time
-  const subs = loadSubs();
+  // subscriptions, two at a time; without the OMP subscription only the FREE_SUBS_MAX oldest (limit.ts). Over the cap
+  // the cached billing state is refreshed first: a renewal paid in the bot unpauses the rest in this very run.
+  if (billingSession() && loadSubs().length > FREE_SUBS_MAX) await fetchBillingAccount(ctx).catch(() => null);
+  const subs = checkedSubs(now());
   const answered: { [id: string]: boolean } = {};
   const asked: { [id: string]: boolean } = {};
   let next = 0;

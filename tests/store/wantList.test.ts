@@ -87,6 +87,16 @@ describe('wantAction', () => {
     expect(vi.mocked(toast).mock.calls[0][0]).toContain('Подключите телефон');
   });
 
+  it('a phone at its subscription cap (no OMP subscription) is quoted instead of «connect a phone»', async () => {
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    const why = 'На телефоне уже 10 подписок — без подписки OMP больше не добавить.';
+    setRpcTransport(() => Promise.resolve(JSON.stringify({ ok: false, error: { code: 'failed', message: why } })));
+    expect(wantAction(title)).toBe(true);
+    await flush();
+    expect(isWanted('movie', 7)).toBe(true);
+    expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть». ' + why]]);
+  });
+
   it('removing from the TV list does not touch the phone', async () => {
     toggleWant(title, 1);
     savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });

@@ -192,6 +192,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/ui/ResumeSheet.tsx',
       'mobile/src/ui/SeriesMenu.tsx',
       'mobile/src/ui/SubSheet.tsx',
+      'mobile/src/ui/SubsLimitSheet.tsx',
       'mobile/src/ui/TorrentMenu.tsx',
       'mobile/src/ui/TorrentRenameSheet.tsx',
       'mobile/src/ui/TouchpadSheet.tsx',

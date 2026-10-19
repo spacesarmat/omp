@@ -78,6 +78,8 @@ export interface RpcSub {
   /** A `subCheck` of it is running. */
   checking: boolean;
   createdAt: number;
+  /** Over the cap without the OMP subscription: kept, but not checked (absent on older phones). */
+  paused?: boolean;
 }
 
 export interface RpcFeed {
