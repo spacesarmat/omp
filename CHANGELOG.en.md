@@ -1,25 +1,19 @@
-# Changes
-
-The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
+# Changelog
 
 ## Unreleased
 
 - Billing: admin login works under BILLING_READONLY (in-memory sessions and tokens), /health uses backupEveryHours, a failed pg_dump sets pgBackupOk false and alerts immediately; bot deviceInfo only when showing devices.
-
 - Billing: the admin user card and subscription list show the credit (RUB toward the next renewal)
 - Billing: admin home shows counts of devices on new vs legacy tokens (prep for strict checks; flags stay off)
-- Subscription: the device limit is base devices (set in the admin settings) plus bonus devices (from a promo or the admin, forever or until a date, free) plus bought ones. The bot, the cabinet and the admin panel show the breakdown, and device lists show the phone model
-- [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected - enter a new code”; clearer “devices taken”, “extra device not renewed” and “update the app” errors
-- [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
-- Billing: every record (payments, audit log, sign-in attempts, device changes, promo redemptions) has a permanent id, in preparation for the move to Postgres
-- Billing: the store can be switched to Postgres (`BILLING_STORE=postgres`); SQLite stays the default, and both are covered by tests
-- Subscription: a phone unbound and bound again right away no longer gets “This device was disconnected”
-- Billing: a SQLite → Postgres data migration script with verification and a dry run; on Postgres logs are kept for a year (sign-in attempts for 90 days)
-- Billing: Postgres 17 in the NUC compose (internal network, no port), daily dumps with frequency and retention set in the panel, a read-only mode for the cutover, a cutover and restore runbook
-- Billing: the SQLite code is removed and billing runs on Postgres only; the old billing.db stays as an archive, and a tool in tools can read it into Postgres
-- Billing: the bot token, YooMoney secret, SMTP password and indexer keys live only in the server's .env, not in the database or its dumps; the admin panel shows them read-only (“set ✅, ****abcd”)
-- Billing: moved to Postgres (19 Oct, 17:13 MSK); SQLite is no longer used
-- Billing: the bot tells the admins about a stale or failed Postgres backup
+
+## 0.20.5
+
+- Subscription: device limit = base (admin) + bonus + bought; bot and admin show the breakdown and phone model
+- [phone] Subscription: new self-renewing device keys and clearer disconnect / limit errors
+- Payment bot: 6-button menu (Pay, Devices), unbind with confirm, credit for a late extra payment
+- Subscription: admin shows devices and last seen, revoke and limit; at most 2 device changes per 30 days in the bot
+- [phone] Without an OMP subscription, up to 10 items in New → Subscriptions (extras paused)
+- Billing on Postgres 17: daily dumps, admin alert, SQLite path removed
 
 ## 0.20.4
 
