@@ -138,6 +138,21 @@ export type HomeData = {
   series?: SeriesPoint[];
   settings?: Record<string, string | number | boolean>;
   storage?: { engine: string; path: string; bytes: number };
+  /** Postgres dumps; null when backups are not configured on the server. */
+  backup?: BackupStatus | null;
+  readOnly?: boolean;
+};
+
+export type BackupStatus = {
+  enabled: boolean;
+  everyHours: number;
+  keepDays: number;
+  last: { name: string; at: number; size: number } | null;
+  ageSec: number | null;
+  count: number;
+  totalBytes: number;
+  stale: boolean;
+  lastError: string;
 };
 
 export type UserCode = {

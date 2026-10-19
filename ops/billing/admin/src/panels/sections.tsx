@@ -10,9 +10,9 @@ import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@
 import { api, post, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
-import { actorLine, auditAction, AUDIT_FILTERS, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
+import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
-import type { HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
+import type { BackupStatus, HomeData, PaymentRow, ProblemRow, SubRow } from '@/lib/types';
 
 export { HomeFeed } from '@/panels/EventFeed';
 
@@ -552,11 +552,42 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['publicPromo', 'Промокод на пробный день (бот покажет, пока он действует)'],
     ],
   },
+  {
+    title: 'Бэкапы Postgres',
+    fields: [
+      ['backupEveryHours', 'Делать дамп каждые, часов (1–168)'],
+      ['backupKeepDays', 'Хранить дампы, дней (1–365; последний не удаляется)'],
+    ],
+  },
 ];
+
+/** Last dump, its size and freshness; «not configured» when the server has no BILLING_PG_BACKUP_DIR. */
+export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
+  if (!backup || !backup.enabled) return <CardDescription>Бэкапы Postgres на этом сервере не настроены (нет BILLING_PG_BACKUP_DIR).</CardDescription>;
+  const last = backup.last;
+  return (
+    <CardDescription>
+      {last ? 'Последний дамп: ' + when(last.at) + ' · ' + bytesText(last.size) : 'Дампов ещё нет'}
+      {' · всего ' + backup.count + ' (' + bytesText(backup.totalBytes) + ')'}
+      {backup.stale ? <span className="text-destructive"> · бэкап устарел</span> : null}
+      {backup.lastError ? <span className="text-destructive"> · ошибка: {backup.lastError}</span> : null}
+    </CardDescription>
+  );
+}
 
 type BaseImpact = { from: number; to: number; lowering: boolean; subscriptions: number; devices: number };
 
-export function SettingsCard({ run, settings, storage }: { run: Run; settings: Record<string, string | number | boolean>; storage?: HomeData['storage'] }) {
+export function SettingsCard({
+  run,
+  settings,
+  storage,
+  backup,
+}: {
+  run: Run;
+  settings: Record<string, string | number | boolean>;
+  storage?: HomeData['storage'];
+  backup?: HomeData['backup'];
+}) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
@@ -597,6 +628,7 @@ export function SettingsCard({ run, settings, storage }: { run: Run; settings: R
           <CardHeader>
             <CardTitle>{group.title}</CardTitle>
             {group.title === 'Платежи' ? <CardDescription>Кошелёк показывается частично. Чтобы сменить, введите новый номер целиком.</CardDescription> : null}
+            {group.title === 'Бэкапы Postgres' ? <BackupLine backup={backup} /> : null}
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {group.fields.map(([name, label]) => (

@@ -254,7 +254,7 @@ export function App() {
           <AuditPanel />
         </TabsContent>
         <TabsContent value="settings">
-          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} />
+          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} />
         </TabsContent>
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} onSaved={() => void reload()} />
