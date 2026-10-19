@@ -54,6 +54,7 @@ import {
   adminNotifyEnabled,
   botDeepLink,
   botReply,
+  mainKeyboard,
   paymentAdminNotices,
   reminderMessage,
   serviceDownNotices,
@@ -70,6 +71,17 @@ import {
 } from './botPoll.mjs';
 import { codeHash, normalizeCode, randomId } from './crypto.mjs';
 import { goPage } from './go.mjs';
+import {
+  confirmPendingPayment,
+  rejectPendingPayment,
+  resetSwaps,
+  revokeDevice,
+  revokeNoticeText,
+  seenDue,
+  setDeviceLimit,
+  subtractDays,
+  touchDevice,
+} from './deviceAdmin.mjs';
 import {
   basicAuthHeader,
   indexerByLink,
@@ -382,6 +394,31 @@ function denyReason(state, token, deviceId) {
   return 'expired';
 }
 
+/** The panel's destructive buttons send confirm=yes after the admin confirmed in the UI. */
+function confirmed(body) {
+  const v = body && body.confirm;
+  return v === true || v === 'yes' || v === '1' || v === 1 || v === 'true';
+}
+
+/**
+ * lastSeen / lastIp for an authenticated device request. The state is one JSON document, so this
+ * writes only when the stored mark is older than SEEN_EVERY_MS; `busy` keeps parallel requests
+ * of one device from writing twice. A failure here never fails the request.
+ */
+async function noteSeen(file, state, codeId, ip, busy, force) {
+  if (!codeId || busy.has(codeId)) return;
+  const now = Date.now();
+  if (!force && !seenDue(state, codeId, now)) return;
+  busy.add(codeId);
+  try {
+    await updateState(file, (cur) => ({ state: touchDevice(cur, { codeId, ip, now, force }) }));
+  } catch (e) {
+    /* lastSeen is best effort */
+  } finally {
+    busy.delete(codeId);
+  }
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -428,6 +465,7 @@ export function createApp(file, fetchImpl, opts) {
   const env = (opts && opts.env) || process.env;
   const activateLimit = createActivateLimiter(activateLimitConfig(env));
   const strictLinkClear = linkClearRequiresToken(env);
+  const seenBusy = new Set();
   return async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -843,6 +881,88 @@ export function createApp(file, fetchImpl, opts) {
           flashText = 'Устройство сброшено, выдан новый код';
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
+        if (path === '/admin/device-revoke') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const out = await updateState(file, (state) =>
+              revokeDevice(state, { accountId: body.accountId || '', codeId: body.codeId || '', now: Date.now(), actor: adminActor(admin) }),
+            );
+            if (out.error === 'not_bound') flashError = 'Устройство уже отвязано';
+            else if (out.error) flashError = 'Устройство не найдено';
+            else {
+              flashText = 'Устройство ' + out.device + '… отозвано: токен больше не действует, для слота выпущен новый код';
+              if (out.telegramId) {
+                let told = false;
+                try {
+                  const cur = readState(file);
+                  told = (await telegramSend(cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, { keyboard: mainKeyboard() })).ok;
+                } catch (e) {
+                  told = false;
+                }
+                flashText += told ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
+              } else flashText += '. У пользователя нет Telegram, сообщение не отправлено';
+            }
+          }
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/limit') {
+          const out = await updateState(file, (state) =>
+            setDeviceLimit(state, {
+              accountId: body.accountId || '',
+              deviceLimit: body.deviceLimit,
+              extraSlots: body.extraSlots,
+              now: Date.now(),
+              actor: adminActor(admin),
+            }),
+          );
+          if (out.error === 'no_subscription') flashError = 'Нет подписки';
+          else if (out.error) flashError = 'Лимит: целое число от 1, доп. устройства от 0 (не больше 20)';
+          else if (out.unchanged) flashText = 'Лимит не изменился';
+          else flashText = 'Лимит устройств: ' + out.total + (out.extraSlots ? ' (' + out.deviceLimit + ' + ' + out.extraSlots + ' доп.)' : '');
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/subtract') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const out = await updateState(file, (state) =>
+              subtractDays(state, { accountId: body.accountId || '', days: body.days, now: Date.now(), actor: adminActor(admin) }),
+            );
+            if (out.error === 'no_subscription') flashError = 'Нет подписки';
+            else if (out.error) flashError = 'Дней: целое число от 1 до 3650';
+            else flashText = 'Убавлено ' + out.days + ' дн., подписка до ' + mskDateTime(out.paidUntil);
+          }
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/swaps-reset') {
+          const out = await updateState(file, (state) =>
+            resetSwaps(state, { accountId: body.accountId || '', now: Date.now(), actor: adminActor(admin) }),
+          );
+          if (out.error) flashError = 'Нет подписки';
+          else flashText = 'Счётчик смен устройства сброшен';
+          if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/payment-confirm' || path === '/admin/payment-reject') {
+          const confirm = path === '/admin/payment-confirm';
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const args = { operationId: body.operationId || '', now: Date.now(), actor: adminActor(admin) };
+            const out = await updateState(file, (state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
+            if (out.error === 'already') flashError = 'Платёж уже обработан';
+            else if (out.error === 'not_found') flashError = 'Платёж не найден';
+            else if (!confirm) flashText = 'Платёж отклонён';
+            else if (out.error) flashError = 'Платёж снят с ожидания, но не применён: ' + out.error;
+            else {
+              flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
+              try {
+                await tellPayment(readState(file), out, net);
+              } catch (e) {
+                /* the payment is applied; the Telegram notice is best effort */
+              }
+            }
+            if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+            else redirectTo = '/admin/?tab=finance';
+          }
+        }
         if (path === '/admin/password') {
           flashError = 'Вход по паролю отключён';
           redirectTo = '/admin/?tab=security';
@@ -948,6 +1068,7 @@ export function createApp(file, fetchImpl, opts) {
         const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now: Date.now() }));
         // device_limit is 409 like other_device: the current app then says the code is tied to another device.
         if (result.error) return json(res, result.error === 'other_device' || result.error === 'device_limit' ? 409 : 403, result);
+        await noteSeen(file, null, result.codeId, clientIp(req), seenBusy, true);
         return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
@@ -981,6 +1102,7 @@ export function createApp(file, fetchImpl, opts) {
           // The token only has to belong to this device: an expired or over-limit phone still learns its status.
           const row = sessionForDevice(state, { token, deviceId: device });
           const own = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
+          if (row) await noteSeen(file, state, row.id, clientIp(req), seenBusy, false);
           if (own) {
             account = state.accounts.find((a) => a.id === own.accountId) || null;
             paidUntil = own.paidUntil;
@@ -1020,7 +1142,9 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId;
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: denyReason(state, token, deviceId) });
+        const session = sessionOk(state, { token, deviceId, now: Date.now() });
+        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
+        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
         const rateKey = String(deviceId || token || '').slice(0, 64);
@@ -1073,7 +1197,9 @@ export function createApp(file, fetchImpl, opts) {
         const deviceId = req.headers['x-device-id'] || body.deviceId || '';
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         const state = readState(file);
-        if (!sessionOk(state, { token, deviceId, now: Date.now() })) return json(res, 403, { error: denyReason(state, token, deviceId) });
+        const session = sessionOk(state, { token, deviceId, now: Date.now() });
+        if (!session) return json(res, 403, { error: denyReason(state, token, deviceId) });
+        await noteSeen(file, state, session.code.id, clientIp(req), seenBusy, false);
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });
         const remote = restoreJackett(body.link, indexer.url, indexer.key, indexer.mark);

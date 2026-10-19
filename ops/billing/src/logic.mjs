@@ -175,6 +175,11 @@ export function deviceAccess(state, deviceId, now) {
   return { subscription: sub, code: row, overLimit: !codeWithinLimit(state, sub, row, now) };
 }
 
+/** The account's subscription that lasts longest (the one the bot and the panel show). */
+export function mainSubscription(state, accountId) {
+  return anySub(state, accountId);
+}
+
 function anySub(state, accountId) {
   const list = state.subscriptions.filter((s) => s.accountId === accountId && s.product === 'jackett');
   if (!list.length) return null;
@@ -251,6 +256,38 @@ export function migrateExtraSlots(state) {
     };
   });
   return { ...state, subscriptions, meta: { ...meta, extraMonthly: 1 } };
+}
+
+/**
+ * Client IP without its last part: «95.24.113.*», IPv6 the first three groups «2a02:6b8:c0e::*».
+ * Only this form is stored. A value already in this form comes back unchanged.
+ */
+export function truncateIp(ip) {
+  const raw = String(ip || '').trim().slice(0, 64);
+  if (!raw) return '';
+  if (/^\d+\.\d+\.\d+\.\*$/.test(raw) || /^[0-9a-f:]+::\*$/i.test(raw)) return raw;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(raw);
+  const v4 = mapped ? mapped[1] : raw;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) return v4.split('.').slice(0, 3).join('.') + '.*';
+  if (raw.indexOf(':') >= 0) {
+    const groups = raw.split('%')[0].split(':').filter((g, i) => g !== '' || i === 0);
+    return groups.slice(0, 3).join(':').toLowerCase() + '::*';
+  }
+  return '*';
+}
+
+/** Additive migration: a full lastIp stored by an earlier build is cut to truncateIp. Idempotent. */
+export function migrateTruncatedIps(state) {
+  if (!state || !Array.isArray(state.codes)) return state;
+  let changed = false;
+  const codes = state.codes.map((c) => {
+    if (!c || typeof c !== 'object' || !c.lastIp) return c;
+    const cut = truncateIp(c.lastIp);
+    if (cut === c.lastIp) return c;
+    changed = true;
+    return { ...c, lastIp: cut };
+  });
+  return changed ? { ...state, codes } : state;
 }
 
 function issue(state, subscriptionId, now) {
@@ -544,9 +581,12 @@ export function sessionOk(state, { token, deviceId, now }) {
   return { code: row, subscription: sub, grace: access.grace, accessUntil: access.accessUntil };
 }
 
-/** A pending (unaccepted) row does not count: the accepted notification for it must still apply. */
+/**
+ * A pending (unaccepted) row does not count: the accepted notification for it must still apply.
+ * Neither does a held payment the admin rejected: if YooMoney later accepts it, the money is there.
+ */
 function seenPayment(state, operationId) {
-  return state.payments.some((p) => p.operationId === operationId && !p.pending);
+  return state.payments.some((p) => p.operationId === operationId && !p.pending && p.error !== 'rejected');
 }
 
 function isTrue(v) {
@@ -582,10 +622,11 @@ function actorFromAuditDetail(row) {
 }
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
-export function logAudit(state, { action, detail, now, actor }) {
+export function logAudit(state, { action, detail, now, actor, accountId }) {
   const row = { at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
+  if (accountId) row.accountId = String(accountId);
   const audit = (state.audit || []).concat([row]).slice(-AUDIT_CAP);
   return { ...state, audit };
 }
@@ -733,6 +774,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       operationId,
       label: String(label || ''),
       amount,
+      currency: String(currency || ''),
       at: now || Date.now(),
       error: 'unaccepted',
       pending: true,
@@ -1171,7 +1213,7 @@ export function unbindCode(state, codeId) {
     ...state,
     accounts,
     codes: state.codes.map((c) =>
-      c.id === codeId ? { ...c, deviceId: '', boundAt: 0, plain, hash: codeHash(plain) } : c,
+      c.id === codeId ? { ...c, deviceId: '', boundAt: 0, plain, hash: codeHash(plain), lastSeenAt: 0, lastIp: '' } : c,
     ),
     sessions: state.sessions.filter((s) => s.codeId !== codeId),
   };
@@ -1435,9 +1477,45 @@ const LOGIN_FEED = {
   logout: 1,
 };
 
+/** Service actions stay in the journal («Журнал») but not on the home timeline. */
+const FEED_HIDDEN = {
+  code_reveal: 1,
+  settings_save: 1,
+};
+
+/** Admin actions on a subscription store a full sentence in `detail`; the feed shows it as is. */
+const DETAIL_FEED = {
+  device_revoke: 1,
+  limit_set: 1,
+  days_subtract: 1,
+  payment_confirm: 1,
+  payment_reject: 1,
+  swaps_reset: 1,
+};
+
+const ADMIN_FEED_LABEL = {
+  grant: 'Выданы дни',
+  issue: 'Выдан код',
+  bulk_issue: 'Выдан пакет кодов',
+  promo_create: 'Создан промокод',
+  bulk_promo: 'Создан пакет промокодов',
+  unbind: 'Сброшено устройство',
+  message: 'Сообщение пользователю',
+  support_reply: 'Ответ в поддержке',
+  support_close: 'Диалог поддержки закрыт',
+  services_save: 'Сохранены сервисы',
+  session_revoke: 'Завершена сессия админа',
+};
+
 function adminFeedText(row) {
   const action = String((row && row.action) || '');
   const detail = String((row && row.detail) || '');
+  if (DETAIL_FEED[action]) return detail || action;
+  if (action === 'grant') {
+    const rest = detail.split(' ').slice(1).join(' ').trim();
+    return rest ? ADMIN_FEED_LABEL.grant + ': ' + rest : ADMIN_FEED_LABEL.grant;
+  }
+  if (ADMIN_FEED_LABEL[action]) return ADMIN_FEED_LABEL[action];
   if (action === 'login_cli') return 'Аварийная ссылка входа';
   if (action === 'login' && detail.indexOf('cli') === 0) return 'Вход с сервера';
   if (action === 'login' && detail.indexOf('telegram') === 0) return 'Вход через Telegram';
@@ -1446,6 +1524,15 @@ function adminFeedText(row) {
   if (action === 'login_telegram_start') return 'Запрос входа через Telegram';
   if (action === 'logout') return 'Выход';
   return action;
+}
+
+/** Account an audit row is about: stored accountId, else an account id at the start of the detail. */
+function auditAccount(state, row) {
+  if (row && row.accountId) return String(row.accountId);
+  const action = String((row && row.action) || '');
+  if (LOGIN_FEED[action]) return '';
+  const head = String((row && row.detail) || '').split(' ')[0];
+  return head && findAccount(state, head) ? head : '';
 }
 
 /**
@@ -1503,18 +1590,34 @@ export function adminDashboard(state, now) {
       });
     }
   }
+  // Every admin panel action (journal row) is on the timeline, with a link to the account it touched.
   const audit = state.audit || [];
   for (let i = 0; i < audit.length; i++) {
     const row = audit[i];
-    if (!LOGIN_FEED[row.action]) continue;
+    if (!row || !row.action || FEED_HIDDEN[row.action]) continue;
     const actor = normalizeActor(row.actor) || actorFromAuditDetail(row) || { kind: 'admin', id: '', label: 'админ' };
     events.push({
       at: row.at || 0,
       kind: 'admin',
       text: adminFeedText(row),
-      accountId: '',
+      accountId: auditAccount(state, row),
       actor,
     });
+  }
+  // Self-service device changes in the bot («Отвязать»).
+  for (let i = 0; i < state.subscriptions.length; i++) {
+    const sub = state.subscriptions[i];
+    const swaps = Array.isArray(sub.swaps) ? sub.swaps : [];
+    for (let k = 0; k < swaps.length; k++) {
+      const swap = swaps[k] || {};
+      events.push({
+        at: Number(swap.at) || 0,
+        kind: 'device',
+        text: 'Отвязал устройство в боте' + (swap.device ? ' ' + swap.device + '…' : ''),
+        accountId: sub.accountId,
+        actor: eventActor(state, sub.accountId, '', 'бот'),
+      });
+    }
   }
   events.sort((a, b) => b.at - a.at);
   const feed = events.slice(0, 150);
@@ -1541,6 +1644,37 @@ export function adminDashboard(state, now) {
     alerts.push({
       level: 'warn',
       text: 'Истекает ' + new Date(sub.paidUntil).toISOString().slice(0, 10) + ': ' + who,
+      accountId: sub.accountId,
+    });
+  }
+
+  const held = (state.payments || []).filter((p) => p && p.pending);
+  for (let i = 0; i < held.length; i++) {
+    const p = held[i];
+    const accountId = p.accountId || resolvePaymentAccount(state, p.label).accountId || '';
+    const acc = accountId ? findAccount(state, accountId) : null;
+    alerts.push({
+      level: 'warn',
+      text:
+        'Платёж ждёт подтверждения в ЮMoney: ' +
+        payText(p) +
+        (acc ? ' · ' + (telegramDisplay(acc) || acc.email || acc.id) : '') +
+        '. Подтвердите или отклоните во вкладке «Финансы».',
+      accountId,
+    });
+  }
+
+  for (let i = 0; i < state.subscriptions.length; i++) {
+    const sub = state.subscriptions[i];
+    if (!subAccess(state, sub, now).access) continue;
+    const bound = boundDevices(state, sub.id);
+    const limit = deviceLimitNow(state, sub, now);
+    if (bound <= limit) continue;
+    const acc = findAccount(state, sub.accountId);
+    alerts.push({
+      level: 'warn',
+      text:
+        'Устройств больше лимита (' + bound + ' из ' + limit + '): ' + (acc ? telegramDisplay(acc) || acc.email || acc.id : sub.accountId),
       accountId: sub.accountId,
     });
   }
@@ -1604,6 +1738,8 @@ export function accountCard(state, accountId, now) {
         deviceId: c.deviceId || '',
         boundAt: c.boundAt || 0,
         createdAt: c.createdAt || 0,
+        lastSeenAt: c.deviceId ? Number(c.lastSeenAt) || 0 : 0,
+        lastIp: c.deviceId ? String(c.lastIp || '') : '',
       }))
     : [];
   const payments = state.payments

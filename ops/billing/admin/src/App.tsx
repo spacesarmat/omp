@@ -9,6 +9,7 @@ import { post, api, type PostResult } from '@/lib/api';
 import { Login } from '@/panels/Login';
 import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
+import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import type { HomeData, UserData } from '@/lib/types';
 
@@ -239,7 +240,8 @@ export function App() {
         <TabsContent value="subs">
           <SubsPanel subs={d.subscriptions || []} filter={filter} setFilter={setFilter} csrf={d.csrf || ''} />
         </TabsContent>
-        <TabsContent value="finance">
+        <TabsContent value="finance" className="space-y-4">
+          <PendingPayments rows={d.pending || []} run={run} showWho />
           <FinancePanel home={d} />
         </TabsContent>
         <TabsContent value="promos">

@@ -1,4 +1,5 @@
 import { payUrl } from './yoomoney.mjs';
+import { selfUnbind, swapStatus } from './deviceAdmin.mjs';
 import {
   adminFind,
   adminSummary,
@@ -21,13 +22,13 @@ import {
   telegramDisplay,
   grantDays,
   isAdminChat,
+  mainSubscription,
   openAppUrl,
   priceText,
   quotePurchase,
   redeemPromo,
   subscriptionView,
   supportReplyTarget,
-  unbindDevice,
 } from './logic.mjs';
 
 function rub(n) {
@@ -347,6 +348,23 @@ export function reminderMessage(state, row, now) {
 export const DEVICE_LIMIT_TEXT =
   'Все устройства подписки уже привязаны, новый код не выдан. Уже привязанные устройства продолжают работать. Чтобы подключить другое, отвяжите одно в «Отвязать» или купите доп. устройство.';
 
+/** «Смен устройства осталось: 1 из 2 за 30 дней.» */
+export function swapLeftLine(status) {
+  return 'Смен устройства осталось: ' + status.left + ' из ' + status.limit + ' за 30 дней.';
+}
+
+/** Refusal when the self-service changes of the last 30 days are used up. */
+export function swapLimitText(status) {
+  const when = Number.isFinite(status.nextAt) && status.nextAt > 0 ? mskDateTime(status.nextAt) : '';
+  return (
+    'Сменить устройство сейчас нельзя: самостоятельно — не больше ' +
+    status.limit +
+    ' раз за 30 дней.' +
+    (when ? '\nСледующая смена — с ' + when + '.' : '') +
+    '\nУже привязанные устройства работают. Если нужно срочно — напишите в «Поддержку».'
+  );
+}
+
 function codeMessage(origin, code) {
   const dashed = formatCode(code);
   return (
@@ -642,7 +660,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       if (slot.code) {
         say(codeMessage(origin, slot.code), { inline: codeButtons(origin, slot.code), parseMode: 'Markdown' });
       } else {
-        say(devicesLine(sub) + '.\n' + DEVICE_LIMIT_TEXT);
+        const swap = swapStatus(mainSubscription(cur, account.id), now, 1);
+        const later =
+          swap.left > 0 ? '\n' + swapLeftLine(swap) : '\nСмены устройства на 30 дней исчерпаны: следующая — с ' + mskDateTime(swap.nextAt) + '.';
+        say(devicesLine(sub) + '.\n' + DEVICE_LIMIT_TEXT + later);
       }
       if (wallet && prices.extra) {
         const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
@@ -660,28 +681,51 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     }
   } else if (action === 'unlink') {
     const bound = (sub && sub.devices.filter((d) => d.bound)) || [];
+    const swap = swapStatus(mainSubscription(cur, account.id), now, 1);
     if (!bound.length) say('Нет привязанных устройств.');
+    else if (swap.left < 1) say(swapLimitText(swap));
     else {
       say(
         'Пришлите начало device id для отвязки (или «все»):\n' +
-          bound.map((d) => (d.deviceId || '').slice(0, 8) + '…').join('\n'),
+          bound.map((d) => (d.deviceId || '').slice(0, 8) + '…').join('\n') +
+          '\n\n' +
+          swapLeftLine(swap) +
+          ' Отвязанное устройство сразу перестаёт работать.',
         { await: { kind: 'unlink_device' } },
       );
     }
   } else if (action === 'unlink_confirm') {
     const q = String(arg || '').toLowerCase();
     const bound = (sub && sub.devices.filter((d) => d.bound)) || [];
-    if (q === 'все' || q === 'all') {
-      let next = cur;
-      for (let i = 0; i < bound.length; i++) next = unbindDevice(next, { accountId: account.id, deviceId: bound[i].deviceId });
-      cur = next;
-      say('Все устройства отвязаны. Код можно ввести заново после выдачи нового (обратитесь к админу) или оплатите слот.');
-    } else {
-      const hit = bound.find((d) => (d.deviceId || '').indexOf(q) === 0);
-      if (!hit) say('Устройство не найдено.');
+    const all = q === 'все' || q === 'all';
+    const hit = all ? null : bound.find((d) => q && (d.deviceId || '').indexOf(q) === 0);
+    const ids = all ? bound.map((d) => d.deviceId) : hit ? [hit.deviceId] : [];
+    if (!ids.length) say(all ? 'Нет привязанных устройств.' : 'Устройство не найдено.');
+    else {
+      const out = selfUnbind(cur, { accountId: account.id, deviceIds: ids, now });
+      if (out.result.error === 'swap_limit') {
+        if (ids.length > 1 && out.result.left > 0) {
+          say(
+            'Отвязать все устройства (' +
+              ids.length +
+              ') сейчас нельзя: ' +
+              swapLeftLine(out.result).toLowerCase() +
+              '\nОтвяжите по одному: «Отвязать» и начало device id.',
+          );
+        } else {
+          say(swapLimitText(out.result));
+        }
+      } else if (out.result.error) say('Устройство не найдено.');
       else {
-        cur = unbindDevice(cur, { accountId: account.id, deviceId: hit.deviceId });
-        say('Устройство ' + hit.deviceId.slice(0, 8) + '… отвязано. Нажмите «Код», чтобы получить новый и открыть в OMP.');
+        cur = out.state;
+        const head = all
+          ? 'Все устройства отвязаны (' + out.result.unbound + ').'
+          : 'Устройство ' + hit.deviceId.slice(0, 8) + '… отвязано.';
+        const tail =
+          out.result.left > 0
+            ? swapLeftLine(out.result)
+            : 'Это была последняя смена на 30 дней: следующая — с ' + mskDateTime(out.result.nextAt) + '.';
+        say(head + ' Нажмите «Код», чтобы получить новый код и открыть его в OMP.\n' + tail);
       }
     }
   } else if (action === 'support' && !arg) {

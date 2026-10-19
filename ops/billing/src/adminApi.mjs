@@ -1,4 +1,16 @@
-import { accountCard, activeExtras, adminDashboard, dailySeries, deviceLimitNow, financeReport, subAccess, supportThreads, telegramDisplay } from './logic.mjs';
+import { maskIp, pendingPayments, swapStatus } from './deviceAdmin.mjs';
+import {
+  accountCard,
+  activeExtras,
+  adminDashboard,
+  dailySeries,
+  deviceLimitNow,
+  financeReport,
+  mainSubscription,
+  subAccess,
+  supportThreads,
+  telegramDisplay,
+} from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
 import { storageInfo } from './store.mjs';
 
@@ -110,6 +122,7 @@ export function homePayload(state, file, opts) {
       problems: (finance.problems || []).slice(0, 20),
     },
     subscriptions: subRows(state, now),
+    pending: pendingPayments(state),
     promos: promoRows(state),
     fails: failRows(state),
     sessions: opts.sessions || [],
@@ -122,9 +135,14 @@ export function homePayload(state, file, opts) {
 }
 
 export function userPayload(state, accountId, opts) {
-  const card = accountCard(state, accountId, Date.now());
+  const now = Date.now();
+  const card = accountCard(state, accountId, now);
   if (!card) return null;
   const sub = card.sub;
+  const subRow = sub ? mainSubscription(state, card.account.id) : null;
+  const overIds = new Set(((sub && sub.devices) || []).filter((d) => d.overLimit).map((d) => d.id));
+  const boundCount = (card.codes || []).filter((c) => c.deviceId).length;
+  const swaps = subRow ? swapStatus(subRow, now, 1) : null;
   return {
     csrf: opts.csrf || '',
     flash: {
@@ -147,9 +165,32 @@ export function userPayload(state, accountId, opts) {
           paidUntil: sub.paidUntil,
           paidUntilText: day(sub.paidUntil),
           active: !!sub.active,
+          inGrace: !!sub.inGrace,
+          accessUntil: sub.accessUntil || 0,
           deviceLimit: sub.deviceLimit,
+          baseLimit: sub.baseLimit,
+          extraSlots: sub.extraSlots,
+          extraUntil: sub.extraUntil || 0,
+          bound: boundCount,
+          overLimit: boundCount > sub.deviceLimit,
+          swaps: swaps
+            ? { used: swaps.used, left: swaps.left, limit: swaps.limit, nextAt: Number.isFinite(swaps.nextAt) ? swaps.nextAt : 0, resetAt: swaps.resetAt }
+            : null,
         }
       : null,
+    /** Bound devices, oldest binding first. IPs are masked here; the full address stays on the server. */
+    devices: (card.codes || [])
+      .filter((c) => c.deviceId)
+      .sort((a, b) => (a.boundAt || 0) - (b.boundAt || 0))
+      .map((c) => ({
+        codeId: c.id,
+        deviceId: c.deviceId.slice(0, 8),
+        boundAt: c.boundAt || 0,
+        lastSeenAt: c.lastSeenAt || 0,
+        lastIp: maskIp(c.lastIp),
+        overLimit: overIds.has(c.id),
+      })),
+    pending: pendingPayments(state, card.account.id),
     codes: (card.codes || []).map((c) => ({
       id: c.id,
       hasPlain: !!c.plain,

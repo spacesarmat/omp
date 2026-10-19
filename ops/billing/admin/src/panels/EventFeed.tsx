@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, CreditCard, Shield, Smartphone, Ticket } from 'lucide-react';
+import { Ban, CreditCard, Repeat, Shield, Smartphone, Ticket } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Stamp } from '@/components/stamp';
@@ -16,6 +16,7 @@ const KIND_ICON: Record<string, typeof CreditCard> = {
   activate: Smartphone,
   fail: Ban,
   admin: Shield,
+  device: Repeat,
 };
 
 function KindBadge({ kind }: { kind: string }) {
@@ -58,6 +59,7 @@ export function HomeFeed({ events }: { events: FeedEvent[] }) {
             <option value="activate">Активация</option>
             <option value="fail">Отказ</option>
             <option value="admin">Админ</option>
+            <option value="device">Смена устройства</option>
           </select>
         </CardDescription>
       </CardHeader>

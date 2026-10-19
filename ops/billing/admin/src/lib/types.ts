@@ -59,6 +59,29 @@ export type FeedEvent = {
   actor?: FeedActor;
 };
 
+export type PendingPayment = {
+  operationId: string;
+  amount: string;
+  at: number;
+  label?: string;
+  kind?: string;
+  price?: number;
+  accountId?: string;
+  who?: string;
+};
+
+export type DeviceRow = {
+  codeId: string;
+  deviceId: string;
+  boundAt?: number;
+  lastSeenAt?: number;
+  /** Masked on the server: «95.24.113.*». */
+  lastIp?: string;
+  overLimit?: boolean;
+};
+
+export type SwapInfo = { used: number; left: number; limit: number; nextAt?: number; resetAt?: number };
+
 export type HomeData = {
   csrf: string;
   sessionId: string;
@@ -72,6 +95,7 @@ export type HomeData = {
     problems?: ProblemRow[];
   };
   subscriptions?: SubRow[];
+  pending?: PendingPayment[];
   promos?: { id: string; code: string; days: number; uses: number; maxUses: number; revoked: boolean; createdAt?: number }[];
   fails?: { at?: number; atText: string; reason: string; deviceId: string }[];
   sessions?: { id: string; lastSeen?: number; createdAt?: number; actor?: FeedActor }[];
@@ -103,7 +127,22 @@ export type UserData = {
     createdAt?: number;
     createdText: string;
   };
-  subscription?: { paidUntilText: string; active: boolean; deviceLimit: number; paidUntil?: number };
+  subscription?: {
+    paidUntilText: string;
+    active: boolean;
+    deviceLimit: number;
+    paidUntil?: number;
+    inGrace?: boolean;
+    accessUntil?: number;
+    baseLimit?: number;
+    extraSlots?: number;
+    extraUntil?: number;
+    bound?: number;
+    overLimit?: boolean;
+    swaps?: SwapInfo | null;
+  };
   codes?: UserCode[];
+  devices?: DeviceRow[];
+  pending?: PendingPayment[];
   payments?: PaymentRow[];
 };
