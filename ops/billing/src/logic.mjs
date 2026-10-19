@@ -686,9 +686,23 @@ function extendGift(state, sub, days, now) {
  * Renewal price at `now`: base price plus every extra slot that still counts.
  * `withExtras: false` quotes the subscription alone (the extra slots then lapse on their date).
  */
+/**
+ * Extra slots a renewal at `now` brings along: the ones that still count, or, once access is over,
+ * the ones that ran with this subscription and lapsed with it (extraUntil reached paidUntil).
+ * Slots dropped by an earlier base-only renewal are not offered again; they are bought with «Код».
+ */
+export function renewableExtras(state, sub, now) {
+  if (!sub) return 0;
+  const active = activeExtras(state, sub, now);
+  if (active > 0) return active;
+  if (subAccess(state, sub, now).access) return 0;
+  const n = Math.max(0, Math.floor(Number(sub.extraSlots) || 0));
+  return n && (Number(sub.extraUntil) || 0) >= (Number(sub.paidUntil) || 0) ? n : 0;
+}
+
 export function renewalPrice(state, sub, now, opts) {
   const prices = priceText(state.settings);
-  const extras = opts && opts.withExtras === false ? 0 : activeExtras(state, sub, now);
+  const extras = opts && opts.withExtras === false ? 0 : renewableExtras(state, sub, now);
   return {
     days: prices.days,
     base: prices.price,
