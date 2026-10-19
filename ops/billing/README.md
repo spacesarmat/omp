@@ -117,7 +117,9 @@ HSTS (`max-age=15552000; includeSubDomains`, без preload), `X-Content-Type-Op
 
 - По умолчанию (`BILLING_STORE` не задан или `sqlite`) — `billing.db` по пути `BILLING_DATA`, как раньше.
 - `BILLING_STORE=postgres` + `BILLING_DATABASE_URL=postgres://…` — состояние в нормализованных таблицах Postgres 17 (`src/db/pg/`): схема создаётся миграциями при старте (`schema_migrations`), запись — одна транзакция под advisory-блокировкой, пишутся только изменившиеся строки, журналы (аудит, попытки входа, проблемы ЮMoney, сообщения поддержки) не удаляются, а помечаются `live = false`. Строка подключения не логируется; при ошибке подключения в stderr только код и текст ошибки, процесс завершается с кодом 1. Любое другое значение `BILLING_STORE` — ошибка, а не тихий откат на SQLite.
-- Перенос данных из `billing.db`, сервис postgres в compose и выкатка — следующие PR по плану `docs/billing/postgres-migration-plan.md`. Пока Postgres только в CI (тесты обоих хранилищ, `BILLING_TEST_DATABASE_URL`).
+- Перенос данных: `BILLING_DATABASE_URL=… node src/migrateToPostgres.mjs --from /data/billing.db` — сухой прогон (всё переносится и сверяется в транзакции, затем откат); `--apply` — запись, только в пустую базу и только если сверка прошла. Отчёт (`--report файл`) — числа, id и короткие хэши, без значений настроек и токенов. Подробности — раздел 3 плана.
+- Сроки хранения журналов на Postgres: аудит и проблемы ЮMoney — 1 год, попытки входа — 90 дней (раз в сутки).
+- Сервис postgres в compose и выкатка — следующий PR по плану `docs/billing/postgres-migration-plan.md`.
 
 ## Бот: тайм-ауты и `/health`
 
