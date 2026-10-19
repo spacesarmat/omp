@@ -1149,12 +1149,13 @@ export function createApp(file, fetchImpl, opts) {
   };
 }
 
-export function listen(file, port, fetchImpl) {
-  const server = createServer((req, res) => {
-    createApp(file, fetchImpl)(req, res);
-  });
+export function listen(file, port, fetchImpl, opts) {
+  // One app for the whole process: the /v1/activate limiter lives inside createApp and
+  // must keep its counters between requests. State is still read from the store per request.
+  const app = createApp(file, fetchImpl, opts);
+  const server = createServer(app);
   // BILLING_HOST=127.0.0.1 for host+tunnel; 0.0.0.0 inside Docker (Caddy reaches it on the compose network)
-  const host = process.env.BILLING_HOST || '0.0.0.0';
+  const host = (opts && opts.host) || process.env.BILLING_HOST || '0.0.0.0';
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
 }
 

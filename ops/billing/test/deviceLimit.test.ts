@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { request as httpRequest } from 'node:http';
 import { join } from 'node:path';
 import { homePayload } from '../src/adminApi.mjs';
 import { botReply, DEVICE_LIMIT_TEXT, paymentAdminNotices } from '../src/bot.mjs';
@@ -23,7 +24,7 @@ import {
   startDeviceLink,
   confirmDeviceLink,
 } from '../src/logic.mjs';
-import { createApp, linkClearRequiresToken } from '../src/server.mjs';
+import { createApp, linkClearRequiresToken, listen } from '../src/server.mjs';
 import { activateLimitConfig, clientIp, createActivateLimiter } from '../src/services.mjs';
 import { emptyState, readState, updateState, writeState } from '../src/store.mjs';
 import { notificationHash } from '../src/yoomoney.mjs';
@@ -375,6 +376,38 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
     expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
     const other = await call(app, 'POST', '/v1/activate', { headers: { 'cf-connecting-ip': '203.0.113.6' }, body: { code: 'YYYYYYYY', deviceId: DEV_C } });
     expect(other.status).toBe(403);
+  });
+
+  it('listen() keeps one limiter for the process, so real requests hit 429', async () => {
+    const start = paid();
+    const file = tempFile(start.state);
+    const server = await listen(file, 0, noFetch, { host: '127.0.0.1', env: { BILLING_ACTIVATE_IP_MAX: '3', BILLING_ACTIVATE_CODE_MAX: '100' } });
+    const port = (server.address() as { port: number }).port;
+    const post = (code: string) =>
+      new Promise<{ status: number; retryAfter: string }>((resolve, reject) => {
+        const body = JSON.stringify({ code, deviceId: DEV_C });
+        const req = httpRequest(
+          { hostname: '127.0.0.1', port, path: '/v1/activate', method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) } },
+          (res) => {
+            res.resume();
+            res.on('end', () => resolve({ status: res.statusCode || 0, retryAfter: String(res.headers['retry-after'] || '') }));
+          },
+        );
+        req.on('error', reject);
+        req.end(body);
+      });
+    try {
+      const statuses: number[] = [];
+      let last = { status: 0, retryAfter: '' };
+      for (let i = 0; i < 5; i++) {
+        last = await post('ZZZZ-ZZ' + i + 'Z');
+        statuses.push(last.status);
+      }
+      expect(statuses).toEqual([403, 403, 403, 429, 429]);
+      expect(Number(last.retryAfter)).toBeGreaterThan(0);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('/v1/activate limits one code across addresses', async () => {
