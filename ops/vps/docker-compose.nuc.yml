@@ -6,13 +6,14 @@
 #   VPS omp-billing is stopped.
 # - postgres: billing database for the move off SQLite (docs/billing/postgres-cutover.md). Internal network
 #   only, no published port, data in ./data/postgres. Needs BILLING_PG_PASSWORD in .env (hex, generated on the
-#   server, never printed): compose refuses to start anything without it. Billing keeps BILLING_STORE=sqlite
-#   until the cutover; BILLING_READONLY=1 (set for one `up`) is the cutover's read-only window.
+#   server, never printed): compose refuses to start anything without it. Billing runs on Postgres since the
+#   2026-10-19 cutover (BILLING_STORE default postgres; billing.db is no longer written). BILLING_READONLY=1
+#   (set for one `up`) is a read-only window.
 services:
   billing:
     environment:
       BILLING_BOT_POLL: "1"   # NUC is the only getUpdates poller (VPS omp-billing stopped)
-      BILLING_STORE: ${BILLING_STORE:-sqlite}
+      BILLING_STORE: ${BILLING_STORE:-postgres}
       BILLING_DATABASE_URL: postgres://omp_billing:${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}@postgres:5432/omp_billing
       BILLING_READONLY: ${BILLING_READONLY:-0}
       # pg_dump every backupEveryHours (admin settings) into /opt/omp-backups/pg, mode 600
