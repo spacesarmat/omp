@@ -131,7 +131,12 @@ describe('Postgres backups: files', () => {
     expect(backupAlert(st)).toBe('');
     st = backupStatus(dir, {}, NOW + 5 * HOUR, 'pg_dump exit 1: connection refused');
     expect(st.stale).toBe(true);
-    expect(backupAlert(st)).toBe('Последний бэкап Postgres 28 ч назад (должен быть раз в 24 ч): pg_dump exit 1: connection refused');
+    expect(backupAlert(st)).toBe('Ошибка бэкапа Postgres: pg_dump exit 1: connection refused');
+    // A failed attempt must alert even while the previous dump is still fresh.
+    dump(dir, NOW - HOUR, 99);
+    st = backupStatus(dir, {}, NOW, 'pg_dump exit 1: connection refused');
+    expect(st.stale).toBe(false);
+    expect(backupAlert(st)).toBe('Ошибка бэкапа Postgres: pg_dump exit 1: connection refused');
   });
 });
 
@@ -208,6 +213,17 @@ describe('Postgres backups: health and admin', () => {
     dump(dir, NOW - HOUR);
     expect(healthPayload(NOW, { backup: backupStatus(dir, {}, NOW, '') })).toMatchObject({ ok: true, pgBackupOk: true, pgBackupAgoSec: 3600 });
     expect(healthPayload(NOW, { backup: backupStatus(tmp(), {}, NOW, '') })).toMatchObject({ ok: true, pgBackupOk: false, pgBackupAgoSec: null });
+    // Fresh dump but last attempt failed: pgBackupOk must be false so monitors and Telegram fire.
+    expect(healthPayload(NOW, { backup: backupStatus(dir, {}, NOW, 'pg_dump exit 1: boom') })).toMatchObject({
+      ok: true,
+      pgBackupOk: false,
+      pgBackupAgoSec: 3600,
+    });
+    // Schedule from settings: weekly interval must not look stale after 40 hours.
+    dump(dir, NOW - 40 * HOUR);
+    const week = backupStatus(dir, { backupEveryHours: 168 }, NOW, '');
+    expect(week.stale).toBe(false);
+    expect(healthPayload(NOW, { backup: week })).toMatchObject({ pgBackupOk: true });
   });
 
   it('the admin home shows the last dump and raises an alert when it is stale', () => {
@@ -283,7 +299,7 @@ describe('Postgres backups: Telegram notice to the admins', () => {
     expect(backupNotice(false, fresh())).toEqual({ alerted: false, text: '' });
     // a failed pg_dump is a problem even while the last dump is still fresh
     const failed = backupStatus(dir, {}, NOW, 'pg_dump exit 1: boom');
-    expect(backupNotice(false, failed)).toEqual({ alerted: true, text: '⚠️ Бэкап Postgres не удался: pg_dump exit 1: boom' });
+    expect(backupNotice(false, failed)).toEqual({ alerted: true, text: '⚠️ Ошибка бэкапа Postgres: pg_dump exit 1: boom' });
     expect(backupProblem({ enabled: false } as never)).toBe('');
   });
 
@@ -308,7 +324,7 @@ describe('Postgres backups: Telegram notice to the admins', () => {
     failSend = false;
     await b.tick(); // still failing: the notice goes out now
     await b.tick(); // same episode: nothing new
-    expect(sent).toEqual(['⚠️ Бэкапов Postgres ещё нет: pg_dump exit 1: boom']);
+    expect(sent).toEqual(['⚠️ Ошибка бэкапа Postgres: pg_dump exit 1: boom']);
     code = 0;
     await b.tick(); // dump works
     expect(sent).toHaveLength(2);
