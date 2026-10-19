@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { homePayload, userPayload } from '../src/adminApi.mjs';
 import { matchesSubscriptionFilter, nextSupportSelection, reminderTargets } from '../admin/src/lib/subs.ts';
 import { adminNotifyEnabled, paymentAdminNotices, serviceDownNotices, botReply } from '../src/bot.mjs';
@@ -20,7 +17,8 @@ import {
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { maskWallet, mergeSettings, publicAdminSettings, SECRET_MASK } from '../src/services.mjs';
-import { emptyState, readState, updateState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 import { notificationHash } from '../src/yoomoney.mjs';
 
 const NOW = Date.UTC(2026, 0, 15, 12, 0, 0);
@@ -235,12 +233,11 @@ async function call(
 
 describe('admin http', () => {
   it('reveals one code, issues for N days, and still notifies on extend', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-admin-'));
-    const file = join(dir, 'billing.db');
+    const file = await testStore();
     const start = seeded();
     start.state.settings.botToken = 'token';
     start.state.settings.adminNotify = true;
-    writeState(file, start.state);
+    await writeState(file, start.state);
     const calls: string[] = [];
     const fetchImpl = async (url: string) => {
       calls.push(String(url));
@@ -256,9 +253,9 @@ describe('admin http', () => {
     const denied = await call(app, 'POST', '/admin/login', { body: { password: 'secret1' } });
     expect(denied.status).toBe(403);
     expect(denied.body).not.toContain('secret1');
-    expect(JSON.stringify(readState(file))).not.toContain('secret1');
+    expect(JSON.stringify((await readState(file)))).not.toContain('secret1');
     const link = await updateState(file, (s) => issueCliAdminLogin(s, { now: Date.now() }));
-    expect(JSON.stringify(readState(file))).not.toContain(link.token);
+    expect(JSON.stringify((await readState(file)))).not.toContain(link.token);
     const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));
     expect(once.status).toBe(302);
     const cookie = String(once.headers['set-cookie'] || '');
@@ -295,14 +292,13 @@ describe('admin http', () => {
   });
 
   it('logs a bad yoomoney signature and does not notify admins', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-yoo-'));
-    const file = join(dir, 'billing.db');
+    const file = await testStore();
     const state = emptyState();
     state.settings.yoomoneySecret = 'secret';
     state.settings.botToken = 'token';
     state.settings.adminTelegramIds = '99';
     state.settings.adminNotify = true;
-    writeState(file, state);
+    await writeState(file, state);
     const calls: string[] = [];
     const fetchImpl = async (url: string) => {
       calls.push(String(url));
@@ -330,7 +326,7 @@ describe('admin http', () => {
     expect(bad.status).toBe(400);
     expect(bad.body).toBe('bad signature');
     expect(calls).toHaveLength(0);
-    expect(readState(file).webhooks.some((row: { kind?: string }) => row.kind === 'bad_signature')).toBe(true);
+    expect((await readState(file)).webhooks.some((row: { kind?: string }) => row.kind === 'bad_signature')).toBe(true);
     const fields = { ...forged, operation_id: 'op-real', sha1_hash: '' };
     fields.sha1_hash = notificationHash(fields, 'secret');
     const ok = await call(app, 'POST', '/v1/yoomoney', { form: fields });

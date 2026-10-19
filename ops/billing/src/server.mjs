@@ -123,7 +123,6 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
-import { resolveDbPath } from './store.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
@@ -552,7 +551,7 @@ export function createApp(file, fetchImpl, opts) {
   const secret = async () => secretValue || (secretValue = await reg.tokenSecret(env));
   const envSecret = String(env.BILLING_TOKEN_SECRET || '');
   if (envSecret && envSecret.length < 32) {
-    process.stderr.write('BILLING_TOKEN_SECRET is shorter than 32 characters and is ignored; the key in billing.db signs tokens\n');
+    process.stderr.write('BILLING_TOKEN_SECRET is shorter than 32 characters and is ignored; the key in the database signs tokens\n');
   }
 
   /**
@@ -1919,8 +1918,7 @@ export function startReminders(file, fetchImpl, opts) {
 const RETENTION_EVERY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Daily log retention (src/retention.mjs) on a store that supports it (Postgres). The SQLite store keeps its
- * capped arrays as before. Prints counts only. Returns a stop function.
+ * Daily log retention (src/retention.mjs) on the Postgres store. Prints counts only. Returns a stop function.
  */
 export function startRetention(store, opts) {
   if (!store || typeof store.retention !== 'function') return () => {};
@@ -1941,13 +1939,6 @@ export function startRetention(store, opts) {
     clearTimeout(first);
     clearInterval(timer);
   };
-}
-
-export function dataFile() {
-  const fromEnv = process.env.BILLING_DATA;
-  if (fromEnv) return resolveDbPath(fromEnv);
-  const path = new URL('../data/billing.db', import.meta.url).pathname;
-  return path.replace(/^\/([A-Za-z]:)/, '$1');
 }
 
 function envServiceDefaults() {
@@ -1995,8 +1986,8 @@ function storeErrorText(e) {
 const started = process.argv[1] && process.argv[1].endsWith('server.mjs');
 if (started) {
   const port = Number(process.env.PORT || 8787);
-  // BILLING_STORE=postgres + BILLING_DATABASE_URL, otherwise billing.db at BILLING_DATA (dataFile()).
-  openStore(process.env, dataFile())
+  // Postgres at BILLING_DATABASE_URL (the only store).
+  openStore(process.env)
     .then(async (store) => {
       const readOnly = readOnlyMode(process.env);
       if (!readOnly) await ensureAdmin(store);

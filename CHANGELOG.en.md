@@ -12,6 +12,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Subscription: a phone unbound and bound again right away no longer gets “This device was disconnected”
 - Billing: a SQLite → Postgres data migration script with verification and a dry run; on Postgres logs are kept for a year (sign-in attempts for 90 days)
 - Billing: Postgres 17 in the NUC compose (internal network, no port), daily dumps with frequency and retention set in the panel, a read-only mode for the cutover, a cutover and restore runbook
+- Billing: the SQLite code is removed and billing runs on Postgres only; the old billing.db stays as an archive, and a tool in tools can read it into Postgres
 - Billing: moved to Postgres (19 Oct, 17:13 MSK); SQLite is no longer used
 - Billing: the bot tells the admins about a stale or failed Postgres backup
 

@@ -16,7 +16,9 @@ services:
           memory: 64M
     environment:
       PORT: "8787"
-      BILLING_DATA: /data/billing.db
+      # Billing runs on Postgres only (the SQLite store was removed): set BILLING_DATABASE_URL in .env,
+      # otherwise the container exits at start. /data keeps the old billing.db as an archive.
+      BILLING_DATABASE_URL: ${BILLING_DATABASE_URL:?set BILLING_DATABASE_URL (Postgres) in .env}
       # This NAS copy must not steal getUpdates from the VPS bot. Set 1 only if it is the only billing process.
       BILLING_BOT_POLL: "0"
       # host gateway on Docker bridge — existing Jackett on the NAS

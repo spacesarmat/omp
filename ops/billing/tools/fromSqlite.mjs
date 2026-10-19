@@ -20,7 +20,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync, backup } from 'node:sqlite';
-import { swapStatus } from '../../deviceAdmin.mjs';
+import { swapStatus } from '../src/deviceAdmin.mjs';
 import {
   activeBonus,
   activeExtras,
@@ -33,13 +33,13 @@ import {
   limitBreakdown,
   renewalPrice,
   subAccess,
-} from '../../logic.mjs';
-import { expiredLogCounts, pruneLogs } from '../../retention.mjs';
-import { normalizeState } from '../../state.mjs';
-import * as reg from './registry.mjs';
-import { LOCK_WRITE } from './schema.mjs';
-import { COLLECTIONS } from './spec.mjs';
-import { loadAll, openPool, writeDiff } from './store.mjs';
+} from '../src/logic.mjs';
+import { expiredLogCounts, pruneLogs } from '../src/retention.mjs';
+import { normalizeState } from '../src/state.mjs';
+import * as reg from '../src/db/pg/registry.mjs';
+import { LOCK_WRITE } from '../src/db/pg/schema.mjs';
+import { COLLECTIONS } from '../src/db/pg/spec.mjs';
+import { loadAll, openPool, writeDiff } from '../src/db/pg/store.mjs';
 
 const DEVICE_COLS = [
   'id', 'subscription_id', 'account_id', 'code_id', 'device_id', 'name', 'platform', 'created_at', 'bound_at',

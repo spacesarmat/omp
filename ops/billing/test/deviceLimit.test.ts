@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { request as httpRequest } from 'node:http';
-import { join } from 'node:path';
 import { homePayload } from '../src/adminApi.mjs';
 import { botReply, DEVICE_LIMIT_TEXT, paymentAdminNotices } from '../src/bot.mjs';
 import {
@@ -26,7 +23,8 @@ import {
 } from '../src/logic.mjs';
 import { createApp, linkClearRequiresToken, listen } from '../src/server.mjs';
 import { activateLimitConfig, clientIp, createActivateLimiter } from '../src/services.mjs';
-import { emptyState, readState, updateState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 import { notificationHash } from '../src/yoomoney.mjs';
 
 const NOW = Date.parse('2026-10-19T00:00:00Z');
@@ -206,9 +204,8 @@ describe('deviceLimit migration to the base of 2', () => {
     expect(twice.subscriptions.map((s: { deviceLimit: number }) => s.deviceLimit)).toEqual([2, 3]);
   });
 
-  it('a stored "2 of 1" subscription reads back as "2 of 2" and both devices keep working', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'omp-dev-'));
-    const file = join(dir, 'billing.db');
+  it('a stored "2 of 1" subscription reads back as "2 of 2" and both devices keep working', async () => {
+    const file = await testStore();
     const f = full();
     // Snapshot as the old server wrote it: no meta, limit 1, two bound devices.
     const legacy: Record<string, unknown> = {
@@ -216,11 +213,11 @@ describe('deviceLimit migration to the base of 2', () => {
       subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, deviceLimit: 1 })),
     };
     delete legacy.meta;
-    writeState(file, legacy);
-    const read = readState(file);
+    await writeState(file, legacy);
+    const read = (await readState(file));
     expect(read.subscriptions[0].deviceLimit).toBe(2);
     expect(read.meta.deviceBase).toBe(2);
-    expect(readState(file).subscriptions[0].deviceLimit).toBe(2);
+    expect((await readState(file)).subscriptions[0].deviceLimit).toBe(2);
     expect(sessionOk(read, { token: f.tokenA, deviceId: DEV_A, now: NOW })).toBeTruthy();
     expect(sessionOk(read, { token: f.tokenB, deviceId: DEV_B, now: NOW })).toBeTruthy();
     const home = homePayload({ ...read, subscriptions: read.subscriptions.map((s: object) => ({ ...s, paidUntil: Date.now() + DAY })) }, file, {});
@@ -353,9 +350,9 @@ async function call(
 
 const noFetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '', headers: {}, arrayBuffer: async () => new ArrayBuffer(0) });
 
-function tempFile(state: unknown) {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-pr1-')), 'billing.db');
-  writeState(file, state);
+async function tempFile(state: unknown) {
+  const file = await testStore();
+  await writeState(file, state);
   return file;
 }
 
@@ -366,7 +363,7 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
       { ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, limitOverride: 3 })) },
       { accountId: f.account, now: NOW },
     );
-    const file = tempFile({ ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, limitOverride: null, paidUntil: Date.now() + DAY })) });
+    const file = await tempFile({ ...minted.state, subscriptions: minted.state.subscriptions.map((s: object) => ({ ...s, limitOverride: null, paidUntil: Date.now() + DAY })) });
     const app = createApp(file, noFetch, { env: { BILLING_ACTIVATE_IP_MAX: '3', BILLING_ACTIVATE_CODE_MAX: '10' } });
     const ip = { 'cf-connecting-ip': '203.0.113.5' };
     const third = await call(app, 'POST', '/v1/activate', { headers: ip, body: { code: minted.result.code, deviceId: DEV_C } });
@@ -385,7 +382,7 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
 
   it('listen() keeps one limiter for the process, so real requests hit 429', async () => {
     const start = paid();
-    const file = tempFile(start.state);
+    const file = await tempFile(start.state);
     const server = await listen(file, 0, noFetch, { host: '127.0.0.1', env: { BILLING_ACTIVATE_IP_MAX: '3', BILLING_ACTIVATE_CODE_MAX: '100' } });
     const port = (server.address() as { port: number }).port;
     const post = (code: string) =>
@@ -417,7 +414,7 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
 
   it('/v1/activate limits one code across addresses', async () => {
     const start = paid();
-    const file = tempFile(start.state);
+    const file = await tempFile(start.state);
     const app = createApp(file, noFetch, { env: { BILLING_ACTIVATE_IP_MAX: '100', BILLING_ACTIVATE_CODE_MAX: '2' } });
     const statuses: number[] = [];
     for (let i = 0; i < 3; i++) {
@@ -430,21 +427,21 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
   it('/v1/link/clear checks a sent token, and can require one', async () => {
     const start = paid();
     const a = activate(start.state, { code: start.code, deviceId: DEV_A, now: NOW });
-    const file = tempFile(a.state);
+    const file = await tempFile(a.state);
     const app = createApp(file, noFetch, { env: {} });
     const wrong = await call(app, 'POST', '/v1/link/clear', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer nope' }, body: { deviceId: DEV_A } });
     expect(wrong.status).toBe(401);
     const foreign = await call(app, 'POST', '/v1/link/clear', { headers: { 'x-device-id': DEV_B, authorization: 'Bearer ' + a.result.token }, body: {} });
     expect(foreign.status).toBe(401);
-    expect(readState(file).accounts[0].linkedDevices).toContain(DEV_A);
+    expect((await readState(file)).accounts[0].linkedDevices).toContain(DEV_A);
     const good = await call(app, 'POST', '/v1/link/clear', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token }, body: {} });
     expect(good.status).toBe(200);
-    expect(readState(file).accounts[0].linkedDevices).not.toContain(DEV_A);
+    expect((await readState(file)).accounts[0].linkedDevices).not.toContain(DEV_A);
 
     // Compatibility (default): the current app sends only the device id.
-    const linked = startDeviceLink(readState(file), { deviceId: DEV_B, now: Date.now() });
+    const linked = startDeviceLink((await readState(file)), { deviceId: DEV_B, now: Date.now() });
     const confirmed = confirmDeviceLink(linked.state, { token: linked.result.token, telegramId: '42', now: Date.now() });
-    writeState(file, confirmed.state);
+    await writeState(file, confirmed.state);
     const legacy = await call(app, 'POST', '/v1/link/clear', { headers: { 'x-device-id': DEV_B }, body: { deviceId: DEV_B } });
     expect(legacy.status).toBe(200);
 
@@ -458,7 +455,7 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
 
   it('/v1/me lists other devices only for a valid token', async () => {
     const f = full();
-    const file = tempFile({ ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, paidUntil: Date.now() + DAY })) });
+    const file = await tempFile({ ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, paidUntil: Date.now() + DAY })) });
     const app = createApp(file, noFetch, { env: {} });
     const withToken = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + f.tokenA } });
     expect(withToken.status).toBe(200);
@@ -475,7 +472,7 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
     start.state.settings.priceRub = 150;
     start.state.settings.yoomoneySecret = 'secret';
     const quote = quotePurchase(start.state, { kind: 'sub', accountId: start.account, subscriptionId: start.sub, now: NOW });
-    const file = tempFile(quote.state);
+    const file = await tempFile(quote.state);
     const app = createApp(file, noFetch, { env: {} });
     const fields: Record<string, string> = {
       notification_type: 'card-incoming',
@@ -492,14 +489,14 @@ describe('billing HTTP: activation, link clear, /v1/me', () => {
     fields.sha1_hash = notificationHash(fields, 'secret');
     const res = await call(app, 'POST', '/v1/yoomoney', { form: fields });
     expect(res.status).toBe(200);
-    const after = readState(file);
+    const after = (await readState(file));
     expect(after.subscriptions[0].paidUntil).toBe(NOW + 30 * DAY);
     expect(after.payments[0].pending).toBe(true);
   });
 
   it('admin issue at the limit flashes a clear error', async () => {
     const f = full();
-    const file = tempFile({ ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, paidUntil: Date.now() + DAY })) });
+    const file = await tempFile({ ...f.state, subscriptions: f.state.subscriptions.map((s: object) => ({ ...s, paidUntil: Date.now() + DAY })) });
     const app = createApp(file, noFetch, { env: {} });
     const link = await updateState(file, (s: State) => issueCliAdminLogin(s, { now: Date.now() }));
     const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));

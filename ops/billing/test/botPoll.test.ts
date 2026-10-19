@@ -1,7 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { botPollStatusText } from '../admin/src/lib/botPoll';
 import { listStamp } from '../admin/src/lib/time';
 import {
@@ -17,7 +15,8 @@ import {
 } from '../src/botPoll.mjs';
 import { createApp, pollBot } from '../src/server.mjs';
 import { issueCliAdminLogin } from '../src/logic.mjs';
-import { emptyState, updateState, writeState } from '../src/store.mjs';
+import { emptyState } from '../src/state.mjs';
+import { updateState, writeState, testStore } from './pg';
 
 const NOW = Date.parse('2026-10-18T12:00:00Z');
 const TOKEN = 'poll-test-token';
@@ -42,14 +41,13 @@ function captureStderr() {
   };
 }
 
-function dbFile() {
-  const dir = mkdtempSync(join(tmpdir(), 'omp-poll-'));
-  const file = join(dir, 'billing.db');
+async function dbFile() {
+  const file = await testStore();
   const state = emptyState();
   state.settings.botToken = TOKEN;
   state.settings.adminTelegramIds = '99';
   state.settings.adminNotify = true;
-  writeState(file, state);
+  await writeState(file, state);
   return file;
 }
 
@@ -85,7 +83,7 @@ describe('BILLING_BOT_POLL', () => {
 
   it('does not call getUpdates when polling is off', async () => {
     process.env.BILLING_BOT_POLL = '0';
-    const file = dbFile();
+    const file = await dbFile();
     let called = 0;
     const log = captureStderr();
     try {
@@ -159,7 +157,7 @@ describe('getUpdates 409', () => {
   });
 
   it('pollBot logs the conflict, alerts once, and records a successful getUpdates', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     const calls: Call[] = [];
     const log = captureStderr();
     const fetchImpl = async (url: string, init?: { body?: string }) => {
@@ -202,7 +200,7 @@ describe('getUpdates 409', () => {
   });
 
   it('does not treat a webhook 409 as another poller', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     const log = captureStderr();
     let slept = 0;
     try {
@@ -242,7 +240,7 @@ describe('admin poll status', () => {
   });
 
   it('serves bot poll status on the services API', async () => {
-    const file = dbFile();
+    const file = await dbFile();
     const at = Date.now();
     noteGetUpdatesConflict({ adminNotify: false, adminTelegramIds: '99' }, at);
     const app = createApp(file, async () => jsonResponse(200, { ok: true }));

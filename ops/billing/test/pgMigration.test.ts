@@ -1,18 +1,20 @@
 /**
- * PR 3: billing.db → Postgres data migration (src/db/pg/fromSqlite.mjs) and log retention.
- * Needs BILLING_TEST_DATABASE_URL (CI: postgres:17 service); every test gets its own schema.
+ * PR 3: billing.db → Postgres data migration (tools/fromSqlite.mjs, kept for the archived billing.db) and
+ * log retention. Needs BILLING_TEST_DATABASE_URL (CI: postgres:17 service); every test gets its own schema.
+ * The source file is written here with the old table layout: the SQLite store itself is gone.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { sha256 } from '../src/crypto.mjs';
 import { activate, createSubscription, ensureTelegramAccount } from '../src/logic.mjs';
 import { emptyState, normalizeState } from '../src/state.mjs';
-import { readState, registryDb, writeState } from '../src/store.mjs';
-import { activeRowForCode, issuePair, tokenSecret } from '../src/registry.mjs';
+import { REFRESH_TTL_MS, signAccess } from '../src/registry.mjs';
 import { expiredLogCounts, pruneLogs } from '../src/retention.mjs';
+import { testStore } from './pg';
 
 const PG_URL = process.env.BILLING_TEST_DATABASE_URL || '';
 const DAY = 24 * 60 * 60 * 1000;
@@ -23,25 +25,36 @@ type State = ReturnType<typeof emptyState>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-const opened: Any[] = [];
-afterAll(async () => {
-  for (const s of opened) await s.close();
-});
 
 const schemaName = () => 'mig_' + Date.now().toString(36) + '_' + randomBytes(4).toString('hex');
 const tmpDb = () => join(mkdtempSync(join(tmpdir(), 'omp-mig-')), 'billing.db');
 
 async function migrate(opts: Record<string, unknown>) {
-  const mod = await import('../src/db/pg/fromSqlite.mjs');
+  const mod = await import('../tools/fromSqlite.mjs');
   return mod.migrateSqliteToPg({ connectionString: PG_URL, now: NOW, ...opts }) as Promise<Any>;
 }
 
 async function pgStore(schema: string) {
-  const mod = await import('../src/db/pg/store.mjs');
-  const s = await mod.createPgStore({ connectionString: PG_URL, schema });
-  opened.push(s);
-  return s as Any;
+  // Closed, and the schema dropped, by test/pg.ts after the file.
+  return (await testStore(schema)) as Any;
 }
+
+/** The tables of the old billing.db (snapshot + registry), as the SQLite store created them. */
+const LEGACY_TABLES = `
+  CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL);
+  CREATE TABLE devices (
+    id TEXT PRIMARY KEY, subscription_id TEXT NOT NULL, account_id TEXT NOT NULL DEFAULT '', code_id TEXT NOT NULL,
+    device_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL,
+    bound_at INTEGER NOT NULL DEFAULT 0, last_seen_at INTEGER NOT NULL DEFAULT 0, last_ip_net TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active', revoked_at INTEGER NOT NULL DEFAULT 0, revoke_reason TEXT NOT NULL DEFAULT '',
+    clone_at INTEGER NOT NULL DEFAULT 0, clone_count INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE refresh_tokens (
+    hash TEXT PRIMARY KEY, device_row_id TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+    rotated_at INTEGER NOT NULL DEFAULT 0, replaced_by TEXT NOT NULL DEFAULT '', revoked INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+`;
 
 /** A prod-like billing.db: a bound phone with a token pair, promos in every state, logs old and new. */
 function sourceDb() {
@@ -70,13 +83,33 @@ function sourceDb() {
     { id: 'p2', operationId: 'op-1', amount: '199.00', at: NOW - DAY, error: 'rejected' },
   ];
   s.experiment = { kept: true };
+  const stored = JSON.parse(JSON.stringify(normalizeState(state)));
+  const code = stored.codes.find((c: Any) => c.id === act.result.codeId);
+  const row = {
+    id: randomBytes(16).toString('hex'),
+    subscription_id: sub.result.subscriptionId,
+    account_id: acc.account.id,
+    code_id: code.id,
+    device_id: DEV_A,
+    created_at: Number(code.boundAt),
+    bound_at: Number(code.boundAt),
+    status: 'active',
+  };
+  const secret = randomBytes(32).toString('hex');
+  const now = Date.now();
+  const refreshToken = 'r1.' + randomBytes(32).toString('base64url');
   const file = tmpDb();
-  writeState(file, state);
-  const db = registryDb(file);
-  const row = activeRowForCode(db, act.result.codeId);
-  const secret = tokenSecret(db, {});
-  const pair = issuePair(db, secret, row, Date.now()).pair;
-  return { file, pair, row, codeId: act.result.codeId, subscriptionId: sub.result.subscriptionId };
+  const db = new DatabaseSync(file);
+  db.exec(LEGACY_TABLES);
+  db.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(stored), NOW);
+  db.prepare('INSERT INTO devices (id, subscription_id, account_id, code_id, device_id, created_at, bound_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+    row.id, row.subscription_id, row.account_id, row.code_id, row.device_id, row.created_at, row.bound_at, row.status,
+  );
+  db.prepare('INSERT INTO refresh_tokens (hash, device_row_id, created_at, expires_at) VALUES (?, ?, ?, ?)').run(sha256(refreshToken), row.id, now, now + REFRESH_TTL_MS);
+  db.prepare("INSERT INTO kv (key, value) VALUES ('token_secret', ?)").run(secret);
+  db.close();
+  const pair = { refreshToken, accessToken: signAccess(secret, row, now).token };
+  return { file, pair, row, stored, codeId: act.result.codeId, subscriptionId: sub.result.subscriptionId };
 }
 
 /** Rewrite the snapshot as is (no normalization), to plant broken rows. */
@@ -122,7 +155,7 @@ describe.skipIf(!PG_URL)('billing.db → Postgres', () => {
   it('apply moves the data: promos without history, logs pruned, phones keep their tokens', async () => {
     const src = sourceDb();
     const schema = schemaName();
-    const before = readState(src.file) as Any;
+    const before = src.stored as Any;
     const report = await migrate({ sourcePath: src.file, schema, apply: true });
     expect(report.ok, JSON.stringify(report.problems)).toBe(true);
     expect(report.result).toMatch(/committed/);

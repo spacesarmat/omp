@@ -1,14 +1,10 @@
 // Device limit as a composition: base (settings.baseDevices, or the subscription's individual limit) + bonus slots
 // (free; forever or until a date; from promos or the admin) + paid monthly extra slots. Plus device names.
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { userPayload } from '../src/adminApi.mjs';
 import { botReply } from '../src/bot.mjs';
 import { grantBonus, removeBonus, setDeviceLimit } from '../src/deviceAdmin.mjs';
-import { activeRowForCode, deviceNameOf, listDevices } from '../src/registry.mjs';
+import { deviceNameOf } from '../src/registry.mjs';
 import {
   activate,
   baseChangeImpact,
@@ -27,7 +23,8 @@ import {
   subscriptionView,
 } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
-import { emptyState, readState, registryDb, updateState, writeState } from '../src/store.mjs';
+import { emptyState, normalizeState } from '../src/state.mjs';
+import { readState, updateState, writeState, testStore } from './pg';
 
 const NOW = Date.UTC(2026, 9, 19, 9, 0, 0); // 19.10.2026 12:00 MSK
 const DAY = 24 * 60 * 60 * 1000;
@@ -99,14 +96,10 @@ describe('migration to the composed limit', () => {
     return { old, subs };
   }
 
-  it('a custom deviceLimit becomes the individual limit, the base one does not; nobody’s limit changes', () => {
+  it('a custom deviceLimit becomes the individual limit, the base one does not; nobody’s limit changes', async () => {
     const { old, subs } = oldSnapshot();
-    const file = join(mkdtempSync(join(tmpdir(), 'omp-lim-')), 'billing.db');
-    const raw = new DatabaseSync(file);
-    raw.exec('CREATE TABLE snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at INTEGER NOT NULL)');
-    raw.prepare('INSERT INTO snapshot (id, data, updated_at) VALUES (1, ?, ?)').run(JSON.stringify(old), NOW);
-    raw.close();
-    const read = readState(file);
+    // What a read of the stored snapshot gives: the one-time migrations run in normalizeState.
+    const read = normalizeState(JSON.parse(JSON.stringify(old)));
     expect(read.meta.limitModel).toBe(1);
     expect(subs.map((s) => subOf(read, s.id).limitOverride)).toEqual([null, 3, 1]);
     expect(subs.map((s) => subOf(read, s.id).bonusSlots)).toEqual([[], [], []]);
@@ -116,8 +109,9 @@ describe('migration to the composed limit', () => {
     // idempotent: once migrated, again changes nothing; a written and re-read state is the same
     expect(migrateLimitModel(read)).toBe(read);
     expect(migrateLimitModel({ ...read, meta: { ...read.meta, limitModel: 0 } }).subscriptions).toEqual(read.subscriptions);
-    writeState(file, read);
-    expect(readState(file).subscriptions).toEqual(read.subscriptions);
+    const file = await testStore();
+    await writeState(file, read);
+    expect((await readState(file)).subscriptions).toEqual(read.subscriptions);
   });
 
   it('migrates against the base in the settings when one is set', () => {
@@ -378,13 +372,13 @@ async function adminCookie(app: App, file: string) {
   return { cookie, csrf: String((home.data && home.data.csrf) || '') };
 }
 
-function httpSetup() {
-  const file = join(mkdtempSync(join(tmpdir(), 'omp-lim-http-')), 'billing.db');
+async function httpSetup() {
+  const file = await testStore();
   let state: State = emptyState();
   const a = account(state);
   const created = createSubscription(a.state, { accountId: a.accountId, now: Date.now(), days: 30 });
   state = created.state;
-  writeState(file, state);
+  await writeState(file, state);
   const app = createApp(
     file,
     async () => ({ ok: true, status: 200, json: async () => ({ ok: true, result: {} }), text: async () => '' }),
@@ -395,7 +389,7 @@ function httpSetup() {
 
 describe('admin HTTP', () => {
   it('bonus routes and the base setting need an admin session and the csrf', async () => {
-    const t = httpSetup();
+    const t = await httpSetup();
     const { cookie } = await adminCookie(t.app, t.file);
     const routes: [string, Record<string, unknown>][] = [
       ['/admin/bonus', { accountId: t.accountId, count: 2, days: '' }],
@@ -407,13 +401,13 @@ describe('admin HTTP', () => {
       expect((await call(t.app, 'POST', path, { body: { ...body, csrf: 'x' } })).status).toBe(403);
       expect((await call(t.app, 'POST', path, { cookie, body: { ...body, csrf: 'wrong' } })).status).toBe(403);
     }
-    const st = readState(t.file);
+    const st = (await readState(t.file));
     expect(subOf(st, t.sub)).toMatchObject({ limitOverride: null, bonusSlots: [] });
     expect(st.settings.baseDevices).toBe(2);
   });
 
   it('grants and removes a bonus, sets the base with validation, all in the journal', async () => {
-    const t = httpSetup();
+    const t = await httpSetup();
     const { cookie, csrf } = await adminCookie(t.app, t.file);
     const grant = await call(t.app, 'POST', '/admin/bonus', {
       cookie,
@@ -436,13 +430,13 @@ describe('admin HTTP', () => {
       cookie,
       body: { csrf, accountId: t.accountId, bonusId: sub.bonus[0].id, confirm: 'yes' },
     });
-    expect(subOf(readState(t.file), t.sub).bonusSlots).toEqual([]);
+    expect(subOf((await readState(t.file)), t.sub).bonusSlots).toEqual([]);
 
     const bad = await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '21' } });
     expect((bad.data as { flash?: { error?: string } }).flash?.error).toContain('от 1 до 20');
-    expect(readState(t.file).settings.baseDevices).toBe(2);
+    expect((await readState(t.file)).settings.baseDevices).toBe(2);
     await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '3' } });
-    const after = readState(t.file);
+    const after = (await readState(t.file));
     expect(after.settings.baseDevices).toBe(3);
     expect(deviceLimitNow(after, subOf(after, t.sub), Date.now())).toBe(3);
     const home = await call(t.app, 'GET', '/admin/api/home', { cookie });
@@ -454,28 +448,28 @@ describe('admin HTTP', () => {
   });
 
   it('stores the device name from activate and refresh; the bot and the panel show it', async () => {
-    const t = httpSetup();
+    const t = await httpSetup();
     const act = await call(t.app, 'POST', '/v1/activate', {
       body: { code: t.code, deviceId: DEVS[0], tokens: 'pair', name: 'Xiaomi 2201117TY' },
       headers: { 'cf-connecting-ip': '203.0.113.9' },
     });
     expect(act.status).toBe(200);
-    const db = registryDb(t.file);
-    const codeId = readState(t.file).codes[0].id;
-    expect(activeRowForCode(db, codeId).name).toBe('Xiaomi 2201117TY');
+    const db = t.file.registry;
+    const codeId = (await readState(t.file)).codes[0].id;
+    expect((await db.activeRowForCode(codeId)).name).toBe('Xiaomi 2201117TY');
     const pair = act.data as { refreshToken: string };
     const ref = await call(t.app, 'POST', '/v1/token/refresh', {
       body: { refreshToken: pair.refreshToken, deviceId: DEVS[0], name: '<Xiaomi> 13T\n' },
       headers: { 'x-device-id': DEVS[0] },
     });
     expect(ref.status).toBe(200);
-    expect(activeRowForCode(db, codeId).name).toBe('Xiaomi 13T');
+    expect((await db.activeRowForCode(codeId)).name).toBe('Xiaomi 13T');
     // no name (an older app): the stored one stays
     const ref2 = await call(t.app, 'POST', '/v1/token/refresh', {
       body: { refreshToken: (ref.data as { refreshToken: string }).refreshToken, deviceId: DEVS[0] },
     });
     expect(ref2.status).toBe(200);
-    expect(listDevices(db, t.sub)[0].name).toBe('Xiaomi 13T');
+    expect((await db.listDevices(t.sub))[0].name).toBe('Xiaomi 13T');
     const { cookie } = await adminCookie(t.app, t.file);
     const user = await call(t.app, 'GET', '/admin/api/user?id=' + encodeURIComponent(t.accountId), { cookie });
     expect((user.data as { devices: { name: string }[] }).devices[0].name).toBe('Xiaomi 13T');
@@ -520,11 +514,11 @@ describe('lowering the global base', () => {
   });
 
   it('the server saves a lower base only with confirm=yes and says what it does; raising needs no confirm', async () => {
-    const t = httpSetup();
-    const st = readState(t.file);
+    const t = await httpSetup();
+    const st = (await readState(t.file));
     let state = st;
     for (const d of [DEVS[0], DEVS[1]]) state = bind(state, t.sub, d, Date.now()).state;
-    writeState(t.file, state);
+    await writeState(t.file, state);
     const { cookie, csrf } = await adminCookie(t.app, t.file);
     expect((await call(t.app, 'GET', '/admin/api/base-impact?base=1')).status).toBe(401);
     const impact = await call(t.app, 'GET', '/admin/api/base-impact?base=1', { cookie });
@@ -539,7 +533,7 @@ describe('lowering the global base', () => {
       devices: 1,
     });
     // nothing at all was saved
-    expect(readState(t.file).settings).toMatchObject({ baseDevices: 2, priceRub: 0 });
+    expect((await readState(t.file)).settings).toMatchObject({ baseDevices: 2, priceRub: 0 });
 
     const forged = await call(t.app, 'POST', '/admin/settings', {
       cookie,
@@ -547,13 +541,13 @@ describe('lowering the global base', () => {
     });
     expect(forged.status).toBe(403);
     await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '1', confirm: 'yes' } });
-    const after = readState(t.file);
+    const after = (await readState(t.file));
     expect(after.settings.baseDevices).toBe(1);
     expect(after.audit.map((a: { detail?: string }) => a.detail)).toContain(
       'Базовых устройств: 2 → 1 (подписок затронуто: 1, устройств отключено: 1)',
     );
     const up = await call(t.app, 'POST', '/admin/settings', { cookie, body: { csrf, baseDevices: '2' } });
     expect((up.data as { flash?: { error?: string } }).flash?.error || '').toBe('');
-    expect(readState(t.file).settings.baseDevices).toBe(2);
+    expect((await readState(t.file)).settings.baseDevices).toBe(2);
   });
 });

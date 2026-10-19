@@ -5,20 +5,12 @@
  */
 import { issueCliAdminLogin } from './logic.mjs';
 import { openStore } from './db/index.mjs';
-import { resolveDbPath } from './store.mjs';
-
-function dataFile() {
-  const fromEnv = process.env.BILLING_DATA;
-  if (fromEnv) return resolveDbPath(fromEnv);
-  const path = new URL('../data/billing.db', import.meta.url).pathname;
-  return path.replace(/^\/([A-Za-z]:)/, '$1');
-}
 
 let store;
 let state;
 try {
-  // Same store as the server: BILLING_STORE=postgres + BILLING_DATABASE_URL, or billing.db.
-  store = await openStore(process.env, dataFile());
+  // Same store as the server: Postgres at BILLING_DATABASE_URL.
+  store = await openStore(process.env);
   state = await store.read();
 } catch (e) {
   process.stderr.write('admin login link failed\n');

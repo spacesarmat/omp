@@ -1,8 +1,7 @@
 /**
- * Device registry and refresh tokens on Postgres: the same rules as src/registry.mjs (SQLite), as async
- * functions over a pg client. Token format, signing and the device name rules are reused from there.
- * Writes that read-then-write (refresh, upgrade) take the store's write lock, like BEGIN IMMEDIATE on SQLite.
- * Until the SQLite store is removed, both files change together (the contract tests run on both).
+ * Device registry and refresh tokens on Postgres, as async functions over a pg client. Token format,
+ * signing and the device name rules come from src/registry.mjs.
+ * Writes that read-then-write (refresh, upgrade) take the store's write lock.
  */
 import { randomBytes } from 'node:crypto';
 import { randomId, sha256 } from '../../crypto.mjs';
@@ -180,7 +179,7 @@ export async function issuePair(q, secret, row, now) {
   };
 }
 
-/** One transaction holding the write lock (serialized with state writes, as SQLite BEGIN IMMEDIATE). */
+/** One transaction holding the write lock (serialized with state writes). */
 export async function inTx(pool, fn) {
   const client = await pool.connect();
   try {

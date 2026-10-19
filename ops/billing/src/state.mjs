@@ -1,6 +1,6 @@
 /**
- * Billing state shape and its normalization (every read runs the one-time migrations). Shared by the SQLite
- * store (store.mjs) and the Postgres store (db/pg/store.mjs); no storage code here.
+ * Billing state shape and its normalization (every read runs the one-time migrations). Used by the Postgres
+ * store (db/pg/store.mjs) and the logic; no storage code here.
  */
 import {
   BASE_DEVICES_DEFAULT,
