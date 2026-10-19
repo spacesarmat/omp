@@ -150,29 +150,26 @@ export function revokeDevice(state, { accountId, codeId, now, actor }) {
 }
 
 /**
- * The registry saw one refresh token used by two holders and revoked the device row: unbind the
- * code too (session gone, fresh code for the slot), like an admin revoke. Only while the code is
- * still bound to that same binding. Not a self-service change.
+ * The registry saw a rotated refresh token used again (two holders of one device key, or a phone
+ * restored from a backup). Journal and feed only: nothing is unbound and the user is not told;
+ * the admin sees the mark in the device list and can revoke by hand.
  */
-export function cloneRevoke(state, { codeId, deviceId, boundAt, now }) {
+export function cloneMark(state, { codeId, now }) {
   const row = codeById(state, codeId);
-  if (!row || row.revoked || !row.deviceId || row.deviceId !== deviceId || (Number(row.boundAt) || 0) !== (Number(boundAt) || 0)) {
-    return { state, result: { error: 'not_bound' } };
-  }
+  if (!row || row.revoked || !row.deviceId) return { state, result: { error: 'not_bound' } };
   const sub = state.subscriptions.find((s) => s.id === row.subscriptionId);
   const accountId = sub ? sub.accountId : '';
   const device = row.deviceId.slice(0, 8);
-  const next = unbindCode(state, codeId);
   return {
     state: audited(
-      next,
+      state,
       { kind: 'system', id: 'tokens', label: 'Защита от клонов' },
       'device_clone',
-      'Устройство ' + device + '… отключено: ключ использован на двух устройствах (' + who(state, accountId) + ')',
+      'Подозрение на клон: ключ устройства ' + device + '… использован повторно (' + who(state, accountId) + ')',
       accountId,
       now,
     ),
-    result: { ok: true, device, accountId, telegramId: (findAccount(state, accountId) || {}).telegramId || '' },
+    result: { ok: true, device, accountId },
   };
 }
 

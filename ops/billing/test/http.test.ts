@@ -57,7 +57,9 @@ describe('billing HTTP methods', () => {
   it('GET /health is 200 and HEAD /health repeats it with an empty body', async () => {
     const get = await call(port, 'GET', '/health');
     expect(get.status).toBe(200);
-    expect(get.body).toBe('{"ok":true}');
+    const health = JSON.parse(get.body);
+    expect(health.ok).toBe(true);
+    expect(Object.keys(health).sort()).toEqual(['botPollEnabled', 'botPollOkAgoSec', 'ok']);
     expect(get.headers['content-type']).toContain('application/json');
 
     const head = await call(port, 'HEAD', '/health');

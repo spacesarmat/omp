@@ -81,6 +81,9 @@ export type DeviceRow = {
   lastIp?: string;
   /** 'refresh': the app already uses refresh/access tokens; 'legacy': the old long-lived token. */
   auth?: 'refresh' | 'legacy';
+  /** Last time a used refresh token of this device came back (suspected copy), 0 if never. */
+  cloneAt?: number;
+  cloneCount?: number;
   overLimit?: boolean;
 };
 

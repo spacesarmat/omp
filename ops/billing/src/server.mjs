@@ -65,6 +65,7 @@ import {
   botPollDisabledLine,
   botPollEnabled,
   botPollSnapshot,
+  notePollError,
   conflictLogLine,
   isGetUpdatesConflict,
   noteBotPollOk,
@@ -77,14 +78,13 @@ import {
   rejectPendingPayment,
   resetSwaps,
   revokeDevice,
-  cloneRevoke,
+  cloneMark,
   revokeNoticeText,
   setDeviceLimit,
   subtractDays,
 } from './deviceAdmin.mjs';
 import {
   activeRowForCode,
-  cloneNoticeText,
   deviceRow,
   isAccessToken,
   issuePair,
@@ -335,25 +335,82 @@ async function fetchDownload(net, url, headers) {
   return { kind: 'file', status, res: first };
 }
 
+/** getUpdates long-polls 25 s; the request as a whole gets 40 s. */
+export const TG_POLL_TIMEOUT_MS = 40000;
+/** sendMessage and getChat. */
+export const TG_SEND_TIMEOUT_MS = 15000;
+
+/**
+ * One Telegram Bot API call with a hard deadline: `{ res, data }` (data is {} when the body is not
+ * JSON). AbortSignal.timeout aborts a real fetch; the race also ends a fetch that ignores the signal,
+ * so a stuck connection can never hang the bot loop. Rejects with name TimeoutError.
+ */
+export async function telegramCall(net, url, init, timeoutMs) {
+  const signal = AbortSignal.timeout(Math.max(1, Number(timeoutMs) || TG_SEND_TIMEOUT_MS));
+  let onAbort = null;
+  const expired = new Promise((resolve, reject) => {
+    onAbort = () => {
+      const err = new Error('telegram request timed out');
+      err.name = 'TimeoutError';
+      reject(err);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  const work = (async () => {
+    const res = await net(url, { ...(init || {}), signal });
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = {};
+    }
+    return { res, data: data || {} };
+  })();
+  // A request that fails after the deadline must not become an unhandled rejection.
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, expired]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
 async function telegramSend(token, chatId, text, fetchImpl, opts) {
   if (!token || !chatId) return { ok: false, messageId: 0 };
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
   if (opts && opts.parseMode) body.parse_mode = opts.parseMode;
   if (opts && opts.inline) body.reply_markup = opts.inline;
   else if (opts && opts.keyboard) body.reply_markup = opts.keyboard;
-  const res = await fetchImpl('https://api.telegram.org/bot' + token + '/sendMessage', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch (e) {
-    data = {};
-  }
+  const { res, data } = await telegramCall(
+    fetchImpl,
+    'https://api.telegram.org/bot' + token + '/sendMessage',
+    { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
+    (opts && opts.timeoutMs) || TG_SEND_TIMEOUT_MS,
+  );
   const messageId = data && data.result && data.result.message_id ? data.result.message_id : 0;
   return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
+}
+
+/**
+ * BILLING_LEGACY_TOKENS: old opaque tokens (apps before PR-5) are accepted unless this is 0 / false /
+ * off / no. Off: those tokens get 401 legacy_disabled and /v1/activate without tokens: "pair" is
+ * refused; /v1/token/upgrade still works so a late phone can move over.
+ */
+export function legacyTokensEnabled(env) {
+  const raw = String((env && env.BILLING_LEGACY_TOKENS) || '')
+    .trim()
+    .toLowerCase();
+  return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/** `/health`: process up, plus bot polling without secrets (seconds since the last good getUpdates, null if none yet). */
+export function healthPayload(now) {
+  const poll = botPollSnapshot(now);
+  return {
+    ok: true,
+    botPollEnabled: !!poll.enabled,
+    botPollOkAgoSec: poll.enabled && poll.lastOkAt ? Math.max(0, Math.floor(((now || Date.now()) - poll.lastOkAt) / 1000)) : null,
+  };
 }
 
 /**
@@ -460,8 +517,13 @@ export function createApp(file, fetchImpl, opts) {
   const strictLinkClear = linkClearRequiresToken(env);
   // Refresh and upgrade are cheap to call but should not be hammered from one address.
   const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
+  const legacyOn = legacyTokensEnabled(env);
   const regDb = () => registryDb(file);
   const secret = () => tokenSecret(regDb(), env);
+  const envSecret = String(env.BILLING_TOKEN_SECRET || '');
+  if (envSecret && envSecret.length < 32) {
+    process.stderr.write('BILLING_TOKEN_SECRET is shorter than 32 characters and is ignored; the key in billing.db signs tokens\n');
+  }
 
   /**
    * The device behind a bearer token: an access token (checked against the registry row) or a
@@ -477,6 +539,7 @@ export function createApp(file, fetchImpl, opts) {
       if (!code) return { error: 'revoked', status: 401 };
       return { code, rowId: v.row.id };
     }
+    if (!legacyOn) return { error: 'legacy_disabled', status: 401 };
     const code = sessionForDevice(state, { token, deviceId: device, now });
     if (!code) return null;
     // A binding revoked in the registry (admin, clone) no longer works with the old token either.
@@ -495,18 +558,12 @@ export function createApp(file, fetchImpl, opts) {
     }
   }
 
-  /** Two holders of one refresh token: unbind the code, log it, tell the owner in Telegram. */
-  async function revokeClone(row) {
+  /** A rotated refresh token came back: journal and feed only, no unbind and no message to the user. */
+  async function markClone(row) {
     try {
-      const out = await updateState(file, (state) =>
-        cloneRevoke(state, { codeId: row.code_id, deviceId: row.device_id, boundAt: row.bound_at, now: Date.now() }),
-      );
-      if (out.ok && out.telegramId) {
-        const cur = readState(file);
-        await telegramSend(cur.settings.botToken, out.telegramId, cloneNoticeText(out.device), net, { keyboard: mainKeyboard() });
-      }
+      await updateState(file, (state) => cloneMark(state, { codeId: row.code_id, now: Date.now() }));
     } catch (e) {
-      process.stderr.write('token clone revoke failed\n');
+      process.stderr.write('token clone mark failed\n');
     }
   }
 
@@ -529,7 +586,7 @@ export function createApp(file, fetchImpl, opts) {
         res.headOnly = true;
         req.method = 'GET';
       }
-      if (req.method === 'GET' && path === '/health') return json(res, 200, { ok: true });
+      if (req.method === 'GET' && path === '/health') return json(res, 200, healthPayload(Date.now()));
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));
         return send(res, 200, goPage(code), { 'content-type': 'text/html; charset=utf-8' });
@@ -1123,6 +1180,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         // An app that sends tokens: "pair" gets refresh/access only; older apps get the opaque token as before.
         const wantPair = body.tokens === 'pair';
+        if (!wantPair && !legacyOn) return json(res, 403, { error: 'app_update_required' });
         const now = Date.now();
         const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
         // device_limit is 409 like other_device: the current app then says the code is tied to another device.
@@ -1142,7 +1200,7 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
         const out = refreshPair(regDb(), secret(), { refreshToken: body.refreshToken, deviceId, now: Date.now() });
-        if (out.clone) await revokeClone(out.clone);
+        if (out.clone && out.cloneLog) await markClone(out.row);
         if (out.error) return json(res, 401, { error: out.error });
         noteSeen(out.row.id, clientIp(req), false);
         return json(res, 200, { ...out.pair, paidUntil: paidUntilOf(readState(file), out.row) });
@@ -1392,7 +1450,8 @@ export function listen(file, port, fetchImpl, opts) {
   return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
 }
 
-export async function refreshMissingProfiles(file, token, net) {
+export async function refreshMissingProfiles(file, token, net, opts) {
+  const timeoutMs = (opts && opts.timeoutMs) || TG_SEND_TIMEOUT_MS;
   const state = readState(file);
   const missing = (state.accounts || [])
     .filter((a) => a.telegramId && !a.telegramUsername && !a.telegramName)
@@ -1401,10 +1460,12 @@ export async function refreshMissingProfiles(file, token, net) {
   const found = [];
   for (let i = 0; i < missing.length; i++) {
     try {
-      const res = await net(
+      const { data } = await telegramCall(
+        net,
         'https://api.telegram.org/bot' + token + '/getChat?chat_id=' + encodeURIComponent(missing[i].telegramId),
+        {},
+        timeoutMs,
       );
-      const data = await res.json();
       if (!data.ok || !data.result) continue;
       const chat = data.result;
       found.push({
@@ -1442,6 +1503,13 @@ export async function pollBot(file, fetchImpl, opts) {
   const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const nowFn = (opts && opts.now) || (() => Date.now());
   const maxLoops = opts && opts.maxLoops ? opts.maxLoops : 0;
+  const pollTimeoutMs = (opts && opts.pollTimeoutMs) || TG_POLL_TIMEOUT_MS;
+  const sendTimeoutMs = (opts && opts.sendTimeoutMs) || TG_SEND_TIMEOUT_MS;
+  /** At most one stderr line a minute for failed polls; never the URL or error text (they can carry the token). */
+  const pollFailed = (kind) => {
+    const line = notePollError(kind, nowFn());
+    if (line) process.stderr.write(line);
+  };
   let loops = 0;
   for (;;) {
     if (maxLoops && loops >= maxLoops) return;
@@ -1455,7 +1523,7 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       if (Date.now() - sweptAt > 10 * 60 * 1000) {
         sweptAt = Date.now();
-        await refreshMissingProfiles(file, token, net);
+        await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
       if (Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
         servicesAt = Date.now();
@@ -1470,8 +1538,12 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       let updates = [];
       try {
-        const res = await net('https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset);
-        const data = await res.json();
+        const { res, data } = await telegramCall(
+          net,
+          'https://api.telegram.org/bot' + token + '/getUpdates?timeout=25&offset=' + offset,
+          {},
+          pollTimeoutMs,
+        );
         if (isGetUpdatesConflict(res, data)) {
           const noted = noteGetUpdatesConflict(state.settings, nowFn());
           if (noted.log) process.stderr.write(conflictLogLine());
@@ -1480,12 +1552,14 @@ export async function pollBot(file, fetchImpl, opts) {
           continue;
         }
         if (!data || !data.ok) {
+          pollFailed('http ' + (Number(res && res.status) || 0) + (data && data.error_code ? ' code ' + Number(data.error_code) : ''));
           await sleep(5000);
           continue;
         }
         noteBotPollOk(nowFn());
         updates = Array.isArray(data.result) ? data.result : [];
       } catch (e) {
+        pollFailed(e && (e.name === 'TimeoutError' || e.name === 'AbortError') ? 'timeout' : 'network');
         await sleep(5000);
         continue;
       }
@@ -1528,6 +1602,7 @@ export async function pollBot(file, fetchImpl, opts) {
               keyboard: row.keyboard,
               inline: row.inline,
               parseMode: row.parseMode,
+              timeoutMs: sendTimeoutMs,
             });
             if (row.supportNotify && sent.messageId) {
               await updateState(file, (cur) => ({
@@ -1540,11 +1615,12 @@ export async function pollBot(file, fetchImpl, opts) {
               }));
             }
           } catch (e) {
-            /* Telegram unreachable from NAS — keep polling */
+            /* Telegram unreachable or timed out — keep polling */
           }
         }
       }
     } catch (e) {
+      pollFailed('loop');
       await sleep(5000);
     }
   }

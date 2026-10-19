@@ -7,11 +7,17 @@ export const BOT_POLL_ALERT_EVERY_MS = 60 * 60 * 1000;
 /** Panel treats a conflict as recent inside this window. */
 export const BOT_POLL_CONFLICT_RECENT_MS = 15 * 60 * 1000;
 
+/** Stderr line for failed getUpdates (timeout, network, HTTP error). At most once a minute. */
+export const BOT_POLL_ERROR_LOG_EVERY_MS = 60 * 1000;
+
 const poll = {
   lastOkAt: 0,
   conflictAt: 0,
   lastLogAt: 0,
   lastAlertAt: 0,
+  errorAt: 0,
+  errorLogAt: 0,
+  errorsQuiet: 0,
 };
 
 export function resetBotPollState() {
@@ -19,6 +25,28 @@ export function resetBotPollState() {
   poll.conflictAt = 0;
   poll.lastLogAt = 0;
   poll.lastAlertAt = 0;
+  poll.errorAt = 0;
+  poll.errorLogAt = 0;
+  poll.errorsQuiet = 0;
+}
+
+/**
+ * A failed poll (`kind`: timeout, network, http 502, loop). Returns the stderr line when one is due
+ * (at most once a minute, with how many failures were not logged since), else ''. Only the kind
+ * goes into the line: the request URL and error text can contain the bot token.
+ */
+export function notePollError(kind, now) {
+  const at = now || Date.now();
+  poll.errorAt = at;
+  if (!due(poll.errorLogAt, at, BOT_POLL_ERROR_LOG_EVERY_MS)) {
+    poll.errorsQuiet += 1;
+    return '';
+  }
+  const quiet = poll.errorsQuiet;
+  poll.errorLogAt = at;
+  poll.errorsQuiet = 0;
+  const safe = String(kind || 'error').replace(/[^a-z0-9 ]/gi, '').slice(0, 40);
+  return 'telegram getUpdates failed: ' + safe + (quiet ? ' (+' + quiet + ' more since the last line)' : '') + '\n';
 }
 
 /**
@@ -105,5 +133,6 @@ export function botPollSnapshot(now) {
     lastOkAt: poll.lastOkAt,
     conflictAt: poll.conflictAt,
     conflictRecent: poll.conflictAt > 0 && at - poll.conflictAt <= BOT_POLL_CONFLICT_RECENT_MS,
+    errorAt: poll.errorAt,
   };
 }

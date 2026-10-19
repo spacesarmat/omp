@@ -123,7 +123,20 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
                         сверх лимита, не работает
                       </Badge>
                     ) : null}
-                    <div className="font-sans text-xs text-muted-foreground">{d.auth === 'refresh' ? 'новые токены' : 'старый токен'}</div>
+                    {d.cloneAt ? (
+                      <Badge variant="warn" className="ml-1" title="Использованный ключ этого устройства пришёл повторно. Если это не потеря сети — отзовите устройство.">
+                        возможен клон{d.cloneCount && d.cloneCount > 1 ? ' ×' + d.cloneCount : ''}
+                      </Badge>
+                    ) : null}
+                    <div className="font-sans text-xs text-muted-foreground">
+                      {d.auth === 'refresh' ? 'новые токены' : 'старый токен'}
+                      {d.cloneAt ? (
+                        <>
+                          {' · клон: '}
+                          <Stamp ms={d.cloneAt} />
+                        </>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     <Stamp ms={d.boundAt} />

@@ -16,13 +16,16 @@ import {
 import {
   ACCESS_TTL_MS,
   activeRowForCode,
+  CLONE_LOG_EVERY_MS,
   issuePair,
+  listDevices,
   refreshPair,
   revokeRow,
   ROTATE_GRACE_MS,
   signAccess,
   tokenSecret,
 } from '../src/registry.mjs';
+import { userPayload } from '../src/adminApi.mjs';
 import { createApp } from '../src/server.mjs';
 import { emptyState, readState, registryDb, updateState, writeState } from '../src/store.mjs';
 
@@ -263,6 +266,32 @@ describe('old apps (no client change)', () => {
   });
 });
 
+describe('BILLING_LEGACY_TOKENS', () => {
+  it('is on by default and when set to 1', async () => {
+    for (const env of [{}, { BILLING_LEGACY_TOKENS: '1' }, { BILLING_LEGACY_TOKENS: '' }]) {
+      const t = await setup({ env });
+      expect((await search(t.app, t.legacy, DEV_A)).status).toBe(200);
+    }
+  });
+
+  it('0 rejects old tokens with 401 and old-style activation, but still lets a phone upgrade', async () => {
+    const t = await setup({ env: { BILLING_LEGACY_TOKENS: '0' } });
+    expect(await search(t.app, t.legacy, DEV_A)).toMatchObject({ status: 401, data: { error: 'legacy_disabled' } });
+    const me = await call(t.app, 'GET', '/v1/me', { headers: { authorization: 'Bearer ' + t.legacy, 'x-device-id': DEV_A } });
+    expect(me).toMatchObject({ status: 401, data: { error: 'legacy_disabled' } });
+    const slot = deviceCode(readState(t.file), t.subscriptionId, Date.now());
+    writeState(t.file, slot.state);
+    const old = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId: DEV_B } });
+    expect(old).toMatchObject({ status: 403, data: { error: 'app_update_required' } });
+    expect(readState(t.file).codes.find((c: { id: string }) => c.id === slot.codeId).deviceId).toBeFalsy();
+    const pair = await call(t.app, 'POST', '/v1/activate', { body: { code: slot.code, deviceId: DEV_B, tokens: 'pair' } });
+    expect(pair.status).toBe(200);
+    const up = await call(t.app, 'POST', '/v1/token/upgrade', { headers: { authorization: 'Bearer ' + t.legacy, 'x-device-id': DEV_A } });
+    expect(up.status).toBe(200);
+    expect((await search(t.app, String(up.data.accessToken), DEV_A)).status).toBe(200);
+  });
+});
+
 describe('access tokens', () => {
   it('a new app activates with tokens: "pair", gets no opaque token and searches with the access token', async () => {
     const t = await setup();
@@ -334,6 +363,40 @@ describe('access tokens', () => {
     expect(await search(t.app, stored, DEV_B)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
   });
 
+  it('a new BILLING_TOKEN_SECRET over an existing DB key: old access tokens fail, refresh gives working ones, nothing is unbound', async () => {
+    const t = await setup();
+    const pair = await pairFor(t, DEV_B);
+    expect((await search(t.app, pair.accessToken, DEV_B)).status).toBe(200);
+    // Same database, restarted with the key in .env.
+    const app = createApp(t.file, async () => ({ ok: true, status: 200, text: async () => RSS, json: async () => ({}) }), {
+      env: { BILLING_TOKEN_SECRET: 'e'.repeat(64) },
+    });
+    expect(await search(app, pair.accessToken, DEV_B)).toMatchObject({ status: 401, data: { error: 'bad_token' } });
+    const r = await call(app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } });
+    expect(r.status).toBe(200);
+    expect((await search(app, String(r.data.accessToken), DEV_B)).status).toBe(200);
+    expect(activeRowForCode(t.db, pair.codeId)).toMatchObject({ status: 'active', clone_count: 0 });
+    // The legacy token of phone A does not depend on the key.
+    expect((await search(app, t.legacy, DEV_A)).status).toBe(200);
+    // A key shorter than 32 characters is ignored (DB key signs) and says so once on stderr.
+    const lines: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string) => {
+      lines.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      const weak = createApp(t.file, async () => ({ ok: true, status: 200, text: async () => RSS, json: async () => ({}) }), {
+        env: { BILLING_TOKEN_SECRET: 'weak-value-x' },
+      });
+      expect((await search(weak, pair.accessToken, DEV_B)).status).toBe(200);
+    } finally {
+      process.stderr.write = orig;
+    }
+    expect(lines.join('')).toContain('BILLING_TOKEN_SECRET is shorter than 32 characters');
+    expect(lines.join('')).not.toContain('weak-value-x');
+  });
+
   it('an expired subscription gives 403 expired with a valid token; renewal brings the same token back', async () => {
     const t = await setup();
     const pair = await pairFor(t, DEV_B);
@@ -379,7 +442,7 @@ describe('refresh rotation', () => {
     expect(t.sent.filter((m) => m.text.indexOf('отключено') >= 0)).toHaveLength(0);
   });
 
-  it('a rotated token used after its successor was used is a clone: the device is revoked and the owner told', async () => {
+  it('a rotated token used after its successor was used is a suspected clone: marked, logged once an hour, nothing revoked', async () => {
     const t = await setup();
     const pair = await pairFor(t, DEV_B);
     const r1 = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } });
@@ -387,31 +450,42 @@ describe('refresh rotation', () => {
     const r2 = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n1.refreshToken } });
     expect(r2.status).toBe(200);
     const n2 = r2.data as { refreshToken: string; accessToken: string };
-    // The copy still holds the first token.
+    // The copy still holds the first token: it gets a pair too (a false alarm must not lock a phone out).
     const clone = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: pair.refreshToken } });
-    expect(clone).toMatchObject({ status: 401, data: { error: 'revoked' } });
-    const row = t.db.prepare('SELECT status, revoke_reason FROM devices WHERE code_id = ? ORDER BY created_at DESC').get(pair.codeId);
-    expect(row).toMatchObject({ status: 'revoked', revoke_reason: 'clone' });
-    // Everything of that device stops at once: newest refresh, current access token.
-    expect(await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n2.refreshToken } })).toMatchObject({
-      status: 401,
-      data: { error: 'revoked' },
-    });
-    expect(await search(t.app, n2.accessToken, DEV_B)).toMatchObject({ status: 401, data: { error: 'revoked' } });
-    // The slot is free again with a new code, the journal and the owner know.
-    const st = readState(t.file);
-    expect(st.codes.find((c: { id: string }) => c.id === pair.codeId)).toMatchObject({ deviceId: '' });
+    expect(clone.status).toBe(200);
+    const row = activeRowForCode(t.db, pair.codeId);
+    expect(row).toMatchObject({ status: 'active', clone_count: 1 });
+    expect(row.clone_at).toBeGreaterThan(0);
+    // Both holders keep working: nothing is revoked or unbound.
+    expect((await search(t.app, n2.accessToken, DEV_B)).status).toBe(200);
+    expect((await search(t.app, String(clone.data.accessToken), DEV_B)).status).toBe(200);
+    expect(
+      (await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n2.refreshToken } })).status,
+    ).toBe(200);
+    let st = readState(t.file);
+    expect(st.codes.find((c: { id: string }) => c.id === pair.codeId)).toMatchObject({ deviceId: DEV_B });
     expect(st.audit[st.audit.length - 1]).toMatchObject({ action: 'device_clone', accountId: t.accountId });
     const feed = adminDashboard(st, Date.now()).events.map((e: { text: string }) => e.text);
-    expect(feed.some((x: string) => x.indexOf('ключ использован на двух устройствах') >= 0)).toBe(true);
-    const notice = t.sent.filter((m) => m.text.indexOf('использовался одновременно на другом устройстве') >= 0);
-    expect(notice).toHaveLength(1);
-    expect(notice[0].chat_id).toBe('42');
-    // Phone A is not affected.
-    expect((await search(t.app, t.legacy, DEV_A)).status).toBe(200);
+    expect(feed.some((x: string) => x.indexOf('Подозрение на клон: ключ устройства bbbbbbbb') === 0)).toBe(true);
+    // The user is not told.
+    expect(t.sent).toHaveLength(0);
+    // A second reuse within the hour counts but does not flood the journal.
+    const again = await call(t.app, 'POST', '/v1/token/refresh', { headers: { 'x-device-id': DEV_B }, body: { refreshToken: n1.refreshToken } });
+    expect(again.status).toBe(200);
+    expect(activeRowForCode(t.db, pair.codeId).clone_count).toBe(2);
+    st = readState(t.file);
+    expect(st.audit.filter((a: { action: string }) => a.action === 'device_clone')).toHaveLength(1);
+    // The admin device list shows the mark.
+    const list = listDevices(t.db, t.subscriptionId).find((r: { code_id: string }) => r.code_id === pair.codeId);
+    expect(list).toMatchObject({ clone_count: 2 });
+    const user = userPayload(st, t.accountId, { registry: (subId: string) => listDevices(t.db, subId) });
+    const shown = user.devices.find((d: { codeId: string }) => d.codeId === pair.codeId);
+    expect(shown.cloneAt).toBeGreaterThan(0);
+    expect(shown.cloneCount).toBe(2);
+    expect(user.devices.find((d: { codeId: string }) => d.codeId === t.codeId).cloneAt).toBe(0);
   });
 
-  it('a rotated token after the 60 s window is a clone even if the successor was never used', () => {
+  it('a rotated token after the 60 s window is a suspected clone even if the successor was never used', () => {
     const file = tmpDb('grace');
     const s = base(Date.now());
     writeState(file, s.state);
@@ -424,10 +498,15 @@ describe('refresh rotation', () => {
     expect(rot.pair).toBeTruthy();
     const inside = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS });
     expect(inside.retry).toBe(true);
+    expect(inside.clone).toBeUndefined();
     const outside = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 + ROTATE_GRACE_MS + 1 });
-    expect(outside.error).toBe('revoked');
-    expect(outside.clone.id).toBe(row.id);
-    expect(activeRowForCode(db, s.codeId)).toBeNull();
+    expect(outside).toMatchObject({ clone: true, cloneLog: true });
+    expect(outside.pair.refreshToken).toBeTruthy();
+    const later = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS });
+    expect(later).toMatchObject({ clone: true, cloneLog: false });
+    const hourLater = refreshPair(db, secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 + ROTATE_GRACE_MS + CLONE_LOG_EVERY_MS });
+    expect(hourLater).toMatchObject({ clone: true, cloneLog: true });
+    expect(activeRowForCode(db, s.codeId)).toMatchObject({ status: 'active', clone_count: 3 });
   });
 
   it('refuses unknown, other-device and expired refresh tokens, and rate-limits per IP', async () => {

@@ -153,6 +153,8 @@ function deviceRows(card, registry, overIds) {
         lastSeenAt: Number(r.last_seen_at) || 0,
         lastIp: maskIp(r.last_ip_net),
         auth: r.auth === 'refresh' ? 'refresh' : 'legacy',
+        cloneAt: Number(r.clone_at) || 0,
+        cloneCount: Number(r.clone_count) || 0,
         overLimit: overIds.has(r.code_id),
       }));
   }

@@ -47,7 +47,9 @@ export function registrySchema(db) {
       last_ip_net TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'active',
       revoked_at INTEGER NOT NULL DEFAULT 0,
-      revoke_reason TEXT NOT NULL DEFAULT ''
+      revoke_reason TEXT NOT NULL DEFAULT '',
+      clone_at INTEGER NOT NULL DEFAULT 0,
+      clone_count INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS devices_code ON devices (code_id, status);
     CREATE INDEX IF NOT EXISTS devices_sub ON devices (subscription_id, status);
@@ -66,7 +68,14 @@ export function registrySchema(db) {
       value TEXT NOT NULL
     );
   `);
+  // Columns added after the table first shipped.
+  const cols = new Set(db.prepare('PRAGMA table_info(devices)').all().map((c) => c.name));
+  if (!cols.has('clone_at')) db.exec('ALTER TABLE devices ADD COLUMN clone_at INTEGER NOT NULL DEFAULT 0');
+  if (!cols.has('clone_count')) db.exec('ALTER TABLE devices ADD COLUMN clone_count INTEGER NOT NULL DEFAULT 0');
 }
+
+/** A suspected clone is written to the journal at most this often per device; the count grows every time. */
+export const CLONE_LOG_EVERY_MS = 60 * MIN;
 
 /* ---------- registry rows ---------- */
 
@@ -81,7 +90,10 @@ export function activeRowForCode(db, codeId) {
   return db.prepare("SELECT * FROM devices WHERE code_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1").get(String(codeId)) || null;
 }
 
-/** Active devices of a subscription, oldest binding first; `auth` is 'refresh' once the phone holds a refresh token. */
+/**
+ * Active devices of a subscription, oldest binding first; `auth` is 'refresh' once the phone holds a
+ * refresh token; `clone_at` / `clone_count` mark a suspected copy.
+ */
 export function listDevices(db, subscriptionId) {
   const rows = db
     .prepare("SELECT * FROM devices WHERE subscription_id = ? AND status = 'active' ORDER BY bound_at, created_at")
@@ -100,7 +112,7 @@ export function revokeRow(db, id, reason, now) {
   return res.changes > 0;
 }
 
-/** Replace the generic reason the snapshot sync wrote ('unbound') with the real one (admin, clone). */
+/** Replace the generic reason the snapshot sync wrote ('unbound') with the real one ('admin'). */
 export function setRevokeReason(db, id, reason) {
   db.prepare("UPDATE devices SET revoke_reason = ? WHERE id = ? AND status = 'revoked'").run(String(reason), String(id));
 }
@@ -140,7 +152,7 @@ export function syncRegistry(db, state, now) {
       revokeRow(db, row.id, 'unbound', at);
       row = null;
     }
-    // A binding revoked here (admin, clone) stays revoked even before the snapshot catches up.
+    // A binding revoked here (admin) stays revoked even before the snapshot catches up.
     if (want && !row && !revokedBinding.get(c.id + '\0' + c.deviceId + '\0' + (Number(c.boundAt) || 0))) {
       const sub = subs.get(c.subscriptionId);
       insert.run(
@@ -301,7 +313,9 @@ function inTx(db, fn) {
  * Exchange a refresh token for a new pair; the presented one is rotated.
  * A rotated token presented again within ROTATE_GRACE_MS, while its successor is still unused,
  * is a lost response: the unused successor is dropped and a new pair issued. Any other reuse of a
- * rotated token means two holders: the device is revoked (`clone: row`).
+ * rotated token suggests two holders. That only marks the row (`clone_at`, `clone_count`; `clone:
+ * true`, `cloneLog` when the journal should hear about it): nothing is revoked and the caller still
+ * gets a pair, so a false alarm never locks a phone out. The admin revokes by hand.
  * Errors: bad_token, refresh_expired, revoked.
  */
 export function refreshPair(db, secret, { refreshToken, deviceId, now }) {
@@ -319,8 +333,11 @@ export function refreshPair(db, secret, { refreshToken, deviceId, now }) {
       const next = t.replaced_by ? db.prepare('SELECT * FROM refresh_tokens WHERE hash = ?').get(t.replaced_by) : null;
       const lost = now - t.rotated_at <= ROTATE_GRACE_MS && next && !next.rotated_at && !next.revoked;
       if (!lost) {
-        revokeRow(db, row.id, 'clone', now);
-        return { error: 'revoked', clone: row };
+        const cloneLog = !row.clone_at || now - row.clone_at >= CLONE_LOG_EVERY_MS || now < row.clone_at;
+        db.prepare('UPDATE devices SET clone_at = ?, clone_count = clone_count + 1 WHERE id = ?').run(now, row.id);
+        const out = issuePair(db, secret, row, now);
+        db.prepare('UPDATE refresh_tokens SET replaced_by = ? WHERE hash = ?').run(out.hash, t.hash);
+        return { row, pair: out.pair, clone: true, cloneLog };
       }
       db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE hash = ?').run(next.hash);
       const out = issuePair(db, secret, row, now);
@@ -346,14 +363,4 @@ export function upgradePair(db, secret, { row, now, again, since }) {
     }
     return issuePair(db, secret, row, now).pair;
   });
-}
-
-/** Telegram notice when a device was revoked because its credential was used twice. */
-export function cloneNoticeText(device) {
-  return (
-    'Устройство ' +
-    device +
-    '… отключено: его ключ подписки использовался одновременно на другом устройстве.\n' +
-    'Если это ваш телефон, нажмите «Код» и введите новый код в OMP. Вопросы — «Поддержка».'
-  );
 }
