@@ -1,4 +1,6 @@
-# Changelog
+# Changes
+
+The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Unreleased
 
