@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { BILLING_BOT, BILLING_BOT_URL } from '../../../src/billing/config';
 import {
+  billingNotice,
   billingSession,
   onBillingChange,
   pendingBillingCode,
@@ -172,7 +173,7 @@ export function OmpJackettCard() {
         )}
         <div class="m-src-row m-note m-muted">{t('sources.billing.bot', { name: BILLING_BOT })}</div>
 
-        {session && session.token ? (
+        {session ? (
           <>
             <div class="m-src-row" data-paid-until={day((account && account.paidUntil) || session.paidUntil)}>
               {account && account.inGrace
@@ -195,7 +196,7 @@ export function OmpJackettCard() {
                 type="button"
                 class="m-btn m-btn-secondary"
                 onClick={() => {
-                  clearBilling();
+                  clearBilling(phoneSourceContext());
                   setSession(null);
                   setAccount(null);
                 }}
@@ -214,11 +215,15 @@ export function OmpJackettCard() {
               autoCapitalize="characters"
               onInput={(e) => setCode((e.target as HTMLInputElement).value)}
             />
-            {error && (
+            {error ? (
               <div class="m-error" role="alert">
                 {error}
               </div>
-            )}
+            ) : billingNotice() ? (
+              <div class="m-error" role="alert" data-notice={billingNotice()}>
+                {billingNotice() === 'keystore' ? t('sources.billing.keystoreLost') : t('sources.billing.revoked')}
+              </div>
+            ) : null}
             <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void connect()}>
               {busy ? t('sources.billing.connecting') : t('sources.billing.connect')}
             </button>

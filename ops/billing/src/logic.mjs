@@ -163,6 +163,24 @@ export function codeWithinLimit(state, sub, codeRow, now) {
 }
 
 /**
+ * True when a device at `position` (0-based among the bound devices, or the count for a new one) would fit if the
+ * subscription's extra slots were paid, but they lapsed or were never paid: the phone should hear «доп. устройство
+ * не продлено», not «все устройства заняты».
+ */
+export function fitsOnlyByLapsedExtra(state, sub, position, now) {
+  if (!sub) return false;
+  const extra = Math.max(0, Math.floor(Number(sub.extraSlots) || 0));
+  if (!extra || activeExtras(state, sub, now)) return false;
+  return position < (Number(sub.deviceLimit) || 0) + extra;
+}
+
+/** Why a bound code is over the limit: `extra_expired` (a lapsed extra slot would hold it) or `device_limit`. */
+export function overLimitReason(state, sub, codeRow, now) {
+  const idx = boundCodes(state, sub.id).findIndex((c) => c.id === codeRow.id);
+  return idx >= 0 && fitsOnlyByLapsedExtra(state, sub, idx, now) ? 'extra_expired' : 'device_limit';
+}
+
+/**
  * Access of one phone by its device id (for /v1/me without a token).
  * `overLimit` is set when the phone is bound but sits over the current device limit.
  */
@@ -533,12 +551,16 @@ export function activate(state, { code, deviceId, now, legacy }) {
     return fail('other_device', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'other_device', accountId: sub.accountId }));
   }
   // A new device needs a free slot. A code already bound to this device (re-entry) always passes.
+  // Apps with the token pair (legacy: false) hear extra_expired when only a lapsed or unpaid extra slot is missing;
+  // older apps keep device_limit, the only code they know.
   if (!row.deviceId && deviceLimitReached(state, sub, now)) {
-    return fail('device_limit', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'device_limit', accountId: sub.accountId }));
+    const why = legacy === false && fitsOnlyByLapsedExtra(state, sub, boundDevices(state, sub.id), now) ? 'extra_expired' : 'device_limit';
+    return fail(why, recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: why, accountId: sub.accountId }));
   }
   // Re-entry on a phone that sits over a lapsed extra slot: the binding stays, access returns on renewal.
   if (row.deviceId && !codeWithinLimit(state, sub, row, now)) {
-    return fail('device_limit', recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: 'device_limit', accountId: sub.accountId }));
+    const why = legacy === false ? overLimitReason(state, sub, row, now) : 'device_limit';
+    return fail(why, recordAttempt(state, { at: now, hash, deviceId, ok: false, reason: why, accountId: sub.accountId }));
   }
   const codes = state.codes.map((c) =>
     c.id === row.id && !c.deviceId ? { ...c, deviceId, boundAt: now, plain: '' } : c.id === row.id ? { ...c, plain: '' } : c,
@@ -1490,6 +1512,7 @@ const ATTEMPT_REASON = {
   expired: 'подписка истекла',
   other_device: 'чужое устройство',
   device_limit: 'лимит устройств',
+  extra_expired: 'доп. устройство не продлено',
 };
 
 function attemptReasonText(reason) {

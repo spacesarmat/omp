@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { BILLING_ORIGIN, BILLING_ORIGIN_LAN, rememberBillingOrigin } from '../../src/billing/config';
+import { BILLING_ORIGIN } from '../../src/billing/config';
 import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
@@ -29,7 +29,6 @@ const RSS =
 describe('omp Jackett source', () => {
   beforeEach(() => {
     localStorage.clear();
-    rememberBillingOrigin(BILLING_ORIGIN);
     unregisterSource(OMP_JACKETT_ID);
     unregisterSource(OMP_JACRED_ID);
   });
@@ -40,12 +39,14 @@ describe('omp Jackett source', () => {
   });
 
   it('binds a code to this device and registers the source', async () => {
-    const site = fakeSite((c) => page(JSON.stringify({ token: 'tok-1', paidUntil: 2e12 }), c.url));
+    const pair = { refreshToken: 'r1.one', accessToken: 'a1.one', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const site = fakeSite((c) => page(JSON.stringify(pair), c.url));
     const row = await activateCode(site.ctx, 'ABCD-EFGH');
-    expect(row.token).toBe('tok-1');
-    expect(billingSession()?.token).toBe('tok-1');
+    expect(row.access).toBe('a1.one');
+    expect(billingSession()?.access).toBe('a1.one');
+    expect(billingSession()?.paidUntil).toBe(2e12);
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/activate');
-    expect(site.calls[0].form).toEqual({ code: 'ABCD-EFGH', deviceId: deviceId() });
+    expect(site.calls[0].form).toEqual({ code: 'ABCD-EFGH', deviceId: deviceId(), tokens: 'pair' });
     startOmpJackett();
     expect(getSource(OMP_JACKETT_ID)?.kind).toBe('billing');
     expect(getSource(OMP_JACRED_ID)?.name).toBe('JacRed');
@@ -292,16 +293,10 @@ describe('omp Jackett source', () => {
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
   });
 
-  it('falls back to LAN when the public host is unreachable', async () => {
+  it('talks to the public domain only (the LAN fallback is gone)', async () => {
     localStorage.clear();
-    const site = fakeSite((c) => {
-      if (c.url.indexOf(BILLING_ORIGIN_LAN) === 0) {
-        return page(JSON.stringify({ token: 'tok-lan', paidUntil: 2e12 }), c.url);
-      }
-      return Promise.reject(new Error('dns down'));
-    });
-    const row = await activateCode(site.ctx, 'ABCD-EFGH');
-    expect(row.token).toBe('tok-lan');
-    expect(site.calls.some((c) => c.url === BILLING_ORIGIN_LAN + '/v1/activate')).toBe(true);
+    const site = fakeSite(() => Promise.reject(new Error('dns down')));
+    await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Сервер подписки не отвечает');
+    expect(site.calls.map((c) => c.url)).toEqual([BILLING_ORIGIN + '/v1/activate']);
   });
 });

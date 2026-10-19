@@ -192,6 +192,7 @@ describe('the background check', () => {
         return Promise.reject(new Error('no network in tests'));
       },
       secretGet: () => Promise.resolve({ value: null }),
+      billingRefresh: () => Promise.resolve({ ok: false, error: 'network' }),
       notify: () => Promise.resolve(true),
       setCleartext: () => Promise.resolve(),
       persist: () => Promise.resolve(),

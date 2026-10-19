@@ -5,6 +5,7 @@
 // Android -> page: {rpc, method, params} (a TV call) and the {id, ...} answers above.
 import { t } from '../../../src/i18n';
 import type { NativeHttpRequest } from '../../../src/sources/http';
+import type { NativeBillingAnswer } from '../../../src/sources/types';
 import type { HostPort, HttpReply } from '../monitor/host';
 import { RpcError } from './handler';
 
@@ -19,6 +20,8 @@ export type RpcDispatch = (method: string, params: unknown) => Promise<unknown>;
 export interface RpcBridge {
   http(req: NativeHttpRequest): Promise<HttpReply>;
   secretGet(key: string): Promise<{ value?: string | null }>;
+  /** A new access token of the OMP subscription, renewed by the app (the page never sees the refresh token). */
+  billingRefresh(deviceId: string, stale: string): Promise<NativeBillingAnswer>;
   /** Starts answering the TV's calls with `dispatch`; calls that come before get `not_ready`. */
   serve(dispatch: RpcDispatch): void;
 }
@@ -120,6 +123,8 @@ export function createRpcBridge(port: HostPort): RpcBridge {
         const o = (v && typeof v === 'object' ? v : {}) as { value?: unknown };
         return { value: typeof o.value === 'string' ? o.value : null };
       }),
+    billingRefresh: (deviceId, stale) =>
+      send('billingRefresh', { deviceId, stale }).then((v) => (v && typeof v === 'object' ? (v as NativeBillingAnswer) : { ok: false, error: 'down' })),
     serve(d) {
       dispatch = d;
     },

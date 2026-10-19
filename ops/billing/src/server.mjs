@@ -24,6 +24,7 @@ import {
   logAudit,
   logWebhook,
   codeWithinLimit,
+  overLimitReason,
   deviceAccess,
   dueReminders,
   markReminder,
@@ -457,9 +458,15 @@ function paymentWho(state, result) {
 }
 
 /** Why a bound code has no search access: `device_limit` when only the lapsed extra slot is missing, else `expired`. */
-function denyReason(state, row, now) {
+/**
+ * 403 reason for a device without access. Over the limit: `extra_expired` when only a lapsed or unpaid extra slot
+ * is missing (apps with the token pair), `device_limit` otherwise and always for legacy tokens (older apps).
+ */
+function denyReason(state, row, now, legacy) {
   const sub = row ? state.subscriptions.find((s) => s.id === row.subscriptionId) : null;
-  if (sub && subAccess(state, sub, now).access && !codeWithinLimit(state, sub, row, now)) return 'device_limit';
+  if (sub && subAccess(state, sub, now).access && !codeWithinLimit(state, sub, row, now)) {
+    return legacy ? 'device_limit' : overLimitReason(state, sub, row, now);
+  }
   return 'expired';
 }
 
@@ -1183,8 +1190,10 @@ export function createApp(file, fetchImpl, opts) {
         if (!wantPair && !legacyOn) return json(res, 403, { error: 'app_update_required' });
         const now = Date.now();
         const result = await updateState(file, (state) => activate(state, { code: body.code, deviceId: body.deviceId, now, legacy: !wantPair }));
-        // device_limit is 409 like other_device: the current app then says the code is tied to another device.
-        if (result.error) return json(res, result.error === 'other_device' || result.error === 'device_limit' ? 409 : 403, result);
+        // device_limit and extra_expired are 409 like other_device (the status older apps know); only apps that ask
+        // for the token pair ever get extra_expired.
+        const conflict = result.error === 'other_device' || result.error === 'device_limit' || result.error === 'extra_expired';
+        if (result.error) return json(res, conflict ? 409 : 403, result);
         const row = activeRowForCode(regDb(), result.codeId);
         if (row) noteSeen(row.id, clientIp(req), true);
         if (!wantPair) return json(res, 200, { token: result.token, paidUntil: result.paidUntil });
@@ -1305,7 +1314,7 @@ export function createApp(file, fetchImpl, opts) {
         const caller = deviceCaller(state, token, deviceId, now);
         if (caller && caller.error) return json(res, 401, { error: caller.error });
         const session = caller ? codeAccess(state, caller.code, now) : null;
-        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
         noteSeen(caller.rowId, clientIp(req), false);
         const source = body.source === 'jacred' ? 'jacred' : 'jackett';
         if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
@@ -1363,7 +1372,7 @@ export function createApp(file, fetchImpl, opts) {
         const caller = deviceCaller(state, token, deviceId, now);
         if (caller && caller.error) return json(res, 401, { error: caller.error });
         const session = caller ? codeAccess(state, caller.code, now) : null;
-        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now) : 'expired' });
+        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
         noteSeen(caller.rowId, clientIp(req), false);
         const indexer = indexerByLink(state.settings, body.link);
         if (!sourceEnabled(state.settings, indexer.name)) return json(res, 403, { error: 'disabled' });

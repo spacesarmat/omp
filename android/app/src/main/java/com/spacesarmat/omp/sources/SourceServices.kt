@@ -98,6 +98,16 @@ class SourceServices private constructor(context: Context) {
     )
     val siteHttp = SiteHttp(jar, cloudflare, agent)
 
+    /** The OMP subscription's refresh token: one refresh at a time for the app and its hidden pages, Keystore only. */
+    val billing = BillingTokens(
+        secrets,
+        { form, headers ->
+            val r = request(HttpSpec(BillingTokens.REFRESH_URL, "POST", headers, form, null, null, BillingTokens.TIMEOUT_MS))
+            BillingTokens.Answer(r.status, r.text)
+        },
+        warn = { android.util.Log.w("OmpBilling", it) },
+    )
+
     /** This device's User-Agent (the visible check uses it, the phone sends it with a check it passed for the TV). */
     fun userAgent(): String = agent()
 
