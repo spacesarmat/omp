@@ -4,6 +4,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Subscription: the phone signs in with new self-renewing device keys. A disconnected device says “This device was disconnected — enter a new code”; clearer “devices taken” and “update the app” errors
 - [phone] Without an OMP subscription, up to 10 subscriptions in New → Subscriptions: extra ones are paused, not deleted. No limit with a subscription
 
 ## 0.20.4

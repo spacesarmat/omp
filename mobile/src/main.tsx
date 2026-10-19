@@ -5,6 +5,8 @@ import { resetTo } from './nav';
 import { activeServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
+import { startBillingKeepAlive } from '../../src/billing/tokens';
+import { phoneSourceContext } from './searchContext';
 import { reloadSourcePrefs } from '../../src/sources/store';
 
 import { ensureFirstRun } from './donate';
@@ -29,6 +31,8 @@ logStart(t('history.phone'));
 
 // the phone app runs on Android: the built-in tracker parsers work through its native http
 registerBuiltinSources();
+// OMP subscription: only this page rotates the device tokens (it can write the Keystore); keeps the access token fresh
+startBillingKeepAlive(phoneSourceContext);
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)
 initPhoneRpc({
   connectedLg: () => (tvState.value === 'connected' && tvKind() !== 'atv' ? sessionIp.value : null),

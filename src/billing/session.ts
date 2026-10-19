@@ -3,11 +3,30 @@ import { loadJson, saveJson } from '../store/storage';
 const DEVICE_KEY = 'tsp.billingDevice';
 const SESSION_KEY = 'tsp.billingSession';
 const PENDING_CODE_KEY = 'tsp.billingPendingCode';
+const NOTICE_KEY = 'tsp.billingNotice';
 
+/**
+ * This phone's binding to a subscription code. Since PR-5 it holds the short-lived access token; the
+ * refresh token lives in the Android Keystore (`refresh` here only where there is no Keystore). Apps before
+ * PR-5 saved an opaque `token`; it is swapped for the pair once (/v1/token/upgrade).
+ */
 export interface BillingSession {
+  /** Opaque long-lived token of an app before PR-5; '' once the phone has the token pair. */
   token: string;
   paidUntil: number;
+  /** Stable id of this binding (the cached /v1/me answer is tied to it; the tokens rotate). */
+  id?: string;
+  /** Access token `a1.…` (24 h) and its expiry, unix ms. */
+  access?: string;
+  accessExp?: number;
+  /** Expiry of the refresh token, unix ms. */
+  refreshExp?: number;
+  /** Refresh token kept here only when the Keystore is missing or refused the write. */
+  refresh?: string;
 }
+
+/** Why the session was dropped by the server: shown above the code field until a new code works. */
+export type BillingNotice = '' | 'revoked';
 
 export interface BillingAccount {
   telegramId: string;
@@ -44,8 +63,27 @@ export function billingSession(): BillingSession | null {
   return loadJson<BillingSession | null>(SESSION_KEY, null, (v) => {
     if (!v || typeof v !== 'object') return false;
     const row = v as BillingSession;
-    return typeof row.token === 'string' && row.token.length > 0 && typeof row.paidUntil === 'number';
+    if (typeof row.token !== 'string' || typeof row.paidUntil !== 'number') return false;
+    return row.token.length > 0 || (typeof row.access === 'string' && row.access.length > 0);
   });
+}
+
+/** Key of the binding for cached answers: the stable id, or the legacy token of an app before PR-5. */
+export function sessionKey(row: BillingSession): string {
+  return row.id || row.token;
+}
+
+/** True while the session still runs on the opaque token of an app before PR-5. */
+export function isLegacySession(row: BillingSession): boolean {
+  return !row.access && row.token.length > 0;
+}
+
+export function billingNotice(): BillingNotice {
+  return loadJson<BillingNotice>(NOTICE_KEY, '', (v) => v === '' || v === 'revoked');
+}
+
+export function setBillingNotice(notice: BillingNotice): void {
+  saveJson(NOTICE_KEY, notice);
 }
 
 export function saveBillingSession(row: BillingSession | null): void {
