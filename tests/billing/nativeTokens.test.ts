@@ -70,6 +70,7 @@ function fakeApp(answer?: (n: number) => NativeBillingAnswer): FakeApp {
       return Promise.resolve({ volatile: false });
     },
     status: () => Promise.resolve({ present: !!(app.memory || app.keystore), volatile: !!app.memory }),
+    name: () => Promise.resolve('Xiaomi 2201117TY*'),
     forget() {
       app.forgotten++;
       app.keystore = null;
@@ -224,9 +225,25 @@ describe('device tokens through the Android app', () => {
     const site = fakeSite((c) => page(JSON.stringify(pair), c.url), {});
     await activateCode({ ...site.ctx, billing: app }, 'ABCD-EFGH');
     expect(app.adopted).toEqual(['r1.code']);
+    // the phone's model goes with the activation, cleaned, for the bot's and the panel's device list
+    expect(site.calls[0].form).toMatchObject({ code: 'ABCD-EFGH', tokens: 'pair', name: 'Xiaomi 2201117TY' });
     expect(site.secrets).toEqual({});
     expect(JSON.stringify(localStorage)).not.toContain('r1.code');
     expect(billingSession()!.access).toBe('a1.code');
+  });
+
+  it('no model from the app (or an error) sends no name; activation still works', async () => {
+    const app = fakeApp();
+    app.name = () => Promise.reject(new Error('no plugin'));
+    const pair = { refreshToken: 'r1.code', accessToken: 'a1.code', accessExpiresAt: Date.now() + 24 * HOUR };
+    const site = fakeSite((c) => page(JSON.stringify(pair), c.url), {});
+    await activateCode({ ...site.ctx, billing: app }, 'ABCD-EFGH');
+    expect(site.calls[0].form).not.toHaveProperty('name');
+    const plain = fakeSite((c) => page(JSON.stringify(pair), c.url), {});
+    resetBillingTokens();
+    clearBilling();
+    await activateCode(plain.ctx, 'ABCD-EFGH');
+    expect(plain.calls[0].form).not.toHaveProperty('name');
   });
 
   it('activation fails cleanly when the app cannot take the token', async () => {
@@ -255,6 +272,7 @@ describe('device tokens through the Android app', () => {
     await fetchBillingAccount({ ...site.ctx, billing: app });
     expect(paths(site.calls).slice(1)).toEqual(['/v1/token/upgrade', '/v1/me']);
     expect(app.adopted).toEqual(['r1.up']);
+    expect(site.calls[1].form).toMatchObject({ name: 'Xiaomi 2201117TY' });
     expect(bearer(site.calls[2])).toBe('Bearer a1.up');
   });
 

@@ -5,7 +5,14 @@
 import {
   activeExtras,
   applyPayment,
+  baseDevices,
+  bonusActive,
+  bonusRow,
+  bonusRows,
   deviceLimitNow,
+  limitBreakdown,
+  limitOverrideOf,
+  withBonus,
   findAccount,
   logAudit,
   mainSubscription,
@@ -183,36 +190,80 @@ export function revokeNoticeText(device) {
   );
 }
 
-/** «2» or «2 + 1 доп.» */
-function limitText(base, extras) {
-  return extras > 0 ? base + ' + ' + extras + ' доп.' : String(base);
-}
-
 /**
- * Admin limit form. `deviceLimit` is the included devices (1–LIMIT_MAX); `extraSlots` the monthly
- * extra slots (0–LIMIT_MAX). Extra slots set here run until paidUntil, like bought ones.
- * Lowering the limit does not unbind anything: the newest devices over it stop working.
+ * Admin limit form: the individual limit and the paid extra slots.
+ * `limitOverride`: a whole number 1–LIMIT_MAX («индивидуальный лимит», replaces the global base and is not touched
+ * when the base in the settings changes), or '' / null to go back to the global base; undefined keeps it.
+ * `extraSlots`: monthly extra slots (0–LIMIT_MAX); set here they run until paidUntil, like bought ones.
+ * Bonus slots are separate (grantBonus). Lowering the limit unbinds nothing: the newest devices over it stop working.
  */
-export function setDeviceLimit(state, { accountId, deviceLimit, extraSlots, now, actor }) {
+export function setDeviceLimit(state, { accountId, limitOverride, extraSlots, now, actor }) {
   const sub = subOf(state, accountId);
   if (!sub) return { state, result: { error: 'no_subscription' } };
-  const base = intIn(deviceLimit, 1, LIMIT_MAX);
+  const oldOverride = limitOverrideOf(sub);
+  let override = oldOverride;
+  if (limitOverride === null || limitOverride === '' || limitOverride === 'base') override = null;
+  else if (limitOverride !== undefined) override = intIn(limitOverride, 1, LIMIT_MAX);
   const extra = extraSlots === undefined || extraSlots === '' ? activeExtras(state, sub, now) : intIn(extraSlots, 0, LIMIT_MAX);
-  if (base === null || extra === null) return { state, result: { error: 'bad_args' } };
-  const oldBase = Number(sub.deviceLimit) || 0;
+  if ((limitOverride !== undefined && limitOverride !== null && limitOverride !== '' && limitOverride !== 'base' && override === null) || extra === null) {
+    return { state, result: { error: 'bad_args' } };
+  }
   const oldExtra = activeExtras(state, sub, now);
-  if (base === oldBase && extra === oldExtra) return { state, result: { ok: true, unchanged: true, deviceLimit: base, extraSlots: extra } };
-  const next = { ...sub, deviceLimit: base };
+  const before = limitBreakdown(state, sub, now);
+  if (override === oldOverride && extra === oldExtra) {
+    return { state, result: { ok: true, unchanged: true, limitOverride: override, extraSlots: extra, total: before.total, text: before.text } };
+  }
+  // deviceLimit mirrors the base for a rollback to an image that reads it
+  const next = { ...sub, limitOverride: override, deviceLimit: override !== null ? override : baseDevices(state.settings) };
   if (extra !== oldExtra) {
     next.extraSlots = extra;
     next.extraUntil = extra > 0 ? Math.max(Number(sub.extraUntil) || 0, Number(sub.paidUntil) || 0) : 0;
   }
   const changed = replaceSub(state, next);
-  const detail = 'Лимит устройств ' + limitText(oldBase, oldExtra) + ' → ' + limitText(base, extra) + ' (' + who(state, accountId) + ')';
+  const after = limitBreakdown(changed, next, now);
+  const detail = 'Лимит устройств ' + before.total + ' (' + before.text + ') → ' + after.total + ' (' + after.text + ') (' + who(state, accountId) + ')';
   return {
     state: audited(changed, actor, 'limit_set', detail, accountId, now),
-    result: { ok: true, deviceLimit: base, extraSlots: extra, total: deviceLimitNow(changed, next, now) },
+    result: { ok: true, limitOverride: override, extraSlots: extra, total: deviceLimitNow(changed, next, now), text: after.text },
   };
+}
+
+/** Bounds for a manual bonus grant. */
+export const BONUS_MAX_DAYS = 3650;
+
+/**
+ * Admin «Бонусные устройства»: `count` free slots (1–LIMIT_MAX), forever (`days` empty / 0) or for `days` days.
+ * They are not part of the renewal price and outlive changes of the global base. `reason` is shown in the panel.
+ */
+export function grantBonus(state, { accountId, count, days, reason, now, actor }) {
+  const sub = subOf(state, accountId);
+  if (!sub) return { state, result: { error: 'no_subscription' } };
+  const n = intIn(count, 1, LIMIT_MAX);
+  const d = days === undefined || days === null || days === '' || String(days).trim() === '0' ? 0 : intIn(days, 1, BONUS_MAX_DAYS);
+  if (n === null || d === null) return { state, result: { error: 'bad_args' } };
+  const row = bonusRow({ count: n, days: d, reason, source: 'admin', now });
+  const next = withBonus(sub, row, now);
+  const changed = replaceSub(state, next);
+  const after = limitBreakdown(changed, next, now);
+  const detail =
+    'Бонусные устройства: +' + n + (row.until ? ' до ' + mskDate(row.until) : ' навсегда') + (row.reason ? ' — ' + row.reason : '') +
+    '; лимит ' + after.total + ' (' + who(state, accountId) + ')';
+  return { state: audited(changed, actor, 'bonus_grant', detail, accountId, now), result: { ok: true, bonus: row, total: after.total, text: after.text } };
+}
+
+/** Admin: remove one bonus row (active or expired). */
+export function removeBonus(state, { accountId, bonusId, now, actor }) {
+  const sub = subOf(state, accountId);
+  if (!sub) return { state, result: { error: 'no_subscription' } };
+  const rows = bonusRows(sub);
+  const row = rows.find((b) => b.id === String(bonusId || ''));
+  if (!row) return { state, result: { error: 'not_found' } };
+  const next = { ...sub, bonusSlots: rows.filter((b) => b !== row) };
+  const changed = replaceSub(state, next);
+  const after = limitBreakdown(changed, next, now);
+  const detail =
+    'Бонусные устройства: снято ' + row.count + (bonusActive(row, now) ? '' : ' (уже истекли)') + '; лимит ' + after.total + ' (' + who(state, accountId) + ')';
+  return { state: audited(changed, actor, 'bonus_remove', detail, accountId, now), result: { ok: true, total: after.total, text: after.text } };
 }
 
 /**

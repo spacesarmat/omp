@@ -190,6 +190,37 @@ export function touchRow(db, id, { ip, now, force }) {
   return true;
 }
 
+/** Longest device name kept in the registry. */
+export const DEVICE_NAME_MAX = 40;
+
+/**
+ * Device name from the phone, safe for the bot (Markdown) and the panel: letters, digits, spaces and . , - _ ( ) + /,
+ * whitespace collapsed, at most DEVICE_NAME_MAX characters. '' when nothing is left.
+ */
+export function deviceNameOf(raw) {
+  if (typeof raw !== 'string') return '';
+  return Array.from(
+    raw
+      .normalize('NFC')
+      .replace(/[^\p{L}\p{N} .,()+\/-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+    .slice(0, DEVICE_NAME_MAX)
+    .join('')
+    .trim();
+}
+
+/** Store the phone's name on an active row; an empty or unchanged name writes nothing. Returns true when written. */
+export function setDeviceName(db, id, raw) {
+  const name = deviceNameOf(raw);
+  if (!name) return false;
+  const row = deviceRow(db, id);
+  if (!row || row.status !== 'active' || row.name === name) return false;
+  db.prepare('UPDATE devices SET name = ? WHERE id = ?').run(name, row.id);
+  return true;
+}
+
 /* ---------- secret ---------- */
 
 const secrets = new WeakMap();

@@ -13,7 +13,7 @@ import {
   type BillingSession,
 } from '../billing/session';
 import { saveBillingAccess } from '../billing/entitlement';
-import { dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
+import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
@@ -101,7 +101,9 @@ function activateError(status: number, code: string): Error {
 
 /** Binds a code to this phone and keeps the device token pair (refresh in the Keystore). */
 export function activateCode(ctx: SourceContext, code: string): Promise<BillingSession> {
-  return billingPost(ctx, '/v1/activate', { code: code, deviceId: deviceId(), tokens: 'pair' }, { timeoutMs: 15000 }).then(
+  return deviceNameField(ctx)
+    .then((named) => billingPost(ctx, '/v1/activate', { code: code, deviceId: deviceId(), tokens: 'pair', ...named }, { timeoutMs: 15000 }))
+    .then(
     (res) => {
       const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
       if (!pair) throw activateError(res.status, errorOf(res.text));

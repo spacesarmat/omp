@@ -250,6 +250,35 @@ function single(work: () => Promise<BillingSession>): Promise<BillingSession> {
   return p;
 }
 
+/** Longest device name the billing server keeps (ops/billing registry.mjs). */
+const NAME_MAX = 40;
+
+/**
+ * `{ name }` with this phone's model for /v1/activate, /v1/token/upgrade and /v1/token/refresh (the server keeps it in
+ * its device list); `{}` when the app has none (browser build, hidden pages) or it fails. Never blocks the request.
+ */
+export function deviceNameField(ctx: SourceContext): Promise<{ name?: string }> {
+  const ask = ctx.billing && ctx.billing.name;
+  if (!ask) return Promise.resolve({});
+  return Promise.resolve()
+    .then(() => ask.call(ctx.billing))
+    .then(
+      (raw) => {
+        const name = Array.from(
+          String(raw || '')
+            .replace(/[^\p{L}\p{N} .,()+/-]/gu, ' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        )
+          .slice(0, NAME_MAX)
+          .join('')
+          .trim();
+        return name ? { name } : {};
+      },
+      () => ({}),
+    );
+}
+
 /** One POST; a lost answer (network error, timeout) is sent once more with the same body. */
 function postTwice(
   ctx: SourceContext,
@@ -284,20 +313,22 @@ function upgradeLegacy(ctx: SourceContext, s: BillingSession): Promise<BillingSe
     Authorization: 'Bearer ' + s.token,
     'X-Device-Id': deviceId(),
   };
-  return postTwice(ctx, '/v1/token/upgrade', { deviceId: deviceId() }, headers).then(
-    (res) => {
-      // an old server without the route, or a blip: the legacy token keeps working, try again later
-      if (res.status === 404 || res.status === 429 || res.status >= 500) {
+  return deviceNameField(ctx)
+    .then((named) => postTwice(ctx, '/v1/token/upgrade', { deviceId: deviceId(), ...named }, headers))
+    .then(
+      (res) => {
+        // an old server without the route, or a blip: the legacy token keeps working, try again later
+        if (res.status === 404 || res.status === 429 || res.status >= 500) {
+          failedAt = Date.now();
+          return s;
+        }
+        return takePair(ctx, s, res);
+      },
+      () => {
         failedAt = Date.now();
         return s;
-      }
-      return takePair(ctx, s, res);
-    },
-    () => {
-      failedAt = Date.now();
-      return s;
-    },
-  );
+      },
+    );
 }
 
 /**
@@ -317,13 +348,17 @@ export function refreshDeviceTokens(ctx: SourceContext): Promise<BillingSession>
           dropDeviceTokens(ctx, lost ? 'keystore' : 'revoked');
           throw lost ? tokenFailure(t('sources.billing.keystoreLost')) : goneError();
         }
-        return postTwice(ctx, '/v1/token/refresh', { refreshToken, deviceId: deviceId() }, { 'X-Device-Id': deviceId() }).then(
-          (res) => takePair(ctx, s, res),
-          () => {
-            failedAt = Date.now();
-            throw downError();
-          },
-        );
+        return deviceNameField(ctx)
+          .then((named) =>
+            postTwice(ctx, '/v1/token/refresh', { refreshToken, deviceId: deviceId(), ...named }, { 'X-Device-Id': deviceId() }),
+          )
+          .then(
+            (res) => takePair(ctx, s, res),
+            () => {
+              failedAt = Date.now();
+              throw downError();
+            },
+          );
       },
       () => {
         failedAt = Date.now();

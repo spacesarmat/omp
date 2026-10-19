@@ -94,6 +94,8 @@ export interface NativeBilling {
   adopt?(refreshToken: string): Promise<{ volatile: boolean }>;
   status?(): Promise<{ present: boolean; volatile: boolean }>;
   forget?(): Promise<void>;
+  /** This phone's model («Xiaomi 2201117TY»), sent on activation so the bot and the panel can name the device. */
+  name?(): Promise<string>;
 }
 
 export interface SourceContext {

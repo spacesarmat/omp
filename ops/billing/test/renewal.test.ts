@@ -366,7 +366,7 @@ describe('monthly extra device', () => {
     for (const press of ['Устройства', 'Код']) {
       const reply = botReply(f.state, { chatId: '42', text: press, now: NOW });
       const text = reply.messages.map((m: { text: string }) => m.text).join('\n');
-      expect(text).toContain('Устройства: 3 из 3 (2 в подписке + 1 доп. до 18.11.2026)');
+      expect(text).toContain('Устройства: 3 из 3 (2 базовых + 1 купленный до 18.11.2026)');
       expect(text).toContain('Ещё одно устройство — 50 ₽ до 18.11.2026');
       expect(text).toContain('продление станет 250 ₽');
       expect(reply.messages[1].inline.inline_keyboard[0][0].text).toBe('Оплатить 50 ₽');

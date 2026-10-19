@@ -17,7 +17,7 @@ export type PostResult = {
   redirect?: string;
   flash?: Flash;
   auth?: boolean;
-  extra?: { codes?: { code: string; accountId?: string; paidUntil?: number }[]; promos?: { code: string; days: number; maxUses: number }[] };
+  extra?: { codes?: { code: string; accountId?: string; paidUntil?: number }[]; promos?: { code: string; days: number; maxUses: number; bonusSlots?: number; bonusDays?: number }[] };
   services?: unknown;
 };
 

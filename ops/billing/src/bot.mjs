@@ -11,7 +11,7 @@ import {
   confirmAdminPanelLogin,
   confirmDeviceLink,
   createPromo,
-  DEVICE_BASE,
+  baseDevices,
   deviceCode,
   ensureTelegramAccount,
   formatCode,
@@ -33,6 +33,26 @@ import {
   subscriptionView,
   supportReplyTarget,
 } from './logic.mjs';
+
+/** «до 2 телефонов» */
+function upToPhones(state) {
+  const n = baseDevices(state && state.settings);
+  return 'до ' + n + (n === 1 ? ' телефона' : ' телефонов');
+}
+
+/** «на 2 телефонах» */
+function onPhones(state) {
+  const n = baseDevices(state && state.settings);
+  return 'на ' + n + (n === 1 ? ' телефоне' : ' телефонах');
+}
+
+/** «+30 дней» / «+1 устройство навсегда» / both. */
+function promoText(p) {
+  const parts = [];
+  if (p.days) parts.push('+' + daysText(p.days));
+  if (p.bonusSlots) parts.push('+' + p.bonusSlots + ' устр. ' + (p.bonusDays ? 'на ' + daysText(p.bonusDays) : 'навсегда'));
+  return parts.join(', ');
+}
 
 function rub(n) {
   return (Number(n) || 0).toFixed(0) + ' ₽';
@@ -288,13 +308,12 @@ export function parseAction(text) {
   return { action: 'unknown', arg: raw };
 }
 
-/** «Устройства: 2 из 3 (2 в подписке + 1 доп. до 18.11.2026)» */
+/** «Устройства: 3 из 4 (2 базовых + 1 бонусный (навсегда) + 1 купленный до 18.11.2026)»; a plain base: «1 из 2». */
 function devicesLine(sub) {
   const used = sub.devices.filter((d) => d.bound).length;
   let line = 'Устройства: ' + used + ' из ' + sub.deviceLimit;
-  if (sub.extraSlots > 0) {
-    line += ' (' + sub.baseLimit + ' в подписке + ' + sub.extraSlots + ' доп. до ' + mskDate(sub.extraUntil) + ')';
-  }
+  const limit = sub.limit;
+  if (limit && !limit.plain) line += ' (' + limit.text + (limit.extra > 0 ? ' до ' + mskDate(limit.extraUntil) : '') + ')';
   return line;
 }
 
@@ -341,9 +360,9 @@ function statusText(state, sub, account, opts) {
           rub(prices.price) +
           ' за ' +
           daysText(prices.days) +
-          ', до ' +
-          DEVICE_BASE +
-          ' телефонов. На ТВ подписка не нужна.' +
+          ', ' +
+          upToPhones(state) +
+          '. На ТВ подписка не нужна.' +
           trialLine(state))
     );
   }
@@ -473,9 +492,9 @@ export function paymentUserMessage(state, result) {
     text =
       '✅ Оплата получена. Подписка до ' +
       mskDateTime(result.paidUntil) +
-      ', до ' +
-      DEVICE_BASE +
-      ' телефонов.\n' +
+      ', ' +
+      upToPhones(state) +
+      '.\n' +
       codeBlock(origin, result.code, 'Код подписки') +
       '\nНа ТВ подписка не нужна.';
     inline = rows([codeButtonRow(origin, result.code)]);
@@ -589,7 +608,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
   if (!sub) {
     out.push({
       text:
-        'Подписки нет.\n«Оплатить» — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', до ' + DEVICE_BASE + ' телефонов. На ТВ подписка не нужна.' + trialLine(state),
+        'Подписки нет.\n«Оплатить» — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(state) + '. На ТВ подписка не нужна.' + trialLine(state),
     });
     return { state, out };
   }
@@ -1013,11 +1032,19 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     say('Формат: КОД дни лимит\nПример: DEMO1 1 50', { adminPad: true, await: { kind: 'admin_promo' } });
   } else if (action === 'admin_promo' && arg) {
     const bits = arg.split(/\s+/);
-    const out = createPromo(cur, { code: bits[0], days: Number(bits[1]) || 1, maxUses: Number(bits[2]) || 1, now });
+    // /admin_promo CODE DAYS USES [BONUS_SLOTS [BONUS_DAYS]]: bonus slots forever when BONUS_DAYS is 0 or missing
+    const out = createPromo(cur, {
+      code: bits[0],
+      days: bits[1] === undefined ? 1 : Number(bits[1]),
+      maxUses: Number(bits[2]) || 1,
+      bonusSlots: Number(bits[3]) || 0,
+      bonusDays: Number(bits[4]) || 0,
+      now,
+    });
     cur = out.state;
     if (out.result.error === 'exists') say('Такой промокод уже есть.', { adminPad: true });
     else if (out.result.error) say('Некорректный промокод.', { adminPad: true });
-    else say('Промокод ' + out.result.promo.code + ' (+' + daysText(out.result.promo.days) + ', до ' + out.result.promo.maxUses + ' исп.).', { adminPad: true });
+    else say('Промокод ' + out.result.promo.code + ' (' + promoText(out.result.promo) + ', до ' + out.result.promo.maxUses + ' исп.).', { adminPad: true });
   } else if (action === 'promo' && !arg) {
     say('Отправьте промокод одним сообщением.\nПример: DEMO1', { await: { kind: 'promo' } });
   } else if (action === 'promo' && arg) {
@@ -1026,8 +1053,13 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (out.result.error === 'bad_promo') say('Промокод не найден или уже не действует.');
     else if (out.result.error === 'already') say('Вы уже активировали этот промокод.');
     else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
+    else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку — «Оплатить».');
     else {
-      const head = 'Промокод принят: +' + daysText(out.result.days) + ', подписка до ' + mskDateTime(out.result.paidUntil) + '.';
+      const b = out.result.bonus;
+      const parts = [];
+      if (out.result.days) parts.push('+' + daysText(out.result.days) + ', подписка до ' + mskDateTime(out.result.paidUntil));
+      if (b) parts.push('+' + b.count + ' ' + (b.count === 1 ? 'устройство' : 'устройства') + ' бесплатно ' + (b.until ? 'до ' + mskDate(b.until) : 'навсегда'));
+      const head = 'Промокод принят: ' + parts.join('; ') + '.';
       if (out.result.code) {
         say(head + '\n\n' + codeBlock(origin, out.result.code), { inline: rows([codeButtonRow(origin, out.result.code)]), parseMode: 'Markdown' });
       } else {
@@ -1037,7 +1069,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'price') {
     const grace = graceDays(cur.settings);
     say(
-      'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ': поиск в Jackett и JacRed на ' + DEVICE_BASE + ' телефонах.' +
+      'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ': поиск в Jackett и JacRed ' + onPhones(cur) + '.' +
         '\nПодписка нужна только на телефоне — на ТВ она не нужна.' +
         (prices.extra ? '\nДоп. устройство — ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
         (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает — можно спокойно продлить.' : '') +
@@ -1048,7 +1080,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     else if (!sub) {
       const p = checkout({ kind: 'new', accountId: account.id }, 'OMP Jackett и JacRed');
       say(
-        'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', до ' + DEVICE_BASE + ' телефонов. На ТВ подписка не нужна.\nПосле оплаты в этот чат придёт код — введите его в OMP на телефоне.',
+        'Подписка OMP — ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\nПосле оплаты в этот чат придёт код — введите его в OMP на телефоне.',
         { inline: rows([[urlButton('Оплатить ' + rub(p.price), p.url)]]) },
       );
     } else {

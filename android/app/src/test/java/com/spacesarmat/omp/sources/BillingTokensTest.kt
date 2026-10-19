@@ -219,4 +219,31 @@ class BillingTokensTest {
         assertNull(store.values[BillingTokens.KEY])
         assertEquals("missing", t.refresh(device, "").getString("error"))
     }
+
+    @Test
+    fun sendsThePhoneModelWithEveryRefreshCleanedAndShort() {
+        val store = Store().apply { values[BillingTokens.KEY] = "r1.old" }
+        val server = Server { _, n -> BillingTokens.Answer(200, pair(n)) }
+        val named = BillingTokens(store, server::post, {}, {}, { now }, { "Xiaomi 2201117TY*" })
+        assertTrue(named.refresh(device, "a1.old").getBoolean("ok"))
+        assertEquals("Xiaomi 2201117TY", server.forms[0]["name"])
+        // an empty or failing model sends no name at all; the refresh itself works
+        val quiet = Server { _, n -> BillingTokens.Answer(200, pair(n)) }
+        val store2 = Store().apply { values[BillingTokens.KEY] = "r1.old" }
+        assertTrue(BillingTokens(store2, quiet::post, {}, {}, { now }, { throw IllegalStateException("no build") }).refresh(device, "a1.x").getBoolean("ok"))
+        assertFalse(quiet.forms[0].containsKey("name"))
+    }
+
+    @Test
+    fun modelNameAndItsBillingForm() {
+        assertEquals("Xiaomi 2201117TY", BillingTokens.modelName("Xiaomi", "2201117TY"))
+        assertEquals("Samsung SM-S918B", BillingTokens.modelName("samsung", "SM-S918B"))
+        assertEquals("Google Pixel 8", BillingTokens.modelName("Google", "Pixel 8"))
+        assertEquals("OnePlus CPH2449", BillingTokens.modelName("OnePlus", "OnePlus CPH2449"))
+        assertEquals("Model", BillingTokens.modelName("", " Model "))
+        assertEquals("Samsung SM-S918B", BillingTokens.billingName("  Samsung\tSM-S918B\n"))
+        assertEquals("bold x (y)", BillingTokens.billingName("*bold*_[x](y)`"))
+        assertEquals(BillingTokens.NAME_MAX, BillingTokens.billingName("x".repeat(60)).length)
+        assertEquals("", BillingTokens.billingName(null))
+    }
 }

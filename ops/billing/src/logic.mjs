@@ -3,8 +3,17 @@ import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from 
 const DAY = 24 * 60 * 60 * 1000;
 const ATTEMPT_CAP = 200;
 
-/** Devices included in a base subscription (phone + second phone). Extra paid slots add to it. */
+/**
+ * Historical base of 2 devices, used only by the old one-time migrations (meta.deviceBase, meta.extraMonthly).
+ * The base today is `settings.baseDevices` (baseDevices()).
+ */
 export const DEVICE_BASE = 2;
+
+/** Base devices of every subscription unless an admin set an individual limit: `settings.baseDevices`, 1–20. */
+export const BASE_DEVICES_DEFAULT = 2;
+export const BASE_DEVICES_MAX = 20;
+/** Bonus slots of one subscription: at most this many entries are kept (the oldest expired ones go first). */
+const BONUS_ROWS_MAX = 50;
 
 /** Days of access after paidUntil while the user renews. `settings.graceDays` overrides it (0–30). */
 export const GRACE_DAYS_DEFAULT = 3;
@@ -135,10 +144,163 @@ export function activeExtras(state, sub, now) {
   return now < (Number(sub.extraUntil) || 0) + graceMs(state) ? n : 0;
 }
 
-/** Devices allowed at `now`: the included ones (deviceLimit) plus extra slots that have not lapsed. */
+/** Global base devices from the admin settings (default 2, 1–20). */
+export function baseDevices(settings) {
+  const raw = settings ? settings.baseDevices : undefined;
+  if (raw === undefined || raw === null || raw === '') return BASE_DEVICES_DEFAULT;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) return BASE_DEVICES_DEFAULT;
+  return Math.min(BASE_DEVICES_MAX, n);
+}
+
+/** The admin's individual limit of a subscription (replaces the global base), or null. */
+export function limitOverrideOf(sub) {
+  const raw = sub ? sub.limitOverride : null;
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 1) return null;
+  return Math.min(BASE_DEVICES_MAX, n);
+}
+
+/** Base part of the limit: the individual limit when set, else the global base. */
+export function baseLimitOf(state, sub) {
+  const own = limitOverrideOf(sub);
+  return own !== null ? own : baseDevices(state && state.settings);
+}
+
+/** Valid bonus slot rows of a subscription: { id, count, until (ms or null = forever), reason, grantedAt, source }. */
+export function bonusRows(sub) {
+  const list = sub && Array.isArray(sub.bonusSlots) ? sub.bonusSlots : [];
+  return list.filter((b) => b && typeof b === 'object' && Math.floor(Number(b.count)) > 0);
+}
+
+function bonusUntil(b) {
+  const u = b.until;
+  return u === null || u === undefined || u === '' ? null : Number(u) || 0;
+}
+
+/** True while a bonus row counts: forever, or before its date. An expired one stops counting by itself. */
+export function bonusActive(b, now) {
+  const until = bonusUntil(b);
+  return until === null || now < until;
+}
+
+/** Free bonus slots that count at `now`. They never cost money and are not part of the renewal price. */
+export function activeBonus(sub, now) {
+  return bonusRows(sub).reduce((n, b) => n + (bonusActive(b, now) ? Math.min(BASE_DEVICES_MAX, Math.floor(Number(b.count))) : 0), 0);
+}
+
+/**
+ * Devices allowed at `now`: base (global, or the individual limit) + active bonus slots + paid extra slots
+ * that have not lapsed.
+ */
 export function deviceLimitNow(state, sub, now) {
   if (!sub) return 0;
-  return (Number(sub.deviceLimit) || 0) + activeExtras(state, sub, now === undefined ? Date.now() : now);
+  const at = now === undefined ? Date.now() : now;
+  return baseLimitOf(state, sub) + activeBonus(sub, at) + activeExtras(state, sub, at);
+}
+
+function plural(n, one, few, many) {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b === 1) return one;
+  if (b >= 2 && b <= 4) return few;
+  return many;
+}
+
+/**
+ * The limit and its parts, for the bot, the cabinet and the panel:
+ * «2 базовых + 1 бонусный (навсегда) + 1 купленный», or «3 (индивидуальный лимит) + …».
+ */
+export function limitBreakdown(state, sub, now) {
+  if (!sub) return null;
+  const at = now === undefined ? Date.now() : now;
+  const override = limitOverrideOf(sub);
+  const base = baseLimitOf(state, sub);
+  const groups = new Map();
+  const rows = bonusRows(sub);
+  for (let i = 0; i < rows.length; i++) {
+    if (!bonusActive(rows[i], at)) continue;
+    const until = bonusUntil(rows[i]);
+    const key = until === null ? 'forever' : mskDate(until);
+    const g = groups.get(key) || { count: 0, until };
+    g.count += Math.floor(Number(rows[i].count));
+    if (until !== null && until > g.until) g.until = until;
+    groups.set(key, g);
+  }
+  const bonus = Array.from(groups.values()).sort((a, b) => (a.until === null ? -1 : b.until === null ? 1 : a.until - b.until));
+  const bonusTotal = activeBonus(sub, at);
+  const extra = activeExtras(state, sub, at);
+  const parts = [override !== null ? override + ' (индивидуальный лимит)' : base + ' ' + plural(base, 'базовое', 'базовых', 'базовых')];
+  for (let i = 0; i < bonus.length; i++) {
+    const g = bonus[i];
+    parts.push(g.count + ' ' + plural(g.count, 'бонусный', 'бонусных', 'бонусных') + ' (' + (g.until === null ? 'навсегда' : 'до ' + mskDate(g.until)) + ')');
+  }
+  if (extra > 0) parts.push(extra + ' ' + plural(extra, 'купленный', 'купленных', 'купленных'));
+  return {
+    total: base + bonusTotal + extra,
+    base,
+    override,
+    globalBase: baseDevices(state && state.settings),
+    bonus,
+    bonusTotal,
+    extra,
+    extraUntil: extra ? Number(sub.extraUntil) || 0 : 0,
+    text: parts.join(' + '),
+    plain: override === null && !bonusTotal && !extra,
+  };
+}
+
+/**
+ * What lowering the global base to `nextBase` would do now: subscriptions without an individual limit that still
+ * give access (paid or grace) and would have more bound devices than their new limit, and how many of their devices
+ * stop working (bound now within the limit, over it after). Expired subscriptions do not count: their devices are off.
+ */
+export function baseChangeImpact(state, nextBase, now) {
+  const at = now === undefined ? Date.now() : now;
+  const from = baseDevices(state && state.settings);
+  const to = baseDevices({ baseDevices: nextBase });
+  let subscriptions = 0;
+  let devices = 0;
+  if (to < from) {
+    const next = { ...state, settings: { ...state.settings, baseDevices: to } };
+    const subs = state.subscriptions || [];
+    for (let i = 0; i < subs.length; i++) {
+      const sub = subs[i];
+      if (!sub || limitOverrideOf(sub) !== null || !subAccess(state, sub, at).access) continue;
+      const bound = boundDevices(state, sub.id);
+      const lost = Math.max(0, bound - deviceLimitNow(next, sub, at)) - Math.max(0, bound - deviceLimitNow(state, sub, at));
+      if (lost > 0) {
+        subscriptions++;
+        devices += lost;
+      }
+    }
+  }
+  return { from, to, lowering: to < from, subscriptions, devices };
+}
+
+/** A new bonus row (the caller stores it). `days` 0 / empty = forever. */
+export function bonusRow({ count, days, reason, source, now }) {
+  const n = Math.floor(Number(days) || 0);
+  return {
+    id: randomId(),
+    count: Math.max(1, Math.min(BASE_DEVICES_MAX, Math.floor(Number(count) || 1))),
+    until: n > 0 ? now + n * DAY : null,
+    reason: String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+    grantedAt: now,
+    source: source || 'admin',
+  };
+}
+
+/** `sub` with one more bonus row; the list stays short (expired rows go first). */
+export function withBonus(sub, row, now) {
+  let list = bonusRows(sub).concat([row]);
+  while (list.length > BONUS_ROWS_MAX) {
+    const old = list.findIndex((b) => !bonusActive(b, now));
+    list = list.filter((_, i) => i !== (old >= 0 ? old : 0));
+  }
+  return { ...sub, bonusSlots: list };
 }
 
 /** Bound codes of a subscription, oldest binding first. The newest ones are the ones over a lowered limit. */
@@ -171,7 +333,7 @@ export function fitsOnlyByLapsedExtra(state, sub, position, now) {
   if (!sub) return false;
   const extra = Math.max(0, Math.floor(Number(sub.extraSlots) || 0));
   if (!extra || activeExtras(state, sub, now)) return false;
-  return position < (Number(sub.deviceLimit) || 0) + extra;
+  return position < baseLimitOf(state, sub) + activeBonus(sub, now) + extra;
 }
 
 /** Why a bound code is over the limit: `extra_expired` (a lapsed extra slot would hold it) or `device_limit`. */
@@ -274,6 +436,31 @@ export function migrateExtraSlots(state) {
     };
   });
   return { ...state, subscriptions, meta: { ...meta, extraMonthly: 1 } };
+}
+
+/**
+ * One-time move to the composed limit (meta.limitModel = 1): base from `settings.baseDevices`, an individual
+ * limit (`limitOverride`) per subscription, bonus slots. A subscription whose stored deviceLimit differs from the
+ * global base keeps it as its individual limit, so nobody's limit changes. A subscription that already has
+ * `limitOverride` is left as is, so running it again changes nothing. `deviceLimit` stays as written (the image
+ * before this change reads it on a rollback).
+ */
+export function migrateLimitModel(state) {
+  if (!state || typeof state !== 'object') return state;
+  const meta = state.meta && typeof state.meta === 'object' && !Array.isArray(state.meta) ? state.meta : {};
+  if (Number(meta.limitModel) >= 1) return state;
+  const base = baseDevices(state.settings);
+  const subscriptions = (state.subscriptions || []).map((s) => {
+    if (!s || typeof s !== 'object') return s;
+    const next = { ...s };
+    if (!Object.prototype.hasOwnProperty.call(s, 'limitOverride')) {
+      const stored = Math.floor(Number(s.deviceLimit));
+      next.limitOverride = Number.isFinite(stored) && stored >= 1 && stored !== base ? Math.min(BASE_DEVICES_MAX, stored) : null;
+    }
+    if (!Array.isArray(s.bonusSlots)) next.bonusSlots = [];
+    return next;
+  });
+  return { ...state, subscriptions, meta: { ...meta, limitModel: 1 } };
 }
 
 /**
@@ -457,7 +644,10 @@ export function createSubscription(state, { accountId, now, days }) {
     accountId,
     product: 'jackett',
     paidUntil: now + period * DAY,
-    deviceLimit: DEVICE_BASE,
+    // deviceLimit only mirrors the base for a rollback to an image that reads it; the limit is limitBreakdown().
+    deviceLimit: baseDevices(state.settings),
+    limitOverride: null,
+    bonusSlots: [],
     extraSlots: 0,
     extraUntil: 0,
     createdAt: now,
@@ -1249,7 +1439,8 @@ export function pageFails(state, { reason, q, offset, limit }) {
 }
 
 export function subscriptionsCsv(state, now) {
-  const lines = ['accountId,who,telegramId,email,paidUntil,active,deviceLimit,bound'];
+  const lines = ['accountId,who,telegramId,email,paidUntil,active,deviceLimit,bound,limit'];
+  const at = now === undefined ? Date.now() : now;
   const subs = state.subscriptions || [];
   for (let i = 0; i < subs.length; i++) {
     const sub = subs[i];
@@ -1263,8 +1454,9 @@ export function subscriptionsCsv(state, now) {
         csvCell(acc.email || ''),
         csvCell(sub.paidUntil ? new Date(sub.paidUntil).toISOString() : ''),
         csvCell(sub.paidUntil > now ? '1' : '0'),
-        csvCell(sub.deviceLimit),
+        csvCell(deviceLimitNow(state, sub, at)),
         csvCell(bound),
+        csvCell(limitBreakdown(state, sub, at).text),
       ].join(','),
     );
   }
@@ -1291,14 +1483,20 @@ export function usersCsv(state) {
 }
 
 export function promosCsv(state) {
-  const lines = ['code,days,uses,maxUses,revoked'];
+  const lines = ['code,days,uses,maxUses,revoked,bonusSlots,bonusDays'];
   const promos = state.promos || [];
   for (let i = 0; i < promos.length; i++) {
     const p = promos[i];
     lines.push(
-      [csvCell(p.code), csvCell(p.days), csvCell((p.uses || []).length), csvCell(p.maxUses), csvCell(p.revoked ? '1' : '0')].join(
-        ',',
-      ),
+      [
+        csvCell(p.code),
+        csvCell(p.days),
+        csvCell((p.uses || []).length),
+        csvCell(p.maxUses),
+        csvCell(p.revoked ? '1' : '0'),
+        csvCell(p.bonusSlots || 0),
+        csvCell(p.bonusSlots ? p.bonusDays || 0 : ''),
+      ].join(','),
     );
   }
   return lines.join('\n') + '\n';
@@ -1626,6 +1824,8 @@ const DETAIL_FEED = {
   device_revoke: 1,
   device_clone: 1,
   limit_set: 1,
+  bonus_grant: 1,
+  bonus_remove: 1,
   days_subtract: 1,
   payment_confirm: 1,
   payment_reject: 1,
@@ -1916,7 +2116,8 @@ export function revokeCode(state, codeId) {
 /**
  * Subscription as the bot, /v1/me and the panel show it.
  * `active` means access (paid or grace); `paid` is before paidUntil; `inGrace` is the grace period.
- * `deviceLimit` is the limit at `now` (included devices + extra slots that count), `baseLimit` the included ones.
+ * `deviceLimit` is the limit at `now` (base + active bonus slots + extra slots that count); `baseLimit` the base
+ * (the individual limit when `limitOverride` is set, else the global base); `limit` the breakdown (limitBreakdown).
  * A bound device over that limit has `overLimit` and gets no access until the slot is renewed; `overReason` says why:
  * 'extra_expired' (a lapsed extra slot would hold it) or 'device_limit'.
  */
@@ -1935,7 +2136,10 @@ export function subscriptionView(state, accountId, now) {
     accessUntil: access.accessUntil,
     graceDays: graceDays(state.settings),
     deviceLimit: deviceLimitNow(state, sub, now),
-    baseLimit: Number(sub.deviceLimit) || 0,
+    baseLimit: baseLimitOf(state, sub),
+    limitOverride: limitOverrideOf(sub),
+    bonusSlots: activeBonus(sub, now),
+    limit: limitBreakdown(state, sub, now),
     extraSlots: extras,
     extraUntil: extras ? Number(sub.extraUntil) || 0 : 0,
     lapsingExtras: lapsingExtras(state, sub, now),
@@ -2057,24 +2261,34 @@ export function normalizePromo(code) {
     .replace(/[^A-Z0-9]/g, '');
 }
 
-export function createPromo(state, { code, days, maxUses, now }) {
+/**
+ * A promo adds `days` to the subscription and/or `bonusSlots` free device slots: forever (`bonusDays` 0) or for
+ * `bonusDays` days from the redemption. A promo with bonus slots may add no days (`days` 0).
+ */
+export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays }) {
   const plain = normalizePromo(code) || normalizeCode(randomCode());
   if (plain.length < 4 || plain.length > 24) return { state, result: { error: 'bad_promo' } };
   if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
+  const bonus = Math.max(0, Math.min(BASE_DEVICES_MAX, Math.floor(Number(bonusSlots) || 0)));
+  const d = Math.floor(Number(days));
   const row = {
     id: randomId(),
     code: plain,
-    days: days > 0 ? Math.floor(days) : 1,
+    days: d > 0 ? Math.min(3650, d) : bonus ? 0 : 1,
     maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
     createdAt: now,
     revoked: false,
     uses: [],
   };
+  if (bonus) {
+    row.bonusSlots = bonus;
+    row.bonusDays = Math.max(0, Math.min(3650, Math.floor(Number(bonusDays) || 0)));
+  }
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
 }
 
 /** Create `count` promo codes (max 100). A custom code is used only when count is 1. */
-export function createPromos(state, { count, code, days, maxUses, now }) {
+export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays }) {
   const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
   let cur = state;
   const promos = [];
@@ -2083,6 +2297,8 @@ export function createPromos(state, { count, code, days, maxUses, now }) {
       code: n === 1 ? code : '',
       days,
       maxUses,
+      bonusSlots,
+      bonusDays,
       now: (now || Date.now()) + i,
     });
     if (out.result.error) return { state: cur, result: { error: out.result.error, promos } };
@@ -2100,7 +2316,8 @@ export function revokePromo(state, promoId) {
 }
 
 /**
- * Redeems a promo in the bot: +days on the subscription (or a new one) and a fresh device activation code.
+ * Redeems a promo in the bot: +days on the subscription (or a new one), bonus slots when the promo has them, and a
+ * fresh device activation code. A promo with bonus slots only needs a subscription (`needs_subscription`).
  * The same account cannot redeem the same promo twice.
  */
 export function redeemPromo(state, { code, accountId, now }) {
@@ -2112,6 +2329,12 @@ export function redeemPromo(state, { code, accountId, now }) {
   if (promo.uses.length >= promo.maxUses) return { state, result: { error: 'exhausted' } };
 
   const existing = anySub(state, accountId);
+  const days = Math.max(0, Math.floor(Number(promo.days) || 0));
+  const bonusCount = Math.max(0, Math.floor(Number(promo.bonusSlots) || 0));
+  if (!existing && !days) return { state, result: { error: 'needs_subscription' } };
+  const bonus = bonusCount
+    ? bonusRow({ count: bonusCount, days: promo.bonusDays, reason: 'промокод ' + promo.code, source: 'promo', now })
+    : null;
   let next = state;
   let subscriptionId = '';
   let activationCode = '';
@@ -2119,17 +2342,19 @@ export function redeemPromo(state, { code, accountId, now }) {
   let limitHit = false;
 
   if (existing) {
-    const extended = extendGift(next, existing, promo.days, now);
+    let extended = days ? extendGift(next, existing, days, now) : existing;
+    if (bonus) extended = withBonus(extended, bonus, now);
     paidUntil = extended.paidUntil;
     const subscriptions = next.subscriptions.map((s) => (s.id === existing.id ? extended : s));
-    const slot = slotCode({ ...next, subscriptions }, existing, now);
+    const slot = slotCode({ ...next, subscriptions }, extended, now);
     next = slot.state;
     subscriptionId = existing.id;
     activationCode = slot.code;
     limitHit = slot.limit;
   } else {
-    const created = createSubscription(next, { accountId, now, days: promo.days });
+    const created = createSubscription(next, { accountId, now, days });
     next = created.state;
+    if (bonus) next = { ...next, subscriptions: next.subscriptions.map((s) => (s.id === created.result.subscriptionId ? withBonus(s, bonus, now) : s)) };
     subscriptionId = created.result.subscriptionId;
     activationCode = created.result.code;
     paidUntil = created.result.paidUntil;
@@ -2139,7 +2364,15 @@ export function redeemPromo(state, { code, accountId, now }) {
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
   return {
     state: { ...next, promos },
-    result: { kind: 'promo', code: activationCode, paidUntil, days: promo.days, promoCode: promo.code, limitReached: limitHit },
+    result: {
+      kind: 'promo',
+      code: activationCode,
+      paidUntil,
+      days,
+      promoCode: promo.code,
+      limitReached: limitHit,
+      bonus: bonus ? { count: bonus.count, until: bonus.until } : null,
+    },
   };
 }
 

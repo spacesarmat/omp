@@ -145,7 +145,7 @@ describe('migration: every bound code becomes a registry row', () => {
     let st = a.state;
     const second = deviceCode(st, a.subscriptionId, now + 1);
     st = activate(second.state, { code: second.code, deviceId: DEV_B, now: now + 1 }).state;
-    st = { ...st, subscriptions: st.subscriptions.map((x: { id: string }) => (x.id === a.subscriptionId ? { ...x, deviceLimit: 1 } : x)) };
+    st = { ...st, subscriptions: st.subscriptions.map((x: { id: string }) => (x.id === a.subscriptionId ? { ...x, limitOverride: 1 } : x)) };
     const acc2 = ensureTelegramAccount(st, '43', now);
     const sub2 = createSubscription(acc2.state, { accountId: acc2.account.id, now, days: 30 });
     st = activate(sub2.state, { code: sub2.result.code, deviceId: DEV_C, now: now + 2 }).state;
@@ -176,7 +176,7 @@ describe('migration: every bound code becomes a registry row', () => {
     expect(activeRowForCode(db, gone.codeId)).toBeNull();
     // Days, limits and bindings are untouched.
     expect(read.subscriptions.map((x: { paidUntil: number }) => x.paidUntil)).toEqual(st.subscriptions.map((x: { paidUntil: number }) => x.paidUntil));
-    expect(read.subscriptions.find((x: { id: string }) => x.id === a.subscriptionId).deviceLimit).toBe(1);
+    expect(read.subscriptions.find((x: { id: string }) => x.id === a.subscriptionId).limitOverride).toBe(1);
     expect(read.codes.filter((c: { deviceId: string }) => c.deviceId).length).toBe(4);
     // Writing again changes nothing in the registry.
     const ids = rows.map((r) => r.id);

@@ -117,6 +117,7 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
               {devices.map((d) => (
                 <TableRow key={d.id || d.codeId}>
                   <TableCell className="font-mono">
+                    {d.name ? <span className="font-sans">{d.name} </span> : null}
                     {d.deviceId}…{' '}
                     {d.overLimit ? (
                       <Badge variant="warn" className="ml-1">
@@ -187,29 +188,55 @@ export function DevicesCard({ user, run }: { user: UserData; run: Run }) {
 
 export function LimitCard({ user, run }: { user: UserData; run: Run }) {
   const sub = user.subscription;
-  const [base, setBase] = useState(String(sub?.baseLimit ?? 2));
+  const [own, setOwn] = useState(sub?.limitOverride ? String(sub.limitOverride) : '');
   const [extra, setExtra] = useState(String(sub?.extraSlots ?? 0));
+  const [bonusCount, setBonusCount] = useState('1');
+  const [bonusDays, setBonusDays] = useState('');
+  const [reason, setReason] = useState('');
   if (!sub) return null;
-  const nextTotal = (Number(base) || 0) + (Number(extra) || 0);
+  const globalBase = sub.globalBase ?? 2;
+  const activeBonus = sub.bonusSlots ?? 0;
+  const nextTotal = (own.trim() ? Number(own) || 0 : globalBase) + activeBonus + (Number(extra) || 0);
   const lowering = nextTotal < (sub.bound || 0);
+  const bonus = sub.bonus || [];
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Лимит устройств</CardTitle>
+        <CardTitle>
+          Лимит устройств{' '}
+          <Badge variant="count" className="ml-2 align-middle">
+            {sub.deviceLimit}
+          </Badge>
+          {sub.limitOverride ? (
+            <Badge variant="warn" className="ml-2 align-middle">
+              индивидуальный лимит
+            </Badge>
+          ) : null}
+        </CardTitle>
         <CardDescription>
-          «В подписке» — устройства, которые входят в цену (обычно 2). «Доп.» — помесячные доп. устройства: выданные здесь действуют до конца
-          оплаченного периода и дальше продлеваются вместе с подпиской. Сейчас: {sub.deviceLimit}
-          {sub.extraSlots ? ' (' + sub.baseLimit + ' + ' + sub.extraSlots + ' доп. до ' + listStamp(sub.extraUntil || 0) + ' МСК)' : ''}.
+          Сейчас: {sub.limitText || sub.deviceLimit}
+          {sub.extraSlots ? ', купленные до ' + listStamp(sub.extraUntil || 0) + ' МСК' : ''}. Лимит = база + бонусные + купленные. База —
+          общая из настроек ({globalBase}), если не задан индивидуальный лимит: он заменяет базу и не меняется, когда меняют общую. Бонусные —
+          бесплатно, навсегда или до даты, в цену продления не входят. Купленные (доп.) — помесячные: выданные здесь действуют до конца
+          оплаченного периода и дальше продлеваются вместе с подпиской.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-4">
         <div className="flex flex-wrap items-end gap-2">
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">В подписке</span>
-            <Input className="w-24" type="number" min={1} max={20} value={base} onChange={(e) => setBase(e.target.value)} />
+            <span className="text-muted-foreground">Индивидуальный лимит</span>
+            <Input
+              className="w-40"
+              type="number"
+              min={1}
+              max={20}
+              placeholder={'пусто = общий (' + globalBase + ')'}
+              value={own}
+              onChange={(e) => setOwn(e.target.value)}
+            />
           </label>
           <label className="grid gap-1 text-sm">
-            <span className="text-muted-foreground">Доп.</span>
+            <span className="text-muted-foreground">Купленные (доп.)</span>
             <Input className="w-24" type="number" min={0} max={20} value={extra} onChange={(e) => setExtra(e.target.value)} />
           </label>
           <ConfirmAction
@@ -218,12 +245,80 @@ export function LimitCard({ user, run }: { user: UserData; run: Run }) {
             question={
               <>
                 Лимит станет {nextTotal}
+                {own.trim() ? ' (индивидуальный ' + own.trim() + ')' : ' (общая база ' + globalBase + ')'}
                 {lowering ? '. Привязано ' + sub.bound + ': последние сверх лимита перестанут работать' : ''}. Сохранить?
               </>
             }
             yes="Да, сохранить"
-            onYes={() => void run('/admin/limit', { accountId: user.account.id, deviceLimit: base, extraSlots: extra })}
+            onYes={() => void run('/admin/limit', { accountId: user.account.id, limitOverride: own.trim(), extraSlots: extra })}
           />
+        </div>
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Бонусные устройства</p>
+          {bonus.length === 0 ? <p className="text-sm text-muted-foreground">Нет</p> : null}
+          {bonus.length > 0 ? (
+            <Table className="min-w-[36rem]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Кол-во</TableHead>
+                  <TableHead>Срок</TableHead>
+                  <TableHead>Причина</TableHead>
+                  <TableHead>Выдано, МСК</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bonus.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell>+{b.count}</TableCell>
+                    <TableCell>
+                      {b.until === null ? 'навсегда' : 'до ' + listStamp(b.until)}
+                      {b.active ? null : (
+                        <Badge variant="secondary" className="ml-1">
+                          истёк
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {b.reason || <span className="text-muted-foreground">—</span>}
+                      {b.source === 'promo' ? null : <span className="text-xs text-muted-foreground"> · вручную</span>}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Stamp ms={b.grantedAt} />
+                    </TableCell>
+                    <TableCell>
+                      <ConfirmAction
+                        label="Снять"
+                        question={<>Снять {b.count} бонусн. устр.?</>}
+                        yes="Да, снять"
+                        onYes={() => void run('/admin/bonus-remove', { accountId: user.account.id, bonusId: b.id, confirm: 'yes' })}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : null}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">Устройств</span>
+              <Input className="w-20" type="number" min={1} max={20} value={bonusCount} onChange={(e) => setBonusCount(e.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">Дней</span>
+              <Input className="w-36" type="number" min={1} max={3650} placeholder="пусто = навсегда" value={bonusDays} onChange={(e) => setBonusDays(e.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-muted-foreground">Причина</span>
+              <Input className="w-56" maxLength={80} value={reason} onChange={(e) => setReason(e.target.value)} />
+            </label>
+            <Button
+              size="sm"
+              onClick={() => void run('/admin/bonus', { accountId: user.account.id, count: bonusCount, days: bonusDays.trim(), reason })}
+            >
+              Выдать бонус
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

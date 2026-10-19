@@ -2,7 +2,16 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { registrySchema, syncRegistry } from './registry.mjs';
-import { DEVICE_BASE, enrichActors, GRACE_DAYS_DEFAULT, migrateDeviceBase, migrateExtraSlots, migrateTruncatedIps } from './logic.mjs';
+import {
+  BASE_DEVICES_DEFAULT,
+  DEVICE_BASE,
+  enrichActors,
+  GRACE_DAYS_DEFAULT,
+  migrateDeviceBase,
+  migrateExtraSlots,
+  migrateLimitModel,
+  migrateTruncatedIps,
+} from './logic.mjs';
 
 export function emptyState() {
   return {
@@ -40,6 +49,8 @@ export function emptyState() {
       periodDays: 30,
       /** Monthly price of one extra device slot; renewed together with the subscription. */
       extraDeviceRub: 0,
+      /** Devices every subscription includes (1–20) unless an admin set an individual limit (limitOverride). */
+      baseDevices: BASE_DEVICES_DEFAULT,
       /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */
       graceDays: GRACE_DAYS_DEFAULT,
     },
@@ -72,8 +83,9 @@ export function emptyState() {
     /**
      * Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored.
      * extraMonthly: extra devices are monthly slots (extraSlots/extraUntil), not part of deviceLimit.
+     * limitModel: the limit is settings.baseDevices (or limitOverride) + bonusSlots + extra slots.
      */
-    meta: { deviceBase: DEVICE_BASE, extraMonthly: 1 },
+    meta: { deviceBase: DEVICE_BASE, extraMonthly: 1, limitModel: 1 },
   };
 }
 
@@ -203,7 +215,7 @@ function normalizeState(parsed) {
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(next))));
+  return migrateTruncatedIps(migrateLimitModel(migrateExtraSlots(migrateDeviceBase(enrichActors(next)))));
 }
 
 export function readState(file) {
