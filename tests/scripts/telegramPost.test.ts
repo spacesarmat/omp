@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins, no @types/node in this project
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 // @ts-ignore
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
-import { postRelease, replacePhoto, repostFiles, ALBUM_MAX, BUTTONS_TEXT, WEBHOOK_NOTICE_LOG } from '../../scripts/telegram-post.mjs';
+import { postRelease, replacePhoto, repostFiles, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
 import { UPLOAD_MAX } from '../../scripts/telegram-lib.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
@@ -272,54 +272,35 @@ describe('photo album of a stable release', () => {
   });
 });
 
-describe('pin notice', () => {
-  it('deletes the «pinned a message» line of the release post and confirms the updates', async () => {
+describe('pin and bot updates', () => {
+  it('pins the post and never polls the bot (the billing bot owns getUpdates and deletes the pin notice)', async () => {
     const root = setup({});
     const calls: Call[] = [];
     const side: Call[] = [];
-    const logs: string[] = [];
-    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: (s: string) => logs.push(s) });
-    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo', 'getUpdates', 'getUpdates', 'deleteMessages']);
-    expect(side[2].form.get('offset')).toBe('42');
-    expect(logs).toContain(`Telegram: deleted the pin notice ${NOTICE}`);
-  });
-
-  it('leaves the notice when it never shows up in the updates', async () => {
-    const root = setup({});
-    const calls: Call[] = [];
-    const side: Call[] = [];
-    const logs: string[] = [];
-    const none = (m: string) => (m === 'getUpdates' ? new Response(JSON.stringify({ ok: true, result: [] }), { status: 200 }) : null);
-    const pauses: number[] = [];
-    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, none, side) as any, log: (s: string) => logs.push(s), pause: async (ms: number) => { pauses.push(ms); } });
-    expect(side.filter((c) => c.method === 'getUpdates')).toHaveLength(5);
-    expect(pauses).toHaveLength(4);
-    expect(logs).toContain('Telegram: pin notice not found, left in the channel');
-  });
-
-  it('skips getUpdates when the admin bot has a webhook on the bot (the Worker deletes the notice)', async () => {
-    const root = setup({});
-    const calls: Call[] = [];
-    const side: Call[] = [];
-    const logs: string[] = [];
-    const hook = (m: string) => (m === 'getWebhookInfo' ? new Response(JSON.stringify({ ok: true, result: { url: 'https://omp-admin-bot.example.workers.dev/' } }), { status: 200 }) : null);
-    await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, hook, side) as any, log: (s: string) => logs.push(s) });
-    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo']);
-    expect(logs).toContain(WEBHOOK_NOTICE_LOG);
-    // the release itself is unchanged
-    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
-  });
-
-  it('treats a 409 from getUpdates as «a webhook is on» and goes on with the release', async () => {
-    const root = setup({});
-    const calls: Call[] = [];
-    const side: Call[] = [];
-    const logs: string[] = [];
-    const conflict = (m: string) =>
-      m === 'getUpdates' ? new Response(JSON.stringify({ ok: false, description: "Conflict: can't use getUpdates method while webhook is active" }), { status: 409 }) : null;
-    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, conflict, side) as any, log: (s: string) => logs.push(s) });
+    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, () => null, side) as any, log: () => undefined });
     expect(failed).toBe(0);
-    expect(side.map((c) => c.method)).toEqual(['getWebhookInfo', 'getUpdates']);
-    expect(logs).toContain(WEBHOOK_NOTICE_LOG);
+    expect(names(calls)).toEqual(['sendPhoto', 'pinChatMessage']);
+    expect(side).toEqual([]);
+  });
+
+  it('a failed pin is only logged', async () => {
+    const root = setup({});
+    const calls: Call[] = [];
+    const logs: string[] = [];
+    const noPin = (m: string) => (m === 'pinChatMessage' ? new Response(JSON.stringify({ ok: false, description: 'not enough rights' }), { status: 400 }) : null);
+    const failed = await postRelease({ tag: 'v1.2.3', dir: join(root, 'build'), root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, noPin) as any, log: (s: string) => logs.push(s) });
+    expect(failed).toBe(0);
+    expect(logs.some((l) => l.includes('pin messages'))).toBe(true);
+  });
+});
+
+describe('no polling or webhook calls anywhere in the release scripts and workflows', () => {
+  it('scripts/*.mjs and .github/workflows never call getUpdates, setWebhook or deleteWebhook', () => {
+    const files = [
+      ...readdirSync('scripts').filter((f: string) => /\.(mjs|js|ts)$/.test(f)).map((f: string) => 'scripts/' + f),
+      ...readdirSync('.github/workflows').map((f: string) => '.github/workflows/' + f),
+    ];
+    const bad = files.filter((f: string) => /getUpdates|setWebhook|deleteWebhook|getWebhookInfo/.test(readFileSync(f, 'utf8')));
+    expect(bad).toEqual([]);
   });
 });
