@@ -184,13 +184,15 @@ export function App() {
         </TabsContent>
 
         <TabsContent value="home" className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
             {(
               [
                 [d.stats?.accounts ?? 0, 'аккаунтов'],
                 [d.stats?.activeSubs ?? 0, 'активных'],
                 [d.stats?.payments30 ?? 0, 'оплат / 30 дн.'],
                 [Math.round(d.stats?.revenue30 || 0), '₽ / 30 дн.'],
+                [d.stats?.devicesRefresh == null ? '-' : d.stats.devicesRefresh, 'новые токены'],
+                [d.stats?.devicesLegacy == null ? '-' : d.stats.devicesLegacy, 'старые токены'],
               ] as const
             ).map(([v, l]) => (
               <Card key={l}>

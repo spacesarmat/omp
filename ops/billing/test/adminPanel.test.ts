@@ -68,6 +68,17 @@ describe('admin payload hides codes', () => {
     expect(home.subscriptions.find((s: { id: string }) => s.id === subId).creditRub).toBe(50);
   });
 
+  it('puts token kind counts from tokenStats onto the home stats', () => {
+    const start = seeded();
+    const home = homePayload(start.state, '/tmp/billing.db', { tokenStats: { total: 5, refresh: 3, legacy: 2 } });
+    expect(home.stats.devicesBound).toBe(5);
+    expect(home.stats.devicesRefresh).toBe(3);
+    expect(home.stats.devicesLegacy).toBe(2);
+    const empty = homePayload(start.state, '/tmp/billing.db', {});
+    expect(empty.stats.devicesRefresh).toBe(null);
+    expect(empty.stats.devicesLegacy).toBe(null);
+  });
+
   it('keeps the real subscription expiry when another code is issued', () => {
     const start = seeded();
     // The first code is on a phone, so the second device slot gets a new code.
