@@ -217,6 +217,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     process.exit(0);
   }
+  // an unknown or removed --mode (e.g. the old --repost-files) must not fall through to a new post
+  if (mode.startsWith('--')) {
+    console.log(`Telegram: unknown mode ${mode}, nothing posted`);
+    process.exit(2);
+  }
   const failed = await postRelease({ tag, token, chat }).catch((e) => {
     console.log(String(e.message));
     return -1;

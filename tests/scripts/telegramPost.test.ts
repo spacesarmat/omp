@@ -5,6 +5,8 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 // @ts-ignore
 import { join } from 'node:path';
+// @ts-ignore
+import { spawnSync } from 'node:child_process';
 import { postRelease, replacePhoto, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
@@ -240,6 +242,18 @@ describe('pin and bot updates', () => {
     const failed = await postRelease({ tag: 'v1.2.3', root, token: TOKEN, chat: '@c', fetch: fakeFetch(calls, noPin) as any, log: (s: string) => logs.push(s) });
     expect(failed).toBe(0);
     expect(logs.some((l) => l.includes('pin messages'))).toBe(true);
+  });
+});
+
+describe('command line', () => {
+  it('refuses an unknown or removed --mode (the old --repost-files) instead of posting again', () => {
+    // @ts-ignore node globals
+    const env = { ...process.env, TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_CHAT_ID: '@c' };
+    // @ts-ignore node globals
+    const r = spawnSync(process.execPath, ['scripts/telegram-post.mjs', 'v1.2.3', '--repost-files', '8', 'build'], { env, encoding: 'utf8' });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toContain('unknown mode --repost-files, nothing posted');
+    expect(r.stdout + r.stderr).not.toContain(TOKEN);
   });
 });
 
