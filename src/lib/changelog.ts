@@ -55,19 +55,27 @@ export function markShownOn(mark: '' | ChangelogMark, platform: ChangelogPlatfor
   return mark === platform;
 }
 
+/** «- [tech] …»: a technical or admin-only bullet. No app shows it; only the admin reads the full changelog. */
+const TECH_MARK = /^\[tech\]\s*/i;
+
+/** Whether a bullet is a «[tech]» one (hidden from users everywhere). */
+export function isTech(item: string): boolean {
+  return TECH_MARK.test(item);
+}
+
 /** The bullet without its platform marker. */
 export function stripPlatform(item: string): string {
   return item.replace(PLATFORM_MARK, '');
 }
 
 /**
- * The entries as one platform shows them: the unmarked bullets and those marked for it, without the markers; a
- * version left with nothing is dropped.
+ * The entries as one platform shows them: the unmarked bullets and those marked for it, without the markers and
+ * never a «[tech]» one; a version left with nothing is dropped.
  */
 export function forPlatform(list: ChangelogEntry[], platform: ChangelogPlatform): ChangelogEntry[] {
   const out: ChangelogEntry[] = [];
   list.forEach((e) => {
-    const items = e.items.filter((i) => markShownOn(itemPlatform(i), platform)).map(stripPlatform);
+    const items = e.items.filter((i) => !isTech(i) && markShownOn(itemPlatform(i), platform)).map(stripPlatform);
     if (items.length) out.push({ version: e.version, items: items });
   });
   return out;

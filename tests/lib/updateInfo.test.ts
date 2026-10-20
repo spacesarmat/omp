@@ -67,6 +67,15 @@ describe('update notes per platform', () => {
     expect(updateNotes(sanitizeUpdateInfo({ ...good, notes: [] })!, 'tv')).toEqual([]);
   });
 
+  it('a stray «[tech]» bullet in a feed is never shown', () => {
+    const old = sanitizeUpdateInfo({ ...good, notes: ['[tech] CI', 'Общее'] })!;
+    expect(updateNotes(old, 'tv')).toEqual(['Общее']);
+    expect(updateNotes(old, 'phone')).toEqual(['Общее']);
+    const fresh = sanitizeUpdateInfo({ ...good, notes: ['x'], notesTv: ['[tech] Биллинг'], notesPhone: ['[TECH] Админка', 'Телефон'] })!;
+    expect(updateNotes(fresh, 'lg')).toEqual(['Исправления и улучшения']);
+    expect(updateNotes(fresh, 'phone')).toEqual(['Телефон']);
+  });
+
   it('a stray «[lg]» / «[atv]» marker: the bullet shows on its own TV only, and never with the marker', () => {
     const info = sanitizeUpdateInfo({ ...good, notes: ['[lg] Поиск', '[atv] Кнопки', '[tv] Пульт', '[phone] Календарь', 'Общее'] })!;
     expect(updateNotes(info, 'lg')).toEqual(['Поиск', 'Пульт', 'Общее']);

@@ -1,0 +1,87 @@
+# Posts an existing GitHub release to the Telegram channel, the same way the Release workflow does
+# (scripts/telegram-post.mjs). For a release whose Telegram step failed. Run by hand only.
+# Scripts and CHANGELOG come from the branch the workflow runs on (main), so a fixed caption script and «[tech]»
+# markers added after the tag apply. No files are attached: the buttons link the release assets of the input tag.
+name: Telegram post (existing release)
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, e.g. v0.20.5
+        required: true
+      force:
+        description: Post even if the channel preview already shows this version
+        type: boolean
+        default: false
+permissions:
+  contents: read
+# one post per tag at a time: a second run for the same tag waits instead of posting in parallel
+concurrency:
+  group: telegram-post-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Refuse a beta tag or a run from another branch
+        # same as release.yml: betas are not posted, the channel gets releases only
+        run: |
+          case "$TAG" in
+            v*-beta.*) echo "::error::$TAG is a beta, betas are not posted to the channel"; exit 1 ;;
+            v*) ;;
+            *) echo "::error::tag must look like vX.Y.Z"; exit 1 ;;
+          esac
+          # the caption and the script come from the checked-out branch: only main is reviewed
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::run this workflow from main (got $GITHUB_REF)"
+            exit 1
+          fi
+      # the workflow ref (main), not the tag: scripts/telegram-post.mjs and CHANGELOG.md as they are now
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: CHANGELOG has this version
+        run: |
+          VERSION="${TAG#v}"
+          if ! grep -qx "## ${VERSION}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md on ${GITHUB_REF_NAME} has no section ## ${VERSION}"
+            exit 1
+          fi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Release must exist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "$TAG" --json tagName,isDraft --jq '"release \(.tagName) draft=\(.isDraft)"'
+      - name: Not posted yet (public channel preview)
+        if: ${{ !inputs.force }}
+        env:
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+        run: |
+          VERSION="${TAG#v}"
+          case "$TELEGRAM_CHAT_ID" in
+            @*) CHANNEL="${TELEGRAM_CHAT_ID#@}" ;;
+            *) echo "::warning::TELEGRAM_CHAT_ID is not an @channel, preview check skipped"; exit 0 ;;
+          esac
+          if curl -fsSL --max-time 20 "https://t.me/s/${CHANNEL}" -o preview.html; then
+            if grep -q "OMP ${VERSION}<" preview.html || grep -q "OMP ${VERSION} " preview.html; then
+              echo "::error::the channel already shows OMP ${VERSION}; rerun with force to post again"
+              echo "Not posted: the channel already shows OMP ${VERSION}." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            echo "channel preview: no OMP ${VERSION} post yet"
+          else
+            echo "::warning::channel preview unavailable, check skipped"
+          fi
+      - name: Post to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::error::TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing"
+            exit 1
+          fi
+          node scripts/telegram-post.mjs "$TAG"
+          echo "Posted $TAG to the Telegram channel. Do not run again for this tag." >> "$GITHUB_STEP_SUMMARY"

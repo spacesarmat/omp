@@ -1,22 +1,16 @@
-// Posts a release to the Telegram channel: photo + changelog + buttons, then every build file as a reply
-// (files over the bot limit, or that Telegram refuses, are linked in a closing reply instead).
+// Posts a release to the Telegram channel: photo + changelog + buttons, nothing else. No files are attached: the
+// buttons link every build and the GitHub release page.
 // A stable release with docs/screenshots/release-<version>/ goes as a photo album (cover + screenshots, changelog on
-// the first photo), then the files and a short message with the buttons, both as replies to the first photo.
-// Usage (release workflow): node scripts/telegram-post.mjs <tag> [build dir, default build]
+// the first photo), then a short message with the buttons as a reply to the first photo.
+// Usage (release workflow): node scripts/telegram-post.mjs <tag>
 // Env: TELEGRAM_BOT_TOKEN (secret), TELEGRAM_CHAT_ID (@channel or id). Without them it does nothing.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { changelogNotes } from './hb-lib.mjs';
 import { readChangelogUtf8 } from './changelog-encoding.mjs';
-import { buildCaption, buildKeyboard, buildFiles, routeFiles, buildLinksMessage, oversizeLogLine } from './telegram-lib.mjs';
+import { buildCaption, buildKeyboard } from './telegram-lib.mjs';
 
-const type = (name) => (name.endsWith('.apk') ? 'application/vnd.android.package-archive' : 'application/octet-stream');
-
-/**
- * Posts the release. `root` is the repo root (CHANGELOG.md, src/lib/donate.ts, screenshots), `dir` the build dir.
- * Resolves to the number of files that could not be attached (they are linked instead).
- */
 function caller(token, doFetch) {
   return async function call(method, form) {
     let r;
@@ -32,8 +26,13 @@ function caller(token, doFetch) {
   };
 }
 
-/** Pins the release post silently (only the post with the description, never the files). A failure is only logged. */
-async function pinPost(call, chat, messageId, log, pause) {
+/**
+ * Pins the release post silently (the post with the description). A failure is only logged.
+ * Telegram then adds a «… pinned a message» line to the channel; the billing bot (@OMPBILLINGBOT, ops/billing) polls
+ * this bot's updates and deletes that line. This script never polls the bot's updates and never sets a webhook: the
+ * token is the billing bot's, and a second poller would take its updates away (409) or change its allowed update types.
+ */
+async function pinPost(call, chat, messageId, log) {
   const form = new FormData();
   form.set('chat_id', chat);
   form.set('message_id', String(messageId));
@@ -42,63 +41,7 @@ async function pinPost(call, chat, messageId, log, pause) {
     await call('pinChatMessage', form);
   } catch (e) {
     log(`${e.message} (the bot needs the «pin messages» right)`);
-    return;
   }
-  await deletePinNotice(call, chat, messageId, log, pause);
-}
-
-/** Log line when the admin bot's webhook is on: the bot deletes the notice itself. */
-export const WEBHOOK_NOTICE_LOG = 'Telegram: a webhook is set (admin bot, ops/admin-bot): it deletes the pin notice, getUpdates skipped';
-
-/** True when a webhook is set for the bot: getUpdates then fails (409) and the webhook owner gets the updates. */
-async function webhookActive(call) {
-  try {
-    const info = await call('getWebhookInfo', new FormData());
-    return !!(info && info.url);
-  } catch {
-    // unknown: try getUpdates as before
-    return false;
-  }
-}
-
-/**
- * Deletes the «… pinned a message» line Telegram adds to the channel. The Bot API does not return its id, so it is
- * looked up in the bot's channel updates (the service post whose pinned_message is our post).
- * When the admin bot (ops/admin-bot, a Cloudflare Worker) has its webhook on this bot, getUpdates is unavailable: the
- * Worker receives the service post itself and deletes it, so here it only logs and returns.
- */
-async function deletePinNotice(call, chat, messageId, log, pause) {
-  if (await webhookActive(call)) {
-    log(WEBHOOK_NOTICE_LOG);
-    return;
-  }
-  for (let attempt = 0; attempt < 5; attempt++) {
-    if (attempt) await pause(1500);
-    let updates;
-    try {
-      const form = new FormData();
-      form.set('allowed_updates', JSON.stringify(['channel_post']));
-      updates = await call('getUpdates', form);
-    } catch (e) {
-      // 409 Conflict: a webhook was set in the meantime, its owner deletes the notice
-      log(/\b409\b/.test(e.message) ? WEBHOOK_NOTICE_LOG : `${e.message} (pin notice left in the channel)`);
-      return;
-    }
-    const notice = updates.map((u) => u.channel_post).find((p) => p && p.pinned_message && p.pinned_message.message_id === messageId);
-    if (updates.length) {
-      // confirm what was read so the next run does not see it again
-      const ack = new FormData();
-      ack.set('offset', String(updates[updates.length - 1].update_id + 1));
-      ack.set('allowed_updates', JSON.stringify(['channel_post']));
-      await call('getUpdates', ack).catch(() => {});
-    }
-    if (notice) {
-      await deleteMessages(call, chat, [notice.message_id], log);
-      log(`Telegram: deleted the pin notice ${notice.message_id}`);
-      return;
-    }
-  }
-  log('Telegram: pin notice not found, left in the channel');
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -113,7 +56,7 @@ function releasePost(tag, root, log) {
   const cover = join(root, `docs/screenshots/release-${version}.png`);
   if (!existsSync(cover)) log(`Telegram: no release cover ${basename(cover)} (scripts/release-cover.mjs), using a screenshot`);
   const photo = [cover, join(root, 'docs/screenshots/library-large.png'), join(root, 'assets/telegram/omp-telegram.png')].find((p) => existsSync(p));
-  return { version, caption: buildCaption(version, notes, tag), keyboard, photo, album: albumPhotos(root, version, photo) };
+  return { version, caption: buildCaption(version, notes), keyboard, photo, album: albumPhotos(root, version, photo) };
 }
 
 /** Telegram takes at most 10 items in one album. */
@@ -163,7 +106,11 @@ async function sendAlbum(call, chat, { caption, album }) {
   return msgs[0].message_id;
 }
 
-export async function postRelease({ tag, dir = 'build', root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
+/**
+ * Posts the release. `root` is the repo root (CHANGELOG.md, src/lib/donate.ts, screenshots).
+ * Resolves to 1 when the buttons of an album post could not be sent (the post then has no download links), else 0.
+ */
+export async function postRelease({ tag, root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
   const post = releasePost(tag, root, log);
   const { version, keyboard, album } = post;
@@ -184,145 +131,32 @@ export async function postRelease({ tag, dir = 'build', root = '.', token, chat,
     postId = await sendSinglePhoto(call, chat, post);
     log(`Telegram: posted ${version}`);
   }
-  await pinPost(call, chat, postId, log, pause);
-
-  const failed = await sendFiles({ call, chat, replyTo: postId, tag, version, dir, log });
-  if (buttons) {
-    const form = new FormData();
-    form.set('chat_id', chat);
-    form.set('text', BUTTONS_TEXT);
-    form.set('reply_parameters', JSON.stringify({ message_id: postId }));
-    form.set('reply_markup', JSON.stringify(keyboard));
-    try {
-      await call('sendMessage', form);
-      log('Telegram: posted the buttons');
-    } catch (e) {
-      log(`${e.message} (the buttons were not posted)`);
-    }
-  }
-  return failed;
-}
-
-/**
- * Sends the build files as a reply to the release post: one album of documents (Telegram shows it as a single
- * block), with the links to the files over the bot limit as the album caption. If Telegram refuses the album the
- * files go one by one and the links follow in a message. Resolves to the number of files that could not be attached.
- */
-async function sendFiles({ call, chat, replyTo, tag, version, dir, log }) {
-  const files = [];
-  for (const name of buildFiles(version)) {
-    const path = join(dir, name);
-    if (existsSync(path)) files.push({ name, path, size: statSync(path).size });
-    else log(`Telegram: ${name} not found, skipped`);
-  }
-  const { upload, link } = routeFiles(files);
-  link.forEach((f) => log(oversizeLogLine(f)));
-  const blob = (f) => new Blob([readFileSync(f.path)], { type: type(f.name) });
-  const base = () => {
-    const form = new FormData();
-    form.set('chat_id', chat);
-    form.set('reply_parameters', JSON.stringify({ message_id: replyTo }));
-    return form;
-  };
-
-  if (upload.length >= 2) {
-    // a request holds at most 50 MB, so each file is uploaded on its own (silently) and the album is built from
-    // the uploaded file ids; the temporary messages are deleted right after
-    const temp = [];
-    try {
-      const ids = [];
-      for (const f of upload) {
-        const form = new FormData();
-        form.set('chat_id', chat);
-        form.set('disable_notification', 'true');
-        form.set('document', blob(f), f.name);
-        const m = await call('sendDocument', form);
-        temp.push(m.message_id);
-        ids.push(m.document.file_id);
-      }
-      const form = base();
-      const linksText = link.length ? buildLinksMessage(tag, link) : '';
-      form.set('media', JSON.stringify(ids.map((id, i) => ({
-        type: 'document',
-        media: id,
-        ...(linksText && i === ids.length - 1 ? { caption: linksText, parse_mode: 'HTML' } : {}),
-      }))));
-      await call('sendMediaGroup', form);
-      log(`Telegram: attached ${upload.map((f) => f.name).join(', ')} as one block`);
-      await deleteMessages(call, chat, temp, log);
-      return 0;
-    } catch (e) {
-      log(`${e.message}, sending the files one by one`);
-      await deleteMessages(call, chat, temp, log);
-    }
-  } else if (upload.length === 1) {
-    try {
-      const form = base();
-      form.set('document', blob(upload[0]), upload[0].name);
-      if (link.length) {
-        form.set('caption', buildLinksMessage(tag, link));
-        form.set('parse_mode', 'HTML');
-      }
-      await call('sendDocument', form);
-      log(`Telegram: attached ${upload[0].name}`);
-      return 0;
-    } catch (e) {
-      log(String(e.message));
-      link.push(upload[0]);
-      log(oversizeLogLine(upload[0]));
-      await sendLinks(call, base(), tag, link);
-      return 1;
-    }
-  }
+  await pinPost(call, chat, postId, log);
 
   let failed = 0;
-  for (const f of upload) {
-    try {
-      const doc = base();
-      doc.set('document', blob(f), f.name);
-      await call('sendDocument', doc);
-      log(`Telegram: attached ${f.name}`);
-    } catch (e) {
-      failed++;
-      link.push(f);
-      log(String(e.message));
-      log(oversizeLogLine(f));
+  if (buttons) {
+    // the buttons are the only download links of an album post: one retry, then the run reports a failure
+    for (let attempt = 1; ; attempt++) {
+      const form = new FormData();
+      form.set('chat_id', chat);
+      form.set('text', BUTTONS_TEXT);
+      form.set('reply_parameters', JSON.stringify({ message_id: postId }));
+      form.set('reply_markup', JSON.stringify(keyboard));
+      try {
+        await call('sendMessage', form);
+        log('Telegram: posted the buttons');
+        break;
+      } catch (e) {
+        if (attempt < 2) {
+          log(`${e.message}, retrying the buttons`);
+          await pause(3000);
+          continue;
+        }
+        log(`${e.message} (the buttons were not posted: the album has no download links, post them by hand)`);
+        failed++;
+        break;
+      }
     }
-  }
-  if (link.length) await sendLinks(call, base(), tag, link);
-  return failed;
-}
-
-async function deleteMessages(call, chat, ids, log) {
-  if (!ids.length) return;
-  const form = new FormData();
-  form.set('chat_id', chat);
-  form.set('message_ids', JSON.stringify(ids));
-  try {
-    await call('deleteMessages', form);
-  } catch (e) {
-    log(`${e.message} (the bot needs the «delete messages» right)`);
-  }
-}
-
-async function sendLinks(call, form, tag, link) {
-  form.set('parse_mode', 'HTML');
-  form.set('link_preview_options', JSON.stringify({ is_disabled: true }));
-  form.set('text', buildLinksMessage(tag, link));
-  await call('sendMessage', form);
-}
-
-/**
- * Sends the files of an already posted release again as one block (reply to the post) and then deletes the old
- * file messages. Resolves to the number of files that could not be attached.
- */
-export async function repostFiles({ tag, messageId, deleteIds = [], dir = 'build', token, chat, fetch: doFetch = fetch, log = console.log }) {
-  const call = caller(token, doFetch);
-  const version = tag.replace(/^v/, '');
-  const failed = await sendFiles({ call, chat, replyTo: messageId, tag, version, dir, log });
-  if (deleteIds.length) {
-    await deleteMessages(call, chat, deleteIds, log);
-    log(`Telegram: deleted the old file messages ${deleteIds.join(', ')}`);
   }
   return failed;
 }
@@ -343,23 +177,24 @@ export async function replacePhoto({ tag, messageId, root = '.', token, chat, fe
   form.set('photo', new Blob([readFileSync(photo)], { type: 'image/png' }), basename(photo));
   await call('editMessageMedia', form);
   log(`Telegram: replaced the picture of ${version} (message ${messageId})`);
-  await pinPost(call, chat, messageId, log, pause);
+  await pinPost(call, chat, messageId, log);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [tag, dir = 'build'] = process.argv.slice(2);
+  // a second argument that is not a --mode (the old «build» dir) is ignored: no files are posted
+  const [tag, mode = ''] = process.argv.slice(2);
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) {
     console.log('Telegram: no TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID, skipping');
     process.exit(0);
   }
-  if (!tag) throw new Error('usage: telegram-post.mjs <tag> [build dir] | <tag> --edit-photo <id> | <tag> --repost-files <id> <dir> [ids] | <tag> --delete <ids>');
+  if (!tag) throw new Error('usage: telegram-post.mjs <tag> | <tag> --edit-photo <id> | <tag> --delete <ids>');
   const parseIds = (ids = '') => ids.split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => {
     const [a, b = a] = p.split('-').map(Number);
     return Array.from({ length: b - a + 1 }, (_, i) => a + i);
   });
-  if (dir === '--delete') {
+  if (mode === '--delete') {
     // <tag> --delete <message ids, comma separated or a-b>
     const ids = parseIds(process.argv[4]);
     if (!ids.length || ids.some((n) => !(n > 0))) throw new Error('--delete <ids>');
@@ -373,18 +208,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(`Telegram: deleted ${ids.join(', ')}`);
     process.exit(0);
   }
-  if (dir === '--repost-files') {
-    // <tag> --repost-files <post id> <build dir> [old message ids, comma separated or a-b]
-    const [messageId, filesDir, ids = ''] = process.argv.slice(4);
-    const deleteIds = parseIds(ids);
-    if (!(Number(messageId) > 0) || !filesDir || deleteIds.some((n) => !(n > 0))) throw new Error('--repost-files <post id> <dir> [ids]');
-    const failed = await repostFiles({ tag, messageId: Number(messageId), deleteIds, dir: filesDir, token, chat }).catch((e) => {
-      console.log(String(e.message));
-      return -1;
-    });
-    process.exit(failed ? 1 : 0);
-  }
-  if (dir === '--edit-photo') {
+  if (mode === '--edit-photo') {
     const messageId = Number(process.argv[4]);
     if (!Number.isInteger(messageId) || messageId <= 0) throw new Error('--edit-photo needs a message id');
     await replacePhoto({ tag, messageId, token, chat }).catch((e) => {
@@ -393,7 +217,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     process.exit(0);
   }
-  const failed = await postRelease({ tag, dir, token, chat }).catch((e) => {
+  // an unknown or removed --mode (e.g. the old --repost-files) must not fall through to a new post
+  if (mode.startsWith('--')) {
+    console.log(`Telegram: unknown mode ${mode}, nothing posted`);
+    process.exit(2);
+  }
+  const failed = await postRelease({ tag, token, chat }).catch((e) => {
     console.log(String(e.message));
     return -1;
   });

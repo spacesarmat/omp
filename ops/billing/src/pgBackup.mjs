@@ -136,21 +136,19 @@ export function backupStatus(dir, settings, now, lastError) {
   };
 }
 
-/** Admin alert text for a stale backup, or ''. */
+/** Admin alert text for a failed or stale backup, or ''. */
 export function backupAlert(status) {
-  if (!status || !status.enabled || !status.stale) return '';
-  if (!status.last) return 'Бэкапов Postgres ещё нет' + (status.lastError ? ': ' + status.lastError : '');
+  if (!status || !status.enabled) return '';
+  if (status.lastError) return 'Ошибка бэкапа Postgres: ' + status.lastError;
+  if (!status.stale) return '';
+  if (!status.last) return 'Бэкапов Postgres ещё нет';
   const hours = Math.floor((status.ageSec || 0) / 3600);
-  return 'Последний бэкап Postgres ' + hours + ' ч назад (должен быть раз в ' + status.everyHours + ' ч)' +
-    (status.lastError ? ': ' + status.lastError : '');
+  return 'Последний бэкап Postgres ' + hours + ' ч назад (должен быть раз в ' + status.everyHours + ' ч)';
 }
 
-/** Problem text for a Telegram notice: a stale backup (backupAlert) or a failed pg_dump; '' when all is well. */
+/** Problem text for a Telegram notice: failed or stale backup; '' when all is well. */
 export function backupProblem(status) {
-  if (!status || !status.enabled) return '';
-  const stale = backupAlert(status);
-  if (stale) return stale;
-  return status.lastError ? 'Бэкап Postgres не удался: ' + status.lastError : '';
+  return backupAlert(status);
 }
 
 /**

@@ -120,4 +120,132 @@ describe('BILLING_READONLY (cutover window)', () => {
     expect(healthPayload(Date.now())).not.toHaveProperty('readOnly');
     expect(healthPayload(Date.now(), { readOnly: true })).toMatchObject({ readOnly: true });
   });
+
+  it('admin Telegram login and CLI once-link work without writing user data', async () => {
+    const s = await seeded();
+    const before = JSON.stringify(await readState(s.file));
+    // Mint a CLI once-link on the real store (break-glass from the shell), then redeem under read-only.
+    const { issueCliAdminLogin, confirmAdminPanelLogin } = await import('../src/logic.mjs');
+    const { createAdminAuthMemory } = await import('../src/adminAuthMemory.mjs');
+    const issued = await toStore(s.file).update((cur: any) => issueCliAdminLogin(cur, { now: Date.now() }));
+    const afterIssue = JSON.stringify(await readState(s.file));
+    expect(afterIssue).not.toBe(before); // minting writes adminCliLogins only
+
+    const authMem = createAdminAuthMemory();
+    const app = createApp(s.file, async () => ({ ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' }), {
+      env: {},
+      readOnly: true,
+      adminAuthMem: authMem,
+    });
+
+    const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
+    expect(once.status).toBe(302);
+    expect(String(once.headers['set-cookie'] || '')).toContain('omp_admin=');
+    // Redeeming must not write again (consumption is in memory).
+    expect(JSON.stringify(await readState(s.file))).toBe(afterIssue);
+
+    // Telegram start is allowed and stays in memory.
+    await writeState(s.file, {
+      ...(await readState(s.file)),
+      settings: {
+        ...(await readState(s.file)).settings,
+        botToken: 'token',
+        botUsername: 'omp_bot',
+        adminTelegramIds: '42',
+      },
+    });
+    const frozen = JSON.stringify(await readState(s.file));
+    const start = await call(app, 'POST', '/admin/login/telegram', { body: {} });
+    expect(start.status).toBe(200);
+    const started = JSON.parse(start.body);
+    expect(started.ok).toBe(true);
+    expect(started.token).toBeTruthy();
+    expect(started.deepLink).toContain('admin_');
+    expect(JSON.stringify(await readState(s.file))).toBe(frozen);
+
+    authMem.confirmPanel((await readState(s.file)).settings, {
+      token: started.token,
+      telegramId: '42',
+      now: Date.now(),
+    });
+    const status = await call(app, 'GET', '/admin/login/telegram/status?token=' + encodeURIComponent(started.token));
+    expect(status.status).toBe(200);
+    expect(JSON.parse(status.body)).toMatchObject({ ok: true, status: 'ok' });
+    expect(String(status.headers['set-cookie'] || '')).toContain('omp_admin=');
+    expect(JSON.stringify(await readState(s.file))).toBe(frozen);
+    // confirmAdminPanelLogin is only used above via memory; keep the import referenced for tree-shaking tools.
+    expect(typeof confirmAdminPanelLogin).toBe('function');
+  });
+
+  it('/health uses backupEveryHours from settings', async () => {
+    const s = await seeded();
+    const { startPgBackups, dumpName } = await import('../src/pgBackup.mjs');
+    const { mkdtempSync, writeFileSync: wfs, utimesSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'omp-ro-'));
+    const now = Date.now();
+    const name = dumpName(now - 40 * 3600 * 1000);
+    const path = join(dir, name);
+    wfs(path, 'x');
+    utimesSync(path, new Date(now - 40 * 3600 * 1000), new Date(now - 40 * 3600 * 1000));
+    await writeState(s.file, {
+      ...(await readState(s.file)),
+      settings: { ...(await readState(s.file)).settings, backupEveryHours: 168 },
+    });
+    const backups = startPgBackups({ dir, url: 'postgres://u:p@127.0.0.1:1/db' }, async () => (await readState(s.file)).settings, {
+      firstDelayMs: 1e9,
+      everyMs: 1e9,
+      log: () => {},
+      spawn: () => {
+        throw new Error('no dump');
+      },
+    });
+    const app = createApp(s.file, async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }), {
+      env: {},
+      readOnly: true,
+      pgBackups: backups,
+    });
+    const health = await call(app, 'GET', '/health');
+    expect(health.status).toBe(200);
+    const body = JSON.parse(health.body);
+    expect(body.pgBackupOk).toBe(true);
+    backups.stop();
+  });
+
+  it('CLI once-link consumption survives a restart via the side file', async () => {
+    const s = await seeded();
+    const { issueCliAdminLogin } = await import('../src/logic.mjs');
+    const { createAdminAuthMemory } = await import('../src/adminAuthMemory.mjs');
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'omp-cli-'));
+    const consumedPath = join(dir, '.cli-consumed.json');
+    const issued = await toStore(s.file).update((cur: any) => issueCliAdminLogin(cur, { now: Date.now() }));
+    const frozen = JSON.stringify(await readState(s.file));
+
+    const first = createAdminAuthMemory({ consumedPath });
+    const app1 = createApp(s.file, async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }), {
+      env: {},
+      readOnly: true,
+      adminAuthMem: first,
+    });
+    const once = await call(app1, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
+    expect(once.status).toBe(302);
+    expect(JSON.stringify(await readState(s.file))).toBe(frozen);
+
+    // New process, same side file: the URL must not mint another session.
+    const second = createAdminAuthMemory({ consumedPath });
+    const app2 = createApp(s.file, async () => ({ ok: true, status: 200, json: async () => ({}), text: async () => '' }), {
+      env: {},
+      readOnly: true,
+      adminAuthMem: second,
+    });
+    const again = await call(app2, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
+    expect(again.status).toBe(403);
+    expect(String(again.headers['set-cookie'] || '')).not.toContain('omp_admin=');
+    expect(JSON.stringify(await readState(s.file))).toBe(frozen);
+  });
+
 });

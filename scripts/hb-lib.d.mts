@@ -2,7 +2,14 @@ export const APP_ID: string;
 export const REPO: string;
 export const FEED_BASE: string;
 export const FIXES_NOTE: string;
-export function changelogNotes(md: string, version: string, platform?: 'lg' | 'atv' | 'phone'): string[];
+export const TECH_MARK: RegExp;
+export function isTech(item: string): boolean;
+export function changelogNotes(
+  md: string,
+  version: string,
+  platform?: 'lg' | 'atv' | 'phone',
+  opts?: { includeTech?: boolean },
+): string[];
 export function feedNotes(md: string, version: string, tv: 'lg' | 'atv'): { notes: string[]; notesTv: string[]; notesPhone: string[] };
 export function buildHomebrew(p: {
   tag: string;

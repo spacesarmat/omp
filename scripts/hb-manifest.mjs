@@ -15,7 +15,8 @@ if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match package.js
 const buf = readFileSync(ipk);
 const sha256 = createHash('sha256').update(buf).digest('hex');
 const md = readChangelogUtf8('CHANGELOG.md', { russian: true });
-const all = changelogNotes(md, version);
+// «[tech]» bullets count here: a version with only technical changes still has notes (users see «Исправления и улучшения»)
+const all = changelogNotes(md, version, undefined, { includeTech: true });
 // per platform for the apps that read notesTv / notesPhone; `notes` (older apps) never has a phone-only bullet.
 // update.json is read by LG TVs only, update-android.json by the phone and Android TV: each feed's TV list is its own
 const lgNotes = feedNotes(md, version, 'lg');

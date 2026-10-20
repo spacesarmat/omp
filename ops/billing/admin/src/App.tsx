@@ -11,6 +11,7 @@ import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AdsPanel } from '@/panels/AdsPanel';
+import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import type { HomeData, UserData } from '@/lib/types';
 
@@ -177,6 +178,7 @@ export function App() {
           <TabsTrigger value="audit">Журнал</TabsTrigger>
           <TabsTrigger value="ads">Реклама</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
+          <TabsTrigger value="changes">Изменения</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
         </TabsList>
@@ -186,13 +188,15 @@ export function App() {
         </TabsContent>
 
         <TabsContent value="home" className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
             {(
               [
                 [d.stats?.accounts ?? 0, 'аккаунтов'],
                 [d.stats?.activeSubs ?? 0, 'активных'],
                 [d.stats?.payments30 ?? 0, 'оплат / 30 дн.'],
                 [Math.round(d.stats?.revenue30 || 0), '₽ / 30 дн.'],
+                [d.stats?.devicesRefresh == null ? '-' : d.stats.devicesRefresh, 'новые токены'],
+                [d.stats?.devicesLegacy == null ? '-' : d.stats.devicesLegacy, 'старые токены'],
               ] as const
             ).map(([v, l]) => (
               <Card key={l}>
@@ -254,6 +258,9 @@ export function App() {
         </TabsContent>
         <TabsContent value="audit">
           <AuditPanel />
+        </TabsContent>
+        <TabsContent value="changes">
+          <ChangelogPanel />
         </TabsContent>
         <TabsContent value="settings">
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
