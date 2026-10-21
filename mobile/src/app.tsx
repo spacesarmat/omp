@@ -53,6 +53,7 @@ import { checkWhatsNew } from '../../src/store/whatsNew';
 import { Onboarding } from './ui/Onboarding';
 import { Setup } from './ui/Setup';
 import { HintHost } from './ui/Hint';
+import { TestModeHost } from './testmode/host';
 import { armOnboardingBoot, holdOnboarding, onboardingVisible, setupHandoff, setupNotice, setupStep, setupVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
@@ -458,6 +459,7 @@ export function App() {
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <ConfirmHost />
+      <TestModeHost />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

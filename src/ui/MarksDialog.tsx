@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { DialogBadge, visibleDialogCode } from '../testmode/badge';
 import { FocusGroup, Focusable, Button } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
@@ -103,7 +104,8 @@ export function MarksDialog(p: { subtitle: string; prefs: TvMarks; onSave: (m: T
         close();
       }}
     >
-      <FocusGroup focusKey="MARKS-DIALOG" className="dialog marks-dialog" boundary>
+      <FocusGroup focusKey="MARKS-DIALOG" className={'dialog marks-dialog' + (visibleDialogCode('marks') ? ' test-anchor' : '')} boundary>
+        <DialogBadge id="marks" />
         <div class="dialog-title" id="marks-title">{t('tv.marks.title')}</div>
         <div class="marks-sub">{p.subtitle}</div>
         {rows().map((r) => (

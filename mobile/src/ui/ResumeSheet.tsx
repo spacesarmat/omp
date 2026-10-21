@@ -25,7 +25,7 @@ export function ResumeSheet({
   const known = duration !== undefined && duration > at;
   const left = known ? Math.max(1, Math.round((duration! - at) / 60)) : 0;
   return (
-    <Sheet onClose={onCancel} label={t('torrent.resume.label')}>
+    <Sheet onClose={onCancel} testId="PD32" label={t('torrent.resume.label')}>
       <div class="m-muted m-small">{info}</div>
       <div class="m-sheet-title">{t('torrent.resume.title')}</div>
       {known && (

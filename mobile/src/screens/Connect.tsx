@@ -369,7 +369,7 @@ export function Connect() {
               <div class="m-local-title">{t('connect.installTitle')}</div>
             </div>
             <div class="m-local-text">{t('connect.installText')}</div>
-            <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
+            <button type="button" class="m-btn m-btn-primary tm" data-code="P01.1" onClick={() => navigate({ name: 'localServer' })}>
               {t('connect.installBtn')}
             </button>
           </div>
@@ -378,7 +378,8 @@ export function Connect() {
       )}
       <button
         type="button"
-        class="m-btn m-btn-secondary"
+        class="m-btn m-btn-secondary tm"
+        data-code="P01.4"
         disabled={scanState === 'scanning'}
         onClick={() => setScanRun(scanRun + 1)}
       >
@@ -404,7 +405,7 @@ export function Connect() {
           </div>
         )}
       </div>
-      <button type="button" class="m-link" aria-expanded={auth} onClick={() => setAuth(!auth)}>
+      <button type="button" class="m-link tm" data-code="P01.2" aria-expanded={auth} onClick={() => setAuth(!auth)}>
         <Icon d={auth ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} size={18} />
         {t('connect.loginPassword')}
       </button>
@@ -435,7 +436,7 @@ export function Connect() {
           </div>
         </div>
       )}
-      <button type="submit" class="m-btn m-btn-primary" disabled={busy}>
+      <button type="submit" class="m-btn m-btn-primary tm" data-code="P01.3" disabled={busy}>
         {busy ? t('connect.connectingMe') : t('connect.connect')}
       </button>
       <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => void scan()}>

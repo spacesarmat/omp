@@ -69,6 +69,11 @@ export interface AppSettings {
    * Off: the numbers that came with the search stay as they are.
    */
   liveSeeds: boolean;
+  /**
+   * TV beta builds: «Режим тестирования». On shows the stable screen codes.
+   * A stable build ignores this flag (the switch is not rendered).
+   */
+  testMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -99,6 +104,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   setupDone: false,
   seenHints: {},
   liveSeeds: true,
+  testMode: false,
 };
 
 const KEY = 'tsp.settings';

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../i18n';
 import { servers, activeServerId, SavedServer } from '../../store/servers';
 import { TorrServerClient } from '../../api/torrserver';
+import { DialogBadge, visibleDialogCode } from '../../testmode/badge';
 import { FocusGroup, Focusable, Button } from '../../ui/components';
 import { useKeys } from '../../ui/keys';
 
@@ -28,11 +29,12 @@ export function ServerHistory(p: { onConnect: (s: SavedServer) => void; onEdit: 
   return (
     <FocusGroup
       focusKey="SERVER-HISTORY"
-      className="server-history"
+      className={'server-history' + (visibleDialogCode('server-history') ? ' test-anchor' : '')}
       boundary
       autoFocus
       preferredChildFocusKey={active ? 'hist-' + active : undefined}
     >
+      <DialogBadge id="server-history" />
       {servers.value.map((s) => {
         const st = status[s.id];
         return (

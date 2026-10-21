@@ -347,7 +347,7 @@ export function Library() {
     });
   const deleteChosen = async () => {
     if (!c || deleting || !chosen.length) return;
-    if (!(await askConfirm(tp('library.deleteAsk', chosen.length), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(tp('library.deleteAsk', chosen.length), t('common.delete'), { destructive: true, testId: 'PD45' }))) return;
     setDeleting(true);
     try {
       reportDeleted(await deleteTorrents(c, chosen));
@@ -443,19 +443,20 @@ export function Library() {
     <div class="m-screen m-library" data-route="library" ref={rootRef}>
       {selecting && mine && !isHistory ? (
         <div class="m-lib-head m-select-bar">
-          <button type="button" class="m-icon-btn" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
+          <button type="button" class="m-icon-btn tm" data-code="P02.6" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
             <Icon d={CLOSE} size={20} />
           </button>
           <span class="m-select-count" role="status">{t('library.selected', { n: chosen.length })}</span>
           <button
             type="button"
-            class="m-btn m-btn-secondary m-btn-sm"
+            class="m-btn m-btn-secondary m-btn-sm tm"
+            data-code="P02.7"
             disabled={deleting}
             onClick={() => setSelected(chosen.length === shownHashes.length ? [] : shownHashes.slice())}
           >
             {chosen.length === shownHashes.length && shownHashes.length > 0 ? t('library.selectNone') : t('library.selectAll')}
           </button>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger tm" data-code="P02.15" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
             {t('library.deleteN', { n: chosen.length })}
           </button>
         </div>
@@ -473,7 +474,8 @@ export function Library() {
               type="button"
               role="tab"
               aria-selected={mode === m}
-              class={'m-seg-btn' + (mode === m ? ' on' : '')}
+              class={'m-seg-btn tm' + (mode === m ? ' on' : '')}
+              data-code={m === 'mine' ? (mode === 'discover' ? 'P34.1' : 'P02.1') : mode === 'discover' ? 'P34.2' : 'P02.2'}
               data-hint-anchor={m === 'mine' ? 'mine' : undefined}
               onClick={() => {
                 if (m === mode) return;
@@ -490,7 +492,8 @@ export function Library() {
         {mine && !isHistory && (
           <button
             type="button"
-            class="m-icon-btn m-sort"
+            class="m-icon-btn m-sort tm"
+            data-code="P02.3"
             aria-label={t('tv.topbar.sort', { name: sortLabel(sort) })}
             onClick={() => updateSettings({ librarySort: nextSort(sort) })}
           >
@@ -500,7 +503,8 @@ export function Library() {
         {mine && !isHistory && (
           <button
             type="button"
-            class="m-icon-btn m-view"
+            class="m-icon-btn m-view tm"
+            data-code="P02.4"
             aria-label={t('tv.topbar.view', { name: viewLabel(view) })}
             onClick={() => updateSettings({ libraryView: nextView(view) })}
           >
@@ -510,7 +514,8 @@ export function Library() {
         {mine && (
           <button
             type="button"
-            class="m-icon-btn"
+            class="m-icon-btn tm"
+            data-code="P02.5"
             aria-label={t('add.search')}
             aria-pressed={searchOpen}
             data-hint-anchor="catalog"
@@ -540,7 +545,8 @@ export function Library() {
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            class={'m-tab' + (tab === t.id ? ' on' : '')}
+            class={'m-tab tm' + (tab === t.id ? ' on' : '')}
+            data-code={t.id === 'history' ? 'P02.8' : t.id === 'all' ? 'P02.9' : t.id === 'movie' ? 'P02.10' : t.id === 'tv' ? 'P02.11' : t.id === 'music' ? 'P02.12' : t.id === 'audiobook' ? 'P02.13' : 'P02.14'}
             onClick={() => (libraryTab.value = t.id as LibraryTab)}
           >
             {t.label}
@@ -585,7 +591,8 @@ export function Library() {
               <div class="m-donate-actions">
                 <button
                   type="button"
-                  class="m-btn m-btn-primary"
+                  class="m-btn m-btn-primary tm"
+                  data-code="P02.17"
                   onClick={() => {
                     dismissDonateCard();
                     setDonateCard(false);
@@ -596,7 +603,8 @@ export function Library() {
                 </button>
                 <button
                   type="button"
-                  class="m-btn m-btn-secondary"
+                  class="m-btn m-btn-secondary tm"
+                  data-code="P02.18"
                   onClick={() => {
                     dismissDonateCard();
                     setDonateCard(false);
@@ -611,7 +619,7 @@ export function Library() {
           {error && !unavailable && (
             <div class="m-hint-warn m-warn-row">
               <span>{cachedBanner(cachedAt)}</span>
-              <button type="button" class="m-btn m-btn-secondary" onClick={() => void loadRef.current()}>{t('common.retry')}</button>
+              <button type="button" class="m-btn m-btn-secondary tm" data-code="P02.16" onClick={() => void loadRef.current()}>{t('common.retry')}</button>
             </div>
           )}
           {unavailable && (

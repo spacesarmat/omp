@@ -164,7 +164,7 @@ export function BetterSheet({
     const oldSize = torrent.torrent_size ? fmtSize(torrent.torrent_size) : '';
     const covered = coverageNote(lib, picked);
     return (
-      <Sheet label={t('monitor.replaceSheet.title')} onClose={cancel}>
+      <Sheet label={t('monitor.replaceSheet.title')} testId="PD20" onClose={cancel}>
         <div class="m-sheet-title">{t('monitor.replaceSheet.title')}</div>
         <div class="m-accent" data-block="better-change">
           {have + ' → ' + qualityOrUnknown(picked.Title)}
@@ -208,7 +208,7 @@ export function BetterSheet({
   }
 
   return (
-    <Sheet label={t('torrent.better.find')} onClose={onClose}>
+    <Sheet label={t('torrent.better.find')} testId="PD21" onClose={onClose}>
       <div class="m-sheet-title">{t('torrent.better.find')}</div>
       <div class="m-muted m-small">{[shortTitle(title), t('torrent.better.have', { quality: have })].join(' · ')}</div>
       {failure && (

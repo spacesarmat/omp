@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { updateServer, removeServer, SavedServer } from '../../store/servers';
+import { DialogBadge, visibleDialogCode } from '../../testmode/badge';
 import { FocusGroup, Button, TextInput } from '../../ui/components';
 import { useKeys } from '../../ui/keys';
 import { AddressField } from '../../ui/AddressField';
@@ -41,7 +42,7 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
   };
 
   const remove = () => {
-    confirmDialog(t('connect.deleteAsk', { name: p.server.name }), t('common.delete')).then((ok) => {
+    confirmDialog(t('connect.deleteAsk', { name: p.server.name }), t('common.delete'), 'delete-server').then((ok) => {
       if (!ok) return;
       removeServer(p.server.id);
       p.onClose();
@@ -50,7 +51,8 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
 
   return (
     <div class="dialog-backdrop">
-      <FocusGroup focusKey="EDIT-SERVER" className="dialog edit-server" boundary autoFocus>
+      <FocusGroup focusKey="EDIT-SERVER" className={'dialog edit-server' + (visibleDialogCode('edit-server') ? ' test-anchor' : '')} boundary autoFocus>
+        <DialogBadge id="edit-server" />
         <div class="dialog-title">{t('connect.editTitle')}</div>
         <label class="field-label">{t('connect.name')}</label>
         <TextInput focusKey="edit-name" value={name} onChange={setName} placeholder={t('connect.namePlaceholder')} />
@@ -59,18 +61,18 @@ export function EditServerDialog(p: { server: SavedServer; onClose: () => void }
         <div class="row">
           <div class="grow">
             <label class="field-label">{t('common.login')}</label>
-            <TextInput value={user} onChange={setUser} placeholder={t('connect.none')} />
+            <TextInput focusKey="edit-user" value={user} onChange={setUser} placeholder={t('connect.none')} />
           </div>
           <div class="grow">
             <label class="field-label">{t('common.password')}</label>
-            <TextInput value={password} onChange={setPassword} placeholder={t('connect.none')} type="password" />
+            <TextInput focusKey="edit-pass" value={password} onChange={setPassword} placeholder={t('connect.none')} type="password" />
           </div>
         </div>
         <div class="muted small">{t('connect.authNote')}</div>
         <div class="row edit-actions">
-          <Button label={t('common.save')} className="primary grow" onPress={save} />
-          <Button label={t('common.cancel')} onPress={p.onClose} />
-          <Button label={t('common.delete')} className="danger" onPress={remove} />
+          <Button focusKey="edit-save" label={t('common.save')} className="primary grow" onPress={save} />
+          <Button focusKey="edit-cancel" label={t('common.cancel')} onPress={p.onClose} />
+          <Button focusKey="edit-delete" label={t('common.delete')} className="danger" onPress={remove} />
         </div>
       </FocusGroup>
     </div>

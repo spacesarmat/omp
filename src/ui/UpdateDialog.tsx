@@ -5,6 +5,7 @@ import { focusAfterClose } from './focus';
 import { updatePrompt, skipVersion, dismissPrompt } from '../store/updates';
 import { APP_VERSION } from '../version';
 import { updateNotes } from '../lib/updateInfo';
+import { DialogBadge, visibleDialogCode } from '../testmode/badge';
 import { FocusGroup, Button } from './components';
 import { useKeys } from './keys';
 import { navigate } from './nav';
@@ -50,14 +51,15 @@ export function UpdateDialog() {
   if (!info) return null;
   return (
     <div class="dialog-backdrop">
-      <FocusGroup key={info.version} focusKey="UPDATE-DIALOG" className="dialog update-dialog" boundary autoFocus>
+      <FocusGroup key={info.version} focusKey="UPDATE-DIALOG" className={'dialog update-dialog' + (visibleDialogCode('update-prompt') ? ' test-anchor' : '')} boundary autoFocus>
+        <DialogBadge id="update-prompt" />
         <div class="dialog-title">{t('update.available', { version: info.version })}</div>
         {updateNotes(info, 'tv').length > 0 && <ul class="update-notes">{updateNotes(info, 'tv').slice(0, 8).map((n, i) => <li key={i}>{n}</li>)}</ul>}
         <div class="muted update-current">{t('update.current', { version: APP_VERSION })}</div>
         <div class="row update-actions">
-          <Button label={t('tv.updateDialog.update')} className="primary" onPress={() => { dismissPrompt(); navigate({ name: 'update' }); }} />
-          <Button label={t('common.later')} onPress={later} />
-          <Button label={t('tv.updateDialog.skip')} onPress={() => { skipVersion(info.version); restore(); }} />
+          <Button focusKey="upd-dlg-update" label={t('tv.updateDialog.update')} className="primary" onPress={() => { dismissPrompt(); navigate({ name: 'update' }); }} />
+          <Button focusKey="upd-dlg-later" label={t('common.later')} onPress={later} />
+          <Button focusKey="upd-dlg-skip" label={t('tv.updateDialog.skip')} onPress={() => { skipVersion(info.version); restore(); }} />
         </div>
       </FocusGroup>
     </div>

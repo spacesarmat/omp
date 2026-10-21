@@ -10,7 +10,7 @@ export function Account() {
   return (
     <div class="m-screen" data-route="account">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P12.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title">{t('settings.account')}</h1>

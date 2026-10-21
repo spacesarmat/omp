@@ -47,7 +47,7 @@ function ApkInstall({ info }: { info: UpdateInfo }) {
   const install = () => {
     if (apkJob.value && apkJob.value.running) return;
     apkInstallPermitted()
-      .then((granted) => (granted ? true : confirmDialog(t('update.allowHint'), t('update.allowGo'))))
+      .then((granted) => (granted ? true : confirmDialog(t('update.allowHint'), t('update.allowGo'), 'update-allow')))
       .then((go) => {
         if (go) startInstall();
       });

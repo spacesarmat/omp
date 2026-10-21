@@ -17,5 +17,5 @@ export function decideStart(item: PlayItem, explicit?: number, ask = true): Prom
   return choose(t('player.resumeAsk'), [
     { label: t('player.resumeFrom', { t: formatDuration(pos) }), value: pos },
     { label: t('player.resumeStart'), value: 0 },
-  ]).then((v) => (v === null ? -1 : v));
+  ], undefined, 'player-resume').then((v) => (v === null ? -1 : v));
 }

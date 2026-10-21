@@ -65,7 +65,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
 
   const head = (
     <div class="m-now-head">
-      <button type="button" class="m-icon-btn" aria-label={t('now.collapse')} onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn tm" data-code="P09.1" aria-label={t('now.collapse')} onClick={() => goBack()}>
         <Icon d={ICONS.collapse} />
       </button>
       <div class="m-now-status">

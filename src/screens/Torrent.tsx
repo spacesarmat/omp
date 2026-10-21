@@ -191,7 +191,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const remove = () => {
-    confirmDialog(t('torrent.deleteAsk'), t('common.delete')).then((ok) => {
+    confirmDialog(t('torrent.deleteAsk'), t('common.delete'), 'torrent-delete').then((ok) => {
       if (!ok) return;
       c.remove(hash).then(
         () => {
@@ -211,7 +211,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const rename = () => {
     if (!tor) return;
-    askText(t('torrent.rename.title'), displayTitle(tor)).then((raw) => {
+    askText(t('torrent.rename.title'), displayTitle(tor), undefined, 'torrent-rename').then((raw) => {
       if (raw === null) return;
       const v = checkTitle(raw);
       if (!v.ok) {
@@ -239,7 +239,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             toast(t('torrent.poster.none'));
             return;
           }
-          return choose(t('torrent.poster.pick'), opts).then((url) => {
+          return choose(t('torrent.poster.pick'), opts, undefined, 'torrent-poster').then((url) => {
             if (!url) return;
             return c.setPoster(tor, url).then(
               () => patch({ poster: url }),
@@ -252,7 +252,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const resetViewed = () => {
-    confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset')).then((ok) => {
+    confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset'), 'torrent-reset').then((ok) => {
       if (!ok) return;
       clearProgress(hash);
       c.removeViewed(hash).then(() => refreshViewed(c), () => undefined);

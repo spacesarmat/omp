@@ -125,7 +125,7 @@ export function Backup() {
   return (
     <div class="m-screen" data-route="backup">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => (review ? setReview(null) : goBack())}>
+        <button type="button" class="m-icon-btn tm" data-code="P20.1" aria-label={t('common.back')} onClick={() => (review ? setReview(null) : goBack())}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('backup.title')}</h1>

@@ -155,7 +155,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
     <>
       <div class="m-tc-backdrop m-sh-backdrop">
         {card.backdrop && <img src={card.backdrop} alt="" />}
-        <button type="button" class="m-icon-btn m-tc-back" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn m-tc-back" data-code="P26.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>
@@ -431,7 +431,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             season === NO_SEASON
               ? tp('series.keepOnlyAskNoSeason', others.length)
               : tp('series.keepOnlyAsk', others.length, { season: String(season) });
-          if (!(await askConfirm(ask, t('series.keepOnly'), { destructive: true }))) return false;
+          if (!(await askConfirm(ask, t('series.keepOnly'), { destructive: true, testId: 'PD52' }))) return false;
           reportDeleted(await deleteTorrents(c, others.map((m) => m.hash)));
           return true;
         },
@@ -578,7 +578,7 @@ export function Series({ seriesKey }: { seriesKey: string }) {
     <div class={'m-screen m-series' + (hero ? ' m-series-hero' : '')} data-route="series">
       {!hero && (
         <div class="m-bar">
-          <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+          <button type="button" class="m-icon-btn tm" data-code="P26.1" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d={BACK} />
           </button>
         </div>

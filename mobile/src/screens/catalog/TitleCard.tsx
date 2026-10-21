@@ -347,7 +347,7 @@ export function TitleCard({ kind, id }: { kind: Kind; id: number }) {
     <div class="m-screen m-tc" data-route="title">
       <div class="m-tc-backdrop">
         {card && card.backdrop && <img src={card.backdrop} alt="" />}
-        <button type="button" class="m-icon-btn m-tc-back" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn m-tc-back" data-code="P24.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>

@@ -169,7 +169,7 @@ export function Faq(p: { q?: string } = {}) {
   return (
     <div class="m-screen" data-route="faq">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P17.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('common.faq')}</h1>

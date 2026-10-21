@@ -189,14 +189,15 @@ export function Discover() {
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
         <button
           type="button"
-          class="m-icon-btn m-sort"
+          class="m-icon-btn m-sort tm"
+          data-code="P34.3"
           aria-label={home ? t('discover.homeBrowseLists') : t('discover.sortAria', { name: sortName(query.sort) })}
           aria-haspopup="dialog"
           onClick={() => setSheet('sort')}
         >
           <Icon d={ICONS.sort} size={20} />
         </button>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => {
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P34.4" aria-label={t('add.search')} onClick={() => {
             saveDiscover({ search: { text: '', items: null } });
             setSearching(true);
           }}>
@@ -208,14 +209,15 @@ export function Discover() {
           <button
             key={c.id}
             type="button"
-            class={'m-hfilter' + (current === c.id ? ' on' : '')}
+            class={'m-hfilter tm' + (current === c.id ? ' on' : '')}
+            data-code={c.id === 'all' ? 'P34.5' : c.id === 'movie' ? 'P34.6' : 'P34.7'}
             aria-pressed={current === c.id}
             onClick={() => setFilter(c.id)}
           >
             {c.label}
           </button>
         ))}
-        <button type="button" class={'m-hfilter m-disc-filters' + (nFilters ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('filters')}>
+        <button type="button" class={'m-hfilter m-disc-filters tm' + (nFilters ? ' on' : '')} data-code="P34.8" aria-haspopup="dialog" onClick={() => setSheet('filters')}>
           {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
         </button>
       </div>

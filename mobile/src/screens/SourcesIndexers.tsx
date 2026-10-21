@@ -233,7 +233,7 @@ export function IndexerAddSheet({
 
   const placeholder = tsKey && norm && tsKey.host === hostKey(norm) ? t('sources.idx.tsKeyPlaceholder') : existing && existing.keySet ? t('sources.idx.keepKeyPlaceholder') : '';
   return (
-    <Sheet label={t('sources.idx.addTitle')} onClose={close}>
+    <Sheet label={t('sources.idx.addTitle')} testId="PD13" onClose={close}>
       <form class="m-field-group m-idx-add" onSubmit={submit}>
         <div class="m-sheet-title">{t('sources.idx.addTitle')}</div>
         {candidates.length > 0 && <div class="m-note m-muted">{t('sources.idx.foundHead')}</div>}

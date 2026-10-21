@@ -16,7 +16,7 @@ export function MyBooks() {
     .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   return (
     <div class="m-screen" data-route="audiobook-mine">
-      <AudiobookBar title={t('audiobooks.mine')} />
+      <AudiobookBar title={t('audiobooks.mine')} code="P30.1" />
       {books.length === 0 ? (
         <section class="m-set-group">
           <p class="m-muted m-note" data-empty="mine">

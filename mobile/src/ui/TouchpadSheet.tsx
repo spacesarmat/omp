@@ -17,7 +17,7 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
   const s = touchpad.value;
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <Sheet onClose={onClose} label={t('remote.touchpad.label')}>
+    <Sheet onClose={onClose} testId="PD08" label={t('remote.touchpad.label')}>
       <div class="m-sheet-title">{t('remote.touchpad.title')}</div>
       <div class="m-tp-group">
         <div class="m-tp-head">

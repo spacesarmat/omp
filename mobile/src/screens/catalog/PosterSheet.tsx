@@ -14,7 +14,7 @@ export function PosterSheet({
   onClose: () => void;
 }) {
   return (
-    <Sheet onClose={onClose} label={t('titleCard.pickPoster')}>
+    <Sheet onClose={onClose} testId="PD18" label={t('titleCard.pickPoster')}>
       <h2>{t('titleCard.pickPoster')}</h2>
       {urls.length ? (
         <div class="m-art-grid">

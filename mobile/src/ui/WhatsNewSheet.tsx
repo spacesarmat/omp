@@ -13,7 +13,7 @@ export function WhatsNewSheet() {
   }, [w ? w.title : '']);
   if (!w) return null;
   return (
-    <Sheet label={t('whatsNew.title')} onClose={closeWhatsNew}>
+    <Sheet label={t('whatsNew.title')} testId="PD12" onClose={closeWhatsNew}>
       <div class="m-sheet-title">{w.title}</div>
       <div class="m-whatsnew m-sheet-scroll">
         {w.entries.map((e) => (

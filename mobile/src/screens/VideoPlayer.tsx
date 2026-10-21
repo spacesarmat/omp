@@ -49,7 +49,7 @@ function BackgroundAudioRow() {
     );
   };
   return (
-    <div class="m-set-row" data-row="background-audio">
+    <div class="m-set-row tm" data-code="P14.5" data-row="background-audio">
       <div class="m-set-text" style="flex-grow: 1">
         <span>{t('player.backgroundAudio')}</span>
         <span class="m-muted m-small">{t('player.backgroundAudioHint')}</span>
@@ -85,7 +85,7 @@ export function VideoPlayer() {
   return (
     <div class="m-screen" data-route="video-player">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P14.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title">{t('player.videoPlayer')}</h1>
@@ -102,7 +102,8 @@ export function VideoPlayer() {
                 aria-checked={cur === o.id}
                 aria-pressed={cur === o.id}
                 disabled={disabled}
-                class="m-opt"
+                class="m-opt tm"
+                data-code={o.id === 'embedded' ? 'P14.2' : o.id === 'p2160' ? 'P14.3' : 'P14.4'}
                 onClick={() => !disabled && updateSettings({ phonePlayer: o.id })}
               >
                 <span class="m-opt-name m-grow">{o.label()}</span>
@@ -112,7 +113,7 @@ export function VideoPlayer() {
           })}
         </div>
         {missing && (
-          <button type="button" class="m-link" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>
+          <button type="button" class="m-link tm" data-code="P14.6" data-row="p2160-missing" onClick={() => window.open(P2160_RELEASES_URL, '_system')}>
             {t('player.p2160Missing')}
           </button>
         )}

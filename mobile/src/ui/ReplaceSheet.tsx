@@ -135,7 +135,7 @@ export function ReplaceSheet({
   if (choosing) {
     const list = [finding.result].concat((others || []).filter((r) => resultKey(r) !== resultKey(finding.result)));
     return (
-      <Sheet label={t('monitor.replaceSheet.other')} onClose={() => setChoosing(false)}>
+      <Sheet label={t('monitor.replaceSheet.other')} testId="PD29" onClose={() => setChoosing(false)}>
         <div class="m-sheet-title">{t('monitor.replaceSheet.other')}</div>
         <div class="m-sheet-scroll m-sub-pick" role="radiogroup" aria-label={t('monitor.replaceSheet.other')}>
           {list.map((r) => {
@@ -167,7 +167,7 @@ export function ReplaceSheet({
 
   const more = others === null ? t('monitor.replaceSheet.searching') : others.length ? tp('monitor.replaceSheet.moreN', others.length) + ' ›' : t('monitor.replaceSheet.noOthers');
   return (
-    <Sheet label={t('monitor.replaceSheet.title')} onClose={() => !busy && onClose()}>
+    <Sheet label={t('monitor.replaceSheet.title')} testId="PD30" onClose={() => !busy && onClose()}>
       <div class="m-sheet-title">{thenWatch ? t('monitor.replaceSheet.titleWatch') : t('monitor.replaceSheet.title')}</div>
       {thenWatch && <div class="m-muted m-small">{t('monitor.replaceSheet.watchNote')}</div>}
       <div class="m-muted m-small">{e ? name + ' · ' + t('library.season', { n: e.season }) : name}</div>

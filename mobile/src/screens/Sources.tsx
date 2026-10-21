@@ -348,7 +348,7 @@ function FlareEntry() {
   return (
     <section class="m-set-group" data-entry="flaresolverr">
       <div class="m-set-label">{t('sources.screen.flareEntry')}</div>
-      <button type="button" class="m-set-row m-set-row-btn" onClick={() => navigate({ name: 'flaresolverr' })}>
+      <button type="button" class="m-set-row m-set-row-btn tm" data-code="P21.2" onClick={() => navigate({ name: 'flaresolverr' })}>
         <span class="m-src-name">
           <span>FlareSolverr</span>
           <span class={'m-src-note' + (note.tone === 'muted' ? '' : ' ' + note.tone)}>{note.text}</span>
@@ -562,12 +562,12 @@ export function Sources({ ctx = phoneSourceContext, indexerEnv = phoneIndexerEnv
   return (
     <div class="m-screen" data-route="sources">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P21.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('tvSettings.sources')}</h1>
       </div>
-      <button type="button" class="m-set-row m-set-pick" data-row="account" onClick={() => navigate({ name: 'account' })}>
+      <button type="button" class="m-set-row m-set-pick tm" data-code="P21.3" data-row="account" onClick={() => navigate({ name: 'account' })}>
         <div class="m-set-text" style="flex-grow: 1">
           <span>{t('settings.account')}</span>
           <span class="m-muted m-small">{t('settings.accountLink')}</span>

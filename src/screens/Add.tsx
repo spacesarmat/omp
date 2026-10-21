@@ -13,6 +13,7 @@ import { recordAutoCategory } from '../lib/categoryCheck';
 import { rememberTrackerSeeds } from '../store/journal';
 import { posterColor } from '../lib/libraryView';
 import { currentRoute, navigate, replaceRoute } from '../ui/nav';
+import { DialogBadge, visibleDialogCode } from '../testmode/badge';
 import { FocusGroup, Focusable, Button, TextInput, Spinner } from '../ui/components';
 import { restoreFocus, scrollIntoViewSafe } from '../ui/focus';
 import { useKeys } from '../ui/keys';
@@ -147,7 +148,8 @@ function DetailsDialog({ r, onAdd, onClose }: { r: TvResult; onAdd: () => void; 
         onClose();
       }}
     >
-      <FocusGroup focusKey="SEARCH-DETAILS" className="dialog search-details" boundary>
+      <FocusGroup focusKey="SEARCH-DETAILS" className={'dialog search-details' + (visibleDialogCode('search-details') ? ' test-anchor' : '')} boundary>
+        <DialogBadge id="search-details" />
         <div class="dialog-title">{t('search.details')}</div>
         <div class="search-details-title">{tvGlyphs(r.Title)}</div>
         <div class="search-details-meta">{tvGlyphs(meta)}</div>
@@ -243,7 +245,7 @@ export function AddScreen() {
 
   const askLink = () => {
     if (busy) return;
-    askText(t('search.linkButton'), '', t('common.add')).then((v) => {
+    askText(t('search.linkButton'), '', t('common.add'), 'add-link').then((v) => {
       if (alive.current && v !== null) add({ link: v });
     });
   };
@@ -385,7 +387,7 @@ export function AddScreen() {
       labels[s.key] = s.label;
     });
     (['seeds', 'size', 'date'] as SortKey[]).forEach((k) => opts.push({ label: labels[k], value: k }));
-    choose(t('add.sort'), opts, sortKey).then((v) => {
+    choose(t('add.sort'), opts, sortKey, 'search-sort').then((v) => {
       if (!alive.current || v === null) return;
       order.current = [];
       setSortKey(v);

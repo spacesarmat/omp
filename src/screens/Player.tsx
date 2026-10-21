@@ -337,7 +337,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   const openChapters = () => {
     if (!chapters.length) return;
-    choose(t('player.chapters'), chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + chapterLabel(ch, i), value: i })), chapterIdx >= 0 ? chapterIdx : undefined)
+    choose(t('player.chapters'), chapters.map((ch, i) => ({ label: formatDuration(ch.start) + ' · ' + chapterLabel(ch, i), value: i })), chapterIdx >= 0 ? chapterIdx : undefined, 'player-chapters')
       .then((i) => { if (i !== null) seekTo(chapters[i].start); });
   };
 
@@ -453,9 +453,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
 
   // the player window on screen (audio list, subtitles list, menu): its colour key closes it again
   const openWindow = useRef<ColorWindow | null>(null);
-  const chooseIn = <T,>(win: ColorWindow, title: string, options: { label: string; value: T }[], current?: T): Promise<T | null> => {
+  const chooseIn = <T,>(win: ColorWindow, title: string, options: { label: string; value: T }[], current?: T, testId?: string): Promise<T | null> => {
     openWindow.current = win;
-    return choose(title, options, current).then((v) => {
+    return choose(title, options, current, testId).then((v) => {
       if (openWindow.current === win) openWindow.current = null;
       return v;
     });
@@ -470,7 +470,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       toast(t('tvPlayer.noOtherAudio'));
       return;
     }
-    chooseIn('audio', t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx).then((i) => {
+    chooseIn('audio', t('tvPlayer.audio'), audio.map((a, i) => ({ label: a.label, value: i })), audioIdx, 'player-audio').then((i) => {
       if (i === null) return;
       chooseAudio(v, audio, i);
     });
@@ -481,7 +481,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const v = videoRef.current;
     if (!v) return;
     const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
-    chooseIn('subs', t('common.subtitles'), menu, subChoice).then((ch) => {
+    chooseIn('subs', t('common.subtitles'), menu, subChoice, 'player-subs').then((ch) => {
       if (ch === null) return;
       chooseSubs(v, ch);
     });
@@ -509,7 +509,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       { label: t('tvPlayer.markIntroEndRow', { v: (pendingIntro.current !== null ? t('tvPlayer.pendingStart', { t: formatDuration(pendingIntro.current) }) : '') + t('tvPlayer.atNow', { t: formatDuration(now) }) }), value: 'mark-intro-end' },
       { label: t('tvPlayer.markCreditsRow', { v: credits }), value: 'mark-credits' },
     );
-    chooseIn('menu', t('tvPlayer.menuTitle'), root).then((kind) => {
+    chooseIn('menu', t('tvPlayer.menuTitle'), root, undefined, 'player-menu').then((kind) => {
       if (kind === 'chapters') openChapters();
       else if (kind === 'mark-intro-start') mark('intro-start', now);
       else if (kind === 'mark-intro-end') mark('intro-end', now);
@@ -517,9 +517,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       if (kind === 'audio') openAudioList();
       else if (kind === 'subs') openSubsList();
       else if (kind === 'size') {
-        choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize).then((size) => { if (size) updateSettings({ subSize: size }); });
+        choose(t('tvPlayer.subSize'), subSizeOptions(), settings.value.subSize, 'player-size').then((size) => { if (size) updateSettings({ subSize: size }); });
       } else if (kind === 'offset') {
-        choose(t('tvPlayer.offset'), subtitleOffsetOptions(), subOffset).then((off) => { if (off !== null) setSubOffset(off); });
+        choose(t('tvPlayer.offset'), subtitleOffsetOptions(), subOffset, 'player-offset').then((off) => { if (off !== null) setSubOffset(off); });
       }
     });
   };

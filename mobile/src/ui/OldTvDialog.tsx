@@ -22,7 +22,7 @@ export function OldTvDialog({
   return (
     <div class="m-sheet-host m-dialog-host">
       <button type="button" class="m-sheet-backdrop" aria-label={t('common.close')} onClick={onClose} />
-      <div class="m-dialog" role="dialog" aria-labelledby="oldtv-title">
+      <div class="m-dialog" role="dialog" aria-labelledby="oldtv-title" data-code="PD42">
         <div class="m-dialog-icon">
           <Icon d={DOWNLOAD} size={24} />
         </div>

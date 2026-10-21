@@ -2,6 +2,7 @@ import { t } from '../i18n';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import { useFocusable, FocusContext, pause, resume } from '@noriginmedia/norigin-spatial-navigation';
+import { badgeFor, TestBadge } from '../testmode/badge';
 import { scrollIntoViewSafe } from './focus';
 import { Icon, IconName } from './icons';
 
@@ -17,6 +18,12 @@ interface FocusableProps {
   role?: 'button' | 'group' | 'radio';
   /** aria-checked of a radio. */
   ariaChecked?: boolean;
+  /** Badge anchor when the focus key is shared or unstable (`src-first`). */
+  testAnchor?: string;
+  /** Current choice. The badge shows that option's code when it is registered. */
+  testValue?: unknown;
+  /** Badge text already resolved (dialog rows). Empty hides it. */
+  testCode?: string;
   children?: ComponentChildren | ((focused: boolean) => ComponentChildren);
 }
 
@@ -31,7 +38,8 @@ export function Focusable(p: FocusableProps) {
       if (p.onFocused) p.onFocused();
     },
   });
-  const cls = 'focusable ' + (p.className || '') + (focused ? ' focused' : '') + (p.disabled ? ' disabled' : '');
+  const code = badgeFor(p);
+  const cls = 'focusable ' + (p.className || '') + (focused ? ' focused' : '') + (p.disabled ? ' disabled' : '') + (code ? ' test-anchor' : '');
   return (
     <div
       ref={ref}
@@ -44,6 +52,7 @@ export function Focusable(p: FocusableProps) {
       onClick={() => { if (!p.disabled && p.onPress) p.onPress(); }}
     >
       {typeof p.children === 'function' ? (p.children as (f: boolean) => ComponentChildren)(focused) : p.children}
+      {code ? <TestBadge code={code} /> : null}
     </div>
   );
 }
@@ -83,9 +92,9 @@ export function FocusGroup(p: FocusGroupProps) {
   );
 }
 
-export function Button(p: { label: string; icon?: IconName; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean }) {
+export function Button(p: { label: string; icon?: IconName; onPress: () => void; focusKey?: string; className?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean; testAnchor?: string; testValue?: unknown; testCode?: string }) {
   return (
-    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow}>
+    <Focusable focusKey={p.focusKey} className={'button ' + (p.className || '')} onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow} testAnchor={p.testAnchor} testValue={p.testValue} testCode={p.testCode}>
       {p.icon && <Icon name={p.icon} size={28} class="button-icon" />}{p.label}
     </Focusable>
   );
@@ -96,9 +105,9 @@ export function Button(p: { label: string; icon?: IconName; onPress: () => void;
  * button keeps its width and the bar its height. `labelEdge` pins the chip to the button's start or end edge instead of
  * centering it, for the buttons at the screen's edges, so the chip never runs off the screen.
  */
-export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean }) {
+export function IconButton(p: { icon: IconName; label: string; onPress: () => void; focusKey?: string; disabled?: boolean; onFocused?: () => void; onArrow?: (direction: string) => boolean; expand?: boolean; labelEdge?: 'start' | 'end'; dot?: boolean; testAnchor?: string; testValue?: unknown; testCode?: string }) {
   return (
-    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow} ariaLabel={p.label} role="button">
+    <Focusable focusKey={p.focusKey} className="icon-button" onPress={p.onPress} disabled={p.disabled} onFocused={p.onFocused} onArrow={p.onArrow} ariaLabel={p.label} role="button" testAnchor={p.testAnchor} testValue={p.testValue} testCode={p.testCode}>
       {(focused: boolean) => [
         <Icon key="i" name={p.icon} size={28} />,
         p.expand && focused ? <span key="l" class={'icon-btn-label' + (p.labelEdge ? ' icon-btn-label--' + p.labelEdge : '')}>{p.label}</span> : null,
@@ -116,6 +125,7 @@ interface TextInputProps {
   onSubmit?: () => void;
   onFocused?: () => void;
   type?: 'text' | 'password' | 'url';
+  testCode?: string;
 }
 
 /**
@@ -138,10 +148,11 @@ export function TextInput(p: TextInputProps) {
   });
   // resume() is idempotent: unmounting a focused input must not leave navigation paused
   useEffect(() => () => resume(), []);
+  const code = badgeFor({ focusKey: p.focusKey, testCode: p.testCode });
   return (
     <div
       ref={ref}
-      class={'focusable text-input' + (focused ? ' focused' : '')}
+      class={'focusable text-input' + (focused ? ' focused' : '') + (code ? ' test-anchor' : '')}
       data-fk={focusKey}
       onMouseEnter={() => focusSelf()}
       onClick={() => { if (inputRef.current) inputRef.current.focus(); }}
@@ -164,6 +175,7 @@ export function TextInput(p: TextInputProps) {
           }
         }}
       />
+      {code ? <TestBadge code={code} /> : null}
     </div>
   );
 }
@@ -190,6 +202,7 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
     <Focusable
       focusKey={p.focusKey}
       className="choice-row"
+      testValue={p.value}
       onPress={() => step(1)}
       onArrow={(dir) => {
         if (dir === 'left') { step(-1); return false; }

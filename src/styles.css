@@ -869,3 +869,33 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .faq-body-scroll { height: 100%; overflow-y: auto; overflow-x: hidden; }
 .faq-body-scroll::-webkit-scrollbar { display: none; }
 .faq-qr, .faq-phone { position: absolute; left: 48px; right: 48px; bottom: 28px; margin-top: 0; }
+
+/* Test-mode codes. Overlays: they take no space in the row and are not focusable. */
+.test-anchor { position: relative; }
+.history-btn.test-anchor,
+.server-history.test-anchor,
+.faq-body.test-anchor { position: absolute; }
+.test-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  pointer-events: none;
+  font-size: 24px;
+  line-height: 28px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.test-screen-badge {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 80;
+  right: auto;
+  pointer-events: auto;
+}
+.test-screen-badge .test-badge { position: static; }

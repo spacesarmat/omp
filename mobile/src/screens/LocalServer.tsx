@@ -27,7 +27,7 @@ const BACK = 'M15 5l-7 7 7 7';
 function Header() {
   return (
     <div class="m-bar">
-      <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn tm" data-code="P16.1" aria-label={t('common.back')} onClick={() => goBack()}>
         <Icon d={BACK} />
       </button>
       <h1 class="m-bar-title">{t('localServer.title')}</h1>
