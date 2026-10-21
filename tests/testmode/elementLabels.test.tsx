@@ -96,6 +96,44 @@ describe('element codes', () => {
     expect(label.className).toBe('test-el');
   });
 
+  it('counts a poster fallback inside a poster once and labels uncoded dialog choices', () => {
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<div class="series-poster"><div class="art"></div></div>' +
+      '<div class="dialog"><span class="test-badge">D20</span>' +
+      '<div class="dialog-option">Русская дорожка</div><div class="dialog-option test-anchor">coded</div></div>';
+    expect(collectElementLabels(root, 'S04', false).map((l) => l.code)).toEqual(['S04.P#1', 'D20.L#1']);
+  });
+
+  it('labels only the open dialog and skips cards scrolled out of their row', () => {
+    document.body.innerHTML =
+      '<div class="app"><div class="test-screen-badge"><span class="test-badge">S01</span></div>' +
+      '<div class="views-tiles" id="row"><div class="tile" id="in"></div><div class="tile" id="out"></div></div>' +
+      '<div class="test-el-layer" id="layer"></div></div>';
+    const rect = (l: number, t: number, w: number, hh: number) => () => ({
+      left: l, top: t, width: w, height: hh, right: l + w, bottom: t + hh, x: l, y: t, toJSON: () => ({}),
+    }) as DOMRect;
+    const app = document.querySelector('.app') as HTMLElement;
+    Object.defineProperty(app, 'offsetWidth', { configurable: true, value: 1920 });
+    app.getBoundingClientRect = rect(0, 0, 1920, 1080);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1080 });
+    (document.getElementById('row') as HTMLElement).getBoundingClientRect = rect(0, 100, 1000, 400);
+    (document.getElementById('in') as HTMLElement).getBoundingClientRect = rect(10, 120, 200, 300);
+    (document.getElementById('out') as HTMLElement).getBoundingClientRect = rect(1100, 120, 200, 300);
+    const layer = document.getElementById('layer') as HTMLElement;
+    paintElementLabels(layer, false);
+    expect(Array.from(layer.children).map((c) => c.textContent)).toEqual(['S01.R#1', 'S01.R1.C#1']);
+
+    const dlg = document.createElement('div');
+    dlg.className = 'dialog';
+    dlg.innerHTML = '<span class="test-badge">D03</span><div class="button" id="b">OK</div>';
+    app.insertBefore(dlg, layer);
+    (document.getElementById('b') as HTMLElement).getBoundingClientRect = rect(800, 500, 200, 60);
+    paintElementLabels(layer, false);
+    expect(Array.from(layer.children).map((c) => c.textContent)).toEqual(['D03.B#1']);
+  });
+
   it('keeps every TV size at 24px or more, «Средний» on the phone is the old size', () => {
     expect(tvLabelPx('small')).toBeGreaterThanOrEqual(24);
     expect(tvLabelPx('small')).toBeLessThan(tvLabelPx('medium'));

@@ -50,7 +50,7 @@ export const ELEMENT_TYPES: ElementType[] = [
     type: 'L',
     ru: 'Строка списка (раздача, файл, серия, результат поиска)',
     en: 'List row (torrent, file, episode, search hit)',
-    tv: '.lrow, .crow, .file-row, .ep-row, .search-result, .better-row, .list-item, .src-row',
+    tv: '.lrow, .crow, .file-row, .ep-row, .search-result, .better-row, .list-item, .src-row, .dialog-option',
     phone: '.m-crow, .m-hrow, .m-vrow, .m-srch-row, .m-cal-row, .m-tc-ep-row, .m-server-row, .m-result, .m-sheet-row, .m-log-row',
     place: 'top',
   },
@@ -92,6 +92,8 @@ export interface ElementLabel {
   code: string;
   el: Element;
   place: 'top' | 'bottom' | 'above';
+  /** The row the element is in: a label outside the row's box (scrolled away) is not painted. */
+  row?: Element;
 }
 
 function hasClass(el: Element, name: string): boolean {
@@ -140,6 +142,21 @@ function toArray(list: NodeListOf<Element>): Element[] {
   return out;
 }
 
+/** A poster inside a poster (the `.art` fallback in `.series-poster`) is one poster. */
+function insideSameType(el: Element, selector: string): boolean {
+  let p: Element | null = el.parentElement;
+  while (p) {
+    if (matches(p, selector)) return true;
+    p = p.parentElement;
+  }
+  return false;
+}
+
+function matches(el: Element, selector: string): boolean {
+  const m = el.matches || (el as unknown as { webkitMatchesSelector?: (s: string) => boolean }).webkitMatchesSelector;
+  return !!m && m.call(el, selector);
+}
+
 function closestIn(el: Element, set: Element[]): Element | null {
   let p: Element | null = el.parentElement;
   while (p) {
@@ -157,7 +174,8 @@ export function collectElementLabels(root: Element, screen: string, phone: boole
   if (!screen) return [];
   const out: ElementLabel[] = [];
   const rowType = ELEMENT_TYPES[0];
-  const rows = toArray(root.querySelectorAll(phone ? rowType.phone : rowType.tv)).filter((el) => !skip(el, phone));
+  const rowSel = phone ? rowType.phone : rowType.tv;
+  const rows = toArray(root.querySelectorAll(rowSel)).filter((el) => !skip(el, phone) && !insideSameType(el, rowSel));
   const rowCode: Element[] = [];
   const rowName: string[] = [];
   const counters: { [k: string]: number } = {};
@@ -174,13 +192,14 @@ export function collectElementLabels(root: Element, screen: string, phone: boole
   }
   for (let t = 1; t < ELEMENT_TYPES.length; t++) {
     const type = ELEMENT_TYPES[t];
-    const els = toArray(root.querySelectorAll(phone ? type.phone : type.tv));
+    const sel = phone ? type.phone : type.tv;
+    const els = toArray(root.querySelectorAll(sel));
     for (let i = 0; i < els.length; i++) {
       const el = els[i];
-      if (skip(el, phone)) continue;
+      if (skip(el, phone) || insideSameType(el, sel)) continue;
       const row = closestIn(el, rowCode);
       const base = row ? rowName[rowCode.indexOf(row)] : containerCode(el, phone) || screen;
-      out.push({ code: base + '.' + type.type + '#' + next(base + '.' + type.type), el: el, place: type.place });
+      out.push({ code: base + '.' + type.type + '#' + next(base + '.' + type.type), el: el, place: type.place, row: row || undefined });
     }
   }
   return out;
@@ -193,10 +212,39 @@ function screenCode(): string {
   return b ? (b.textContent || '').trim() : '';
 }
 
-/** Draws the labels for the visible elements into `layer`. */
+/**
+ * The open dialog or sheet, if any: only its elements are labelled, the page under it is covered.
+ * The last one in the DOM is the one on top.
+ */
+export function activeWindow(root: Element, phone: boolean): Element | null {
+  const list = root.querySelectorAll(phone ? '[role="dialog"]' : '.dialog');
+  return list.length ? list[list.length - 1] : null;
+}
+
+interface Box {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+function box(el: Element): Box {
+  const r = el.getBoundingClientRect();
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+}
+
+function overlaps(a: Box, b: Box): boolean {
+  return a.right > b.left && a.bottom > b.top && a.left < b.right && a.top < b.bottom;
+}
+
+/**
+ * Draws the labels for the visible elements into `layer`. All positions are read first and the
+ * spans written after, with one shared label height, so an old TV lays the page out about once.
+ */
 export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
   const root: Element | null = phone ? document.body : document.querySelector('.app');
-  const labels = root ? collectElementLabels(root, screenCode(), phone) : [];
+  const win = root ? activeWindow(root, phone) : null;
+  const labels = root ? collectElementLabels(win || root, screenCode(), phone) : [];
   // TV: the .app root is scaled to the panel (4K), the layer sits inside it in 1920 coordinates
   let ox = 0;
   let oy = 0;
@@ -208,33 +256,51 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
     oy = r.top;
     scale = w > 0 && r.width > 0 ? r.width / w : 1;
   }
-  const vw = window.innerWidth || 0;
-  const vh = window.innerHeight || 0;
-  let used = 0;
-  for (let i = 0; i < labels.length && used < MAX_LABELS; i++) {
-    const rect = labels[i].el.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
-    if (rect.right <= 0 || rect.bottom <= 0 || rect.left >= vw || rect.top >= vh) continue;
-    let span = layer.children[used] as HTMLElement | undefined;
+  const view: Box = { left: 0, top: 0, right: window.innerWidth || 0, bottom: window.innerHeight || 0 };
+  // 1. read
+  const rowBoxes: { el: Element; b: Box }[] = [];
+  const rowBox = (row: Element): Box => {
+    for (let i = 0; i < rowBoxes.length; i++) if (rowBoxes[i].el === row) return rowBoxes[i].b;
+    const b = box(row);
+    rowBoxes.push({ el: row, b: b });
+    return b;
+  };
+  const shown: { code: string; place: string; b: Box }[] = [];
+  for (let i = 0; i < labels.length && shown.length < MAX_LABELS; i++) {
+    const b = box(labels[i].el);
+    if (b.right - b.left <= 0 || b.bottom - b.top <= 0) continue;
+    if (!overlaps(b, view)) continue;
+    const row = labels[i].row;
+    if (row && !overlaps(b, rowBox(row))) continue;
+    shown.push({ code: labels[i].code, place: labels[i].place, b: b });
+  }
+  // 2. write the texts
+  for (let i = 0; i < shown.length; i++) {
+    let span = layer.children[i] as HTMLElement | undefined;
     if (!span) {
       span = document.createElement('span');
       span.className = 'test-el';
       layer.appendChild(span);
     }
-    if (span.textContent !== labels[i].code) span.textContent = labels[i].code;
-    const h = span.offsetHeight || 0;
-    const x = (rect.left - ox) / scale;
-    const top = (rect.top - oy) / scale;
-    const bottom = (rect.bottom - oy) / scale;
+    if (span.textContent !== shown[i].code) span.textContent = shown[i].code;
+    span.setAttribute('data-place', shown[i].place);
+  }
+  while (layer.children.length > shown.length) layer.removeChild(layer.lastChild as Node);
+  // 3. one height for all labels (same font), then 4. write the positions
+  const first = layer.children[0] as HTMLElement | undefined;
+  const h = first ? first.offsetHeight || 0 : 0;
+  for (let i = 0; i < shown.length; i++) {
+    const span = layer.children[i] as HTMLElement;
+    const b = shown[i].b;
+    const x = (b.left - ox) / scale;
+    const top = (b.top - oy) / scale;
+    const bottom = (b.bottom - oy) / scale;
     let y = top;
-    if (labels[i].place === 'bottom') y = bottom - h;
-    else if (labels[i].place === 'above') y = top - h >= 0 ? top - h : top;
+    if (shown[i].place === 'bottom') y = bottom - h;
+    else if (shown[i].place === 'above') y = top - h >= 0 ? top - h : top;
     span.style.left = Math.round(x) + 'px';
     span.style.top = Math.round(y) + 'px';
-    span.setAttribute('data-place', labels[i].place);
-    used++;
   }
-  while (layer.children.length > used) layer.removeChild(layer.lastChild as Node);
 }
 
 /** Paints `body.test-size-*` while labels are on: CSS picks the label size from it. */
@@ -303,7 +369,7 @@ export function elementTypesDoc(): string[] {
     '- `S03.P#4` - the fourth poster on screen S03 (outside any row).',
     '- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits just above it.',
     '- `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.',
-    '- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`.',
+    '- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.',
     '- The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.',
     '- The size follows «Размер меток» / "Label size" (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and uses the same size.',
     '',

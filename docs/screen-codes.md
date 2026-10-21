@@ -915,7 +915,7 @@ Besides the fixed codes above, test mode labels the elements of a screen: poster
 - `S03.P#4` - the fourth poster on screen S03 (outside any row).
 - `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits just above it.
 - `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.
-- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`.
+- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.
 - The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.
 - The size follows «Размер меток» / "Label size" (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and uses the same size.
 
