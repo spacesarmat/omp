@@ -550,8 +550,7 @@ export async function buildTasks(ctx) {
     const readList = async () => {
       const r = await get(jackettTorznabIndexersUrl(jackettUrl, s.jackettApiKey), { timeoutMs: 20000, maxBytes: 4 * 1024 * 1024 });
       if (r.ok && r.status === 200 && /<indexers\b/i.test(r.body)) {
-        const list = parseJackettIndexers(r.body);
-        return list.length ? { list, why: '' } : { list: null, why: 'в Jackett нет настроенных трекеров' };
+        return { list: parseJackettIndexers(r.body), why: '' };
       }
       return { list: null, why: r.ok ? 'HTTP ' + r.status : errorText(r.error) };
     };
@@ -563,6 +562,9 @@ export async function buildTasks(ctx) {
           return again.list ? '' : again.why || 'не прочитан';
         }),
       );
+    } else if (!indexers.length) {
+      // Read fine and empty: no scope, so alerts of removed trackers close.
+      out.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', alert: true, run: async () => ({ ok: false, detail: 'в Jackett нет настроенных трекеров', ms: 0 }) });
     } else {
       for (const ix of indexers) {
         out.push({

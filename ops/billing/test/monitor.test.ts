@@ -385,6 +385,19 @@ describe('buildTasks', () => {
     expect(listCalls).toBe(2);
   });
 
+  it('an empty Jackett catalog is a problem but not an unread list', async () => {
+    const base = world();
+    const { get } = fakeGet((url, proxy) => {
+      const u = new URL(url);
+      if (u.hostname === 'jackett' && u.searchParams.get('t') === 'indexers') return { ok: true, status: 200, body: '<indexers></indexers>' };
+      return base(url, proxy);
+    });
+    const tasks = await buildTasks({ settings: SETTINGS, env: {}, get, net: okNet, now: () => NOW, statfs: async () => ({ blocks: 1000, bsize: 4096, bavail: 500 }), botPoll: () => ({ enabled: false }) });
+    const list = tasks.find((t) => t.id === 'jackett:list')!;
+    expect(list.scope).toBeUndefined();
+    expect(await list.run()).toMatchObject({ ok: false, detail: 'в Jackett нет настроенных трекеров' });
+  });
+
   it('runTasks keeps at most heavyLimit heavy tasks at once', async () => {
     let live = 0;
     let peak = 0;
