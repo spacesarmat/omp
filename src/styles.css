@@ -899,3 +899,30 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
   pointer-events: auto;
 }
 .test-screen-badge .test-badge { position: static; }
+/* «Размер меток»: never under 24px on the TV, same 1920 layout at 1080p and 4K */
+body.test-size-small .test-badge, body.test-size-small .test-el { font-size: 24px; line-height: 28px; }
+body.test-size-medium .test-badge, body.test-size-medium .test-el { font-size: 28px; line-height: 32px; }
+body.test-size-large .test-badge, body.test-size-large .test-el { font-size: 36px; line-height: 42px; }
+/* Element codes (posters, cards, rows): one overlay layer over the screen, takes no space, ignores the remote */
+.test-el-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  z-index: 79;
+  pointer-events: none;
+}
+.test-el {
+  position: absolute;
+  pointer-events: none;
+  font-size: 28px;
+  line-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: rgba(20, 70, 170, 0.8);
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}

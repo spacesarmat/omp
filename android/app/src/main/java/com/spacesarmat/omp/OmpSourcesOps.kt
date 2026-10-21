@@ -36,6 +36,7 @@ private fun testLabelsOn(ctx: android.content.Context, call: PluginCall): Boolea
     } catch (_: Exception) {
         ""
     }
+    PlayerTestHud.textDp = PlayerTestHud.sizeDp(call.getString("testSize"))
     return PlayerTestHud.enabled(version, call.getBoolean("testMode") == true)
 }
 

@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,5 +16,14 @@ class PlayerTestHudTest {
         assertFalse(PlayerTestHud.enabled("0.20.5-test", true))
         assertFalse(PlayerTestHud.enabled("0.20.6-beta", true))
         assertFalse(PlayerTestHud.enabled("", true))
+    }
+
+    @Test
+    fun labelSizeNeverGoesUnder24OnTheTv() {
+        assertEquals(24f, PlayerTestHud.sizeDp("small"), 0f)
+        assertEquals(28f, PlayerTestHud.sizeDp("medium"), 0f)
+        assertEquals(36f, PlayerTestHud.sizeDp("large"), 0f)
+        assertEquals(28f, PlayerTestHud.sizeDp(null), 0f)
+        assertEquals(28f, PlayerTestHud.sizeDp("huge"), 0f)
     }
 }

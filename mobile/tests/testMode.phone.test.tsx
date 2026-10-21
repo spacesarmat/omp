@@ -33,6 +33,21 @@ function mount(): HTMLElement {
 }
 
 describe('phone test mode', () => {
+  it('offers the label size next to the switch on a beta build', () => {
+    resetTo({ name: 'settings' });
+    const el = mount();
+    const row = el.querySelector('[data-code="P11.20"]') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(row.textContent).toContain('Размер меток');
+    const on = row.querySelector('.m-seg-btn.on') as HTMLElement;
+    expect(on.getAttribute('data-code')).toBe('P11.20.2');
+    const large = row.querySelector('[data-code="P11.20.3"]') as HTMLElement;
+    expect(large.textContent).toBe('Крупный');
+    act(() => { large.click(); });
+    expect(settings.value.testLabelSize).toBe('large');
+    expect((row.querySelector('.m-seg-btn.on') as HTMLElement).getAttribute('data-code')).toBe('P11.20.3');
+  });
+
   it('shows the switch on a beta build and the screen code after it is on', () => {
     resetTo({ name: 'settings' });
     const el = mount();

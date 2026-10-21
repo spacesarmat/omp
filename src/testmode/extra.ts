@@ -1,6 +1,6 @@
 // Phone (P / PD) and native Android TV player (A / AD) codes.
 // Same rule as the TV registry: append, do not renumber.
-// Posters, files, episodes, search hits and user servers are not coded.
+// Posters, files, episodes, search hits and user servers have no fixed code (element codes: elements.tsx).
 
 export interface ExtraOpt {
   code: string;
@@ -136,6 +136,11 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P11.17', 'Поддержать', 'Support'),
       it('P11.18', 'Расширенные', 'Advanced'),
       it('P11.19', 'Режим тестирования', 'Test mode', onOff('P11.19')),
+      it('P11.20', 'Размер меток', 'Label size', [
+        { code: 'P11.20.1', value: 'small', ru: 'Маленький', en: 'Small' },
+        { code: 'P11.20.2', value: 'medium', ru: 'Средний', en: 'Medium' },
+        { code: 'P11.20.3', value: 'large', ru: 'Крупный', en: 'Large' },
+      ]),
     ],
   },
   { key: 'phone:account', code: 'P12', ru: 'Аккаунт', en: 'Account', items: [it('P12.1', 'Назад', 'Back')] },

@@ -97,6 +97,7 @@ describe('screen code registry', () => {
       'src/testmode/active.ts',
       'src/testmode/badge.tsx',
       'src/testmode/doc.ts',
+      'src/testmode/elements.tsx',
       'docs/screen-codes.md',
       'mobile/src/testmode/host.tsx',
       'android/app/src/main/java/com/spacesarmat/omp/player/PlayerTestHud.kt',

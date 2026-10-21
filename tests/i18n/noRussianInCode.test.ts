@@ -15,6 +15,7 @@ const ALLOWLIST: { [file: string]: string } = {
   'src/testmode/registry.ts': 'stable TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',
   'src/testmode/extra.ts': 'phone and native Android TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',
   'src/testmode/doc.ts': 'bilingual screen-code table generated from the catalog',
+  'src/testmode/elements.tsx': 'element-code type catalog (Russian and English names, source of docs/screen-codes.md)',
   'src/lib/faqLinks.ts': 'FAQ link keys: legacy Russian question texts resolved to item ids by OLD_Q_LINKS (language-independent)',
   'src/lib/librarySearch.ts': 'title matching (ё→е normalization)',
   'src/lib/tracks.ts': 'language names in their own language and audio-language tokens of file names (parsing)',

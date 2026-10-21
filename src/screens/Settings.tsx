@@ -250,7 +250,7 @@ export function SettingsScreen() {
     ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
     ['set-onboarding'],
   ];
-  if (isBetaBuild()) tail.push(['set-test-mode']);
+  if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
   const nav = (key: string) => rowArrow(tail, key);
 
   return (
@@ -337,6 +337,14 @@ export function SettingsScreen() {
             options={onOff()}
             onChange={(v) => updateSettings({ testMode: v })}
             onArrow={nav('set-test-mode')}
+          />
+          <ChoiceRow
+            focusKey="set-test-size"
+            label={t('settings.testLabelSize')}
+            value={s.testLabelSize}
+            options={subSizeOptions()}
+            onChange={(v) => updateSettings({ testLabelSize: v })}
+            onArrow={nav('set-test-size')}
           />
           <div class="muted">{t('settings.testModeHint')}</div>
         </div>

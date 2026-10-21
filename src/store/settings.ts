@@ -74,6 +74,8 @@ export interface AppSettings {
    * A stable build ignores this flag (the switch is not rendered).
    */
   testMode: boolean;
+  /** Size of the test-mode code labels: «Маленький» / «Средний» / «Крупный». Beta builds only, like testMode. */
+  testLabelSize: 'small' | 'medium' | 'large';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -105,6 +107,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   seenHints: {},
   liveSeeds: true,
   testMode: false,
+  testLabelSize: 'medium',
 };
 
 const KEY = 'tsp.settings';
@@ -131,6 +134,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
     if (typeof v[k] === typeof DEFAULT_SETTINGS[k]) target[k] = v[k];
   });
   if (SUB_SIZES.indexOf(out.subSize) < 0) out.subSize = DEFAULT_SETTINGS.subSize;
+  if (SUB_SIZES.indexOf(out.testLabelSize) < 0) out.testLabelSize = DEFAULT_SETTINGS.testLabelSize;
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
   if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;

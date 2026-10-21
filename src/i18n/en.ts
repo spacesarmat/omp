@@ -93,6 +93,7 @@ export const en: EnDict<typeof ru> = {
     testModeTitle: 'Test mode',
     testModeHint: 'Screen and item numbers. Tap the number in the corner of the screen to copy it.',
     testModeCopied: 'Code {code}',
+    testLabelSize: 'Label size',
     version: 'Version',
     localMissing: 'Needs downloading',
     localMissingSize: 'Needs downloading ({size})',

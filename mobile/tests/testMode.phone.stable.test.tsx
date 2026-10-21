@@ -33,6 +33,7 @@ describe('phone test mode on a stable build', () => {
       );
     });
     expect(el.querySelector('[data-code="P11.19"]')).toBeNull();
+    expect(el.querySelector('[data-code="P11.20"]')).toBeNull();
     expect(el.textContent).not.toContain('Режим тестирования');
     expect(el.querySelector('.test-screen-badge')).toBeNull();
     expect(document.body.classList.contains('test-labels')).toBe(false);
