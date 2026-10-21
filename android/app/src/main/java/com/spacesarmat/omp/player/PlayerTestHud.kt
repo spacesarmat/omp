@@ -67,24 +67,21 @@ object PlayerTestHud {
 
     /** The screen code, top start. A tap copies it. Not focusable, so the remote skips it. */
     fun copyChip(ctx: Context, parent: FrameLayout, code: String, session: Session) {
-        val chip = object : TextView(ctx) {
-            override fun isFocusable(): Boolean = false
-            override fun isFocusableInTouchMode(): Boolean = false
-        }
+        val chip = TextView(ctx)
         chip.text = code
         chip.setTextColor(Color.WHITE)
         chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24f)
         chip.setBackgroundColor(0x8C000000.toInt())
         val pad = dip(ctx, 6f).toInt()
         chip.setPadding(pad, 0, pad, 0)
-        chip.isClickable = true
-        chip.isFocusable = false
-        chip.isFocusableInTouchMode = false
         chip.setOnClickListener {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             cm?.setPrimaryClip(ClipData.newPlainText("code", code))
             Toast.makeText(ctx, code, Toast.LENGTH_SHORT).show()
         }
+        // After the click listener: a clickable view is focusable in AUTO mode, and that would steal the D-pad.
+        chip.isFocusable = false
+        chip.isFocusableInTouchMode = false
         val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
         val m = dip(ctx, 16f).toInt()
         lp.topMargin = m
