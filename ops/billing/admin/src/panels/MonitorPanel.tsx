@@ -93,6 +93,15 @@ function Detail({ row }: { row?: MonitorCheck }) {
   );
 }
 
+/** localStorage, or null where the browser refuses access (blocked storage throws on the property itself). */
+function browserStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function PlainTable({ rows }: { rows: MonitorCheck[] }) {
   return (
     <Table>
@@ -156,6 +165,27 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
       </TableHeader>
       <TableBody>
         {rows.map((t) => {
+          if (t.kind === 'check' && t.check) {
+            const r = t.check;
+            return (
+              <TableRow key={t.key} data-check={r.id}>
+                <TableCell className="font-medium">
+                  {r.name}
+                  <PathBadge path={r.path} />
+                </TableCell>
+                <TableCell colSpan={withSearch ? 3 : 2}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge ok={r.ok} alerted={r.alerted} />
+                    <Detail row={r} />
+                  </div>
+                  {r.context ? <div className="text-xs text-muted-foreground">{r.context}</div> : null}
+                </TableCell>
+                <TableCell>
+                  <HistoryStrip strip={r.history} uptime={r.uptime} />
+                </TableCell>
+              </TableRow>
+            );
+          }
           const main = t.search || t.warp || t.direct || t.site;
           return (
             <TableRow key={t.key} data-check={t.key}>
@@ -182,7 +212,14 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
 function GroupCard({ view, onToggle }: { view: GroupView; onToggle: (id: string, open: boolean) => void }) {
   const { id, title, items, failed } = view;
   const tracker = id === 'jackett' || id === 'jacred';
-  const summary = title + ' ' + view.okCount + '/' + view.total;
+  const summary = title + ' ' + view.okCount + '/' + view.total + (view.skipped ? ', не проверено: ' + view.skipped : '');
+  const badge = failed ? (
+    <Badge variant="bad">ошибок: {failed}</Badge>
+  ) : view.skipped ? (
+    <Badge variant="warn">не проверено: {view.skipped}</Badge>
+  ) : (
+    <Badge variant="ok">всё ок</Badge>
+  );
   if (view.folded) {
     return (
       <Card data-group={id} data-folded="1">
@@ -191,13 +228,14 @@ function GroupCard({ view, onToggle }: { view: GroupView; onToggle: (id: string,
             <span className="mr-2 text-muted-foreground">▸</span>
             {summary}
           </span>
-          {failed ? <Badge variant="bad">ошибок: {failed}</Badge> : <Badge variant="ok">всё ок</Badge>}
+          {badge}
         </button>
       </Card>
     );
   }
-  const plain = items.filter((it) => it.kind === 'check').map((it) => it.check as MonitorCheck);
-  const trackers = items.filter((it) => it.kind === 'tracker');
+  // Trackers and plain checks of one group share a table, so the chosen sort order holds across both.
+  const hasTrackers = items.some((it) => it.kind === 'tracker');
+  const plain = items.map((it) => it.check as MonitorCheck);
   return (
     <Card data-group={id}>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
@@ -207,11 +245,10 @@ function GroupCard({ view, onToggle }: { view: GroupView; onToggle: (id: string,
             {summary}
           </CardTitle>
         </button>
-        {failed ? <Badge variant="bad">ошибок: {failed}</Badge> : <Badge variant="ok">всё ок</Badge>}
+        {badge}
       </CardHeader>
       <CardContent className="space-y-3">
-        {plain.length ? <PlainTable rows={plain} /> : null}
-        {trackers.length ? <TrackerTable rows={trackers} withSearch={id === 'jackett'} /> : null}
+        {hasTrackers ? <TrackerTable rows={items} withSearch={id === 'jackett'} /> : items.length ? <PlainTable rows={plain} /> : null}
         {tracker ? (
           <p className="text-xs text-muted-foreground">
             {id === 'jackett'
@@ -360,10 +397,10 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   const [interval, setIntervalValue] = useState('');
   const [err, setErr] = useState('');
   const wasRunning = useRef(false);
-  const [prefs, setPrefsState] = useState<MonitorPrefs>(() => loadPrefs(typeof window === 'undefined' ? null : window.localStorage));
+  const [prefs, setPrefsState] = useState<MonitorPrefs>(() => loadPrefs(browserStorage()));
   const setPrefs = (p: MonitorPrefs) => {
     setPrefsState(p);
-    savePrefs(typeof window === 'undefined' ? null : window.localStorage, p);
+    savePrefs(browserStorage(), p);
   };
 
   async function load() {

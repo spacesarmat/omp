@@ -152,6 +152,8 @@ export type GroupView = {
   title: string;
   total: number;
   okCount: number;
+  /** Items with no result (a check that is not configured or was skipped): never counted as ok. */
+  skipped: number;
   failed: number;
   /** Folded to the one-line summary («Контейнеры 12/12»). */
   folded: boolean;
@@ -177,8 +179,11 @@ export function buildView(groups: { id: string; title: string }[], checks: Monit
     );
     if (narrowed && !items.length) return;
     const chosen = prefs.open[g.id];
-    const folded = narrowed ? false : chosen === undefined ? failed === 0 : !chosen;
-    out.push({ id: g.id, title: g.title, total: all.length, okCount: all.filter((it) => itemOk(it) !== false).length, failed, folded, items });
+    const okCount = all.filter((it) => itemOk(it) === true).length;
+    const skipped = all.filter((it) => itemOk(it) === null).length;
+    // Folded by default only when every item is green; a skipped check stays visible.
+    const folded = narrowed ? false : chosen === undefined ? okCount === all.length : !chosen;
+    out.push({ id: g.id, title: g.title, total: all.length, okCount, skipped, failed, folded, items });
   });
   const order = new Map(groups.map((g, i) => [g.id, i]));
   return out.sort((a, b) => (a.failed ? 0 : 1) - (b.failed ? 0 : 1) || (order.get(a.id) || 0) - (order.get(b.id) || 0));

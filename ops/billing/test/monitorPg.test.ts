@@ -181,6 +181,28 @@ describe('monitor runs on Postgres', () => {
     expect(Number(full.at)).toBe(firstAt);
   });
 
+  it('a recheck starts from the newest run, even one that could not be saved', async () => {
+    const t = await setup();
+    t.w.failJackett.add('kinozal');
+    await t.monitor.run('schedule');
+    // Postgres refuses the next run: kinozal recovered, rutracker broke, nothing saved.
+    const store = t.store as any;
+    const query = store.query.bind(store);
+    store.query = (sql: string, params?: unknown[]) =>
+      /INSERT INTO monitor_runs/.test(sql) ? Promise.reject(Object.assign(new Error('down'), { code: 'ECONNREFUSED' })) : query(sql, params);
+    t.w.failJackett.clear();
+    t.w.failJackett.add('rutracker');
+    t.tick(60000);
+    await t.monitor.run('schedule');
+    store.query = query;
+    t.tick(60000);
+    const r = await t.monitor.run('recheck', { only: 'failed' });
+    // rutracker was red in the unsaved run, so it is checked again and stays red: no false «починилось»
+    expect(r!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: false });
+    expect(r!.rows.find((x: any) => x.id === 'jackett:kinozal')).toMatchObject({ ok: true });
+    expect(t.sent.filter((m) => m.text.includes('починилось') && m.text.includes('utracker'))).toEqual([]);
+  });
+
   it('a message that could not be sent goes out on the next run', async () => {
     const t = await setup();
     t.w.failJackett.add('kinozal');

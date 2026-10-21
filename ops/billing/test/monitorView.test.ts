@@ -51,6 +51,11 @@ describe('monitor tab view', () => {
     expect(v[0].items.map((i) => i.name)).toEqual(['Kinozal', 'RuTor', 'BitRu']);
   });
 
+  it('a skipped check is not counted as ok and keeps its group open', () => {
+    const v = buildView(GROUPS, [c('containers', 'containers', null, { name: 'Docker не настроен', detail: 'не настроено' })], prefs());
+    expect(v[0]).toMatchObject({ id: 'containers', okCount: 0, skipped: 1, total: 1, failed: 0, folded: false });
+  });
+
   it('a folded group opens when chosen, and an open red group can be folded', () => {
     const v = buildView(GROUPS, CHECKS, prefs({ open: { containers: true, jackett: false } }));
     expect(v.find((g) => g.id === 'containers')!.folded).toBe(false);

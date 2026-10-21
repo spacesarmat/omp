@@ -246,8 +246,12 @@ export function createMonitor(deps) {
     return finalize(await runTasks(tasks, 8, 3, now));
   }
 
-  /** Rows of the last saved run (for «Перепроверить все ошибки»), or null. */
+  /**
+   * Rows of the last run (for «Перепроверить все ошибки»), or null. The run this process made last wins, saved or
+   * not (a run during a Postgres outage is newer than anything in monitor_runs); after a restart, the last saved run.
+   */
   async function lastRows() {
+    if (mem.lastRows) return mem.lastRows;
     try {
       const last = (await store.query('SELECT rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
       if (!last) return mem.lastRows || null;
