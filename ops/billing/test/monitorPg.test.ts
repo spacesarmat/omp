@@ -448,13 +448,15 @@ describe('monitor routes', () => {
     for (const ids of [[], ['bad id'], 'jackett:kinozal', Array.from({ length: 11 }, (_, i) => 'x' + i)]) {
       expect(JSON.parse((await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, ids })).body).ok).toBe(false);
     }
-    // concurrency: a row recheck never joins a run that is going
-    t.tick(1000);
-    await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf });
-    expect(t.monitor.isRunning()).toBe(true);
+    // concurrency: a row recheck never joins a run that is going (a run held open, so the test does not race it)
+    const runsBefore = (await t.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n;
+    const isRunning = t.monitor.isRunning;
+    (t.monitor as any).isRunning = () => true;
     const busy = JSON.parse((await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, ids: ['jackett:kinozal'] })).body);
+    (t.monitor as any).isRunning = isRunning;
     expect(busy).toMatchObject({ ok: false, busy: true });
-    await vi.waitFor(async () => expect(t.monitor.isRunning()).toBe(false), { timeout: 5000 });
+    expect(t.monitor.isRunning()).toBe(false);
+    expect((await t.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n).toBe(runsBefore);
   });
 
   it('read-only mode has no monitor', async () => {
