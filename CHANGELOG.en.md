@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.6-beta.2
+
+- Beta: codes on posters, cards, rows, list rows, tabs and buttons (for example S01.R2.P#4 is the 4th poster in the 2nd row), an open window shows only its own
+- Beta: "Label size" next to "Test mode": Small, Medium or Large
+- Beta: the label size also applies in the Android TV player and the Cloudflare check window
+- [tech] Element type table (R, P, C, L, T, B, I, G) in docs/screen-codes.md; npm run tv:install finds a beta IPK
+
 ## 0.20.6-beta.1
 
 - [tv] Beta: "Test mode" in Settings shows codes for screens, dialogs and items (for example S05.3), the screen code in the corner can be copied
