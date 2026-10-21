@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -702,6 +702,33 @@ describe('ops/vps deploy', () => {
       expect(line).toContain(IMAGE);
       expect(line).toContain('node --check');
     }
+  });
+
+  it('with no node on PATH and OMP_NODE_CHECK unset, the check runs in docker by itself', () => {
+    const box = world(release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' }));
+    // PATH without any node: the fakes (minus node) plus links to every other system tool.
+    const bin = path.join(box.parent, 'bin');
+    rmSync(path.join(bin, 'node'));
+    const sys = path.join(box.parent, 'sys');
+    mkdirSync(sys);
+    for (const dir of (process.env.PATH ?? '').split(':')) {
+      if (!dir || dir === bin || !existsSync(dir)) continue;
+      for (const name of readdirSync(dir)) {
+        if (name === 'node' || existsSync(path.join(sys, name)) || existsSync(path.join(bin, name))) continue;
+        try {
+          symlinkSync(path.join(dir, name), path.join(sys, name));
+        } catch {
+          /* duplicate or unreadable entry */
+        }
+      }
+    }
+    const env = { ...box.env, PATH: `${bin}:${sys}` };
+    delete env.OMP_NODE_CHECK;
+    expect(spawnSync('bash', ['-c', 'command -v node'], { env }).status).not.toBe(0);
+    const result = runDeploy(env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('node --check: docker');
+    expect(linesStarting(box.dockerLog, 'run').length).toBeGreaterThanOrEqual(2);
   });
 
   it('without node on the host a failing check in the container stops the deploy', () => {
