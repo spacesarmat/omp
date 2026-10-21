@@ -4,6 +4,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.6-beta.3
+
+- Beta: "Label size" is now a px slider, labels are smaller by default
+- [phone] Beta: labels from 8 to 24 px, default 12
+- [tv] Beta: labels from 16 to 36 px in steps of 2, default 20; left and right change it, the row shows the value
+- [atv] Beta: the Android TV player uses the same px size
+- [tech] An old Small or Large choice moves to the nearest size, Medium becomes the new default
+
 ## 0.20.6-beta.2
 
 - Beta: codes on posters, cards, rows, list rows, tabs and buttons (for example S01.R2.P#4 is the 4th poster in the 2nd row), an open window shows only its own
