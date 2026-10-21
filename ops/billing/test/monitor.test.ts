@@ -386,16 +386,24 @@ describe('buildTasks', () => {
   });
 
   it('an empty Jackett catalog is a problem but not an unread list', async () => {
+    let reads = 0;
     const base = world();
     const { get } = fakeGet((url, proxy) => {
       const u = new URL(url);
-      if (u.hostname === 'jackett' && u.searchParams.get('t') === 'indexers') return { ok: true, status: 200, body: '<indexers></indexers>' };
+      if (u.hostname === 'jackett' && u.searchParams.get('t') === 'indexers') {
+        reads += 1;
+        return reads <= 2 ? { ok: true, status: 200, body: '<indexers></indexers>' } : base(url, proxy);
+      }
       return base(url, proxy);
     });
     const tasks = await buildTasks({ settings: SETTINGS, env: {}, get, net: okNet, now: () => NOW, statfs: async () => ({ blocks: 1000, bsize: 4096, bavail: 500 }), botPoll: () => ({ enabled: false }) });
     const list = tasks.find((t) => t.id === 'jackett:list')!;
     expect(list.scope).toBeUndefined();
     expect(await list.run()).toMatchObject({ ok: false, detail: 'в Jackett нет настроенных трекеров' });
+    // the retry reads Jackett again: still empty, then trackers added
+    expect(await list.run()).toMatchObject({ ok: false, detail: 'в Jackett нет настроенных трекеров' });
+    expect(await list.run()).toMatchObject({ ok: true });
+    expect(reads).toBe(3);
   });
 
   it('runTasks keeps at most heavyLimit heavy tasks at once', async () => {

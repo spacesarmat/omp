@@ -564,7 +564,21 @@ export async function buildTasks(ctx) {
       );
     } else if (!indexers.length) {
       // Read fine and empty: no scope, so alerts of removed trackers close.
-      out.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', alert: true, run: async () => ({ ok: false, detail: 'в Jackett нет настроенных трекеров', ms: 0 }) });
+      let tries = 0;
+      out.push({
+        id: 'jackett:list',
+        group: 'jackett',
+        name: 'Список трекеров Jackett',
+        alert: true,
+        run: async () => {
+          tries += 1;
+          const empty = { ok: false, detail: 'в Jackett нет настроенных трекеров', ms: 0 };
+          if (tries === 1) return empty;
+          const again = await readList();
+          if (!again.list) return { ok: false, detail: again.why || 'не прочитан', ms: 0 };
+          return again.list.length ? { ok: true, detail: 'трекеры появились, проверка - в следующий раз', ms: 0 } : empty;
+        },
+      });
     } else {
       for (const ix of indexers) {
         out.push({
