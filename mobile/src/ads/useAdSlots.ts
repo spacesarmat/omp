@@ -131,7 +131,8 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const pickAt = (pos: number) => pickBanner(banners, o.section + ':' + pos, now);
   // What the cell draws. The pick is used for preloading and for admitting a new slot. A slot that is already
   // on screen stays on its current banner until the replacement image is loaded, and only while that banner is
-  // still eligible. Otherwise the cell is dropped at once, without waiting for the replacement.
+  // still eligible. Otherwise the cell is dropped at once, without waiting for the replacement. Its admission
+  // goes with it, so the replacement is not drawn in that visible slot (that would push the cards).
   const bannerAt = (pos: number): AdBanner | null => {
     const next = pickAt(pos);
     if (!next) return null;
@@ -156,9 +157,27 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   }
   if (!banners.length) held.current = {};
   const admitted = adm.key === o.listKey && banners.length ? adm.list : [];
+  // Positions whose banner was withdrawn and whose replacement is not ready to draw. They leave `admitted`
+  // so the next image, once loaded, has to pass the below-the-screen check again.
+  const released: number[] = [];
+  for (let i = 0; i < admitted.length; i++) {
+    const p = admitted[i];
+    if (positions.indexOf(p) < 0) continue;
+    if (!bannerAt(p)) released.push(p);
+  }
   useEffect(() => {
     if (!banners.length && adm.list.length) setAdm({ key: o.listKey, list: [] });
   }, [banners.length]);
+  useEffect(() => {
+    if (!released.length) return;
+    const k = opts.current.listKey;
+    setAdm((prev) => {
+      if (prev.key !== k) return prev;
+      const list = prev.list.filter((p) => released.indexOf(p) < 0);
+      if (list.length === prev.list.length) return prev;
+      return { key: k, list };
+    });
+  }, [released.join(',')]);
 
   // the images of the banners these positions would show
   useEffect(() => {
@@ -219,7 +238,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     };
   }, [positions.join(','), admitted.join(','), imgTick, banners]);
 
-  const drawn = admitted.filter((p) => positions.indexOf(p) >= 0);
+  const drawn = admitted.filter((p) => positions.indexOf(p) >= 0 && released.indexOf(p) < 0);
   return {
     admitted: drawn,
     banner: bannerAt,

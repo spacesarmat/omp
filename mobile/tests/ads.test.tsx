@@ -456,6 +456,56 @@ describe('ads in «Мои»', () => {
     }
   });
 
+  it('does not put a replacement banner into a slot that is already on screen', async () => {
+    const pending: Array<{ onload: (() => void) | null }> = [];
+    class Img {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_v: string) {
+        pending.push(this);
+      }
+    }
+    vi.stubGlobal('Image', Img);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    try {
+      oneSlot();
+      mount(<Library />);
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(1);
+      // the slot was admitted below the screen; it is now in view and must not be filled again here
+      top = 50;
+      const nextImg = 'https://billing.omp-player.online/v1/ads/img/' + 'e'.repeat(24);
+      const next = { ...BANNER, id: 'eeeeeeeeeeee', title: 'Другой баннер', image: '/v1/ads/img/' + 'e'.repeat(24) };
+      saveAdsConfig({ ...CONFIG, everyN: 30, banners: [next] });
+      act(() => {
+        adsConfig.value = cachedAdsConfig();
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+      expect(pending.length).toBeGreaterThan(0);
+      await act(async () => {
+        for (let i = 0; i < pending.length; i++) if (pending[i].onload) pending[i].onload!();
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+      top = 2000;
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      });
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(1);
+      expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe(next.title);
+      expect(el.querySelector('.m-ad img')!.getAttribute('src')).toBe(nextImg);
+    } finally {
+      vi.unstubAllGlobals();
+      top = 2000;
+    }
+  });
+
   it('reads the server a moment after the screen opens, and never for a subscriber', async () => {
     localStorage.removeItem('tsp.adsConfig');
     vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
