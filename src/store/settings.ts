@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
+import { clampLabelPx, PHONE_LABEL_PX, TV_LABEL_PX } from '../testmode/labelPx';
 import type { LibrarySort } from '../lib/librarySearch';
 import type { LibraryView } from '../lib/libraryView';
 import { isHistoryFilter, type HistoryFilter } from '../lib/history';
@@ -74,8 +75,10 @@ export interface AppSettings {
    * A stable build ignores this flag (the switch is not rendered).
    */
   testMode: boolean;
-  /** Size of the test-mode code labels: «Маленький» / «Средний» / «Крупный». Beta builds only, like testMode. */
-  testLabelSize: 'small' | 'medium' | 'large';
+  /** Test-mode label size in px on the TV and in the native Android TV player (16..36, step 2). Beta only. */
+  testLabelPx: number;
+  /** Test-mode label size in px on the phone (8..24). Beta only. */
+  testLabelPhonePx: number;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -107,7 +110,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   seenHints: {},
   liveSeeds: true,
   testMode: false,
-  testLabelSize: 'medium',
+  testLabelPx: 20,
+  testLabelPhonePx: 12,
 };
 
 const KEY = 'tsp.settings';
@@ -126,6 +130,22 @@ function sanitizeHints(v: unknown): { [id: string]: true } {
 const SUB_SIZES = ['small', 'medium', 'large'];
 const SUB_COLORS = ['white', 'yellow'];
 
+/**
+ * beta.2 kept «Размер меток» as small / medium / large. Small and large become the nearest px; medium was the
+ * default and is in every saved blob, so it takes the new (smaller) default instead of the old big size.
+ */
+function migrateLabelSize(v: Record<string, unknown>, out: AppSettings): void {
+  const old = v.testLabelSize;
+  if (typeof v.testLabelPx !== 'number') {
+    if (old === 'small') out.testLabelPx = 24;
+    else if (old === 'large') out.testLabelPx = 36;
+  }
+  if (typeof v.testLabelPhonePx !== 'number') {
+    if (old === 'small') out.testLabelPhonePx = 16;
+    else if (old === 'large') out.testLabelPhonePx = 24;
+  }
+}
+
 export function sanitizeSettings(v: unknown): AppSettings {
   const out: AppSettings = { ...DEFAULT_SETTINGS };
   if (!isObject(v)) return out;
@@ -134,7 +154,9 @@ export function sanitizeSettings(v: unknown): AppSettings {
     if (typeof v[k] === typeof DEFAULT_SETTINGS[k]) target[k] = v[k];
   });
   if (SUB_SIZES.indexOf(out.subSize) < 0) out.subSize = DEFAULT_SETTINGS.subSize;
-  if (SUB_SIZES.indexOf(out.testLabelSize) < 0) out.testLabelSize = DEFAULT_SETTINGS.testLabelSize;
+  migrateLabelSize(v, out);
+  out.testLabelPx = clampLabelPx(out.testLabelPx, TV_LABEL_PX);
+  out.testLabelPhonePx = clampLabelPx(out.testLabelPhonePx, PHONE_LABEL_PX);
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
   if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;

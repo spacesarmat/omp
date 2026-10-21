@@ -5,7 +5,7 @@
 // phone sends them to the TV over the pairing channel). All the Russian copy of the check lives here; the native dialog
 // gets it as parameters. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
 import { t } from '../i18n';
-import { testLabelSize, testLabels } from '../testmode/active';
+import { testLabelPx, testLabels } from '../testmode/active';
 import { log } from '../lib/log';
 import { cloudflareFailure, hostOf, logCloudflare, siteRoot } from './cloudflare';
 import { allSources, getSource } from './registry';
@@ -107,8 +107,8 @@ export interface CloudflareVisibleRequest {
   forTv?: string;
   /** Beta test mode: the native dialog paints screen codes. Omitted unless the switch is on. */
   testMode?: boolean;
-  /** Label size with testMode: small, medium or large. */
-  testSize?: string;
+  /** Label size in px with testMode («Размер меток»). */
+  testPx?: number;
 }
 
 /** The TV dialog (mockup TvCloudflare) for the site. */
@@ -131,7 +131,7 @@ export function tvCheckRequest(site: { name: string; url: string }): CloudflareV
   };
   if (testLabels.peek()) {
     r.testMode = true;
-    r.testSize = testLabelSize.peek();
+    r.testPx = testLabelPx.peek();
   }
   return r;
 }
@@ -153,7 +153,7 @@ export function phoneCheckRequest(site: { name: string; url: string }, forTv?: {
   }
   if (testLabels.peek()) {
     r.testMode = true;
-    r.testSize = testLabelSize.peek();
+    r.testPx = testLabelPx.peek();
   }
   return r;
 }

@@ -404,11 +404,7 @@ addScreen('S05', ['settings'], 'Настройки', 'Settings', [
   item('S05.27', ['set-advanced'], 'Расширенные', 'Advanced'),
   item('S05.28', ['set-onboarding'], 'Показать знакомство', 'Show the tour'),
   item('S05.29', ['set-test-mode'], 'Режим тестирования', 'Test mode', opt('S05.29', ON_OFF)),
-  item('S05.30', ['set-test-size'], 'Размер меток', 'Label size', opt('S05.30', [
-    ['small', 'Маленький', 'Small'],
-    ['medium', 'Средний', 'Medium'],
-    ['large', 'Крупный', 'Large'],
-  ])),
+  item('S05.30', ['set-test-size'], 'Размер меток (ползунок, px)', 'Label size (slider, px)'),
 ]);
 
 addScreen('S06', ['player'], 'Плеер', 'Player', [

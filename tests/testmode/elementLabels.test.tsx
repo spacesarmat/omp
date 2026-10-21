@@ -8,8 +8,8 @@ vi.mock('../../src/version', () => ({ APP_VERSION: '0.20.6-beta.2' }));
 import { SettingsScreen } from '../../src/screens/Settings';
 import { DEFAULT_SETTINGS, resetSettings, sanitizeSettings, settings, updateSettings } from '../../src/store/settings';
 import { ScreenCodeBadge } from '../../src/testmode/badge';
-import { collectElementLabels, ElementLabelsHost, paintElementLabels } from '../../src/testmode/elements';
-import { phoneLabelPx, tvLabelPx } from '../../src/testmode/active';
+import { collectElementLabels, ElementLabelsHost, labelSizeCss, paintElementLabels } from '../../src/testmode/elements';
+import { clampLabelPx, PHONE_LABEL_PX, TV_LABEL_PX } from '../../src/testmode/active';
 import { routeStack } from '../../src/ui/nav';
 
 beforeAll(() => {
@@ -134,16 +134,22 @@ describe('element codes', () => {
     expect(Array.from(layer.children).map((c) => c.textContent)).toEqual(['D03.B#1']);
   });
 
-  it('keeps every TV size at 24px or more, «Средний» on the phone is the old size', () => {
-    expect(tvLabelPx('small')).toBeGreaterThanOrEqual(24);
-    expect(tvLabelPx('small')).toBeLessThan(tvLabelPx('medium'));
-    expect(tvLabelPx('medium')).toBeLessThan(tvLabelPx('large'));
-    expect(phoneLabelPx('medium')).toBe(24);
+  it('clamps the px to the TV and phone ranges and steps', () => {
+    expect(TV_LABEL_PX).toEqual({ min: 16, max: 36, step: 2, def: 20 });
+    expect(PHONE_LABEL_PX).toEqual({ min: 8, max: 24, step: 1, def: 12 });
+    expect(clampLabelPx(21, TV_LABEL_PX)).toBe(22);
+    expect(clampLabelPx(4, TV_LABEL_PX)).toBe(16);
+    expect(clampLabelPx(99, TV_LABEL_PX)).toBe(36);
+    expect(clampLabelPx('big', TV_LABEL_PX)).toBe(20);
+    expect(clampLabelPx(7, PHONE_LABEL_PX)).toBe(8);
+    expect(clampLabelPx(13.4, PHONE_LABEL_PX)).toBe(13);
+    expect(labelSizeCss(20, false)).toContain('.test-el { font-size: 20px; line-height: 24px; }');
+    expect(labelSizeCss(12, true)).toContain('body.test-labels [data-code]::after');
   });
 });
 
-describe('label size setting on a beta build', () => {
-  it('sits under the switch, cycles and is saved', () => {
+describe('label size slider on a beta build', () => {
+  it('sits under the switch, shows the px, OK steps by 2 and wraps', () => {
     const host = mount(h(SettingsScreen, {}));
     const row = Array.from(host.querySelectorAll('.choice-row')).find((n) => {
       const label = n.querySelector('.choice-label');
@@ -151,34 +157,72 @@ describe('label size setting on a beta build', () => {
     }) as HTMLElement;
     expect(row).toBeTruthy();
     expect(row.getAttribute('data-fk')).toBe('set-test-size');
-    expect(row.textContent).toContain('Средний');
+    expect(row.querySelector('.choice-value')!.textContent).toBe('20 px');
     act(() => { row.click(); });
-    expect(settings.value.testLabelSize).toBe('large');
+    expect(settings.value.testLabelPx).toBe(22);
+    act(() => { updateSettings({ testLabelPx: 36 }); });
+    act(() => { (host.querySelector('[data-fk="set-test-size"]') as HTMLElement).click(); });
+    expect(settings.value.testLabelPx).toBe(16);
     act(() => { updateSettings({ testMode: true }); });
-    const badge = row.querySelector('.test-badge');
-    expect(badge && badge.textContent).toBe('S05.30.3');
+    const badge = host.querySelector('[data-fk="set-test-size"] .test-badge');
+    expect(badge && badge.textContent).toBe('S05.30');
   });
 
-  it('paints the body size class and the overlay only while test mode is on', () => {
+  it('left / right on the remote step by 2 px, stop at both ends and keep the focus', async () => {
+    const { getCurrentFocusKey, setFocus } = await import('@noriginmedia/norigin-spatial-navigation');
+    const press = async (key: string) => {
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+    };
+    mount(h(SettingsScreen, {}));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    await act(async () => { setFocus('set-test-size'); for (let i = 0; i < 4; i++) await Promise.resolve(); });
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+    await press('ArrowRight');
+    expect(settings.value.testLabelPx).toBe(22);
+    await press('ArrowLeft');
+    await press('ArrowLeft');
+    expect(settings.value.testLabelPx).toBe(18);
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+    act(() => { updateSettings({ testLabelPx: 16 }); });
+    await press('ArrowLeft');
+    expect(settings.value.testLabelPx).toBe(16);
+    act(() => { updateSettings({ testLabelPx: 36 }); });
+    await press('ArrowRight');
+    expect(settings.value.testLabelPx).toBe(36);
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+  });
+
+  it('writes the px rule and the overlay only while test mode is on', () => {
     routeStack.value = [{ name: 'settings' }];
     const host = mount(h('div', { class: 'app' }, h(ScreenCodeBadge, null), h(ElementLabelsHost, null)));
     expect(host.querySelector('.test-el-layer')).toBeNull();
-    expect(document.body.className).not.toContain('test-size-');
+    expect(document.getElementById('test-label-size')).toBeNull();
     act(() => { updateSettings({ testMode: true }); });
-    expect(document.body.classList.contains('test-size-medium')).toBe(true);
+    expect(document.getElementById('test-label-size')!.textContent).toContain('font-size: 20px');
     const layer = host.querySelector('.test-el-layer') as HTMLElement;
     expect(layer).toBeTruthy();
     expect(layer.getAttribute('aria-hidden')).toBe('true');
-    act(() => { updateSettings({ testLabelSize: 'small' }); });
-    expect(document.body.classList.contains('test-size-small')).toBe(true);
-    expect(document.body.classList.contains('test-size-medium')).toBe(false);
+    act(() => { updateSettings({ testLabelPx: 16 }); });
+    expect(document.getElementById('test-label-size')!.textContent).toContain('font-size: 16px');
     act(() => { updateSettings({ testMode: false }); });
-    expect(document.body.className).not.toContain('test-size-');
+    expect(document.getElementById('test-label-size')).toBeNull();
   });
 
-  it('falls back to «Средний» for an unknown saved size', () => {
-    expect(DEFAULT_SETTINGS.testLabelSize).toBe('medium');
-    expect(sanitizeSettings({ testLabelSize: 'huge' }).testLabelSize).toBe('medium');
-    expect(sanitizeSettings({ testLabelSize: 'large' }).testLabelSize).toBe('large');
+  it('defaults to 20 / 12 px and moves a beta.2 choice to the nearest px', () => {
+    expect(DEFAULT_SETTINGS.testLabelPx).toBe(20);
+    expect(DEFAULT_SETTINGS.testLabelPhonePx).toBe(12);
+    const small = sanitizeSettings({ testLabelSize: 'small' });
+    expect([small.testLabelPx, small.testLabelPhonePx]).toEqual([24, 16]);
+    const large = sanitizeSettings({ testLabelSize: 'large' });
+    expect([large.testLabelPx, large.testLabelPhonePx]).toEqual([36, 24]);
+    const medium = sanitizeSettings({ testLabelSize: 'medium' });
+    expect([medium.testLabelPx, medium.testLabelPhonePx]).toEqual([20, 12]);
+    const both = sanitizeSettings({ testLabelSize: 'large', testLabelPx: 18, testLabelPhonePx: 10 });
+    expect([both.testLabelPx, both.testLabelPhonePx]).toEqual([18, 10]);
+    expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPx).toBe(36);
+    expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPhonePx).toBe(8);
   });
 });

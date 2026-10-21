@@ -9,7 +9,7 @@ import { subSizeOptions } from '../player/subtitleOffset';
 import { goBack, navigate } from '../ui/nav';
 import { askText } from '../ui/TextDialog';
 import type { TmdbConfig } from '../api/types';
-import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
+import { FocusGroup, ChoiceRow, onOff, Button, Focusable, StepperRow } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
 import { nativeOpenOnStartupState, nativePlugin, nativeRequestOpenOnStartupOverlay, nativeSetOpenOnStartup } from '../platform/androidNative';
 import { p2160Package, P2160_RELEASES_URL } from '../player/player2160';
@@ -27,7 +27,7 @@ import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptio
 import { t, type LanguageSetting } from '../i18n';
 import { openOnboarding } from '../onboarding/gate';
 import { LANGUAGE_NAMES } from '../i18n/languageNames';
-import { isBetaBuild } from '../testmode/active';
+import { clampLabelPx, isBetaBuild, TV_LABEL_PX } from '../testmode/active';
 
 const seekOptions = () => [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }));
 const subColorOptions = (): { value: 'white' | 'yellow'; label: string }[] => [
@@ -338,12 +338,15 @@ export function SettingsScreen() {
             onChange={(v) => updateSettings({ testMode: v })}
             onArrow={nav('set-test-mode')}
           />
-          <ChoiceRow
+          <StepperRow
             focusKey="set-test-size"
             label={t('settings.testLabelSize')}
-            value={s.testLabelSize}
-            options={subSizeOptions()}
-            onChange={(v) => updateSettings({ testLabelSize: v })}
+            value={clampLabelPx(s.testLabelPx, TV_LABEL_PX)}
+            min={TV_LABEL_PX.min}
+            max={TV_LABEL_PX.max}
+            step={TV_LABEL_PX.step}
+            unit="px"
+            onChange={(v) => updateSettings({ testLabelPx: v })}
             onArrow={nav('set-test-size')}
           />
           <div class="muted">{t('settings.testModeHint')}</div>

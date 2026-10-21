@@ -52,8 +52,8 @@ data class PlayRequest(
     val alwaysFfmpeg: Boolean = false,
     /** Beta test mode on the page. The activity also checks that the installed version is `x.y.z-beta.N`. */
     val testMode: Boolean = false,
-    /** Test-mode label size: small, medium or large (the page's «Размер меток»). */
-    val testSize: String = "medium",
+    /** Test-mode label size in px (the page's «Размер меток» slider); 0 when the page sent none. */
+    val testPx: Int = 0,
 ) {
     companion object {
         const val LABEL_MAX = 200
@@ -102,7 +102,7 @@ data class PlayRequest(
                 subPick = TrackPick.parseList(o.optJSONArray("subPick")),
                 alwaysFfmpeg = o.optBoolean("alwaysFfmpeg", false),
                 testMode = o.optBoolean("testMode", false),
-                testSize = o.optString("testSize", "medium"),
+                testPx = o.optInt("testPx", 0),
             )
         }
     }
