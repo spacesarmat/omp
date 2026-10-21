@@ -8,6 +8,7 @@
 - [tech] Проверки раз в 15 минут (интервал меняется во вкладке): все трекеры Jackett и JacRed напрямую и через WARP, поиск через Jackett, Cloudflare trace через WARP, Postgres, бэкап, опрос бота, диск, 4 публичных сайта, Jackett, JacRed и TorrServer во внутренней сети
 - [tech] Контейнеры, перезапуски и память через прокси Docker только для чтения (новый контейнер omp-docker-proxy); перезапускать из панели нельзя
 - [tech] Алерт в Telegram через @OMPBILLINGBOT только после повторной проверки через 30 с, один раз на проблему, и сообщение «починилось»
+- [tech] ops/vps/deploy.sh работает на NUC: docker compose с docker-compose.nuc.yml, проверки здоровья по http на порту 80, node --check в контейнере, если на хосте нет node
 
 ## 0.20.6-beta.3
 
