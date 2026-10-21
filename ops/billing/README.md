@@ -177,7 +177,7 @@ sudo $DC up -d --no-deps billing                                             # �
 | | Диск `/data` и каталог бэкапов (`statfs`) | свободно меньше 10% или меньше 2 ГБ |
 | | Cloudflare trace через `http://warp:1080` | нет `warp=on` |
 | Сервисы | Jackett, JacRed (Torznab caps), TorrServer (`/echo`) во внутренней сети | нет ответа или HTTP-ошибка |
-| Сайты | `omp-player.online` 200, `billing.omp-player.online/admin/` 200, `jackett.` и `jacred.omp-player.online` 401 | другой код или нет ответа |
+| Сайты | `omp-player.online` 200, `billing.omp-player.online/admin/` 200, `jackett.` и `jacred.omp-player.online` 401 (по коду и заголовкам, тело страницы не читается) | другой код или нет ответа |
 | Контейнеры | каждый контейнер проекта `omp-vps`: статус, health, перезапуски, память | не `running`, `unhealthy`, OOM, `RestartCount` вырос с прошлой проверки, память больше 90% лимита |
 | Трекеры Jackett | каждый трекер из `t=indexers&configured=true`: поиск через Jackett, сайт трекера напрямую и через WARP | поиск не вернул Torznab; сайт: нет ответа, 5xx или редирект на страницу блокировки |
 | JacRed | свежесть базы (`/lastupdatedb`, не старше 6 ч), поиск, `sync.jacred.stream` и сайт каждого трекера из `/api/v1.0/trackers` напрямую и через WARP | так же |

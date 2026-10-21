@@ -307,7 +307,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     target,
     alert: false,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS }), url)),
+    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
   });
   out.push({
     id: idBase + ':warp',
@@ -318,7 +318,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     alert: false,
     pairAlert: true,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS }), url)),
+    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
   });
 }
 
@@ -494,7 +494,8 @@ export async function buildTasks(ctx) {
       path: cfg.sitesViaWarp ? 'warp' : 'direct',
       alert: true,
       run: timed(async () => {
-        const r = await get(site.url, { timeoutMs: SITE_TIMEOUT_MS, proxy: cfg.sitesViaWarp ? cfg.warpProxy : '' });
+        // Status and headers decide; the body is not read (a stalled body is not a down site).
+        const r = await get(site.url, { timeoutMs: SITE_TIMEOUT_MS, proxy: cfg.sitesViaWarp ? cfg.warpProxy : '', headersOnly: true });
         if (!r.ok) return { ok: false, detail: errorText(r.error) };
         return { ok: r.status === site.expect, detail: 'HTTP ' + r.status + (r.status === site.expect ? '' : ', ждали ' + site.expect) };
       }),
