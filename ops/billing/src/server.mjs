@@ -948,8 +948,10 @@ export function createApp(file, fetchImpl, opts) {
           if (path === '/admin/monitor/run') {
             const already = monitor.isRunning();
             // The run takes minutes (every tracker); the tab polls GET /admin/api/monitor until it ends.
-            void monitor.run('manual');
-            if (!already) await audit(file, 'monitor_run', 'ok', admin);
+            // only=failed: «Перепроверить все ошибки», only the checks that were red in the last run
+            const onlyFailed = body.only === 'failed';
+            void (onlyFailed ? monitor.run('recheck', { only: 'failed' }) : monitor.run('manual'));
+            if (!already) await audit(file, 'monitor_run', onlyFailed ? 'только ошибки' : 'ok', admin);
             return json(res, 200, { ok: true, started: !already, running: true });
           }
           const saved = await saveMonitorConfig(store, body);

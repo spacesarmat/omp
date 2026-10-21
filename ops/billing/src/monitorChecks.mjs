@@ -307,7 +307,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     target,
     alert: false,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS }), url)),
+    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
   });
   out.push({
     id: idBase + ':warp',
@@ -318,7 +318,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     alert: false,
     pairAlert: true,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS }), url)),
+    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
   });
 }
 
@@ -494,7 +494,8 @@ export async function buildTasks(ctx) {
       path: cfg.sitesViaWarp ? 'warp' : 'direct',
       alert: true,
       run: timed(async () => {
-        const r = await get(site.url, { timeoutMs: SITE_TIMEOUT_MS, proxy: cfg.sitesViaWarp ? cfg.warpProxy : '' });
+        // Status and headers decide; the body is not read (a stalled body is not a down site).
+        const r = await get(site.url, { timeoutMs: SITE_TIMEOUT_MS, proxy: cfg.sitesViaWarp ? cfg.warpProxy : '', headersOnly: true });
         if (!r.ok) return { ok: false, detail: errorText(r.error) };
         return { ok: r.status === site.expect, detail: 'HTTP ' + r.status + (r.status === site.expect ? '' : ', ждали ' + site.expect) };
       }),
@@ -687,7 +688,8 @@ export function finalize(rows) {
 }
 
 /** Run tasks with at most `limit` at a time, and at most `heavyLimit` heavy ones (Jackett searches). */
-export async function runTasks(tasks, limit, heavyLimit) {
+export async function runTasks(tasks, limit, heavyLimit, clock) {
+  const at = clock || (() => Date.now());
   const max = Math.max(1, limit || 8);
   const heavyMax = Math.max(1, heavyLimit || 3);
   const results = new Array(tasks.length);
@@ -716,7 +718,7 @@ export async function runTasks(tasks, limit, heavyLimit) {
         }
       }
       const { run, ...meta } = t;
-      const row = { ...meta, ok: r.ok === true ? true : r.ok === false ? false : null, detail: String(r.detail || ''), ms: Number(r.ms) || 0 };
+      const row = { ...meta, ok: r.ok === true ? true : r.ok === false ? false : null, detail: String(r.detail || ''), ms: Number(r.ms) || 0, at: at() };
       if (r.restarts !== undefined) row.restarts = r.restarts;
       results[i] = row;
     }

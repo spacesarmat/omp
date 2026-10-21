@@ -191,7 +191,7 @@ export function createMonitor(deps) {
   let timers = [];
   // Last values read from Postgres, so a Postgres outage is still checked and reported.
   // `unsaved`: keys whose last write failed; memory is newer than Postgres until it is written.
-  const mem = { settings: null, config: { ...MONITOR_DEFAULTS }, kv: {}, unsaved: new Set() };
+  const mem = { settings: null, config: { ...MONITOR_DEFAULTS }, kv: {}, unsaved: new Set(), lastRows: null };
 
   async function settingsNow() {
     try {
@@ -243,10 +243,29 @@ export function createMonitor(deps) {
   }
 
   async function check(tasks) {
-    return finalize(await runTasks(tasks, 8, 3));
+    return finalize(await runTasks(tasks, 8, 3, now));
   }
 
-  async function run(trigger) {
+  /**
+   * Rows of the last run (for «Перепроверить все ошибки»), or null. The run this process made last wins, saved or
+   * not (a run during a Postgres outage is newer than anything in monitor_runs); after a restart, the last saved run.
+   */
+  async function lastRows() {
+    if (mem.lastRows) return mem.lastRows;
+    try {
+      const last = (await store.query('SELECT rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
+      if (!last) return mem.lastRows || null;
+      return typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows;
+    } catch (e) {
+      return mem.lastRows || null;
+    }
+  }
+
+  /**
+   * trigger: 'schedule' | 'manual' | 'recheck'. opts.only === 'failed': run again only the checks that were red in
+   * the last run (and new ones); the others keep their last result. Without a last run it is a full run.
+   */
+  async function run(trigger, opts) {
     if (running) return running;
     runningSince = now();
     running = (async () => {
@@ -255,27 +274,46 @@ export function createMonitor(deps) {
       const restarts = await kvNow('monitor_restarts', {});
       const ctx = { settings, env, store, backups: d.backups, net: d.net, get: d.get, statfs: d.statfs, now, botPoll: d.botPoll, restarts };
       const tasks = await buildTasks(ctx);
-      let rows = await check(tasks);
+      const prev = opts && opts.only === 'failed' ? await lastRows() : null;
+      let toRun = tasks;
+      let kept = [];
+      if (prev) {
+        const before = new Map(prev.map((r) => [r.id, r]));
+        toRun = tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false);
+        kept = tasks
+          .filter((t) => !toRun.includes(t))
+          .map((t) => {
+            const { run: _run, ...meta } = t;
+            const b = before.get(t.id);
+            return { ...meta, ok: b.ok, detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
+          });
+      }
+      const ran = new Set(toRun.map((t) => t.id));
+      const order = new Map(tasks.map((t, i) => [t.id, i]));
+      const merge = (fresh) => finalize([...kept, ...fresh].sort((a, b) => order.get(a.id) - order.get(b.id)));
+      let rows = merge(await runTasks(toRun, 8, 3, now));
       const alerted = await kvNow('monitor_alerts', {});
       // One retry after 30 s for every failed check, when one of them would be a new alert.
-      const fresh = rows.some((r) => r.alert && r.ok === false && !alerted[r.id]);
+      const fresh = rows.some((r) => ran.has(r.id) && r.alert && r.ok === false && !alerted[r.id]);
       if (fresh) {
         await sleep(MONITOR_RETRY_MS);
-        const failedIds = new Set(rows.filter((r) => r.ok === false).map((r) => r.id));
+        const failedIds = new Set(rows.filter((r) => ran.has(r.id) && r.ok === false).map((r) => r.id));
         const again = await check(tasks.filter((t) => failedIds.has(t.id)).map((t) => ({ ...t, retried: true })));
         const byId = new Map(again.map((r) => [r.id, r]));
         rows = finalize(rows.map((r) => (byId.has(r.id) ? { ...byId.get(r.id), retried: true } : r)));
       }
       const finishedAt = now();
-      lastRunAt = finishedAt;
+      // A recheck of the red ones does not move the next full run.
+      if (!prev) lastRunAt = finishedAt;
       // Alerts first: with Postgres down the history cannot be saved, but the alert must still go out.
       await notify(alerted, rows, finishedAt, settings);
       // RestartCount per container, for the next run's «перезапускался».
       const counts = { ...restarts };
       for (const r of rows) if (r.group === 'containers' && r.restarts !== undefined) counts[r.name] = r.restarts;
       await kvKeep('monitor_restarts', counts);
+      mem.lastRows = rows;
       try {
-        await saveRun(startedAt, finishedAt, trigger, rows);
+        await saveRun(startedAt, finishedAt, trigger, rows, ran);
       } catch (e) {
         log('monitor history not saved: ' + String((e && e.code) || (e && e.name) || 'error'));
       }
@@ -292,7 +330,7 @@ export function createMonitor(deps) {
     return running;
   }
 
-  async function saveRun(startedAt, finishedAt, trigger, rows) {
+  async function saveRun(startedAt, finishedAt, trigger, rows, ran) {
     const failed = rows.filter((r) => r.ok === false).length;
     const slim = rows.map((r) => ({
       id: r.id,
@@ -306,6 +344,7 @@ export function createMonitor(deps) {
       ms: r.ms,
       alert: !!r.alert,
       retried: !!r.retried,
+      at: Number(r.at) || finishedAt,
     }));
     await store.query('INSERT INTO monitor_runs (run_at, finished_at, trigger, total, failed, rows) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (run_at) DO NOTHING', [
       startedAt,
@@ -315,7 +354,8 @@ export function createMonitor(deps) {
       failed,
       JSON.stringify(slim),
     ]);
-    const judged = rows.filter((r) => r.ok !== null);
+    // History: only the checks that ran now (a recheck keeps the others' last result without counting it twice).
+    const judged = rows.filter((r) => r.ok !== null && (!ran || ran.has(r.id)));
     if (judged.length) {
       const values = [];
       const params = [startedAt];
@@ -374,6 +414,8 @@ export function createMonitor(deps) {
     }
     const rows = last ? (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows) : [];
     const alerted = await kvGet(store, 'monitor_alerts', {});
+    const full = (await store.query("SELECT max(finished_at) AS at FROM monitor_runs WHERE trigger <> 'recheck'")).rows[0];
+    const fullAt = Number(full && full.at) || 0;
     return {
       ok: true,
       intervalMin: cfg.intervalMin,
@@ -382,7 +424,7 @@ export function createMonitor(deps) {
       runningSince,
       groups: GROUPS.map(([id, title]) => ({ id, title })),
       lastRun: last ? { at: Number(last.run_at), finishedAt: Number(last.finished_at), trigger: last.trigger, total: last.total, failed: last.failed } : null,
-      nextRunAt: d.scheduled && last ? Number(last.finished_at) + cfg.intervalMin * 60 * 1000 : 0,
+      nextRunAt: d.scheduled && fullAt ? fullAt + cfg.intervalMin * 60 * 1000 : 0,
       chat: monitorChatId(env),
       checks: rows.map((r) => {
         const pts = byCheck.get(r.id) || [];
@@ -403,7 +445,7 @@ export function createMonitor(deps) {
         const cfg = await configNow();
         if (!lastRunAt) {
           try {
-            const r = (await store.query('SELECT max(finished_at) AS at FROM monitor_runs')).rows[0];
+            const r = (await store.query("SELECT max(finished_at) AS at FROM monitor_runs WHERE trigger <> 'recheck'")).rows[0];
             lastRunAt = Number(r && r.at) || 0;
           } catch (e) {
             lastRunAt = 0; // Postgres down at start: run now, the run reports it
