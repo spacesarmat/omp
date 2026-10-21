@@ -253,7 +253,7 @@ export function SourcesScreen({
       setCloudflareBypass(s.id, false);
       return;
     }
-    confirmDialog(bypassWarning(), t('tvSources.enable')).then((ok) => {
+    confirmDialog(bypassWarning(), t('tvSources.enable'), 'src-bypass').then((ok) => {
       if (!ok) return;
       setSourceOn(s.id, true);
       setCloudflareBypass(s.id, true);
@@ -266,7 +266,7 @@ export function SourcesScreen({
       setCloudflareBypass(s.id, false);
       return;
     }
-    confirmDialog(bypassWarning(), t('tvSources.enable')).then((ok) => {
+    confirmDialog(bypassWarning(), t('tvSources.enable'), 'src-bypass').then((ok) => {
       if (ok) setCloudflareBypass(s.id, true);
     });
   };
@@ -312,7 +312,7 @@ export function SourcesScreen({
 
   const logout = (s: Source) => {
     if (!s.logout) return;
-    confirmDialog(t('tvSources.signOutAsk', { name: s.name }), t('tvSources.signOut')).then((ok) => {
+    confirmDialog(t('tvSources.signOutAsk', { name: s.name }), t('tvSources.signOut'), 'src-signout').then((ok) => {
       if (!ok || !s.logout) return;
       s.logout(ctx()).then(
         () => {
@@ -415,7 +415,7 @@ export function SourcesScreen({
           })}
           <div class="src-group">{t('tvSources.viaTorrServer')}</div>
           {ts.map((s, i) => (
-            <Focusable key={s.id} focusKey={i === 0 && !indexers.length ? 'src-first' : 'src-' + s.id} className="src-row" onPress={() => toggle(s)}>
+            <Focusable key={s.id} focusKey={i === 0 && !indexers.length ? 'src-first' : 'src-' + s.id} testAnchor={i === 0 && !indexers.length ? 'src-' + s.id : undefined} className="src-row" onPress={() => toggle(s)}>
               <span class="src-name">
                 {label(s)}
                 <Note note={healthText(getHealth(s.id))} />

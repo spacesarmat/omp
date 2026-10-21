@@ -335,7 +335,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const dub = useSeriesDub(group.members, c);
   const openDub = () => {
     const options = dub.choices.map((o) => ({ label: tvGlyphs(o.label), value: o.value }));
-    choose(t('series.dubTitle'), options, dub.value).then((v) => {
+    choose(t('series.dubTitle'), options, dub.value, 'series-dub').then((v) => {
       if (v === null) return;
       dub.pick(v).catch((e) => toast(errorMessage(e), 'error'));
     });
@@ -354,7 +354,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       return;
     }
     const options = upgradable.map((m) => ({ label: [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · '), value: m.hash }));
-    choose(t('tv.better.which'), options).then((hash) => {
+    choose(t('tv.better.which'), options, undefined, 'series-better').then((hash) => {
       const m = upgradable.filter((x) => x.hash === hash)[0];
       if (m) setBetter(m);
     });
@@ -377,7 +377,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       return;
     }
     const options = releases.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
-    choose(t('series.releasesTitle'), options).then((hash) => {
+    choose(t('series.releasesTitle'), options, undefined, 'series-releases').then((hash) => {
       if (hash) navigate({ name: 'torrent', hash });
     });
   };

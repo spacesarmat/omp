@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { setFocus } from '@noriginmedia/norigin-spatial-navigation';
+import { DialogBadge, visibleDialogCode } from '../testmode/badge';
 import { FocusGroup, Button, TextInput } from './components';
 import { useKeys } from './keys';
 import { errorMessage } from '../api/http';
@@ -127,7 +128,8 @@ export function TrackerLoginDialog(p: { source: Source; ctx: () => SourceContext
   const title = t('common.signInTo', { site: p.source.name });
   return (
     <div class="dialog-backdrop">
-      <FocusGroup focusKey="LOGIN-DIALOG" className="dialog login-dialog" boundary>
+      <FocusGroup focusKey="LOGIN-DIALOG" className={'dialog login-dialog' + (visibleDialogCode('tracker-login') ? ' test-anchor' : '')} boundary>
+        <DialogBadge id="tracker-login" />
         <div class="dialog-title">{title}</div>
         <div class="login-label">{t('common.login')}</div>
         <TextInput focusKey="login-user" value={username} onChange={setUsername} />

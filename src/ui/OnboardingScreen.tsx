@@ -12,6 +12,7 @@ import {
 import { onboardingSlides, type OnboardingIcon } from '../onboarding/slides';
 import { activeServer } from '../store/servers';
 import { currentRoute, navigate } from './nav';
+import { DialogBadge, TestBadge, visibleDialogCode, visibleDialogItem } from '../testmode/badge';
 import { FocusGroup, Button } from './components';
 import { Icon, type IconName } from './icons';
 import { Logo } from './Logo';
@@ -90,8 +91,12 @@ export function OnboardingScreen() {
 
   return (
     <div class="onboarding-host" role="dialog" aria-modal="true" aria-label={t(slide.title)} data-onboarding="tv" data-slide={slide.id} data-step={i}>
-      <FocusGroup key={slide.id} focusKey="ONBOARDING" className="onboarding" boundary autoFocus preferredChildFocusKey="onb-next">
-        <div class="onb-step">{t('onboarding.step', { n: i + 1, total: slides.length })}</div>
+      <FocusGroup key={slide.id} focusKey="ONBOARDING" className={'onboarding' + (visibleDialogCode('onboarding') ? ' test-anchor' : '')} boundary autoFocus preferredChildFocusKey="onb-next">
+        <DialogBadge id="onboarding" />
+        <div class={'onb-step' + (visibleDialogItem('onboarding', 'value:' + slide.id) ? ' test-anchor' : '')}>
+          {t('onboarding.step', { n: i + 1, total: slides.length })}
+          {visibleDialogItem('onboarding', 'value:' + slide.id) ? <TestBadge code={visibleDialogItem('onboarding', 'value:' + slide.id)} /> : null}
+        </div>
         <div class="onb-main">
           <SlideIcon name={slide.icon} />
           <h1>{t(slide.title)}</h1>

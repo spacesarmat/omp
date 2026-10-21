@@ -35,6 +35,7 @@ import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
 import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
+import { ScreenCodeBadge } from './testmode/badge';
 
 /**
  * The Android TV search sources screen (on LG: the TorrServer sources) is a separate chunk: its indexer status code stays out of the main bundle.
@@ -100,7 +101,7 @@ function renderRoute(r: Route) {
 }
 
 function exitApp() {
-  confirmDialog(t('tv.exitAsk'), t('tv.exit')).then((ok) => {
+  confirmDialog(t('tv.exitAsk'), t('tv.exit'), 'exit').then((ok) => {
     if (ok) window.close();
   });
 }
@@ -151,6 +152,7 @@ export function App() {
       <DialogHost />
       <TextDialogHost />
       <ToastHost />
+      <ScreenCodeBadge />
     </div>
   );
 }

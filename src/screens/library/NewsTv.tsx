@@ -716,7 +716,7 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
   };
 
   const find = () => {
-    askText(t('tv.subs.find'), filter, t('add.search')).then((v) => {
+    askText(t('tv.subs.find'), filter, t('add.search'), 'news-find').then((v) => {
       if (v === null || !alive.current) return;
       setFilter(v.trim());
     });

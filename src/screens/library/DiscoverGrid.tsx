@@ -245,7 +245,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   }, []);
 
   const askSearch = () => {
-    askText(t('discover.searchLabel'), search ? search.q : '', t('add.search')).then((v) => {
+    askText(t('discover.searchLabel'), search ? search.q : '', t('add.search'), 'discover-search').then((v) => {
       const q = (v || '').trim();
       if (q) runSearch(q);
     });
@@ -259,7 +259,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   };
 
   const pickSort = (fromKey?: boolean) => {
-    choose(t('discover.sort'), DISCOVER_SORTS.map((s) => ({ label: sortName(s), value: s })), query.sort).then((s) => {
+    choose(t('discover.sort'), DISCOVER_SORTS.map((s) => ({ label: sortName(s), value: s })), query.sort, 'discover-sort').then((s) => {
       if (!s) return;
       applyQuery({ ...query, sort: s });
       // the blue key may have been pressed on a poster that the new feed replaces
@@ -272,7 +272,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     // a genre chosen under another kind stays in the list, so it can be turned off
     query.genres.forEach((g) => { if (ids.indexOf(g) < 0) ids.push(g); });
     const options = [{ label: t('discover.yearAny'), value: '' }].concat(ids.map((g) => ({ label: genreName(g), value: g })));
-    choose(t('discover.genre'), options, query.genres.length ? query.genres[0] : '').then((g) => {
+    choose(t('discover.genre'), options, query.genres.length ? query.genres[0] : '', 'discover-genre').then((g) => {
       if (g !== null) applyQuery({ ...query, genres: g ? [g] : [] });
     });
   };
@@ -280,21 +280,21 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const pickYear = () => {
     const years: DiscoverYear[] = ['any', 'this', 'last'];
     const names = [t('discover.yearAny'), t('discover.yearThis'), t('discover.yearLast')];
-    choose(t('discover.year'), years.map((y, i) => ({ label: names[i], value: y })), query.year).then((y) => {
+    choose(t('discover.year'), years.map((y, i) => ({ label: names[i], value: y })), query.year, 'discover-year').then((y) => {
       if (y) applyQuery({ ...query, year: y, from: 0, to: 0 });
     });
   };
 
   const pickCountry = () => {
     const options = [{ label: t('discover.countryAny'), value: '' }].concat(DISCOVER_COUNTRIES.map((c) => ({ label: countryName(c), value: c })));
-    choose(t('discover.country'), options, query.country).then((c) => {
+    choose(t('discover.country'), options, query.country, 'discover-country').then((c) => {
       if (c !== null) applyQuery({ ...query, country: c });
     });
   };
 
   const pickRating = () => {
     const options = DISCOVER_RATINGS.map((n) => ({ label: n ? t('tv.discover.ratingFrom', { n: n }) : t('discover.ratingAny'), value: n }));
-    choose(t('discover.minRating'), options, query.rating).then((n) => {
+    choose(t('discover.minRating'), options, query.rating, 'discover-rating').then((n) => {
       if (n !== null) applyQuery({ ...query, rating: n });
     });
   };

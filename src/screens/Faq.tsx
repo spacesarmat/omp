@@ -4,6 +4,7 @@ import { FocusGroup, Focusable } from '../ui/components';
 import { Qr } from '../ui/Qr';
 import { platformKind } from '../platform/env';
 import { FAQ, SECTIONS, itemFor, type Device, type FaqItem, type FaqLine, type SectionId } from '../faq/faq';
+import { TestBadge, visibleCode } from '../testmode/badge';
 import { t } from '../i18n';
 import { scrollToShow } from '../ui/focus';
 import { tvGlyphs } from '../ui/tvText';
@@ -177,7 +178,15 @@ export function FaqScreen() {
     <FocusGroup focusKey="FAQ" className="screen faq">
       <h1>{t('tvSettings.help')}</h1>
       <div class="faq-chips">
-        {sections.map((s) => <span key={s.id} class={'faq-chip' + (s.id === secId ? ' on' : '')}>{s.label}</span>)}
+        {sections.map((s) => {
+          const code = visibleCode('faq-sec-' + s.id);
+          return (
+            <span key={s.id} class={'faq-chip' + (s.id === secId ? ' on' : '') + (code ? ' test-anchor' : '')}>
+              {s.label}
+              {code ? <TestBadge code={code} /> : null}
+            </span>
+          );
+        })}
         <span class="spacer"></span>
         <span class="faq-chips-hint">{t('faq.hintSection')}</span>
       </div>

@@ -215,14 +215,14 @@ export function ConnectScreen() {
           </Focusable>
           {advanced && (
             <div class="row">
-              <TextInput value={user} onChange={setUser} placeholder={t('common.login')} />
-              <TextInput value={password} onChange={setPassword} placeholder={t('common.password')} type="password" />
+              <TextInput focusKey="connect-user" value={user} onChange={setUser} placeholder={t('common.login')} />
+              <TextInput focusKey="connect-pass" value={password} onChange={setPassword} placeholder={t('common.password')} type="password" />
             </div>
           )}
           <div class="row">
             {/* never disabled while connecting: a disabled item would lose the focus; connect() ignores a second OK */}
             <Button focusKey="connect-btn" label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} />
-            <Button icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
+            <Button focusKey="connect-scan" icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
           </div>
           {(error || netHint) && !busy && (
             <div class="connect-error" role="alert">
