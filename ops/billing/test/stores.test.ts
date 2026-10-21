@@ -451,7 +451,7 @@ describe.skipIf(!PG_URL)('postgres only', () => {
     const store = await createPgStore({ connectionString: PG_URL, schema });
     const again = await createPgStore({ connectionString: PG_URL, schema });
     opened.push(store, again);
-    expect((await store.query('SELECT version FROM schema_migrations')).rows).toEqual([{ version: '001_init' }]);
+    expect((await store.query('SELECT version FROM schema_migrations ORDER BY version')).rows).toEqual([{ version: '001_init' }, { version: '002_monitor' }]);
     const idx = await store.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'devices_active_code' AND schemaname = $1", [schema]);
     expect(idx.rows[0].indexdef).toMatch(/UNIQUE.*WHERE \(status = 'active'::text\)/);
   });

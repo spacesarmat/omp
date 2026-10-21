@@ -70,6 +70,8 @@ const AUDIT_ACTION: Record<string, string> = {
   unbind: 'сброс устройства',
   settings_save: 'сохранение настроек',
   services_save: 'сохранение сервисов',
+  monitor_run: 'проверка мониторинга',
+  monitor_config: 'интервал мониторинга',
   password_change: 'смена пароля',
   session_revoke: 'завершение сессии',
   code_reveal: 'показ кода',

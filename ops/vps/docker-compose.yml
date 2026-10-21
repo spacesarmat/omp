@@ -1,4 +1,4 @@
-# OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer + FlareSolverr
+# OMP VPS stack: Caddy + billing + Jackett + JacRed + TorrServer + FlareSolverr + read-only Docker API proxy
 # Jackett FlareSolverrUrl = http://flaresolverr:8191/ (timeout 55000); HTTP proxy warp:1080
 # Deploy: copy this directory to the VPS, fill .env, then:
 #   docker compose pull && docker compose up -d
@@ -71,16 +71,23 @@ services:
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080
       HTTPS_PROXY: http://warp:1080
-      NO_PROXY: jackett,jacred,torrserver,caddy,localhost,127.0.0.1
+      NO_PROXY: jackett,jacred,torrserver,caddy,docker-proxy,localhost,127.0.0.1
       NODE_USE_ENV_PROXY: "1"
+      # «Мониторинг» tab (ops/billing/src/monitor.mjs): container state, restarts and memory through the
+      # read-only proxy below. Alerts go to BILLING_MONITOR_CHAT_ID (default 536445442), sendMessage only.
+      BILLING_DOCKER_PROXY_URL: http://docker-proxy:2375
+      BILLING_MONITOR: ${BILLING_MONITOR:-1}
+      BILLING_MONITOR_CHAT_ID: ${BILLING_MONITOR_CHAT_ID:-536445442}
     volumes:
       - ./data/billing:/data
     depends_on:
       - jackett
       - jacred
       - warp
+      - docker-proxy
     networks:
       - omp
+      - dockerapi
     # not published — only Caddy reaches it
 
   # SOCKS/HTTP proxy so billing can reach Telegram Bot API from a blocked VPS IP
@@ -162,9 +169,39 @@ services:
     networks:
       - omp
 
+  # Read-only Docker API for the billing «Мониторинг» tab. CONTAINERS=1 and POST=0: only GET/HEAD on
+  # /containers (list, inspect, stats) gets through; start, stop, restart, exec and every other write is refused,
+  # so the panel cannot restart anything. Reachable only from billing, over the internal "dockerapi" network.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: omp-docker-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      POST: "0"
+      # granted by default in the image; not needed
+      EVENTS: "0"
+      PING: "0"
+      VERSION: "0"
+      # listen on IPv4 :2375 only (the compose networks have no IPv6)
+      DISABLE_IPV6: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # the entrypoint writes /tmp/haproxy.cfg and haproxy its pid to /run
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    networks:
+      - dockerapi
+    # no ports
+
 networks:
   omp:
     driver: bridge
+  # billing <-> docker-proxy only; internal: no route out, nothing published
+  dockerapi:
+    internal: true
 
 volumes:
   caddy_data:

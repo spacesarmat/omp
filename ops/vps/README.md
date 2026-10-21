@@ -1,6 +1,6 @@
 # OMP VPS stack
 
-Docker Compose on a single VPS: **Caddy** (TLS) → **billing**, **Jackett**, **JacRed**, **TorrServer**, plus **FlareSolverr** (localhost only). On the host, [`jackett-monitor/`](jackett-monitor/README.md) tests Jackett indexers every 30 minutes and disables ones that keep failing.
+Docker Compose on a single VPS: **Caddy** (TLS) → **billing**, **Jackett**, **JacRed**, **TorrServer**, plus **FlareSolverr** (localhost only). **docker-proxy** (`omp-docker-proxy`, `tecnativa/docker-socket-proxy`) gives billing a read-only Docker API for the panel's «Мониторинг» tab: `CONTAINERS=1`, `POST=0`, the socket mounted `:ro`, internal network `dockerapi` (billing and the proxy only), nothing published. Billing reads container state, restarts and memory through it and cannot start, stop or restart anything. See `ops/billing/README.md` (Мониторинг). On the host, [`jackett-monitor/`](jackett-monitor/README.md) tests Jackett indexers every 30 minutes and disables ones that keep failing.
 
 Hostnames (Cloudflare A → VPS IP, orange cloud):
 

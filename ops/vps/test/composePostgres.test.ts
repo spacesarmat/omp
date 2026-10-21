@@ -44,7 +44,7 @@ describe('NUC compose: postgres for billing', () => {
     expect(billing).toContain('BILLING_DATABASE_URL: postgres://omp_billing:${BILLING_PG_PASSWORD:?set BILLING_PG_PASSWORD in .env}@postgres:5432/omp_billing');
     expect(billing).toContain('BILLING_PG_BACKUP_DIR: /backups/pg');
     expect(block(billing, '    ', 'volumes').trim()).toBe('- /opt/omp-backups/pg:/backups/pg');
-    expect(block(billing, '    ', 'networks').split('\n').map((l) => l.trim())).toEqual(['- omp', '- pg']);
+    expect(block(billing, '    ', 'networks').split('\n').map((l) => l.trim())).toEqual(['- omp', '- pg', '- dockerapi']);
     expect(billing).toMatch(/NO_PROXY: \S*\bpostgres\b/);
   });
 

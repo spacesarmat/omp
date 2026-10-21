@@ -133,6 +133,7 @@ import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
 import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
+import { createMonitor, monitorEnabled, saveMonitorConfig } from './monitor.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
@@ -502,6 +503,28 @@ async function notifyAdmins(state, messages, fetchImpl) {
   }
 }
 
+/**
+ * The «Мониторинг» runner of this process (src/monitor.mjs). Alerts go out with the billing bot, sendMessage only.
+ * null without a Postgres pool (store.query) or in read-only mode.
+ */
+export function monitorFor(store, opts) {
+  const o = opts || {};
+  if (!store || typeof store.query !== 'function' || o.readOnly) return null;
+  return createMonitor({
+    store,
+    env: o.env || process.env,
+    backups: o.backups || null,
+    net: o.net,
+    getSettings: async () => (await store.read()).settings,
+    send: async (chatId, text) => {
+      const token = (await store.read()).settings.botToken;
+      if (!token) return false;
+      const r = await telegramSend(token, chatId, text, o.net || fetch);
+      return r.ok;
+    },
+  });
+}
+
 function paymentWho(state, result) {
   const subId = result && result.subscriptionId;
   if (!subId) return '';
@@ -554,6 +577,8 @@ export function createApp(file, fetchImpl, opts) {
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
+  // «Мониторинг»: the scheduled runner when the server passes it, else one for «Проверить сейчас» only.
+  const monitor = opts && opts.monitor !== undefined ? opts.monitor : monitorFor(store, { env, backups, net, readOnly });
   // The full changelog for the «Изменения» tab: GitHub main, cached; one source per app.
   const changelog = (opts && opts.changelog) || createChangelogSource({ net });
   // Pending admin login tokens stay in memory during cutover (same as session cookies).
@@ -698,6 +723,12 @@ export function createApp(file, fetchImpl, opts) {
         if (!admin) return json(res, 401, { auth: false });
         const services = await probeAllServices((await store.read()).settings, net);
         return json(res, 200, { ok: true, services, botPoll: botPollSnapshot() });
+      }
+      if (req.method === 'GET' && path === '/admin/api/monitor') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        if (!monitor) return json(res, 200, { ok: false, error: readOnly ? 'read_only' : 'unavailable' });
+        return json(res, 200, await monitor.snapshot());
       }
       if (req.method === 'GET' && path === '/admin/api/changelog') {
         const admin = adminOf(req);
@@ -910,6 +941,19 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
         const body = await readBody(req);
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        if (path === '/admin/monitor/run' || path === '/admin/monitor/config') {
+          if (!monitor) return json(res, 200, { ok: false, error: 'Мониторинг недоступен на этом экземпляре' });
+          if (path === '/admin/monitor/run') {
+            const already = monitor.isRunning();
+            // The run takes minutes (every tracker); the tab polls GET /admin/api/monitor until it ends.
+            void monitor.run('manual');
+            if (!already) await audit(file, 'monitor_run', 'ok', admin);
+            return json(res, 200, { ok: true, started: !already, running: true });
+          }
+          const saved = await saveMonitorConfig(store, body);
+          if (saved.ok) await audit(file, 'monitor_config', 'Интервал: ' + saved.intervalMin + ' мин', admin);
+          return json(res, 200, saved);
+        }
         // settings.baseDevices: a whole number 1-20; a bad value keeps the current one and says so
         const badBase = path === '/admin/settings' && body.baseDevices !== undefined && body.baseDevices !== '' && !validBase(body.baseDevices);
         // Lowering the base cuts every subscription without an individual limit: only with confirm=yes. Without it
@@ -2174,7 +2218,11 @@ if (started) {
         await flushCliConsumedToStore(store, consumedPath);
       }
       const adminAuthMem = readOnly ? createAdminAuthMemory({ consumedPath }) : null;
-      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem });
+      // «Мониторинг»: scheduled only on the instance that polls the bot (no doubled alerts), never read-only.
+      const monitor = monitorFor(store, { env: process.env, backups: pgBackups, readOnly });
+      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor });
+      if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
+      else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );

@@ -1972,6 +1972,8 @@ const ADMIN_FEED_LABEL = {
   support_reply: 'Ответ в поддержке',
   support_close: 'Диалог поддержки закрыт',
   services_save: 'Сохранены сервисы',
+  monitor_run: 'Мониторинг: проверка вручную',
+  monitor_config: 'Мониторинг: интервал',
   session_revoke: 'Завершена сессия админа',
 };
 
