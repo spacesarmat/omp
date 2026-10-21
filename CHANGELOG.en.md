@@ -13,6 +13,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Monitoring: site checks (public sites and trackers) pass on the response status and headers without downloading the whole page, so a slow body no longer reads as a timeout
 - [tech] Monitoring: red first, fully green groups fold into one line ("Containers 12/12"); filter "All / Errors only / No alert", search by name, sorting by status, name, response time and check time; the choice is kept in the browser
 - [tech] Monitoring: a "Recheck all errors" button runs only the red checks again
+- [tech] ops/vps/deploy.sh works on the NUC: docker compose with docker-compose.nuc.yml, health checks over http on port 80, node --check in a container when the host has no node
 
 ## 0.20.6-beta.3
 

@@ -9,13 +9,23 @@ IMAGE="${OMP_BILLING_IMAGE:-ghcr.io/spacesarmat/omp-billing:local}"
 BILLING_HOST="${OMP_BILLING_HOST:-billing.omp-player.online}"
 LANDING_HOST="${OMP_LANDING_HOST:-omp-player.online}"
 HEALTH_IP="${OMP_HEALTH_IP:-127.0.0.1}"
-HEALTH_SCHEME="${OMP_HEALTH_SCHEME:-https}"
-HEALTH_PORT="${OMP_HEALTH_PORT:-443}"
+# Empty: https/443, or http/80 when docker-compose.nuc.yml is present (Caddy on the NUC
+# serves plain HTTP on :80; TLS ends at Cloudflare).
+HEALTH_SCHEME="${OMP_HEALTH_SCHEME:-}"
+HEALTH_PORT="${OMP_HEALTH_PORT:-}"
 HEALTH_MAX_TIME="${OMP_HEALTH_MAX_TIME:-20}"
 HEALTH_ATTEMPTS="${OMP_HEALTH_ATTEMPTS:-15}"
 HEALTH_SLEEP="${OMP_HEALTH_SLEEP:-2}"
 BILLING_CONTAINER="${OMP_BILLING_CONTAINER:-omp-billing}"
 BACKUP_PREFIX="${OMP_BACKUP_PREFIX:-/opt/omp-vps-backup}"
+# Colon-separated compose files (relative to OMP_VPS_ROOT). Empty: docker-compose.yml plus
+# docker-compose.nuc.yml when that file exists, otherwise compose's own default.
+COMPOSE_FILES="${OMP_COMPOSE_FILES:-}"
+# node --check: auto (host node if present, else in a container), host, or docker.
+NODE_CHECK="${OMP_NODE_CHECK:-auto}"
+NODE_IMAGE="${OMP_NODE_IMAGE:-node:24-bookworm-slim}"
+COMPOSE_ARGS=()
+NUC=0
 
 DRY_RUN=0
 REF=""
@@ -87,7 +97,11 @@ Environment:
   OMP_BILLING_HOST OMP_LANDING_HOST OMP_HEALTH_IP
   OMP_HEALTH_SCHEME OMP_HEALTH_PORT OMP_HEALTH_MAX_TIME
   OMP_HEALTH_ATTEMPTS OMP_HEALTH_SLEEP OMP_BILLING_CONTAINER
-  OMP_LOCK_FILE
+  OMP_LOCK_FILE OMP_COMPOSE_FILES OMP_NODE_CHECK OMP_NODE_IMAGE
+
+On the NUC (docker-compose.nuc.yml next to docker-compose.yml) compose runs
+with both files and the health checks use http on :80. node --check runs in
+a container (the billing image, or OMP_NODE_IMAGE) when the host has no node.
 EOF
 }
 
@@ -195,10 +209,47 @@ sanitize_ref() {
   printf '%s' "${ref//\//-}"
 }
 
+# Compose files and health defaults for this host (VPS or NUC).
+setup_target() {
+  local -a files
+  local f
+  COMPOSE_ARGS=()
+  NUC=0
+  if [[ -n "$COMPOSE_FILES" ]]; then
+    IFS=':' read -r -a files <<<"$COMPOSE_FILES"
+  elif [[ -f "$ROOT/docker-compose.nuc.yml" ]]; then
+    files=(docker-compose.yml docker-compose.nuc.yml)
+  else
+    files=()
+  fi
+  for f in "${files[@]}"; do
+    [[ "$f" =~ ^[A-Za-z0-9._-]+$ ]] || die "bad compose file name: ${f}"
+    [[ -f "$ROOT/$f" ]] || die "compose file not found: ${ROOT}/${f}"
+    [[ "$f" == docker-compose.nuc.yml ]] && NUC=1
+    COMPOSE_ARGS+=(-f "$ROOT/$f")
+  done
+  if [[ -z "$HEALTH_SCHEME" ]]; then
+    if [[ "$NUC" -eq 1 ]]; then HEALTH_SCHEME=http; else HEALTH_SCHEME=https; fi
+  fi
+  if [[ -z "$HEALTH_PORT" ]]; then
+    if [[ "$HEALTH_SCHEME" == http ]]; then HEALTH_PORT=80; else HEALTH_PORT=443; fi
+  fi
+  [[ "$NODE_CHECK" == auto || "$NODE_CHECK" == host || "$NODE_CHECK" == docker ]] || die "bad OMP_NODE_CHECK"
+  [[ "$NODE_IMAGE" =~ ^[A-Za-z0-9._:/@-]+$ ]] || die "bad OMP_NODE_IMAGE"
+  if [[ "$NODE_CHECK" == auto ]]; then
+    if command -v node >/dev/null 2>&1; then NODE_CHECK=host; else NODE_CHECK=docker; fi
+  fi
+  if [[ "${#COMPOSE_ARGS[@]}" -gt 0 ]]; then
+    log "compose files: ${files[*]}"
+  fi
+  log "health: ${HEALTH_SCHEME} :${HEALTH_PORT}; node --check: ${NODE_CHECK}"
+}
+
 check_config() {
   [[ "$ROOT" == /* ]] || die "OMP_VPS_ROOT must be absolute"
   [[ "$ROOT" != "/" ]] || die "refusing OMP_VPS_ROOT=/"
   [[ "$ROOT" != *..* ]] || die "OMP_VPS_ROOT must not contain .."
+  setup_target
   assert_absolute_path "backup prefix" "$BACKUP_PREFIX"
   [[ "$REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "bad OMP_REPO"
   [[ "$IMAGE" == *:* && "$IMAGE" != *@* ]] || die "billing image must be name:tag"
@@ -295,9 +346,12 @@ prepare_work() {
 
 require_tools() {
   local cmd
-  for cmd in curl tar rsync diff cmp awk flock node docker; do
+  for cmd in curl tar rsync diff cmp awk flock docker; do
     need_cmd "$cmd"
   done
+  if [[ "$NODE_CHECK" == host ]]; then
+    need_cmd node
+  fi
   docker compose version >/dev/null 2>&1 || die "docker compose is not available"
   if ! docker info >/dev/null 2>&1; then
     die "docker daemon is not reachable"
@@ -448,11 +502,11 @@ validate_tree() {
 
 node_check() {
   local dir="$1"
-  local file count
+  local file count img
   count=0
   while IFS= read -r -d '' file; do
     count=$((count + 1))
-    if ! node --check "$file"; then
+    if [[ "$NODE_CHECK" == host ]] && ! node --check "$file"; then
       log "node --check failed: ${file}"
       return 1
     fi
@@ -460,6 +514,20 @@ node_check() {
   if [[ "$count" -eq 0 ]]; then
     log "no .mjs files under ${dir}"
     return 1
+  fi
+  if [[ "$NODE_CHECK" == docker ]]; then
+    # No node on the host (the NUC): the same check in a throwaway container, no network,
+    # source mounted read-only. The billing image has node; without it, OMP_NODE_IMAGE.
+    img="$NODE_IMAGE"
+    if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+      img="$IMAGE"
+    fi
+    # shellcheck disable=SC2016 # expanded inside the container
+    if ! docker run --rm --network none -v "${dir}:/src:ro" --entrypoint sh "$img" -c \
+      'find /src -type f -name "*.mjs" -not -path "*/node_modules/*" -print0 | xargs -0 -r -n1 node --check'; then
+      log "node --check failed (in ${img})"
+      return 1
+    fi
   fi
   log "node --check passed for ${count} files"
   return 0
@@ -639,7 +707,7 @@ backup_live() {
 }
 
 compose() {
-  env -u BILLING_IMAGE docker compose --project-directory "$ROOT" "$@"
+  env -u BILLING_IMAGE docker compose --project-directory "$ROOT" "${COMPOSE_ARGS[@]}" "$@"
 }
 
 caddy_reload() {
