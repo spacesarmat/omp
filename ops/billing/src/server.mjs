@@ -133,12 +133,32 @@ import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
 import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
+import {
+  adsConfig,
+  adsSettingsDiff,
+  applyAdsSettings,
+  decodeAdImage,
+  etagMatches,
+  etagOf,
+  isAdImageId,
+  mskDay,
+  parseAdEvents,
+  publicAdsConfig,
+  removeBanner,
+  saveBanner,
+  summarizeAdStats,
+  usedImageIds,
+  AD_CONFIG_TTL_SEC,
+  AD_STATS_DAYS,
+} from './ads.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
 const SPA_INDEX = join(PUBLIC_DIR, 'index.html');
 const searchRate = createRateLimit(30, 60 * 1000);
 const searchCache = createSearchCache(45 * 1000);
+/** POST /v1/ads/event per IP: the app sends a batch every 30 seconds at most. */
+const adEventRate = createRateLimit(30, 60 * 1000);
 
 function wantsJson(req) {
   const accept = String(req.headers.accept || '');
@@ -610,6 +630,16 @@ export function createApp(file, fetchImpl, opts) {
     }
   }
 
+  /** Ad images no banner uses any more (older than a day): best effort after a banner save or removal. */
+  async function gcImages() {
+    if (!store.ads) return;
+    try {
+      await store.ads.gcImages(usedImageIds((await store.read()).settings), Date.now());
+    } catch (e) {
+      /* a stale image costs only disk */
+    }
+  }
+
   /** A rotated refresh token came back: journal and feed only, no unbind and no message to the user. */
   async function markClone(row) {
     try {
@@ -648,6 +678,32 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('retry-after', '600');
         if (path === '/v1/yoomoney') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
+      }
+      if (req.method === 'GET' && path === '/v1/ads-config') {
+        // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
+        const body = JSON.stringify(publicAdsConfig((await store.read()).settings, Date.now()));
+        const etag = etagOf(body);
+        const headers = {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'public, max-age=' + AD_CONFIG_TTL_SEC,
+          etag,
+        };
+        if (etagMatches(req.headers['if-none-match'], etag)) {
+          res.writeHead(304, { 'cache-control': headers['cache-control'], etag });
+          return res.end();
+        }
+        return send(res, 200, body, headers);
+      }
+      if (req.method === 'GET' && path.indexOf('/v1/ads/img/') === 0) {
+        const id = path.slice('/v1/ads/img/'.length);
+        const img = isAdImageId(id) && store.ads ? await store.ads.getImage(id) : null;
+        if (!img) return send(res, 404, 'not found');
+        // The id is the hash of the bytes: the same id never changes.
+        return send(res, 200, img.bytes, {
+          'content-type': img.mime,
+          'cache-control': 'public, max-age=31536000, immutable',
+          'x-content-type-options': 'nosniff',
+        });
       }
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));
@@ -752,6 +808,15 @@ export function createApp(file, fetchImpl, opts) {
           limit: Number(url.searchParams.get('limit')) || 30,
         });
         return json(res, 200, page);
+      }
+      if (req.method === 'GET' && path === '/admin/api/ads') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const settings = (await store.read()).settings;
+        const now = Date.now();
+        const days = Math.max(1, Math.min(AD_STATS_DAYS, Number(url.searchParams.get('days')) || 30));
+        const rows = store.ads ? await store.ads.since(mskDay(now - (days - 1) * 24 * 60 * 60 * 1000)) : [];
+        return json(res, 200, { config: adsConfig(settings), stats: summarizeAdStats(rows, settings, days, now), csrf: admin.csrf });
       }
       if (req.method === 'GET' && path === '/admin/api/base-impact') {
         const admin = adminOf(req);
@@ -1245,6 +1310,61 @@ export function createApp(file, fetchImpl, opts) {
             else redirectTo = '/admin/?tab=finance';
           }
         }
+        if (path === '/admin/ads/config') {
+          const before = adsConfig((await store.read()).settings);
+          const r = applyAdsSettings((await store.read()).settings, body);
+          if (r.error) flashError = r.error;
+          else {
+            await store.update((state) => ({ state: { ...state, settings: { ...state.settings, ads: { ...r.config, banners: adsConfig(state.settings).banners } } } }));
+            await audit(file, 'ads_config', 'Реклама: ' + adsSettingsDiff(before, r.config), admin);
+            flashText = 'Настройки рекламы сохранены';
+          }
+          redirectTo = '/admin/?tab=ads';
+        }
+        if (path === '/admin/ads/banner') {
+          const r = await store.update((state) => {
+            const out = saveBanner(state.settings, body.banner || body);
+            if (out.error) return { state, result: out };
+            return { state: { ...state, settings: out.settings }, result: out };
+          });
+          if (r.error) flashError = r.error;
+          else {
+            const b = r.banner;
+            await audit(file, r.created ? 'ads_banner_add' : 'ads_banner_save', b.title + ' · ' + b.advertiser + ' · erid ' + b.erid, admin);
+            flashText = r.created ? 'Баннер добавлен' : 'Баннер сохранён';
+            extra = { bannerId: b.id };
+            await gcImages();
+          }
+          redirectTo = '/admin/?tab=ads';
+        }
+        if (path === '/admin/ads/banner-remove') {
+          if (!confirmed(body)) flashError = 'Удаление баннера требует подтверждения';
+          else {
+            const r = await store.update((state) => {
+              const out = removeBanner(state.settings, body.id);
+              if (out.error) return { state, result: out };
+              return { state: { ...state, settings: out.settings }, result: out };
+            });
+            if (r.error) flashError = r.error;
+            else {
+              await audit(file, 'ads_banner_remove', r.banner.title + ' · ' + r.banner.advertiser + ' · erid ' + r.banner.erid, admin);
+              flashText = 'Баннер удалён';
+              await gcImages();
+            }
+          }
+          redirectTo = '/admin/?tab=ads';
+        }
+        if (path === '/admin/ads/image') {
+          const img = decodeAdImage(body);
+          if (img.error) flashError = img.error;
+          else if (!store.ads) flashError = 'Картинки рекламы хранятся только в Postgres';
+          else {
+            await store.ads.putImage(img, Date.now());
+            extra = { imageId: img.id };
+            flashText = 'Картинка загружена';
+          }
+          redirectTo = '/admin/?tab=ads';
+        }
         if (path === '/admin/password') {
           flashError = 'Вход по паролю отключён';
           redirectTo = '/admin/?tab=security';
@@ -1338,6 +1458,19 @@ export function createApp(file, fetchImpl, opts) {
         }
         res.writeHead(302, { location: redirectTo });
         return res.end();
+      }
+      if (req.method === 'POST' && path === '/v1/ads/event') {
+        // Impressions and clicks, summed per MSK day: no device id and no IP are stored.
+        const ip = clientIp(req);
+        if (!adEventRate.allow(ip)) {
+          res.setHeader('retry-after', String(adEventRate.retryAfter(ip) || 60));
+          return json(res, 429, { error: 'rate' });
+        }
+        const body = await readBody(req);
+        const parsed = parseAdEvents(body, (await store.read()).settings);
+        if (parsed.bad) return json(res, 400, { error: 'events' });
+        if (store.ads && parsed.rows.length) await store.ads.bump(mskDay(Date.now()), parsed.rows);
+        return json(res, 200, { ok: true, accepted: parsed.rows.length, dropped: parsed.dropped });
       }
       if (req.method === 'POST' && path === '/v1/activate') {
         const body = await readBody(req);
@@ -2081,8 +2214,12 @@ export function startRetention(store, opts) {
     store
       .retention(Date.now())
       .then((r) => {
-        const total = Object.values(r.expired).concat(Object.values(r.deleted)).reduce((a, b) => a + b, 0);
-        if (total) process.stdout.write('log retention: expired ' + JSON.stringify(r.expired) + ', deleted ' + JSON.stringify(r.deleted) + '\n');
+        const total = Object.values(r.expired).concat(Object.values(r.deleted)).reduce((a, b) => a + b, 0) + (r.adStats || 0);
+        if (total) {
+          process.stdout.write(
+            'log retention: expired ' + JSON.stringify(r.expired) + ', deleted ' + JSON.stringify(r.deleted) + ', ad stat rows ' + (r.adStats || 0) + '\n',
+          );
+        }
       })
       .catch(() => process.stderr.write('log retention failed\n'));
   };

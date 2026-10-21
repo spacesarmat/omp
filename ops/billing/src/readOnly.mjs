@@ -33,8 +33,22 @@ export function readOnlyStore(store) {
     if (typeof registry[name] === 'function') registry[name] = async () => { throw new ReadOnlyError(); };
   }
   if (typeof registry.touchRow === 'function') registry.touchRow = async () => null;
+  // Ads: images are still served; counters and uploads are refused like every other write.
+  const ads = store.ads
+    ? {
+        ...store.ads,
+        bump: async () => {
+          throw new ReadOnlyError();
+        },
+        putImage: async () => {
+          throw new ReadOnlyError();
+        },
+        gcImages: async () => 0,
+      }
+    : undefined;
   return {
     ...store,
+    ads,
     engine: store.engine,
     readOnly: true,
     read: () => store.read(),

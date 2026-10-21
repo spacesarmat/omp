@@ -85,7 +85,7 @@ describe('phone shared UI in English', () => {
       />,
     );
     expect(text()).toContain('Support OMP');
-    expect(text()).toContain('OMP is free and has no ads');
+    expect(text()).toContain('OMP is free, ad-free with a subscription');
     expect(text()).toContain('Already supported?');
     expect(buttons()).toEqual(expect.arrayContaining(['Support on Boosty', 'Copy', 'Paste', 'Apply', 'Close']));
     expect(labels()).toContain('Copy the TON address');

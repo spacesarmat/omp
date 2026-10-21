@@ -310,6 +310,30 @@ CREATE TABLE kv (key text PRIMARY KEY, value text NOT NULL);
 INSERT INTO kv (key, value) VALUES ('store_version', '0');
 `,
   },
+  {
+    version: '002_ads',
+    sql: `
+-- Ads (src/ads.mjs): banner images uploaded in the admin, and impressions / clicks per MSK day, banner, section and
+-- platform. No device id and no IP. Kept 90 days (store.retention).
+CREATE TABLE ad_images (
+  id text PRIMARY KEY,
+  mime text NOT NULL,
+  bytes bytea NOT NULL,
+  size integer NOT NULL,
+  created_at bigint NOT NULL
+);
+CREATE TABLE ad_stats (
+  day text NOT NULL,
+  banner_id text NOT NULL,
+  section text NOT NULL,
+  platform text NOT NULL,
+  impressions bigint NOT NULL DEFAULT 0,
+  clicks bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, banner_id, section, platform)
+);
+CREATE INDEX ad_stats_day ON ad_stats (day);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

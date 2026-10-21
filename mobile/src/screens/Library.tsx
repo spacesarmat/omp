@@ -41,6 +41,9 @@ import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
 import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { withAds } from '../../../src/ads/ads';
+import { AdCell, type AdCellKind } from '../ads/AdCell';
+import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
@@ -335,6 +338,20 @@ export function Library() {
   });
 
   const selecting = selected !== null;
+  // ads among the cards of «Мои» (not in History, a search, selection mode or a failed list); the same cell size as
+  // the cards in every view, only below the screen when it appears
+  const ads = useAdSlots({
+    section: 'mine',
+    count: shown.length,
+    perScreen: PER_SCREEN[view] || PER_SCREEN.list,
+    active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
+    listKey: tab + '|' + sort,
+    itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
+  });
+  const adCell = (pos: number, kind: AdCellKind) => {
+    const b = ads.banner(pos);
+    return b ? <AdCell key={'ad:mine:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+  };
   // only the torrents still in the list count (a refresh may drop some)
   const chosen = selected ? selected.filter((h) => shownHashes.indexOf(h) >= 0) : [];
   const isChosen = (it: LibraryItem) => hashesOf(it).every((h) => chosen.indexOf(h) >= 0);
@@ -687,7 +704,9 @@ export function Library() {
           ) : (
             view === 'list' ? (
               <div class="m-vlist">
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'list');
+                  const it = e.item;
                   const k = itemKey(it);
                   if (it.kind === 'series') {
                     return (
@@ -735,7 +754,9 @@ export function Library() {
               </div>
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'compact');
+                  const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
                   const tor = it.kind === 'series' ? it.named : it.tor;
@@ -761,7 +782,9 @@ export function Library() {
               </div>
             ) : (
               <div class={'m-grid m-view-' + view}>
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'grid');
+                  const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
                   const tor = it.kind === 'series' ? it.lead : it.tor;
