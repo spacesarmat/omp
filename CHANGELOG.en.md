@@ -16,6 +16,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] ops/vps/deploy.sh works on the NUC: docker compose with docker-compose.nuc.yml, health checks over http on port 80, node --check in a container when the host has no node
 - [tech] JacRed: the base syncs from sync.jacred.stream through WARP (globalproxy in jacred/init.yaml): the direct path from the NUC stalled and the base had not grown for 15 hours
 - [tech] Monitoring: a "Recheck" button on a red row (that check only), run progress «N of M» with the start time, a state per row (checking, waiting for the retry, done) and a summary at the end
+- [tech] JacRed on the NUC: the full running config is pinned in the host jacred/init.yaml (with globalproxy through WARP); the README explains that /app/init.yaml is the real config and that a JacRed admin save must be copied to the host
 
 ## 0.20.6-beta.3
 
