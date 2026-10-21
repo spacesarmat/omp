@@ -1,0 +1,11 @@
+[Unit]
+Description=Copy the running JacRed config back to the host every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
