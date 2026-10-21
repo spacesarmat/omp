@@ -112,6 +112,43 @@ describe('jacred-config-sync', () => {
     expect(w.list()).toEqual([]);
   });
 
+  it('skips when the sync pattern uses another proxy and WARP is only in a different entry', () => {
+    const src = config('x: 1', false).replace(
+      'globalproxy: ',
+      'globalproxy:\n- pattern: sync\\.jacred\\.stream\n  list:\n  - http://other:8080\n- pattern: rutracker\\.org\n  list:\n  - http://warp:1080',
+    );
+    const w = world(config(), src);
+    const r = w.run({ JACRED_SYNC_YAML_CHECK: 'none' });
+    expect(r.out).toMatch(/no globalproxy entry/);
+    expect(readFileSync(w.host, 'utf8')).toBe(config());
+  });
+
+  it('checks entries the same way when the list is indented', () => {
+    const block = (syncProxy: string) =>
+      `globalproxy:\n  - pattern: "sync\\\\.jacred\\\\.stream"\n    list:\n      - ${syncProxy}\n  - pattern: rutracker\\.org\n    list:\n      - http://warp:1080`;
+    const bad = world(config(), config('x: 1', false).replace('globalproxy: ', block('http://other:8080')));
+    expect(bad.run({ JACRED_SYNC_YAML_CHECK: 'none' }).out).toMatch(/no globalproxy entry/);
+    const good = world(config(), config('x: 1', false).replace('globalproxy: ', block('http://warp:1080')));
+    expect(good.run({ JACRED_SYNC_YAML_CHECK: 'none' }).out).toMatch(/updated/);
+  });
+
+  it('the git template passes the checks', () => {
+    const w = world(config(), readFileSync('ops/vps/jacred/init.yaml', 'utf8'));
+    const r = w.run({ JACRED_SYNC_YAML_CHECK: hasYaml ? 'python' : 'none' });
+    expect(r.out).toMatch(/updated/);
+  });
+
+  it.skipIf(process.getuid?.() === 0)('a failed write exits 1 and leaves the host file as it was', () => {
+    const w = world(config(), config('rev: 2'));
+    chmodSync(w.host, 0o444);
+    const r = w.run();
+    expect(r.status).toBe(1);
+    expect(r.out).toMatch(/writing .* failed/);
+    expect(readFileSync(w.host, 'utf8')).toBe(config());
+    expect(w.list()).toHaveLength(1);
+    expect(r.out).not.toContain('SECRET');
+  });
+
   it.skipIf(!hasYaml)('skips invalid YAML', () => {
     const w = world(config(), config('bad: [unclosed'));
     const r = w.run({ JACRED_SYNC_YAML_CHECK: 'python' });
