@@ -14,7 +14,7 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { settings, updateSettings } from '../../src/store/settings';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { saveAdsConfig, type AdsConfig } from '../../src/ads/ads';
+import { cachedAdsConfig, saveAdsConfig } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
@@ -299,9 +299,11 @@ describe('ads in «Мои»', () => {
         vi.advanceTimersByTime(1000);
       });
       expect(pendingAdEvents()).toEqual([{ b: BANNER.id, s: 'mine', p: 'phone', t: 'i', n: 2 }]);
+      // same image, already loaded: the cell switches at once and the new banner gets its own impression
       const next = { ...BANNER, id: 'bbbbbbbbbbbb', title: 'Другой баннер' };
+      saveAdsConfig({ ...CONFIG, banners: [next] });
       act(() => {
-        adsConfig.value = { ...CONFIG, banners: [next] } as AdsConfig;
+        adsConfig.value = cachedAdsConfig();
       });
       await flush();
       expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe(next.title);
@@ -312,6 +314,50 @@ describe('ads in «Мои»', () => {
         { b: BANNER.id, s: 'mine', p: 'phone', t: 'i', n: 2 },
         { b: next.id, s: 'mine', p: 'phone', t: 'i', n: 2 },
       ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the current banner until the replacement image has loaded', async () => {
+    const pending: Array<{ onload: (() => void) | null }> = [];
+    class Img {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_v: string) {
+        pending.push(this);
+      }
+    }
+    vi.stubGlobal('Image', Img);
+    vi.stubGlobal('IntersectionObserver', VisibleObserver);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
+    try {
+      mount(<Library />);
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      const nextImg = 'https://billing.omp-player.online/v1/ads/img/' + 'b'.repeat(24);
+      const next = { ...BANNER, id: 'bbbbbbbbbbbb', title: 'Другой баннер', image: '/v1/ads/img/' + 'b'.repeat(24) };
+      saveAdsConfig({ ...CONFIG, banners: [next] });
+      act(() => {
+        adsConfig.value = cachedAdsConfig();
+      });
+      await flush();
+      expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe(BANNER.title);
+      expect(el.querySelector('.m-ad img')!.getAttribute('src')).toBe(IMG);
+      expect(pendingAdEvents().map((e) => e.b)).toEqual([BANNER.id]);
+      expect(pending.length).toBeGreaterThan(0);
+      await act(async () => {
+        for (let i = 0; i < pending.length; i++) if (pending[i].onload) pending[i].onload!();
+      });
+      await flush();
+      expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe('Другой баннер');
+      expect(el.querySelector('.m-ad img')!.getAttribute('src')).toBe(nextImg);
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(pendingAdEvents()).toContainEqual({ b: next.id, s: 'mine', p: 'phone', t: 'i', n: 2 });
     } finally {
       vi.useRealTimers();
     }

@@ -73,6 +73,9 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const key = useRef(o.listKey);
   const opts = useRef(o);
   opts.current = o;
+  // The banner actually drawn in an admitted slot. A refresh may pick another one before its image has loaded;
+  // the cell keeps this one until then, so it never goes blank and the impression timer does not start early.
+  const held = useRef<{ [pos: number]: AdBanner }>({});
   // localStorage, not a signal: a renewal (this page, or the background check) has to bump it or the open catalog
   // keeps the ads it already drew
   const [subscribed, setSubscribed] = useState(() => ompSubscribed());
@@ -117,13 +120,25 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     if (!banners.length) return [];
     return o.section === 'discoverRails' ? railPositions(o.count, cfg.railsEvery) : adPositions(o.count, cfg, o.perScreen);
   }, [banners, o.count, o.perScreen, o.section, cfg]);
-  const bannerAt = (pos: number) => pickBanner(banners, o.section + ':' + pos, now);
+  const pickAt = (pos: number) => pickBanner(banners, o.section + ':' + pos, now);
+  // What the cell draws. The pick is used for preloading and for admitting a new slot; a slot that is already
+  // on screen stays on its current banner until the replacement image is loaded.
+  const bannerAt = (pos: number): AdBanner | null => {
+    const next = pickAt(pos);
+    if (!next) return null;
+    const prev = held.current[pos];
+    if (!loaded.has(next.image)) return prev || null;
+    held.current[pos] = next;
+    return next;
+  };
 
   // another list, or ads off here: start over (the impressions too)
   if (key.current !== o.listKey) {
     key.current = o.listKey;
     seen.current = new Set();
+    held.current = {};
   }
+  if (!banners.length) held.current = {};
   const admitted = adm.key === o.listKey && banners.length ? adm.list : [];
   useEffect(() => {
     if (!banners.length && adm.list.length) setAdm({ key: o.listKey, list: [] });
@@ -134,7 +149,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     let alive = true;
     const urls: string[] = [];
     for (let i = 0; i < positions.length; i++) {
-      const b = bannerAt(positions[i]);
+      const b = pickAt(positions[i]);
       if (b && urls.indexOf(b.image) < 0) urls.push(b.image);
     }
     for (let i = 0; i < urls.length; i++) {
@@ -160,7 +175,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         if (admitted.indexOf(p) >= 0) continue;
-        const b = bannerAt(p);
+        const b = pickAt(p);
         if (!b || !loaded.has(b.image)) continue;
         const el = cur.itemEl(p);
         if (!el) continue;
