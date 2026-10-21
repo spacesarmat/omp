@@ -237,6 +237,16 @@ describe('monitor runs on Postgres', () => {
     expect(Number(full.at)).toBe(firstAt);
     // an id that is not a check starts nothing
     expect(await t.monitor.run('recheck', { ids: ['nope'] })).toBeNull();
+    // a check added since the last run (here: every row but one dropped from the saved run) does not break a row recheck
+    const last = (await t.store.query('SELECT run_at, rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
+    const only = (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows).filter((x: any) => x.id === 'jackett:kinozal');
+    const t2 = await setup({ store: t.store });
+    // a fresh process (nothing in memory) reads the saved run from this store
+    await t.store.query('UPDATE monitor_runs SET rows = $1 WHERE run_at = $2', [JSON.stringify(only), last.run_at]);
+    t2.tick(24 * 3600000);
+    const r2 = await t2.monitor.run('recheck', { ids: ['jackett:kinozal'] });
+    expect(r2).not.toBeNull();
+    expect(r2!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: null, detail: 'ещё не проверялась' });
   });
 
   it('a message that could not be sent goes out on the next run', async () => {

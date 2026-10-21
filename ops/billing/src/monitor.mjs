@@ -303,6 +303,8 @@ export function createMonitor(deps) {
           .map((t) => {
             const { run: _run, ...meta } = t;
             const b = before.get(t.id);
+            // A check added since the last run that is not in this recheck: shown as not checked yet.
+            if (!b) return { ...meta, ok: null, detail: 'ещё не проверялась', ms: 0, at: 0, retried: false };
             return { ...meta, ok: b.ok, detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
           });
       }

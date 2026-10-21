@@ -502,7 +502,11 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
     setIntervalValue((cur) => cur || String(res.intervalMin || ''));
     if (wasRunning.current && !res.running) {
       const s = res.lastSummary;
-      toast(s ? 'Проверка завершена: проверено ' + s.checked + ', ошибок ' + s.failed : 'Проверка завершена');
+      toast(
+        s
+          ? 'Проверка завершена: проверено ' + s.checked + ', ошибок ' + s.failed + (s.retried ? ', повторено через 30 с: ' + s.retried : '') + ', заняло ' + Math.max(1, Math.round((s.finishedAt - s.startedAt) / 1000)) + ' с'
+          : 'Проверка завершена',
+      );
     }
     if (!res.running) setPending([]);
     wasRunning.current = !!res.running;
