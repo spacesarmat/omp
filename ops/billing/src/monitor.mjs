@@ -178,6 +178,9 @@ export function historyStrip(points, now) {
  * The monitor of one process. deps: { store, env, backups, getSettings, send(chatId, text) => Promise<boolean>,
  * net, get, statfs, now, sleep, botPoll, log }.
  */
+/** Detail of a check added since the last run and not run yet (kept by a row recheck). */
+const UNCHECKED = 'ещё не проверялась';
+
 export function createMonitor(deps) {
   const d = deps || {};
   const store = d.store;
@@ -292,19 +295,31 @@ export function createMonitor(deps) {
       const tasks = await buildTasks(ctx);
       const ids = opts && Array.isArray(opts.ids) ? new Set(opts.ids.map(String)) : null;
       const prev = (opts && opts.only === 'failed') || ids ? await lastRows() : null;
+      // A row recheck needs a last run to keep the other rows from; without one it starts nothing.
+      if (ids && !prev) return null;
       let toRun = tasks;
       let kept = [];
       if (prev) {
         const before = new Map(prev.map((r) => [r.id, r]));
-        toRun = ids ? tasks.filter((t) => ids.has(t.id) && before.has(t.id)) : tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false);
+        const unchecked = (b) => b.ok === null && b.detail === UNCHECKED;
+        if (ids) {
+          // A saved id that is no longer a task (a red container or tracker list that loads again and is now
+          // one row per item): recheck that whole group, so the list row is replaced.
+          const taskIds = new Set(tasks.map((t) => t.id));
+          const groups = new Set([...ids].filter((id) => !taskIds.has(id) && before.has(id)).map((id) => before.get(id).group));
+          toRun = tasks.filter((t) => (ids.has(t.id) && before.has(t.id)) || groups.has(t.group));
+        } else {
+          toRun = tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false || unchecked(before.get(t.id)));
+        }
         if (ids && !toRun.length) return null; // unknown or new checks: nothing to recheck
         kept = tasks
           .filter((t) => !toRun.includes(t))
           .map((t) => {
             const { run: _run, ...meta } = t;
             const b = before.get(t.id);
-            // A check added since the last run that is not in this recheck: shown as not checked yet.
-            if (!b) return { ...meta, ok: null, detail: 'ещё не проверялась', ms: 0, at: 0, retried: false };
+            // A check added since the last run that is not in this recheck: shown as not checked yet, and the
+            // next «Перепроверить все ошибки» runs it.
+            if (!b) return { ...meta, ok: null, detail: UNCHECKED, ms: 0, at: 0, retried: false };
             return { ...meta, ok: b.ok, detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
           });
       }

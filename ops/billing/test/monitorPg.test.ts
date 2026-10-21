@@ -247,6 +247,31 @@ describe('monitor runs on Postgres', () => {
     const r2 = await t2.monitor.run('recheck', { ids: ['jackett:kinozal'] });
     expect(r2).not.toBeNull();
     expect(r2!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: null, detail: 'ещё не проверялась' });
+    // «Перепроверить все ошибки» then runs that not-yet-checked one too
+    t2.tick(60000);
+    const r3 = await t2.monitor.run('recheck', { only: 'failed' });
+    expect(r3!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: true });
+  });
+
+  it('a row recheck of a red list that loads again rechecks its group; with no run yet it starts nothing', async () => {
+    const empty = await setup();
+    expect(await empty.monitor.run('recheck', { ids: ['jackett:kinozal'] })).toBeNull();
+    expect((await empty.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n).toBe(0);
+    const t = await setup();
+    await t.monitor.run('schedule');
+    // the saved run had the Jackett list red (one row instead of a row per tracker)
+    const last = (await t.store.query('SELECT run_at, rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
+    const rows = (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows).filter((x: any) => x.group !== 'jackett');
+    rows.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', path: '', target: '', ok: false, detail: 'не прочитан', context: '', ms: 0, alert: true, retried: false, at: last.run_at });
+    await t.store.query('UPDATE monitor_runs SET rows = $1 WHERE run_at = $2', [JSON.stringify(rows), last.run_at]);
+    const fresh = await setup({ store: t.store });
+    fresh.tick(24 * 3600000);
+    const r = await fresh.monitor.run('recheck', { ids: ['jackett:list'] });
+    expect(r).not.toBeNull();
+    expect(r!.rows.find((x: any) => x.id === 'jackett:list')).toBeUndefined();
+    expect(r!.rows.find((x: any) => x.id === 'jackett:kinozal')).toMatchObject({ ok: true });
+    const snap = await fresh.monitor.snapshot();
+    expect(snap.lastSummary.checked).toBeGreaterThan(1);
   });
 
   it('a message that could not be sent goes out on the next run', async () => {
