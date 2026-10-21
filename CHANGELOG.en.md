@@ -10,6 +10,9 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Checks every 15 minutes (the interval is set in the tab): every Jackett and JacRed tracker directly and through WARP, search through Jackett, Cloudflare trace through WARP, Postgres, backup, bot polling, disk, the 4 public sites, Jackett, JacRed and TorrServer on the internal network
 - [tech] Containers, restarts and memory through a read-only Docker proxy (new omp-docker-proxy container); the panel cannot restart anything
 - [tech] Telegram alert through @OMPBILLINGBOT only after a second check 30 s later, once per problem, plus a «fixed» message
+- [tech] Monitoring: site checks (public sites and trackers) pass on the response status and headers without downloading the whole page, so a slow body no longer reads as a timeout
+- [tech] Monitoring: red first, fully green groups fold into one line ("Containers 12/12"); filter "All / Errors only / No alert", search by name, sorting by status, name, response time and check time; the choice is kept in the browser
+- [tech] Monitoring: a "Recheck all errors" button runs only the red checks again
 - [tech] ops/vps/deploy.sh works on the NUC: docker compose with docker-compose.nuc.yml, health checks over http on port 80, node --check in a container when the host has no node
 
 ## 0.20.6-beta.3

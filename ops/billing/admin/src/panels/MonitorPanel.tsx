@@ -9,23 +9,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton, toast } from '@/components/chrome';
 import { api, post } from '@/lib/api';
 import { when } from '@/lib/text';
+import {
+  buildView,
+  FILTER_TEXT,
+  loadPrefs,
+  savePrefs,
+  SORT_TEXT,
+  type GroupView,
+  type MonitorCheck,
+  type MonitorFilter,
+  type MonitorItem,
+  type MonitorPrefs,
+  type MonitorSort,
+} from '@/lib/monitorView';
 
-export type MonitorCheck = {
-  id: string;
-  group: string;
-  name: string;
-  path: string;
-  target?: string;
-  ok: boolean | null;
-  detail: string;
-  context?: string;
-  ms: number;
-  alert: boolean;
-  alerted?: boolean;
-  retried?: boolean;
-  history: string;
-  uptime: number | null;
-};
+export type { MonitorCheck } from '@/lib/monitorView';
 
 export type MonitorData = {
   ok?: boolean;
@@ -77,16 +75,31 @@ function PathBadge({ path }: { path: string }) {
   );
 }
 
+/** HH:MM:SS in Moscow time, when the check ran. */
+function clock(at: number) {
+  return new Date(at).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour12: false });
+}
+
 function Detail({ row }: { row?: MonitorCheck }) {
   if (!row) return <span className="text-muted-foreground">-</span>;
   return (
     <span className="text-xs">
       {row.detail || '-'}
       {row.ms ? <span className="text-muted-foreground"> · {row.ms} мс</span> : null}
+      {row.at ? <span className="text-muted-foreground"> · {clock(row.at)}</span> : null}
       {row.retried && row.ok === false ? <span className="text-muted-foreground"> · повтор через 30 с</span> : null}
       {!row.alert && row.ok === false ? <span className="text-muted-foreground"> · без алерта</span> : null}
     </span>
   );
+}
+
+/** localStorage, or null where the browser refuses access (blocked storage throws on the property itself). */
+function browserStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function PlainTable({ rows }: { rows: MonitorCheck[] }) {
@@ -108,7 +121,7 @@ function PlainTable({ rows }: { rows: MonitorCheck[] }) {
             </TableCell>
             <TableCell className="font-medium">
               {r.name}
-              <PathBadge path={r.path} />
+              {r.group === 'containers' ? null : <PathBadge path={r.path} />}
             </TableCell>
             <TableCell>
               <Detail row={r} />
@@ -124,29 +137,6 @@ function PlainTable({ rows }: { rows: MonitorCheck[] }) {
   );
 }
 
-type TrackerRow = { key: string; name: string; search?: MonitorCheck; direct?: MonitorCheck; warp?: MonitorCheck; site?: MonitorCheck };
-
-/** Trackers: one line each, with the Jackett search (Jackett trackers), the site directly and through WARP. */
-export function trackerRows(rows: MonitorCheck[]): { trackers: TrackerRow[]; other: MonitorCheck[] } {
-  const map = new Map<string, TrackerRow>();
-  const other: MonitorCheck[] = [];
-  for (const r of rows) {
-    const m = /^(.*):(direct|warp|site)$/.exec(r.id);
-    const key = m ? m[1] : r.path === 'jackett' ? r.id : '';
-    if (!key) {
-      other.push(r);
-      continue;
-    }
-    const row = map.get(key) || { key, name: r.name };
-    if (r.path === 'jackett') row.search = r;
-    else if (m && m[2] === 'direct') row.direct = r;
-    else if (m && m[2] === 'warp') row.warp = r;
-    else row.site = r;
-    map.set(key, row);
-  }
-  return { trackers: Array.from(map.values()), other };
-}
-
 function Cell({ row }: { row?: MonitorCheck }) {
   if (!row) return <span className="text-xs text-muted-foreground">-</span>;
   return (
@@ -155,12 +145,13 @@ function Cell({ row }: { row?: MonitorCheck }) {
       <div className="max-w-[260px] text-xs text-muted-foreground">
         {row.detail}
         {row.ms ? ' · ' + row.ms + ' мс' : ''}
+        {row.at ? ' · ' + clock(row.at) : ''}
       </div>
     </div>
   );
 }
 
-function TrackerTable({ rows, withSearch }: { rows: TrackerRow[]; withSearch: boolean }) {
+function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: boolean }) {
   return (
     <Table>
       <TableHeader>
@@ -174,12 +165,33 @@ function TrackerTable({ rows, withSearch }: { rows: TrackerRow[]; withSearch: bo
       </TableHeader>
       <TableBody>
         {rows.map((t) => {
+          if (t.kind === 'check' && t.check) {
+            const r = t.check;
+            return (
+              <TableRow key={t.key} data-check={r.id}>
+                <TableCell className="font-medium">
+                  {r.name}
+                  <PathBadge path={r.path} />
+                </TableCell>
+                <TableCell colSpan={withSearch ? 3 : 2}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge ok={r.ok} alerted={r.alerted} />
+                    <Detail row={r} />
+                  </div>
+                  {r.context ? <div className="text-xs text-muted-foreground">{r.context}</div> : null}
+                </TableCell>
+                <TableCell>
+                  <HistoryStrip strip={r.history} uptime={r.uptime} />
+                </TableCell>
+              </TableRow>
+            );
+          }
           const main = t.search || t.warp || t.direct || t.site;
           return (
             <TableRow key={t.key} data-check={t.key}>
               <TableCell className="font-medium">
                 {t.name}
-                {t.direct?.target || t.warp?.target ? <div className="text-xs text-muted-foreground">{t.direct?.target || t.warp?.target}</div> : null}
+                {t.target ? <div className="text-xs text-muted-foreground">{t.target}</div> : null}
               </TableCell>
               {withSearch ? (
                 <TableCell>
@@ -197,25 +209,46 @@ function TrackerTable({ rows, withSearch }: { rows: TrackerRow[]; withSearch: bo
   );
 }
 
-function GroupCard({ title, id, rows }: { title: string; id: string; rows: MonitorCheck[] }) {
-  const failed = rows.filter((r) => r.ok === false).length;
+function GroupCard({ view, onToggle }: { view: GroupView; onToggle: (id: string, open: boolean) => void }) {
+  const { id, title, items, failed } = view;
   const tracker = id === 'jackett' || id === 'jacred';
-  const split = tracker ? trackerRows(rows) : null;
+  const summary = title + ' ' + view.okCount + '/' + view.total + (view.skipped ? ', не проверено: ' + view.skipped : '');
+  const badge = failed ? (
+    <Badge variant="bad">ошибок: {failed}</Badge>
+  ) : view.skipped ? (
+    <Badge variant="warn">не проверено: {view.skipped}</Badge>
+  ) : (
+    <Badge variant="ok">всё ок</Badge>
+  );
+  if (view.folded) {
+    return (
+      <Card data-group={id} data-folded="1">
+        <button type="button" className="flex w-full items-center justify-between gap-2 px-6 py-4 text-left" onClick={() => onToggle(id, true)} aria-expanded={false}>
+          <span className="font-semibold">
+            <span className="mr-2 text-muted-foreground">▸</span>
+            {summary}
+          </span>
+          {badge}
+        </button>
+      </Card>
+    );
+  }
+  // Trackers and plain checks of one group share a table, so the chosen sort order holds across both.
+  const hasTrackers = items.some((it) => it.kind === 'tracker');
+  const plain = items.map((it) => it.check as MonitorCheck);
   return (
     <Card data-group={id}>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle>{title}</CardTitle>
-        {failed ? <Badge variant="bad">ошибок: {failed}</Badge> : <Badge variant="ok">всё ок</Badge>}
+        <button type="button" className="text-left" onClick={() => onToggle(id, false)} aria-expanded>
+          <CardTitle>
+            <span className="mr-2 text-muted-foreground">▾</span>
+            {summary}
+          </CardTitle>
+        </button>
+        {badge}
       </CardHeader>
       <CardContent className="space-y-3">
-        {split && split.other.length ? <PlainTable rows={split.other} /> : null}
-        {split ? (
-          split.trackers.length ? (
-            <TrackerTable rows={split.trackers} withSearch={id === 'jackett'} />
-          ) : null
-        ) : (
-          <PlainTable rows={rows} />
-        )}
+        {hasTrackers ? <TrackerTable rows={items} withSearch={id === 'jackett'} /> : items.length ? <PlainTable rows={plain} /> : null}
         {tracker ? (
           <p className="text-xs text-muted-foreground">
             {id === 'jackett'
@@ -228,24 +261,82 @@ function GroupCard({ title, id, rows }: { title: string; id: string; rows: Monit
   );
 }
 
+const selectClass = 'h-10 rounded-md border border-input bg-secondary px-3 text-sm text-foreground';
+
+function Toolbar({ prefs, setPrefs, shown }: { prefs: MonitorPrefs; setPrefs: (p: MonitorPrefs) => void; shown: number }) {
+  return (
+    <Card>
+      <CardContent className="flex flex-wrap items-end gap-3 pt-6">
+        <div className="space-y-1">
+          <Label>Показать</Label>
+          <div className="flex gap-1" role="group" aria-label="Фильтр">
+            {(Object.keys(FILTER_TEXT) as MonitorFilter[]).map((f) => (
+              <Button
+                key={f}
+                type="button"
+                size="sm"
+                className="h-10"
+                variant={prefs.filter === f ? 'default' : 'outline'}
+                aria-pressed={prefs.filter === f}
+                title={f === 'noalert' ? 'Красные строки, по которым алерт не уходит (например, сайт закрыт только напрямую)' : undefined}
+                onClick={() => setPrefs({ ...prefs, filter: f })}
+              >
+                {FILTER_TEXT[f]}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="monitorSearch">Поиск</Label>
+          <Input id="monitorSearch" className="w-56" placeholder="название, адрес, ошибка" value={prefs.q} onChange={(e) => setPrefs({ ...prefs, q: e.target.value })} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="monitorSort">Сортировка</Label>
+          <div className="flex gap-1">
+            <select id="monitorSort" className={selectClass} value={prefs.sort} onChange={(e) => setPrefs({ ...prefs, sort: e.target.value as MonitorSort })}>
+              {(Object.keys(SORT_TEXT) as MonitorSort[]).map((k) => (
+                <option key={k} value={k}>
+                  {SORT_TEXT[k]}
+                </option>
+              ))}
+            </select>
+            <Button type="button" variant="outline" className="w-10 px-0" title={prefs.desc ? 'По убыванию' : 'По возрастанию'} aria-label={prefs.desc ? 'По убыванию' : 'По возрастанию'} onClick={() => setPrefs({ ...prefs, desc: !prefs.desc })}>
+              {prefs.desc ? '↓' : '↑'}
+            </Button>
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">Строк: {shown}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function MonitorView({
   data,
   busy,
   interval,
   setInterval,
   onRun,
+  onRecheck,
   onSave,
+  prefs,
+  setPrefs,
 }: {
   data: MonitorData | null;
   busy: boolean;
   interval: string;
   setInterval: (v: string) => void;
   onRun: () => void;
+  onRecheck: () => void;
   onSave: () => void;
+  prefs: MonitorPrefs;
+  setPrefs: (p: MonitorPrefs) => void;
 }) {
   const running = !!data?.running;
   const checks = data?.checks || [];
   const failed = checks.filter((c) => c.ok === false).length;
+  const view = buildView(data?.groups || [], checks, prefs);
+  const shown = view.reduce((n, g) => n + (g.folded ? 0 : g.items.length), 0);
   return (
     <div className="space-y-4">
       <Card>
@@ -253,7 +344,7 @@ export function MonitorView({
           <div className="space-y-1">
             <CardTitle>Мониторинг</CardTitle>
             <CardDescription>
-              {data?.lastRun ? 'Последняя проверка: ' + when(data.lastRun.finishedAt) + (data.lastRun.trigger === 'manual' ? ' (вручную)' : '') + '.' : 'Проверок ещё не было.'}
+              {data?.lastRun ? 'Последняя проверка: ' + when(data.lastRun.finishedAt) + (data.lastRun.trigger === 'manual' ? ' (вручную)' : data.lastRun.trigger === 'recheck' ? ' (перепроверка ошибок)' : '') + '.' : 'Проверок ещё не было.'}
               {data?.scheduled && data?.nextRunAt ? ' Следующая около ' + when(data.nextRunAt) + '.' : ''}
               {data && !data.scheduled ? ' Расписание на этом экземпляре выключено, работает только ручная проверка.' : ''}
             </CardDescription>
@@ -264,6 +355,11 @@ export function MonitorView({
             <Button type="button" disabled={busy || running} onClick={onRun}>
               {running ? 'Проверка идёт…' : 'Проверить сейчас'}
             </Button>
+            {failed ? (
+              <Button type="button" variant="secondary" disabled={busy || running} onClick={onRecheck} title="Запустить заново только красные проверки, остальные сохраняют последний результат">
+                Перепроверить все ошибки
+              </Button>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
@@ -286,11 +382,11 @@ export function MonitorView({
       </Card>
       {data?.error ? <Alert variant="destructive">{data.error === 'read_only' ? 'Сервер в режиме только чтения: мониторинг не работает.' : 'Мониторинг недоступен на этом экземпляре.'}</Alert> : null}
       {!data && busy ? <Skeleton className="h-40" /> : null}
-      {(data?.groups || []).map((g) => {
-        const rows = checks.filter((c) => c.group === g.id);
-        if (!rows.length) return null;
-        return <GroupCard key={g.id} id={g.id} title={g.title} rows={rows} />;
-      })}
+      {checks.length ? <Toolbar prefs={prefs} setPrefs={setPrefs} shown={shown} /> : null}
+      {checks.length && !view.length ? <p className="text-sm text-muted-foreground">Ничего не найдено.</p> : null}
+      {view.map((g) => (
+        <GroupCard key={g.id} view={g} onToggle={(id, open) => setPrefs({ ...prefs, open: { ...prefs.open, [id]: open } })} />
+      ))}
     </div>
   );
 }
@@ -301,6 +397,11 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   const [interval, setIntervalValue] = useState('');
   const [err, setErr] = useState('');
   const wasRunning = useRef(false);
+  const [prefs, setPrefsState] = useState<MonitorPrefs>(() => loadPrefs(browserStorage()));
+  const setPrefs = (p: MonitorPrefs) => {
+    setPrefsState(p);
+    savePrefs(browserStorage(), p);
+  };
 
   async function load() {
     let res: MonitorData & { auth?: boolean; error?: string };
@@ -339,16 +440,16 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.running]);
 
-  async function runNow() {
+  async function runNow(onlyFailed = false) {
     setBusy(true);
     try {
-      const res = (await post('/admin/monitor/run', csrf, {})) as { ok?: boolean; error?: string; auth?: boolean };
+      const res = (await post('/admin/monitor/run', csrf, onlyFailed ? { only: 'failed' } : {})) as { ok?: boolean; error?: string; auth?: boolean };
       if (res.auth === false) return setErr('Нужен вход');
       if (!res.ok) {
         toast(res.error || 'Не запущено, обновите страницу');
         return;
       }
-      toast('Проверка запущена, займёт до нескольких минут');
+      toast(onlyFailed ? 'Перепроверяю красные проверки' : 'Проверка запущена, займёт до нескольких минут');
       wasRunning.current = true;
       await load();
     } catch {
@@ -379,7 +480,12 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   return (
     <>
       {err ? <Alert variant="destructive">{err}</Alert> : null}
-      <MonitorView data={data} busy={busy} interval={interval} setInterval={setIntervalValue} onRun={() => void runNow()} onSave={() => void save()} />
+      <MonitorView data={data} busy={busy} interval={interval} setInterval={setIntervalValue} onRun={() => void runNow()}
+        onRecheck={() => void runNow(true)}
+        onSave={() => void save()}
+        prefs={prefs}
+        setPrefs={setPrefs}
+      />
     </>
   );
 }

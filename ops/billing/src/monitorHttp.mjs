@@ -60,7 +60,8 @@ function tunnel(proxyUrl, host, port, deadline, track) {
 }
 
 /**
- * GET `url`. opts: { proxy?: 'http://warp:1080', timeoutMs?, headers?, maxBytes? }.
+ * GET `url`. opts: { proxy?: 'http://warp:1080', timeoutMs?, headers?, maxBytes?, headersOnly? }.
+ * headersOnly: resolve as soon as the status line and headers arrive, without reading the body.
  * Resolves { ok: true, status, headers, body, ms } or { ok: false, error, ms }. Never rejects.
  */
 export async function monitorGet(url, opts) {
@@ -119,6 +120,18 @@ export async function monitorGet(url, opts) {
         }
         const req = track(
           mod.request(options, (res) => {
+            const head = {
+              location: String(res.headers.location || ''),
+              server: String(res.headers.server || ''),
+              'cf-mitigated': String(res.headers['cf-mitigated'] || ''),
+              'content-type': String(res.headers['content-type'] || ''),
+            };
+            if (o.headersOnly) {
+              // Status and headers are the answer; a slow or stalled body must not turn it into a timeout.
+              resolve({ ok: true, status: res.statusCode || 0, headers: head, body: '' });
+              res.destroy();
+              return;
+            }
             const chunks = [];
             let size = 0;
             let finished = false;
@@ -128,12 +141,7 @@ export async function monitorGet(url, opts) {
               resolve({
                 ok: true,
                 status: res.statusCode || 0,
-                headers: {
-                  location: String(res.headers.location || ''),
-                  server: String(res.headers.server || ''),
-                  'cf-mitigated': String(res.headers['cf-mitigated'] || ''),
-                  'content-type': String(res.headers['content-type'] || ''),
-                },
+                headers: head,
                 body: Buffer.concat(chunks).toString('utf8'),
               });
             };

@@ -43,6 +43,12 @@ beforeAll(async () => {
       return res.end('a'.repeat(200000));
     }
     if (String(req.url).startsWith('/slow')) return; // never answers
+    if (req.url === '/stall') {
+      // headers and a first chunk, then the body never ends (the landing from the NUC)
+      res.writeHead(200, { 'content-type': 'text/html', server: 'cloudflare' });
+      res.write('<html>');
+      return;
+    }
     res.writeHead(200, { 'content-type': 'text/plain', server: 'test' });
     res.end('fl=1\nwarp=on\ncolo=AMS\n');
   });
@@ -98,6 +104,19 @@ describe('monitorGet', () => {
     // the GET itself went through the tunnel, not around it
     expect(tunneledBytes - bytesBefore).toBeGreaterThan(20);
     expect(targetHits.length).toBe(1);
+  });
+
+  it('headersOnly answers on status and headers even when the body stalls, directly and through the proxy', async () => {
+    const full = await monitorGet('http://127.0.0.1:' + targetPort + '/stall', { timeoutMs: 400 });
+    expect(full).toMatchObject({ ok: false, error: 'timeout' });
+    const head = await monitorGet('http://127.0.0.1:' + targetPort + '/stall', { timeoutMs: 400, headersOnly: true });
+    expect(head).toMatchObject({ ok: true, status: 200, body: '' });
+    expect(head.headers.server).toBe('cloudflare');
+    expect(head.ms).toBeLessThan(400);
+    const via = await monitorGet('http://127.0.0.1:' + targetPort + '/stall', { timeoutMs: 400, headersOnly: true, proxy: 'http://127.0.0.1:' + proxyPort });
+    expect(via).toMatchObject({ ok: true, status: 200 });
+    const redirect = await monitorGet('http://127.0.0.1:' + targetPort + '/redirect', { headersOnly: true });
+    expect(redirect.headers.location).toContain('warning.rt.ru');
   });
 
   it('does not follow redirects and keeps the location', async () => {
@@ -212,10 +231,10 @@ describe('verdicts and parsers', () => {
 type Res = { ok: boolean; status?: number; body?: string; headers?: Record<string, string>; error?: string };
 
 function fakeGet(routes: (url: string, proxy: string) => Res | undefined) {
-  const calls: { url: string; proxy: string }[] = [];
-  const get = async (url: string, opts?: { proxy?: string }) => {
+  const calls: { url: string; proxy: string; headersOnly: boolean }[] = [];
+  const get = async (url: string, opts?: { proxy?: string; headersOnly?: boolean }) => {
     const proxy = (opts && opts.proxy) || '';
-    calls.push({ url, proxy });
+    calls.push({ url, proxy, headersOnly: !!(opts && opts.headersOnly) });
     const r = routes(url, proxy);
     return { ms: 5, headers: {}, ...(r || { ok: false, error: 'refused' }) };
   };
@@ -302,6 +321,13 @@ describe('buildTasks', () => {
     expect(calls.find((c) => c.url.startsWith('https://www.cloudflare.com'))!.proxy).toBe('http://warp:1080');
     // the docker proxy only gets GETs of list, inspect and stats
     expect(calls.filter((c) => c.url.startsWith('http://docker-proxy')).every((c) => /\/containers\/(json\?|[a-f0-9]{64}\/(json|stats\?))/.test(c.url))).toBe(true);
+  });
+
+  it('site checks read status and headers only; feeds and lists still read the body', async () => {
+    const { calls } = await runWorld();
+    for (const site of PUBLIC_SITES) expect(calls.find((c) => c.url === site.url)).toMatchObject({ headersOnly: true });
+    expect(calls.filter((c) => c.url === 'https://rutracker.org/').every((c) => c.headersOnly)).toBe(true);
+    expect(calls.filter((c) => c.url.includes('t=indexers') || c.url.includes('cdn-cgi/trace')).every((c) => !c.headersOnly)).toBe(true);
   });
 
   it('never puts a key into a row', async () => {
