@@ -4,10 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6-beta.1
 
-- [tech] Beta: TV settings "Test mode" shows stable screen and item codes (docs/screen-codes.md)
-- [tech] Beta: the same mode on the phone, in the native Android TV player and in the Cloudflare check (P/PD and A/AD, docs/screen-codes.md)
+- [tv] Beta: "Test mode" in Settings shows codes for screens, dialogs and items (for example S05.3), the screen code in the corner can be copied
+- [phone] Beta: "Test mode" on the phone too (item P11.19 in Settings), codes P and PD
+- [atv] Beta: codes in the Android TV player too (A01, AD01-AD06)
+- [tech] Screen code table in docs/screen-codes.md, a test keeps it in sync with the code
 - [tech] Telegram release post without files: only photo, caption and buttons (builds and release page via buttons); the file replies, the file repost (telegram-fix: files) and the «forward it manually» log are removed
 - [tech] Telegram release post without text links: the caption holds only the change bullets, the files and the GitHub release page are buttons only (new universal APK button), no separate message linking the big files
 - [tech] One Telegram bot, @OMPBILLINGBOT, for billing and channel posts: billing requests its update types explicitly and deletes the «pinned a message» line itself; the release script no longer polls the bot
