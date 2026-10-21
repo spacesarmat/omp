@@ -131,6 +131,56 @@ describe('monitor runs on Postgres', () => {
     expect(r!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: true, retried: true });
   });
 
+  it('«Перепроверить все ошибки» runs only the red checks, keeps the rest, and does not move the schedule', async () => {
+    const t = await setup();
+    t.w.failJackett.add('kinozal');
+    const first = await t.monitor.run('schedule');
+    const firstAt = first!.finishedAt;
+    expect(t.sent).toHaveLength(1);
+    const okBefore = first!.rows.find((x: any) => x.id === 'jackett:rutracker');
+    t.w.failJackett.clear();
+    t.tick(60000);
+    const searches: string[] = [];
+    const base = makeGet(t.w);
+    const counting = createMonitor({
+      store: t.store,
+      env: { BILLING_DOCKER_PROXY_URL: 'http://docker-proxy:2375' },
+      getSettings: async () => (await t.store.read()).settings,
+      send: async (_c: string, text: string) => {
+        t.sent.push({ chat: _c, text });
+        return true;
+      },
+      net: async () => ({ status: 200, ok: true }),
+      get: async (url: string, opts?: { proxy?: string }) => {
+        const u = new URL(url);
+        if (u.hostname === 'jackett' && u.searchParams.get('t') !== 'indexers') searches.push(u.pathname.split('/')[4]);
+        return base(url, opts);
+      },
+      statfs: async () => ({ blocks: 1000000, bsize: 1024 * 1024, bavail: 900000 }),
+      now: t.now,
+      sleep: async () => {},
+      botPoll: () => ({ enabled: true, lastOkAt: t.now() - 1000 }),
+      log: () => {},
+    });
+    const r = await counting.run('recheck', { only: 'failed' });
+    expect(searches).toEqual(['kinozal']);
+    expect(r!.rows.find((x: any) => x.id === 'jackett:kinozal')).toMatchObject({ ok: true });
+    // the green ones keep their last result and time
+    expect(r!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: true, at: okBefore.at });
+    expect(r!.rows.length).toBe(first!.rows.length);
+    expect(t.sent.at(-1)!.text).toContain('починилось');
+    // history: one more result for kinozal only
+    const n = await t.store.query("SELECT check_id, count(*)::int AS n FROM monitor_results WHERE check_id IN ('jackett:kinozal', 'jackett:rutracker') GROUP BY check_id ORDER BY check_id");
+    expect(n.rows).toEqual([
+      { check_id: 'jackett:kinozal', n: 2 },
+      { check_id: 'jackett:rutracker', n: 1 },
+    ]);
+    const snap = await counting.snapshot();
+    expect(snap.lastRun.trigger).toBe('recheck');
+    const full = (await t.store.query("SELECT max(finished_at) AS at FROM monitor_runs WHERE trigger <> 'recheck'")).rows[0];
+    expect(Number(full.at)).toBe(firstAt);
+  });
+
   it('a message that could not be sent goes out on the next run', async () => {
     const t = await setup();
     t.w.failJackett.add('kinozal');
@@ -310,8 +360,15 @@ describe('monitor routes', () => {
     expect(bad.ok).toBe(false);
     const good = JSON.parse((await call(app, 'POST', '/admin/monitor/config', { cookie }, { csrf, intervalMin: 60 })).body);
     expect(good).toEqual({ ok: true, intervalMin: 60 });
-    const audit = (await t.store.read()).audit.map((a: any) => a.action);
+    t.tick(1000);
+    const again = await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, only: 'failed' });
+    expect(JSON.parse(again.body)).toMatchObject({ ok: true });
+    await vi.waitFor(async () => expect(t.monitor.isRunning()).toBe(false), { timeout: 5000 });
+    expect(JSON.parse((await call(app, 'GET', '/admin/api/monitor', { cookie })).body).lastRun.trigger).toBe('recheck');
+    const entries = (await t.store.read()).audit;
+    const audit = entries.map((a: any) => a.action);
     expect(audit).toEqual(expect.arrayContaining(['monitor_run', 'monitor_config']));
+    expect(entries.some((a: any) => a.action === 'monitor_run' && /только ошибки/.test(JSON.stringify(a)))).toBe(true);
   });
 
   it('read-only mode has no monitor', async () => {

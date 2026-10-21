@@ -688,7 +688,8 @@ export function finalize(rows) {
 }
 
 /** Run tasks with at most `limit` at a time, and at most `heavyLimit` heavy ones (Jackett searches). */
-export async function runTasks(tasks, limit, heavyLimit) {
+export async function runTasks(tasks, limit, heavyLimit, clock) {
+  const at = clock || (() => Date.now());
   const max = Math.max(1, limit || 8);
   const heavyMax = Math.max(1, heavyLimit || 3);
   const results = new Array(tasks.length);
@@ -717,7 +718,7 @@ export async function runTasks(tasks, limit, heavyLimit) {
         }
       }
       const { run, ...meta } = t;
-      const row = { ...meta, ok: r.ok === true ? true : r.ok === false ? false : null, detail: String(r.detail || ''), ms: Number(r.ms) || 0 };
+      const row = { ...meta, ok: r.ok === true ? true : r.ok === false ? false : null, detail: String(r.detail || ''), ms: Number(r.ms) || 0, at: at() };
       if (r.restarts !== undefined) row.restarts = r.restarts;
       results[i] = row;
     }

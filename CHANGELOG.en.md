@@ -11,6 +11,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Containers, restarts and memory through a read-only Docker proxy (new omp-docker-proxy container); the panel cannot restart anything
 - [tech] Telegram alert through @OMPBILLINGBOT only after a second check 30 s later, once per problem, plus a «fixed» message
 - [tech] Monitoring: site checks (public sites and trackers) pass on the response status and headers without downloading the whole page, so a slow body no longer reads as a timeout
+- [tech] Monitoring: red first, fully green groups fold into one line ("Containers 12/12"); filter "All / Errors only / No alert", search by name, sorting by status, name, response time and check time; the choice is kept in the browser
+- [tech] Monitoring: a "Recheck all errors" button runs only the red checks again
 
 ## 0.20.6-beta.3
 
