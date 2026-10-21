@@ -1,6 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+
+// a stable version no matter what package.json says (a beta release bumps it to x.y.z-beta.N)
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.20.5' }));
+
 import { Settings } from '../src/screens/Settings';
 import { TestModeHost } from '../src/testmode/host';
 import { resetTo } from '../src/nav';
