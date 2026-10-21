@@ -94,6 +94,7 @@ export const ru = {
     testModeTitle: 'Режим тестирования',
     testModeHint: 'Номера экранов и пунктов. Нажмите на номер в углу экрана, чтобы скопировать его.',
     testModeCopied: 'Код {code}',
+    testLabelSize: 'Размер меток',
     version: 'Версия',
     localMissing: 'Нужно скачать',
     localMissingSize: 'Нужно скачать ({size})',

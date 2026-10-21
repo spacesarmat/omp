@@ -153,6 +153,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private var dialog: AlertDialog? = null
     /** Beta test-mode codes. Off on a stable build even when the page sends testMode. */
     private var testOn = false
+    private var testSizeDp = 0f
     private val testHud = PlayerTestHud.Session()
 
     /** The colour key whose window [dialog] is (audio list, subtitles list, menu); null for another list. */
@@ -298,9 +299,12 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** Corner codes. A second call with the same flag does nothing, so a new queue does not stack badges. */
     private fun applyTestLabels(r: PlayRequest) {
         val on = PlayerTestHud.enabled(versionLabel(), r.testMode)
-        if (on == testOn) return
+        val size = PlayerTestHud.sizeDp(r.testSize)
+        if (on == testOn && size == testSizeDp) return
         testHud.clear()
         testOn = on
+        testSizeDp = size
+        PlayerTestHud.textDp = size
         if (!on) return
         val content = findViewById<View>(android.R.id.content)
         if (content is android.widget.FrameLayout) PlayerTestHud.copyChip(this, content, "A01", testHud)

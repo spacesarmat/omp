@@ -1899,3 +1899,32 @@ body.test-labels [data-code]::after {
   background: rgba(0, 0, 0, 0.55);
   border-radius: 6px;
 }
+/* «Размер меток»: «Средний» is the size the labels always had */
+body.test-labels.test-size-small [data-code]::after, body.test-size-small .test-screen-badge .test-badge, body.test-size-small .test-el { font-size: 16px; line-height: 20px; }
+body.test-labels.test-size-medium [data-code]::after, body.test-size-medium .test-screen-badge .test-badge, body.test-size-medium .test-el { font-size: 24px; line-height: 28px; }
+body.test-labels.test-size-large [data-code]::after, body.test-size-large .test-screen-badge .test-badge, body.test-size-large .test-el { font-size: 32px; line-height: 38px; }
+/* Element codes (posters, cards, rows): one fixed overlay, takes no space, ignores touches */
+.test-el-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 41;
+  pointer-events: none;
+}
+.test-el {
+  position: absolute;
+  pointer-events: none;
+  font-size: 24px;
+  line-height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(20, 70, 170, 0.8);
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.m-test-size { flex-wrap: wrap; }
+.m-test-size .m-seg { flex: 1 1 100%; margin-top: 8px; }

@@ -10,7 +10,9 @@ A beta build (`x.y.z-beta.N`, `isBetaVersion` in `src/lib/version.ts`) shows the
 
 Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src/testmode/extra.ts`). Do not renumber an existing code. Append a new one.
 
-Posters, files, episodes, search hits, subscriptions, user servers and track lists are not coded. They change with the library. A window of that content still has its own code, without a code per row.
+Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.
+
+Labels come in three sizes, «Маленький» / «Средний» / «Крупный» (`settings.testLabelSize`, beta only, next to the switch). TV web UI and the native Android TV player: 24 / 28 / 36 px (never under 24 px). Phone: 16 / 24 / 32 px.
 
 | Code | Where (ru) | Where (en) | Item (ru) | Item (en) |
 | --- | --- | --- | --- | --- |
@@ -154,6 +156,10 @@ Posters, files, episodes, search hits, subscriptions, user servers and track lis
 | S05.29 | Настройки | Settings | Режим тестирования | Test mode |
 | S05.29.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | S05.29.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
+| S05.30 | Настройки | Settings | Размер меток | Label size |
+| S05.30.1 | Настройки | Settings | Размер меток - Маленький | Label size - Small |
+| S05.30.2 | Настройки | Settings | Размер меток - Средний | Label size - Medium |
+| S05.30.3 | Настройки | Settings | Размер меток - Крупный | Label size - Large |
 | S06 | Плеер | Player |  |  |
 | S06.1 | Плеер | Player | Предыдущий | Previous |
 | S06.2 | Плеер | Player | Воспроизведение | Play or pause |
@@ -714,6 +720,10 @@ Posters, files, episodes, search hits, subscriptions, user servers and track lis
 | P11.19 | Настройки | Settings | Режим тестирования | Test mode |
 | P11.19.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | P11.19.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
+| P11.20 | Настройки | Settings | Размер меток | Label size |
+| P11.20.1 | Настройки | Settings | Размер меток - Маленький | Label size - Small |
+| P11.20.2 | Настройки | Settings | Размер меток - Средний | Label size - Medium |
+| P11.20.3 | Настройки | Settings | Размер меток - Крупный | Label size - Large |
 | P12 | Аккаунт | Account |  |  |
 | P12.1 | Аккаунт | Account | Назад | Back |
 | P13 | Расширенные | Advanced |  |  |
@@ -897,3 +907,25 @@ Posters, files, episodes, search hits, subscriptions, user servers and track lis
 | AD06.2 | Проверка Cloudflare | Cloudflare check | Отметить пультом | Mark it with the remote |
 | AD06.3 | Проверка Cloudflare | Cloudflare check | Проверить ещё раз | Check again |
 | AD06.4 | Проверка Cloudflare | Cloudflare check | Отмена | Cancel |
+
+## Element codes
+
+Besides the fixed codes above, test mode labels the elements of a screen: posters, cards, list rows, tabs, buttons without their own code, fields and rows. They are counted on the page in screen order, so they follow the library and are meant for a report about what is on screen now.
+
+- `S03.P#4` - the fourth poster on screen S03 (outside any row).
+- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits just above it.
+- `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.
+- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.
+- The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.
+- The size follows «Размер меток» / "Label size" (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and uses the same size.
+
+| Type | Element (ru) | Element (en) |
+| --- | --- | --- |
+| `R` | Ряд, полка, сетка или список | Row, shelf, grid or list |
+| `P` | Постер или обложка | Poster or cover |
+| `C` | Карточка (плитка) | Card (tile) |
+| `L` | Строка списка (раздача, файл, серия, результат поиска) | List row (torrent, file, episode, search hit) |
+| `T` | Вкладка или чип | Tab or chip |
+| `B` | Кнопка без своего кода | Button without its own code |
+| `I` | Поле ввода | Input field |
+| `G` | Полоса прогресса или перемотки | Progress or seek bar |

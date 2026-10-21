@@ -5,7 +5,8 @@
 // Codes are assigned here and nowhere else. Do not renumber an existing code:
 // a beta tester cites them across builds ("S05.3 does not save").
 // Append a new code instead. Content rows (posters, files, search hits,
-// episodes, subscriptions) are not coded: they change with the library.
+// episodes, subscriptions) have no fixed code: they change with the library.
+// They get element codes counted on the page (src/testmode/elements.tsx).
 import { NATIVE_DIALOGS, NATIVE_SCREENS, PHONE_DIALOGS, PHONE_SCREENS, type ExtraItem } from './extra';
 
 export interface CodeOption {
@@ -403,6 +404,11 @@ addScreen('S05', ['settings'], 'Настройки', 'Settings', [
   item('S05.27', ['set-advanced'], 'Расширенные', 'Advanced'),
   item('S05.28', ['set-onboarding'], 'Показать знакомство', 'Show the tour'),
   item('S05.29', ['set-test-mode'], 'Режим тестирования', 'Test mode', opt('S05.29', ON_OFF)),
+  item('S05.30', ['set-test-size'], 'Размер меток', 'Label size', opt('S05.30', [
+    ['small', 'Маленький', 'Small'],
+    ['medium', 'Средний', 'Medium'],
+    ['large', 'Крупный', 'Large'],
+  ])),
 ]);
 
 addScreen('S06', ['player'], 'Плеер', 'Player', [

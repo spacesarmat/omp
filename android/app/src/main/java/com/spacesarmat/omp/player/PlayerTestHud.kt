@@ -34,6 +34,20 @@ object PlayerTestHud {
 
     private val BETA = Regex("-beta\\.[0-9]+$")
 
+    /**
+     * Label text size in dp for «Маленький» / «Средний» / «Крупный». A TV never goes under 24.
+     * Anything unknown is «Средний».
+     */
+    fun sizeDp(size: String?): Float = when (size) {
+        "small" -> 24f
+        "large" -> 36f
+        else -> 28f
+    }
+
+    /** The size the next badges are drawn with. Set before pin(), copyChip(), dialog() and CodedMenu. */
+    @Volatile
+    var textDp: Float = 28f
+
     class Pin(val view: View, val drawable: Drawable, val listener: View.OnLayoutChangeListener)
 
     class Session {
@@ -70,7 +84,7 @@ object PlayerTestHud {
         val chip = TextView(ctx)
         chip.text = code
         chip.setTextColor(Color.WHITE)
-        chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24f)
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_DIP, textDp)
         chip.setBackgroundColor(0x8C000000.toInt())
         val pad = dip(ctx, 6f).toInt()
         chip.setPadding(pad, 0, pad, 0)
@@ -124,7 +138,7 @@ class CodedMenu(ctx: Context, private val rows: List<Pair<String, String>>) : Ar
         val badge = TextView(context)
         badge.text = row.second
         badge.setTextColor(Color.WHITE)
-        badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 24f)
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_DIP, PlayerTestHud.textDp)
         badge.setBackgroundColor(0x8C000000.toInt())
         badge.setPadding(pad / 2, 0, pad / 2, 0)
         badge.isFocusable = false
@@ -138,7 +152,7 @@ class CodedMenu(ctx: Context, private val rows: List<Pair<String, String>>) : Ar
 private class CodeDrawable(ctx: Context, private val text: String) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 24f, ctx.resources.displayMetrics)
+        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, PlayerTestHud.textDp, ctx.resources.displayMetrics)
     }
     private val bg = Paint().apply { color = 0x8C000000.toInt() }
     private val pad = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4f, ctx.resources.displayMetrics)

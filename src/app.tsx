@@ -36,6 +36,7 @@ import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
 import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
 import { ScreenCodeBadge } from './testmode/badge';
+import { ElementLabelsHost } from './testmode/elements';
 
 /**
  * The Android TV search sources screen (on LG: the TorrServer sources) is a separate chunk: its indexer status code stays out of the main bundle.
@@ -153,6 +154,7 @@ export function App() {
       <TextDialogHost />
       <ToastHost />
       <ScreenCodeBadge />
+      <ElementLabelsHost />
     </div>
   );
 }

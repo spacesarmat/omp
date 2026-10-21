@@ -33,6 +33,8 @@ describe('test mode on a stable build', () => {
     act(() => { render(h('div', null, h(SettingsScreen, null), h(ScreenCodeBadge, null)), host); });
     expect(host.textContent).not.toContain('Режим тестирования');
     expect(host.textContent).not.toContain('Test mode');
+    expect(host.textContent).not.toContain('Размер меток');
+    expect(host.querySelector('[data-fk="set-test-size"]')).toBeNull();
     expect(host.querySelector('.test-badge')).toBeNull();
     expect(host.querySelector('.test-screen-badge')).toBeNull();
   });

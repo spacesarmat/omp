@@ -1,6 +1,7 @@
 // Renders docs/screen-codes.md from the registry. Imported by tests only, so the FAQ texts stay out of the TV bundle.
 import { FAQ_EN } from '../faq/faq.en';
 import { FAQ_RU } from '../faq/faq.ru';
+import { elementTypesDoc } from './elements';
 import { dialogs, screens, type CodeOption, type RegItem } from './registry';
 
 function clean(s: string): string {
@@ -124,7 +125,9 @@ export function renderScreenCodesDoc(): string {
     '',
     'Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src/testmode/extra.ts`). Do not renumber an existing code. Append a new one.',
     '',
-    'Posters, files, episodes, search hits, subscriptions, user servers and track lists are not coded. They change with the library. A window of that content still has its own code, without a code per row.',
+    'Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.',
+    '',
+    'Labels come in three sizes, «Маленький» / «Средний» / «Крупный» (`settings.testLabelSize`, beta only, next to the switch). TV web UI and the native Android TV player: 24 / 28 / 36 px (never under 24 px). Phone: 16 / 24 / 32 px.',
     '',
     '| Code | Where (ru) | Where (en) | Item (ru) | Item (en) |',
     '| --- | --- | --- | --- | --- |',
@@ -134,5 +137,7 @@ export function renderScreenCodesDoc(): string {
     lines.push('| ' + [r.code, r.whereRu, r.whereEn, r.itemRu, r.itemEn].map(cell).join(' | ') + ' |');
   }
   lines.push('');
+  const el = elementTypesDoc();
+  for (let i = 0; i < el.length; i++) lines.push(el[i]);
   return lines.join('\n');
 }
