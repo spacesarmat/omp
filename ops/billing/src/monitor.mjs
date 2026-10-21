@@ -87,6 +87,8 @@ export function alertPlan(alerted, rows, now) {
   const problems = [];
   const recovered = [];
   const seen = new Set();
+  // A list that could not be read: the rows it would have made were not checked, so they keep their state.
+  const unread = rows.filter((r) => r.scope).map((r) => r.scope);
   for (const r of rows) {
     seen.add(r.id);
     const was = prev[r.id];
@@ -104,35 +106,59 @@ export function alertPlan(alerted, rows, now) {
     }
   }
   for (const id of Object.keys(prev)) {
-    if (!seen.has(id)) recovered.push({ id, text: prev[id].text, gone: true });
+    if (seen.has(id)) continue;
+    if (unread.some((p) => id.startsWith(p))) next[id] = prev[id];
+    else recovered.push({ id, text: prev[id].text, gone: true });
   }
   return { problems, recovered, next };
 }
 
-function clip(lines, head) {
-  let out = head;
-  let n = 0;
-  for (const line of lines) {
-    if (out.length + line.length + 1 > MAX_MESSAGE) break;
-    out += '\n' + line;
-    n += 1;
-  }
-  if (n < lines.length) out += '\n… и ещё ' + (lines.length - n);
+/**
+ * Split lines into Telegram-sized messages, each starting with `head`. Returns [{ text, items: [line indexes] }],
+ * so the caller can mark as told only the lines of messages that went out.
+ */
+export function splitMessages(lines, head) {
+  const out = [];
+  let cur = null;
+  lines.forEach((raw, i) => {
+    const line = raw.length > MAX_MESSAGE - head.length - 1 ? raw.slice(0, MAX_MESSAGE - head.length - 2) + '…' : raw;
+    if (!cur || cur.text.length + line.length + 1 > MAX_MESSAGE) {
+      cur = { text: head, items: [] };
+      out.push(cur);
+    }
+    cur.text += '\n' + line;
+    cur.items.push(i);
+  });
+  if (out.length > 1) out.forEach((m, n) => (m.text = m.text.replace(head, head + ' (' + (n + 1) + '/' + out.length + ')')));
   return out;
 }
 
+const PROBLEM_HEAD = '⚠️ Мониторинг OMP: проблема (проверено дважды, с паузой 30 с)';
+const RECOVERED_HEAD = '✅ Мониторинг OMP: починилось';
+
+function problemLines(problems) {
+  return problems.map((r) => '• ' + label(r) + ': ' + (r.detail || 'ошибка') + (r.context ? ' (' + r.context + ')' : ''));
+}
+
+function recoveredLines(recovered) {
+  return recovered.map((r) => '• ' + r.text + (r.gone ? ': больше не проверяется' : r.partial ? ': сайт снова открывается напрямую' : ''));
+}
+
+export function problemMessages(problems) {
+  return splitMessages(problemLines(problems), PROBLEM_HEAD);
+}
+
+export function recoveredMessages(recovered) {
+  return splitMessages(recoveredLines(recovered), RECOVERED_HEAD);
+}
+
+/** One message (the first part when it needs several). */
 export function problemText(problems) {
-  return clip(
-    problems.map((r) => '• ' + label(r) + ': ' + (r.detail || 'ошибка') + (r.context ? ' (' + r.context + ')' : '')),
-    '⚠️ Мониторинг OMP: проблема (проверено дважды, с паузой 30 с)',
-  );
+  return problemMessages(problems).map((m) => m.text)[0] || PROBLEM_HEAD;
 }
 
 export function recoveredText(recovered) {
-  return clip(
-    recovered.map((r) => '• ' + r.text + (r.gone ? ': больше не проверяется' : r.partial ? ': сайт снова открывается напрямую' : '')),
-    '✅ Мониторинг OMP: починилось',
-  );
+  return recoveredMessages(recovered).map((m) => m.text)[0] || RECOVERED_HEAD;
 }
 
 /** Seven days as 168 hourly cells per check: 'g' all ok, 'r' a failure in that hour, '-' no data. */
@@ -163,6 +189,58 @@ export function createMonitor(deps) {
   let runningSince = 0;
   let lastRunAt = 0;
   let timers = [];
+  // Last values read from Postgres, so a Postgres outage is still checked and reported.
+  // `unsaved`: keys whose last write failed; memory is newer than Postgres until it is written.
+  const mem = { settings: null, config: { ...MONITOR_DEFAULTS }, kv: {}, unsaved: new Set() };
+
+  async function settingsNow() {
+    try {
+      const s = (await d.getSettings()) || {};
+      mem.settings = s;
+      return s;
+    } catch (e) {
+      return mem.settings || {};
+    }
+  }
+
+  async function kvNow(key, fallback) {
+    if (mem.unsaved.has(key)) {
+      try {
+        await kvSet(store, key, mem.kv[key]);
+        mem.unsaved.delete(key);
+      } catch (e) {
+        /* still down */
+      }
+      return mem.kv[key];
+    }
+    try {
+      const v = await kvGet(store, key, fallback);
+      mem.kv[key] = v;
+      return v;
+    } catch (e) {
+      return mem.kv[key] !== undefined ? mem.kv[key] : fallback;
+    }
+  }
+
+  async function kvKeep(key, value) {
+    mem.kv[key] = value;
+    try {
+      await kvSet(store, key, value);
+      mem.unsaved.delete(key);
+    } catch (e) {
+      mem.unsaved.add(key);
+      log('monitor state not saved: ' + key);
+    }
+  }
+
+  async function configNow() {
+    try {
+      mem.config = await readMonitorConfig(store);
+    } catch (e) {
+      /* Postgres down: the last interval read */
+    }
+    return mem.config;
+  }
 
   async function check(tasks) {
     return finalize(await runTasks(tasks, 8, 3));
@@ -173,12 +251,12 @@ export function createMonitor(deps) {
     runningSince = now();
     running = (async () => {
       const startedAt = now();
-      const settings = (await d.getSettings()) || {};
-      const restarts = await kvGet(store, 'monitor_restarts', {});
+      const settings = await settingsNow();
+      const restarts = await kvNow('monitor_restarts', {});
       const ctx = { settings, env, store, backups: d.backups, net: d.net, get: d.get, statfs: d.statfs, now, botPoll: d.botPoll, restarts };
       const tasks = await buildTasks(ctx);
       let rows = await check(tasks);
-      const alerted = await kvGet(store, 'monitor_alerts', {});
+      const alerted = await kvNow('monitor_alerts', {});
       // One retry after 30 s for every failed check, when one of them would be a new alert.
       const fresh = rows.some((r) => r.alert && r.ok === false && !alerted[r.id]);
       if (fresh) {
@@ -189,13 +267,18 @@ export function createMonitor(deps) {
         rows = finalize(rows.map((r) => (byId.has(r.id) ? { ...byId.get(r.id), retried: true } : r)));
       }
       const finishedAt = now();
-      await saveRun(startedAt, finishedAt, trigger, rows);
+      lastRunAt = finishedAt;
+      // Alerts first: with Postgres down the history cannot be saved, but the alert must still go out.
+      await notify(alerted, rows, finishedAt, settings);
       // RestartCount per container, for the next run's «перезапускался».
       const counts = { ...restarts };
       for (const r of rows) if (r.group === 'containers' && r.restarts !== undefined) counts[r.name] = r.restarts;
-      await kvSet(store, 'monitor_restarts', counts);
-      await notify(alerted, rows, finishedAt);
-      lastRunAt = finishedAt;
+      await kvKeep('monitor_restarts', counts);
+      try {
+        await saveRun(startedAt, finishedAt, trigger, rows);
+      } catch (e) {
+        log('monitor history not saved: ' + String((e && e.code) || (e && e.name) || 'error'));
+      }
       return { startedAt, finishedAt, rows };
     })()
       .catch((e) => {
@@ -247,26 +330,27 @@ export function createMonitor(deps) {
     await store.query('DELETE FROM monitor_runs WHERE run_at < $1', [cut]);
   }
 
-  async function notify(alerted, rows, at) {
+  async function notify(alerted, rows, at, settings) {
     const plan = alertPlan(alerted, rows, at);
     const next = { ...plan.next };
     const chat = monitorChatId(env);
-    if (plan.problems.length) {
-      const sent = await safeSend(chat, problemText(plan.problems));
+    // Long lists go in several messages; only the lines of a message that went out count as told.
+    for (const m of problemMessages(plan.problems)) {
+      const sent = await safeSend(chat, m.text, settings);
       // Not sent: forget them, so the next run reports them again.
-      if (!sent) for (const r of plan.problems) delete next[r.id];
+      if (!sent) for (const i of m.items) delete next[plan.problems[i].id];
     }
-    if (plan.recovered.length) {
-      const sent = await safeSend(chat, recoveredText(plan.recovered));
-      if (!sent) for (const r of plan.recovered) if (alerted[r.id]) next[r.id] = alerted[r.id];
+    for (const m of recoveredMessages(plan.recovered)) {
+      const sent = await safeSend(chat, m.text, settings);
+      if (!sent) for (const i of m.items) next[plan.recovered[i].id] = alerted[plan.recovered[i].id];
     }
-    await kvSet(store, 'monitor_alerts', next);
+    await kvKeep('monitor_alerts', next);
   }
 
-  async function safeSend(chat, text) {
+  async function safeSend(chat, text, settings) {
     if (!d.send) return false;
     try {
-      return !!(await d.send(chat, text));
+      return !!(await d.send(chat, text, settings));
     } catch (e) {
       log('monitor alert not sent: ' + String((e && e.name) || 'error'));
       return false;
@@ -316,10 +400,14 @@ export function createMonitor(deps) {
     const tick = async () => {
       try {
         if (running) return;
-        const cfg = await readMonitorConfig(store);
+        const cfg = await configNow();
         if (!lastRunAt) {
-          const r = (await store.query('SELECT max(finished_at) AS at FROM monitor_runs')).rows[0];
-          lastRunAt = Number(r && r.at) || 0;
+          try {
+            const r = (await store.query('SELECT max(finished_at) AS at FROM monitor_runs')).rows[0];
+            lastRunAt = Number(r && r.at) || 0;
+          } catch (e) {
+            lastRunAt = 0; // Postgres down at start: run now, the run reports it
+          }
         }
         if (now() - lastRunAt >= cfg.intervalMin * 60 * 1000) await run('schedule');
       } catch (e) {

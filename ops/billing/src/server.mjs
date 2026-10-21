@@ -516,8 +516,10 @@ export function monitorFor(store, opts) {
     backups: o.backups || null,
     net: o.net,
     getSettings: async () => (await store.read()).settings,
-    send: async (chatId, text) => {
-      const token = (await store.read()).settings.botToken;
+    // `settings` is the monitor's last good read, so an alert about a Postgres outage still has a token.
+    send: async (chatId, text, settings) => {
+      const env = o.env || process.env;
+      const token = (settings && settings.botToken) || String(env.BILLING_BOT_TOKEN || '').trim();
       if (!token) return false;
       const r = await telegramSend(token, chatId, text, o.net || fetch);
       return r.ok;

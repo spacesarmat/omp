@@ -153,6 +153,59 @@ describe('monitor runs on Postgres', () => {
     expect(t.sent[1].text).toContain('починилось');
   });
 
+  it('a Postgres outage is still reported (cached settings and state), once, and its recovery too', async () => {
+    const base = await testStore();
+    await base.update((s: any) => ({ state: { ...s, settings: { ...s.settings, ...SETTINGS } } }));
+    let down = false;
+    const refuse = () => Promise.reject(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
+    const flaky = { query: (sql: string, params?: unknown[]) => (down ? refuse() : base.query(sql, params)) };
+    const tokens: string[] = [];
+    const t = await setup({
+      store: flaky,
+      getSettings: async () => (down ? refuse() : (await base.read()).settings),
+    });
+    const sent: string[] = [];
+    // re-create with a send that records the token it was handed
+    const monitor = createMonitor({
+      store: flaky,
+      env: {},
+      getSettings: async () => (down ? refuse() : (await base.read()).settings),
+      send: async (_chat: string, text: string, settings: any) => {
+        tokens.push(settings && settings.botToken);
+        sent.push(text);
+        return true;
+      },
+      net: async () => ({ status: 200, ok: true }),
+      get: makeGet(t.w),
+      statfs: async () => ({ blocks: 1000000, bsize: 1024 * 1024, bavail: 900000 }),
+      now: t.now,
+      sleep: async () => {},
+      botPoll: () => ({ enabled: true, lastOkAt: t.now() - 1000 }),
+      log: () => {},
+    });
+    await monitor.run('schedule');
+    expect(sent).toEqual([]);
+    down = true;
+    t.tick(15 * 60000);
+    const r = await monitor.run('schedule');
+    expect(r).not.toBeNull();
+    expect(r!.rows.find((x: any) => x.id === 'postgres').ok).toBe(false);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('• Postgres');
+    expect(tokens[0]).toBe(SETTINGS.botToken);
+    t.tick(15 * 60000);
+    await monitor.run('schedule');
+    expect(sent).toHaveLength(1);
+    down = false;
+    t.tick(15 * 60000);
+    await monitor.run('schedule');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain('починилось');
+    expect(sent[1]).toContain('• Postgres');
+    const kv = await base.query("SELECT value FROM kv WHERE key = 'monitor_alerts'");
+    expect(JSON.parse(kv.rows[0].value)).toEqual({});
+  });
+
   it('keeps 7 days only', async () => {
     const t = await setup();
     const old = t.now() - 8 * 24 * 3600000;

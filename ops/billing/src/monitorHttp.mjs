@@ -110,10 +110,10 @@ export async function monitorGet(url, opts) {
           headers: { 'user-agent': 'omp-billing-monitor', accept: '*/*', ...(o.headers || {}) },
           servername: target.hostname,
         };
-        // Never the global agents: with NODE_USE_ENV_PROXY they carry the env proxy.
+        // Never the global agents: with NODE_USE_ENV_PROXY they carry the env proxy. Through the tunnel no
+        // agent at all: `agent: false` would make a fresh agent that ignores createConnection and goes direct.
         if (createConnection) {
           options.createConnection = createConnection;
-          options.agent = false;
         } else {
           options.agent = new mod.Agent({ keepAlive: false });
         }

@@ -254,8 +254,29 @@ function info(detail) {
   return async () => ({ ok: null, detail, ms: 0 });
 }
 
-function failed(detail) {
-  return async () => ({ ok: false, detail, ms: 0 });
+/**
+ * A list (containers, Jackett or JacRed trackers) that could not be read. The first run reports the captured
+ * error; the 30 s retry reads the list again. `scope` is the id prefix of the rows the list would have made:
+ * while this row exists, their alert state is kept (they were not checked, so nothing recovered).
+ */
+function listFailed(row, detail, reread) {
+  let tries = 0;
+  return {
+    ...row,
+    run: async () => {
+      tries += 1;
+      if (tries === 1) return { ok: false, detail, ms: 0 };
+      const started = Date.now();
+      let why = '';
+      try {
+        why = await reread();
+      } catch (e) {
+        why = errorText(e && e.kind);
+      }
+      if (why) return { ok: false, detail: why, ms: Date.now() - started };
+      return { ok: true, detail: 'прочитан со второй попытки, проверка по списку - в следующий раз', ms: Date.now() - started };
+    },
+  };
 }
 
 /** Monitor settings from the environment (names documented in ops/vps/.env.example). */
@@ -484,16 +505,23 @@ export async function buildTasks(ctx) {
   if (!cfg.dockerProxy) {
     out.push({ id: 'containers', group: 'containers', name: 'Контейнеры', alert: false, run: info('не настроено (BILLING_DOCKER_PROXY_URL)') });
   } else {
-    let list = null;
-    let why = '';
-    try {
-      const filters = encodeURIComponent(JSON.stringify({ label: ['com.docker.compose.project=' + cfg.composeProject] }));
-      list = await dockerJson(cfg, get, '/containers/json?all=1&filters=' + filters);
-    } catch (e) {
-      why = errorText(e && e.kind);
-    }
+    const readList = async () => {
+      try {
+        const filters = encodeURIComponent(JSON.stringify({ label: ['com.docker.compose.project=' + cfg.composeProject] }));
+        const list = await dockerJson(cfg, get, '/containers/json?all=1&filters=' + filters);
+        return Array.isArray(list) ? { list, why: '' } : { list: null, why: 'ответ не список' };
+      } catch (e) {
+        return { list: null, why: errorText(e && e.kind) };
+      }
+    };
+    const { list, why } = await readList();
     if (!Array.isArray(list)) {
-      out.push({ id: 'containers', group: 'containers', name: 'Docker (прокси сокета)', alert: true, run: failed('список контейнеров: ' + (why || 'ошибка')) });
+      out.push(
+        listFailed({ id: 'containers', group: 'containers', name: 'Docker (прокси сокета)', alert: true, scope: 'ct:' }, 'список контейнеров: ' + (why || 'ошибка'), async () => {
+          const again = await readList();
+          return again.list ? '' : 'список контейнеров: ' + (again.why || 'ошибка');
+        }),
+      );
     } else {
       const rows = list
         .map((x) => ({ id: String(x.Id || ''), name: String((x.Names && x.Names[0]) || '').replace(/^\//, '') }))
@@ -519,15 +547,22 @@ export async function buildTasks(ctx) {
   // ---- Jackett trackers: every configured one, via Jackett and the site directly / through WARP ----
   const jackettUrl = String(s.jackettUrl || '').replace(/\/+$/, '');
   if (jackettUrl && s.jackettApiKey) {
-    let indexers = null;
-    let why = '';
-    const r = await get(jackettTorznabIndexersUrl(jackettUrl, s.jackettApiKey), { timeoutMs: 20000, maxBytes: 4 * 1024 * 1024 });
-    if (r.ok && r.status === 200 && /<indexers\b/i.test(r.body)) indexers = parseJackettIndexers(r.body);
-    else why = r.ok ? 'HTTP ' + r.status : errorText(r.error);
+    const readList = async () => {
+      const r = await get(jackettTorznabIndexersUrl(jackettUrl, s.jackettApiKey), { timeoutMs: 20000, maxBytes: 4 * 1024 * 1024 });
+      if (r.ok && r.status === 200 && /<indexers\b/i.test(r.body)) {
+        const list = parseJackettIndexers(r.body);
+        return list.length ? { list, why: '' } : { list: null, why: 'в Jackett нет настроенных трекеров' };
+      }
+      return { list: null, why: r.ok ? 'HTTP ' + r.status : errorText(r.error) };
+    };
+    const { list: indexers, why } = await readList();
     if (!indexers) {
-      out.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', alert: true, run: failed(why || 'не прочитан') });
-    } else if (!indexers.length) {
-      out.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', alert: true, run: failed('в Jackett нет настроенных трекеров') });
+      out.push(
+        listFailed({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', alert: true, scope: 'jackett:' }, why || 'не прочитан', async () => {
+          const again = await readList();
+          return again.list ? '' : again.why || 'не прочитан';
+        }),
+      );
     } else {
       for (const ix of indexers) {
         out.push({
@@ -586,20 +621,25 @@ export async function buildTasks(ctx) {
       }),
     });
     sitePair(out, 'jacred', 'jacred:sync', 'sync.jacred.stream', JACRED_SYNC_URL, cfg, get);
-    let trackers = null;
-    let why = '';
-    const r = await get(jacredUrl + '/api/v1.0/trackers?apikey=' + encodeURIComponent(s.jacredApiKey), { timeoutMs: 10000 });
-    if (r.ok && r.status === 200) {
+    const readList = async () => {
+      const r = await get(jacredUrl + '/api/v1.0/trackers?apikey=' + encodeURIComponent(s.jacredApiKey), { timeoutMs: 10000 });
+      if (!r.ok || r.status !== 200) return { list: null, why: r.ok ? 'HTTP ' + r.status : errorText(r.error) };
       try {
         const data = JSON.parse(r.body);
-        if (Array.isArray(data)) trackers = data.map((x) => String(x || '').toLowerCase()).filter((x) => /^[a-z0-9_-]{1,40}$/.test(x));
-        else why = 'ответ не список';
+        if (!Array.isArray(data)) return { list: null, why: 'ответ не список' };
+        return { list: data.map((x) => String(x || '').toLowerCase()).filter((x) => /^[a-z0-9_-]{1,40}$/.test(x)), why: '' };
       } catch (e) {
-        why = 'ответ не JSON';
+        return { list: null, why: 'ответ не JSON' };
       }
-    } else why = r.ok ? 'HTTP ' + r.status : errorText(r.error);
+    };
+    const { list: trackers, why } = await readList();
     if (!trackers) {
-      out.push({ id: 'jacred:list', group: 'jacred', name: 'Список трекеров JacRed', alert: true, run: failed(why || 'не прочитан') });
+      out.push(
+        listFailed({ id: 'jacred:list', group: 'jacred', name: 'Список трекеров JacRed', alert: true, scope: 'jacred:' }, why || 'не прочитан', async () => {
+          const again = await readList();
+          return again.list ? '' : again.why || 'не прочитан';
+        }),
+      );
     } else {
       for (const t of Array.from(new Set(trackers)).sort()) sitePair(out, 'jacred', 'jacred:' + t, t, JACRED_TRACKER_SITES[t] || '', cfg, get);
     }

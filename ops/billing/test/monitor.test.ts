@@ -17,7 +17,7 @@ import {
   siteVerdict,
   PUBLIC_SITES,
 } from '../src/monitorChecks.mjs';
-import { alertPlan, historyStrip, monitorChatId, monitorEnabled, problemText, recoveredText, validInterval } from '../src/monitor.mjs';
+import { alertPlan, historyStrip, monitorChatId, monitorEnabled, problemMessages, problemText, recoveredText, validInterval } from '../src/monitor.mjs';
 
 const KEY = 'jk_' + 'x'.repeat(29);
 const RED_KEY = 'jr_' + 'y'.repeat(29);
@@ -28,9 +28,12 @@ let proxy: Server;
 let targetPort = 0;
 let proxyPort = 0;
 let proxied = 0;
+let tunneledBytes = 0;
+let targetHits: string[] = [];
 
 beforeAll(async () => {
   target = createServer((req, res) => {
+    targetHits.push(String(req.socket.remotePort));
     if (req.url === '/redirect') {
       res.writeHead(302, { location: 'http://warning.rt.ru/?id=1' });
       return res.end();
@@ -60,6 +63,9 @@ beforeAll(async () => {
       client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
       if (head && head.length) up.write(head);
       up.pipe(client);
+      client.on('data', (b: Buffer) => {
+        tunneledBytes += b.length;
+      });
       client.pipe(up);
     });
     up.on('error', () => client.destroy());
@@ -83,9 +89,15 @@ describe('monitorGet', () => {
     expect(direct).toMatchObject({ ok: true, status: 200 });
     expect(direct.body).toContain('warp=on');
     expect(proxied).toBe(before);
+    const bytesBefore = tunneledBytes;
+    targetHits = [];
     const via = await monitorGet('http://127.0.0.1:' + targetPort + '/', { proxy: 'http://127.0.0.1:' + proxyPort });
     expect(via).toMatchObject({ ok: true, status: 200 });
+    expect(via.body).toContain('warp=on');
     expect(proxied).toBe(before + 1);
+    // the GET itself went through the tunnel, not around it
+    expect(tunneledBytes - bytesBefore).toBeGreaterThan(20);
+    expect(targetHits.length).toBe(1);
   });
 
   it('does not follow redirects and keeps the location', async () => {
@@ -342,6 +354,37 @@ describe('buildTasks', () => {
     expect(rows.find((r) => r.id === 'jacred:fresh')).toMatchObject({ ok: false });
   });
 
+  it('a list that failed is read again on the retry', async () => {
+    let listCalls = 0;
+    const base = world();
+    const { get } = fakeGet((url, proxy) => {
+      const u = new URL(url);
+      if (u.hostname === 'jackett' && u.searchParams.get('t') === 'indexers') {
+        listCalls += 1;
+        return listCalls === 1 ? { ok: false, error: 'timeout' } : base(url, proxy);
+      }
+      if (u.hostname === 'jacred' && u.pathname === '/api/v1.0/trackers') return { ok: true, status: 500 };
+      if (u.hostname === 'docker-proxy' && u.pathname === '/containers/json') return { ok: false, error: 'refused' };
+      return base(url, proxy);
+    });
+    const tasks = await buildTasks({ settings: SETTINGS, env: { BILLING_DOCKER_PROXY_URL: 'http://docker-proxy:2375' }, get, net: okNet, now: () => NOW, statfs: async () => ({ blocks: 1000, bsize: 4096, bavail: 500 }), botPoll: () => ({ enabled: false }) });
+    const lists = tasks.filter((t) => t.scope);
+    expect(lists.map((t) => [t.id, t.scope])).toEqual([
+      ['containers', 'ct:'],
+      ['jackett:list', 'jackett:'],
+      ['jacred:list', 'jacred:'],
+    ]);
+    const first = await runTasks(lists, 8, 3);
+    expect(first.every((r) => r.ok === false)).toBe(true);
+    const again = await runTasks(lists, 8, 3);
+    const byId = Object.fromEntries(again.map((r) => [r.id, r]));
+    expect(byId['jackett:list'].ok).toBe(true);
+    expect(byId['jackett:list'].scope).toBe('jackett:');
+    expect(byId['jacred:list']).toMatchObject({ ok: false, detail: 'HTTP 500' });
+    expect(byId.containers.ok).toBe(false);
+    expect(listCalls).toBe(2);
+  });
+
   it('runTasks keeps at most heavyLimit heavy tasks at once', async () => {
     let live = 0;
     let peak = 0;
@@ -393,10 +436,32 @@ describe('alerts', () => {
     const p = problemText([{ id: 'jackett:k', group: 'jackett', name: 'Kinozal', path: 'jackett', ok: false, alert: true, detail: 'таймаут', context: 'сайт напрямую: ок; через WARP: ок' }]);
     expect(p).toBe('⚠️ Мониторинг OMP: проблема (проверено дважды, с паузой 30 с)\n• Jackett: Kinozal (поиск через Jackett): таймаут (сайт напрямую: ок; через WARP: ок)');
     expect(recoveredText([{ id: 'a', text: 'Postgres' }, { id: 'b', text: 'X', gone: true }])).toBe('✅ Мониторинг OMP: починилось\n• Postgres\n• X: больше не проверяется');
-    const long = problemText(Array.from({ length: 200 }, (_, i) => row('check-' + i + '-' + 'z'.repeat(40), false)));
-    expect(long.length).toBeLessThan(4096);
-    expect(long).toMatch(/… и ещё \d+$/);
-    for (const t of [p, long]) expect(t).not.toMatch(/[\u2013\u2014]/);
+    for (const t of [p]) expect(t).not.toMatch(/[\u2013\u2014]/);
+  });
+
+  it('a long list goes in several messages, every check in one of them', () => {
+    const many = Array.from({ length: 200 }, (_, i) => row('check-' + i + '-' + 'z'.repeat(40), false));
+    const msgs = problemMessages(many);
+    expect(msgs.length).toBeGreaterThan(1);
+    for (const m of msgs) {
+      expect(m.text.length).toBeLessThan(4096);
+      expect(m.text).not.toMatch(/[\u2013\u2014]/);
+    }
+    expect(msgs[0].text.split('\n')[0]).toContain('(1/' + msgs.length + ')');
+    expect(msgs.flatMap((m) => m.items)).toEqual(many.map((_, i) => i));
+    expect(msgs.map((m) => m.text).join('\n')).toContain('check-199-');
+  });
+
+  it('a list that could not be read keeps its rows alerted, without «починилось»', () => {
+    const prev = { 'jackett:kinozal': { since: 1, text: 'Kinozal' }, 'ct:omp-jacred': { since: 1, text: 'omp-jacred' } };
+    const listRow = { ...row('jackett:list', false), scope: 'jackett:' };
+    const plan = alertPlan(prev, [listRow], 5);
+    expect(plan.recovered.map((r) => r.id)).toEqual(['ct:omp-jacred']);
+    expect(plan.next['jackett:kinozal']).toEqual(prev['jackett:kinozal']);
+    // read again on the retry: still not checked, still kept
+    expect(alertPlan(prev, [{ ...listRow, ok: true }], 5).next['jackett:kinozal']).toBeTruthy();
+    // read fine on a later run, tracker gone from Jackett: closed
+    expect(alertPlan(prev, [row('jackett:other', true)], 5).recovered.map((r) => r.id)).toContain('jackett:kinozal');
   });
 
   it('settings helpers', () => {

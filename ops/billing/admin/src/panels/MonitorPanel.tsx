@@ -303,11 +303,22 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   const wasRunning = useRef(false);
 
   async function load() {
-    const res = await api<MonitorData>('/admin/api/monitor');
+    let res: MonitorData & { auth?: boolean; error?: string };
+    try {
+      res = await api<MonitorData & { error?: string }>('/admin/api/monitor');
+    } catch {
+      setErr('Нет связи с сервером');
+      return null;
+    }
     if (res.auth === false) {
       setErr('Нужен вход');
       return null;
     }
+    if (!res.ok) {
+      setErr(res.error === 'read_only' ? 'Этот экземпляр только для чтения, мониторинг здесь не работает' : 'Мониторинг недоступен');
+      return null;
+    }
+    setErr('');
     setData(res);
     setIntervalValue((cur) => cur || String(res.intervalMin || ''));
     if (wasRunning.current && !res.running) toast('Проверка завершена');
@@ -322,8 +333,8 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   }, []);
 
   useEffect(() => {
-    if (!data?.running) return;
-    const timer = window.setInterval(() => void load(), 3000);
+    // Every 3 s while a check runs, every minute otherwise, so a scheduled run shows up in an open tab.
+    const timer = window.setInterval(() => void load(), data?.running ? 3000 : 60000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.running]);
@@ -331,11 +342,17 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   async function runNow() {
     setBusy(true);
     try {
-      const res = await post('/admin/monitor/run', csrf, {});
+      const res = (await post('/admin/monitor/run', csrf, {})) as { ok?: boolean; error?: string; auth?: boolean };
       if (res.auth === false) return setErr('Нужен вход');
+      if (!res.ok) {
+        toast(res.error || 'Не запущено, обновите страницу');
+        return;
+      }
       toast('Проверка запущена, займёт до нескольких минут');
       wasRunning.current = true;
       await load();
+    } catch {
+      toast('Нет связи с сервером');
     } finally {
       setBusy(false);
     }
@@ -352,6 +369,8 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
         setIntervalValue(String(res.intervalMin));
         await load();
       }
+    } catch {
+      toast('Нет связи с сервером');
     } finally {
       setBusy(false);
     }
