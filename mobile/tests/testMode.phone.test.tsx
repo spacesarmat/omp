@@ -9,6 +9,8 @@ import { TestModeHost } from '../src/testmode/host';
 import { resetTo } from '../src/nav';
 import { resetSettings, settings, updateSettings } from '../../src/store/settings';
 import { toast } from '../src/ui/toast';
+import { ElementLabelsHost } from '../../src/testmode/elements';
+import { markPhoneUi } from '../../src/testmode/active';
 
 afterEach(() => {
   resetSettings();
@@ -33,6 +35,34 @@ function mount(): HTMLElement {
 }
 
 describe('phone test mode', () => {
+  it('applies the phone px to the labels, not the TV px', () => {
+    markPhoneUi();
+    updateSettings({ testMode: true, testLabelPx: 30 });
+    resetTo({ name: 'settings' });
+    document.body.innerHTML = '<div id="app"></div>';
+    const el = document.getElementById('app')!;
+    act(() => {
+      render(
+        <div>
+          <Settings />
+          <TestModeHost />
+          <ElementLabelsHost phone />
+        </div>,
+        el,
+      );
+    });
+    const style = () => document.getElementById('test-label-size')!.textContent || '';
+    expect(style()).toContain('font-size: 12px');
+    const range = el.querySelector('[data-code="P11.20"] input[type="range"]') as HTMLInputElement;
+    act(() => {
+      range.value = '10';
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(style()).toContain('font-size: 10px');
+    expect(style()).not.toContain('30px');
+    expect(style()).toContain('body.test-labels [data-code]::after');
+  });
+
   it('offers a label size slider next to the switch on a beta build', () => {
     resetTo({ name: 'settings' });
     const el = mount();

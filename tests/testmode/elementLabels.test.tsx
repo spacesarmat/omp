@@ -168,6 +168,33 @@ describe('label size slider on a beta build', () => {
     expect(badge && badge.textContent).toBe('S05.30');
   });
 
+  it('left / right on the remote step by 2 px, stop at both ends and keep the focus', async () => {
+    const { getCurrentFocusKey, setFocus } = await import('@noriginmedia/norigin-spatial-navigation');
+    const press = async (key: string) => {
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: key, bubbles: true }));
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+    };
+    mount(h(SettingsScreen, {}));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    await act(async () => { setFocus('set-test-size'); for (let i = 0; i < 4; i++) await Promise.resolve(); });
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+    await press('ArrowRight');
+    expect(settings.value.testLabelPx).toBe(22);
+    await press('ArrowLeft');
+    await press('ArrowLeft');
+    expect(settings.value.testLabelPx).toBe(18);
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+    act(() => { updateSettings({ testLabelPx: 16 }); });
+    await press('ArrowLeft');
+    expect(settings.value.testLabelPx).toBe(16);
+    act(() => { updateSettings({ testLabelPx: 36 }); });
+    await press('ArrowRight');
+    expect(settings.value.testLabelPx).toBe(36);
+    expect(getCurrentFocusKey()).toBe('set-test-size');
+  });
+
   it('writes the px rule and the overlay only while test mode is on', () => {
     routeStack.value = [{ name: 'settings' }];
     const host = mount(h('div', { class: 'app' }, h(ScreenCodeBadge, null), h(ElementLabelsHost, null)));
