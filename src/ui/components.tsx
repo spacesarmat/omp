@@ -216,6 +216,39 @@ export function ChoiceRow<T>(p: ChoiceRowProps<T>) {
   );
 }
 
+/** Settings row with a number: ← / → step it inside [min, max] (no wrap), OK steps up and wraps to min. */
+export function StepperRow(p: {
+  focusKey?: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  onChange: (v: number) => void;
+  onArrow?: (direction: string) => boolean;
+}) {
+  const set = (v: number) => {
+    const n = v < p.min ? p.min : v > p.max ? p.max : v;
+    if (n !== p.value) p.onChange(n);
+  };
+  return (
+    <Focusable
+      focusKey={p.focusKey}
+      className="choice-row stepper-row"
+      onPress={() => p.onChange(p.value + p.step > p.max ? p.min : p.value + p.step)}
+      onArrow={(dir) => {
+        if (dir === 'left') { set(p.value - p.step); return false; }
+        if (dir === 'right') { set(p.value + p.step); return false; }
+        return p.onArrow ? p.onArrow(dir) : true;
+      }}
+    >
+      <span class="choice-label">{p.label}</span>
+      <span class="choice-value"><Icon name="chevronLeft" size={22} />{p.value + ' ' + p.unit}<Icon name="chevronRight" size={22} /></span>
+    </Focusable>
+  );
+}
+
 export const onOff = () => [
   { value: true, label: t('tv.on') },
   { value: false, label: t('tv.off') },

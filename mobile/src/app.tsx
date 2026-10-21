@@ -55,6 +55,7 @@ import { Setup } from './ui/Setup';
 import { HintHost } from './ui/Hint';
 import { TestModeHost } from './testmode/host';
 import { ElementLabelsHost } from '../../src/testmode/elements';
+import { markPhoneUi } from '../../src/testmode/active';
 import { armOnboardingBoot, holdOnboarding, onboardingVisible, setupHandoff, setupNotice, setupStep, setupVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
@@ -82,6 +83,9 @@ import { Fragment } from 'preact';
 import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
+
+// test-mode labels read the phone size (P11.20)
+markPhoneUi();
 
 const TABS: string[] = TAB_IDS;
 

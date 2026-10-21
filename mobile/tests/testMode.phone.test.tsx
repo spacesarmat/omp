@@ -33,19 +33,21 @@ function mount(): HTMLElement {
 }
 
 describe('phone test mode', () => {
-  it('offers the label size next to the switch on a beta build', () => {
+  it('offers a label size slider next to the switch on a beta build', () => {
     resetTo({ name: 'settings' });
     const el = mount();
     const row = el.querySelector('[data-code="P11.20"]') as HTMLElement;
     expect(row).toBeTruthy();
     expect(row.textContent).toContain('Размер меток');
-    const on = row.querySelector('.m-seg-btn.on') as HTMLElement;
-    expect(on.getAttribute('data-code')).toBe('P11.20.2');
-    const large = row.querySelector('[data-code="P11.20.3"]') as HTMLElement;
-    expect(large.textContent).toBe('Крупный');
-    act(() => { large.click(); });
-    expect(settings.value.testLabelSize).toBe('large');
-    expect((row.querySelector('.m-seg-btn.on') as HTMLElement).getAttribute('data-code')).toBe('P11.20.3');
+    expect(row.textContent).toContain('12 px');
+    const range = row.querySelector('input[type="range"]') as HTMLInputElement;
+    expect([range.min, range.max, range.step, range.value]).toEqual(['8', '24', '1', '12']);
+    act(() => {
+      range.value = '9';
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(settings.value.testLabelPhonePx).toBe(9);
+    expect(row.textContent).toContain('9 px');
   });
 
   it('shows the switch on a beta build and the screen code after it is on', () => {

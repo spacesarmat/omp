@@ -13,7 +13,7 @@ import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
-import { isBetaBuild, TEST_LABEL_SIZES, type TestLabelSize } from '../../../src/testmode/active';
+import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
 import { isBetaVersion } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
 import { phoneChangelog } from '../lib/phoneChangelog';
@@ -30,13 +30,8 @@ import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { phonePlayerName } from './VideoPlayer';
 
-/** Codes of «Маленький» / «Средний» / «Крупный», in TEST_LABEL_SIZES order. */
-const TEST_SIZE_CODES = ['P11.20.1', 'P11.20.2', 'P11.20.3'];
-
-function testSizeLabel(size: TestLabelSize): string {
-  if (size === 'small') return t('player.subSizeSmall');
-  if (size === 'large') return t('player.subSizeLarge');
-  return t('player.subSizeMedium');
+function testLabelPhone(): number {
+  return clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX);
 }
 
 type Checker = (o: { manual: boolean; url?: string; minIntervalMs?: number }) => Promise<CheckResult>;
@@ -385,20 +380,17 @@ export function Settings() {
         {isBetaBuild() && (
           <div class="m-set-row m-test-size tm" data-code="P11.20">
             <span>{t('settings.testLabelSize')}</span>
-            <div class="m-seg" role="group" aria-label={t('settings.testLabelSize')}>
-              {TEST_LABEL_SIZES.map((size, i) => (
-                <button
-                  key={size}
-                  type="button"
-                  aria-pressed={settings.value.testLabelSize === size}
-                  class={'m-seg-btn tm' + (settings.value.testLabelSize === size ? ' on' : '')}
-                  data-code={TEST_SIZE_CODES[i]}
-                  onClick={() => updateSettings({ testLabelSize: size })}
-                >
-                  {testSizeLabel(size)}
-                </button>
-              ))}
-            </div>
+            <span class="m-muted m-test-size-value">{testLabelPhone()} px</span>
+            <input
+              type="range"
+              class="m-test-size-range"
+              min={PHONE_LABEL_PX.min}
+              max={PHONE_LABEL_PX.max}
+              step={PHONE_LABEL_PX.step}
+              value={testLabelPhone()}
+              aria-label={t('settings.testLabelSize')}
+              onInput={(e) => updateSettings({ testLabelPhonePx: clampLabelPx(Number((e.currentTarget as HTMLInputElement).value), PHONE_LABEL_PX) })}
+            />
           </div>
         )}
         <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>

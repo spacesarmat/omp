@@ -299,7 +299,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     /** Corner codes. A second call with the same flag does nothing, so a new queue does not stack badges. */
     private fun applyTestLabels(r: PlayRequest) {
         val on = PlayerTestHud.enabled(versionLabel(), r.testMode)
-        val size = PlayerTestHud.sizeDp(r.testSize)
+        val size = PlayerTestHud.sizeDp(r.testPx)
         if (on == testOn && size == testSizeDp) return
         testHud.clear()
         testOn = on

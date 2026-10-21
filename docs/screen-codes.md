@@ -12,7 +12,7 @@ Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src
 
 Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.
 
-Labels come in three sizes, «Маленький» / «Средний» / «Крупный» (`settings.testLabelSize`, beta only, next to the switch). TV web UI and the native Android TV player: 24 / 28 / 36 px (never under 24 px). Phone: 16 / 24 / 32 px.
+Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 16-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.
 
 | Code | Where (ru) | Where (en) | Item (ru) | Item (en) |
 | --- | --- | --- | --- | --- |
@@ -156,10 +156,7 @@ Labels come in three sizes, «Маленький» / «Средний» / «Кр
 | S05.29 | Настройки | Settings | Режим тестирования | Test mode |
 | S05.29.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | S05.29.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
-| S05.30 | Настройки | Settings | Размер меток | Label size |
-| S05.30.1 | Настройки | Settings | Размер меток - Маленький | Label size - Small |
-| S05.30.2 | Настройки | Settings | Размер меток - Средний | Label size - Medium |
-| S05.30.3 | Настройки | Settings | Размер меток - Крупный | Label size - Large |
+| S05.30 | Настройки | Settings | Размер меток (ползунок, px) | Label size (slider, px) |
 | S06 | Плеер | Player |  |  |
 | S06.1 | Плеер | Player | Предыдущий | Previous |
 | S06.2 | Плеер | Player | Воспроизведение | Play or pause |
@@ -720,10 +717,7 @@ Labels come in three sizes, «Маленький» / «Средний» / «Кр
 | P11.19 | Настройки | Settings | Режим тестирования | Test mode |
 | P11.19.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | P11.19.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
-| P11.20 | Настройки | Settings | Размер меток | Label size |
-| P11.20.1 | Настройки | Settings | Размер меток - Маленький | Label size - Small |
-| P11.20.2 | Настройки | Settings | Размер меток - Средний | Label size - Medium |
-| P11.20.3 | Настройки | Settings | Размер меток - Крупный | Label size - Large |
+| P11.20 | Настройки | Settings | Размер меток (ползунок, px) | Label size (slider, px) |
 | P12 | Аккаунт | Account |  |  |
 | P12.1 | Аккаунт | Account | Назад | Back |
 | P13 | Расширенные | Advanced |  |  |
@@ -917,7 +911,7 @@ Besides the fixed codes above, test mode labels the elements of a screen: poster
 - `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.
 - Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.
 - The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.
-- The size follows «Размер меток» / "Label size" (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and uses the same size.
+- The size follows the «Размер меток» / "Label size" slider (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and gets the same px value.
 
 | Type | Element (ru) | Element (en) |
 | --- | --- | --- |

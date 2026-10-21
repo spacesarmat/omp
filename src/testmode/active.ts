@@ -1,6 +1,7 @@
-import { computed } from '@preact/signals';
+import { computed, signal } from '@preact/signals';
 import { isBetaVersion } from '../lib/version';
 import { settings } from '../store/settings';
+import { clampLabelPx, PHONE_LABEL_PX, TV_LABEL_PX } from './labelPx';
 import { APP_VERSION } from '../version';
 
 /**
@@ -31,27 +32,18 @@ export function isBetaBuild(): boolean {
  */
 export const testLabels = computed(() => isBetaBuild() && settings.value.testMode);
 
-export type TestLabelSize = 'small' | 'medium' | 'large';
+export { TV_LABEL_PX, PHONE_LABEL_PX, clampLabelPx } from './labelPx';
 
-/** The label size while labels are on. */
-export const testLabelSize = computed<TestLabelSize>(() => settings.value.testLabelSize || 'medium');
+/** Set by the phone app at start: the same code then reads the phone size. */
+const phoneUi = signal(false);
 
-/**
- * Label text size in CSS px (TV web UI, 1920 layout) or dp (native Android TV).
- * The TV never goes under 24px, so «Маленький» is the old size there and the scale grows from it.
- */
-export function tvLabelPx(size: TestLabelSize): number {
-  if (size === 'small') return 24;
-  if (size === 'large') return 36;
-  return 28;
+export function markPhoneUi(): void {
+  phoneUi.value = true;
 }
 
-/** Phone label text size in CSS px. «Средний» is the size the labels had before the setting. */
-export function phoneLabelPx(size: TestLabelSize): number {
-  if (size === 'small') return 16;
-  if (size === 'large') return 32;
-  return 24;
-}
-
-/** Options for the size choice, in the order shown. */
-export const TEST_LABEL_SIZES: TestLabelSize[] = ['small', 'medium', 'large'];
+/** The label size in px for this app (TV or phone). Also what the native player and dialogs get. */
+export const testLabelPx = computed<number>(() =>
+  phoneUi.value
+    ? clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX)
+    : clampLabelPx(settings.value.testLabelPx, TV_LABEL_PX),
+);

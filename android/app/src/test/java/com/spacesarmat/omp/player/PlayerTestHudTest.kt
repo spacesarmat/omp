@@ -19,11 +19,14 @@ class PlayerTestHudTest {
     }
 
     @Test
-    fun labelSizeNeverGoesUnder24OnTheTv() {
-        assertEquals(24f, PlayerTestHud.sizeDp("small"), 0f)
-        assertEquals(28f, PlayerTestHud.sizeDp("medium"), 0f)
-        assertEquals(36f, PlayerTestHud.sizeDp("large"), 0f)
-        assertEquals(28f, PlayerTestHud.sizeDp(null), 0f)
-        assertEquals(28f, PlayerTestHud.sizeDp("huge"), 0f)
+    fun labelSizeFollowsThePagePx() {
+        assertEquals(20f, PlayerTestHud.sizeDp(20), 0f)
+        assertEquals(16f, PlayerTestHud.sizeDp(16), 0f)
+        assertEquals(36f, PlayerTestHud.sizeDp(36), 0f)
+        assertEquals(12f, PlayerTestHud.sizeDp(12), 0f)
+        assertEquals(36f, PlayerTestHud.sizeDp(80), 0f)
+        assertEquals(8f, PlayerTestHud.sizeDp(3), 0f)
+        assertEquals(20f, PlayerTestHud.sizeDp(null), 0f)
+        assertEquals(20f, PlayerTestHud.sizeDp(0), 0f)
     }
 }

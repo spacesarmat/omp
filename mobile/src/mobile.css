@@ -1899,10 +1899,7 @@ body.test-labels [data-code]::after {
   background: rgba(0, 0, 0, 0.55);
   border-radius: 6px;
 }
-/* «Размер меток»: «Средний» is the size the labels always had */
-body.test-labels.test-size-small [data-code]::after, body.test-size-small .test-screen-badge .test-badge, body.test-size-small .test-el { font-size: 16px; line-height: 20px; }
-body.test-labels.test-size-medium [data-code]::after, body.test-size-medium .test-screen-badge .test-badge, body.test-size-medium .test-el { font-size: 24px; line-height: 28px; }
-body.test-labels.test-size-large [data-code]::after, body.test-size-large .test-screen-badge .test-badge, body.test-size-large .test-el { font-size: 32px; line-height: 38px; }
+/* «Размер меток» (8-24px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
 /* Element codes (posters, cards, rows): one fixed overlay, takes no space, ignores touches */
 .test-el-layer {
   position: fixed;
@@ -1927,4 +1924,5 @@ body.test-labels.test-size-large [data-code]::after, body.test-size-large .test-
   white-space: nowrap;
 }
 .m-test-size { flex-wrap: wrap; }
-.m-test-size .m-seg { flex: 1 1 100%; margin-top: 8px; }
+.m-test-size-value { margin-left: auto; }
+.m-test-size-range { flex: 1 1 100%; width: 100%; margin: 8px 0 4px; accent-color: var(--accent); }

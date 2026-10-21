@@ -35,18 +35,18 @@ object PlayerTestHud {
     private val BETA = Regex("-beta\\.[0-9]+$")
 
     /**
-     * Label text size in dp for «Маленький» / «Средний» / «Крупный». A TV never goes under 24.
-     * Anything unknown is «Средний».
+     * Label text size in dp from the page's slider. The TV sends 16..36 (default 20), the phone 8..24
+     * (default 12, for the Cloudflare dialog). Test-mode labels are the one text allowed under 24 on a TV.
+     * Missing or out of range: clamped to 8..36, nothing at all is 20.
      */
-    fun sizeDp(size: String?): Float = when (size) {
-        "small" -> 24f
-        "large" -> 36f
-        else -> 28f
+    fun sizeDp(px: Int?): Float {
+        if (px == null || px <= 0) return 20f
+        return px.coerceIn(8, 36).toFloat()
     }
 
     /** The size the next badges are drawn with. Set before pin(), copyChip(), dialog() and CodedMenu. */
     @Volatile
-    var textDp: Float = 28f
+    var textDp: Float = 20f
 
     class Pin(val view: View, val drawable: Drawable, val listener: View.OnLayoutChangeListener)
 

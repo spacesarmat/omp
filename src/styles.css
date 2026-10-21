@@ -899,10 +899,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
   pointer-events: auto;
 }
 .test-screen-badge .test-badge { position: static; }
-/* «Размер меток»: never under 24px on the TV, same 1920 layout at 1080p and 4K */
-body.test-size-small .test-badge, body.test-size-small .test-el { font-size: 24px; line-height: 28px; }
-body.test-size-medium .test-badge, body.test-size-medium .test-el { font-size: 28px; line-height: 32px; }
-body.test-size-large .test-badge, body.test-size-large .test-el { font-size: 36px; line-height: 42px; }
+/* «Размер меток» (16-36px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
 /* Element codes (posters, cards, rows): one overlay layer over the screen, takes no space, ignores the remote */
 .test-el-layer {
   position: absolute;

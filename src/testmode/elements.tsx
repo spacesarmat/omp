@@ -5,7 +5,7 @@
 // The labels live in one overlay layer: they take no space, ignore the pointer and the remote,
 // and the app's own markup is never changed.
 import { useEffect, useRef } from 'preact/hooks';
-import { testLabelSize, testLabels, TEST_LABEL_SIZES } from './active';
+import { testLabelPx, testLabels } from './active';
 
 export interface ElementType {
   /** Letter in the code. */
@@ -303,25 +303,43 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
   }
 }
 
-/** Paints `body.test-size-*` while labels are on: CSS picks the label size from it. */
-export function syncSizeClass(on: boolean, size: string): void {
-  const body = document.body;
-  for (let i = 0; i < TEST_LABEL_SIZES.length; i++) {
-    const s = TEST_LABEL_SIZES[i];
-    body.classList.toggle('test-size-' + s, on && s === size);
+const SIZE_STYLE_ID = 'test-label-size';
+
+/** CSS for one label size. Added after the app styles, so it wins over the default size. */
+export function labelSizeCss(px: number, phone: boolean): string {
+  const rule = '{ font-size: ' + px + 'px; line-height: ' + (px + 4) + 'px; }';
+  if (phone) {
+    return 'body.test-labels [data-code]::after, .test-screen-badge .test-badge, .test-el ' + rule;
   }
+  return '.test-badge, .test-screen-badge .test-badge, .test-el ' + rule;
 }
 
-/** The overlay with element codes, and the size class. Mount once per app, inside `.app` on the TV. */
+/** Writes (or removes) the size rules in one <style> at the end of <head>. */
+export function syncSizeStyle(on: boolean, px: number, phone: boolean): void {
+  let el = document.getElementById(SIZE_STYLE_ID);
+  if (!on) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    return;
+  }
+  if (!el) {
+    el = document.createElement('style');
+    el.id = SIZE_STYLE_ID;
+    (document.head || document.body).appendChild(el);
+  }
+  const css = labelSizeCss(px, phone);
+  if (el.textContent !== css) el.textContent = css;
+}
+
+/** The overlay with element codes, and the size style. Mount once per app, inside `.app` on the TV. */
 export function ElementLabelsHost(p: { phone?: boolean }) {
-  const on = testLabels.value;
-  const size = testLabelSize.value;
   const phone = !!p.phone;
+  const on = testLabels.value;
+  const size = testLabelPx.value;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    syncSizeClass(on, size);
-    return () => syncSizeClass(false, size);
-  }, [on, size]);
+    syncSizeStyle(on, size, phone);
+    return () => syncSizeStyle(false, size, phone);
+  }, [on, size, phone]);
   useEffect(() => {
     if (!on) return undefined;
     let timer = 0;
@@ -371,7 +389,7 @@ export function elementTypesDoc(): string[] {
     '- `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.',
     '- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.',
     '- The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.',
-    '- The size follows «Размер меток» / "Label size" (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and uses the same size.',
+    '- The size follows the «Размер меток» / "Label size" slider (`S05.30`, `P11.20`). The native Android TV player (`A01`, `AD01`-`AD06`) has fixed codes only and gets the same px value.',
     '',
     '| Type | Element (ru) | Element (en) |',
     '| --- | --- | --- |',

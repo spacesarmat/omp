@@ -6,7 +6,7 @@
 // The platforms register their way of showing the page (mobile/src/browserLogin.ts, src/sources/cloudflareTv.ts);
 // LG has none. All the Russian copy lives here. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
 import { t } from '../i18n';
-import { testLabelSize, testLabels } from '../testmode/active';
+import { testLabelPx, testLabels } from '../testmode/active';
 import { cloudflareFailure } from './cloudflare';
 import { rutrackerCaptcha } from './rutrackerText';
 import { siteLoginCode, siteLoginKeys } from './siteLoginText';
@@ -125,8 +125,8 @@ export interface BrowserLoginRequest extends BrowserSpec {
   askPhone?: boolean;
   /** Beta test mode: the native dialog paints screen codes. Omitted unless the switch is on. */
   testMode?: boolean;
-  /** Label size with testMode: small, medium or large. */
-  testSize?: string;
+  /** Label size in px with testMode («Размер меток»). */
+  testPx?: number;
   /** The login page tried to leave the site (it is back on the login page). */
   blocked?: string;
   /** While the sign-in is checked; when it is not confirmed; the button that checks again. */
@@ -159,7 +159,7 @@ export function phoneLoginRequest(spec: BrowserSpec, forTv?: { id: string; tv: s
   }
   if (testLabels.peek()) {
     r.testMode = true;
-    r.testSize = testLabelSize.peek();
+    r.testPx = testLabelPx.peek();
   }
   return r;
 }
@@ -192,7 +192,7 @@ export function tvLoginRequest(spec: BrowserSpec, askPhone?: boolean): BrowserLo
   if (askPhone) r.askPhone = true;
   if (testLabels.peek()) {
     r.testMode = true;
-    r.testSize = testLabelSize.peek();
+    r.testPx = testLabelPx.peek();
   }
   return r;
 }
