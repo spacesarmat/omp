@@ -1,7 +1,11 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
+
+// a stable version no matter what package.json says (a beta release bumps it to x.y.z-beta.N)
+vi.mock('../../src/version', () => ({ APP_VERSION: '0.20.5' }));
+
 import { SettingsScreen } from '../../src/screens/Settings';
 import { resetSettings, updateSettings } from '../../src/store/settings';
 import { ScreenCodeBadge } from '../../src/testmode/badge';
