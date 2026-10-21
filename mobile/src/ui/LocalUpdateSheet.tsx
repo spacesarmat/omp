@@ -66,6 +66,7 @@ export function LocalUpdateSheet({ info }: { info: LocalServerInfo }) {
   const locked = busy;
   return (
     <Sheet
+      testId="PD27"
       label={t('settings.localNewVersion')}
       onClose={() => !locked && dismissLocalUpdate()}
       onBack={() => !busyRef.current && dismissLocalUpdate()}

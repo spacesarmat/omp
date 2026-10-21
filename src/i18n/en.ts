@@ -91,7 +91,7 @@ export const en: EnDict<typeof ru> = {
     betaTitle: 'Try new features first',
     betaHint: 'There may be bugs. When the main version is out, it replaces the beta',
     testModeTitle: 'Test mode',
-    testModeHint: 'Screen and item numbers. Click the number in the corner of the screen with the pointer to copy it.',
+    testModeHint: 'Screen and item numbers. Tap the number in the corner of the screen to copy it.',
     testModeCopied: 'Code {code}',
     version: 'Version',
     localMissing: 'Needs downloading',

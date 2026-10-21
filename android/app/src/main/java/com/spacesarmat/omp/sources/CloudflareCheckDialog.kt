@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.spacesarmat.omp.player.PlayerTestHud
 
 /**
  * The texts of the visible check, all from the page (src/sources/cloudflareCheck.ts): Russian copy lives in one place.
@@ -55,17 +56,20 @@ class CheckResult(val result: String, val sent: Boolean? = null, val via: String
 
 /**
  * The screen of the visible Cloudflare check ([VisibleCheck] is the logic): a bottom sheet on the phone (title, text,
- * the page, note, «Отмена»), a dialog under the remote on Android TV («Пройти на телефоне», «Отметить пультом» — focuses
- * the page; Back inside the page returns to the buttons —, «Отмена», hint). Main thread only.
+ * the page, note, «Отмена»), a dialog under the remote on Android TV («Пройти на телефоне», «Отметить пультом», focuses
+ * the page; Back inside the page returns to the buttons, «Отмена», hint). Main thread only.
  */
 class CloudflareCheckDialog(
     private val activity: Activity,
     private val tv: Boolean,
     private val texts: CheckTexts,
     private val phoneButton: Boolean,
+    /** Beta test mode, already checked against the installed version by the caller. */
+    private val testLabels: Boolean = false,
 ) : CheckUi {
     private var check: CheckControl? = null
     private var dialog: Dialog? = null
+    private val testHud = PlayerTestHud.Session()
     private var frame: FrameLayout? = null
     private var hintView: TextView? = null
     private var remoteBtn: TextView? = null
@@ -208,21 +212,25 @@ class CloudflareCheckDialog(
             var first: View? = null
             if (phoneButton && texts.phone != null) {
                 val b = button(texts.phone) { check?.askPhone() }
+                if (testLabels) PlayerTestHud.pin(b, "AD06.1", testHud)
                 addBtn(b)
                 first = b
             }
             if (texts.remote != null) {
                 val b = button(texts.remote) { web?.requestFocus(View.FOCUS_DOWN) }
+                if (testLabels) PlayerTestHud.pin(b, "AD06.2", testHud)
                 remoteBtn = b
                 addBtn(b)
                 if (first == null) first = b
             }
             texts.retry?.let {
                 val b = button(it) { check?.retry() }.apply { visibility = View.GONE }
+                if (testLabels) PlayerTestHud.pin(b, "AD06.3", testHud)
                 retryBtn = b
                 addBtn(b)
             }
             val c = button(texts.cancel) { check?.cancel() }
+            if (testLabels) PlayerTestHud.pin(c, "AD06.4", testHud)
             addBtn(c)
             if (first == null) first = c
             val hint = label("", 12f, MUTED).apply {
@@ -240,12 +248,23 @@ class CloudflareCheckDialog(
             add(hint)
             texts.retry?.let {
                 val b = button(it) { check?.retry() }.apply { visibility = View.GONE }
+                if (testLabels) PlayerTestHud.pin(b, "PD53.1", testHud)
                 retryBtn = b
                 add(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
             }
-            add(button(texts.cancel) { check?.cancel() }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
+            val cancelBtn = button(texts.cancel) { check?.cancel() }
+            if (testLabels) PlayerTestHud.pin(cancelBtn, "PD53.2", testHud)
+            add(cancelBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48f)))
         }
-        d.setContentView(box)
+        val content: View = if (testLabels) {
+            val host = FrameLayout(activity)
+            host.addView(box, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            PlayerTestHud.copyChip(activity, host, if (tv) "AD06" else "PD53", testHud)
+            host
+        } else {
+            box
+        }
+        d.setContentView(content)
         d.setCancelable(true)
         d.setCanceledOnTouchOutside(false)
         d.setOnCancelListener { check?.cancel() }

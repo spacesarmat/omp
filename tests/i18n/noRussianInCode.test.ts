@@ -13,6 +13,7 @@ const ALLOWLIST: { [file: string]: string } = {
   'src/i18n/languageNames.ts': 'language names in their own language',
   'src/faq/faq.ru.ts': 'Russian FAQ texts',
   'src/testmode/registry.ts': 'stable TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',
+  'src/testmode/extra.ts': 'phone and native Android TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',
   'src/testmode/doc.ts': 'bilingual screen-code table generated from the catalog',
   'src/lib/faqLinks.ts': 'FAQ link keys: legacy Russian question texts resolved to item ids by OLD_Q_LINKS (language-independent)',
   'src/lib/librarySearch.ts': 'title matching (ё→е normalization)',

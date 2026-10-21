@@ -182,7 +182,7 @@ export function Tv() {
   return (
     <div class="m-screen m-tvscreen">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P10.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('history.tv')}</h1>

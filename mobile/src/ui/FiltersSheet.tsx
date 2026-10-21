@@ -49,7 +49,7 @@ export function FiltersSheet({
     return isFinite(n) && n > 0 ? n : 0;
   };
   return (
-    <Sheet label={t('filters.title')} onClose={onClose}>
+    <Sheet label={t('filters.title')} testId="PD26" onClose={onClose}>
       <div class="m-sheet-head">
         <div class="m-sheet-title">{t('filters.title')}</div>
         <button type="button" class="m-link-btn" onClick={() => onChange(NO_FILTERS)}>{t('common.reset')}</button>

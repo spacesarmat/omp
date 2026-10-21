@@ -86,7 +86,7 @@ export function TorrentMenu({
   const remove = async () => {
     const c = client.value;
     if (!c || busy) return;
-    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true, testId: 'PD48' }))) return;
     setBusy(true);
     const r = await deleteTorrents(c, [tor.hash]);
     reportDeleted(r);
@@ -108,7 +108,7 @@ export function TorrentMenu({
   if (renaming) return <TorrentRenameSheet initial={title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
 
   return (
-    <Sheet label={heading || shortTitle(title)} onClose={onClose}>
+    <Sheet label={heading || shortTitle(title)} testId="PD06" onClose={onClose}>
       <div class="m-sheet-title">{heading || shortTitle(title)}</div>
       <button type="button" class="m-opt" disabled={busy} onClick={open}>
         <Icon d={OPEN} size={22} />

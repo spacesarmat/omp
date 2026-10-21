@@ -118,7 +118,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
 
   const locked = busy || launching;
   return (
-    <Sheet label={t('update.sheetLabel')} onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
+    <Sheet label={t('update.sheetLabel')} testId="PD11" onClose={() => !locked && dismissPrompt()} onBack={() => !busyRef.current && dismissPrompt()}>
       <div class="m-sheet-title">{updateTitle(info.version, APP_VERSION)}</div>
       <div class="m-muted m-small">
         {t('update.current', { version: APP_VERSION })}

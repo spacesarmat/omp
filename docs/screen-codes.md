@@ -1,12 +1,16 @@
 # Screen codes
 
-Stable codes for the TV test mode (LG webOS and Android TV).
+Stable codes for test mode.
 
-A beta build (`x.y.z-beta.N`, `isBetaVersion` in `src/lib/version.ts`) shows the setting «Режим тестирования» / "Test mode" (`settings.testMode`). Labels appear only when that switch is on. A stable build hides the switch and every label, even if `testMode` was left on.
+- `S` / `D` - TV web UI on LG webOS and on Android TV (the shared WebView).
+- `P` / `PD` - the phone app: screens, and sheets or confirms.
+- `A` / `AD` - native Android TV surfaces outside the WebView: the player (`PlayerActivity`) and the Cloudflare / site-login dialog. The box WebView stays on `S` / `D`.
 
-Codes are assigned in `src/testmode/registry.ts`. Do not renumber an existing code. Append a new one.
+A beta build (`x.y.z-beta.N`, `isBetaVersion` in `src/lib/version.ts`) shows the setting «Режим тестирования» / "Test mode" (`settings.testMode`) on the TV and on the phone. Labels appear only when that switch is on. A stable build hides the switch and every label, even if `testMode` was left on. The native player and the native Cloudflare dialog read the same switch and check the app version again. Sign-in in the browser uses that same dialog (`AD06` on the box, `PD53` on the phone).
 
-Posters, files, episodes, search hits, subscriptions and user servers are not coded. They change with the library. A dialog of that content still has its own code (the window), without a code per row.
+Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src/testmode/extra.ts`). Do not renumber an existing code. Append a new one.
+
+Posters, files, episodes, search hits, subscriptions, user servers and track lists are not coded. They change with the library. A window of that content still has its own code, without a code per row.
 
 | Code | Where (ru) | Where (en) | Item (ru) | Item (en) |
 | --- | --- | --- | --- | --- |
@@ -644,3 +648,252 @@ Posters, files, episodes, search hits, subscriptions and user servers are not co
 | D46.24 | Сервер | Server | Клавиатура | Keyboard |
 | D46.25 | Сервер | Server | Готово | Done |
 | D47 | История серверов | Server history |  |  |
+| P01 | Подключение | Connect |  |  |
+| P01.1 | Подключение | Connect | TorrServer на телефоне | TorrServer on the phone |
+| P01.2 | Подключение | Connect | Логин и пароль | Login and password |
+| P01.3 | Подключение | Connect | Подключиться | Connect |
+| P01.4 | Подключение | Connect | Найти в сети | Scan the network |
+| P02 | Каталог | Library |  |  |
+| P02.1 | Каталог | Library | Мои | Mine |
+| P02.2 | Каталог | Library | Обзор | Browse |
+| P02.3 | Каталог | Library | Сортировка | Sort |
+| P02.4 | Каталог | Library | Вид | View |
+| P02.5 | Каталог | Library | Поиск | Search |
+| P02.6 | Каталог | Library | Отменить выбор | Cancel selection |
+| P02.7 | Каталог | Library | Выбрать все | Select all |
+| P02.8 | Каталог | Library | История | History |
+| P02.9 | Каталог | Library | Все | All |
+| P02.10 | Каталог | Library | Фильмы | Movies |
+| P02.11 | Каталог | Library | Сериалы | Series |
+| P02.12 | Каталог | Library | Музыка | Music |
+| P02.13 | Каталог | Library | Аудиокниги | Audiobooks |
+| P02.14 | Каталог | Library | Прочее | Other |
+| P02.15 | Каталог | Library | Удалить выбранное | Delete selected |
+| P02.16 | Каталог | Library | Повторить | Retry |
+| P02.17 | Каталог | Library | Поддержать | Support |
+| P02.18 | Каталог | Library | Не напоминать | Do not remind |
+| P03 | Новое | News |  |  |
+| P03.1 | Новое | News | Находки | Findings |
+| P03.2 | Новое | News | Подписки | Subscriptions |
+| P03.3 | Новое | News | Календарь | Calendar |
+| P04 | Находки подписки | Subscription findings |  |  |
+| P04.1 | Находки подписки | Subscription findings | Назад | Back |
+| P05 | Следить за новыми | Follow new episodes |  |  |
+| P05.1 | Следить за новыми | Follow new episodes | Назад | Back |
+| P05.2 | Следить за новыми | Follow new episodes | Как часто | How often |
+| P06 | Раздача | Release |  |  |
+| P06.1 | Раздача | Release | Назад | Back |
+| P07 | Добавить | Add |  |  |
+| P07.1 | Добавить | Add | Найти | Search |
+| P07.2 | Добавить | Add | Magnet или ссылка | Magnet or link |
+| P08 | Пульт | Remote |  |  |
+| P08.1 | Пульт | Remote | Сменить телевизор | Switch TV |
+| P09 | Сейчас играет | Now playing |  |  |
+| P09.1 | Сейчас играет | Now playing | Свернуть | Collapse |
+| P10 | Телевизор | TV |  |  |
+| P10.1 | Телевизор | TV | Назад | Back |
+| P11 | Настройки | Settings |  |  |
+| P11.1 | Настройки | Settings | Аккаунт | Account |
+| P11.2 | Настройки | Settings | Сменить телевизор | Change TV |
+| P11.3 | Настройки | Settings | Установить OMP на телевизор | Install OMP on the TV |
+| P11.4 | Настройки | Settings | Поиск с телевизора | Search from the TV |
+| P11.5 | Настройки | Settings | Откуда смотреть | Watch from |
+| P11.6 | Настройки | Settings | Плеер для видео | Video player |
+| P11.7 | Настройки | Settings | Язык | Language |
+| P11.8 | Настройки | Settings | Аудиокниги | Audiobooks |
+| P11.9 | Настройки | Settings | Где искать | Where to search |
+| P11.10 | Настройки | Settings | Актуальные сиды | Live seeds |
+| P11.11 | Настройки | Settings | Следить за новыми | Follow new episodes |
+| P11.12 | Настройки | Settings | Версия | Version |
+| P11.13 | Настройки | Settings | Проверить обновление | Check for an update |
+| P11.14 | Настройки | Settings | Помощь | Help |
+| P11.15 | Настройки | Settings | Показать знакомство | Show the tour |
+| P11.16 | Настройки | Settings | Подсказки снова | Hints again |
+| P11.17 | Настройки | Settings | Поддержать | Support |
+| P11.18 | Настройки | Settings | Расширенные | Advanced |
+| P11.19 | Настройки | Settings | Режим тестирования | Test mode |
+| P11.19.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
+| P11.19.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
+| P12 | Аккаунт | Account |  |  |
+| P12.1 | Аккаунт | Account | Назад | Back |
+| P13 | Расширенные | Advanced |  |  |
+| P13.1 | Расширенные | Advanced | Назад | Back |
+| P13.2 | Расширенные | Advanced | TorrServer на телефоне | TorrServer on the phone |
+| P13.3 | Расширенные | Advanced | Запускать вместе с OMP | Start with OMP |
+| P13.4 | Расширенные | Advanced | Очистить кэш | Clear cache |
+| P13.5 | Расширенные | Advanced | Настройки сервера | Server settings |
+| P13.6 | Расширенные | Advanced | Проверять обновления при запуске | Check for updates on start |
+| P13.7 | Расширенные | Advanced | Бета-версии | Beta versions |
+| P13.8 | Расширенные | Advanced | Резервная копия | Backup |
+| P13.9 | Расширенные | Advanced | Журнал | Log |
+| P13.10 | Расширенные | Advanced | Страница проекта | Project page |
+| P14 | Плеер для видео | Video player |  |  |
+| P14.1 | Плеер для видео | Video player | Назад | Back |
+| P14.2 | Плеер для видео | Video player | Встроенный | Built-in |
+| P14.3 | Плеер для видео | Video player | 2160 Player | 2160 Player |
+| P14.4 | Плеер для видео | Video player | Выбор приложения | App chooser |
+| P14.5 | Плеер для видео | Video player | Звук в фоне | Background audio |
+| P14.6 | Плеер для видео | Video player | 2160 Player не установлен | 2160 Player is not installed |
+| P15 | Настройки сервера | Server settings |  |  |
+| P15.1 | Настройки сервера | Server settings | Назад | Back |
+| P16 | TorrServer на телефоне | TorrServer on the phone |  |  |
+| P16.1 | TorrServer на телефоне | TorrServer on the phone | Назад | Back |
+| P17 | Помощь | Help |  |  |
+| P17.1 | Помощь | Help | Назад | Back |
+| P18 | Установка на телевизор | Install on the TV |  |  |
+| P18.1 | Установка на телевизор | Install on the TV | Назад | Back |
+| P19 | Журнал | Log |  |  |
+| P19.1 | Журнал | Log | Назад | Back |
+| P20 | Резервная копия | Backup |  |  |
+| P20.1 | Резервная копия | Backup | Назад | Back |
+| P21 | Источники поиска | Search sources |  |  |
+| P21.1 | Источники поиска | Search sources | Назад | Back |
+| P21.2 | Источники поиска | Search sources | FlareSolverr | FlareSolverr |
+| P21.3 | Источники поиска | Search sources | Аккаунт | Account |
+| P22 | FlareSolverr | FlareSolverr |  |  |
+| P22.1 | FlareSolverr | FlareSolverr | Назад | Back |
+| P23 | Сайт | Site |  |  |
+| P23.1 | Сайт | Site | Назад | Back |
+| P24 | Карточка | Title |  |  |
+| P24.1 | Карточка | Title | Назад | Back |
+| P25 | Сезон | Season |  |  |
+| P25.1 | Сезон | Season | Назад | Back |
+| P26 | Сериал | Series |  |  |
+| P26.1 | Сериал | Series | Назад | Back |
+| P27 | Персона | Person |  |  |
+| P27.1 | Персона | Person | Назад | Back |
+| P28 | Аудиокниги | Audiobooks |  |  |
+| P28.1 | Аудиокниги | Audiobooks | Назад | Back |
+| P28.2 | Аудиокниги | Audiobooks | Поиск | Search |
+| P28.3 | Аудиокниги | Audiobooks | Мои книги | My books |
+| P29 | Поиск аудиокниг | Audiobook search |  |  |
+| P29.1 | Поиск аудиокниг | Audiobook search | Назад | Back |
+| P30 | Мои книги | My books |  |  |
+| P30.1 | Мои книги | My books | Назад | Back |
+| P31 | Книга | Book |  |  |
+| P31.1 | Книга | Book | Назад | Back |
+| P32 | Плеер аудиокниги | Audiobook player |  |  |
+| P32.1 | Плеер аудиокниги | Audiobook player | Назад | Back |
+| P33 | Нижняя панель | Tab bar |  |  |
+| P33.1 | Нижняя панель | Tab bar | Каталог | Library |
+| P33.2 | Нижняя панель | Tab bar | Новое | News |
+| P33.3 | Нижняя панель | Tab bar | Добавить | Add |
+| P33.4 | Нижняя панель | Tab bar | Пульт | Remote |
+| P33.5 | Нижняя панель | Tab bar | Настройки | Settings |
+| P34 | Обзор | Browse |  |  |
+| P34.1 | Обзор | Browse | Мои | Mine |
+| P34.2 | Обзор | Browse | Обзор | Browse |
+| P34.3 | Обзор | Browse | Сортировка | Sort |
+| P34.4 | Обзор | Browse | Поиск | Search |
+| P34.5 | Обзор | Browse | Все | All |
+| P34.6 | Обзор | Browse | Фильмы | Movies |
+| P34.7 | Обзор | Browse | Сериалы | Series |
+| P34.8 | Обзор | Browse | Фильтры | Filters |
+| PD01 | Язык | Language |  |  |
+| PD01.1 | Язык | Language | Как в системе | Follow the system |
+| PD01.2 | Язык | Language | Русский | Russian |
+| PD01.3 | Язык | Language | English | English |
+| PD02 | Меню сериала | Series menu |  |  |
+| PD03 | Источники подписки | Subscription sources |  |  |
+| PD04 | Подписка | Subscription |  |  |
+| PD05 | Лимит подписок | Subscription limit |  |  |
+| PD06 | Меню раздачи | Release menu |  |  |
+| PD07 | Переименовать | Rename |  |  |
+| PD08 | Тачпад | Touchpad |  |  |
+| PD09 | Вход на сайт | Site sign-in |  |  |
+| PD10 | Дорожки | Tracks |  |  |
+| PD11 | Обновление | Update |  |  |
+| PD12 | Что нового | What's new |  |  |
+| PD13 | Индексатор | Indexer |  |  |
+| PD14 | Где смотреть | Where to watch |  |  |
+| PD15 | Заставка и титры | Intro and credits |  |  |
+| PD16 | Сортировка обзора | Browse sort |  |  |
+| PD17 | Фильтры обзора | Browse filters |  |  |
+| PD18 | Постер | Poster |  |  |
+| PD19 | Хочу посмотреть | Want to watch |  |  |
+| PD20 | Заменить на лучшее | Replace with better |  |  |
+| PD21 | В лучшем качестве | Better quality |  |  |
+| PD22 | Код приставки | Box code |  |  |
+| PD23 | Сертификат изменился | Certificate changed |  |  |
+| PD24 | Код | Code |  |  |
+| PD25 | Поддержать | Support |  |  |
+| PD26 | Фильтры | Filters |  |  |
+| PD27 | Обновление TorrServer | TorrServer update |  |  |
+| PD28 | Переименовать | Rename |  |  |
+| PD29 | Другая замена | Another replacement |  |  |
+| PD30 | Замена | Replacement |  |  |
+| PD31 | Подробнее | Details |  |  |
+| PD32 | Продолжить | Resume |  |  |
+| PD33 | Источники поиска | Search sources |  |  |
+| PD34 | Сортировка поиска | Search sort |  |  |
+| PD35 | Установка | Installation |  |  |
+| PD36 | Как часто | How often |  |  |
+| PD37 | Сменить телевизор | Switch TV |  |  |
+| PD38 | Параметр сервера | Server option |  |  |
+| PD39 | Ключ TMDB | TMDB key |  |  |
+| PD40 | Очистить ключ | Clear the key |  |  |
+| PD41 | Сбросить сервер | Reset the server |  |  |
+| PD42 | Старая версия на телевизоре | Old version on the TV |  |  |
+| PD43 | Знакомство | Tour |  |  |
+| PD44 | Первый запуск | First run |  |  |
+| PD45 | Удалить выбранное | Delete selected |  |  |
+| PD45.1 | Удалить выбранное | Delete selected | Удалить | Delete |
+| PD45.2 | Удалить выбранное | Delete selected | Отмена | Cancel |
+| PD46 | Удалить сериал | Delete the series |  |  |
+| PD46.1 | Удалить сериал | Delete the series | Удалить | Delete |
+| PD46.2 | Удалить сериал | Delete the series | Отмена | Cancel |
+| PD47 | Удалить подписку | Delete the subscription |  |  |
+| PD47.1 | Удалить подписку | Delete the subscription | Удалить | Delete |
+| PD47.2 | Удалить подписку | Delete the subscription | Отмена | Cancel |
+| PD48 | Удалить раздачу | Delete the release |  |  |
+| PD48.1 | Удалить раздачу | Delete the release | Удалить | Delete |
+| PD48.2 | Удалить раздачу | Delete the release | Отмена | Cancel |
+| PD49 | Удалить раздачу | Delete the release |  |  |
+| PD49.1 | Удалить раздачу | Delete the release | Удалить | Delete |
+| PD49.2 | Удалить раздачу | Delete the release | Отмена | Cancel |
+| PD50 | Очистить журнал | Clear the log |  |  |
+| PD50.1 | Очистить журнал | Clear the log | Очистить | Clear |
+| PD50.2 | Очистить журнал | Clear the log | Отмена | Cancel |
+| PD51 | Выключить телевизор | Turn the TV off |  |  |
+| PD51.1 | Выключить телевизор | Turn the TV off | Выключить | Turn off |
+| PD51.2 | Выключить телевизор | Turn the TV off | Отмена | Cancel |
+| PD52 | Оставить одну раздачу | Keep one release |  |  |
+| PD52.1 | Оставить одну раздачу | Keep one release | Оставить | Keep |
+| PD52.2 | Оставить одну раздачу | Keep one release | Отмена | Cancel |
+| PD53 | Проверка Cloudflare | Cloudflare check |  |  |
+| PD53.1 | Проверка Cloudflare | Cloudflare check | Проверить ещё раз | Check again |
+| PD53.2 | Проверка Cloudflare | Cloudflare check | Отмена | Cancel |
+| A01 | Нативный плеер | Native player |  |  |
+| A01.1 | Нативный плеер | Native player | Пауза | Pause |
+| A01.2 | Нативный плеер | Native player | Аудио | Audio |
+| A01.3 | Нативный плеер | Native player | Субтитры | Subtitles |
+| A01.4 | Нативный плеер | Native player | Следующий | Next |
+| A01.5 | Нативный плеер | Native player | Пропустить заставку | Skip the intro |
+| A01.6 | Нативный плеер | Native player | Следующая серия | Next episode |
+| A01.7 | Нативный плеер | Native player | Основное действие ошибки | Error primary action |
+| A01.8 | Нативный плеер | Native player | Повторить | Retry |
+| A01.9 | Нативный плеер | Native player | Назад | Back |
+| A01.10 | Нативный плеер | Native player | Вернуть пропуск | Undo skip |
+| A01.11 | Нативный плеер | Native player | Поддержать | Support |
+| A01.12 | Нативный плеер | Native player | Инфо | Info |
+| AD01 | Меню плеера | Player menu |  |  |
+| AD01.1 | Меню плеера | Player menu | Плеер | Player |
+| AD01.2 | Меню плеера | Player menu | Аудио | Audio |
+| AD01.3 | Меню плеера | Player menu | Субтитры | Subtitles |
+| AD01.4 | Меню плеера | Player menu | Ночной звук | Night sound |
+| AD01.5 | Меню плеера | Player menu | Инфо | Info |
+| AD01.6 | Меню плеера | Player menu | Главы | Chapters |
+| AD01.7 | Меню плеера | Player menu | Начало заставки | Intro start |
+| AD01.8 | Меню плеера | Player menu | Конец заставки | Intro end |
+| AD01.9 | Меню плеера | Player menu | Титры | Credits |
+| AD02 | Аудио | Audio |  |  |
+| AD03 | Субтитры | Subtitles |  |  |
+| AD04 | Главы | Chapters |  |  |
+| AD05 | VLC не справляется | VLC is stuck |  |  |
+| AD05.1 | VLC не справляется | VLC is stuck | Вернуться к встроенному | Back to the built-in player |
+| AD05.2 | VLC не справляется | VLC is stuck | Ждать | Wait |
+| AD06 | Проверка Cloudflare | Cloudflare check |  |  |
+| AD06.1 | Проверка Cloudflare | Cloudflare check | Пройти на телефоне | Pass it on the phone |
+| AD06.2 | Проверка Cloudflare | Cloudflare check | Отметить пультом | Mark it with the remote |
+| AD06.3 | Проверка Cloudflare | Cloudflare check | Проверить ещё раз | Check again |
+| AD06.4 | Проверка Cloudflare | Cloudflare check | Отмена | Cancel |

@@ -13,6 +13,7 @@ import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
+import { isBetaBuild } from '../../../src/testmode/active';
 import { isBetaVersion } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
 import { phoneChangelog } from '../lib/phoneChangelog';
@@ -98,12 +99,12 @@ function LanguageRow() {
   const title = t('settings.language.title');
   return (
     <>
-      <button type="button" class="m-set-row m-set-pick" data-row="language" onClick={() => setOpen(true)}>
+      <button type="button" class="m-set-row m-set-pick tm" data-code="P11.7" data-row="language" onClick={() => setOpen(true)}>
         <span>{title}</span>
         <span class="m-muted">{languageName(cur)} ›</span>
       </button>
       {open && (
-        <Sheet label={title} onClose={() => setOpen(false)}>
+        <Sheet label={title} testId="PD01" onClose={() => setOpen(false)}>
           <div class="m-sheet-title">{title}</div>
           <div class="m-sub-pick" role="radiogroup" aria-label={title}>
             {LANGUAGES.map((v) => (
@@ -112,7 +113,8 @@ function LanguageRow() {
                 type="button"
                 role="radio"
                 aria-checked={cur === v}
-                class="m-opt"
+                class="m-opt tm"
+                data-code={v === 'system' ? 'PD01.1' : v === 'ru' ? 'PD01.2' : 'PD01.3'}
                 onClick={() => {
                   updateSettings({ language: v });
                   setOpen(false);
@@ -132,7 +134,7 @@ function LanguageRow() {
 /** «Плеер для видео»: opens its own screen (the three options do not fit in a segment). */
 function VideoPlayerRow() {
   return (
-    <button type="button" class="m-set-row m-set-pick" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
+    <button type="button" class="m-set-row m-set-pick tm" data-code="P11.6" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
       <span>{t('player.videoPlayer')}</span>
       <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
     </button>
@@ -143,7 +145,7 @@ function VideoPlayerRow() {
 function TvSearchRow() {
   const on = tvSearchOn.value;
   return (
-    <div class="m-set-row" data-row="tv-search-service">
+    <div class="m-set-row tm" data-code="P11.4" data-row="tv-search-service">
       <div class="m-set-text" style="flex-grow: 1">
         <span>{t('settings.tvSearch')}</span>
         <span class="m-muted m-small">{on ? t('settings.tvSearchHint') : t('settings.tvSearchOff')}</span>
@@ -220,7 +222,7 @@ function AccountRow() {
   useEffect(() => onBillingChange(() => setSession(billingSession())), []);
   const until = session && session.token ? billingDay(session.paidUntil) : '';
   return (
-    <button type="button" class="m-set-row m-set-pick" data-row="account" onClick={() => navigate({ name: 'account' })}>
+    <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" onClick={() => navigate({ name: 'account' })}>
       <span>{until ? t('settings.subscribedUntil', { date: until }) : t('common.signIn')}</span>
       <Icon d={CHEVRON} size={20} />
     </button>
@@ -288,7 +290,7 @@ export function Settings() {
           <div class="m-set-text">
             <span>{tv ? tv.name : t('settings.notChosen')}</span>
           </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'tv' })}>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P11.2" onClick={() => navigate({ name: 'tv' })}>
             {tv ? t('settings.change') : t('settings.choose')}
           </button>
         </div>
@@ -296,7 +298,7 @@ export function Settings() {
         <TvOmpRow v={omp.v} />
         <TvSearchRow />
         {showWizard && (
-          <button type="button" class="m-set-row m-set-pick" data-row="install" onClick={() => navigate({ name: 'install' })}>
+          <button type="button" class="m-set-row m-set-pick tm" data-code="P11.3" data-row="install" onClick={() => navigate({ name: 'install' })}>
             <span>{t('install.assistant.title')}</span>
             <Icon d={CHEVRON} size={20} />
           </button>
@@ -305,7 +307,7 @@ export function Settings() {
 
       <section class="m-set-group" data-section="watch">
         <div class="m-set-label">{t('settings.watch')}</div>
-        <div class="m-set-row" data-row="watch-from">
+        <div class="m-set-row tm" data-code="P11.5" data-row="watch-from">
           <div class="m-set-text" style="flex-grow: 1">
             <span>{t('settings.watchFrom')}</span>
             <span class="m-muted m-small">{whereLine}</span>
@@ -320,15 +322,15 @@ export function Settings() {
 
       <section class="m-set-group" data-section="search">
         <div class="m-set-label">{t('settings.search')}</div>
-        <button type="button" class="m-set-row m-set-pick" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.8" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
           <span>{t('audiobooks.title')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'sources' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.9" onClick={() => navigate({ name: 'sources' })}>
           <span>{t('settings.whereSearch')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <div class="m-set-row" data-row="live-seeds">
+        <div class="m-set-row tm" data-code="P11.10" data-row="live-seeds">
           <div class="m-set-text">
             <span>{t('settings.liveSeeds')}</span>
             <span class="m-muted m-small">{t('settings.liveSeedsHint')}</span>
@@ -344,7 +346,7 @@ export function Settings() {
             <span class="m-switch-knob" />
           </button>
         </div>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'monitor' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.11" onClick={() => navigate({ name: 'monitor' })}>
           <span>{t('settings.followNew')}</span>
           <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
         </button>
@@ -352,7 +354,26 @@ export function Settings() {
 
       <section class="m-set-group" data-section="app">
         <div class="m-set-label">{t('settings.app')}</div>
-        <button type="button" class="m-set-row m-set-row-btn" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
+        {isBetaBuild() && (
+          <div class="m-set-row tm" data-code="P11.19">
+            <div class="m-set-text" style="flex-grow: 1">
+              <span>{t('settings.testModeTitle')}</span>
+              <span class="m-muted m-small">{t('settings.testModeHint')}</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.value.testMode}
+              aria-label={t('settings.testModeTitle')}
+              class={'m-switch tm' + (settings.value.testMode ? ' on' : '')}
+              data-code={settings.value.testMode ? 'P11.19.1' : 'P11.19.2'}
+              onClick={() => updateSettings({ testMode: !settings.value.testMode })}
+            >
+              <span class="m-switch-knob" />
+            </button>
+          </div>
+        )}
+        <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
           <span>{t('settings.version')}</span>
           <span class="m-muted">
             {APP_VERSION}
@@ -360,25 +381,26 @@ export function Settings() {
           </span>
         </button>
         {latestUpdate.value ? (
-          <button type="button" class="m-btn m-btn-primary" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
+          <button type="button" class="m-btn m-btn-primary tm" data-code="P11.13" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
             {updateTitle(latestUpdate.value.version, APP_VERSION)}
           </button>
         ) : (
-          <button type="button" class="m-btn m-btn-secondary" onClick={() => void check()}>
+          <button type="button" class="m-btn m-btn-secondary tm" data-code="P11.13" onClick={() => void check()}>
             {t('updateScreen.check')}
           </button>
         )}
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'faq' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.14" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-set-row m-set-pick" data-row="onboarding" onClick={() => openOnboarding()}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>
           <span>{t('settings.showOnboarding')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
         <button
           type="button"
-          class="m-set-row m-set-pick"
+          class="m-set-row m-set-pick tm"
+          data-code="P11.16"
           data-row="reset-hints"
           onClick={() => {
             resetHints();
@@ -389,7 +411,7 @@ export function Settings() {
           <Icon d={CHEVRON} size={20} />
         </button>
         {activeMethods().length > 0 && (
-          <button type="button" class="m-set-row m-set-pick" onClick={openDonate}>
+          <button type="button" class="m-set-row m-set-pick tm" data-code="P11.17" onClick={openDonate}>
             <span>{t('settings.support')}</span>
             <Icon d={CHEVRON} size={20} />
           </button>
@@ -397,7 +419,7 @@ export function Settings() {
       </section>
 
       <section class="m-set-group" data-section="advanced">
-        <button type="button" class="m-set-row m-set-pick" data-row="advanced" onClick={() => navigate({ name: 'advanced' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.18" data-row="advanced" onClick={() => navigate({ name: 'advanced' })}>
           <span>{t('settings.advanced')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>

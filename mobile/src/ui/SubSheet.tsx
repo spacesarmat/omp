@@ -102,7 +102,7 @@ export function SubSheet(p: {
 
   const remove = async () => {
     if (!p.sub) return;
-    if (!(await askConfirm(t('monitor.sub.deleteAsk', { query: p.sub.query }), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(t('monitor.sub.deleteAsk', { query: p.sub.query }), t('common.delete'), { destructive: true, testId: 'PD47' }))) return;
     removeSubscription(p.sub.id);
     reloadMonitor();
     showToast(t('monitor.sub.deleted'));
@@ -114,7 +114,7 @@ export function SubSheet(p: {
 
   if (picking) {
     return (
-      <Sheet label={t('monitor.sub.sourcesLabel')} onClose={() => setPicking(false)}>
+      <Sheet label={t('monitor.sub.sourcesLabel')} testId="PD03" onClose={() => setPicking(false)}>
         <div class="m-sheet-title">{t('monitor.sub.sources')}</div>
         <div class="m-sheet-scroll m-sub-pick">
           <button type="button" role="radio" aria-checked={sources === null} class="m-opt" onClick={() => setSources(null)}>
@@ -146,7 +146,7 @@ export function SubSheet(p: {
   }
 
   return (
-    <Sheet label={t('monitor.sub.title')} onClose={p.onClose}>
+    <Sheet label={t('monitor.sub.title')} testId="PD04" onClose={p.onClose}>
       <div class="m-sheet-title">{t('monitor.sub.title')}</div>
       <div class="m-sheet-scroll m-sub-form">
         <div class="m-field">

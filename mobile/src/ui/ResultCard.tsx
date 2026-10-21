@@ -131,7 +131,7 @@ export function ResultCard(p: {
         </div>
       </div>
       {open && (
-        <Sheet label={t('common.more')} onClose={() => setOpen(false)}>
+        <Sheet label={t('common.more')} testId="PD31" onClose={() => setOpen(false)}>
           <div class="m-sheet-scroll m-rc-sheet" data-result-details="">
             <ReleaseName raw={r.Title} class="m-rc-sheet-title" />
             <ReleaseChips raw={r.Title} kind={kind} />

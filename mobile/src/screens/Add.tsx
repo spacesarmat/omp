@@ -459,7 +459,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
-        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.go')}>
+        <button type="submit" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P07.1" aria-label={t('add.go')}>
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
@@ -515,7 +515,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
           {t('add.byMagnet')}
         </button>
       )}
@@ -597,7 +597,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         })}
       </div>
       {sheet === 'sources' && (
-        <Sheet label={t('add.sourcesSheet')} onClose={() => setSheet(null)}>
+        <Sheet label={t('add.sourcesSheet')} testId="PD33" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sourcesSheet')}</div>
           {all.map((s) => {
             const on = selected.indexOf(s.id) >= 0;
@@ -624,7 +624,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
-        <Sheet label={t('add.sort')} onClose={() => setSheet(null)}>
+        <Sheet label={t('add.sort')} testId="PD34" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sort')}</div>
           {sortLabels().map((s) => (
             <button

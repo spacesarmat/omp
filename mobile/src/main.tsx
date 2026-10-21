@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { App } from './app';
 import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
-import { resetTo } from './nav';
+import { resetTo, type MRoute } from './nav';
 import { activeServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
@@ -50,4 +50,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 resetTo({ name: activeServer.value ? 'library' : 'connect' });
+// Dev server only: `?testlabels=1&screen=settings` opens that route so a beta preview can be screenshotted.
+// This runs after the default route above. Production builds inline DEV as false.
+if (import.meta.env.DEV && typeof location !== 'undefined') {
+  const asked = /(?:^|[?&])screen=([a-zA-Z]+)(?:&|$)/.exec(location.search || '');
+  if (asked) resetTo({ name: asked[1] } as MRoute);
+}
 render(<App />, document.getElementById('app')!);

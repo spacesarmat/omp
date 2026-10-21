@@ -5,6 +5,7 @@
 // phone sends them to the TV over the pairing channel). All the Russian copy of the check lives here; the native dialog
 // gets it as parameters. Shared by the phone and the TV bundles: Chromium 53 rules, no platform imports.
 import { t } from '../i18n';
+import { testLabels } from '../testmode/active';
 import { log } from '../lib/log';
 import { cloudflareFailure, hostOf, logCloudflare, siteRoot } from './cloudflare';
 import { allSources, getSource } from './registry';
@@ -104,11 +105,13 @@ export interface CloudflareVisibleRequest {
   errors?: { [outcome: string]: string };
   /** Phone: the id of the TV's waiting request (the native side takes the address from it). */
   forTv?: string;
+  /** Beta test mode: the native dialog paints screen codes. Omitted unless the switch is on. */
+  testMode?: boolean;
 }
 
 /** The TV dialog (mockup TvCloudflare) for the site. */
 export function tvCheckRequest(site: { name: string; url: string }): CloudflareVisibleRequest {
-  return {
+  const r: CloudflareVisibleRequest = {
     url: site.url,
     site: site.name,
     mode: 'tv',
@@ -124,6 +127,8 @@ export function tvCheckRequest(site: { name: string; url: string }): CloudflareV
     gateWait: gateWait(),
     errors: tvErrors(),
   };
+  if (testLabels.peek()) r.testMode = true;
+  return r;
 }
 
 /** The phone sheet (mockup PhoneCloudflare); with forTv the TV «tv» asked for it and gets the result. */
@@ -141,6 +146,7 @@ export function phoneCheckRequest(site: { name: string; url: string }, forTv?: {
     r.note = sheetNoteTv();
     r.forTv = forTv.id;
   }
+  if (testLabels.peek()) r.testMode = true;
   return r;
 }
 

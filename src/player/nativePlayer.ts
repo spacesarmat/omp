@@ -1,6 +1,7 @@
 // Android TV: the native player (Media3 or libVLC, android/.../player/PlayerActivity.kt) driven from the TV app.
 // The page keeps the latest state event for the phone bridge and saves progress like useProgressSync.
 import { t } from '../i18n';
+import { testLabels } from '../testmode/active';
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, ListenerHandle } from '../platform/androidNative';
 import type { Cmd, PlayerState } from '../phone/protocol';
@@ -320,6 +321,7 @@ export class NativeSession {
           ...(o.alwaysFfmpeg ? { alwaysFfmpeg: true } : {}),
           ...(o.audioPick && o.audioPick.length ? { audioPick: o.audioPick } : {}),
           ...(o.subPick && o.subPick.length ? { subPick: o.subPick } : {}),
+          ...(testLabels.peek() ? { testMode: true } : {}),
           queue,
           index: o.index,
           startAt: o.startAt,

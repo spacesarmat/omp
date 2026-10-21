@@ -187,7 +187,7 @@ export function AudiobookSearch() {
 
   return (
     <div class="m-screen" data-route="audiobook-search">
-      <AudiobookBar title={t('audiobooks.searchTitle')} />
+      <AudiobookBar title={t('audiobooks.searchTitle')} code="P29.1" />
       <form class="m-add-row" onSubmit={onSearch}>
         <input
           class="m-input m-lib-search"

@@ -85,7 +85,7 @@ export function TrackerLogin({
 
   const title = t('common.signInTo', { site: source.name });
   return (
-    <Sheet label={title} onClose={close}>
+    <Sheet label={title} testId="PD09" onClose={close}>
       <form class="m-field-group" onSubmit={submit}>
         <div class="m-sheet-title">{title}</div>
         <div class="m-field">

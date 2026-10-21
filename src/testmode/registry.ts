@@ -1,8 +1,12 @@
-// Stable screen codes for the TV UI (LG webOS and Android TV).
+// Stable screen codes.
+// S / D: TV web UI (LG webOS and the Android TV WebView).
+// P / PD: phone screens and sheets.
+// A / AD: native Android TV player (PlayerActivity), not the shared web UI.
 // Codes are assigned here and nowhere else. Do not renumber an existing code:
 // a beta tester cites them across builds ("S05.3 does not save").
 // Append a new code instead. Content rows (posters, files, search hits,
 // episodes, subscriptions) are not coded: they change with the library.
+import { NATIVE_DIALOGS, NATIVE_SCREENS, PHONE_DIALOGS, PHONE_SCREENS, type ExtraItem } from './extra';
 
 export interface CodeOption {
   code: string;
@@ -706,6 +710,43 @@ export function dialogById(id: string): DialogDef | null {
   return BY_DIALOG[id] || null;
 }
 
+function fromExtra(it: ExtraItem): RegItem {
+  return { code: it.code, anchors: [], ru: it.ru, en: it.en, options: it.options };
+}
+
+/** Phone and native Android TV codes. Called once, before the registry is checked. */
+function installExtra(): void {
+  const lists = [PHONE_SCREENS, NATIVE_SCREENS];
+  for (let n = 0; n < lists.length; n++) {
+    const list = lists[n];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      const items: RegItem[] = [];
+      for (let j = 0; j < s.items.length; j++) items.push(fromExtra(s.items[j]));
+      addScreen(s.code, [s.key], s.ru, s.en, items);
+    }
+  }
+  const dialogs = [PHONE_DIALOGS, NATIVE_DIALOGS];
+  for (let n = 0; n < dialogs.length; n++) {
+    const list = dialogs[n];
+    for (let i = 0; i < list.length; i++) {
+      const d = list[i];
+      const items: RegItem[] = [];
+      for (let j = 0; j < d.items.length; j++) items.push(fromExtra(d.items[j]));
+      addDialog(d.code, d.id, d.ru, d.en, items);
+    }
+  }
+}
+
+/**
+ * Phone screen for a route. «Обзор» is a mode of «Каталог», not its own route,
+ * and keeps a separate code so a screenshot of browse is not cited as «Мои».
+ */
+export function lookupPhone(name: string, mode: string): ScreenDef | null {
+  if (name === 'library' && mode === 'discover') return BY_KEY['phone:library:discover'] || null;
+  return BY_KEY['phone:' + name] || null;
+}
+
 const ANCHORS: { [a: string]: RegItem } = {};
 
 function isGlobalAnchor(a: string): boolean {
@@ -727,8 +768,11 @@ function indexItem(it: RegItem, problems: string[]): void {
 
 const PROBLEMS: string[] = [];
 
+installExtra();
+
 function checkCode(code: string, parent: string): void {
-  if (!/^[SD][0-9]+(\.[0-9]+)*$/.test(code)) PROBLEMS.push('bad code ' + code);
+  // PD and AD before P and A, so the two-letter prefixes are not read as P / A.
+  if (!/^(PD|AD|S|D|P|A)[0-9]+(\.[0-9]+)*$/.test(code)) PROBLEMS.push('bad code ' + code);
   if (parent && code.indexOf(parent + '.') !== 0) PROBLEMS.push(code + ' is outside ' + parent);
 }
 

@@ -112,7 +112,7 @@ export function DonateSheet({ methods }: { methods?: DonateMethod[] }) {
     }
   };
   return (
-    <Sheet label={t('donate.title')} onClose={closeDonate}>
+    <Sheet label={t('donate.title')} testId="PD25" onClose={closeDonate}>
       <div class="m-sheet-title">{t('donate.title')}</div>
       <div class="m-sheet-scroll m-donate">
         <p>{t('donate.intro')}</p>

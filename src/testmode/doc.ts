@@ -39,16 +39,30 @@ interface Row {
   itemEn: string;
 }
 
+function family(code: string): number {
+  if (code.indexOf('PD') === 0) return 3;
+  if (code.indexOf('AD') === 0) return 5;
+  const c = code.charAt(0);
+  if (c === 'S') return 0;
+  if (c === 'D') return 1;
+  if (c === 'P') return 2;
+  if (c === 'A') return 4;
+  return 9;
+}
+
 function parts(code: string): number[] {
-  const raw = code.slice(1).split('.');
+  let rest = code;
+  if (rest.indexOf('PD') === 0 || rest.indexOf('AD') === 0) rest = rest.slice(2);
+  else rest = rest.slice(1);
+  const raw = rest.split('.');
   const out: number[] = [];
   for (let i = 0; i < raw.length; i++) out.push(parseInt(raw[i], 10) || 0);
   return out;
 }
 
 function cmp(a: string, b: string): number {
-  const ra = a.charAt(0) === 'S' ? 0 : 1;
-  const rb = b.charAt(0) === 'S' ? 0 : 1;
+  const ra = family(a);
+  const rb = family(b);
   if (ra !== rb) return ra - rb;
   const pa = parts(a);
   const pb = parts(b);
@@ -100,13 +114,17 @@ export function renderScreenCodesDoc(): string {
   const lines = [
     '# Screen codes',
     '',
-    'Stable codes for the TV test mode (LG webOS and Android TV).',
+    'Stable codes for test mode.',
     '',
-    'A beta build (`x.y.z-beta.N`, `isBetaVersion` in `src/lib/version.ts`) shows the setting «Режим тестирования» / "Test mode" (`settings.testMode`). Labels appear only when that switch is on. A stable build hides the switch and every label, even if `testMode` was left on.',
+    '- `S` / `D` - TV web UI on LG webOS and on Android TV (the shared WebView).',
+    '- `P` / `PD` - the phone app: screens, and sheets or confirms.',
+    '- `A` / `AD` - native Android TV surfaces outside the WebView: the player (`PlayerActivity`) and the Cloudflare / site-login dialog. The box WebView stays on `S` / `D`.',
     '',
-    'Codes are assigned in `src/testmode/registry.ts`. Do not renumber an existing code. Append a new one.',
+    'A beta build (`x.y.z-beta.N`, `isBetaVersion` in `src/lib/version.ts`) shows the setting «Режим тестирования» / "Test mode" (`settings.testMode`) on the TV and on the phone. Labels appear only when that switch is on. A stable build hides the switch and every label, even if `testMode` was left on. The native player and the native Cloudflare dialog read the same switch and check the app version again. Sign-in in the browser uses that same dialog (`AD06` on the box, `PD53` on the phone).',
     '',
-    'Posters, files, episodes, search hits, subscriptions and user servers are not coded. They change with the library. A dialog of that content still has its own code (the window), without a code per row.',
+    'Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src/testmode/extra.ts`). Do not renumber an existing code. Append a new one.',
+    '',
+    'Posters, files, episodes, search hits, subscriptions, user servers and track lists are not coded. They change with the library. A window of that content still has its own code, without a code per row.',
     '',
     '| Code | Where (ru) | Where (en) | Item (ru) | Item (en) |',
     '| --- | --- | --- | --- | --- |',

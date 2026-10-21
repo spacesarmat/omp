@@ -1860,3 +1860,42 @@ html.m-hint-hold .m-hint { display: none; }
   font-weight: 700;
   padding: 0;
 }
+
+/* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
+   The badge is out of flow and ignores touches, so rows and remote focus stay put.
+   .tm is only for controls that are not already positioned: forcing position on an
+   absolute back button would pull it back into the row. */
+body.test-labels .tm { position: relative; }
+body.test-labels [data-code]::after {
+  content: attr(data-code);
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  pointer-events: none;
+  font-size: 24px;
+  line-height: 28px;
+  padding: 0 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+}
+.test-screen-badge {
+  position: fixed;
+  z-index: 35;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.test-screen-badge .test-badge {
+  font-size: 24px;
+  line-height: 28px;
+  padding: 0 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+}

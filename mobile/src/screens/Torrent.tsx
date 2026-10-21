@@ -141,7 +141,7 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
   };
 
   return (
-    <Sheet onClose={onClose} label={t('torrent.screen.whereLabel')}>
+    <Sheet onClose={onClose} testId="PD14" label={t('torrent.screen.whereLabel')}>
       <div class="m-muted m-small">{head.join(' · ')}</div>
       <div class="m-sheet-title">{t('torrent.screen.whereTitle')}</div>
       <button type="button" class="m-opt primary" disabled={busy} onClick={onTv}>
@@ -250,7 +250,7 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
   };
 
   return (
-    <Sheet onClose={onClose} label={t('tv.marks.title')}>
+    <Sheet onClose={onClose} testId="PD15" label={t('tv.marks.title')}>
       <div class="m-sheet-title">{t('tv.marks.title')}</div>
       <div class="m-muted m-small">{t('torrent.screen.marksText', { title: title })}</div>
       <div class="m-section">{t('torrent.screen.marksIntro')}</div>
@@ -418,7 +418,7 @@ export function Torrent({ hash }: { hash: string }) {
   if (!c || !tor) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P06.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} size={20} />
         </button>
         <p class="m-muted m-note">{c && fetched === undefined ? t('torrent.screen.loading') : t('torrent.screen.notFound')}</p>
@@ -575,7 +575,7 @@ export function Torrent({ hash }: { hash: string }) {
     });
 
   const remove = async () => {
-    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(t('torrent.screen.deleteAsk', { title: shortTitle(title) }), t('common.delete'), { destructive: true, testId: 'PD49' }))) return;
     void deleteTorrents(c, [hash]).then((r) => {
       if (r.failed.length) {
         showToast(errorMessage(r.firstError));
@@ -590,7 +590,7 @@ export function Torrent({ hash }: { hash: string }) {
     <div class="m-screen m-torrent" data-route="torrent">
       <div class="m-thead" style={posterStyle(art) + '; --poster: ' + posterColor(hash)}>
         <div class="m-thead-bar">
-          <button type="button" class="m-icon-btn m-glass" aria-label={t('common.back')} onClick={() => goBack()}>
+          <button type="button" class="m-icon-btn m-glass tm" data-code="P06.1" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d={BACK} size={20} />
           </button>
           <div class="m-thead-actions">

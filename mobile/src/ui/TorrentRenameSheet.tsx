@@ -35,7 +35,7 @@ export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: stri
   };
 
   return (
-    <Sheet label={t('torrent.rename.title')} onClose={onClose}>
+    <Sheet label={t('torrent.rename.title')} testId="PD07" onClose={onClose}>
       <div class="m-sheet-title">{t('torrent.rename.title')}</div>
       <div class="m-field">
         <label for="rename-title">{t('torrent.rename.name')}</label>

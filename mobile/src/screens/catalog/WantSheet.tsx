@@ -47,7 +47,7 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
   const about = t(card.kind === 'tv' ? 'titleCard.wantSeries' : 'titleCard.wantFilm', { title: card.title, year: card.year || '' }).replace(' ()', '');
 
   return (
-    <Sheet label={t('titleCard.want')} onClose={onClose}>
+    <Sheet label={t('titleCard.want')} testId="PD19" onClose={onClose}>
       <div class="m-sheet-title">{t('titleCard.want')}</div>
       <p class="m-want-text">{about}</p>
       <div class="m-muted m-small">{t('monitor.sub.quality')}</div>

@@ -49,7 +49,7 @@ const defaults: LogActions = {
     window.open(url, '_system');
   },
   shareText: (o) => native.shareText(o),
-  confirm: (text) => askConfirm(text, t('tvSettings.clear')),
+  confirm: (text) => askConfirm(text, t('tvSettings.clear'), { testId: 'PD50' }),
   phoneName: () => native.phoneName().then((n) => (n && n !== ru.history.phone && n !== t('history.phone') ? n : null)),
 };
 
@@ -103,7 +103,7 @@ export function Log() {
   return (
     <div class="m-screen" data-route="log">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P19.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('log.screenTitle')}</h1>

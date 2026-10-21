@@ -104,7 +104,7 @@ const defaults: RemoteActions = {
     setActiveTv(tv.ip);
     return connectTv(tv).catch(() => {});
   },
-  confirm: (text) => askConfirm(text, t('remote.turnOff')),
+  confirm: (text) => askConfirm(text, t('remote.turnOff'), { testId: 'PD51' }),
 };
 
 let act: RemoteActions = defaults;
@@ -224,12 +224,12 @@ function TvSwitch({ tv, live, class: cls }: { tv: SavedTv; live: string; class: 
   }
   return (
     <>
-      <button type="button" class={cls + ' m-remote-switch'} data-tv-name aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} {...press}>
+      <button type="button" class={cls + ' m-remote-switch tm'} data-code="P08.1" data-tv-name aria-haspopup="dialog" aria-label={t('remote.switchTv') + ': ' + tv.name} {...press}>
         {name} ▾
       </button>
       {sheet}
       {open && (
-        <Sheet label={t('remote.switchTitle')} onClose={() => setOpen(false)}>
+        <Sheet label={t('remote.switchTitle')} testId="PD37" onClose={() => setOpen(false)}>
           <div class="m-sheet-title">{t('remote.switchTitle')}</div>
           {list.map((x) => (
             <button

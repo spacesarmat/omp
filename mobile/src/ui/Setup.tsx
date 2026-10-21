@@ -147,7 +147,7 @@ export function Setup() {
   const ok = outcome && outcome.ok ? outcome : noticed ? { server: { name: noticed.name }, version: noticed.version } : null;
 
   return (
-    <div class="m-onb m-setup" role="dialog" aria-modal="true" aria-label={t('setup.whereTitle')} data-onboarding="setup" data-setup={step}>
+    <div class="m-onb m-setup" role="dialog" aria-modal="true" aria-label={t('setup.whereTitle')} data-onboarding="setup" data-setup={step} data-code="PD44">
       <div class="m-onb-step">{t('setup.step', { n: stepNo, total: 3 })}</div>
       {step === 'where' && (
         <div class="m-onb-main">
