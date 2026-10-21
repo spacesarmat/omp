@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
 import { adEvent } from '../../../src/ads/events';
 import { APP_VERSION } from '../../../src/version';
-import { ompSubscribed } from '../../../src/billing/entitlement';
-import { onBillingChange } from '../../../src/billing/session';
+import { ACCESS_KEY, ompSubscribed } from '../../../src/billing/entitlement';
+import { onBillingChange, SESSION_KEY } from '../../../src/billing/session';
 import { ensureFirstRun } from '../donate';
 import { adsConfig, refreshAds, syncAdsFromCache } from './phoneAds';
 
@@ -82,8 +82,8 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
 
   // the config is read while a catalog screen is open: the cached one now, the server's a moment later (not
   // competing with the catalog's own first requests) and then every 5 minutes. A subscriber never asks.
-  // Subscription is re-read on a billing change and when the app comes back (the background page writes
-  // localStorage in another context, so this page does not hear that save).
+  // Subscription is re-read on a billing change, when the app comes back, and when the background page writes
+  // the session or the cached /v1/me answer (another document: this page hears that as a storage event).
   useEffect(() => {
     syncAdsFromCache();
     const tick = () => {
@@ -98,12 +98,19 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       syncSub();
       tick();
     };
+    const onStore = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== SESSION_KEY && e.key !== ACCESS_KEY) return;
+      syncSub();
+      tick();
+    };
     document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('storage', onStore);
     return () => {
       clearTimeout(first);
       clearInterval(id);
       off();
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('storage', onStore);
     };
   }, []);
 

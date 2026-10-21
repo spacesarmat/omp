@@ -18,7 +18,7 @@ import { cachedAdsConfig, saveAdsConfig } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
-import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
+import { ACCESS_KEY, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { emitBillingChange, saveBillingSession } from '../../src/billing/session';
 import type { Torrent } from '../../src/api/types';
 import type { CatalogClient } from '../../src/catalog/client';
@@ -286,6 +286,23 @@ describe('ads in «Мои»', () => {
     });
     await flush();
     expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    expect(get.mock.calls.length).toBe(calls);
+  });
+
+  it('drops the ads when the background page writes the subscription while the catalog stays open', async () => {
+    mount(<Library />);
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad').length).toBeGreaterThan(0);
+    const calls = get.mock.calls.length;
+    subscribe();
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', { key: ACCESS_KEY }));
+    });
+    await flush();
+    expect(ompSubscribed()).toBe(true);
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    expect(el.querySelectorAll('.m-grid .m-card').length).toBeGreaterThan(10);
     expect(get.mock.calls.length).toBe(calls);
   });
 
