@@ -187,6 +187,10 @@ export function createMonitor(deps) {
   const log = d.log || ((s) => process.stderr.write(s + '\n'));
   let running = null;
   let runningSince = 0;
+  // While a run goes: { trigger, startedAt, total, done, states: { id: 'queued' | 'running' | 'retry' | 'done' } }.
+  let progress = null;
+  // The last finished run, for the «готово» line: { trigger, startedAt, finishedAt, checked, failed, retried, ids }.
+  let lastSummary = null;
   let lastRunAt = 0;
   let timers = [];
   // Last values read from Postgres, so a Postgres outage is still checked and reported.
@@ -242,8 +246,19 @@ export function createMonitor(deps) {
     return mem.config;
   }
 
+  const hooks = {
+    onStart(id) {
+      if (progress) progress.states[id] = 'running';
+    },
+    onDone(row) {
+      if (!progress) return;
+      progress.states[row.id] = 'done';
+      progress.done += 1;
+    },
+  };
+
   async function check(tasks) {
-    return finalize(await runTasks(tasks, 8, 3, now));
+    return finalize(await runTasks(tasks, 8, 3, now, hooks));
   }
 
   /**
@@ -263,7 +278,8 @@ export function createMonitor(deps) {
 
   /**
    * trigger: 'schedule' | 'manual' | 'recheck'. opts.only === 'failed': run again only the checks that were red in
-   * the last run (and new ones); the others keep their last result. Without a last run it is a full run.
+   * the last run (and new ones); the others keep their last result. opts.ids: run only these checks («Перепроверить»
+   * on a row), same handling (retry, alerts, history of the ones that ran). Without a last run it is a full run.
    */
   async function run(trigger, opts) {
     if (running) return running;
@@ -274,12 +290,14 @@ export function createMonitor(deps) {
       const restarts = await kvNow('monitor_restarts', {});
       const ctx = { settings, env, store, backups: d.backups, net: d.net, get: d.get, statfs: d.statfs, now, botPoll: d.botPoll, restarts };
       const tasks = await buildTasks(ctx);
-      const prev = opts && opts.only === 'failed' ? await lastRows() : null;
+      const ids = opts && Array.isArray(opts.ids) ? new Set(opts.ids.map(String)) : null;
+      const prev = (opts && opts.only === 'failed') || ids ? await lastRows() : null;
       let toRun = tasks;
       let kept = [];
       if (prev) {
         const before = new Map(prev.map((r) => [r.id, r]));
-        toRun = tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false);
+        toRun = ids ? tasks.filter((t) => ids.has(t.id) && before.has(t.id)) : tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false);
+        if (ids && !toRun.length) return null; // unknown or new checks: nothing to recheck
         kept = tasks
           .filter((t) => !toRun.includes(t))
           .map((t) => {
@@ -291,13 +309,18 @@ export function createMonitor(deps) {
       const ran = new Set(toRun.map((t) => t.id));
       const order = new Map(tasks.map((t, i) => [t.id, i]));
       const merge = (fresh) => finalize([...kept, ...fresh].sort((a, b) => order.get(a.id) - order.get(b.id)));
-      let rows = merge(await runTasks(toRun, 8, 3, now));
+      progress = { trigger: String(trigger || 'schedule'), startedAt, total: toRun.length, done: 0, states: Object.fromEntries(toRun.map((t) => [t.id, 'queued'])) };
+      let rows = merge(await runTasks(toRun, 8, 3, now, hooks));
+      let retriedCount = 0;
       const alerted = await kvNow('monitor_alerts', {});
       // One retry after 30 s for every failed check, when one of them would be a new alert.
       const fresh = rows.some((r) => ran.has(r.id) && r.alert && r.ok === false && !alerted[r.id]);
       if (fresh) {
-        await sleep(MONITOR_RETRY_MS);
         const failedIds = new Set(rows.filter((r) => ran.has(r.id) && r.ok === false).map((r) => r.id));
+        retriedCount = failedIds.size;
+        for (const id of failedIds) progress.states[id] = 'retry';
+        progress.total += failedIds.size;
+        await sleep(MONITOR_RETRY_MS);
         const again = await check(tasks.filter((t) => failedIds.has(t.id)).map((t) => ({ ...t, retried: true })));
         const byId = new Map(again.map((r) => [r.id, r]));
         rows = finalize(rows.map((r) => (byId.has(r.id) ? { ...byId.get(r.id), retried: true } : r)));
@@ -317,6 +340,15 @@ export function createMonitor(deps) {
       } catch (e) {
         log('monitor history not saved: ' + String((e && e.code) || (e && e.name) || 'error'));
       }
+      lastSummary = {
+        trigger: String(trigger || 'schedule'),
+        startedAt,
+        finishedAt,
+        checked: ran.size,
+        failed: rows.filter((r) => ran.has(r.id) && r.ok === false).length,
+        retried: retriedCount,
+        ids: ids ? [...ran] : null,
+      };
       return { startedAt, finishedAt, rows };
     })()
       .catch((e) => {
@@ -326,6 +358,7 @@ export function createMonitor(deps) {
       .finally(() => {
         running = null;
         runningSince = 0;
+        progress = null;
       });
     return running;
   }
@@ -422,6 +455,8 @@ export function createMonitor(deps) {
       scheduled: !!d.scheduled,
       running: !!running,
       runningSince,
+      progress: progress ? { ...progress, states: { ...progress.states } } : null,
+      lastSummary,
       groups: GROUPS.map(([id, title]) => ({ id, title })),
       lastRun: last ? { at: Number(last.run_at), finishedAt: Number(last.finished_at), trigger: last.trigger, total: last.total, failed: last.failed } : null,
       nextRunAt: d.scheduled && fullAt ? fullAt + cfg.intervalMin * 60 * 1000 : 0,
@@ -470,5 +505,5 @@ export function createMonitor(deps) {
     };
   }
 
-  return { run, snapshot, start, isRunning: () => !!running };
+  return { run, snapshot, start, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
 }

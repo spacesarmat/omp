@@ -950,6 +950,15 @@ export function createApp(file, fetchImpl, opts) {
             // The run takes minutes (every tracker); the tab polls GET /admin/api/monitor until it ends.
             // only=failed: «Перепроверить все ошибки», only the checks that were red in the last run
             const onlyFailed = body.only === 'failed';
+            // ids: «Перепроверить» on one row (a tracker sends its red checks). Never joins a run that is going.
+            if (body.ids !== undefined) {
+              const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string' && /^[A-Za-z0-9:._/-]{1,120}$/.test(x)) : [];
+              if (!ids.length || ids.length > 10 || ids.length !== body.ids.length) return json(res, 200, { ok: false, error: 'Неверный список проверок' });
+              if (already) return json(res, 200, { ok: false, busy: true, error: 'Уже идёт проверка, дождитесь конца' });
+              void monitor.run('recheck', { ids });
+              await audit(file, 'monitor_run', 'перепроверка: ' + ids.join(', ').slice(0, 200), admin);
+              return json(res, 200, { ok: true, started: true, running: true, ids });
+            }
             void (onlyFailed ? monitor.run('recheck', { only: 'failed' }) : monitor.run('manual'));
             if (!already) await audit(file, 'monitor_run', onlyFailed ? 'только ошибки' : 'ok', admin);
             return json(res, 200, { ok: true, started: !already, running: true });
