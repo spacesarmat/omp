@@ -1,0 +1,33 @@
+{
+  "version": "0.20.6-beta.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.6-beta.3/OMP-0.20.6-beta.3.apk",
+  "ipkHash": "4e8af0e5ec0eb943822017696b66b15452573557acf20ddf2d8274de6774ed13",
+  "ipkSize": 92677931,
+  "apks": {
+    "arm64": {
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.6-beta.3/OMP-0.20.6-beta.3-arm64.apk",
+      "sha256": "5d225fe0cc75fab292f3ce7a2ce21769a20c818e9a776decd5e41f95f7bfec17",
+      "size": 58129669
+    },
+    "armv7": {
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.6-beta.3/OMP-0.20.6-beta.3-armv7.apk",
+      "sha256": "3b232c43018567ae921682a1aa86a29ed10855f10f0331f870ad5b87bef4b29f",
+      "size": 53948697
+    }
+  },
+  "notes": [
+    "Бета: «Размер меток» теперь ползунок в пикселях, метки по умолчанию мельче",
+    "Бета: метки от 16 до 36 px с шагом 2, по умолчанию 20; меняется стрелками влево и вправо, в строке видно значение",
+    "Бета: плеер Android TV берёт тот же размер в пикселях"
+  ],
+  "notesTv": [
+    "Бета: «Размер меток» теперь ползунок в пикселях, метки по умолчанию мельче",
+    "Бета: метки от 16 до 36 px с шагом 2, по умолчанию 20; меняется стрелками влево и вправо, в строке видно значение",
+    "Бета: плеер Android TV берёт тот же размер в пикселях"
+  ],
+  "notesPhone": [
+    "Бета: «Размер меток» теперь ползунок в пикселях, метки по умолчанию мельче",
+    "Бета: метки от 8 до 24 px, по умолчанию 12"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.6-beta.3"
+}
