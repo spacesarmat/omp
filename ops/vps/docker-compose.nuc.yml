@@ -4,6 +4,7 @@
 #   so no ACME attempts for domains that still point at the VPS.
 # - billing: (cutover 2026-10-19) Telegram block removed; NUC is the only bot poller.
 #   VPS omp-billing is stopped.
+# - docker-proxy (base file): read-only Docker API for the billing «Мониторинг» tab, internal network only.
 # - postgres: billing database for the move off SQLite (docs/billing/postgres-cutover.md). Internal network
 #   only, no published port, data in ./data/postgres. Needs BILLING_PG_PASSWORD in .env (hex, generated on the
 #   server, never printed): compose refuses to start anything without it. Billing runs on Postgres since the
@@ -19,12 +20,13 @@ services:
       # pg_dump every backupEveryHours (admin settings) into /opt/omp-backups/pg, mode 600
       BILLING_PG_BACKUP_DIR: /backups/pg
       # base list + postgres (pg does not use the HTTP proxy; listed so nothing ever routes it via warp)
-      NO_PROXY: jackett,jacred,torrserver,caddy,postgres,localhost,127.0.0.1
+      NO_PROXY: jackett,jacred,torrserver,caddy,postgres,docker-proxy,localhost,127.0.0.1
     volumes:
       - /opt/omp-backups/pg:/backups/pg
     networks:
       - omp
       - pg
+      - dockerapi
   postgres:
     image: postgres:17-alpine
     container_name: omp-postgres

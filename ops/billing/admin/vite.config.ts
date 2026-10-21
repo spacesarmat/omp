@@ -40,6 +40,7 @@ export default defineConfig({
       '/admin/session-revoke': 'http://127.0.0.1:8787',
       '/admin/settings': 'http://127.0.0.1:8787',
       '/admin/services': 'http://127.0.0.1:8787',
+      '/admin/monitor': 'http://127.0.0.1:8787',
       '/admin/support': 'http://127.0.0.1:8787',
       '/admin/support-close': 'http://127.0.0.1:8787',
       '/admin/finance.csv': 'http://127.0.0.1:8787',

@@ -310,6 +310,28 @@ CREATE TABLE kv (key text PRIMARY KEY, value text NOT NULL);
 INSERT INTO kv (key, value) VALUES ('store_version', '0');
 `,
   },
+  {
+    version: '002_monitor',
+    sql: `
+-- «Мониторинг» (src/monitor.mjs): one row per run with every check (the tab shows the newest), and one row
+-- per judged check for the 7-day history. Both are pruned to 7 days after each run. Not part of the state.
+CREATE TABLE monitor_runs (
+  run_at bigint PRIMARY KEY,
+  finished_at bigint NOT NULL,
+  trigger text NOT NULL,
+  total integer NOT NULL,
+  failed integer NOT NULL,
+  rows jsonb NOT NULL
+);
+CREATE TABLE monitor_results (
+  run_at bigint NOT NULL,
+  check_id text NOT NULL,
+  ok boolean NOT NULL
+);
+CREATE INDEX monitor_results_at ON monitor_results (run_at);
+CREATE INDEX monitor_results_check ON monitor_results (check_id, run_at);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
