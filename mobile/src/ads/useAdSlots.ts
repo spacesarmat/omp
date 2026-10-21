@@ -75,6 +75,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   opts.current = o;
   // The banner actually drawn in an admitted slot. A refresh may pick another one before its image has loaded;
   // the cell keeps this one until then, so it never goes blank and the impression timer does not start early.
+  // A banner that the refresh removed or that expired is not kept: a failed replacement image must not leave it up.
   const held = useRef<{ [pos: number]: AdBanner }>({});
   // localStorage, not a signal: a renewal (this page, or the background check) has to bump it or the open catalog
   // keeps the ads it already drew
@@ -128,15 +129,23 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     return o.section === 'discoverRails' ? railPositions(o.count, cfg.railsEvery) : adPositions(o.count, cfg, o.perScreen);
   }, [banners, o.count, o.perScreen, o.section, cfg]);
   const pickAt = (pos: number) => pickBanner(banners, o.section + ':' + pos, now);
-  // What the cell draws. The pick is used for preloading and for admitting a new slot; a slot that is already
-  // on screen stays on its current banner until the replacement image is loaded.
+  // What the cell draws. The pick is used for preloading and for admitting a new slot. A slot that is already
+  // on screen stays on its current banner until the replacement image is loaded, and only while that banner is
+  // still eligible. Otherwise the cell is dropped at once, without waiting for the replacement.
   const bannerAt = (pos: number): AdBanner | null => {
     const next = pickAt(pos);
     if (!next) return null;
+    if (loaded.has(next.image)) {
+      held.current[pos] = next;
+      return next;
+    }
     const prev = held.current[pos];
-    if (!loaded.has(next.image)) return prev || null;
-    held.current[pos] = next;
-    return next;
+    if (!prev) return null;
+    for (let i = 0; i < banners.length; i++) {
+      if (banners[i].id === prev.id) return prev;
+    }
+    delete held.current[pos];
+    return null;
   };
 
   // another list, or ads off here: start over (the impressions too)

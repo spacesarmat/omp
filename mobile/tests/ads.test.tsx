@@ -14,7 +14,7 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { settings, updateSettings } from '../../src/store/settings';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { cachedAdsConfig, saveAdsConfig } from '../../src/ads/ads';
+import { cachedAdsConfig, pickBanner, saveAdsConfig, type AdBanner } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
@@ -336,7 +336,23 @@ describe('ads in «Мои»', () => {
     }
   });
 
-  it('keeps the current banner until the replacement image has loaded', async () => {
+  /** One slot (every 30), so a weight can move the pick without a second slot staying on the old banner. */
+  function oneSlot() {
+    saveAdsConfig({ ...CONFIG, everyN: 30 });
+    adsConfig.value = cachedAdsConfig();
+  }
+
+  /** A weight 1..100 for which this slot's daily pick is `next`, while `BANNER` stays eligible. 0 if none. */
+  function weightBeside(next: typeof BANNER): number {
+    const now = Date.now();
+    for (let w = 1; w <= 100; w++) {
+      const candidate = { ...next, weight: w };
+      if (pickBanner([BANNER, candidate] as AdBanner[], 'mine:10', now)?.id === candidate.id) return w;
+    }
+    return 0;
+  }
+
+  it('keeps an eligible banner until the replacement image has loaded', async () => {
     const pending: Array<{ onload: (() => void) | null }> = [];
     class Img {
       onload: (() => void) | null = null;
@@ -349,14 +365,17 @@ describe('ads in «Мои»', () => {
     vi.stubGlobal('IntersectionObserver', VisibleObserver);
     vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
     try {
+      oneSlot();
       mount(<Library />);
       await flush();
       await act(async () => {
         vi.advanceTimersByTime(1000);
       });
       const nextImg = 'https://billing.omp-player.online/v1/ads/img/' + 'b'.repeat(24);
-      const next = { ...BANNER, id: 'bbbbbbbbbbbb', title: 'Другой баннер', image: '/v1/ads/img/' + 'b'.repeat(24) };
-      saveAdsConfig({ ...CONFIG, banners: [next] });
+      const next = { ...BANNER, id: 'bbbbbbbbbbbb', title: 'Другой баннер', image: '/v1/ads/img/' + 'b'.repeat(24), weight: 1 };
+      const weight = weightBeside(next);
+      expect(weight).toBeGreaterThan(0);
+      saveAdsConfig({ ...CONFIG, everyN: 30, banners: [BANNER, { ...next, weight }] });
       act(() => {
         adsConfig.value = cachedAdsConfig();
       });
@@ -374,7 +393,64 @@ describe('ads in «Мои»', () => {
       await act(async () => {
         vi.advanceTimersByTime(1000);
       });
-      expect(pendingAdEvents()).toContainEqual({ b: next.id, s: 'mine', p: 'phone', t: 'i', n: 2 });
+      expect(pendingAdEvents()).toContainEqual({ b: next.id, s: 'mine', p: 'phone', t: 'i', n: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops a withdrawn banner without waiting for the replacement image', async () => {
+    const pending: Array<{ onload: (() => void) | null; onerror: (() => void) | null }> = [];
+    class Img {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_v: string) {
+        pending.push(this);
+      }
+    }
+    vi.stubGlobal('Image', Img);
+    vi.stubGlobal('IntersectionObserver', VisibleObserver);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
+    try {
+      oneSlot();
+      mount(<Library />);
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(1);
+      const next = { ...BANNER, id: 'dddddddddddd', title: 'Другой баннер', image: '/v1/ads/img/' + 'd'.repeat(24) };
+      saveAdsConfig({ ...CONFIG, everyN: 30, banners: [next] });
+      act(() => {
+        adsConfig.value = cachedAdsConfig();
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+      expect(pendingAdEvents().map((e) => e.b)).toEqual([BANNER.id]);
+      expect(pending.length).toBeGreaterThan(0);
+      const failed = pending.slice();
+      await act(async () => {
+        for (let i = 0; i < failed.length; i++) if (failed[i].onerror) failed[i].onerror!();
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+
+      const again = { ...next, id: 'cccccccccccc', image: '/v1/ads/img/' + 'c'.repeat(24) };
+      const nextImg = 'https://billing.omp-player.online/v1/ads/img/' + 'c'.repeat(24);
+      saveAdsConfig({ ...CONFIG, everyN: 30, banners: [again] });
+      act(() => {
+        adsConfig.value = cachedAdsConfig();
+      });
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+      const fresh = pending.filter((img) => failed.indexOf(img) < 0);
+      expect(fresh.length).toBeGreaterThan(0);
+      await act(async () => {
+        for (let i = 0; i < fresh.length; i++) if (fresh[i].onload) fresh[i].onload!();
+      });
+      await flush();
+      expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe(again.title);
+      expect(el.querySelector('.m-ad img')!.getAttribute('src')).toBe(nextImg);
     } finally {
       vi.useRealTimers();
     }
