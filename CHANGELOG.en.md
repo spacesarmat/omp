@@ -14,6 +14,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Monitoring: red first, fully green groups fold into one line ("Containers 12/12"); filter "All / Errors only / No alert", search by name, sorting by status, name, response time and check time; the choice is kept in the browser
 - [tech] Monitoring: a "Recheck all errors" button runs only the red checks again
 - [tech] ops/vps/deploy.sh works on the NUC: docker compose with docker-compose.nuc.yml, health checks over http on port 80, node --check in a container when the host has no node
+- [tech] JacRed: the base syncs from sync.jacred.stream through WARP (globalproxy in jacred/init.yaml): the direct path from the NUC stalled and the base had not grown for 15 hours
 - [tech] Monitoring: a "Recheck" button on a red row (that check only), run progress «N of M» with the start time, a state per row (checking, waiting for the retry, done) and a summary at the end
 
 ## 0.20.6-beta.3
