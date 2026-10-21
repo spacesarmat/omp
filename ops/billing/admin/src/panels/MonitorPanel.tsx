@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,11 +33,56 @@ export type MonitorData = {
   scheduled: boolean;
   running: boolean;
   runningSince?: number;
+  progress?: MonitorProgress | null;
+  lastSummary?: MonitorSummary | null;
   groups: { id: string; title: string }[];
   lastRun: { at: number; finishedAt: number; trigger: string; total: number; failed: number } | null;
   nextRunAt: number;
   checks: MonitorCheck[];
 };
+
+export type RowState = 'queued' | 'running' | 'retry' | 'done';
+export type MonitorProgress = { trigger: string; startedAt: number; total: number; done: number; states: Record<string, RowState> };
+export type MonitorSummary = { trigger: string; startedAt: number; finishedAt: number; checked: number; failed: number; retried: number; ids: string[] | null };
+
+const ROW_STATE_TEXT: Record<RowState, string> = { queued: 'в очереди', running: 'проверяется', retry: 'ждёт повтора', done: 'готово' };
+
+/** What a table row needs from the panel: the live run states and the per-row recheck. */
+type RowCtxValue = { states: Record<string, RowState>; running: boolean; pending: string[]; recheck: (ids: string[]) => void };
+const RowCtx = createContext<RowCtxValue>({ states: {}, running: false, pending: [], recheck: () => {} });
+
+/** Live state of the checks in a row while a run goes, plus «Перепроверить» on a red row when nothing runs. */
+function RowRun({ ids, red, recheckIds }: { ids: string[]; red: boolean; recheckIds?: string[] }) {
+  const again = recheckIds || ids;
+  const ctx = useContext(RowCtx);
+  const states = ids.map((id) => ctx.states[id]).filter(Boolean) as RowState[];
+  const pending = again.some((id) => ctx.pending.includes(id));
+  if (ctx.running && states.length) {
+    const st: RowState = states.includes('running') ? 'running' : states.includes('retry') ? 'retry' : states.includes('queued') ? 'queued' : 'done';
+    return (
+      <Badge variant={st === 'done' ? 'ok' : st === 'retry' ? 'warn' : 'secondary'} className="ml-2 align-middle" data-row-state={st}>
+        {st === 'running' ? <span className="mr-1 inline-block h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" /> : null}
+        {ROW_STATE_TEXT[st]}
+      </Badge>
+    );
+  }
+  if (!red || !again.length) return null;
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="ml-2 h-7 px-2 text-xs"
+      disabled={ctx.running || pending}
+      title={ctx.running ? 'Идёт проверка, дождитесь конца' : 'Проверить заново только эту строку'}
+      onClick={() => ctx.recheck(again)}
+      data-recheck={again.join(',')}
+    >
+      {pending ? <span className="mr-1 inline-block h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" /> : null}
+      Перепроверить
+    </Button>
+  );
+}
 
 const PATH_TEXT: Record<string, string> = {
   direct: 'напрямую',
@@ -122,6 +167,7 @@ function PlainTable({ rows }: { rows: MonitorCheck[] }) {
             <TableCell className="font-medium">
               {r.name}
               {r.group === 'containers' ? null : <PathBadge path={r.path} />}
+              <RowRun ids={[r.id]} red={r.ok === false} />
             </TableCell>
             <TableCell>
               <Detail row={r} />
@@ -172,6 +218,7 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
                 <TableCell className="font-medium">
                   {r.name}
                   <PathBadge path={r.path} />
+                  <RowRun ids={[r.id]} red={r.ok === false} />
                 </TableCell>
                 <TableCell colSpan={withSearch ? 3 : 2}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -191,6 +238,7 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
             <TableRow key={t.key} data-check={t.key}>
               <TableCell className="font-medium">
                 {t.name}
+                <RowRun ids={t.checks.map((c) => c.id)} red={t.checks.some((c) => c.ok === false)} recheckIds={t.checks.filter((c) => c.ok === false).map((c) => c.id)} />
                 {t.target ? <div className="text-xs text-muted-foreground">{t.target}</div> : null}
               </TableCell>
               {withSearch ? (
@@ -321,6 +369,8 @@ export function MonitorView({
   onSave,
   prefs,
   setPrefs,
+  onRowRecheck,
+  pending,
 }: {
   data: MonitorData | null;
   busy: boolean;
@@ -331,20 +381,27 @@ export function MonitorView({
   onSave: () => void;
   prefs: MonitorPrefs;
   setPrefs: (p: MonitorPrefs) => void;
+  onRowRecheck?: (ids: string[]) => void;
+  pending?: string[];
 }) {
   const running = !!data?.running;
   const checks = data?.checks || [];
   const failed = checks.filter((c) => c.ok === false).length;
   const view = buildView(data?.groups || [], checks, prefs);
   const shown = view.reduce((n, g) => n + (g.folded ? 0 : g.items.length), 0);
+  const progress = running ? data?.progress || null : null;
+  const summary = !running ? data?.lastSummary || null : null;
+  const nameOf = (id: string) => checks.find((c) => c.id === id)?.name || id;
+  const rowCtx: RowCtxValue = { states: progress?.states || {}, running, pending: pending || [], recheck: onRowRecheck || (() => {}) };
   return (
+    <RowCtx.Provider value={rowCtx}>
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <CardTitle>Мониторинг</CardTitle>
             <CardDescription>
-              {data?.lastRun ? 'Последняя проверка: ' + when(data.lastRun.finishedAt) + (data.lastRun.trigger === 'manual' ? ' (вручную)' : data.lastRun.trigger === 'recheck' ? ' (перепроверка ошибок)' : '') + '.' : 'Проверок ещё не было.'}
+              {data?.lastRun ? 'Последняя проверка: ' + when(data.lastRun.finishedAt) + (data.lastRun.trigger === 'manual' ? ' (вручную)' : data.lastRun.trigger === 'recheck' ? ' (перепроверка)' : '') + '.' : 'Проверок ещё не было.'}
               {data?.scheduled && data?.nextRunAt ? ' Следующая около ' + when(data.nextRunAt) + '.' : ''}
               {data && !data.scheduled ? ' Расписание на этом экземпляре выключено, работает только ручная проверка.' : ''}
             </CardDescription>
@@ -362,7 +419,26 @@ export function MonitorView({
             ) : null}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {progress ? (
+            <div className="space-y-1" data-testid="monitor-progress">
+              <div className="text-sm">
+                Проверка идёт: {progress.done} из {progress.total}, начата {clock(progress.startedAt)} МСК
+                {progress.trigger === 'recheck' ? ' (перепроверка)' : ''}
+                {Object.values(progress.states).includes('retry') ? ', ждёт повтора: ' + Object.values(progress.states).filter((x) => x === 'retry').length : ''}
+              </div>
+              <div className="h-2 w-full max-w-md overflow-hidden rounded bg-zinc-800">
+                <div className="h-full bg-amber-500 transition-all" style={{ width: Math.round((100 * progress.done) / Math.max(1, progress.total)) + '%' }} />
+              </div>
+            </div>
+          ) : null}
+          {summary ? (
+            <div className="text-sm text-muted-foreground" data-testid="monitor-summary">
+              Готово в {clock(summary.finishedAt)} МСК
+              {summary.ids ? ' (' + summary.ids.map(nameOf).join(', ') + ')' : summary.trigger === 'recheck' ? ' (перепроверка ошибок)' : ''}: проверено {summary.checked}, ошибок {summary.failed}
+              {summary.retried ? ', повторено через 30 с: ' + summary.retried : ''}, заняло {Math.max(1, Math.round((summary.finishedAt - summary.startedAt) / 1000))} с.
+            </div>
+          ) : null}
           <form
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
@@ -388,6 +464,7 @@ export function MonitorView({
         <GroupCard key={g.id} view={g} onToggle={(id, open) => setPrefs({ ...prefs, open: { ...prefs.open, [id]: open } })} />
       ))}
     </div>
+    </RowCtx.Provider>
   );
 }
 
@@ -397,6 +474,7 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
   const [interval, setIntervalValue] = useState('');
   const [err, setErr] = useState('');
   const wasRunning = useRef(false);
+  const [pending, setPending] = useState<string[]>([]);
   const [prefs, setPrefsState] = useState<MonitorPrefs>(() => loadPrefs(browserStorage()));
   const setPrefs = (p: MonitorPrefs) => {
     setPrefsState(p);
@@ -422,7 +500,15 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
     setErr('');
     setData(res);
     setIntervalValue((cur) => cur || String(res.intervalMin || ''));
-    if (wasRunning.current && !res.running) toast('Проверка завершена');
+    if (wasRunning.current && !res.running) {
+      const s = res.lastSummary;
+      toast(
+        s
+          ? 'Проверка завершена: проверено ' + s.checked + ', ошибок ' + s.failed + (s.retried ? ', повторено через 30 с: ' + s.retried : '') + ', заняло ' + Math.max(1, Math.round((s.finishedAt - s.startedAt) / 1000)) + ' с'
+          : 'Проверка завершена',
+      );
+    }
+    if (!res.running) setPending([]);
     wasRunning.current = !!res.running;
     return res;
   }
@@ -459,6 +545,24 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
     }
   }
 
+  async function recheckRow(ids: string[]) {
+    setPending(ids);
+    try {
+      const res = (await post('/admin/monitor/run', csrf, { ids })) as { ok?: boolean; error?: string; auth?: boolean };
+      if (res.auth === false) return setErr('Нужен вход');
+      if (!res.ok) {
+        setPending([]);
+        toast(res.error || 'Не запущено, обновите страницу');
+        return;
+      }
+      wasRunning.current = true;
+      await load();
+    } catch {
+      setPending([]);
+      toast('Нет связи с сервером');
+    }
+  }
+
   async function save() {
     setBusy(true);
     try {
@@ -485,6 +589,8 @@ export function MonitorPanel({ csrf }: { csrf: string }) {
         onSave={() => void save()}
         prefs={prefs}
         setPrefs={setPrefs}
+        onRowRecheck={(ids) => void recheckRow(ids)}
+        pending={pending}
       />
     </>
   );

@@ -203,6 +203,80 @@ describe('monitor runs on Postgres', () => {
     expect(t.sent.filter((m) => m.text.includes('починилось') && m.text.includes('utracker'))).toEqual([]);
   });
 
+  it('«Перепроверить» on a row runs only that check, with progress, retry and alerts like any run', async () => {
+    const seen: any[] = [];
+    let m: any = null;
+    const t = await setup({
+      sleep: async () => {
+        seen.push(m.progress());
+      },
+    });
+    m = t.monitor;
+    expect(m.progress()).toBeNull();
+    await t.monitor.run('schedule');
+    const firstAt = (await t.monitor.snapshot()).lastRun.finishedAt;
+    t.w.failJackett.add('kinozal');
+    t.tick(60000);
+    const r = await t.monitor.run('recheck', { ids: ['jackett:kinozal'] });
+    // the retry 30 s later: the row waits for it, the counter grows by one
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ trigger: 'recheck', total: 2, done: 1, states: { 'jackett:kinozal': 'retry' } });
+    expect(Object.keys(seen[0].states)).toEqual(['jackett:kinozal']);
+    expect(r!.rows.find((x: any) => x.id === 'jackett:kinozal')).toMatchObject({ ok: false, retried: true });
+    expect(t.sent.at(-1)!.text).toContain('Kinozal');
+    const n = await t.store.query("SELECT check_id, count(*)::int AS n FROM monitor_results WHERE check_id IN ('jackett:kinozal', 'jackett:rutracker') GROUP BY check_id ORDER BY check_id");
+    expect(n.rows).toEqual([
+      { check_id: 'jackett:kinozal', n: 2 },
+      { check_id: 'jackett:rutracker', n: 1 },
+    ]);
+    const snap = await t.monitor.snapshot();
+    expect(snap.progress).toBeNull();
+    expect(snap.lastSummary).toMatchObject({ trigger: 'recheck', checked: 1, failed: 1, retried: 1, ids: ['jackett:kinozal'] });
+    expect(snap.checks.length).toBe(r!.rows.length);
+    const full = (await t.store.query("SELECT max(finished_at) AS at FROM monitor_runs WHERE trigger <> 'recheck'")).rows[0];
+    expect(Number(full.at)).toBe(firstAt);
+    // an id that is not a check starts nothing
+    expect(await t.monitor.run('recheck', { ids: ['nope'] })).toBeNull();
+    // a check added since the last run (here: every row but one dropped from the saved run) does not break a row recheck
+    const last = (await t.store.query('SELECT run_at, rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
+    const only = (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows).filter((x: any) => x.id === 'jackett:kinozal');
+    const t2 = await setup({ store: t.store });
+    // a fresh process (nothing in memory) reads the saved run from this store
+    await t.store.query('UPDATE monitor_runs SET rows = $1 WHERE run_at = $2', [JSON.stringify(only), last.run_at]);
+    t2.tick(24 * 3600000);
+    const r2 = await t2.monitor.run('recheck', { ids: ['jackett:kinozal'] });
+    expect(r2).not.toBeNull();
+    expect(r2!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: null, detail: 'ещё не проверялась' });
+    // «Перепроверить все ошибки» then runs that not-yet-checked one too
+    t2.tick(60000);
+    const r3 = await t2.monitor.run('recheck', { only: 'failed' });
+    expect(r3!.rows.find((x: any) => x.id === 'jackett:rutracker')).toMatchObject({ ok: true });
+  });
+
+  it('a row recheck of a red list that loads again rechecks its group; with no run yet it starts nothing', async () => {
+    const empty = await setup();
+    expect(await empty.monitor.run('recheck', { ids: ['jackett:kinozal'] })).toBeNull();
+    expect((await empty.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n).toBe(0);
+    const t = await setup();
+    await t.monitor.run('schedule');
+    // the saved run had the Jackett list red (one row instead of a row per tracker)
+    const last = (await t.store.query('SELECT run_at, rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
+    const rows = (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows).filter((x: any) => x.group !== 'jackett');
+    rows.push({ id: 'jackett:gone', group: 'jackett', name: 'Gone', path: 'jackett', target: '', ok: false, detail: 'таймаут', context: '', ms: 0, alert: true, retried: false, at: last.run_at });
+    rows.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', path: '', target: '', ok: false, detail: 'не прочитан', context: '', ms: 0, alert: true, retried: false, at: last.run_at });
+    await t.store.query('UPDATE monitor_runs SET rows = $1 WHERE run_at = $2', [JSON.stringify(rows), last.run_at]);
+    const fresh = await setup({ store: t.store });
+    fresh.tick(24 * 3600000);
+    // a removed tracker's old red row starts nothing: only the known list rows expand to their group
+    expect(await fresh.monitor.run('recheck', { ids: ['jackett:gone'] })).toBeNull();
+    const r = await fresh.monitor.run('recheck', { ids: ['jackett:list'] });
+    expect(r).not.toBeNull();
+    expect(r!.rows.find((x: any) => x.id === 'jackett:list')).toBeUndefined();
+    expect(r!.rows.find((x: any) => x.id === 'jackett:kinozal')).toMatchObject({ ok: true });
+    const snap = await fresh.monitor.snapshot();
+    expect(snap.lastSummary.checked).toBeGreaterThan(1);
+  });
+
   it('a message that could not be sent goes out on the next run', async () => {
     const t = await setup();
     t.w.failJackett.add('kinozal');
@@ -391,6 +465,26 @@ describe('monitor routes', () => {
     const audit = entries.map((a: any) => a.action);
     expect(audit).toEqual(expect.arrayContaining(['monitor_run', 'monitor_config']));
     expect(entries.some((a: any) => a.action === 'monitor_run' && /только ошибки/.test(JSON.stringify(a)))).toBe(true);
+    // «Перепроверить» on one row
+    t.tick(1000);
+    const row = JSON.parse((await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, ids: ['jackett:kinozal'] })).body);
+    expect(row).toMatchObject({ ok: true, ids: ['jackett:kinozal'] });
+    await vi.waitFor(async () => expect(t.monitor.isRunning()).toBe(false), { timeout: 5000 });
+    const after = JSON.parse((await call(app, 'GET', '/admin/api/monitor', { cookie })).body);
+    expect(after.lastSummary).toMatchObject({ checked: 1, ids: ['jackett:kinozal'] });
+    expect((await t.store.read()).audit.some((a: any) => /перепроверка: jackett:kinozal/.test(JSON.stringify(a)))).toBe(true);
+    for (const ids of [[], ['bad id'], 'jackett:kinozal', Array.from({ length: 11 }, (_, i) => 'x' + i)]) {
+      expect(JSON.parse((await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, ids })).body).ok).toBe(false);
+    }
+    // concurrency: a row recheck never joins a run that is going (a run held open, so the test does not race it)
+    const runsBefore = (await t.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n;
+    const isRunning = t.monitor.isRunning;
+    (t.monitor as any).isRunning = () => true;
+    const busy = JSON.parse((await call(app, 'POST', '/admin/monitor/run', { cookie }, { csrf, ids: ['jackett:kinozal'] })).body);
+    (t.monitor as any).isRunning = isRunning;
+    expect(busy).toMatchObject({ ok: false, busy: true });
+    expect(t.monitor.isRunning()).toBe(false);
+    expect((await t.store.query('SELECT count(*)::int AS n FROM monitor_runs')).rows[0].n).toBe(runsBefore);
   });
 
   it('read-only mode has no monitor', async () => {
