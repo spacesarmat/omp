@@ -180,6 +180,8 @@ export function historyStrip(points, now) {
  */
 /** Detail of a check added since the last run and not run yet (kept by a row recheck). */
 const UNCHECKED = 'ещё не проверялась';
+/** Rows that stand for a whole list while it cannot be read (monitorChecks listFailed). */
+const LIST_IDS = new Set(['containers', 'jackett:list', 'jacred:list']);
 
 export function createMonitor(deps) {
   const d = deps || {};
@@ -306,7 +308,7 @@ export function createMonitor(deps) {
           // A saved id that is no longer a task (a red container or tracker list that loads again and is now
           // one row per item): recheck that whole group, so the list row is replaced.
           const taskIds = new Set(tasks.map((t) => t.id));
-          const groups = new Set([...ids].filter((id) => !taskIds.has(id) && before.has(id)).map((id) => before.get(id).group));
+          const groups = new Set([...ids].filter((id) => LIST_IDS.has(id) && !taskIds.has(id) && before.has(id)).map((id) => before.get(id).group));
           toRun = tasks.filter((t) => (ids.has(t.id) && before.has(t.id)) || groups.has(t.group));
         } else {
           toRun = tasks.filter((t) => !before.has(t.id) || before.get(t.id).ok === false || unchecked(before.get(t.id)));

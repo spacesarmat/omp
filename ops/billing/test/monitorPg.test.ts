@@ -262,10 +262,13 @@ describe('monitor runs on Postgres', () => {
     // the saved run had the Jackett list red (one row instead of a row per tracker)
     const last = (await t.store.query('SELECT run_at, rows FROM monitor_runs ORDER BY run_at DESC LIMIT 1')).rows[0];
     const rows = (typeof last.rows === 'string' ? JSON.parse(last.rows) : last.rows).filter((x: any) => x.group !== 'jackett');
+    rows.push({ id: 'jackett:gone', group: 'jackett', name: 'Gone', path: 'jackett', target: '', ok: false, detail: 'таймаут', context: '', ms: 0, alert: true, retried: false, at: last.run_at });
     rows.push({ id: 'jackett:list', group: 'jackett', name: 'Список трекеров Jackett', path: '', target: '', ok: false, detail: 'не прочитан', context: '', ms: 0, alert: true, retried: false, at: last.run_at });
     await t.store.query('UPDATE monitor_runs SET rows = $1 WHERE run_at = $2', [JSON.stringify(rows), last.run_at]);
     const fresh = await setup({ store: t.store });
     fresh.tick(24 * 3600000);
+    // a removed tracker's old red row starts nothing: only the known list rows expand to their group
+    expect(await fresh.monitor.run('recheck', { ids: ['jackett:gone'] })).toBeNull();
     const r = await fresh.monitor.run('recheck', { ids: ['jackett:list'] });
     expect(r).not.toBeNull();
     expect(r!.rows.find((x: any) => x.id === 'jackett:list')).toBeUndefined();
