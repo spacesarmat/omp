@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,8 @@ const PLATFORMS: AdPlatform[] = ['phone', 'androidTv', 'webos'];
 const imageUrl = (id: string) => '/v1/ads/img/' + id;
 
 type Draft = {
+  /** Which open form an in-flight upload belongs to. A new one on each open, kept across field edits. */
+  localId: string;
   id?: string;
   enabled: boolean;
   title: string;
@@ -44,7 +46,12 @@ type Draft = {
   tvMode: 'qr' | 'noclick';
 };
 
+function draftLocalId(): string {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
 const emptyDraft = (): Draft => ({
+  localId: draftLocalId(),
   enabled: true,
   title: '',
   text: '',
@@ -62,6 +69,7 @@ const emptyDraft = (): Draft => ({
 
 function draftOf(b: AdBanner): Draft {
   return {
+    localId: draftLocalId(),
     id: b.id,
     enabled: b.enabled,
     title: b.title,
@@ -92,16 +100,31 @@ export function AdsPanel({ csrf }: { csrf: string }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // The first load fills the settings form. Later loads for another stats period must not.
+  const formReady = useRef(false);
 
-  async function load(d = days) {
+  async function load(d = days, keepForm = false) {
     const r = await api<{ config?: AdsConfig; stats?: AdStats }>('/admin/api/ads?days=' + d);
     if (r.auth === false || !r.config) return;
     setCfg(r.config);
-    setForm(r.config);
     setStats(r.stats || null);
+    if (!keepForm) setForm(r.config);
   }
   useEffect(() => {
-    void load(days);
+    const keep = formReady.current;
+    formReady.current = true;
+    let alive = true;
+    void (async () => {
+      const r = await api<{ config?: AdsConfig; stats?: AdStats }>('/admin/api/ads?days=' + days);
+      if (!alive || r.auth === false || !r.config) return;
+      setCfg(r.config);
+      setStats(r.stats || null);
+      // A period change keeps whatever the admin has not saved yet. The first answer still fills an empty form.
+      setForm((cur) => (keep && cur ? cur : r.config!));
+    })();
+    return () => {
+      alive = false;
+    };
   }, [days]);
 
   async function send(path: string, fields: Record<string, unknown>) {
@@ -264,13 +287,19 @@ export function AdsPanel({ csrf }: { csrf: string }) {
               busy={busy}
               error={error}
               onUpload={async (file) => {
+                const localId = draft.localId;
                 const data = await fileBase64(file);
                 const res = await send('/admin/ads/image', { mime: file.type, data });
                 const extra = res.extra as { imageId?: string } | undefined;
-                if (extra && extra.imageId) setDraft({ ...draft, image: extra.imageId });
+                const imageId = extra && extra.imageId;
+                if (!imageId) return;
+                // Field edits made while the upload was in flight stay. A canceled or replaced form is left alone.
+                setDraft((cur) => (cur && cur.localId === localId ? { ...cur, image: imageId } : cur));
               }}
               onSave={async () => {
-                const res = await send('/admin/ads/banner', { banner: draft });
+                const { localId: _local, ...banner } = draft;
+                void _local;
+                const res = await send('/admin/ads/banner', { banner });
                 if (res.ok) {
                   setDraft(null);
                   await load();

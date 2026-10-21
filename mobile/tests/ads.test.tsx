@@ -14,12 +14,12 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { settings, updateSettings } from '../../src/store/settings';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { saveAdsConfig } from '../../src/ads/ads';
+import { saveAdsConfig, type AdsConfig } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
 import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
-import { saveBillingSession } from '../../src/billing/session';
+import { emitBillingChange, saveBillingSession } from '../../src/billing/session';
 import type { Torrent } from '../../src/api/types';
 import type { CatalogClient } from '../../src/catalog/client';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
@@ -71,6 +71,22 @@ const T: Torrent[] = Array.from({ length: 25 }, (_, i) => ({
 class FakeObserver {
   constructor(_cb: IntersectionObserverCallback) {}
   observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+}
+
+/** Fires as soon as a cell is observed, the way a visible cell does in the browser. */
+class VisibleObserver {
+  cb: IntersectionObserverCallback;
+  constructor(cb: IntersectionObserverCallback) {
+    this.cb = cb;
+  }
+  observe(el: Element) {
+    this.cb([{ isIntersecting: true, intersectionRatio: 1, target: el } as unknown as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+  }
   unobserve() {}
   disconnect() {}
   takeRecords() {
@@ -236,6 +252,69 @@ describe('ads in «Мои»', () => {
     await flush();
     await flush();
     expect(el.querySelectorAll('.m-ad').length).toBeGreaterThan(0);
+  });
+
+  function subscribe() {
+    saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 10 * DAY } as never);
+    saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY });
+  }
+
+  it('drops the ads when a renewal lands while the catalog stays open', async () => {
+    mount(<Library />);
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad').length).toBeGreaterThan(0);
+    const calls = get.mock.calls.length;
+    subscribe();
+    act(() => emitBillingChange());
+    await flush();
+    expect(ompSubscribed()).toBe(true);
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    expect(el.querySelectorAll('.m-grid .m-card').length).toBeGreaterThan(10);
+    expect(get.mock.calls.length).toBe(calls);
+  });
+
+  it('drops the ads when the app resumes onto a subscription the background check saved', async () => {
+    mount(<Library />);
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad').length).toBeGreaterThan(0);
+    const calls = get.mock.calls.length;
+    subscribe();
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await flush();
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    expect(get.mock.calls.length).toBe(calls);
+  });
+
+  it('counts an impression for a banner that replaces the one already on screen', async () => {
+    vi.stubGlobal('IntersectionObserver', VisibleObserver);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
+    try {
+      mount(<Library />);
+      await flush();
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(pendingAdEvents()).toEqual([{ b: BANNER.id, s: 'mine', p: 'phone', t: 'i', n: 2 }]);
+      const next = { ...BANNER, id: 'bbbbbbbbbbbb', title: 'Другой баннер' };
+      act(() => {
+        adsConfig.value = { ...CONFIG, banners: [next] } as AdsConfig;
+      });
+      await flush();
+      expect(el.querySelector('.m-ad .m-card-title')!.textContent).toBe(next.title);
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(pendingAdEvents()).toEqual([
+        { b: BANNER.id, s: 'mine', p: 'phone', t: 'i', n: 2 },
+        { b: next.id, s: 'mine', p: 'phone', t: 'i', n: 2 },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reads the server a moment after the screen opens, and never for a subscriber', async () => {

@@ -6,6 +6,7 @@ import { adPositions, adsFor, pickBanner, railPositions, type AdBanner, type AdS
 import { adEvent } from '../../../src/ads/events';
 import { APP_VERSION } from '../../../src/version';
 import { ompSubscribed } from '../../../src/billing/entitlement';
+import { onBillingChange } from '../../../src/billing/session';
 import { ensureFirstRun } from '../donate';
 import { adsConfig, refreshAds, syncAdsFromCache } from './phoneAds';
 
@@ -72,19 +73,34 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const key = useRef(o.listKey);
   const opts = useRef(o);
   opts.current = o;
+  // localStorage, not a signal: a renewal (this page, or the background check) has to bump it or the open catalog
+  // keeps the ads it already drew
+  const [subscribed, setSubscribed] = useState(() => ompSubscribed());
 
   // the config is read while a catalog screen is open: the cached one now, the server's a moment later (not
   // competing with the catalog's own first requests) and then every 5 minutes. A subscriber never asks.
+  // Subscription is re-read on a billing change and when the app comes back (the background page writes
+  // localStorage in another context, so this page does not hear that save).
   useEffect(() => {
     syncAdsFromCache();
     const tick = () => {
       if (!ompSubscribed()) void refreshAds();
     };
+    const syncSub = () => setSubscribed(ompSubscribed());
     const first = setTimeout(tick, FIRST_FETCH_MS);
     const id = setInterval(tick, REFRESH_MS);
+    const off = onBillingChange(syncSub);
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      syncSub();
+      tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
     return () => {
       clearTimeout(first);
       clearInterval(id);
+      off();
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
@@ -93,9 +109,9 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const banners = useMemo(
     () =>
       o.active
-        ? adsFor(cfg, { platform: PLATFORM, section: o.section, appVersion: APP_VERSION, subscribed: ompSubscribed(now), firstRun: ensureFirstRun(now), now })
+        ? adsFor(cfg, { platform: PLATFORM, section: o.section, appVersion: APP_VERSION, subscribed, firstRun: ensureFirstRun(now), now })
         : [],
-    [cfg, o.active, o.section, day],
+    [cfg, o.active, o.section, day, subscribed],
   );
   const positions = useMemo(() => {
     if (!banners.length) return [];

@@ -9,10 +9,12 @@ export type AdCellKind = 'grid' | 'list' | 'compact' | 'disc' | 'rail';
 
 const SHOWN_MS = 1000;
 
-function useShown(onShown: () => void) {
+function useShown(onShown: () => void, bannerId: string) {
   const ref = useRef<HTMLElement>(null);
   const cb = useRef(onShown);
   cb.current = onShown;
+  // A new banner in the same slot keeps the component (the key is the position). The observer is started again so a
+  // cell that stays on screen still counts an impression for the banner that just replaced the previous one.
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
@@ -37,7 +39,7 @@ function useShown(onShown: () => void) {
       io.disconnect();
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, []);
+  }, [bannerId]);
   return ref;
 }
 
@@ -50,7 +52,7 @@ function Erid({ b }: { b: AdBanner }) {
 }
 
 export function AdCell({ kind, banner: b, onShown, onClick }: { kind: AdCellKind; banner: AdBanner; onShown: () => void; onClick: () => void }) {
-  const ref = useShown(onShown);
+  const ref = useShown(onShown, b.id);
   const aria = t('ads.aria', { title: b.title, advertiser: b.advertiser });
   const img = <img src={b.image} alt="" decoding="async" draggable={false} />;
   if (kind === 'list') {
