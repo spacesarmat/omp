@@ -168,6 +168,12 @@ export function challengeKind(res) {
  * reachable for a person, so no alert, but not plain green either.
  */
 export function siteVerdict(res, url) {
+  const v = siteVerdictRaw(res, url);
+  // the server left out its intermediate certificate; it was fetched (AIA) and the chain verified
+  return res && res.aia && v.ok !== false ? { ...v, detail: v.detail + ', сертификат докачан' } : v;
+}
+
+function siteVerdictRaw(res, url) {
   if (!res || !res.ok) return { ok: false, detail: errorText(res && res.error) };
   const s = Number(res.status) || 0;
   const h = res.headers || {};
