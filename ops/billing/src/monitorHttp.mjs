@@ -89,6 +89,9 @@ export async function monitorGet(url, opts) {
     return x;
   };
   let timer = null;
+  // Set once the headers of a peeked answer arrived: the overall deadline then ends the peek with what was
+  // read instead of turning a reachable site into a timeout.
+  let endPeek = null;
   try {
     const work = (async () => {
       let createConnection = null;
@@ -146,11 +149,13 @@ export async function monitorGet(url, opts) {
               const finish = () => {
                 if (over) return;
                 over = true;
+                endPeek = null;
                 clearTimeout(peekTimer);
                 resolve({ ok: true, status: res.statusCode || 0, headers: head, body: Buffer.concat(parts).toString('utf8') });
                 res.destroy();
               };
               const peekTimer = setTimeout(finish, Math.max(1, Math.min(Number(o.peekMs) || 3000, deadline - Date.now())));
+              endPeek = finish;
               res.on('data', (c) => {
                 if (got < peekBytes) {
                   const part = c.length > peekBytes - got ? c.subarray(0, peekBytes - got) : c;
@@ -199,7 +204,10 @@ export async function monitorGet(url, opts) {
     })();
     work.catch(() => {});
     const expired = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(fail('timeout')), timeoutMs);
+      timer = setTimeout(() => {
+        if (endPeek) endPeek();
+        else reject(fail('timeout'));
+      }, timeoutMs);
     });
     const out = await Promise.race([work, expired]);
     return { ...out, ms: Date.now() - started };

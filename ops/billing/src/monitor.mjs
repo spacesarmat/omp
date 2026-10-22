@@ -328,7 +328,7 @@ export function createMonitor(deps) {
             // A check added since the last run that is not in this recheck: shown as not checked yet, and the
             // next «Перепроверить все ошибки» runs it.
             if (!b) return { ...meta, ok: null, detail: UNCHECKED, ms: 0, at: 0, retried: false };
-            return { ...meta, ok: b.ok, detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
+            return { ...meta, ok: b.ok, ...(b.ok === true && b.warn ? { warn: b.warn } : {}), detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
           });
       }
       const ran = new Set(toRun.map((t) => t.id));

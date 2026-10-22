@@ -51,6 +51,14 @@ beforeAll(async () => {
       res.write('<html><head><title>Введите код</title></head><body><img src="/captcha.php"> введите код с картинки');
       return;
     }
+    if (req.url === '/late') {
+      // headers just before the deadline, then a body that never ends
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        res.write('<title>late</title>');
+      }, 250);
+      return;
+    }
     if (req.url === '/forbidden') {
       res.writeHead(403, { 'content-type': 'text/html', server: 'nginx' });
       return res.end('<html><title>403 Forbidden</title></html>');
@@ -143,6 +151,13 @@ describe('monitorGet', () => {
     const stall = await monitorGet(base + '/stall', { timeoutMs: 2000, headersOnly: true, peekBytes: 16384, peekMs: 200 });
     expect(stall).toMatchObject({ ok: true, status: 200, body: '<html>' });
     expect(stall.ms).toBeLessThan(1000);
+    // headers late in the request: the deadline ends the peek with what arrived, not with a timeout
+    const late = await monitorGet(base + '/late', { timeoutMs: 400, headersOnly: true, peekBytes: 16384, peekMs: 3000 });
+    expect(late).toMatchObject({ ok: true, status: 200, body: '<title>late</title>' });
+    const lateVia = await monitorGet(base + '/late', { timeoutMs: 400, headersOnly: true, peekBytes: 16384, peekMs: 3000, proxy: 'http://127.0.0.1:' + proxyPort });
+    expect(lateVia).toMatchObject({ ok: true, status: 200 });
+    // no headers by the deadline is still a timeout
+    expect(await monitorGet(base + '/slow', { timeoutMs: 200, headersOnly: true, peekBytes: 16384 })).toMatchObject({ ok: false, error: 'timeout' });
     // the byte cap holds
     const big = await monitorGet(base + '/big', { headersOnly: true, peekBytes: 1000, peekMs: 2000 });
     expect(big.body.length).toBe(1000);

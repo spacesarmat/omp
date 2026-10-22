@@ -152,6 +152,18 @@ describe('monitor runs on Postgres', () => {
     t.tick(15 * 60000);
     await t.monitor.run('schedule');
     expect(t.sent).toHaveLength(2);
+
+    // a recheck of an unrelated red check keeps the yellow rows yellow
+    t.w.failJackett.add('kinozal');
+    t.tick(15 * 60000);
+    await t.monitor.run('schedule');
+    t.tick(60000);
+    await t.monitor.run('recheck', { only: 'failed' });
+    const after = await t.monitor.snapshot();
+    expect(after.lastRun.trigger).toBe('recheck');
+    for (const id of ['jackett:rutracker:direct', 'jackett:rutracker:warp']) {
+      expect(after.checks.find((c: any) => c.id === id)).toMatchObject({ ok: true, warn: 'code' });
+    }
   });
 
   it('a failure that passes on the retry sends nothing', async () => {
