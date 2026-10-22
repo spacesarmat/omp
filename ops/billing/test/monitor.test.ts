@@ -15,6 +15,8 @@ import {
   parseTrace,
   runTasks,
   siteVerdict,
+  challengeKind,
+  SITE_PEEK,
   PUBLIC_SITES,
 } from '../src/monitorChecks.mjs';
 import { alertPlan, historyStrip, monitorChatId, monitorEnabled, problemMessages, problemText, recoveredText, validInterval } from '../src/monitor.mjs';
@@ -43,6 +45,16 @@ beforeAll(async () => {
       return res.end('a'.repeat(200000));
     }
     if (String(req.url).startsWith('/slow')) return; // never answers
+    if (req.url === '/captcha') {
+      // a captcha page whose body never ends
+      res.writeHead(403, { 'content-type': 'text/html', server: 'nginx' });
+      res.write('<html><head><title>Введите код</title></head><body><img src="/captcha.php"> введите код с картинки');
+      return;
+    }
+    if (req.url === '/forbidden') {
+      res.writeHead(403, { 'content-type': 'text/html', server: 'nginx' });
+      return res.end('<html><title>403 Forbidden</title></html>');
+    }
     if (req.url === '/stall') {
       // headers and a first chunk, then the body never ends (the landing from the NUC)
       res.writeHead(200, { 'content-type': 'text/html', server: 'cloudflare' });
@@ -119,6 +131,26 @@ describe('monitorGet', () => {
     expect(redirect.headers.location).toContain('warning.rt.ru');
   });
 
+  it('peek reads only the start of the body on 200/403/429/503, briefly, directly and through the proxy', async () => {
+    const base = 'http://127.0.0.1:' + targetPort;
+    const cap = await monitorGet(base + '/captcha', { timeoutMs: 2000, headersOnly: true, peekBytes: 16384, peekMs: 200 });
+    expect(cap).toMatchObject({ ok: true, status: 403 });
+    expect(cap.body).toContain('введите код');
+    expect(cap.ms).toBeLessThan(1000);
+    const via = await monitorGet(base + '/captcha', { timeoutMs: 2000, headersOnly: true, peekBytes: 16384, peekMs: 200, proxy: 'http://127.0.0.1:' + proxyPort });
+    expect(via.body).toContain('введите код');
+    // a stalled 200 still answers by the peek deadline, not by the timeout
+    const stall = await monitorGet(base + '/stall', { timeoutMs: 2000, headersOnly: true, peekBytes: 16384, peekMs: 200 });
+    expect(stall).toMatchObject({ ok: true, status: 200, body: '<html>' });
+    expect(stall.ms).toBeLessThan(1000);
+    // the byte cap holds
+    const big = await monitorGet(base + '/big', { headersOnly: true, peekBytes: 1000, peekMs: 2000 });
+    expect(big.body.length).toBe(1000);
+    // a redirect is not peeked
+    const redirect = await monitorGet(base + '/redirect', { headersOnly: true, peekBytes: 1000 });
+    expect(redirect).toMatchObject({ status: 302, body: '' });
+  });
+
   it('does not follow redirects and keeps the location', async () => {
     const r = await monitorGet('http://127.0.0.1:' + targetPort + '/redirect');
     expect(r.status).toBe(302);
@@ -153,11 +185,83 @@ describe('monitorGet', () => {
   });
 });
 
+describe('captcha and anti-bot pages (yellow «Просит код»)', () => {
+  const url = 'https://torrent.by/';
+  const v = (status: number, headers: Record<string, string> = {}, body = '') => siteVerdict({ ok: true, status, headers, body }, url);
+
+  it('spots a challenge by header, server and body', () => {
+    expect(challengeKind({ ok: true, status: 200, headers: { 'cf-mitigated': 'challenge' } })).toBe('Cloudflare');
+    expect(challengeKind({ ok: true, status: 503, headers: { server: 'cloudflare' } })).toBe('Cloudflare');
+    expect(challengeKind({ ok: true, status: 403, headers: { server: 'ddos-guard' } })).toBe('DDoS-Guard');
+    expect(challengeKind({ ok: true, status: 429, headers: {}, body: '<p>Введите код с картинки</p>' })).toBe('капча');
+    expect(challengeKind({ ok: true, status: 403, headers: {}, body: '<div class="g-recaptcha"></div>' })).toBe('капча');
+    expect(challengeKind({ ok: true, status: 200, headers: {}, body: '<title>Just a moment...</title>' })).toBe('капча');
+    expect(challengeKind({ ok: true, status: 200, headers: {}, body: '<script src="/cdn-cgi/challenge-platform/h/b/orchestrate"></script>' })).toBe('Cloudflare');
+    expect(challengeKind({ ok: true, status: 503, headers: {}, body: '<title>DDoS-Guard</title>' })).toBe('DDoS-Guard');
+  });
+
+  it('a normal page is not a challenge, even with a captcha on its login form', () => {
+    expect(challengeKind({ ok: true, status: 200, headers: {}, body: '<title>Торрент трекер - torrent.by</title> введите условия поиска <div class="g-recaptcha">' })).toBe('');
+    expect(challengeKind({ ok: true, status: 403, headers: { server: 'nginx' }, body: '<title>403 Forbidden</title>' })).toBe('');
+    expect(challengeKind({ ok: true, status: 500, headers: {}, body: 'captcha' })).toBe('');
+    expect(challengeKind({ ok: false, error: 'tls' } as never)).toBe('');
+  });
+
+  it('a challenge is yellow: passing (no alert), with warn code', () => {
+    expect(v(429, {}, 'введите код')).toEqual({ ok: true, warn: 'code', detail: 'HTTP 429, просит код (капча)' });
+    expect(v(503, { 'cf-mitigated': 'challenge' })).toEqual({ ok: true, warn: 'code', detail: 'HTTP 503, просит код (Cloudflare)' });
+    expect(v(503, {}, 'Service Unavailable')).toEqual({ ok: false, detail: 'HTTP 503' });
+    expect(v(200)).toEqual({ ok: true, detail: 'HTTP 200' });
+  });
+
+  it('tracker site checks peek at the body on both paths; a captcha site is yellow, not red', async () => {
+    const base = world();
+    const { get, calls } = fakeGet((url, proxy) => (url === 'https://rutracker.org/' ? { ok: true, status: 403, headers: { server: 'nginx' }, body: 'Введите код с картинки' } : base(url, proxy)));
+    const tasks = await buildTasks({
+      settings: SETTINGS,
+      env: {},
+      store: { query: async () => ({ rows: [] }) },
+      backups: { status: () => ({ stale: false, lastError: '', ageSec: 3600, everyHours: 24 }) },
+      net: okNet,
+      get,
+      statfs: async () => ({ blocks: 1000000, bsize: 4096 * 1024, bavail: 500000 }),
+      now: () => NOW,
+      botPoll: () => ({ enabled: true, lastOkAt: NOW - 10000, conflictRecent: false }),
+    });
+    const rows = finalize(await runTasks(tasks, 8, 3));
+    for (const id of ['jackett:rutracker:direct', 'jackett:rutracker:warp']) {
+      expect(rows.find((r) => r.id === id)).toMatchObject({ ok: true, warn: 'code', detail: 'HTTP 403, просит код (капча)', alert: false });
+    }
+    expect(rows.find((r) => r.id === 'jackett:kinozal:direct')?.warn).toBeUndefined();
+    const site = calls.filter((c) => c.url === 'https://rutracker.org/');
+    expect(site.length).toBe(2);
+    expect(site.every((c) => c.headersOnly && c.peek === SITE_PEEK.peekBytes)).toBe(true);
+  });
+
+  it('runTasks keeps warn only on a passing check, and finalize words it «просит код»', async () => {
+    const rows = await runTasks(
+      [
+        { id: 't:direct', group: 'jacred', name: 'T', pair: 't', run: async () => ({ ok: true, warn: 'code', detail: 'HTTP 403, просит код (капча)' }) },
+        { id: 't:warp', group: 'jacred', name: 'T', pair: 't', pairAlert: true, run: async () => ({ ok: false, warn: 'code', detail: 'таймаут' }) },
+        { id: 'j', group: 'jackett', name: 'T', path: 'jackett', pair: 't', run: async () => ({ ok: true, detail: 'результатов: 3' }) },
+      ] as never,
+      4,
+      2,
+    );
+    expect(rows[0].warn).toBe('code');
+    expect(rows[1].warn).toBeUndefined();
+    const fin = finalize(rows);
+    expect(fin[1].alert).toBe(false); // direct passes (yellow), so no pair alert
+    expect(fin[2].context).toBe('сайт напрямую: просит код; через WARP: таймаут');
+  });
+});
+
 describe('verdicts and parsers', () => {
   it('treats any answer below 500 as reachable, a block-page redirect or 5xx as not', () => {
     const url = 'https://rutracker.org/';
     expect(siteVerdict({ ok: true, status: 200, headers: {} }, url).ok).toBe(true);
-    expect(siteVerdict({ ok: true, status: 403, headers: { server: 'cloudflare' } }, url)).toEqual({ ok: true, detail: 'HTTP 403, проверка Cloudflare' });
+    expect(siteVerdict({ ok: true, status: 403, headers: { server: 'cloudflare' } }, url)).toEqual({ ok: true, warn: 'code', detail: 'HTTP 403, просит код (Cloudflare)' });
+    expect(siteVerdict({ ok: true, status: 403, headers: { server: 'nginx' }, body: '<title>403 Forbidden</title>' }, url)).toEqual({ ok: true, detail: 'HTTP 403' });
     expect(siteVerdict({ ok: true, status: 301, headers: { location: 'https://www.rutracker.org/forum/' } }, url)).toEqual({ ok: true, detail: 'HTTP 301' });
     expect(siteVerdict({ ok: true, status: 302, headers: { location: 'http://warning.rt.ru/?id=17' } }, url)).toEqual({ ok: false, detail: 'редирект на страницу блокировки (warning.rt.ru)' });
     expect(siteVerdict({ ok: true, status: 302, headers: { location: 'http://95.167.13.50/' } }, url).ok).toBe(false);
@@ -231,10 +335,10 @@ describe('verdicts and parsers', () => {
 type Res = { ok: boolean; status?: number; body?: string; headers?: Record<string, string>; error?: string };
 
 function fakeGet(routes: (url: string, proxy: string) => Res | undefined) {
-  const calls: { url: string; proxy: string; headersOnly: boolean }[] = [];
-  const get = async (url: string, opts?: { proxy?: string; headersOnly?: boolean }) => {
+  const calls: { url: string; proxy: string; headersOnly: boolean; peek: number }[] = [];
+  const get = async (url: string, opts?: { proxy?: string; headersOnly?: boolean; peekBytes?: number }) => {
     const proxy = (opts && opts.proxy) || '';
-    calls.push({ url, proxy, headersOnly: !!(opts && opts.headersOnly) });
+    calls.push({ url, proxy, headersOnly: !!(opts && opts.headersOnly), peek: Number(opts && opts.peekBytes) || 0 });
     const r = routes(url, proxy);
     return { ms: 5, headers: {}, ...(r || { ok: false, error: 'refused' }) };
   };
@@ -473,6 +577,26 @@ describe('alerts', () => {
     expect(gone.recovered).toEqual([{ id: 'jackett:x', text: 'Jackett: X (поиск через Jackett)', gone: true }]);
     const partial = alertPlan({ 'jackett:x:warp': { since: 1, text: 'x' } }, [{ id: 'jackett:x:warp', group: 'jackett', name: 'X', ok: false, alert: false, pairAlert: true, detail: 'таймаут' }], 5);
     expect(partial.recovered[0]).toMatchObject({ partial: true });
+  });
+
+  it('red to yellow closes the alert with a «просит код» line; yellow never opens one', () => {
+    const warp = { id: 'jacred:torrentby:warp', group: 'jacred', name: 'torrentby', pair: 'jacred:torrentby', pairAlert: true };
+    const direct = { id: 'jacred:torrentby:direct', group: 'jacred', name: 'torrentby', pair: 'jacred:torrentby', alert: false };
+    const open = { [warp.id]: { since: 1, text: 'JacRed: torrentby (сайт не открывается ни напрямую, ни через WARP)' } };
+    const yellow = alertPlan(open, [{ ...direct, ok: true, warn: 'code', detail: 'x' }, { ...warp, ok: true, warn: 'code', alert: false, detail: 'x' }], 5);
+    expect(yellow.recovered).toEqual([{ id: warp.id, text: open[warp.id].text, code: true }]);
+    expect(yellow.next).toEqual({});
+    expect(recoveredText(yellow.recovered)).toBe(
+      '✅ Мониторинг OMP: починилось\n• JacRed: torrentby (сайт не открывается ни напрямую, ни через WARP): сайт отвечает, но просит код (жёлтый статус, без алерта)',
+    );
+    // only the direct path asks for a code, WARP still fails: the pair alert closes, saying so
+    const half = alertPlan(open, [{ ...direct, ok: true, warn: 'code', detail: 'x' }, { ...warp, ok: false, alert: false, detail: 'таймаут' }], 5);
+    expect(half.recovered).toEqual([{ id: warp.id, text: open[warp.id].text, partial: true, code: true }]);
+    expect(recoveredText(half.recovered)).toContain('напрямую сайт отвечает, но просит код');
+    expect(recoveredText(half.recovered)).not.toMatch(/[\u2013\u2014]/);
+    // yellow from the start: nothing to tell
+    const none = alertPlan({}, [{ ...direct, ok: true, warn: 'code', detail: 'x' }, { ...warp, ok: true, warn: 'code', alert: false, detail: 'x' }], 5);
+    expect(none).toEqual({ problems: [], recovered: [], next: {} });
   });
 
   it('non-alerting failures are never reported', () => {

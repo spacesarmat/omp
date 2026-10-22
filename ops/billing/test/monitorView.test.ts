@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildView, DEFAULT_PREFS, groupItems, loadPrefs, matchesFilter, matchesQuery, PREFS_KEY, savePrefs, sortItems, type MonitorCheck, type MonitorPrefs } from '../admin/src/lib/monitorView.ts';
+import { buildView, DEFAULT_PREFS, FILTER_TEXT, groupItems, itemState, yellowText, loadPrefs, matchesFilter, matchesQuery, PREFS_KEY, savePrefs, sortItems, type MonitorCheck, type MonitorPrefs } from '../admin/src/lib/monitorView.ts';
 
 function c(id: string, group: string, ok: boolean | null, extra: Partial<MonitorCheck> = {}): MonitorCheck {
   return { id, group, name: id, path: '', ok, detail: ok === false ? 'таймаут' : 'ок', ms: 10, at: 1000, alert: true, history: '', uptime: null, ...extra };
@@ -99,5 +99,35 @@ describe('monitor tab view', () => {
     expect(loadPrefs(storage)).toEqual(DEFAULT_PREFS);
     const broken = { getItem: () => null, setItem: () => { throw new Error('quota'); } };
     expect(() => savePrefs(broken, DEFAULT_PREFS)).not.toThrow();
+  });
+
+  it('«Просит код» is yellow: counted as passing, its own filter, sorted between red and green, shown in the summary', () => {
+    const y = (id: string, extra: Partial<MonitorCheck> = {}) => c(id, 'jackett', true, { warn: 'code', detail: 'HTTP 403, просит код (капча)', alert: false, ...extra });
+    const checks: MonitorCheck[] = [
+      c('jackett:bitru', 'jackett', true, { name: 'BitRu', path: 'jackett' }),
+      c('jackett:bitru:direct', 'jackett', true, { name: 'BitRu', path: 'direct', alert: false }),
+      c('jackett:bitru:warp', 'jackett', true, { name: 'BitRu', path: 'warp', alert: false }),
+      y('jackett:abc:direct', { name: 'Abc', path: 'direct' }),
+      y('jackett:abc:warp', { name: 'Abc', path: 'warp' }),
+      c('jackett:zed:direct', 'jackett', false, { name: 'Zed', path: 'direct', alert: false }),
+      c('jackett:zed:warp', 'jackett', true, { name: 'Zed', path: 'warp', alert: false }),
+    ];
+    const items = groupItems(checks);
+    expect(items.map((i) => [i.name, itemState(i)])).toEqual([
+      ['BitRu', 'green'],
+      ['Abc', 'yellow'],
+      ['Zed', 'red'],
+    ]);
+    expect(sortItems(items, 'status', false).map((i) => i.name)).toEqual(['Zed', 'Abc', 'BitRu']);
+    expect(sortItems(items, 'status', true).map((i) => i.name)).toEqual(['BitRu', 'Abc', 'Zed']);
+    expect(FILTER_TEXT.code).toBe('Просит код');
+    expect(items.filter((i) => matchesFilter(i, 'code')).map((i) => i.name)).toEqual(['Abc']);
+    // yellow is not an error and never «без алерта»
+    expect(items.filter((i) => matchesFilter(i, 'errors')).map((i) => i.name)).toEqual(['Zed']);
+    expect(items.filter((i) => matchesFilter(i, 'noalert')).map((i) => i.name)).toEqual(['Zed']);
+    const [g] = buildView([{ id: 'jackett', title: 'Трекеры Jackett' }], checks.filter((x) => !x.id.startsWith('jackett:zed')), prefs());
+    expect(g).toMatchObject({ total: 2, okCount: 2, warned: 1, failed: 0, folded: true });
+    expect([1, 2, 5, 11, 21, 22].map(yellowText)).toEqual(['1 жёлтая', '2 жёлтые', '5 жёлтых', '11 жёлтых', '21 жёлтая', '22 жёлтые']);
+    expect(loadPrefs({ getItem: () => JSON.stringify({ filter: 'code' }), setItem: () => {} }).filter).toBe('code');
   });
 });

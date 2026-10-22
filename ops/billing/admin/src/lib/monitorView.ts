@@ -7,6 +7,8 @@ export type MonitorCheck = {
   path: string;
   target?: string;
   ok: boolean | null;
+  /** 'code' on a passing tracker site that shows a captcha or anti-bot page: yellow «Просит код», no alert. */
+  warn?: string;
   detail: string;
   context?: string;
   ms: number;
@@ -18,7 +20,7 @@ export type MonitorCheck = {
   uptime: number | null;
 };
 
-export type MonitorFilter = 'all' | 'errors' | 'noalert';
+export type MonitorFilter = 'all' | 'errors' | 'noalert' | 'code';
 export type MonitorSort = 'status' | 'name' | 'ms' | 'time';
 
 export type MonitorPrefs = {
@@ -33,7 +35,7 @@ export type MonitorPrefs = {
 export const PREFS_KEY = 'omp-admin-monitor-view';
 export const DEFAULT_PREFS: MonitorPrefs = { filter: 'all', sort: 'status', desc: false, q: '', open: {} };
 
-export const FILTER_TEXT: Record<MonitorFilter, string> = { all: 'Все', errors: 'Только ошибки', noalert: 'Без алерта' };
+export const FILTER_TEXT: Record<MonitorFilter, string> = { all: 'Все', errors: 'Только ошибки', noalert: 'Без алерта', code: 'Просит код' };
 export const SORT_TEXT: Record<MonitorSort, string> = { status: 'Статус', name: 'Название', ms: 'Время ответа', time: 'Время проверки' };
 
 type Storage = { getItem(k: string): string | null; setItem(k: string, v: string): void };
@@ -107,20 +109,43 @@ export function groupItems(rows: MonitorCheck[]): MonitorItem[] {
   return out;
 }
 
-/** false: something red; true: something green and nothing red; null: nothing judged. */
+/** false: something red; true: something passed (green or yellow) and nothing red; null: nothing judged. */
 export function itemOk(it: MonitorItem): boolean | null {
   if (it.checks.some((c) => c.ok === false)) return false;
   if (it.checks.some((c) => c.ok === true)) return true;
   return null;
 }
 
-const rank = (ok: boolean | null) => (ok === false ? 0 : ok === null ? 1 : 2);
+/** A passing check that asks for a code (captcha or anti-bot page). */
+export const isYellow = (c: MonitorCheck) => c.ok === true && !!c.warn;
+
+export type ItemState = 'red' | 'yellow' | 'green' | 'none';
+
+/** red: something failed; yellow: nothing failed, something asks for a code; green; none: nothing judged. */
+export function itemState(it: MonitorItem): ItemState {
+  const ok = itemOk(it);
+  if (ok === false) return 'red';
+  if (ok === null) return 'none';
+  return it.checks.some(isYellow) ? 'yellow' : 'green';
+}
+
+/** «1 жёлтая», «2 жёлтые», «5 жёлтых». */
+export function yellowText(n: number) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const word = m10 === 1 && m100 !== 11 ? 'жёлтая' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'жёлтые' : 'жёлтых';
+  return n + ' ' + word;
+}
+
+const RANK: Record<ItemState, number> = { red: 0, yellow: 1, none: 2, green: 3 };
+const rank = (it: MonitorItem) => RANK[itemState(it)];
 const itemMs = (it: MonitorItem) => Math.max(0, ...it.checks.map((c) => Number(c.ms) || 0));
 const itemAt = (it: MonitorItem) => Math.max(0, ...it.checks.map((c) => Number(c.at) || 0));
 
 export function matchesFilter(it: MonitorItem, filter: MonitorFilter): boolean {
   const red = it.checks.filter((c) => c.ok === false);
   if (filter === 'errors') return red.length > 0;
+  if (filter === 'code') return it.checks.some(isYellow);
   // red, but nothing of it goes to Telegram (one path of a tracker, a direct-only block)
   if (filter === 'noalert') return red.length > 0 && red.every((c) => !c.alert);
   return true;
@@ -139,7 +164,7 @@ export function sortItems(items: MonitorItem[], sort: MonitorSort, desc: boolean
     if (sort === 'name') return byName(a, b);
     if (sort === 'ms') return itemMs(a) - itemMs(b) || byName(a, b);
     if (sort === 'time') return itemAt(a) - itemAt(b) || byName(a, b);
-    return rank(itemOk(a)) - rank(itemOk(b)) || byName(a, b);
+    return rank(a) - rank(b) || byName(a, b);
   };
   return items
     .map((it, i) => ({ it, i }))
@@ -151,7 +176,10 @@ export type GroupView = {
   id: string;
   title: string;
   total: number;
+  /** Green and yellow items (a yellow site opens for a person). */
   okCount: number;
+  /** Yellow items: «Просит код». */
+  warned: number;
   /** Items with no result (a check that is not configured or was skipped): never counted as ok. */
   skipped: number;
   failed: number;
@@ -181,9 +209,10 @@ export function buildView(groups: { id: string; title: string }[], checks: Monit
     const chosen = prefs.open[g.id];
     const okCount = all.filter((it) => itemOk(it) === true).length;
     const skipped = all.filter((it) => itemOk(it) === null).length;
+    const warned = all.filter((it) => itemState(it) === 'yellow').length;
     // Folded by default only when every item is green; a skipped check stays visible.
     const folded = narrowed ? false : chosen === undefined ? okCount === all.length : !chosen;
-    out.push({ id: g.id, title: g.title, total: all.length, okCount, skipped, failed, folded, items });
+    out.push({ id: g.id, title: g.title, total: all.length, okCount, warned, skipped, failed, folded, items });
   });
   const order = new Map(groups.map((g, i) => [g.id, i]));
   return out.sort((a, b) => (a.failed ? 0 : 1) - (b.failed ? 0 : 1) || (order.get(a.id) || 0) - (order.get(b.id) || 0));
