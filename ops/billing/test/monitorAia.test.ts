@@ -15,6 +15,8 @@ let dir = '';
 let aia: Server;
 let proxy: Server;
 let aiaPort = 0;
+let aia6: Server | null = null;
+let aia6Port = 0;
 let proxyPort = 0;
 let proxied = 0;
 const aiaHits: Record<string, number> = {};
@@ -38,11 +40,11 @@ function ca(name: string, signer?: string, aiaPath?: string) {
   ossl('x509', '-req', '-in', name + '.csr', '-CA', signer + '.pem', '-CAkey', signer + '.key', '-set_serial', String(serial++), '-out', name + '.pem', '-days', '3650', '-extfile', name + '.ext');
 }
 
-function leaf(name: string, san: string, aiaPath: string, signer = 'inter') {
+function leaf(name: string, san: string, aiaPath: string, signer = 'inter', base = `http://127.0.0.1:${aiaPort}`) {
   ossl('req', '-new', ...ec, '-keyout', name + '.key', '-out', name + '.csr', '-subj', '/CN=' + name);
   writeFileSync(
     path.join(dir, name + '.ext'),
-    `basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=${san}\nauthorityInfoAccess=caIssuers;URI:http://127.0.0.1:${aiaPort}${aiaPath}\n`,
+    `basicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName=${san}\nauthorityInfoAccess=caIssuers;URI:${base}${aiaPath}\n`,
   );
   ossl('x509', '-req', '-in', name + '.csr', '-CA', signer + '.pem', '-CAkey', signer + '.key', '-set_serial', String(serial++), '-out', name + '.pem', '-days', '3650', '-extfile', name + '.ext');
 }
@@ -65,31 +67,47 @@ function track(server: { on: (e: 'connection', f: (s: import('node:net').Socket)
   });
 }
 
+function aiaHandler(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) {
+    const p = String(req.url);
+  aiaHits[p] = (aiaHits[p] || 0) + 1;
+  const send = (body: Buffer | string) => {
+    res.writeHead(200, { 'content-type': 'application/pkix-cert' });
+    res.end(body);
+  };
+  if (p === '/inter.der') return send(ossl('x509', '-in', 'inter.pem', '-outform', 'DER'));
+  if (p === '/inter.pem') return send(readFileSync(path.join(dir, 'inter.pem')));
+  const der = /^\/(other|cross|inter2|selfroot|inter3)\.der$/.exec(p);
+  if (der) return send(ossl('x509', '-in', der[1] + '.pem', '-outform', 'DER'));
+  if (p === '/big') return send(Buffer.alloc(40 * 1024, 1));
+  if (p === '/junk') return send('not a certificate');
+  res.writeHead(404);
+  res.end();
+  }
+
 const url = (name: string) => 'https://127.0.0.1:' + sites[name].port + '/';
 // the local AIA server is on loopback; production allows only public addresses on port 80
 const aiaAllow = (ip: string, port: number) => ip === '127.0.0.1' && port === aiaPort;
 
 beforeAll(async () => {
   dir = mkdtempSync(path.join(tmpdir(), 'aia-'));
-  aia = createServer((req, res) => {
-    const p = String(req.url);
-    aiaHits[p] = (aiaHits[p] || 0) + 1;
-    const send = (body: Buffer | string) => {
-      res.writeHead(200, { 'content-type': 'application/pkix-cert' });
-      res.end(body);
-    };
-    if (p === '/inter.der') return send(ossl('x509', '-in', 'inter.pem', '-outform', 'DER'));
-    if (p === '/inter.pem') return send(readFileSync(path.join(dir, 'inter.pem')));
-    const der = /^\/(other|cross|inter2|selfroot|inter3)\.der$/.exec(p);
-    if (der) return send(ossl('x509', '-in', der[1] + '.pem', '-outform', 'DER'));
-    if (p === '/big') return send(Buffer.alloc(40 * 1024, 1));
-    if (p === '/junk') return send('not a certificate');
-    res.writeHead(404);
-    res.end();
-  });
+  aia = createServer(aiaHandler);
   track(aia);
   await new Promise<void>((r) => aia.listen(0, '127.0.0.1', r));
   aiaPort = (aia.address() as AddressInfo).port;
+  // the same AIA server on IPv6 loopback, when the machine has it
+  try {
+    const s6 = createServer(aiaHandler);
+    track(s6);
+    await new Promise<void>((r, j) => {
+      s6.once('error', j);
+      s6.listen(0, '::1', r);
+    });
+    aia6 = s6;
+    aia6Port = (s6.address() as AddressInfo).port;
+  } catch (e) {
+    aia6Port = 0;
+  }
+
   proxy = createServer((_req, res) => {
     res.writeHead(405);
     res.end();
@@ -123,12 +141,16 @@ beforeAll(async () => {
   leaf('twohop', 'IP:127.0.0.1', '/inter2.der', 'inter2');
   leaf('untrusted', 'IP:127.0.0.1', '/inter3.der', 'inter3');
   leaf('good', 'IP:127.0.0.1,DNS:localhost', '/inter.der');
+  // AIA by name (resolves to every loopback address; the server listens on one of them only)
+  leaf('byname', 'IP:127.0.0.1', '/inter.der', 'inter', `http://localhost:${aiaPort}`);
+  if (aia6Port) leaf('v6aia', 'IP:127.0.0.1', '/inter.der', 'inter', `http://[::1]:${aia6Port}`);
   leaf('pem', 'IP:127.0.0.1', '/inter.pem');
   leaf('wronghost', 'DNS:wrong.example', '/inter.der');
   leaf('junk', 'IP:127.0.0.1', '/junk');
   leaf('big', 'IP:127.0.0.1', '/big');
   leaf('otherca', 'IP:127.0.0.1', '/other.der');
-  for (const n of ['good', 'pem', 'wronghost', 'junk', 'big', 'otherca', 'twohop', 'untrusted']) await site(n);
+  for (const n of ['good', 'pem', 'wronghost', 'junk', 'big', 'otherca', 'twohop', 'untrusted', 'byname']) await site(n);
+  if (aia6Port) await site('v6aia');
 }, 60000);
 
 afterAll(async () => {
@@ -141,6 +163,7 @@ afterAll(async () => {
   proxy.closeAllConnections();
   aia.closeAllConnections();
   await new Promise((r) => aia.close(r));
+  if (aia6) await new Promise((r) => aia6!.close(r));
   await new Promise((r) => proxy.close(r));
   rmSync(dir, { recursive: true, force: true });
 }, 30000);
@@ -229,27 +252,50 @@ describe('missing intermediate certificate (AIA caIssuers)', () => {
     for (const ip of ['1.1.1.1', '104.18.0.1', '2606:4700::1']) expect(isPublicAddress(ip)).toBe(true);
   });
 
-  it('the whole check keeps one time limit', async () => {
+  it('the whole check keeps one time limit, and a download cut short by it is not cached', async () => {
     // an AIA server that never answers: the check still ends by its timeout, with the full time in ms
-    const slow = createServer(() => {});
+    let slowHits = 0;
+    const slow = createServer(() => {
+      slowHits += 1;
+    });
     track(slow);
     await new Promise<void>((r) => slow.listen(0, '127.0.0.1', r));
     const slowPort = (slow.address() as AddressInfo).port;
-    leaf('slowaia', 'IP:127.0.0.1', '/x');
-    // rewrite the AIA port: issue a leaf pointing at the silent server
-    writeFileSync(
-      path.join(dir, 'slowaia.ext'),
-      `basicConstraints=CA:FALSE\nsubjectAltName=IP:127.0.0.1\nauthorityInfoAccess=caIssuers;URI:http://127.0.0.1:${slowPort}/x\n`,
-    );
-    ossl('x509', '-req', '-in', 'slowaia.csr', '-CA', 'inter.pem', '-CAkey', 'inter.key', '-set_serial', String(serial++), '-out', 'slowaia.pem', '-days', '3650', '-extfile', 'slowaia.ext');
+    leaf('slowaia', 'IP:127.0.0.1', '/x', 'inter', `http://127.0.0.1:${slowPort}`);
     await site('slowaia');
+    const opts = { roots: [rootPem], aiaAllow: () => true, timeoutMs: 1500 };
     const started = Date.now();
-    const r = await monitorGet(url('slowaia'), { roots: [rootPem], aiaAllow: () => true, timeoutMs: 1500 });
+    const r = await monitorGet(url('slowaia'), opts);
     expect(r).toMatchObject({ ok: false, error: 'tls' });
     expect(Date.now() - started).toBeLessThan(2500);
     expect(r.ms).toBeGreaterThanOrEqual(1000);
+    expect(slowHits).toBe(1);
+    // not cached as failed: the next check asks again
+    await monitorGet(url('slowaia'), opts);
+    expect(slowHits).toBe(2);
     for (const sock of sockets) sock.destroy();
     await new Promise((res) => slow.close(res));
+  });
+
+  it('an AIA name with several addresses falls back to the next one', async () => {
+    const r = await monitorGet(url('byname'), { roots: [rootPem], aiaAllow: () => true, timeoutMs: 5000 });
+    expect(r).toMatchObject({ ok: true, status: 200, aia: true });
+  });
+
+  it('an AIA URL with an IPv6 address works', async () => {
+    if (!aia6Port) return;
+    const r = await monitorGet(url('v6aia'), { roots: [rootPem], aiaAllow: (ip: string) => ip === '::1', timeoutMs: 5000 });
+    expect(r).toMatchObject({ ok: true, status: 200, aia: true });
+  });
+
+  it('a failed download is remembered per path (direct and WARP separately)', async () => {
+    const proxyUrl = 'http://127.0.0.1:' + proxyPort;
+    const opts = { roots: [rootPem], aiaAllow, timeoutMs: 5000 };
+    expect(await monitorGet(url('junk'), opts)).toMatchObject({ ok: false });
+    expect(await monitorGet(url('junk'), { ...opts, proxy: proxyUrl })).toMatchObject({ ok: false });
+    expect(aiaHits['/junk']).toBe(2);
+    await monitorGet(url('junk'), opts);
+    expect(aiaHits['/junk']).toBe(2);
   });
 
   it('a plain http site or another error does not trigger the fetch', async () => {

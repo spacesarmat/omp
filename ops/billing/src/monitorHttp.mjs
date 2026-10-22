@@ -139,10 +139,11 @@ async function pinAiaUrl(aiaUrl, o) {
     return null;
   }
   if (!addrs.length || !addrs.every((a) => allow(a.address))) return null;
-  const ip = addrs[0].address;
   const port = u.port || '';
-  const pinned = 'http://' + (net.isIPv6(ip) ? '[' + ip + ']' : ip) + (port ? ':' + port : '') + u.pathname + u.search;
-  return { url: pinned, host: u.host };
+  const urls = [...new Set(addrs.map((a) => a.address))].map(
+    (ip) => 'http://' + (net.isIPv6(ip) ? '[' + ip + ']' : ip) + (port ? ':' + port : '') + u.pathname + u.search,
+  );
+  return { urls, host: u.host };
 }
 
 /** TLS errors of a server that left out its intermediate certificate. */
@@ -153,7 +154,7 @@ const AIA_TTL_MS = 24 * 3600 * 1000;
 const AIA_FAIL_TTL_MS = 10 * 60 * 1000;
 const AIA_CACHE_MAX = 32;
 // (per URL; a chain of up to AIA_MAX_HOPS URLs per site)
-/** caIssuers URL -> { pem, at } (pem '' for a failed fetch, kept a shorter time). */
+/** caIssuers URL -> { pem, at }; a failed fetch under '<path> <URL>' with pem '' (kept a shorter time). */
 const aiaCache = new Map();
 
 export function clearAiaCache() {
@@ -176,7 +177,7 @@ async function leafCert(target, port, o, deadline) {
   try {
     const opts = { servername: target.hostname, rejectUnauthorized: false };
     if (o.proxy) opts.socket = track(await tunnel(o.proxy, target.hostname, port, deadline, track));
-    else Object.assign(opts, { host: target.hostname, port });
+    else Object.assign(opts, { host: target.hostname.replace(/^\[|\]$/g, ''), port });
     const t = track(tls.connect(opts));
     return await new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), Math.max(1, Math.min(AIA_TIMEOUT_MS, deadline - Date.now())));
@@ -219,26 +220,44 @@ function caIssuersUrl(access) {
 /** One CA certificate from an AIA URL as PEM, or '' (DER or PEM, at most 32 KB, 5 s). Cached by URL. */
 async function caFromUrl(aiaUrl, o) {
   const now = Date.now();
+  // a certificate is the same whichever way it came; a failure is kept per path (direct may fail, WARP work)
+  const failKey = (o.proxy || 'direct') + ' ' + aiaUrl;
   const hit = aiaCache.get(aiaUrl);
-  if (hit && now - hit.at < (hit.pem ? AIA_TTL_MS : AIA_FAIL_TTL_MS)) return hit.pem;
+  if (hit && now - hit.at < AIA_TTL_MS) return hit.pem;
+  const miss = aiaCache.get(failKey);
+  if (miss && now - miss.at < AIA_FAIL_TTL_MS) return '';
   let pem = '';
+  // a failure is cached only when it is a real answer (or a timeout with the full download time), not a check
+  // that ran out of its own budget
+  let fair = true;
   const pin = await pinAiaUrl(aiaUrl, o);
-  const timeoutMs = Math.min(AIA_TIMEOUT_MS, (o.deadline || Date.now() + AIA_TIMEOUT_MS) - Date.now());
-  const r =
-    pin && timeoutMs > 0
-      ? await getOnce(pin.url, { proxy: o.proxy, timeoutMs, raw: true, maxBytes: AIA_MAX_BYTES + 1, headers: { host: pin.host } })
-      : { ok: false };
-  if (r.ok && r.status === 200 && r.buf && r.buf.length > 0 && r.buf.length <= AIA_MAX_BYTES) {
-    try {
-      const text = r.buf.toString('latin1');
-      const x = new X509Certificate(text.includes('-----BEGIN CERTIFICATE-----') ? text : r.buf);
-      if (x.ca) pem = x.toString();
-    } catch (e) {
-      pem = '';
+  // every checked address in turn, until one answers (like a client that falls back to the next address)
+  for (const u of pin ? pin.urls : []) {
+    const left = (o.deadline || Infinity) - Date.now();
+    const timeoutMs = Math.min(AIA_TIMEOUT_MS, left);
+    if (timeoutMs < 200) {
+      fair = false;
+      break;
     }
+    const r = await getOnce(u, { proxy: o.proxy, timeoutMs, raw: true, maxBytes: AIA_MAX_BYTES + 1, headers: { host: pin.host } });
+    if (!r.ok) {
+      if (r.error === 'timeout' && timeoutMs < AIA_TIMEOUT_MS) fair = false;
+      continue;
+    }
+    if (r.status === 200 && r.buf && r.buf.length > 0 && r.buf.length <= AIA_MAX_BYTES) {
+      try {
+        const text = r.buf.toString('latin1');
+        const x = new X509Certificate(text.includes('-----BEGIN CERTIFICATE-----') ? text : r.buf);
+        if (x.ca) pem = x.toString();
+      } catch (e) {
+        pem = '';
+      }
+    }
+    break;
   }
+  if (!pem && !fair) return '';
   if (aiaCache.size >= AIA_CACHE_MAX) aiaCache.delete(aiaCache.keys().next().value);
-  aiaCache.set(aiaUrl, { pem, at: now });
+  aiaCache.set(pem ? aiaUrl : failKey, { pem, at: now });
   return pem;
 }
 
@@ -257,7 +276,8 @@ function signedBy(child, parent) {
  * check), and follow its own caIssuers again (at most 3 hops) until a certificate signed by a trusted root
  * (opts.roots, default the system roots). Every hop must be a CA certificate that signed the one before.
  * Each URL must be http on port 80 and resolve only to public addresses (the request then goes to that checked
- * address); each URL is cached for a day, a failure for 10 minutes. opts.deadline bounds the whole search. This only finds candidates: the TLS check that
+ * address); each URL is cached for a day, a failure for 10 minutes. opts.deadline bounds the whole search.
+ * This only finds candidates: the TLS check that
  * follows verifies the whole chain and the host name itself.
  */
 export async function fetchIssuer(url, opts) {
@@ -345,7 +365,8 @@ async function getOnce(url, opts) {
         const mod = secure ? https : http;
         const options = {
           protocol: target.protocol,
-          hostname: target.hostname,
+          // a URL keeps an IPv6 address in brackets; the socket wants it bare
+          hostname: target.hostname.replace(/^\[|\]$/g, ''),
           port,
           path: target.pathname + target.search,
           method: 'GET',
