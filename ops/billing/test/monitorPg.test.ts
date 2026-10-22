@@ -11,13 +11,16 @@ const XML =
   '<indexers><indexer id="rutracker" configured="true"><title>RuTracker</title><link>https://rutracker.org/</link></indexer>' +
   '<indexer id="kinozal" configured="true"><title>Kinozal</title><link>https://kinozal.tv/</link></indexer></indexers>';
 
-type World = { failJackett: Set<string>; failOnce: Set<string>; restarts: number; calls: number };
+type World = { failJackett: Set<string>; failOnce: Set<string>; restarts: number; calls: number; site?: Record<string, 'down' | 'code'> };
 
 function makeGet(w: World) {
   return async (url: string, opts?: { proxy?: string }) => {
     w.calls += 1;
     const u = new URL(url);
     const base = { ok: true, ms: 3, headers: {} as Record<string, string> };
+    const site = w.site && w.site[u.hostname];
+    if (site === 'down') return { ok: false, error: 'timeout', ms: 1 };
+    if (site === 'code') return { ...base, status: 403, headers: { server: 'nginx' }, body: '<title>Введите код</title> код с картинки' };
     if (u.hostname === 'jackett') {
       if (u.searchParams.get('t') === 'indexers') return { ...base, status: 200, body: XML };
       const id = u.pathname.split('/')[4];
@@ -120,6 +123,47 @@ describe('monitor runs on Postgres', () => {
     const row = snap.checks.find((c: any) => c.id === 'jackett:kinozal');
     expect(row.alerted).toBe(false);
     expect(row.uptime).toBeCloseTo(33.3, 1);
+  });
+
+  it('a tracker site that goes from red to «Просит код» closes its alert and is saved yellow, not failed', async () => {
+    const t = await setup();
+    t.w.site = { 'rutracker.org': 'down' };
+    await t.monitor.run('schedule');
+    expect(t.sent).toHaveLength(1);
+    expect(t.sent[0].text).toContain('RuTracker (сайт не открывается ни напрямую, ни через WARP)');
+
+    t.w.site = { 'rutracker.org': 'code' };
+    t.tick(15 * 60000);
+    const r = await t.monitor.run('schedule');
+    expect(t.sleeps).toHaveLength(1); // yellow is not retried
+    expect(t.sent).toHaveLength(2);
+    expect(t.sent[1].text).toBe(
+      '✅ Мониторинг OMP: починилось\n• Jackett: RuTracker (сайт не открывается ни напрямую, ни через WARP): сайт отвечает, но просит код (жёлтый статус, без алерта)',
+    );
+    expect(r!.rows.filter((x: any) => x.ok === false)).toEqual([]);
+    const snap = await t.monitor.snapshot();
+    expect(snap.lastRun.failed).toBe(0);
+    for (const id of ['jackett:rutracker:direct', 'jackett:rutracker:warp']) {
+      expect(snap.checks.find((c: any) => c.id === id)).toMatchObject({ ok: true, warn: 'code', detail: 'HTTP 403, просит код (капча)', alerted: false });
+    }
+    expect(snap.checks.find((c: any) => c.id === 'jackett:kinozal:direct').warn).toBeUndefined();
+
+    // still yellow: nothing more is sent
+    t.tick(15 * 60000);
+    await t.monitor.run('schedule');
+    expect(t.sent).toHaveLength(2);
+
+    // a recheck of an unrelated red check keeps the yellow rows yellow
+    t.w.failJackett.add('kinozal');
+    t.tick(15 * 60000);
+    await t.monitor.run('schedule');
+    t.tick(60000);
+    await t.monitor.run('recheck', { only: 'failed' });
+    const after = await t.monitor.snapshot();
+    expect(after.lastRun.trigger).toBe('recheck');
+    for (const id of ['jackett:rutracker:direct', 'jackett:rutracker:warp']) {
+      expect(after.checks.find((c: any) => c.id === id)).toMatchObject({ ok: true, warn: 'code' });
+    }
   });
 
   it('a failure that passes on the retry sends nothing', async () => {

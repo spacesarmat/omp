@@ -12,6 +12,8 @@ import { when } from '@/lib/text';
 import {
   buildView,
   FILTER_TEXT,
+  isYellow,
+  yellowText,
   loadPrefs,
   savePrefs,
   SORT_TEXT,
@@ -91,7 +93,13 @@ const PATH_TEXT: Record<string, string> = {
   internal: 'внутр. сеть',
 };
 
-export function StatusBadge({ ok, alerted }: { ok: boolean | null | undefined; alerted?: boolean }) {
+export function StatusBadge({ ok, alerted, warn }: { ok: boolean | null | undefined; alerted?: boolean; warn?: string }) {
+  if (ok === true && warn)
+    return (
+      <Badge variant="warn" data-status="code" title="Сайт отвечает страницей с капчей или проверкой на робота. Человек откроет, алерта нет.">
+        Просит код
+      </Badge>
+    );
   if (ok === true) return <Badge variant="ok">ок</Badge>;
   if (ok === false) return <Badge variant="bad">{alerted ? 'ошибка · в Telegram' : 'ошибка'}</Badge>;
   return <Badge variant="secondary">-</Badge>;
@@ -162,7 +170,7 @@ function PlainTable({ rows }: { rows: MonitorCheck[] }) {
         {rows.map((r) => (
           <TableRow key={r.id} data-check={r.id}>
             <TableCell>
-              <StatusBadge ok={r.ok} alerted={r.alerted} />
+              <StatusBadge ok={r.ok} alerted={r.alerted} warn={r.warn} />
             </TableCell>
             <TableCell className="font-medium">
               {r.name}
@@ -187,7 +195,7 @@ function Cell({ row }: { row?: MonitorCheck }) {
   if (!row) return <span className="text-xs text-muted-foreground">-</span>;
   return (
     <div className="space-y-1">
-      <StatusBadge ok={row.ok} alerted={row.alerted} />
+      <StatusBadge ok={row.ok} alerted={row.alerted} warn={row.warn} />
       <div className="max-w-[260px] text-xs text-muted-foreground">
         {row.detail}
         {row.ms ? ' · ' + row.ms + ' мс' : ''}
@@ -222,7 +230,7 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
                 </TableCell>
                 <TableCell colSpan={withSearch ? 3 : 2}>
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge ok={r.ok} alerted={r.alerted} />
+                    <StatusBadge ok={r.ok} alerted={r.alerted} warn={r.warn} />
                     <Detail row={r} />
                   </div>
                   {r.context ? <div className="text-xs text-muted-foreground">{r.context}</div> : null}
@@ -260,9 +268,11 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
 function GroupCard({ view, onToggle }: { view: GroupView; onToggle: (id: string, open: boolean) => void }) {
   const { id, title, items, failed } = view;
   const tracker = id === 'jackett' || id === 'jacred';
-  const summary = title + ' ' + view.okCount + '/' + view.total + (view.skipped ? ', не проверено: ' + view.skipped : '');
+  const summary = title + ' ' + view.okCount + '/' + view.total + (view.warned ? ', ' + yellowText(view.warned) : '') + (view.skipped ? ', не проверено: ' + view.skipped : '');
   const badge = failed ? (
     <Badge variant="bad">ошибок: {failed}</Badge>
+  ) : view.warned ? (
+    <Badge variant="warn">просит код: {view.warned}</Badge>
   ) : view.skipped ? (
     <Badge variant="warn">не проверено: {view.skipped}</Badge>
   ) : (
@@ -387,6 +397,8 @@ export function MonitorView({
   const running = !!data?.running;
   const checks = data?.checks || [];
   const failed = checks.filter((c) => c.ok === false).length;
+  // trackers with a yellow path, counted once per tracker
+  const yellow = new Set(checks.filter(isYellow).map((c) => c.id.replace(/:(direct|warp|site)$/, ''))).size;
   const view = buildView(data?.groups || [], checks, prefs);
   const shown = view.reduce((n, g) => n + (g.folded ? 0 : g.items.length), 0);
   const progress = running ? data?.progress || null : null;
@@ -409,6 +421,7 @@ export function MonitorView({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {checks.length ? failed ? <Badge variant="bad">ошибок: {failed}</Badge> : <Badge variant="ok">всё ок</Badge> : null}
+            {yellow ? <Badge variant="warn" title="Сайты, которые отвечают капчей или проверкой на робота (без алерта)">просит код: {yellow}</Badge> : null}
             <Button type="button" disabled={busy || running} onClick={onRun}>
               {running ? 'Проверка идёт…' : 'Проверить сейчас'}
             </Button>

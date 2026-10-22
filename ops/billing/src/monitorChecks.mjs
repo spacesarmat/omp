@@ -132,9 +132,40 @@ export function looksBlocked(locHost) {
   return /(^|[.-])(warning|blocked|block|blocklist|zapret|rkn|eais|stop|forbidden)([.-]|$)/.test(h);
 }
 
+/** How much of a tracker page is read to spot a captcha (only for statuses in PEEK_STATUSES). */
+export const SITE_PEEK = { peekBytes: 16 * 1024, peekMs: 3000 };
+
+// Markers of an anti-bot page. On a 200 only unmistakable ones (a captcha title, a Cloudflare challenge script),
+// since a normal page can carry a reCAPTCHA login form; on 403/429/503 any captcha word counts.
+const STRONG_CHALLENGE = [
+  /<title>[^<]{0,120}(captcha|капч|just a moment|attention required|проверка браузера|ddos-guard|введите код|are you human|подтвердите, что вы)/i,
+  /cf-chl-|cf_chl_opt|challenge-platform/i,
+];
+const WEAK_CHALLENGE = /captcha|капч|turnstile|введите (код|символы|число|цифры)|код с картинки|are you (a )?human|not a robot|не робот/i;
+
 /**
- * Verdict on a tracker site answer: any HTTP answer below 500 means reachable (a Cloudflare challenge too);
- * a redirect to a block page, a 5xx or no answer does not.
+ * Anti-bot or captcha page: '' when not, otherwise who asks ('Cloudflare', 'DDoS-Guard', 'капча').
+ * Uses the cf-mitigated header, the server header with 403/429/503, and the body start when it was read.
+ */
+export function challengeKind(res) {
+  if (!res || !res.ok) return '';
+  const s = Number(res.status) || 0;
+  const h = res.headers || {};
+  const body = String(res.body || '');
+  const server = String(h.server || '');
+  const deny = s === 403 || s === 429 || s === 503;
+  if (String(h['cf-mitigated'] || '').toLowerCase() === 'challenge') return 'Cloudflare';
+  if ((s === 403 || s === 503) && /cloudflare/i.test(server)) return 'Cloudflare';
+  if (deny && /ddos-guard/i.test(server)) return 'DDoS-Guard';
+  if ((deny || s === 200) && STRONG_CHALLENGE.some((re) => re.test(body))) return /ddos-guard/i.test(body) ? 'DDoS-Guard' : /cf-chl-|cf_chl_opt|challenge-platform/i.test(body) ? 'Cloudflare' : 'капча';
+  if (deny && WEAK_CHALLENGE.test(body)) return 'капча';
+  return '';
+}
+
+/**
+ * Verdict on a tracker site answer: any HTTP answer below 500 means reachable; a redirect to a block page, a 5xx
+ * or no answer does not. An anti-bot or captcha page is yellow: { ok: true, warn: 'code' }, «просит код»,
+ * reachable for a person, so no alert, but not plain green either.
  */
 export function siteVerdict(res, url) {
   if (!res || !res.ok) return { ok: false, detail: errorText(res && res.error) };
@@ -155,8 +186,8 @@ export function siteVerdict(res, url) {
     }
     return { ok: true, detail: 'HTTP ' + s };
   }
-  const challenge = h['cf-mitigated'] === 'challenge' || ((s === 403 || s === 503) && /cloudflare/i.test(h.server || ''));
-  if (challenge) return { ok: true, detail: 'HTTP ' + s + ', проверка Cloudflare' };
+  const challenge = challengeKind(res);
+  if (challenge) return { ok: true, warn: 'code', detail: 'HTTP ' + s + ', просит код (' + challenge + ')' };
   if (s >= 500) return { ok: false, detail: 'HTTP ' + s };
   return { ok: true, detail: 'HTTP ' + s };
 }
@@ -307,7 +338,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     target,
     alert: false,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
+    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
   out.push({
     id: idBase + ':warp',
@@ -318,7 +349,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     alert: false,
     pairAlert: true,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true }), url)),
+    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
 }
 
@@ -672,7 +703,7 @@ export async function buildTasks(ctx) {
  */
 export function finalize(rows) {
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const word = (r) => (!r ? '-' : r.ok === true ? 'ок' : r.ok === false ? r.detail || 'нет' : '-');
+  const word = (r) => (!r ? '-' : r.ok === true ? (r.warn ? 'просит код' : 'ок') : r.ok === false ? r.detail || 'нет' : '-');
   for (const r of rows) {
     if (r.pairAlert) {
       const direct = byId.get(r.pair + ':direct');
@@ -722,6 +753,8 @@ export async function runTasks(tasks, limit, heavyLimit, clock, hooks) {
       const { run, ...meta } = t;
       const row = { ...meta, ok: r.ok === true ? true : r.ok === false ? false : null, detail: String(r.detail || ''), ms: Number(r.ms) || 0, at: at() };
       if (r.restarts !== undefined) row.restarts = r.restarts;
+      // yellow (asks for a code): only on a passing check
+      if (row.ok === true && r.warn) row.warn = String(r.warn);
       results[i] = row;
       if (h.onDone) h.onDone(row);
     }

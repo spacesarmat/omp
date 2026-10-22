@@ -11,6 +11,8 @@ import tls from 'node:tls';
 
 export const MONITOR_HTTP_TIMEOUT_MS = 15000;
 const MAX_BODY = 64 * 1024;
+/** Statuses whose body start is read in headersOnly mode when peekBytes is set (anti-bot pages use these). */
+export const PEEK_STATUSES = [200, 403, 429, 503];
 
 /** A short error kind for the panel: dns, refused, reset, timeout, tls, unreachable, proxy_<x>, down. */
 export function errorKind(e) {
@@ -60,8 +62,11 @@ function tunnel(proxyUrl, host, port, deadline, track) {
 }
 
 /**
- * GET `url`. opts: { proxy?: 'http://warp:1080', timeoutMs?, headers?, maxBytes?, headersOnly? }.
+ * GET `url`. opts: { proxy?: 'http://warp:1080', timeoutMs?, headers?, maxBytes?, headersOnly?, peekBytes?, peekMs? }.
  * headersOnly: resolve as soon as the status line and headers arrive, without reading the body.
+ * peekBytes / peekMs (with headersOnly): for a status in PEEK_STATUSES also read the start of the body, at most
+ * peekBytes and at most peekMs, to spot a captcha page. A slow body still never turns into a timeout: whatever
+ * arrived by then comes back.
  * Resolves { ok: true, status, headers, body, ms } or { ok: false, error, ms }. Never rejects.
  */
 export async function monitorGet(url, opts) {
@@ -84,6 +89,9 @@ export async function monitorGet(url, opts) {
     return x;
   };
   let timer = null;
+  // Set once the headers of a peeked answer arrived: the overall deadline then ends the peek with what was
+  // read instead of turning a reachable site into a timeout.
+  let endPeek = null;
   try {
     const work = (async () => {
       let createConnection = null;
@@ -126,10 +134,39 @@ export async function monitorGet(url, opts) {
               'cf-mitigated': String(res.headers['cf-mitigated'] || ''),
               'content-type': String(res.headers['content-type'] || ''),
             };
-            if (o.headersOnly) {
+            const peekBytes = Math.max(0, Number(o.peekBytes) || 0);
+            if (o.headersOnly && !(peekBytes && PEEK_STATUSES.includes(res.statusCode || 0))) {
               // Status and headers are the answer; a slow or stalled body must not turn it into a timeout.
               resolve({ ok: true, status: res.statusCode || 0, headers: head, body: '' });
               res.destroy();
+              return;
+            }
+            if (o.headersOnly) {
+              // Only the start of the body, for a short while; then the answer is what arrived.
+              const parts = [];
+              let got = 0;
+              let over = false;
+              const finish = () => {
+                if (over) return;
+                over = true;
+                endPeek = null;
+                clearTimeout(peekTimer);
+                resolve({ ok: true, status: res.statusCode || 0, headers: head, body: Buffer.concat(parts).toString('utf8') });
+                res.destroy();
+              };
+              const peekTimer = setTimeout(finish, Math.max(1, Math.min(Number(o.peekMs) || 3000, deadline - Date.now())));
+              endPeek = finish;
+              res.on('data', (c) => {
+                if (got < peekBytes) {
+                  const part = c.length > peekBytes - got ? c.subarray(0, peekBytes - got) : c;
+                  parts.push(part);
+                  got += part.length;
+                }
+                if (got >= peekBytes) finish();
+              });
+              res.on('end', finish);
+              res.on('close', finish);
+              res.on('error', finish);
               return;
             }
             const chunks = [];
@@ -167,7 +204,10 @@ export async function monitorGet(url, opts) {
     })();
     work.catch(() => {});
     const expired = new Promise((_, reject) => {
-      timer = setTimeout(() => reject(fail('timeout')), timeoutMs);
+      timer = setTimeout(() => {
+        if (endPeek) endPeek();
+        else reject(fail('timeout'));
+      }, timeoutMs);
     });
     const out = await Promise.race([work, expired]);
     return { ...out, ms: Date.now() - started };

@@ -4,7 +4,8 @@
  * - Interval: kv monitor_config.intervalMin (5-1440 minutes, default 15), editable in the tab, applied on the
  *   next minute tick without a restart.
  * - Before an alert, the failed checks run once more after 30 s; only a check still failing is reported.
- * - One message when a problem starts (no repeats while it lasts) and one «починилось» when it is over:
+ * - One message when a problem starts (no repeats while it lasts) and one «починилось» when it is over
+ *   (a tracker site that now only asks for a code, yellow, closes its alert with a «просит код» line):
  *   kv monitor_alerts holds the checks already reported. A failed send is retried on the next run.
  * - Alerts go to BILLING_MONITOR_CHAT_ID (default 536445442) with the billing bot, sendMessage only.
  * - The scheduler runs only on the instance that polls the bot and is not read-only, so a standby copy
@@ -100,9 +101,12 @@ export function alertPlan(alerted, rows, now) {
       }
     } else if (was) {
       // ok again, or no longer alert-worthy (a pair whose direct path came back)
-      if (r.ok === false && !r.alert && r.pairAlert) recovered.push({ id: r.id, text: was.text, partial: true });
+      if (r.ok === false && !r.alert && r.pairAlert) {
+        const direct = rows.find((x) => x.id === r.pair + ':direct');
+        recovered.push({ id: r.id, text: was.text, partial: true, ...(direct && direct.warn ? { code: true } : {}) });
+      }
       else if (r.ok === false) next[r.id] = was;
-      else recovered.push({ id: r.id, text: was.text });
+      else recovered.push(r.ok === true && r.warn ? { id: r.id, text: was.text, code: true } : { id: r.id, text: was.text });
     }
   }
   for (const id of Object.keys(prev)) {
@@ -141,7 +145,9 @@ function problemLines(problems) {
 }
 
 function recoveredLines(recovered) {
-  return recovered.map((r) => '• ' + r.text + (r.gone ? ': больше не проверяется' : r.partial ? ': сайт снова открывается напрямую' : ''));
+  return recovered.map(
+    (r) => '• ' + r.text + (r.gone ? ': больше не проверяется' : r.partial ? (r.code ? ': напрямую сайт отвечает, но просит код (жёлтый статус, без алерта)' : ': сайт снова открывается напрямую') : r.code ? ': сайт отвечает, но просит код (жёлтый статус, без алерта)' : ''),
+  );
 }
 
 export function problemMessages(problems) {
@@ -322,7 +328,7 @@ export function createMonitor(deps) {
             // A check added since the last run that is not in this recheck: shown as not checked yet, and the
             // next «Перепроверить все ошибки» runs it.
             if (!b) return { ...meta, ok: null, detail: UNCHECKED, ms: 0, at: 0, retried: false };
-            return { ...meta, ok: b.ok, detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
+            return { ...meta, ok: b.ok, ...(b.ok === true && b.warn ? { warn: b.warn } : {}), detail: b.detail, ms: b.ms, at: b.at, retried: !!b.retried };
           });
       }
       const ran = new Set(toRun.map((t) => t.id));
@@ -391,6 +397,7 @@ export function createMonitor(deps) {
       path: r.path || '',
       target: r.target || '',
       ok: r.ok,
+      ...(r.ok === true && r.warn ? { warn: String(r.warn) } : {}),
       detail: r.detail,
       context: r.context || '',
       ms: r.ms,
