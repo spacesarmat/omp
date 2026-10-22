@@ -6,7 +6,7 @@ import { createServer as createTlsServer, type Server as HttpsServer } from 'nod
 import { connect, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { clearAiaCache, monitorGet } from '../src/monitorHttp.mjs';
+import { clearAiaCache, isPublicAddress, monitorGet } from '../src/monitorHttp.mjs';
 import { siteVerdict } from '../src/monitorChecks.mjs';
 
 // A local test PKI: root -> intermediate -> leaf. The HTTPS servers send the leaf only (no intermediate), like
@@ -52,11 +52,22 @@ async function site(name: string) {
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end('hello');
   });
+  track(server);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   sites[name] = { server, port: (server.address() as AddressInfo).port };
 }
 
+const sockets = new Set<import('node:net').Socket>();
+function track(server: { on: (e: 'connection', f: (s: import('node:net').Socket) => void) => unknown }) {
+  server.on('connection', (sock) => {
+    sockets.add(sock);
+    sock.on('close', () => sockets.delete(sock));
+  });
+}
+
 const url = (name: string) => 'https://127.0.0.1:' + sites[name].port + '/';
+// the local AIA server is on loopback; production allows only public addresses on port 80
+const aiaAllow = (ip: string, port: number) => ip === '127.0.0.1' && port === aiaPort;
 
 beforeAll(async () => {
   dir = mkdtempSync(path.join(tmpdir(), 'aia-'));
@@ -76,6 +87,7 @@ beforeAll(async () => {
     res.writeHead(404);
     res.end();
   });
+  track(aia);
   await new Promise<void>((r) => aia.listen(0, '127.0.0.1', r));
   aiaPort = (aia.address() as AddressInfo).port;
   proxy = createServer((_req, res) => {
@@ -94,6 +106,7 @@ beforeAll(async () => {
     up.on('error', () => client.destroy());
     client.on('error', () => up.destroy());
   });
+  track(proxy);
   await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', r));
   proxyPort = (proxy.address() as AddressInfo).port;
 
@@ -119,15 +132,18 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
+  // CONNECT tunnels and TLS sockets are not tracked by closeAllConnections: destroy every socket ever accepted
+  for (const sock of sockets) sock.destroy();
   for (const s of Object.values(sites)) {
     s.server.closeAllConnections();
     await new Promise((r) => s.server.close(r));
   }
   proxy.closeAllConnections();
+  aia.closeAllConnections();
   await new Promise((r) => aia.close(r));
   await new Promise((r) => proxy.close(r));
   rmSync(dir, { recursive: true, force: true });
-});
+}, 30000);
 
 beforeEach(() => {
   clearAiaCache();
@@ -136,17 +152,17 @@ beforeEach(() => {
 
 describe('missing intermediate certificate (AIA caIssuers)', () => {
   it('without the AIA fetch the site fails TLS, like before', async () => {
-    const r = await monitorGet(url('good'), { roots: [rootPem], aia: false, timeoutMs: 5000 });
+    const r = await monitorGet(url('good'), { roots: [rootPem], aiaAllow, aia: false, timeoutMs: 5000 });
     expect(r).toMatchObject({ ok: false, error: 'tls' });
     expect(r).not.toHaveProperty('tlsCode');
     expect(aiaHits).toEqual({});
   });
 
   it('fetches the intermediate (DER), verifies the chain and answers; the next call uses the cache', async () => {
-    const r = await monitorGet(url('good'), { roots: [rootPem], timeoutMs: 5000 });
+    const r = await monitorGet(url('good'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 });
     expect(r).toMatchObject({ ok: true, status: 200, aia: true, body: 'hello' });
     expect(aiaHits).toEqual({ '/inter.der': 1 });
-    const again = await monitorGet(url('good'), { roots: [rootPem], timeoutMs: 5000, headersOnly: true });
+    const again = await monitorGet(url('good'), { roots: [rootPem], aiaAllow, timeoutMs: 5000, headersOnly: true });
     expect(again).toMatchObject({ ok: true, status: 200, aia: true });
     expect(aiaHits).toEqual({ '/inter.der': 1 });
     expect(siteVerdict(again, url('good'))).toEqual({ ok: true, detail: 'HTTP 200, сертификат докачан' });
@@ -154,7 +170,7 @@ describe('missing intermediate certificate (AIA caIssuers)', () => {
 
   it('works through the WARP-style CONNECT proxy, the intermediate fetched through it too', async () => {
     const before = proxied;
-    const r = await monitorGet(url('good'), { roots: [rootPem], timeoutMs: 5000, proxy: 'http://127.0.0.1:' + proxyPort });
+    const r = await monitorGet(url('good'), { roots: [rootPem], aiaAllow, timeoutMs: 5000, proxy: 'http://127.0.0.1:' + proxyPort });
     expect(r).toMatchObject({ ok: true, status: 200, aia: true });
     // first try, leaf read, intermediate download, second try
     expect(proxied - before).toBe(4);
@@ -162,29 +178,29 @@ describe('missing intermediate certificate (AIA caIssuers)', () => {
   });
 
   it('follows the caIssuers of the intermediate too (two hops), directly and through the proxy', async () => {
-    expect(await monitorGet(url('twohop'), { roots: [rootPem], timeoutMs: 5000 })).toMatchObject({ ok: true, status: 200, aia: true });
+    expect(await monitorGet(url('twohop'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 })).toMatchObject({ ok: true, status: 200, aia: true });
     expect(aiaHits).toEqual({ '/inter2.der': 1, '/cross.der': 1 });
-    expect(await monitorGet(url('twohop'), { roots: [rootPem], timeoutMs: 5000, proxy: 'http://127.0.0.1:' + proxyPort })).toMatchObject({ ok: true, aia: true });
+    expect(await monitorGet(url('twohop'), { roots: [rootPem], aiaAllow, timeoutMs: 5000, proxy: 'http://127.0.0.1:' + proxyPort })).toMatchObject({ ok: true, aia: true });
     expect(aiaHits).toEqual({ '/inter2.der': 1, '/cross.der': 1 });
   });
 
   it('a chain that ends at an untrusted root is not tried', async () => {
-    expect(await monitorGet(url('untrusted'), { roots: [rootPem], timeoutMs: 5000 })).toMatchObject({ ok: false, error: 'tls' });
+    expect(await monitorGet(url('untrusted'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 })).toMatchObject({ ok: false, error: 'tls' });
     expect(aiaHits).toEqual({ '/inter3.der': 1, '/selfroot.der': 1 });
   });
 
   it('accepts a PEM intermediate', async () => {
-    expect(await monitorGet(url('pem'), { roots: [rootPem], timeoutMs: 5000 })).toMatchObject({ ok: true, aia: true });
+    expect(await monitorGet(url('pem'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 })).toMatchObject({ ok: true, aia: true });
   });
 
   it('still checks the host name', async () => {
-    const r = await monitorGet(url('wronghost'), { roots: [rootPem], timeoutMs: 5000 });
+    const r = await monitorGet(url('wronghost'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 });
     expect(r).toMatchObject({ ok: false, error: 'tls' });
     expect(r).not.toHaveProperty('aia');
   });
 
   it('still needs a trusted root: the fetched intermediate is not a trust anchor', async () => {
-    const r = await monitorGet(url('good'), { roots: [], timeoutMs: 5000 });
+    const r = await monitorGet(url('good'), { roots: [], aiaAllow, timeoutMs: 5000 });
     expect(r).toMatchObject({ ok: false, error: 'tls' });
     const self = await monitorGet(url('good'), { roots: [readFileSync(path.join(dir, 'other.pem'), 'utf8')], timeoutMs: 5000 });
     expect(self).toMatchObject({ ok: false, error: 'tls' });
@@ -196,11 +212,44 @@ describe('missing intermediate certificate (AIA caIssuers)', () => {
 
   it('rejects junk, an oversized answer and a CA that did not issue the leaf, and caches the failure', async () => {
     for (const n of ['junk', 'big', 'otherca']) {
-      expect(await monitorGet(url(n), { roots: [rootPem], timeoutMs: 5000 })).toMatchObject({ ok: false, error: 'tls' });
+      expect(await monitorGet(url(n), { roots: [rootPem], aiaAllow, timeoutMs: 5000 })).toMatchObject({ ok: false, error: 'tls' });
     }
     expect(aiaHits).toEqual({ '/junk': 1, '/big': 1, '/other.der': 1 });
-    await monitorGet(url('junk'), { roots: [rootPem], timeoutMs: 5000 });
+    await monitorGet(url('junk'), { roots: [rootPem], aiaAllow, timeoutMs: 5000 });
     expect(aiaHits['/junk']).toBe(1);
+  });
+
+  it('by default an AIA URL may only reach public addresses on port 80 (no requests to billing neighbours)', async () => {
+    const r = await monitorGet(url('good'), { roots: [rootPem], timeoutMs: 5000 });
+    expect(r).toMatchObject({ ok: false, error: 'tls' });
+    expect(aiaHits).toEqual({});
+    for (const ip of ['127.0.0.1', '10.1.2.3', '172.18.0.5', '192.168.1.211', '100.64.0.1', '169.254.169.254', '0.0.0.0', '::1', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', 'docker-proxy']) {
+      expect(isPublicAddress(ip)).toBe(false);
+    }
+    for (const ip of ['1.1.1.1', '104.18.0.1', '2606:4700::1']) expect(isPublicAddress(ip)).toBe(true);
+  });
+
+  it('the whole check keeps one time limit', async () => {
+    // an AIA server that never answers: the check still ends by its timeout, with the full time in ms
+    const slow = createServer(() => {});
+    track(slow);
+    await new Promise<void>((r) => slow.listen(0, '127.0.0.1', r));
+    const slowPort = (slow.address() as AddressInfo).port;
+    leaf('slowaia', 'IP:127.0.0.1', '/x');
+    // rewrite the AIA port: issue a leaf pointing at the silent server
+    writeFileSync(
+      path.join(dir, 'slowaia.ext'),
+      `basicConstraints=CA:FALSE\nsubjectAltName=IP:127.0.0.1\nauthorityInfoAccess=caIssuers;URI:http://127.0.0.1:${slowPort}/x\n`,
+    );
+    ossl('x509', '-req', '-in', 'slowaia.csr', '-CA', 'inter.pem', '-CAkey', 'inter.key', '-set_serial', String(serial++), '-out', 'slowaia.pem', '-days', '3650', '-extfile', 'slowaia.ext');
+    await site('slowaia');
+    const started = Date.now();
+    const r = await monitorGet(url('slowaia'), { roots: [rootPem], aiaAllow: () => true, timeoutMs: 1500 });
+    expect(r).toMatchObject({ ok: false, error: 'tls' });
+    expect(Date.now() - started).toBeLessThan(2500);
+    expect(r.ms).toBeGreaterThanOrEqual(1000);
+    for (const sock of sockets) sock.destroy();
+    await new Promise((res) => slow.close(res));
   });
 
   it('a plain http site or another error does not trigger the fetch', async () => {

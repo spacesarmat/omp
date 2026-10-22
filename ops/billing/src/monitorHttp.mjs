@@ -9,6 +9,8 @@ import http from 'node:http';
 import https from 'node:https';
 import tls from 'node:tls';
 import { X509Certificate } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
+import net from 'node:net';
 
 export const MONITOR_HTTP_TIMEOUT_MS = 15000;
 const MAX_BODY = 64 * 1024;
@@ -77,15 +79,70 @@ function tunnel(proxyUrl, host, port, deadline, track) {
 export async function monitorGet(url, opts) {
   const o = opts || {};
   const started = Date.now();
+  // One deadline for the whole check: first try, certificate downloads and the retry.
+  const deadline = started + Math.max(1, Number(o.timeoutMs) || MONITOR_HTTP_TIMEOUT_MS);
   const first = await getOnce(url, o);
   if (first.ok || !AIA_CODES.has(first.tlsCode) || o.aia === false || o.ca) return strip(first);
-  const found = await fetchIssuer(url, o);
-  if (!found.length) return strip(first);
+  const found = await fetchIssuer(url, { ...o, deadline });
+  const left = deadline - Date.now();
+  if (!found.length || left < 500) return { ...strip(first), ms: Date.now() - started };
   const roots = Array.isArray(o.roots) ? o.roots : tls.rootCertificates;
   // The fetched intermediates only complete the chain: the leaf must still chain up to one of `roots`,
   // and the host name is checked as usual (verification is never turned off).
-  const again = await getOnce(url, { ...o, ca: [...roots, ...found] });
+  const again = await getOnce(url, { ...o, timeoutMs: left, ca: [...roots, ...found] });
   return { ...strip(again), ...(again.ok ? { aia: true } : {}), ms: Date.now() - started };
+}
+
+// Addresses an AIA download may go to: public unicast only. The URL comes from a certificate nobody has
+// verified yet, so it must not reach billing's neighbours (docker-proxy, Postgres, the LAN).
+const PRIVATE = new net.BlockList();
+for (const [a, n] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
+  ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24],
+  ['203.0.113.0', 24], ['224.0.0.0', 4], ['240.0.0.0', 4],
+]) PRIVATE.addSubnet(a, n, 'ipv4');
+for (const [a, n] of [['::', 128], ['::1', 128], ['64:ff9b::', 96], ['100::', 64], ['2001:db8::', 32], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]]) {
+  PRIVATE.addSubnet(a, n, 'ipv6');
+}
+
+/** A public unicast address (not loopback, private, link-local, CGNAT, multicast or reserved). */
+export function isPublicAddress(ip) {
+  const v = net.isIP(String(ip || ''));
+  if (!v) return false;
+  // Node's BlockList matches IPv4 rules against IPv4 mapped IPv6 too; a mapped address is judged by its IPv4 part
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(String(ip));
+  if (mapped) return isPublicAddress(mapped[1]);
+  if (v === 6 && /^::ffff:/i.test(String(ip))) return false;
+  return !PRIVATE.check(String(ip), v === 6 ? 'ipv6' : 'ipv4');
+}
+
+/**
+ * http://host[:80]/path of an AIA URL turned into a request to one checked address (pinned, so the name cannot
+ * resolve to something else on the real connection), with the original Host header. null when not allowed.
+ */
+async function pinAiaUrl(aiaUrl, o) {
+  let u;
+  try {
+    u = new URL(aiaUrl);
+  } catch (e) {
+    return null;
+  }
+  if (u.protocol !== 'http:' || u.username || u.password) return null;
+  const portNum = Number(u.port) || 80;
+  // tests pass aiaAllow(ip, port) for their local server; production: port 80 on public addresses only
+  const allow = typeof o.aiaAllow === 'function' ? (ip) => o.aiaAllow(ip, portNum) : (ip) => portNum === 80 && isPublicAddress(ip);
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  let addrs;
+  try {
+    addrs = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true, verbatim: true });
+  } catch (e) {
+    return null;
+  }
+  if (!addrs.length || !addrs.every((a) => allow(a.address))) return null;
+  const ip = addrs[0].address;
+  const port = u.port || '';
+  const pinned = 'http://' + (net.isIPv6(ip) ? '[' + ip + ']' : ip) + (port ? ':' + port : '') + u.pathname + u.search;
+  return { url: pinned, host: u.host };
 }
 
 /** TLS errors of a server that left out its intermediate certificate. */
@@ -165,7 +222,12 @@ async function caFromUrl(aiaUrl, o) {
   const hit = aiaCache.get(aiaUrl);
   if (hit && now - hit.at < (hit.pem ? AIA_TTL_MS : AIA_FAIL_TTL_MS)) return hit.pem;
   let pem = '';
-  const r = await getOnce(aiaUrl, { proxy: o.proxy, timeoutMs: AIA_TIMEOUT_MS, raw: true, maxBytes: AIA_MAX_BYTES + 1 });
+  const pin = await pinAiaUrl(aiaUrl, o);
+  const timeoutMs = Math.min(AIA_TIMEOUT_MS, (o.deadline || Date.now() + AIA_TIMEOUT_MS) - Date.now());
+  const r =
+    pin && timeoutMs > 0
+      ? await getOnce(pin.url, { proxy: o.proxy, timeoutMs, raw: true, maxBytes: AIA_MAX_BYTES + 1, headers: { host: pin.host } })
+      : { ok: false };
   if (r.ok && r.status === 200 && r.buf && r.buf.length > 0 && r.buf.length <= AIA_MAX_BYTES) {
     try {
       const text = r.buf.toString('latin1');
@@ -194,7 +256,8 @@ function signedBy(child, parent) {
  * read the leaf's AIA caIssuers URL (http only), download that CA certificate (through the same proxy as the
  * check), and follow its own caIssuers again (at most 3 hops) until a certificate signed by a trusted root
  * (opts.roots, default the system roots). Every hop must be a CA certificate that signed the one before.
- * Each URL is cached for a day, a failure for 10 minutes. This only finds candidates: the TLS check that
+ * Each URL must be http on port 80 and resolve only to public addresses (the request then goes to that checked
+ * address); each URL is cached for a day, a failure for 10 minutes. opts.deadline bounds the whole search. This only finds candidates: the TLS check that
  * follows verifies the whole chain and the host name itself.
  */
 export async function fetchIssuer(url, opts) {
@@ -207,7 +270,7 @@ export async function fetchIssuer(url, opts) {
   }
   if (target.protocol !== 'https:') return [];
   const port = Number(target.port) || 443;
-  const leaf = await leafCert(target, port, o, Date.now() + AIA_TIMEOUT_MS);
+  const leaf = await leafCert(target, port, o, Math.min(Date.now() + AIA_TIMEOUT_MS, o.deadline || Infinity));
   if (!leaf) return [];
   let cur;
   try {
