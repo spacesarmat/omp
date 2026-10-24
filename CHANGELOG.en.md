@@ -20,6 +20,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] JacRed on the NUC: a systemd timer copies the running config from the container to the host every minute (validated, with a backup, last 20 kept), so a JacRed admin save survives a restart
 - [tech] Monitoring: a yellow «Просит код» (asks for a code) status for tracker sites that answer with a captcha or anti-bot page: no alert, not counted as an error, its own filter, group summary «12/12, 1 жёлтая»; a red tracker turning yellow closes its alert with an «asks for a code» note
 - [tech] Monitoring: when a tracker site leaves out its intermediate certificate, the check fetches it through AIA like a browser and still verifies the full chain («сертификат докачан»); torrent.by is no longer red with a TLS error
+- [phone] «Другая раздача» (another release): long release titles no longer run over the next row and the size and seeds line; each row grows to fit its title and the list scrolls
+- [tv] «В лучшем качестве» (better quality): all text in the dialog is at least 24px
 
 ## 0.20.6-beta.3
 
