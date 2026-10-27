@@ -1,0 +1,46 @@
+name: Billing watchdog
+
+# External check of https://billing.omp-player.online/health every 15 minutes, independent of the NUC and Andy's PC.
+# A problem (no answer, bot not polling, «Мониторинг» not running) and its fix are told once each to Telegram
+# by @OMPBILLINGBOT with sendMessage only: this workflow never polls the bot and never touches its webhook.
+# Secrets (names only): TELEGRAM_BOT_TOKEN (the @OMPBILLINGBOT token, already used by the release posts) and
+# WATCHDOG_TELEGRAM_CHAT_ID (the chat for alerts, the same as BILLING_MONITOR_CHAT_ID on the NUC).
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: billing-watchdog
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          sparse-checkout: scripts
+      # the last state ({ ok, since, reason }), so only a change is told; a fresh cache key per run, restored by prefix
+      - name: Restore the last state
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: watchdog-state.json
+          key: billing-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: billing-watchdog-
+      - name: Check billing
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.WATCHDOG_TELEGRAM_CHAT_ID }}
+        run: node scripts/billing-watchdog.mjs watchdog-state.json
+      - name: Save the state
+        if: always()
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: watchdog-state.json
+          key: billing-watchdog-${{ github.run_id }}-${{ github.run_attempt }}

@@ -59,7 +59,7 @@ describe('billing HTTP methods', () => {
     expect(get.status).toBe(200);
     const health = JSON.parse(get.body);
     expect(health.ok).toBe(true);
-    expect(Object.keys(health).sort()).toEqual(['botPollEnabled', 'botPollOkAgoSec', 'ok']);
+    expect(Object.keys(health).sort()).toEqual(['botPollEnabled', 'botPollOkAgoSec', 'monitorAgoSec', 'monitorIntervalMin', 'monitorScheduled', 'monitorScheduledAgoSec', 'ok']);
     expect(get.headers['content-type']).toContain('application/json');
 
     const head = await call(port, 'HEAD', '/health');

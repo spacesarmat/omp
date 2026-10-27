@@ -457,6 +457,15 @@ export function healthPayload(now, extra) {
     out.pgBackupOk = !x.backup.stale && !x.backup.lastError;
     out.pgBackupAgoSec = x.backup.ageSec;
   }
+  // «Мониторинг» on this instance, for the external watchdog: seconds since the last full run (null before the first).
+  if (x.monitor) {
+    const now2 = now || Date.now();
+    out.monitorScheduled = !!x.monitor.scheduled;
+    out.monitorAgoSec = x.monitor.lastRunAt ? Math.max(0, Math.floor((now2 - x.monitor.lastRunAt) / 1000)) : null;
+    // seconds since the schedule started here, so a first run that never finishes is visible too
+    out.monitorScheduledAgoSec = x.monitor.scheduled && x.monitor.scheduledAt ? Math.max(0, Math.floor((now2 - x.monitor.scheduledAt) / 1000)) : null;
+    out.monitorIntervalMin = Number(x.monitor.intervalMin) || null;
+  }
   if (x.readOnly) out.readOnly = true;
   return out;
 }
@@ -667,7 +676,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'GET' && path === '/health') {
         const settings = backups ? (await store.read()).settings : null;
-        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly }));
+        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly, monitor: monitor && monitor.health ? monitor.health() : null }));
       }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
