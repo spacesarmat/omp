@@ -216,17 +216,19 @@ describe('series screen', () => {
     await flush();
   }
 
-  it('two releases of the season: the info row lists each; a tap opens its menu, nothing is deleted', async () => {
+  const openReleases = () => act(() => (el.querySelector('[data-release-switch] .m-btn-text') as HTMLElement).click());
+  const sheetLines = () => Array.from(document.querySelectorAll('[data-release] .m-opt-name')).map((b) => b.textContent);
+
+  it('two releases of the season: «Другая раздача» lists each; «⋯» opens the menu of the shown one, nothing is deleted', async () => {
     await open([SPIRIT_1080, SPIRIT_2160], 1);
-    const info = el.querySelector('[data-dup-info]')!;
-    expect(info.textContent).toContain('2 раздачи этого сезона');
-    const lines = Array.from(info.querySelectorAll('[data-dup-line]')).map((b) => b.textContent);
-    expect(lines).toEqual(expect.arrayContaining(['1080p WEB-DL · 18 серий · 5,4 ГБ', '4K WEB-DL · 18 серий · 9,7 ГБ']));
-    // the release rows say the size the same way as the info row
-    const sizes = Array.from(el.querySelectorAll('.m-series-row .m-vrow-meta > span:first-child')).map((s) => s.textContent);
-    expect(sizes.sort()).toEqual(['5,4 ГБ', '9,7 ГБ']);
-    const line = Array.from(info.querySelectorAll('[data-dup-line]')).find((b) => (b.textContent || '').indexOf('1080p') === 0) as HTMLButtonElement;
-    act(() => line.click());
+    // one release on the screen, the line says which one
+    expect(el.querySelectorAll('[data-release-switch]').length).toBe(1);
+    openReleases();
+    expect(sheetLines()).toEqual(expect.arrayContaining(['1080p WEB-DL · 18 серий · 5,4 ГБ', '4K WEB-DL · 18 серий · 9,7 ГБ']));
+    act(() => (document.querySelector('[data-release="' + SPIRIT_1080.hash + '"]') as HTMLElement).click());
+    await flush();
+    expect(el.querySelector('[data-release-switch]')!.textContent).toContain('1080p WEB-DL · 5,4 ГБ');
+    act(() => (el.querySelector('.m-release-more') as HTMLElement).click());
     // the menu names the release
     expect(document.querySelector('.m-sheet-title')!.textContent).toMatch(/ · 1080p WEB-DL$/);
     // only the normal manual actions of a release (deleting asks its own confirm)
@@ -235,16 +237,18 @@ describe('series screen', () => {
     expect(removeSpy).not.toHaveBeenCalled();
   });
 
-  it('the release rows count episodes like the info row: 16 files of the 4K release hold 18 episodes', async () => {
+  it('the release lines count episodes: 16 files of the 4K release hold 18 episodes', async () => {
     await open([SPIRIT_1080, SPIRIT_2160], 1);
-    const meta = (hash: string) => el.querySelector('.m-series-row[data-hash="' + hash + '"] .m-vrow-meta')!.textContent || '';
-    expect(meta(SPIRIT_2160.hash)).toContain('18 серий');
-    expect(meta(SPIRIT_2160.hash)).not.toContain('16');
-    expect(meta(SPIRIT_1080.hash)).toContain('18 серий');
+    openReleases();
+    const line = (hash: string) => document.querySelector('[data-release="' + hash + '"] .m-opt-name')!.textContent || '';
+    expect(line(SPIRIT_2160.hash)).toContain('18 серий');
+    expect(line(SPIRIT_2160.hash)).not.toContain('16');
+    expect(line(SPIRIT_1080.hash)).toContain('18 серий');
   });
 
-  it('one release of the season: no info row', async () => {
+  it('one release of the season: «Другая раздача» lists only it', async () => {
     await open([S1_1080, S2_4K], 1);
-    expect(el.querySelector('[data-dup-info]')).toBeNull();
+    openReleases();
+    expect(document.querySelectorAll('[data-release]').length).toBe(1);
   });
 });

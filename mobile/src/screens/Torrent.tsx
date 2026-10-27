@@ -42,7 +42,7 @@ import { isLibraryFilm } from '../../../src/monitor/better';
 import { isWatchedSeries } from '../../../src/monitor/newEpisodes';
 import { upgradeKind } from '../../../src/monitor/upgrade';
 import { BetterSheet } from '../ui/BetterSheet';
-import { findingsOf, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
+import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
 import { deleteTorrents, watchTarget } from '../lib/torrentActions';
@@ -50,8 +50,11 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
-import { comingEpisodes, comingEpisodeText, lastEpisodes, realEpisodeName } from '../../../src/lib/episodeNames';
+import { comingEpisodes, comingEpisodeText, lastEpisodes, realEpisodeName, type ComingEpisode, type EpisodeMap } from '../../../src/lib/episodeNames';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
+import { filmReleases } from '../lib/filmGroups';
+import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
+import { phoneLabel } from '../watchHere';
 import { isoDay } from '../../../src/lib/seriesStatus';
 
 const BACK = 'M15 5l-7 7 7 7';
@@ -77,7 +80,7 @@ function fileTitle(f: TorrentFile): string {
 }
 
 
-function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
+export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
   const c = client.value!;
   const tv = activeTv.value;
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -130,6 +133,16 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
     }
   };
 
+  const phoneOpt = (primary: boolean) => (
+    <button type="button" class={'m-opt' + (primary ? ' primary' : '')} data-where="phone" onClick={onPhone}>
+      <Icon d={PHONE} size={26} />
+      <span class="m-opt-text">
+        <span class="m-opt-name">{t('torrent.screen.onPhone')}</span>
+        <span class="m-opt-sub">{t('torrent.screen.onPhoneSub')}</span>
+      </span>
+    </button>
+  );
+
   const onCopy = async (withAuth: boolean) => {
     try {
       await actions.copyText(await tvServerUrl(streamUrlFor(c, torrent, file, withAuth)));
@@ -144,20 +157,16 @@ function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: Torre
     <Sheet onClose={onClose} testId="PD14" label={t('torrent.screen.whereLabel')}>
       <div class="m-muted m-small">{head.join(' · ')}</div>
       <div class="m-sheet-title">{t('torrent.screen.whereTitle')}</div>
-      <button type="button" class="m-opt primary" disabled={busy} onClick={onTv}>
+      {/* no TV chosen: the phone comes first and is the main choice */}
+      {!tv && phoneOpt(true)}
+      <button type="button" class={'m-opt' + (tv ? ' primary' : '')} disabled={busy} onClick={onTv}>
         <Icon d={TV} size={26} />
         <span class="m-opt-text">
           <span class="m-opt-name">{tv ? t('torrent.screen.onTvNamed', { name: tv.name }) : t('torrent.screen.onTv')}</span>
           <span class="m-opt-sub">{tv ? t('torrent.screen.onTvSub') : t('torrent.screen.connectTvFirst')}</span>
         </span>
       </button>
-      <button type="button" class="m-opt" onClick={onPhone}>
-        <Icon d={PHONE} size={26} />
-        <span class="m-opt-text">
-          <span class="m-opt-name">{t('torrent.screen.onPhone')}</span>
-          <span class="m-opt-sub">{t('torrent.screen.onPhoneSub')}</span>
-        </span>
-      </button>
+      {tv && phoneOpt(false)}
       <button type="button" class="m-opt" onClick={() => onCopy(true)}>
         <Icon d={LINK} size={26} />
         <span class="m-opt-text">
@@ -287,6 +296,75 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
   );
 }
 
+/** The episodes (or files) of a release with their progress, then the episodes TMDB announces after the last one. */
+export function EpisodeRows({
+  hash,
+  files,
+  eps,
+  coming,
+  onPick,
+}: {
+  hash: string;
+  files: TorrentFile[];
+  eps: EpisodeMap;
+  coming: ComingEpisode[];
+  onPick: (f: TorrentFile) => void;
+}) {
+  const tmdb = { eps };
+  const setSheet = onPick;
+  return (
+    <div class="m-list m-eps">
+      {files.map((f, i) => {
+        const pct = Math.round(sharedRatio(hash, f.id) * 100);
+        const pe = parseEpisode(f.path);
+        if (pe.episode === null) {
+          return (
+            <button type="button" class="m-ep" key={f.id} onClick={() => setSheet(f)}>
+              <span class="m-ep-code">{fileCode(f) || i + 1}</span>
+              <span class="m-ep-text">
+                <span class="m-ep-name">{fileTitle(f)}</span>
+                <span class="m-bar-track thin">
+                  <span class="m-bar-fill" style={{ width: pct + '%' }} />
+                </span>
+              </span>
+              <span class="m-muted m-small">{fmtSize(f.length)}</span>
+            </button>
+          );
+        }
+        // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label and the size below (not the file name)
+        const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
+        const real = ep ? realEpisodeName(ep.title) : '';
+        const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
+        const sub = [fileCode(f), fmtSize(f.length)].filter(Boolean).join(' · ');
+        return (
+          <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
+            <span class="m-ep-text">
+              <span class="m-ep-name">
+                {name}
+                {ep && ep.runtime > 0 && <span class="m-muted m-small m-ep-min"> {fmtDuration(ep.runtime)}</span>}
+              </span>
+              <span class="m-muted m-small m-ep-sub">{sub}</span>
+              <span class="m-bar-track thin">
+                <span class="m-bar-fill" style={{ width: pct + '%' }} />
+              </span>
+            </span>
+          </button>
+        );
+      })}
+      {/* the episodes TMDB announces after the last one here: muted, not tappable */}
+      {coming.map((e) => (
+        <div class="m-ep m-ep-named m-ep-coming" key={'coming:' + e.season + ':' + e.episode} data-coming={e.season + ':' + e.episode} aria-disabled="true">
+          <span class="m-ep-text">
+            <span class="m-ep-name">
+              {comingEpisodeText(e)}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Torrent({ hash }: { hash: string }) {
   useLiveSwarm();
   const c = client.value;
@@ -311,6 +389,8 @@ export function Torrent({ hash }: { hash: string }) {
   const [finding, setFinding] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
+  // «Другая раздача» of a film with several releases in «Мои»
+  const [releasesOpen, setReleasesOpen] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   // «Watch the quality» (omp.q in the journal); null until read from the server
@@ -481,6 +561,8 @@ export function Torrent({ hash }: { hash: string }) {
     );
   };
   const badges = [qualityBadge(title)].filter(Boolean);
+  // the other releases of this film in «Мои» (one card there): «Раздача: 1080p · Сменить»
+  const releases = book ? [] : filmReleases(torrents.value, tor);
   const group = gkey ? findGroup(torrents.value, gkey) : null;
   const own0 = seasonsOf(tor);
   const mine = own0.length ? own0 : fileSeasons;
@@ -650,14 +732,31 @@ export function Torrent({ hash }: { hash: string }) {
         </div>
       </div>
       <div class="m-tbody">
-        <button type="button" class="m-btn m-btn-primary" disabled={busy || !target} onClick={watchMain}>
-          <Icon d={TV_PLAY} size={20} />
-          {mainLabel}
-        </button>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={!target} onClick={watchPhone}>
-          <Icon d={PHONE} size={18} />
-          {book ? t('audiobooks.listenOnPhone') : t('torrent.screen.watchOnPhone')}
-        </button>
+        {releases.length > 1 && <ReleaseSwitch tor={tor} code="P06.2" onChange={() => setReleasesOpen(true)} />}
+        {tv || book ? (
+          <>
+            <button type="button" class="m-btn m-btn-primary" disabled={busy || !target} onClick={watchMain}>
+              <Icon d={TV_PLAY} size={20} />
+              {mainLabel}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={!target} onClick={watchPhone}>
+              <Icon d={PHONE} size={18} />
+              {book ? t('audiobooks.listenOnPhone') : t('torrent.screen.watchOnPhone')}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* no TV chosen: the phone is the main action, «На ТВ» (connect first) the second one */}
+            <button type="button" class="m-btn m-btn-primary tm" data-code="P06.3" data-main="phone" disabled={!target} onClick={watchPhone}>
+              <Icon d={PHONE} size={20} />
+              {phoneLabel(target, at, hasEpisodes)}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P06.4" disabled={busy || !target} onClick={watchMain}>
+              <Icon d={TV_PLAY} size={18} />
+              {t('nav.onTv')}
+            </button>
+          </>
+        )}
         {status && <LaunchError message={status} />}
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
@@ -719,59 +818,20 @@ export function Torrent({ hash }: { hash: string }) {
           </div>
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
-        <div class="m-list m-eps">
-          {files.map((f, i) => {
-            const pct = Math.round(sharedRatio(hash, f.id) * 100);
-            const pe = parseEpisode(f.path);
-            if (pe.episode === null) {
-              return (
-                <button type="button" class="m-ep" key={f.id} onClick={() => setSheet(f)}>
-                  <span class="m-ep-code">{fileCode(f) || i + 1}</span>
-                  <span class="m-ep-text">
-                    <span class="m-ep-name">{fileTitle(f)}</span>
-                    <span class="m-bar-track thin">
-                      <span class="m-bar-fill" style={{ width: pct + '%' }} />
-                    </span>
-                  </span>
-                  <span class="m-muted m-small">{fmtSize(f.length)}</span>
-                </button>
-              );
-            }
-            // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label and the size below (not the file name)
-            const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
-            const real = ep ? realEpisodeName(ep.title) : '';
-            const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
-            const sub = [fileCode(f), fmtSize(f.length)].filter(Boolean).join(' · ');
-            return (
-              <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
-                <span class="m-ep-text">
-                  <span class="m-ep-name">
-                    {name}
-                    {ep && ep.runtime > 0 && <span class="m-muted m-small m-ep-min"> {fmtDuration(ep.runtime)}</span>}
-                  </span>
-                  <span class="m-muted m-small m-ep-sub">{sub}</span>
-                  <span class="m-bar-track thin">
-                    <span class="m-bar-fill" style={{ width: pct + '%' }} />
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-          {/* the episodes TMDB announces after the last one here: muted, not tappable */}
-          {coming.map((e) => (
-            <div class="m-ep m-ep-named m-ep-coming" key={'coming:' + e.season + ':' + e.episode} data-coming={e.season + ':' + e.episode} aria-disabled="true">
-              <span class="m-ep-text">
-                <span class="m-ep-name">
-                  {comingEpisodeText(e)}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
+        <EpisodeRows hash={hash} files={files} eps={tmdb.eps} coming={coming} onPick={setSheet} />
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
+      {releasesOpen && (
+        <ReleasesSheet
+          releases={releases}
+          current={hash}
+          onPick={(x) => replaceTop({ name: 'torrent', hash: x.hash })}
+          onFind={upgrade ? () => setBetterOpen(true) : undefined}
+          onClose={() => setReleasesOpen(false)}
+        />
+      )}
       {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}
     </div>

@@ -1,5 +1,7 @@
 // A season of a catalog series: its poster, «Смотреть на ТВ», and the episode list.
 import { useEffect, useState } from 'preact/hooks';
+import { errorMessage } from '../../../../src/api/http';
+import { playOnPhone } from '../../watchHere';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { formatBytes } from '../../../../src/lib/format';
 import { baseName, episodeLabel, stripExt } from '../../../../src/lib/episodes';
@@ -128,11 +130,12 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
       if (hash) navigate(routeForHash(hash));
       return;
     }
+    setLaunchError('');
+    // no TV chosen: the main action plays on this phone
     if (!activeTv.value) {
-      navigate({ name: 'tv' });
+      playOnPhone(spot.hash, spot.file, spot.at).catch((e) => setLaunchError(errorMessage(e)));
       return;
     }
-    setLaunchError('');
     void launch.start({
       hash: spot.hash,
       file: spot.file.id,
@@ -176,7 +179,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
           <div class="m-tc-actions m-tc-actions-row">
             {spot || hash ? (
               <button type="button" class="m-btn m-btn-primary" onClick={watch}>
-                {t('news.watchOnTv')}
+                {activeTv.value ? t('news.watchOnTv') : t('nav.watchOnPhone')}
               </button>
             ) : (
               !unreleased && (

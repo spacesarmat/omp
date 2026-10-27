@@ -1942,6 +1942,28 @@ html.m-hint-hold .m-hint { display: none; }
 /* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
 .m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
+/* phone navigation: search scopes, continue row, release line */
+.m-search-scopes { margin: 4px 0 8px; }
+.m-search-none { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.m-resume { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.m-resume-head { display: flex; align-items: center; justify-content: space-between; }
+.m-resume-title { font-size: 16px; font-weight: 700; font-family: 'Manrope', sans-serif; }
+.m-resume-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.m-resume-row::-webkit-scrollbar { display: none; }
+.m-resume-card {
+  display: flex; gap: 10px; align-items: center; flex: 0 0 auto; width: 260px; max-width: 80vw;
+  padding: 8px; border: none; border-radius: 14px; background: var(--panel); color: inherit; text-align: left;
+}
+.m-resume-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.m-resume-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-resume-card .m-bar-track { margin-top: 4px; }
+.m-release-switch { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 2px 0 2px 12px; border-radius: 12px; background: var(--panel); }
+.m-release-switch-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--muted); }
+.m-release-switch-text b { color: var(--text); }
+.m-release-switch .m-btn-text { color: var(--accent); min-height: 40px; }
+.m-release-more { flex-shrink: 0; }
+.m-releases .m-opt-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.
@@ -2017,3 +2039,4 @@ body.test-labels [data-code]::after {
 .m-test-size { flex-wrap: wrap; }
 .m-test-size-value { margin-left: auto; }
 .m-test-size-range { flex: 1 1 100%; width: 100%; margin: 8px 0 4px; accent-color: var(--accent); }
+

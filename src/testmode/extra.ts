@@ -75,7 +75,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
     items: [
       it('P02.1', 'Мои', 'Mine'),
       it('P02.2', 'Обзор', 'Browse'),
-      it('P02.3', 'Сортировка', 'Sort'),
+      it('P02.3', 'Вид и сортировка', 'View and sort'),
       it('P02.4', 'Вид', 'View'),
       it('P02.5', 'Поиск', 'Search'),
       it('P02.6', 'Отменить выбор', 'Cancel selection'),
@@ -91,6 +91,9 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P02.16', 'Повторить', 'Retry'),
       it('P02.17', 'Поддержать', 'Support'),
       it('P02.18', 'Не напоминать', 'Do not remind'),
+      it('P02.19', 'Продолжить просмотр', 'Continue watching'),
+      it('P02.20', 'История', 'History'),
+      it('P02.21', 'Вся история', 'All history'),
     ],
   },
   {
@@ -106,8 +109,31 @@ export const PHONE_SCREENS: ExtraScreen[] = [
   },
   { key: 'phone:subFindings', code: 'P04', ru: 'Находки подписки', en: 'Subscription findings', items: [it('P04.1', 'Назад', 'Back')] },
   { key: 'phone:monitor', code: 'P05', ru: 'Следить за новыми', en: 'Follow new episodes', items: [it('P05.1', 'Назад', 'Back'), it('P05.2', 'Как часто', 'How often')] },
-  { key: 'phone:torrent', code: 'P06', ru: 'Раздача', en: 'Release', items: [it('P06.1', 'Назад', 'Back')] },
-  { key: 'phone:add', code: 'P07', ru: 'Добавить', en: 'Add', items: [it('P07.1', 'Найти', 'Search'), it('P07.2', 'Magnet или ссылка', 'Magnet or link')] },
+  {
+    key: 'phone:torrent',
+    code: 'P06',
+    ru: 'Раздача',
+    en: 'Release',
+    items: [
+      it('P06.1', 'Назад', 'Back'),
+      it('P06.2', 'Раздача - Сменить', 'Release - Change'),
+      it('P06.3', 'Смотреть на телефоне', 'Watch on the phone'),
+      it('P06.4', 'На ТВ', 'On the TV'),
+    ],
+  },
+  {
+    key: 'phone:add',
+    code: 'P07',
+    ru: 'Поиск',
+    en: 'Search',
+    items: [
+      it('P07.1', 'Найти', 'Search'),
+      it('P07.2', 'Magnet или ссылка', 'Magnet or link'),
+      it('P07.3', 'Мои', 'Mine'),
+      it('P07.4', 'Каталог', 'Catalog'),
+      it('P07.5', 'Источники', 'Sources'),
+    ],
+  },
   { key: 'phone:remote', code: 'P08', ru: 'Пульт', en: 'Remote', items: [it('P08.1', 'Сменить телевизор', 'Switch TV')] },
   { key: 'phone:nowPlaying', code: 'P09', ru: 'Сейчас играет', en: 'Now playing', items: [it('P09.1', 'Свернуть', 'Collapse')] },
   { key: 'phone:tv', code: 'P10', ru: 'Телевизор', en: 'TV', items: [it('P10.1', 'Назад', 'Back')] },
@@ -137,6 +163,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P11.18', 'Расширенные', 'Advanced'),
       it('P11.19', 'Режим тестирования', 'Test mode', onOff('P11.19')),
       it('P11.20', 'Размер меток (ползунок, px)', 'Label size (slider, px)'),
+      it('P11.21', 'Сервер на телефоне', 'Server on the phone'),
     ],
   },
   { key: 'phone:account', code: 'P12', ru: 'Аккаунт', en: 'Account', items: [it('P12.1', 'Назад', 'Back')] },
@@ -198,7 +225,14 @@ export const PHONE_SCREENS: ExtraScreen[] = [
     code: 'P26',
     ru: 'Сериал',
     en: 'Series',
-    items: [it('P26.1', 'Назад', 'Back'), it('P26.2', 'Озвучка', 'Dub'), it('P26.3', 'Сменить озвучку', 'Change the dub')],
+    items: [
+      it('P26.1', 'Назад', 'Back'),
+      it('P26.2', 'Озвучка', 'Dub'),
+      it('P26.3', 'Сменить озвучку', 'Change the dub'),
+      it('P26.4', 'Раздача - Сменить', 'Release - Change'),
+      it('P26.5', 'Смотреть', 'Watch'),
+      it('P26.6', 'На ТВ', 'On the TV'),
+    ],
   },
   { key: 'phone:person', code: 'P27', ru: 'Персона', en: 'Person', items: [it('P27.1', 'Назад', 'Back')] },
   {
@@ -224,7 +258,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
     items: [
       it('P33.1', 'Каталог', 'Library'),
       it('P33.2', 'Новое', 'News'),
-      it('P33.3', 'Добавить', 'Add'),
+      it('P33.3', 'Поиск', 'Search'),
       it('P33.4', 'Пульт', 'Remote'),
       it('P33.5', 'Настройки', 'Settings'),
     ],
@@ -320,6 +354,8 @@ export const PHONE_DIALOGS: ExtraDialog[] = [
       it('PD53.2', 'Отмена', 'Cancel'),
     ],
   },
+  { code: 'PD54', id: 'p-library-view', ru: 'Вид и сортировка', en: 'View and sort', items: [] },
+  { code: 'PD55', id: 'p-releases', ru: 'Другая раздача', en: 'Another release', items: [it('PD55.1', 'Найти другую раздачу', 'Find another release')] },
 ];
 
 /** Native Android TV player (PlayerActivity). The shared web UI on the box stays on S / D. */

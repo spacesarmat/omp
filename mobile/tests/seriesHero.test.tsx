@@ -136,7 +136,7 @@ describe('series screen with TMDB', () => {
     expect(el.querySelector('.m-sh-caption')!.textContent).toBe('10 серий · 2025');
     expect(el.querySelector('.m-sh-season-name')!.textContent).toBe('Возвращение');
     expect(el.querySelector('.m-sh-season-overview')!.textContent).toBe('О сезоне 2');
-    expect(Array.from(el.querySelectorAll('.m-series-row')).map((r) => r.getAttribute('data-hash'))).toEqual(['s2']);
+    expect(el.querySelector('[data-release-switch]')!.getAttribute('data-hash')).toBe('s2');
 
     act(() => chips()[0].click());
     await flush();
@@ -198,16 +198,18 @@ describe('series screen · cast', () => {
     act(() => (people[1] as HTMLElement).click());
     expect(currentRoute.value).toMatchObject({ name: 'person', id: 7, label: 'Джоэл Эдгертон' });
   });
-  it('sits before the season rows, right after the watch button', async () => {
+  it('comes after the release line, the watch button and the episodes', async () => {
     fake();
     card.mockImplementation(() => Promise.resolve({ ...SHOW, cast: [{ id: 7, name: 'Джоэл Эдгертон', photo: '', role: 'Джейсон', job: 'cast' as const }] }));
     mount();
     await flush();
     const cast = el.querySelector('.m-tc-section')!;
-    const rows = el.querySelector('.m-series-rows')!;
-    expect(cast.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const release = el.querySelector('[data-release-switch]')!;
+    expect(release.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const actions = el.querySelector('.m-tc-season-actions');
     if (actions) expect(actions.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const ep = el.querySelector('.m-ep');
+    if (ep) expect(ep.compareDocumentPosition(cast) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
   it('is absent without a cast', async () => {
     fake();
@@ -223,7 +225,8 @@ describe('series screen without TMDB', () => {
     torrents.value = [S1, { ...S2, connected_seeders: 12, active_peers: 3 }];
     mount();
     await flush();
-    const meta = el.querySelector('.m-series-row[data-hash="s2"] .m-vrow-meta')!.textContent || '';
+    act(() => (el.querySelector('[data-release-switch] .m-btn-text') as HTMLElement).click());
+    const meta = document.querySelector('[data-release="s2"] .m-opt-sub')!.textContent || '';
     expect(meta).toContain('12 сидов');
     expect(meta).toContain('3 пира');
   });
