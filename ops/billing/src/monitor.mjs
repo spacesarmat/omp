@@ -531,5 +531,10 @@ export function createMonitor(deps) {
     };
   }
 
-  return { run, snapshot, start, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
+  /** For /health (no secrets): is the schedule on here, when the last full run finished, the interval. */
+  function health() {
+    return { scheduled: !!d.scheduled, lastRunAt, intervalMin: mem.config.intervalMin };
+  }
+
+  return { run, snapshot, start, health, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
 }
