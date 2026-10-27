@@ -395,6 +395,29 @@ describe('Library', () => {
     expect(currentRoute.value.name).toBe('library');
   });
 
+  it('history play without a TV loads the files first when the cached entry has none, and shows an error when that fails', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    const full = torrents.value.find((x) => x.hash === 'h1')!;
+    const bare = torrents.value.map((x) => (x.hash === 'h1' ? { ...x, data: undefined, file_stats: undefined } : x));
+    torrents.value = bare;
+    listSpy.mockResolvedValue(bare);
+    const info = vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockResolvedValueOnce(full).mockRejectedValueOnce(new Error('Сервер не ответил'));
+    const open = vi.fn();
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: open, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => historyButton().click());
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    expect(info).toHaveBeenCalledWith('h1');
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(String(open.mock.calls[0][0])).toContain('link=h1&index=2');
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('Сервер не ответил');
+  });
+
   it('«Продолжить просмотр» on top of «Мои»: a card per started item, «Вся история» opens the history', async () => {
     saveProgress('h1', 2, 1394, 3651);
     mount();

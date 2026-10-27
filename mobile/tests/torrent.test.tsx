@@ -170,6 +170,21 @@ describe('Torrent', () => {
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f2' });
   });
 
+  it('another release picked in place does not show the files loaded for the previous one', async () => {
+    const f1: T = { hash: 'abc', title: 'Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3 };
+    const f2: T = { hash: 'f2', title: 'Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3 };
+    torrents.value = [f1, f2];
+    vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockImplementation((h: string) =>
+      h === 'abc' ? Promise.resolve({ ...f1, file_stats: [{ id: 1, path: 'Midnight.Archive.1080p.mkv', length: 1 }] }) : new Promise<T>(() => {}),
+    );
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Midnight.Archive.1080p');
+    act(() => render(<Torrent hash="f2" />, el));
+    await flush();
+    expect(el.textContent).not.toContain('Midnight.Archive.1080p');
+  });
+
   it('a lone film has no release line', async () => {
     torrents.value = [{ hash: 'abc', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'Neon.mkv', length: 1 }] }];
     mount();

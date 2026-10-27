@@ -437,17 +437,27 @@ export function Library() {
   // no TV chosen: «Продолжить» plays on this phone (from the same place)
   const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) => {
     if (!tvFirst()) {
-      const tor = list.find((x) => x.hash === hash);
-      const file = tor ? filesOf(tor).find((f) => f.id === fileIndex) : undefined;
-      if (!tor || !file) return Promise.resolve(false);
+      const cached = list.find((x) => x.hash === hash);
       setTvError('');
-      return playOnPhone(tor, file, time).then(
-        () => true,
-        (e) => {
-          setTvError(errorMessage(e));
-          return false;
-        },
-      );
+      // the saved library cache has no file_stats: the files are loaded first, as on the torrent screen
+      const withFiles = async (): Promise<Torrent> => {
+        if (cached && filesOf(cached).some((f) => f.id === fileIndex)) return cached;
+        if (!c) throw new Error(t('torrent.noFiles'));
+        return c.loadInfo(hash);
+      };
+      return withFiles()
+        .then((tor) => {
+          const file = filesOf(tor).find((f) => f.id === fileIndex);
+          if (!file) throw new Error(t('torrent.noFiles'));
+          return playOnPhone(tor, file, time);
+        })
+        .then(
+          () => true,
+          (e) => {
+            setTvError(errorMessage(e));
+            return false;
+          },
+        );
     }
     return launch.start({
       hash,

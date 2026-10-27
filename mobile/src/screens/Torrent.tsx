@@ -373,7 +373,7 @@ export function Torrent({ hash }: { hash: string }) {
   const [fetched, setFetched] = useState<TorrentT | null | undefined>(undefined);
   const tor = listed || fetched || undefined;
   const { card: movie, pending: moviePending } = useTorrentCast(tor);
-  const [loaded, setLoaded] = useState<TorrentT | null>(null);
+  const [loaded, setLoaded] = useState<{ hash: string; info: TorrentT } | null>(null);
   const [sheet, setSheet] = useState<TorrentFile | null>(null);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -399,7 +399,8 @@ export function Torrent({ hash }: { hash: string }) {
   serverViewed.value;
 
   const own = tor ? filesOf(tor) : [];
-  const allFiles = own.length ? own : loaded ? filesOf(loaded) : [];
+  // another release picked in place («Другая раздача»): the files loaded for the previous hash are not used
+  const allFiles = own.length ? own : loaded && loaded.hash === hash ? filesOf(loaded.info) : [];
   const skip = useSkip(c, hash, firstPlayableId(allFiles), !!tor);
   const fileSeasons = playableFiles(allFiles)
     .map((f) => parseEpisode(f.path).season)
@@ -437,7 +438,7 @@ export function Torrent({ hash }: { hash: string }) {
     c.loadInfo(hash).then(
       (info) => {
         repairTitles(c, [{ ...tor, file_stats: info.file_stats }]);
-        if (alive) setLoaded(info);
+        if (alive) setLoaded({ hash, info });
       },
       () => {},
     );
