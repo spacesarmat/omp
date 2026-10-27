@@ -29,6 +29,7 @@ import { t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { phonePlayerName } from './VideoPlayer';
+import { localServer, canRun } from '../server/localServer';
 
 function testLabelPhone(): number {
   return clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX);
@@ -260,6 +261,22 @@ function reachText(st: 'none' | 'checking' | 'ok' | 'down'): string {
   return '';
 }
 
+/** «Сервер на телефоне» next to «Откуда смотреть»: its state, and its screen (start, download, update). */
+function PhoneServerRow() {
+  const st = localServer.value;
+  if (!st.supported) return null;
+  const state = st.running ? t('sources.flare.works') : !canRun(st) ? t('settings.localNotDownloaded') : t('settings.localStopped');
+  return (
+    <button type="button" class="m-set-row m-set-pick tm" data-code="P11.21" data-row="phone-server" onClick={() => navigate({ name: 'localServer' })}>
+      <div class="m-set-text" style="flex-grow: 1">
+        <span>{t('settings.phoneServer')}</span>
+        <span class="m-muted m-small">{state}</span>
+      </div>
+      <Icon d={CHEVRON} size={20} />
+    </button>
+  );
+}
+
 export function Settings() {
   const server = activeServer.value;
   const tv = activeTv.value;
@@ -320,6 +337,7 @@ export function Settings() {
             {t('settings.change')}
           </button>
         </div>
+        <PhoneServerRow />
         <VideoPlayerRow />
         <LanguageRow />
       </section>

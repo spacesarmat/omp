@@ -660,7 +660,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P02 | Каталог | Library |  |  |
 | P02.1 | Каталог | Library | Мои | Mine |
 | P02.2 | Каталог | Library | Обзор | Browse |
-| P02.3 | Каталог | Library | Сортировка | Sort |
+| P02.3 | Каталог | Library | Вид и сортировка | View and sort |
 | P02.4 | Каталог | Library | Вид | View |
 | P02.5 | Каталог | Library | Поиск | Search |
 | P02.6 | Каталог | Library | Отменить выбор | Cancel selection |
@@ -676,6 +676,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P02.16 | Каталог | Library | Повторить | Retry |
 | P02.17 | Каталог | Library | Поддержать | Support |
 | P02.18 | Каталог | Library | Не напоминать | Do not remind |
+| P02.19 | Каталог | Library | Продолжить просмотр | Continue watching |
+| P02.20 | Каталог | Library | История | History |
+| P02.21 | Каталог | Library | Вся история | All history |
 | P03 | Новое | News |  |  |
 | P03.1 | Новое | News | Находки | Findings |
 | P03.2 | Новое | News | Подписки | Subscriptions |
@@ -687,9 +690,15 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P05.2 | Следить за новыми | Follow new episodes | Как часто | How often |
 | P06 | Раздача | Release |  |  |
 | P06.1 | Раздача | Release | Назад | Back |
-| P07 | Добавить | Add |  |  |
-| P07.1 | Добавить | Add | Найти | Search |
-| P07.2 | Добавить | Add | Magnet или ссылка | Magnet or link |
+| P06.2 | Раздача | Release | Раздача - Сменить | Release - Change |
+| P06.3 | Раздача | Release | Смотреть на телефоне | Watch on the phone |
+| P06.4 | Раздача | Release | На ТВ | On the TV |
+| P07 | Поиск | Search |  |  |
+| P07.1 | Поиск | Search | Найти | Search |
+| P07.2 | Поиск | Search | Magnet или ссылка | Magnet or link |
+| P07.3 | Поиск | Search | Мои | Mine |
+| P07.4 | Поиск | Search | Каталог | Catalog |
+| P07.5 | Поиск | Search | Источники | Sources |
 | P08 | Пульт | Remote |  |  |
 | P08.1 | Пульт | Remote | Сменить телевизор | Switch TV |
 | P09 | Сейчас играет | Now playing |  |  |
@@ -719,6 +728,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P11.19.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | P11.19.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
 | P11.20 | Настройки | Settings | Размер меток (ползунок, px) | Label size (slider, px) |
+| P11.21 | Настройки | Settings | Сервер на телефоне | Server on the phone |
 | P12 | Аккаунт | Account |  |  |
 | P12.1 | Аккаунт | Account | Назад | Back |
 | P13 | Расширенные | Advanced |  |  |
@@ -767,6 +777,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P26.1 | Сериал | Series | Назад | Back |
 | P26.2 | Сериал | Series | Озвучка | Dub |
 | P26.3 | Сериал | Series | Сменить озвучку | Change the dub |
+| P26.4 | Сериал | Series | Раздача - Сменить | Release - Change |
+| P26.5 | Сериал | Series | Смотреть | Watch |
+| P26.6 | Сериал | Series | На ТВ | On the TV |
 | P27 | Персона | Person |  |  |
 | P27.1 | Персона | Person | Назад | Back |
 | P28 | Аудиокниги | Audiobooks |  |  |
@@ -784,7 +797,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P33 | Нижняя панель | Tab bar |  |  |
 | P33.1 | Нижняя панель | Tab bar | Каталог | Library |
 | P33.2 | Нижняя панель | Tab bar | Новое | News |
-| P33.3 | Нижняя панель | Tab bar | Добавить | Add |
+| P33.3 | Нижняя панель | Tab bar | Поиск | Search |
 | P33.4 | Нижняя панель | Tab bar | Пульт | Remote |
 | P33.5 | Нижняя панель | Tab bar | Настройки | Settings |
 | P34 | Обзор | Browse |  |  |
@@ -870,6 +883,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD53 | Проверка Cloudflare | Cloudflare check |  |  |
 | PD53.1 | Проверка Cloudflare | Cloudflare check | Проверить ещё раз | Check again |
 | PD53.2 | Проверка Cloudflare | Cloudflare check | Отмена | Cancel |
+| PD54 | Вид и сортировка | View and sort |  |  |
+| PD55 | Другая раздача | Another release |  |  |
+| PD55.1 | Другая раздача | Another release | Найти другую раздачу | Find another release |
 | A01 | Нативный плеер | Native player |  |  |
 | A01.1 | Нативный плеер | Native player | Пауза | Pause |
 | A01.2 | Нативный плеер | Native player | Аудио | Audio |

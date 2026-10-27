@@ -1,5 +1,6 @@
-// The series screen: a long press on a release row opens the torrent menu (no «Выбрать»), with «Оставить только эту»
-// when the shown season has 2+ releases; deletes update the screen in place, the last one goes back to the library.
+// The series screen: «⋯» on the release line («Раздача: ... · Сменить») opens the torrent menu (no «Выбрать»), with
+// «Оставить только эту» when the shown season has 2+ releases; «Сменить» picks another release of the season in
+// «Другая раздача»; deletes update the screen in place, the last one goes back to the library.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -69,22 +70,25 @@ async function open(list: Torrent[], season?: number) {
   await flush();
 }
 
-function pointer(target: Element, type: string) {
-  act(() => {
-    target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: 10, clientY: 10 }));
-  });
+const shown = () => el.querySelector('[data-release-switch]')!.getAttribute('data-hash');
+const openReleases = () => act(() => (el.querySelector('[data-release-switch] .m-btn-text') as HTMLElement).click());
+/** The releases «Другая раздача» lists for the season (the sheet is closed again). */
+function rowHashes(): string[] {
+  openReleases();
+  const list = Array.from(document.querySelectorAll('[data-release]')).map((r) => r.getAttribute('data-release')!);
+  act(() => (document.querySelector('[data-release][aria-checked="true"]') as HTMLElement).click());
+  return list;
 }
-function longPress(target: Element) {
-  pointer(target, 'pointerdown');
-  act(() => {
-    vi.advanceTimersByTime(500);
-  });
-  pointer(target, 'pointerup');
-  act(() => (target as HTMLElement).click()); // the click after a long press is swallowed
+/** Shows the release (through «Сменить») and opens its menu with «⋯». */
+async function menuOf(hash: string) {
+  if (shown() !== hash) {
+    openReleases();
+    act(() => (document.querySelector('[data-release="' + hash + '"]') as HTMLElement).click());
+    await flush();
+  }
+  expect(shown()).toBe(hash);
+  act(() => (el.querySelector('.m-release-more') as HTMLElement).click());
 }
-
-const rowMain = (hash: string) => el.querySelector('.m-series-row[data-hash="' + hash + '"] .m-hrow-main') as HTMLElement;
-const rowHashes = () => Array.from(el.querySelectorAll('.m-series-row')).map((r) => r.getAttribute('data-hash'));
 const option = (text: string) =>
   Array.from(document.querySelectorAll('.m-opt')).find((b) => (b.textContent || '').trim() === text) as HTMLButtonElement | undefined;
 const options = () => Array.from(document.querySelectorAll('.m-opt')).map((b) => (b.textContent || '').trim());
@@ -125,26 +129,48 @@ afterEach(() => {
 });
 
 describe('release menu on the series screen', () => {
-  it('a long press opens the menu without «Выбрать»; one release of the season: no «Оставить только эту»', async () => {
+  it('«⋯» opens the menu without «Выбрать»; one release of the season: no «Оставить только эту»', async () => {
     await open([S1, S2A], 2);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     expect(currentRoute.value.name).toBe('series');
     expect(options()).toEqual(['Открыть', 'Переименовать', 'Удалить']);
   });
 
-  it('a tap still opens the torrent', async () => {
+  it('a pack holding two seasons shows only the chosen season\'s episodes', async () => {
+    await open([S1, PACK], 2);
+    expect(shown()).toBe('p12');
+    const eps = Array.from(el.querySelectorAll('.m-ep')).map((r) => r.textContent || '');
+    expect(eps.length).toBe(1);
+    expect(eps[0]).toContain('S02E01');
+  });
+
+  it('«Открыть» in the menu opens the release page', async () => {
     await open([S1, S2A], 2);
-    pointer(rowMain('s2a'), 'pointerdown');
-    pointer(rowMain('s2a'), 'pointerup');
-    act(() => rowMain('s2a').click());
+    await menuOf('s2a');
+    act(() => option('Открыть')!.click());
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 's2a' });
+  });
+
+  it('«Сменить» shows another release of the season on the same screen', async () => {
+    await open([S1, S2A, S2B], 2);
+    expect(shown()).toBe('s2a');
+    expect(el.querySelector('[data-release-switch]')!.textContent).toContain('Раздача: 4K');
+    openReleases();
+    expect(document.querySelector('[data-code="PD55"]')).toBeTruthy();
+    expect(document.querySelector('[data-release="s2a"]')!.getAttribute('aria-checked')).toBe('true');
+    act(() => (document.querySelector('[data-release="s2b"]') as HTMLElement).click());
+    await flush();
+    expect(document.querySelector('[data-code="PD55"]')).toBeNull();
+    expect(shown()).toBe('s2b');
+    expect(el.querySelector('[data-release-switch]')!.textContent).toContain('Раздача: 1080p');
+    expect(currentRoute.value.name).toBe('series');
   });
 
   it('«Оставить только эту» deletes the other releases of the season, not a pack holding another season', async () => {
     expect(seasonsOf(PACK)).toEqual([1, 2]);
     await open([S1, S2A, S2B, PACK], 2);
     expect(rowHashes().sort()).toEqual(['p12', 's2a', 's2b']);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     expect(options()).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);
     // the sheet names the release that stays: the series name and the release's quality
     expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Тёмная материя · 4K WEB-DL');
@@ -161,7 +187,7 @@ describe('release menu on the series screen', () => {
 
   it('declining the confirm deletes nothing and keeps the menu', async () => {
     await open([S1, S2A, S2B], 2);
-    longPress(rowMain('s2b'));
+    await menuOf('s2b');
     act(() => option('Оставить только эту')!.click());
     expect(confirmText()).toBe('Удалить ещё 1 раздачу 2-го сезона?');
     await declineConfirm();
@@ -172,7 +198,7 @@ describe('release menu on the series screen', () => {
 
   it('only packs besides it: no «Оставить только эту»', async () => {
     await open([S1, S2A, PACK], 2);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     expect(options()).toEqual(['Открыть', 'Переименовать', 'Удалить']);
   });
 
@@ -180,7 +206,7 @@ describe('release menu on the series screen', () => {
     applyLanguageSetting('en');
     const S2C: Torrent = { ...S2B, hash: 's2c', title: 'Тёмная материя / Dark Matter [S02] 720p WEB-DL', timestamp: 2 };
     await open([S1, S2A, S2B, S2C], 2);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     act(() => option('Keep only this one')!.click());
     expect(confirmText()).toBe('Delete 2 more torrents of season 2?');
     await acceptConfirm();
@@ -190,7 +216,7 @@ describe('release menu on the series screen', () => {
 
   it('deleting the only release of the season leaves it missing («+ Сезон 2») in place', async () => {
     await open([S1, S2A], 2);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     act(() => option('Удалить')!.click());
     await acceptConfirm();
     await flush();
@@ -204,13 +230,13 @@ describe('release menu on the series screen', () => {
 
   it('deleting the last release of the series goes back to the library', async () => {
     await open([S2A, S2B], 2);
-    longPress(rowMain('s2a'));
+    await menuOf('s2a');
     act(() => option('Удалить')!.click());
     await acceptConfirm();
     await flush();
     expect(currentRoute.value.name).toBe('series');
     expect(rowHashes()).toEqual(['s2b']);
-    longPress(rowMain('s2b'));
+    await menuOf('s2b');
     act(() => option('Удалить')!.click());
     await acceptConfirm();
     await flush();

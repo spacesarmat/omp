@@ -290,7 +290,7 @@ describe('phone onboarding', () => {
     expect(mark.getAttribute('data-hint')).toBe('catalog');
     expect(mark.getAttribute('data-place')).toBe('below');
     expect(mark.querySelector('[data-hint-arrow]')).toBeTruthy();
-    expect(mark.querySelector('p')!.textContent).toBe('Поиск фильма или сериала - эта кнопка. «Добавить» ищет по трекерам.');
+    expect(mark.querySelector('p')!.textContent).toBe('Поиск фильма или сериала - эта кнопка. Во вкладке «Поиск» есть ещё «Мои» и «Источники».');
     expect(mark.querySelector('[data-action="hint-dismiss"]')!.textContent).toBe('Понятно');
     await act(async () => {
       (el.querySelector('[data-action="hint-dismiss"]') as HTMLButtonElement).click();
@@ -314,7 +314,7 @@ describe('phone onboarding', () => {
     installGeometry();
     applyLanguageSetting('en');
     const el = mount(<HintPage />);
-    expect(el.querySelector('.m-hint p')!.textContent).toBe('Search for a movie or a series is this button. Add searches the trackers.');
+    expect(el.querySelector('.m-hint p')!.textContent).toBe('Search for a movie or a series is this button. The Search tab also has Mine and Sources.');
     expect(el.querySelector('[data-action="hint-dismiss"]')!.textContent).toBe('Got it');
     applyLanguageSetting('ru');
   });

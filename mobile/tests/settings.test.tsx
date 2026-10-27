@@ -199,6 +199,31 @@ describe('Settings', () => {
   });
 });
 
+describe('Settings: «Сервер на телефоне» next to «Откуда смотреть»', () => {
+  it('sits right after «Откуда смотреть», says its state and opens the phone server screen', () => {
+    localServer.value = { supported: true, running: true };
+    const el = mount();
+    const watch = el.querySelector('[data-section="watch"]')!;
+    const rows = Array.from(watch.querySelectorAll('[data-code]')).map((r) => r.getAttribute('data-code'));
+    expect(rows.indexOf('P11.21')).toBe(rows.indexOf('P11.5') + 1);
+    const row = watch.querySelector('[data-row="phone-server"]') as HTMLElement;
+    expect(row.textContent).toContain('Сервер на телефоне');
+    expect(row.textContent).toContain('Работает');
+    act(() => row.click());
+    expect(currentRoute.value.name).toBe('localServer');
+  });
+
+  it('a stopped server says so; a phone without one shows no row', () => {
+    localServer.value = { supported: true, running: false };
+    let el = mount();
+    expect(el.querySelector('[data-row="phone-server"]')!.textContent).toContain('Остановлен');
+    act(() => render(null, el));
+    localServer.value = { supported: false, running: false };
+    el = mount();
+    expect(el.querySelector('[data-row="phone-server"]')).toBeNull();
+  });
+});
+
 describe('Settings: TorrServer on the phone', () => {
   beforeEach(() => {
     view = 'advanced';

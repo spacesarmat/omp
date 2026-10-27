@@ -4,6 +4,17 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] With no TV chosen the main button is "Watch on the phone"; on a series page one tap starts the next unwatched episode, with "On the TV" next to it
+- [phone] The "Add" tab is now "Search": one field with the "Mine", "Catalog" and "Sources" tabs; a link or magnet is pasted there too
+- [phone] A series and its release on one screen: seasons, episodes and a "Release: 1080p · Change" line that opens "Another release"
+- [phone] "Mine": a "Continue watching" row on top; "History" left the filters and opens from the header button or "All history"
+- [phone] The "Remote" tab shows only when a TV is chosen
+- [phone] Several releases of one movie in "Mine" are one card, and the release is picked inside with the "Release: ... · Change" line
+- [phone] Sort and view are one sheet, and the button shows the current choice
+- [phone] Settings: "Server on the phone" sits next to "Watch from"
+
 ## 0.20.6-beta.4
 
 - [phone] Offline shows one honest "No internet" instead of "TMDB does not answer" and "Nothing found"; the source search does not offer a subscription when no source answered

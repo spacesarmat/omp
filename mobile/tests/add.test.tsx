@@ -3,7 +3,8 @@ import { tvNoOmp } from '../src/tv/tvClient';
 import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Add, normalizeLink, resetAddSearch } from '../src/screens/Add';
+import { Add, normalizeLink, resetAddSearch, resetSearchScope } from '../src/screens/Add';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { setWatchActions } from '../src/watch';
 import { currentRoute, goBack, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
@@ -75,6 +76,7 @@ beforeEach(() => {
   reloadSourcePrefs();
   resetHealth();
   resetAddSearch();
+  resetSearchScope();
   reloadTvs();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
@@ -368,7 +370,7 @@ describe('Add category', () => {
 
   it('the search comes first; the magnet is a collapsed link under the search, before the results', () => {
     mount();
-    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Добавить');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Поиск');
     // collapsed by default: one link, no magnet field, no category chips
     expect(el.querySelector(MAGNET)).toBeNull();
     expect(el.querySelector('[data-magnet-block]')).toBeNull();
@@ -966,9 +968,10 @@ describe('Add in English', () => {
   it('screen chrome, search sheets and the subscribe plate', async () => {
     registerSource({ id: 'fake', name: 'Fake', kind: 'builtin', search: () => Promise.resolve([]) });
     mount();
-    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Add');
+    expect(el.querySelector('.m-screen-head h1')!.textContent).toBe('Search');
     expect(el.textContent).not.toContain('Category');
-    expect(el.textContent).toContain('Search in sources');
+    expect(el.querySelector('input[aria-label="Search in sources"]')).toBeTruthy();
+    expect(el.querySelector('[data-scope="sources"]')!.textContent).toBe('Sources');
     expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
     click(el.querySelector('[data-magnet-open]')!);
     expect(byText('Add')).toBeTruthy();
@@ -979,7 +982,7 @@ describe('Add in English', () => {
     expect(el.querySelector('[data-magnet-category]')!.getAttribute('aria-label')).toBe('Category');
     expect(el.querySelector('[data-magnet-category]')!.textContent).toContain('Category:');
     type('input[aria-label="Magnet link or hash"]', '');
-    expect(el.querySelector<HTMLInputElement>('input[type=search]')!.placeholder).toBe('Name');
+    expect(el.querySelector<HTMLInputElement>('input[type=search]')!.placeholder).toBe('Film or series title');
     expect(byText('All sources · 1')).toBeTruthy();
     click(byText('All sources · 1'));
     expect(el.querySelector('.m-sheet-title')!.textContent).toBe('Sources for search');
@@ -1002,3 +1005,98 @@ describe('Add in English', () => {
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
+
+describe('one «Поиск»: «Мои / Каталог / Источники»', () => {
+  const scopes = () => Array.from(el.querySelectorAll('[data-scope]')).map((b) => b.getAttribute('data-scope') + (b.getAttribute('aria-selected') === 'true' ? '*' : ''));
+  const field = () => el.querySelector('input[type=search]') as HTMLInputElement;
+  function mountScope(scope?: 'mine' | 'catalog' | 'sources') {
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add scope={scope} />, el));
+  }
+  function typeQuery(v: string) {
+    act(() => {
+      field().value = v;
+      field().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  afterEach(() => setCatalogClientForTests(null));
+
+  it('opens on «Источники»; the magnet link lives there only', () => {
+    mount();
+    expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+    expect(el.querySelector('[data-magnet-open]')).toBeTruthy();
+    click(el.querySelector('[data-scope="mine"]')!);
+    expect(scopes()).toEqual(['mine*', 'catalog', 'sources']);
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
+  });
+
+  it('«Мои» searches the library as you type; nothing found offers the catalog with the same query', () => {
+    torrents.value = [
+      { hash: 'n1', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3 },
+      { hash: 'q1', title: 'Тихий дом (2024) 720p', category: 'movie', stat: 3 },
+    ];
+    mountScope('mine');
+    expect(field().getAttribute('aria-label')).toBe('Поиск по названию');
+    typeQuery('neon');
+    const rows = el.querySelectorAll('[data-mine-item]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Neon Rivers');
+    click(rows[0]);
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'n1' });
+    resetTo({ name: 'add' });
+    mountScope('mine');
+    typeQuery('zzz');
+    expect(el.querySelector('[data-search-mine="none"]')).toBeTruthy();
+    click(el.querySelector('[data-search-to="catalog"]')!);
+    expect(scopes()).toEqual(['mine', 'catalog*', 'sources']);
+    expect(field().value).toBe('zzz');
+  });
+
+  it('«Каталог» shows TMDB titles; the last tab used is where «Поиск» opens next', async () => {
+    setCatalogClientForTests({
+      novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+      discover: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+      search: vi.fn(() => Promise.resolve({ items: [{ kind: 'movie' as const, id: 11, title: 'Midnight Archive', original: 'Midnight Archive', year: 2026, poster: '', rating: 7.4 }], pages: 1 })),
+      card: vi.fn(() => Promise.reject(new Error('x'))),
+    });
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    mountScope('catalog');
+    typeQuery('midnight');
+    await act(async () => {
+      vi.advanceTimersByTime(400);
+    });
+    await flush();
+    expect(el.querySelector('.m-srch-row')!.textContent).toContain('Midnight Archive');
+    act(() => render(null, el));
+    mountScope();
+    expect(scopes()).toEqual(['mine', 'catalog*', 'sources']);
+  });
+
+  it('back to the same entry comes back to the tab chosen there, not the one it was opened with', () => {
+    const entry = { name: 'add', scope: 'mine' };
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add scope="mine" entry={entry} />, el));
+    expect(scopes()).toEqual(['mine*', 'catalog', 'sources']);
+    click(el.querySelector('[data-scope="catalog"]')!);
+    act(() => render(null, el));
+    act(() => render(<Add scope="mine" entry={entry} />, el));
+    expect(scopes()).toEqual(['mine', 'catalog*', 'sources']);
+    // a new entry opened from «Мои» starts on «Мои» again
+    act(() => render(null, el));
+    act(() => render(<Add scope="mine" entry={{ name: 'add', scope: 'mine' }} />, el));
+    expect(scopes()).toEqual(['mine*', 'catalog', 'sources']);
+  });
+
+  it('a link always opens «Источники»', () => {
+    mountScope('mine');
+    act(() => render(null, el));
+    mount('magnet:?xt=urn:btih:' + HASH);
+    expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+  });
+});
+

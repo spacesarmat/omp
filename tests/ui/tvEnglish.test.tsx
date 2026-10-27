@@ -123,7 +123,7 @@ describe('TV screens in English', () => {
     mount(h(LibraryScreen, {}));
     await flush();
     const text = host.textContent || '';
-    expect(text).toContain('No torrents. Add them via "Add" or the TorrServer web interface on the phone.');
+    expect(text).toContain('No torrents. Add them via "Search" or the TorrServer web interface on the phone.');
     expect(text).toContain('OK - open');
     expect(text).toContain('Back - exit');
     expect(text).not.toMatch(CYR);

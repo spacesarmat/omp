@@ -170,6 +170,7 @@ describe('Sheet grab handle and pull', () => {
     expect(users).toEqual([
       'mobile/src/screens/Add.tsx',
       'mobile/src/screens/InstallAssistant.tsx',
+      'mobile/src/screens/Library.tsx',
       'mobile/src/screens/Monitor.tsx',
       'mobile/src/screens/Remote.tsx',
       'mobile/src/screens/ServerSettings.tsx',
@@ -186,6 +187,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/ui/DonateSheet.tsx',
       'mobile/src/ui/FiltersSheet.tsx',
       'mobile/src/ui/LocalUpdateSheet.tsx',
+      'mobile/src/ui/ReleasesSheet.tsx',
       'mobile/src/ui/RenameSheet.tsx',
       'mobile/src/ui/ReplaceSheet.tsx',
       'mobile/src/ui/ResultCard.tsx',
