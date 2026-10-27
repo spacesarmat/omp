@@ -252,19 +252,22 @@ function AccountRow() {
   const [view, setView] = useState<AccountView>(localAccountView);
   useEffect(() => {
     let alive = true;
+    // only the latest check may paint: an older answer that arrives late (before «Отключить») is dropped
+    let seq = 0;
     function check() {
       const local = localAccountView();
       setView(local);
+      const mine = ++seq;
       if (billingSession()) return;
       const fetcher = accountFetcher ?? (() => fetchBillingAccount(phoneSourceContext()));
       fetcher().then(
         (account) => {
-          if (!alive || billingSession()) return;
+          if (!alive || mine !== seq || billingSession()) return;
           setView(account ? { kind: 'in', until: account.paidUntil } : { kind: 'out' });
         },
         () => {
           // Server down: keep the last known answer, otherwise offer to sign in.
-          if (alive && !billingSession()) setView(local.kind === 'in' ? local : { kind: 'out' });
+          if (alive && mine === seq && !billingSession()) setView(local.kind === 'in' ? local : { kind: 'out' });
         },
       );
     }

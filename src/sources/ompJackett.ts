@@ -10,6 +10,7 @@ import {
   onBillingChange,
   saveBillingSession,
   saveSeenAccount,
+  sessionKey,
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
@@ -147,10 +148,19 @@ export function clearTelegramLink(ctx: SourceContext): Promise<void> {
   );
 }
 
+/** The binding a request started with ('' without a session): an answer for an older binding is not cached. */
+function bindingKey(): string {
+  const row = billingSession();
+  return row ? sessionKey(row) : '';
+}
+
 export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
+  const startedFor = bindingKey();
   return withDeviceToken(ctx, (headers) => billingGet(ctx, '/v1/me', { headers, timeoutMs: 12000 })).then(
     (res) => {
       const session = billingSession();
+      // «Отключить» (or a new code) while this request was in flight: its answer must not bring the old account back
+      const current = bindingKey() === startedFor;
       if (res.status === 401) {
         // revoked: withDeviceToken already forgot the binding; an expired token on a hidden page is not an answer
         const err = tokenError(errorOf(res.text));
@@ -172,7 +182,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
-      saveSeenAccount({ paidUntil });
+      if (current) saveSeenAccount({ paidUntil });
       // Admin/bot may extend paidUntil; keep local session date in sync with the server.
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
         saveBillingSession({ ...session, paidUntil });

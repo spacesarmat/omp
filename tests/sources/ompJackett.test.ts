@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
-import { billingSession, deviceId, saveBillingSession } from '../../src/billing/session';
+import { billingSession, deviceId, saveBillingSession, seenAccount } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
 import type { SourceResult } from '../../src/sources/types';
@@ -60,6 +60,20 @@ describe('omp Jackett source', () => {
   it('says the device slots are full on device_limit', async () => {
     const site = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 409));
     await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Все устройства подписки заняты');
+  });
+
+  it('caches the account for the Settings row, but not an answer that comes back after «Отключить»', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 1e12 });
+    const ok = fakeSite((c) => page(JSON.stringify({ active: true, paidUntil: 2e12 }), c.url));
+    await fetchBillingAccount(ok.ctx);
+    expect(seenAccount()).toEqual({ paidUntil: 2e12 });
+    const late = fakeSite((c) => {
+      clearBilling();
+      return page(JSON.stringify({ active: true, paidUntil: 2e12 }), c.url);
+    });
+    await fetchBillingAccount(late.ctx);
+    expect(billingSession()).toBeNull();
+    expect(seenAccount()).toBeNull();
   });
 
   it('keeps paid sources in the grace period and reads the grace end', async () => {
