@@ -16,7 +16,7 @@
 - CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Релиз по тегу `v*` (`release.yml`), образ биллинга `billing-image.yml`,
   `torrserver-update.yml` (обновление TorrServer), `telegram-post.yml` (пост для уже выпущенного релиза), `vps-deploy.yml` (ручной деплой).
 - `main` защищён: изменения только через PR.
-- NUC: только с ПК Andy: `ssh -o BatchMode=yes andy@192.168.1.211`, каталог `/opt/omp-vps`,
+- NUC: только с ПК Andy по ssh (адрес в локальных заметках, не в репо), каталог `/opt/omp-vps`,
   compose `-f docker-compose.yml -f docker-compose.nuc.yml`. Выкатка: `deploy.sh [--dry-run] <ref>`, откат `deploy.sh --rollback <dir>`.
 - Сервисы: omp-billing, omp-postgres, omp-caddy, omp-jackett, omp-jacred, omp-flaresolverr, omp-torrserver, omp-warp, omp-warp-tunnel,
   omp-cloudflared, omp-cloudflared-home-nas, omp-docker-proxy (только чтение Docker API для мониторинга).
