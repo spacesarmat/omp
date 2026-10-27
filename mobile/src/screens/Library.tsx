@@ -4,6 +4,7 @@ import { fmtSize, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
 import { Logo } from '../../../src/ui/Logo';
+import { showToast } from '../ui/toast';
 import { TvChip } from '../ui/TvChip';
 import { TorrentMenu } from '../ui/TorrentMenu';
 import { sharedResume } from '../lib/sharedProgress';
@@ -86,6 +87,7 @@ function episodesText(tor: Torrent): string {
 }
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
+const CLEAR = 'M6 6l12 12M18 6L6 18';
 const CLOSE = 'M6 6l12 12M18 6L6 18';
 const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
@@ -108,6 +110,13 @@ export function Library() {
   const cachedAt = torrentsAt.value;
   const sort = settings.value.librarySort;
   const view = settings.value.libraryView;
+  // leaving «Каталог» with an empty search field closes it; a typed query stays for the way back (QA B14)
+  useEffect(
+    () => () => {
+      if (!libraryQuery.peek().trim()) librarySearchOpen.value = false;
+    },
+    [],
+  );
   const hfilter = settings.value.historyFilter;
   const mode = catalogMode.value;
   const mine = mode === 'mine';
@@ -495,9 +504,17 @@ export function Library() {
             class="m-icon-btn m-sort tm"
             data-code="P02.3"
             aria-label={t('tv.topbar.sort', { name: sortLabel(sort) })}
-            onClick={() => updateSettings({ librarySort: nextSort(sort) })}
+            onClick={() => {
+              // the button cycles: the tag shows the order that is on, the toast names the new one
+              const next = nextSort(sort);
+              updateSettings({ librarySort: next });
+              showToast(t('tv.topbar.sort', { name: sortLabel(next) }));
+            }}
           >
             <Icon d={ICONS.sort} size={20} />
+            <span class="m-icon-tag" aria-hidden="true" data-sort-tag={sort}>
+              {t(sort === 'title' ? 'library.sortTagTitle' : sort === 'size' ? 'library.sortTagSize' : 'library.sortTagNew')}
+            </span>
           </button>
         )}
         {mine && !isHistory && (
@@ -506,7 +523,11 @@ export function Library() {
             class="m-icon-btn m-view tm"
             data-code="P02.4"
             aria-label={t('tv.topbar.view', { name: viewLabel(view) })}
-            onClick={() => updateSettings({ libraryView: nextView(view) })}
+            onClick={() => {
+              const next = nextView(view);
+              updateSettings({ libraryView: next });
+              showToast(t('tv.topbar.view', { name: viewLabel(next) }));
+            }}
           >
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
           </button>
@@ -529,14 +550,22 @@ export function Library() {
       {mine ? (
       <>
       {searchOpen && (
-        <input
-          class="m-input m-lib-search"
-          type="search"
-          aria-label={t('catalog.searchPlaceholder')}
-          placeholder={t('catalog.searchPlaceholder')}
-          value={query}
-          onInput={(e) => (libraryQuery.value = (e.target as HTMLInputElement).value)}
-        />
+        <div class="m-subs-search m-lib-search-row">
+          <input
+            class="m-input m-lib-search m-grow"
+            type="search"
+            aria-label={t('catalog.searchPlaceholder')}
+            placeholder={t('catalog.searchPlaceholder')}
+            value={query}
+            onInput={(e) => (libraryQuery.value = (e.target as HTMLInputElement).value)}
+          />
+          {/* the system «x» of a search field is tiny and grey: a 44px clear button instead (QA B14) */}
+          {query && (
+            <button type="button" class="m-icon-btn" data-lib-clear aria-label={t('news.clearSearch')} onClick={() => (libraryQuery.value = '')}>
+              <Icon d={CLEAR} size={18} />
+            </button>
+          )}
+        </div>
       )}
       <div class="m-tabs" role="tablist">
         {libraryTabs().map((t) => (
@@ -547,7 +576,11 @@ export function Library() {
             aria-selected={tab === t.id}
             class={'m-tab tm' + (tab === t.id ? ' on' : '')}
             data-code={t.id === 'history' ? 'P02.8' : t.id === 'all' ? 'P02.9' : t.id === 'movie' ? 'P02.10' : t.id === 'tv' ? 'P02.11' : t.id === 'music' ? 'P02.12' : t.id === 'audiobook' ? 'P02.13' : 'P02.14'}
-            onClick={() => (libraryTab.value = t.id as LibraryTab)}
+            onClick={() => {
+              // an empty search field does not follow to another tab (QA B14)
+              if (!libraryQuery.peek().trim()) librarySearchOpen.value = false;
+              libraryTab.value = t.id as LibraryTab;
+            }}
           >
             {t.label}
           </button>
@@ -584,7 +617,7 @@ export function Library() {
           </div>
         )}
         <div class="m-lib-body" style={pullStyle} ref={bodyRef}>
-          {!activeTv.value && <FoundTvs />}
+          {!activeTv.value && <FoundTvs quiet />}
           {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
               <span>{t('library.donateText')}</span>
@@ -644,6 +677,12 @@ export function Library() {
           )}
           {c && !loaded && !list.length && <p class="m-muted m-note">{t('catalog.loading')}</p>}
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
+          {/* nothing in «Мои»: the same words can still be found on the trackers (QA B14) */}
+          {empty && query.trim() && !isHistory && (
+            <button type="button" class="m-btn m-btn-secondary" data-lib-find onClick={() => navigate({ name: 'add', query: query.trim(), run: true })}>
+              {t('discover.trackerSearch', { q: query.trim() })}
+            </button>
+          )}
           {unavailable ? null : isHistory ? (
             <div class="m-list m-history">
               <div class="m-seg m-hist-seg" role="group" aria-label={t('add.source')}>
@@ -776,11 +815,11 @@ export function Library() {
                   const meta = g ? '' : tileMeta(tor);
                   return (
                     <button type="button" class={'m-card' + (g ? ' m-series-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
-                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} />
+                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} initial />
                       {mark(it)}
                       <span class="m-card-title"><TileName tor={g ? g.named : tor} g={g} /></span>
-                      {/* a series card has its count on the poster badge */}
-                      {meta && <span class="m-muted m-card-meta m-tile-meta">{meta}</span>}
+                      {/* a series card has its count on the poster badge; an empty line keeps the cards of a row one height (QA B15) */}
+                      {meta ? <span class="m-muted m-card-meta m-tile-meta">{meta}</span> : <span class="m-card-meta-pad" aria-hidden="true" />}
                       {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
                       {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
                     </button>

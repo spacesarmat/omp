@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { sizeText as resultSizeText } from './ResultCard';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { showToast } from './toast';
@@ -154,7 +155,7 @@ export function ReplaceSheet({
               >
                 <span class="m-opt-text m-grow">
                   <span class="m-opt-name">{r.Title}</span>
-                  <span class="m-opt-sub">{[sourceName(r.source), r.Size, seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
+                  <span class="m-opt-sub">{[sourceName(r.source), resultSizeText(r), seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
                 </span>
                 {on && <Icon d={CHECK} size={20} />}
               </button>
@@ -180,7 +181,7 @@ export function ReplaceSheet({
       </div>
       <div class="m-rep-box new">
         <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
-        <div class="m-rep-line">{releaseLine(picked.Title, picked.Size)}</div>
+        <div class="m-rep-line">{releaseLine(picked.Title, resultSizeText(picked))}</div>
       </div>
       <div class="m-rep-moves">
         <div>✓ {t('monitor.replaceSheet.keepsHistory')}</div>

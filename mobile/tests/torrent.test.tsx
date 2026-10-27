@@ -221,10 +221,9 @@ describe('Torrent', () => {
     click(el.querySelectorAll('.m-opt')[1]);
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play', 'video/*');
-    // watch journal: started on this phone
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(record.mock.calls[0][1]).toBe('abc');
-    expect(record.mock.calls[0][2]).toEqual({ f: 2, t: 0, d: 0, src: 'phone', name: 'Телефон' });
+    // watch journal: nothing. This used to write a start entry at 0:00, but an outside player never reports
+    // back whether it played, so a failed start (no network) showed in «История» as watched at 0:00 (QA B12)
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('copy option writes the stream URL to the clipboard and toasts', async () => {
@@ -243,8 +242,8 @@ describe('Torrent', () => {
     click(byText('Смотреть на телефоне'));
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E01.mkv?link=abc&index=1&play', 'video/*');
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(record.mock.calls[0][2]).toMatchObject({ f: 1, src: 'phone' });
+    // no 0:00 journal entry for an outside player (QA B12)
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('no journal entry when the external player fails to open', async () => {

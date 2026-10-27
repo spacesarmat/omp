@@ -101,7 +101,8 @@ describe('ReplaceSheet', () => {
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Другая раздача')));
     expect(el.querySelector('[role=radiogroup][aria-label="Другая раздача"]')).toBeTruthy();
     click(Array.from(el.querySelectorAll('[role=radio]')).find((b) => (b.textContent || '').includes('720p')));
-    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-9 из 10 · 720p · 9 ГБ');
+    // the tracker's «9 GB» in the phone's one size format, like the current release above it (QA N1: «11.17 GB» next to «9,1 ГБ»)
+    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-9 из 10 · 720p · 9,0 ГБ');
     replaceMock.mockResolvedValue({ ok: true, hash: 'd'.repeat(40) });
     click(byText('Заменить'));
     await flush();

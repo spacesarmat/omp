@@ -124,3 +124,36 @@ describe('resumeFrom', () => {
     expect(resumeFrom({ time: 2800, duration: 2900, updated: 1 }, 10, 0.9)).toBe(0);
   });
 });
+
+describe('buildHistory: failed starts and duplicates (QA B12)', () => {
+  it('a 0:00 start entry is not a watch: an older real position of the torrent shows instead', () => {
+    const t = torrent('z', [
+      { f: 2, t: 0, d: 0, at: at(9, 2, 22, 0), src: 'phone', name: 'S21' },
+      { f: 1, t: 900, d: 2900, at: at(9, 1, 22, 0), src: 'tv' },
+    ]);
+    const h = buildHistory([t], 'all', [], noLocal);
+    expect(h.map((x) => [x.fileIndex, x.progress.time])).toEqual([[1, 900]]);
+    expect(buildHistory([t], 'phone', [], noLocal)).toEqual([]);
+  });
+
+  it('a 0:00 start with newer local progress still shows (the phone played it)', () => {
+    const t = torrent('y', [{ f: 2, t: 0, d: 0, at: at(9, 2, 22, 0), src: 'phone', name: 'S21' }]);
+    const local = (): HistoryProgress => ({ time: 300, duration: 2900, updated: at(9, 2, 22, 30) });
+    expect(buildHistory([t], 'all', [], local).map((x) => x.progress.time)).toEqual([300]);
+  });
+
+  it('the same episode of the same show in two torrents shows once, the newest', () => {
+    const files = [{ id: 1, path: 'Show.S01E03.mkv', length: 1 }];
+    const old = { ...torrent('o', [{ f: 1, t: 100, d: 2000, at: at(9, 1, 20, 0), src: 'tv' }]), title: 'Show S01 1080p', category: 'tv', file_stats: files } as Torrent;
+    const neu = { ...torrent('n', [{ f: 1, t: 500, d: 2000, at: at(9, 2, 20, 0), src: 'tv' }]), title: 'Show S01 2160p', category: 'tv', file_stats: files } as Torrent;
+    const other = { ...torrent('x', [{ f: 1, t: 500, d: 2000, at: at(9, 2, 19, 0), src: 'tv' }]), title: 'Other S01', category: 'tv', file_stats: files } as Torrent;
+    expect(buildHistory([old, neu, other], 'all', [], noLocal).map((x) => x.torrent.hash)).toEqual(['n', 'x']);
+  });
+
+  it('a file without a season takes the torrent season: E01 of S01 and E01 of S02 are two rows', () => {
+    const files = [{ id: 1, path: 'Show.E01.mkv', length: 1 }];
+    const s1 = { ...torrent('s1', [{ f: 1, t: 100, d: 2000, at: at(9, 1, 20, 0), src: 'tv' }]), title: 'Show S01 1080p', category: 'tv', file_stats: files } as Torrent;
+    const s2 = { ...torrent('s2', [{ f: 1, t: 500, d: 2000, at: at(9, 2, 20, 0), src: 'tv' }]), title: 'Show S02 1080p', category: 'tv', file_stats: files } as Torrent;
+    expect(buildHistory([s1, s2], 'all', [], noLocal).map((x) => x.torrent.hash)).toEqual(['s2', 's1']);
+  });
+});

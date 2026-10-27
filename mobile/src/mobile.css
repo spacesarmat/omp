@@ -1526,7 +1526,12 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-install-dev-icon.ok { color: #8FE39A; }
 .m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
-.m-install-manual { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+/* «Установить OMP на телевизор» (QA B16): the same top gap and spacing as «Телевизор», the title a line lower than the
+   status bar, the back arrow on its first line, «Ввести IP вручную» a normal secondary button like on «Телевизор» */
+.m-install { display: flex; flex-direction: column; gap: 14px; padding-top: calc(env(safe-area-inset-top) + 16px); }
+.m-install > .m-bar { align-items: flex-start; }
+.m-install > .m-bar .m-bar-title { font-size: 20px; line-height: 26px; padding-top: 9px; }
+.m-install > .m-note { margin: 0; }
 .m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
 .m-install-step.current { background: #3A3320; }
@@ -1867,24 +1872,103 @@ html.m-hint-hold .m-hint { display: none; }
   padding: 0;
 }
 
+/* Landscape (QA B7): the system navigation bar sits on a side, so the screens keep off the side insets,
+   and the tab bar gets short (icon and caption in one line) so a series page shows its watch buttons. */
+.m-screen {
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+}
+.m-torrent {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.m-nav {
+  padding-left: calc(8px + env(safe-area-inset-left));
+  padding-right: calc(8px + env(safe-area-inset-right));
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --m-nav-h: 48px; }
+  .m-nav { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .m-nav-item { flex-direction: row; justify-content: center; gap: 6px; padding-top: 0; min-height: 40px; }
+  .m-nav-pill { width: 40px; height: 28px; }
+}
+/* «Новое» → «Подписки 2»: the count pill keeps the tab on one line (QA B10) */
+.m-seg button { white-space: nowrap; }
+.m-seg-count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+/* «Мои» → the sort button names the order that is on (QA B13): a small tag at its bottom edge */
+.m-icon-btn.m-sort { position: relative; }
+.m-icon-tag {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* «Мои» search: our own 44px clear button, not the tiny system one (QA B14) */
+.m-lib-search::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.m-lib-search-row .m-btn-secondary { align-self: center; }
+
+/* «Мои» grid (QA B15): a poster without an image shows the first letter (the name is under it), and a card without a
+   meta line keeps its height, so the captions of a row line up */
+.m-poster-initial { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 44px; line-height: 1; color: rgba(255, 255, 255, 0.5); }
+.m-card-meta-pad { display: block; height: 16px; }
+.m-view-small .m-card-meta-pad { height: 14px; }
+
+/* Buttons on a backdrop (QA N4): the later plain .m-icon-btn rule wiped the glass, so on a bright poster the grey
+   back, edit and delete icons were hard to see. Two classes win over it. */
+.m-icon-btn.m-glass { background: rgba(15, 17, 21, 0.6); color: #fff; }
+.m-icon-btn.m-glass.m-danger { color: #FF9EA2; }
+/* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
+.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
+
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.
    .tm is only for controls that are not already positioned: forcing position on an
    absolute back button would pull it back into the row. */
 body.test-labels .tm { position: relative; }
+/* The badge sits on the top edge of the control, shifted up out of it, see-through and small
+   (phone labels may be under 24px): it names the control without covering a switch, a value or
+   a back arrow. White text with a dark outline stays readable on a light or a dark row. */
 body.test-labels [data-code]::after {
   content: attr(data-code);
   position: absolute;
   top: 0;
   right: 0;
+  transform: translateY(-55%);
   z-index: 2;
   pointer-events: none;
-  font-size: 24px;
-  line-height: 28px;
-  padding: 0 6px;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 3px;
   color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 6px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+  white-space: nowrap;
+  opacity: 0.85;
 }
 .test-screen-badge {
   position: fixed;
@@ -1920,11 +2004,12 @@ body.test-labels [data-code]::after {
 .test-el {
   position: absolute;
   pointer-events: none;
-  font-size: 24px;
-  line-height: 28px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: rgba(20, 70, 170, 0.8);
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgba(20, 70, 170, 0.5);
+  text-shadow: 0 0 2px #000;
   color: #fff;
   font-weight: 700;
   white-space: nowrap;

@@ -193,7 +193,13 @@ export const PHONE_SCREENS: ExtraScreen[] = [
   { key: 'phone:sourceSite', code: 'P23', ru: 'Сайт', en: 'Site', items: [it('P23.1', 'Назад', 'Back')] },
   { key: 'phone:title', code: 'P24', ru: 'Карточка', en: 'Title', items: [it('P24.1', 'Назад', 'Back')] },
   { key: 'phone:seasonCard', code: 'P25', ru: 'Сезон', en: 'Season', items: [it('P25.1', 'Назад', 'Back')] },
-  { key: 'phone:series', code: 'P26', ru: 'Сериал', en: 'Series', items: [it('P26.1', 'Назад', 'Back')] },
+  {
+    key: 'phone:series',
+    code: 'P26',
+    ru: 'Сериал',
+    en: 'Series',
+    items: [it('P26.1', 'Назад', 'Back'), it('P26.2', 'Озвучка', 'Dub'), it('P26.3', 'Сменить озвучку', 'Change the dub')],
+  },
   { key: 'phone:person', code: 'P27', ru: 'Персона', en: 'Person', items: [it('P27.1', 'Назад', 'Back')] },
   {
     key: 'phone:audiobooks',

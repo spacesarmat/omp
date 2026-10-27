@@ -16,6 +16,7 @@ import {
   tvForgot,
 } from '../tv/tvClient';
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
+import { phoneWifiNow } from '../tv/foundTvDiscovery';
 import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { tvs, activeTv, forgetTv, isTvRenamed, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
@@ -55,6 +56,8 @@ const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4';
 export function Tv() {
   const [found, setFound] = useState<FoundTv[]>([]);
   const [searching, setSearching] = useState(true);
+  /** The phone has no Wi-Fi: no search, a plain note instead of a spinner that ends in silence. */
+  const [noWifi, setNoWifi] = useState(false);
   const [target, setTarget] = useState<string | null>(null);
   const [manual, setManual] = useState(false);
   const [ip, setIp] = useState('');
@@ -83,25 +86,56 @@ export function Tv() {
     };
   }, [connectedIp]);
 
+  // a new round after the no-Wi-Fi note: the app came back or the network changed
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let alive = true;
-    // SSDP (LG) and NSD (Android TV with OMP) in parallel; each list shows as soon as it arrives
-    const lg = (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS)
-      .then((r) => alive && setFound(r))
-      .catch(() => {});
-    const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
-      .then((r) => {
-        if (!alive) return;
-        // a saved Android TV that answers on another port now (8095 taken on the box): its saved port follows
-        updateAtvPorts(r);
-        setFoundAtv(r);
-      })
-      .catch(() => {});
-    Promise.all([lg, atv]).then(() => alive && setSearching(false));
+    const discover = () => {
+      // SSDP (LG) and NSD (Android TV with OMP) in parallel; each list shows as soon as it arrives
+      const lg = (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS)
+        .then((r) => alive && setFound(r))
+        .catch(() => {});
+      const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
+        .then((r) => {
+          if (!alive) return;
+          // a saved Android TV that answers on another port now (8095 taken on the box): its saved port follows
+          updateAtvPorts(r);
+          setFoundAtv(r);
+        })
+        .catch(() => {});
+      Promise.all([lg, atv]).then(() => alive && setSearching(false));
+    };
+    // no Wi-Fi: no search at all, the note says why (off the phone the check is true at once)
+    const gate = phoneWifiNow();
+    if (gate === true) {
+      setNoWifi(false);
+      discover();
+    } else {
+      void Promise.resolve(gate)
+        .catch(() => true)
+        .then((wifi) => {
+          if (!alive) return;
+          setNoWifi(!wifi);
+          setSearching(wifi);
+          if (wifi) discover();
+        });
+    }
     return () => {
       alive = false;
     };
-  }, []);
+  }, [round]);
+  useEffect(() => {
+    if (!noWifi) return undefined;
+    const again = () => {
+      if (document.visibilityState !== 'hidden') setRound((r) => r + 1);
+    };
+    window.addEventListener('online', again);
+    document.addEventListener('visibilitychange', again);
+    return () => {
+      window.removeEventListener('online', again);
+      document.removeEventListener('visibilitychange', again);
+    };
+  }, [noWifi]);
 
   const savedList = tvs.value;
   const ompMeta = (ip: string, version?: string) => ip + (version ? ' · OMP ' + version : '');
@@ -193,7 +227,17 @@ export function Tv() {
       <button type="button" class="m-link m-tv-install" onClick={() => navigate({ name: 'install' })}>
         {t('tvScreen.installLink')}
       </button>
-      {searching && (
+      {noWifi && (
+        <p class="m-hint-warn" role="status" data-tv-nowifi>
+          {t('tvScreen.noWifi')}
+        </p>
+      )}
+      {!searching && !noWifi && rows.length === 0 && (
+        <p class="m-muted" role="status" data-tv-notfound>
+          {t('tvScreen.notFound')}
+        </p>
+      )}
+      {searching && !noWifi && (
         <div class="m-muted m-searching">
           <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <path d="M12 3a9 9 0 1 0 9 9" />

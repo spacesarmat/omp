@@ -20,6 +20,19 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] JacRed on the NUC: a systemd timer copies the running config from the container to the host every minute (validated, with a backup, last 20 kept), so a JacRed admin save survives a restart
 - [tech] Monitoring: a yellow «Просит код» (asks for a code) status for tracker sites that answer with a captcha or anti-bot page: no alert, not counted as an error, its own filter, group summary «12/12, 1 жёлтая»; a red tracker turning yellow closes its alert with an «asks for a code» note
 - [tech] Monitoring: when a tracker site leaves out its intermediate certificate, the check fetches it through AIA like a browser and still verifies the full chain («сертификат докачан»); torrent.by is no longer red with a TLS error
+- [phone] Offline shows one honest "No internet" instead of "TMDB does not answer" and "Nothing found"; the source search does not offer a subscription when no source answered
+- [phone] The TV search does not run without Wi-Fi, and on "Catalog" it runs without the "Searching..." line, so the poster grid no longer jumps; the "TV" screen says "No TVs found" and what to check after a search with no result
+- [phone] "History": a start that never played (0:00) is no longer saved as a watch, and one episode of a show is shown as one row
+- [phone] Landscape: screens keep off the side system bar, the bottom tab bar is lower
+- [phone] "Mine": the sort button shows which order is on, a toast names the new sort or view after a change
+- [phone] "Mine": a large clear button in search, an empty search field closes when you leave, "Nothing found" offers a tracker search; a poster without an image shows a letter instead of the name twice
+- [phone] "News": the "Subscriptions" tab with its counter fits one line
+- [phone] Release and series: no dangling "-" when seeds are unknown; the buttons over the backdrop are on a dark plate again
+- [phone] "Another release" and "Find in better quality": sizes in one format ("11.2 GB"), the picked release is outlined
+- [phone] Series, "Dub": "Change" turns into "Hide", and with no remembered dub there is no pointless "Default (reset)" item
+- [phone] "Remote" without a TV: the search is a line in the "Connect a TV" card, not a separate line above it
+- [phone] "Install OMP on the TV": a top gap, an aligned title, a normal "Enter IP manually" button
+- [phone] Beta: test-mode labels sit on the edge of the element, see-through and smaller, and no longer cover switches and values; "Label size" shows only with test mode on; "Dub" and "Change" have codes
 - [phone] «Другая раздача» (another release): long release titles no longer run over the next row and the size and seeds line; each row grows to fit its title and the list scrolls
 - [tv] «В лучшем качестве» (better quality): all text in the dialog is at least 24px
 
