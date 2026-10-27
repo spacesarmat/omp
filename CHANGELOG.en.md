@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Settings, "OMP account": with an active subscription the row shows "Subscribed until ..." right away instead of "Sign in"; a phone linked through Telegram sees "Checking sign-in…" instead of "Sign in" while the account is checked
+
 ## 0.20.6-beta.5
 
 - [phone] With no TV chosen the main button is "Watch on the phone"; on a series page one tap starts the next unwatched episode, with "On the TV" next to it
@@ -17,7 +21,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] The built-in player is now 2160 Player 0.2.13: the "Audio track" and "Subtitles" panels are wider and labels no longer break mid-word; in landscape the time is aligned to the right
 - [phone] 2160 Player: "LIVE" shows only for real live streams; while buffering a spinner replaces the play button
 - [phone] 2160 Player: the error dialog closes the open panel and draws on an opaque backdrop; intro detection starts only after the stream has opened
-- [phone] Settings, "OMP account": with an active subscription the row shows "Subscribed until ..." right away instead of "Sign in"; a phone linked through Telegram sees "Checking sign-in…" instead of "Sign in" while the account is checked
 
 ## 0.20.6-beta.4
 
