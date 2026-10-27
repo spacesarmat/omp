@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6-beta.6
 
 - [phone] Test mode in landscape: row and poster labels no longer cover the filter chips and the bottom tab bar; a row label moves to a free spot, and labels of elements under the tab bar are not drawn
 - [phone] Settings, "OMP account": with an active subscription the row shows "Subscribed until ..." right away instead of "Sign in"; a phone linked through Telegram sees "Checking sign-in…" instead of "Sign in" while the account is checked
