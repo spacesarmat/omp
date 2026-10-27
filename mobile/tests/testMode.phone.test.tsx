@@ -63,9 +63,12 @@ describe('phone test mode', () => {
     expect(style()).toContain('body.test-labels [data-code]::after');
   });
 
-  it('offers a label size slider next to the switch on a beta build', () => {
+  it('offers a label size slider next to the switch on a beta build, only while test mode is on', () => {
     resetTo({ name: 'settings' });
     const el = mount();
+    // off: no labels, so no size to set (QA B19)
+    expect(el.querySelector('[data-code="P11.20"]')).toBeNull();
+    act(() => updateSettings({ testMode: true }));
     const row = el.querySelector('[data-code="P11.20"]') as HTMLElement;
     expect(row).toBeTruthy();
     expect(row.textContent).toContain('Размер меток');

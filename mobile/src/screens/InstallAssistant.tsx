@@ -190,7 +190,7 @@ function Find() {
           </button>
         </form>
       ) : (
-        <button type="button" class="m-install-manual" onClick={() => setManual(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-install-manual" onClick={() => setManual(true)}>
           {t('install.assistant.manualIp')}
         </button>
       )}

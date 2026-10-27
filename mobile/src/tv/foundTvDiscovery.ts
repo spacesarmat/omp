@@ -3,6 +3,7 @@
 // results. A screen opened after the TTL, after an empty scan, or when the phone's network changed,
 // searches again. App resume and online/offline do too. Two callers never run two scans at once.
 import { signal } from '@preact/signals';
+import { Capacitor } from '@capacitor/core';
 import { native, type FoundOmpTv, type FoundTv } from '../platform/native';
 
 const SEARCH_MS = 4000;
@@ -26,11 +27,17 @@ let lgDiscover: LgDiscover | null = null;
 let atvDiscover: AtvDiscover | null = null;
 let nowFn = () => Date.now();
 let netReader: NetReader = () => native.localIpv4().catch(() => null);
+type WifiCheck = () => boolean | Promise<boolean>;
+/** On the phone: a Wi-Fi IPv4 means there is a LAN to search. Off the phone (web, tests) true at once. */
+const nativeWifi: WifiCheck = () => (Capacitor.isNativePlatform() ? native.localIpv4().then((ip) => !!ip, () => true) : true);
+let wifiCheck: WifiCheck = nativeWifi;
 
 /** TVs the shared scan has published. A screen opened later reads this on its first render. */
 export const foundTvRows = signal<FoundTvRow[]>([]);
 /** True from the start of a scan until both the LG and Android TV searches have settled. */
 export const foundTvScanning = signal(false);
+/** The last scan did not start: the phone has no Wi-Fi, so there is no LAN to search. */
+export const foundTvNoWifi = signal(false);
 
 let generation = 0;
 let inflight: Promise<unknown> | null = null;
@@ -61,6 +68,20 @@ export function setFoundTvNetwork(fn: NetReader | null): void {
   netReader = fn ?? (() => native.localIpv4().catch(() => null));
 }
 
+/** Whether the phone is on Wi-Fi (always true off the phone). The «Телевизор» screen asks before searching. */
+export function phoneOnWifi(): Promise<boolean> {
+  try {
+    return Promise.resolve(wifiCheck()).catch(() => true);
+  } catch {
+    return Promise.resolve(true);
+  }
+}
+
+/** Tests: whether the phone is on Wi-Fi. Null restores the native check. */
+export function setFoundTvWifi(fn: WifiCheck | null): void {
+  wifiCheck = fn ?? nativeWifi;
+}
+
 /** Drops cached TVs so the next screen may start a scan. An in-flight result from the old scan is ignored. */
 export function resetFoundTvDiscovery(): void {
   generation++;
@@ -73,6 +94,8 @@ export function resetFoundTvDiscovery(): void {
   handled = 0;
   foundTvRows.value = [];
   foundTvScanning.value = false;
+  foundTvNoWifi.value = false;
+  wifiCheck = nativeWifi;
   nowFn = () => Date.now();
   netReader = () => native.localIpv4().catch(() => null);
 }
@@ -147,16 +170,40 @@ function startScan(): void {
     foundTvRows.value = toRows(atv || [], lg || []);
     if (left === 0) finishedAt = nowFn();
   };
-  const job = Promise.all([
-    call(lgDiscover ?? ((ms: number) => native.discoverTvs(ms)), [] as FoundTv[]).then((v) => {
-      lg = v;
-      arrived();
-    }),
-    call(atvDiscover ?? ((ms: number) => native.discoverOmpTvs(ms)), [] as FoundOmpTv[]).then((v) => {
-      atv = v;
-      arrived();
-    }),
-  ]).finally(() => {
+  const discover = () =>
+    Promise.all([
+      call(lgDiscover ?? ((ms: number) => native.discoverTvs(ms)), [] as FoundTv[]).then((v) => {
+        lg = v;
+        arrived();
+      }),
+      call(atvDiscover ?? ((ms: number) => native.discoverOmpTvs(ms)), [] as FoundOmpTv[]).then((v) => {
+        atv = v;
+        arrived();
+      }),
+    ]);
+  // no Wi-Fi: nothing to search, and no spinner that runs on (and redraws the WebView) for nothing
+  let gate: boolean | Promise<boolean>;
+  try {
+    gate = wifiCheck();
+  } catch {
+    gate = true;
+  }
+  let run: Promise<unknown>;
+  if (gate === true) {
+    foundTvNoWifi.value = false;
+    run = discover();
+  } else {
+    run = Promise.resolve(gate)
+      .catch(() => true)
+      .then((wifi) => {
+        if (token !== generation) return;
+        foundTvNoWifi.value = !wifi;
+        if (wifi) return discover();
+        foundTvRows.value = [];
+        finishedAt = 0;
+      });
+  }
+  const job = run.finally(() => {
     if (inflight === job) inflight = null;
     if (token !== generation) return;
     if (rerun) {

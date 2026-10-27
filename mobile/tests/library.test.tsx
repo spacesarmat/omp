@@ -577,6 +577,8 @@ describe('Library', () => {
     expect(titles()[0]).toContain('Starbound');
     act(() => chip().click());
     expect(chip().getAttribute('aria-label')).toBe('Сортировка: По названию');
+    // the order that is on is visible, not only in the label (QA B13)
+    expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('А-Я');
     expect(settings.value.librarySort).toBe('title');
     expect(titles()[0]).toBe('Neon Rivers');
     act(() => chip().click());
@@ -597,6 +599,7 @@ describe('Library', () => {
     expect(el.querySelectorAll('.m-card .m-small').length).toBe(3);
     act(() => chip().click());
     expect(chip().getAttribute('aria-label')).toBe('Вид: Мелкие постеры');
+    expect(toast.value).toBe('Вид: Мелкие постеры');
     expect(settings.value.libraryView).toBe('small');
     expect(el.querySelector('.m-grid.m-view-small')).toBeTruthy();
     expect(el.querySelectorAll('.m-card').length).toBe(3);

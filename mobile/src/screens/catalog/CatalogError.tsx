@@ -1,16 +1,19 @@
-// «Обзор»: the catalog error block (feed, search, title card) — the text by the code, «Повторить», and
+// «Обзор»: the catalog error block (feed, search, title card) - the text by the code, «Повторить», and
 // «Как получить ключ» when there is no TMDB key.
 import { t } from '../../../../src/i18n';
 import { navigate } from '../../nav';
 import { catalogErrorKey, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { OFFLINE_TITLE } from '../../catalog/phoneCatalog';
+import { online } from '../../lib/online';
 
 export function CatalogError({ code, onRetry }: { code: CatalogErrorCode; onRetry: () => void }) {
-  const keyHelp = code === 'nokey' || code === 'badkey';
+  // no network at all: say so, not «TMDB не отвечает из этой сети» with a mirror hint
+  const noNet = !online.value;
+  const keyHelp = !noNet && (code === 'nokey' || code === 'badkey');
   return (
     <div class="m-disc-error" role="alert">
-      <p class="m-disc-error-title">{t(OFFLINE_TITLE)}</p>
-      <p class="m-muted">{t(catalogErrorKey(code, 'phone'))}</p>
+      <p class="m-disc-error-title">{noNet ? t('common.offlineTitle') : t(OFFLINE_TITLE)}</p>
+      <p class="m-muted">{noNet ? t('common.offlineText') : t(catalogErrorKey(code, 'phone'))}</p>
       <div class="m-disc-error-actions">
         <button type="button" class="m-btn m-btn-primary" onClick={onRetry}>
           {t('common.retry')}

@@ -12,7 +12,7 @@ import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
-import { foundTvRows } from '../tv/foundTvDiscovery';
+import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
@@ -977,13 +977,19 @@ export function Remote() {
     return (
       <div class="m-screen" data-route="remote">
         <ScreenHeader title={t('nav.remote')} />
-        <FoundTvs />
+        {/* one block, not «Ищу…» above «Подключите телевизор» (QA B18): found TVs still show above, the search is a line in the card */}
+        <FoundTvs quiet />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>
           <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'tv' })}>
             {t('remote.noTvButton')}
           </button>
+          {foundTvScanning.value && !foundTvNoWifi.value && foundTvRows.value.length === 0 && (
+            <p class="m-muted m-small" role="status" data-remote-searching>
+              {t('remote.searchingNear')}
+            </p>
+          )}
         </div>
       </div>
     );

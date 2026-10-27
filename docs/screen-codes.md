@@ -764,6 +764,8 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P25.1 | Сезон | Season | Назад | Back |
 | P26 | Сериал | Series |  |  |
 | P26.1 | Сериал | Series | Назад | Back |
+| P26.2 | Сериал | Series | Озвучка | Dub |
+| P26.3 | Сериал | Series | Сменить озвучку | Change the dub |
 | P27 | Персона | Person |  |  |
 | P27.1 | Персона | Person | Назад | Back |
 | P28 | Аудиокниги | Audiobooks |  |  |
