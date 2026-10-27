@@ -290,7 +290,7 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
   const first = layer.children[0] as HTMLElement | undefined;
   const h = first ? first.offsetHeight || 0 : 0;
   if (phone) {
-    paintPhonePositions(layer, shown, labels, h, view);
+    paintPhonePositions(layer, shown, labels, h, view, win);
     return;
   }
   for (let i = 0; i < shown.length; i++) {
@@ -369,8 +369,10 @@ function visibleBox(el: Element, view: Box): Box | null {
 }
 
 /** Phone pass of paintElementLabels: reads the chrome, the controls and the label widths, then places or drops each label. */
-function paintPhonePositions(layer: HTMLElement, shown: { code: string; place: string; b: Box }[], labels: ElementLabel[], h: number, view: Box): void {
-  const chromeEls = toArray(document.querySelectorAll(PHONE_CHROME));
+function paintPhonePositions(layer: HTMLElement, shown: { code: string; place: string; b: Box }[], labels: ElementLabel[], h: number, view: Box, win: Element | null): void {
+  // An open sheet or dialog sits above the tab bar and covers the page: only its own controls count then,
+  // not the backdrop button, the sheet box itself or the page under it.
+  const chromeEls = win ? [] : toArray(document.querySelectorAll(PHONE_CHROME));
   const chrome: Box[] = [];
   const chromeOf: Element[] = [];
   for (let i = 0; i < chromeEls.length; i++) {
@@ -381,9 +383,14 @@ function paintPhonePositions(layer: HTMLElement, shown: { code: string; place: s
     }
   }
   const controls: Box[] = [];
-  const ctrlEls = toArray(document.querySelectorAll(PHONE_CONTROLS));
+  const ctrlEls = toArray((win || document).querySelectorAll(PHONE_CONTROLS));
   // the fixed-code badge hangs above its control by about half a label (translateY(-55%) in mobile.css)
   const badge = Math.ceil(h * 0.6);
+  if (win && win.hasAttribute('data-code')) {
+    // the sheet's own code (PD21) sits on its top edge: keep that strip free, not the whole sheet
+    const wb = visibleBox(win, view);
+    if (wb) controls.push({ left: wb.left, top: wb.top - badge, right: wb.right, bottom: wb.top + h - badge });
+  }
   for (let i = 0; i < ctrlEls.length; i++) {
     if (layer.contains(ctrlEls[i])) continue;
     const b = visibleBox(ctrlEls[i], view);

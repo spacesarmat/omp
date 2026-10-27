@@ -282,6 +282,39 @@ describe('phone labels in landscape (S21, 1024x461)', () => {
     }
   });
 
+  it('an open sheet keeps its row labels: the backdrop, the sheet box and the tab bar under it do not count', () => {
+    document.body.innerHTML =
+      '<button class="test-screen-badge" id="scr"><span class="test-badge">P02</span></button>' +
+      '<nav class="m-nav" id="nav"><button data-code="P33.1" id="t1">Каталог</button></nav>' +
+      '<div class="m-sheet-host"><button class="m-sheet-backdrop" id="bd"></button>' +
+      '<div class="m-sheet" role="dialog" data-code="PD21" id="sh"><div class="m-better-list" id="list"><button class="m-result" id="r1">1080p</button></div></div></div>' +
+      '<div class="test-el-layer" id="layer"></div>';
+    set('scr', 8, 52, 44, 44);
+    set('nav', 0, 404, 1024, 57);
+    set('t1', 100, 410, 120, 44);
+    set('bd', 0, 0, 1024, 461);
+    set('sh', 0, 120, 1024, 341);
+    set('list', 16, 200, 990, 240);
+    set('r1', 16, 200, 990, 60);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 461 });
+    const hh = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(16);
+    const ww = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(60);
+    try {
+      const layer = document.getElementById('layer') as HTMLElement;
+      paintElementLabels(layer, true);
+      const at = (code: string) => {
+        const span = Array.from(layer.children).find((c) => c.textContent === code) as HTMLElement | undefined;
+        return span ? span.style.left + ',' + span.style.top : 'none';
+      };
+      expect(at('PD21.R#1')).toBe('16px,184px');
+      expect(at('PD21.R1.L#1')).toBe('16px,200px');
+    } finally {
+      hh.mockRestore();
+      ww.mockRestore();
+    }
+  });
+
   it('places a row label in the first free spot and drops it with none', () => {
     const row = { b: box(50, 100, 950, 140), place: 'above', w: 60, inChrome: -1 };
     expect(placePhoneLabels([row], 16, view, [], [])).toEqual([{ x: 50, y: 84 }]);
