@@ -26,8 +26,14 @@ export function evaluateHealth(res) {
     if (age === null || age === undefined) problems.push('бот ещё ни разу не получил обновления от Telegram');
     else if (Number(age) > BOT_POLL_MAX_AGE_SEC) problems.push('бот не получал обновления ' + minutes(age));
   }
-  if (b.monitorScheduled === true && b.monitorAgoSec !== null && b.monitorAgoSec !== undefined) {
-    if (Number(b.monitorAgoSec) > monitorMaxAgeSec(b.monitorIntervalMin)) problems.push('«Мониторинг» не запускался ' + minutes(b.monitorAgoSec));
+  if (b.monitorScheduled === true) {
+    const max = monitorMaxAgeSec(b.monitorIntervalMin);
+    if (b.monitorAgoSec !== null && b.monitorAgoSec !== undefined) {
+      if (Number(b.monitorAgoSec) > max) problems.push('«Мониторинг» не запускался ' + minutes(b.monitorAgoSec));
+    } else if (b.monitorScheduledAgoSec !== null && b.monitorScheduledAgoSec !== undefined && Number(b.monitorScheduledAgoSec) > max) {
+      // no finished run yet, though the schedule has been on for longer than a run may take
+      problems.push('«Мониторинг» ни разу не завершил прогон за ' + minutes(b.monitorScheduledAgoSec));
+    }
   }
   return problems.length ? { ok: false, reason: problems.join('; ') } : { ok: true, reason: '' };
 }
@@ -54,4 +60,32 @@ export function transition(prev, verdict, now) {
     text: '🔴 billing.omp-player.online: ' + verdict.reason + '\nВнешняя проверка из GitHub Actions, не зависит от NUC и ПК. Следующее сообщение придёт, когда починится.',
     next: { ok: false, since: at, reason: verdict.reason },
   };
+}
+
+/**
+ * One watchdog run. deps: { probe() -> res, send(text) -> boolean, readState() -> state|null, writeState(state),
+ * sleep(ms), log(line), now() }. Up to `attempts` probes, `gapMs` apart, until one is ok. Returns the exit code:
+ * 1 only when there is a problem and Telegram could not be told, so a down billing does not fail every run.
+ * A message that was not sent keeps the old state, so the next run tries again.
+ */
+export async function runWatchdog(deps, attempts = 3, gapMs = 30_000) {
+  let verdict = { ok: false, reason: '' };
+  for (let i = 0; i < attempts; i++) {
+    if (i) await deps.sleep(gapMs);
+    verdict = evaluateHealth(await deps.probe());
+    if (verdict.ok) break;
+    deps.log('attempt ' + (i + 1) + ': ' + verdict.reason);
+  }
+  const prev = deps.readState();
+  const plan = transition(prev, verdict, deps.now());
+  let next = plan.next;
+  let unsent = false;
+  if (plan.text) {
+    unsent = !(await deps.send(plan.text));
+    // no state yet: as if it was fine, so the failure is told again
+    if (unsent) next = prev || { ok: true, since: 0, reason: '' };
+  }
+  deps.writeState(next);
+  deps.log(verdict.ok ? 'billing ok' : 'billing problem: ' + verdict.reason);
+  return unsent && !verdict.ok ? 1 : 0;
 }

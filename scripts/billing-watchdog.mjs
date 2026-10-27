@@ -5,12 +5,10 @@
 // nothing is sent and the run fails on a problem, so GitHub still mails about the failed run).
 // The bot token is never printed: errors are logged by name only.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { evaluateHealth, transition } from './billing-watchdog-lib.mjs';
+import { runWatchdog } from './billing-watchdog-lib.mjs';
 
 const URL_ = process.env.WATCHDOG_URL || 'https://billing.omp-player.online/health';
 const statePath = process.argv[2] || 'watchdog-state.json';
-const ATTEMPTS = 3;
-const GAP_MS = 30_000;
 
 async function probe() {
   try {
@@ -57,23 +55,12 @@ async function send(text) {
   }
 }
 
-let verdict = { ok: false, reason: '' };
-for (let i = 0; i < ATTEMPTS; i++) {
-  if (i) await new Promise((r) => setTimeout(r, GAP_MS));
-  verdict = evaluateHealth(await probe());
-  if (verdict.ok) break;
-  console.log('attempt ' + (i + 1) + ': ' + verdict.reason);
-}
-const prev = readState();
-const plan = transition(prev, verdict, Date.now());
-let next = plan.next;
-let unsent = false;
-if (plan.text) {
-  unsent = !(await send(plan.text));
-  // not sent: keep the old state, so the next run tries again (no state yet: as if it was fine)
-  if (unsent) next = prev || { ok: true, since: 0, reason: '' };
-}
-writeFileSync(statePath, JSON.stringify(next) + '\n');
-console.log(verdict.ok ? 'billing ok' : 'billing problem: ' + verdict.reason);
-// A red run only when Telegram could not be told, so a down billing does not mail every 15 minutes.
-if (unsent && !verdict.ok) process.exitCode = 1;
+process.exitCode = await runWatchdog({
+  probe,
+  send,
+  readState,
+  writeState: (state) => writeFileSync(statePath, JSON.stringify(state) + '\n'),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  log: (line) => console.log(line),
+  now: () => Date.now(),
+});

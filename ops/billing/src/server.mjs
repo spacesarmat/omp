@@ -462,6 +462,8 @@ export function healthPayload(now, extra) {
     const now2 = now || Date.now();
     out.monitorScheduled = !!x.monitor.scheduled;
     out.monitorAgoSec = x.monitor.lastRunAt ? Math.max(0, Math.floor((now2 - x.monitor.lastRunAt) / 1000)) : null;
+    // seconds since the schedule started here, so a first run that never finishes is visible too
+    out.monitorScheduledAgoSec = x.monitor.scheduled && x.monitor.scheduledAt ? Math.max(0, Math.floor((now2 - x.monitor.scheduledAt) / 1000)) : null;
     out.monitorIntervalMin = Number(x.monitor.intervalMin) || null;
   }
   if (x.readOnly) out.readOnly = true;

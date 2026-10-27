@@ -203,6 +203,8 @@ export function createMonitor(deps) {
   // The last finished run, for the «готово» line: { trigger, startedAt, finishedAt, checked, failed, retried, ids }.
   let lastSummary = null;
   let lastRunAt = 0;
+  // When start() turned the schedule on, so /health can tell a first run that never finishes.
+  let scheduledAt = 0;
   let timers = [];
   // Last values read from Postgres, so a Postgres outage is still checked and reported.
   // `unsaved`: keys whose last write failed; memory is newer than Postgres until it is written.
@@ -500,6 +502,7 @@ export function createMonitor(deps) {
   function start(opts) {
     const o = opts || {};
     d.scheduled = true;
+    scheduledAt = now();
     const tick = async () => {
       try {
         if (running) return;
@@ -533,7 +536,7 @@ export function createMonitor(deps) {
 
   /** For /health (no secrets): is the schedule on here, when the last full run finished, the interval. */
   function health() {
-    return { scheduled: !!d.scheduled, lastRunAt, intervalMin: mem.config.intervalMin };
+    return { scheduled: !!d.scheduled, scheduledAt, lastRunAt, intervalMin: mem.config.intervalMin };
   }
 
   return { run, snapshot, start, health, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
