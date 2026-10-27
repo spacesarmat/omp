@@ -628,6 +628,9 @@ button, .m-btn {
 .m-sheet,
 .m-sheet > .m-sheet-scroll { overscroll-behavior: contain; }
 .m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+/* Rows inside a scrolling part never shrink: buttons carry min-height: 44px, so a flex column (a long
+   «Другая раздача» list) squeezed them to 44px and the titles ran over the next row. The part scrolls instead. */
+.m-sheet > .m-sheet-scroll > * { flex-shrink: 0; }
 /* The bar stays 40×4; ::before is the tap target. A downward pull on it drags the sheet. */
 .m-sheet-grip {
   align-self: center;
@@ -655,9 +658,12 @@ button, .m-btn {
 .m-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: none; border-radius: 14px; background: var(--panel-2); text-align: left; }
 .m-opt.primary { background: var(--accent); color: var(--bg); }
 .m-opt:disabled { opacity: 0.6; }
-.m-opt-text { display: flex; flex-direction: column; gap: 2px; }
-.m-opt-name { font-size: 16px; font-weight: 700; }
-.m-opt-sub { font-size: 13px; color: var(--muted); }
+.m-opt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* a long release title wraps (even a long word); the row grows to fit it and the line under it */
+.m-opt-name { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.m-opt-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+/* the check of the picked row keeps its size next to a long title */
+.m-opt > svg { flex-shrink: 0; }
 .m-opt.primary .m-opt-sub { color: var(--bg); }
 .m-status-ok { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #1E2A1F; color: #8FE39A; font-size: 14px; }
 .m-status-err { padding: 12px 14px; border-radius: 12px; background: #3A2024; color: #FF9EA2; font-size: 14px; line-height: 1.4; }

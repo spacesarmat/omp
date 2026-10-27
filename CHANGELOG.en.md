@@ -33,6 +33,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] "Remote" without a TV: the search is a line in the "Connect a TV" card, not a separate line above it
 - [phone] "Install OMP on the TV": a top gap, an aligned title, a normal "Enter IP manually" button
 - [phone] Beta: test-mode labels sit on the edge of the element, see-through and smaller, and no longer cover switches and values; "Label size" shows only with test mode on; "Dub" and "Change" have codes
+- [phone] «Другая раздача» (another release): long release titles no longer run over the next row and the size and seeds line; each row grows to fit its title and the list scrolls
+- [tv] «В лучшем качестве» (better quality): all text in the dialog is at least 24px
 
 ## 0.20.6-beta.3
 
