@@ -65,8 +65,8 @@ services:
       BILLING_JACKETT_API_KEY: ${BILLING_JACKETT_API_KEY:-}
       BILLING_JACRED_API_KEY: ${BILLING_JACRED_API_KEY:-}
       BILLING_INDEXER_PASS: ${BILLING_INDEXER_PASS:-}
-      # 0 = refuse the old long-lived device tokens (apps before the token update). Leave 1 for now.
-      BILLING_LEGACY_TOKENS: ${BILLING_LEGACY_TOKENS:-1}
+      # 0 (default since 27.10.2026) = refuse the old long-lived device tokens (apps before the token update); 1 = accept them again
+      BILLING_LEGACY_TOKENS: ${BILLING_LEGACY_TOKENS:-0}
       TZ: ${TZ:-Europe/Moscow}
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080
