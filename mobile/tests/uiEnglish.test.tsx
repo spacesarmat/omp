@@ -121,7 +121,7 @@ describe('phone shared UI in English', () => {
   it('NavBar', () => {
     mount(<NavBar active="library" />);
     expect(labels()).toContain('Sections');
-    expect(buttons()).toEqual(['Catalog', 'News', 'Add', 'Remote', 'Settings']);
+    expect(buttons()).toEqual(['Catalog', 'News', 'Search', 'Remote', 'Settings']);
   });
 
   it('OldTvDialog', () => {

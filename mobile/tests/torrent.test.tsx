@@ -150,15 +150,67 @@ describe('Torrent', () => {
     await flush();
     const fills = Array.from(el.querySelectorAll('.m-ep .m-bar-fill')).map((n) => (n as HTMLElement).style.width);
     expect(fills).toEqual(['0%', '100%', '39%', '0%']);
-    expect((el.querySelector('.m-btn-primary') as HTMLElement).textContent).toContain('Продолжить на ТВ · S02E03 с 23:14');
+    expect((el.querySelector('.m-btn-primary') as HTMLElement).textContent).toContain('Продолжить на телефоне · S02E03 с 23:14');
     // nothing is written for this release
     expect(localStorage.getItem('tsp.progress')).not.toContain('abc:');
   });
 
-  it('main button says «Смотреть на ТВ» with no history', async () => {
+  it('a film with two releases: «Раздача: ... · Сменить» opens «Другая раздача», a pick shows the other release', async () => {
+    const f1: T = { hash: 'abc', title: 'Полуночный архив / Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 8 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.mkv', length: 1 }] };
+    const f2: T = { hash: 'f2', title: 'Полуночный архив / Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3, torrent_size: 20 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.2160p.mkv', length: 1 }] };
+    torrents.value = [f1, f2];
+    mount();
+    await flush();
+    const line = el.querySelector('[data-code="P06.2"]')!;
+    expect(line.textContent).toContain('Раздача: 1080p WEB-DL · 8,0 ГБ');
+    click(line.querySelector('.m-btn-text'));
+    expect(el.querySelector('[data-code="PD55"]')).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('[data-release]')).map((r) => r.getAttribute('data-release'))).toEqual(['abc', 'f2']);
+    click('[data-release="f2"]');
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f2' });
+  });
+
+  it('another release picked in place does not show the files loaded for the previous one', async () => {
+    const f1: T = { hash: 'abc', title: 'Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3 };
+    const f2: T = { hash: 'f2', title: 'Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3 };
+    torrents.value = [f1, f2];
+    vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockImplementation((h: string) =>
+      h === 'abc' ? Promise.resolve({ ...f1, file_stats: [{ id: 1, path: 'Midnight.Archive.1080p.mkv', length: 1 }] }) : new Promise<T>(() => {}),
+    );
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Midnight.Archive.1080p');
+    act(() => render(<Torrent hash="f2" />, el));
+    await flush();
+    expect(el.textContent).not.toContain('Midnight.Archive.1080p');
+  });
+
+  it('a lone film has no release line', async () => {
+    torrents.value = [{ hash: 'abc', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'Neon.mkv', length: 1 }] }];
+    mount();
+    await flush();
+    expect(el.querySelector('[data-code="P06.2"]')).toBeNull();
+  });
+
+  it('main button says «Смотреть на ТВ» with no history and a TV', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
     await flush();
     expect(el.querySelector('.m-btn-primary')!.textContent).toContain('Смотреть на ТВ');
+  });
+
+  it('without a TV the main button plays on the phone; «На ТВ» sits next to it', async () => {
+    mount();
+    await flush();
+    const main = el.querySelector('[data-main="phone"]') as HTMLElement;
+    expect(main.classList.contains('m-btn-primary')).toBe(true);
+    expect(main.textContent).toContain('Смотреть на телефоне · S02E01');
+    click(main);
+    await flush();
+    expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E01.mkv?link=abc&index=1&play', 'video/*');
+    expect(launch).not.toHaveBeenCalled();
+    click(el.querySelector('[data-code="P06.4"]')!);
+    expect(currentRoute.value.name).toBe('tv');
   });
 
   it('tapping an episode opens the sheet with three options', async () => {
@@ -205,11 +257,12 @@ describe('Torrent', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
-  it('without a TV the first option leads to the TV screen', async () => {
+  it('without a TV the phone comes first and the TV option leads to the TV screen', async () => {
     mount();
     await flush();
     click(el.querySelectorAll('.m-ep')[0]);
-    click(el.querySelectorAll('.m-opt')[0]);
+    expect(el.querySelectorAll('.m-opt')[0].getAttribute('data-where')).toBe('phone');
+    click(el.querySelectorAll('.m-opt')[1]);
     expect(launch).not.toHaveBeenCalled();
     expect(currentRoute.value.name).toBe('tv');
   });
@@ -218,7 +271,7 @@ describe('Torrent', () => {
     mount();
     await flush();
     click(el.querySelectorAll('.m-ep')[1]);
-    click(el.querySelectorAll('.m-opt')[1]);
+    click(el.querySelectorAll('.m-opt')[0]);
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play', 'video/*');
     // watch journal: nothing. This used to write a start entry at 0:00, but an outside player never reports

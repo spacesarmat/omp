@@ -7,7 +7,9 @@ import { TvChip } from '../ui/TvChip';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
-import { navigate } from '../nav';
+import { navigate, type SearchScope } from '../nav';
+import { SearchMine } from './SearchMine';
+import { CatalogResults } from './catalog/CatalogSearch';
 import { activeTv } from '../tv/tvStore';
 import { useTvLaunch, watchAddedOnPhone } from '../watch';
 import { client } from '../../../src/store/servers';
@@ -168,7 +170,35 @@ function progOf(h: SearchHandle): Prog {
 /** Route entries whose ready query was taken (and searched) already: back to one keeps the person's own query. */
 const takenEntries = new WeakSet<object>();
 
-export function Add({ link, query: initialQuery, run, entry }: { link?: string; query?: string; run?: boolean; entry?: object }) {
+// the «Поиск» tab used last («Мои / Каталог / Источники»), for this run of the app
+let lastScope: SearchScope = 'sources';
+// the tab of each route entry: back from a title opened in «Каталог» comes back to «Каталог»
+const entryScopes = new WeakMap<object, SearchScope>();
+
+/** Tests: the next «Поиск» without a scope opens «Источники». */
+export function resetSearchScope(): void {
+  lastScope = 'sources';
+}
+
+const SCOPES: { id: SearchScope; code: string; label: () => string }[] = [
+  { id: 'mine', code: 'P07.3', label: () => t('nav.searchMine') },
+  { id: 'catalog', code: 'P07.4', label: () => t('nav.searchCatalog') },
+  { id: 'sources', code: 'P07.5', label: () => t('nav.searchSources') },
+];
+
+export function Add({
+  link,
+  query: initialQuery,
+  run,
+  entry,
+  scope: askedScope,
+}: {
+  link?: string;
+  query?: string;
+  run?: boolean;
+  entry?: object;
+  scope?: SearchScope;
+}) {
   // the ready query of «Обзор» counts once per route entry (back from another screen remounts the same entry)
   const fresh = useRef<boolean | null>(null);
   if (fresh.current === null) fresh.current = !(entry && takenEntries.has(entry));
@@ -194,6 +224,20 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
+  // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
+  // the route's fields choose only the first tab of the entry
+  const [scope, setScopeState] = useState<SearchScope>(
+    () => (entry && entryScopes.get(entry)) || (link || run || initialQuery ? 'sources' : askedScope || lastScope),
+  );
+  const setScope = (v: SearchScope) => {
+    lastScope = v;
+    if (entry) entryScopes.set(entry, v);
+    setScopeState(v);
+  };
+  useEffect(() => {
+    lastScope = scope;
+    if (entry) entryScopes.set(entry, scope);
+  }, []);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
@@ -250,6 +294,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     if (link) {
       changeValue(link);
       setMagnetOpen(true);
+      setScope('sources');
     }
   }, [link]);
 
@@ -319,7 +364,13 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     // the keyboard goes away: the results are what to look at now
     const focused = document.activeElement as HTMLElement | null;
     if (focused && focused.tagName === 'INPUT') focused.blur();
-    runSearch(q, {});
+    // «Мои» and «Каталог» follow the field as it is typed: Enter only hides the keyboard
+    if (scope === 'sources') runSearch(q, {});
+  };
+  // «Мои» / «Каталог» → «Источники» with the same words
+  const toSources = (q: string) => {
+    setScope('sources');
+    if (q.trim()) runSearch(q.trim(), {});
   };
 
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
@@ -447,17 +498,32 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
 
   return (
     <div class="m-screen" data-route="add">
-      <ScreenHeader title={t('common.add')}>
+      <ScreenHeader title={t('nav.search')}>
         <TvChip />
       </ScreenHeader>
-      {/* search first: it is what this tab is for; the magnet row comes below it */}
-      <h2 class="m-add-title">{t('add.searchBySources')}</h2>
+      {/* one search: the field is shared by the three tabs */}
+      <div class="m-seg m-search-scopes" role="tablist" aria-label={t('nav.searchScopes')}>
+        {SCOPES.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="tab"
+            aria-selected={scope === o.id}
+            class={'m-seg-btn tm' + (scope === o.id ? ' on' : '')}
+            data-code={o.code}
+            data-scope={o.id}
+            onClick={() => setScope(o.id)}
+          >
+            {o.label()}
+          </button>
+        ))}
+      </div>
       <form class="m-add-row" onSubmit={onSearch}>
         <input
           class="m-input m-lib-search"
           type="search"
-          aria-label={t('add.searchBySources')}
-          placeholder={t('common.name')}
+          aria-label={scope === 'sources' ? t('add.searchBySources') : scope === 'catalog' ? t('discover.searchLabel') : t('catalog.searchPlaceholder')}
+          placeholder={t('nav.searchPlaceholder')}
           enterkeyhint="search"
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
@@ -466,6 +532,10 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
+      {scope === 'mine' && <SearchMine query={query} onCatalog={() => setScope('catalog')} onSources={() => toSources(query)} />}
+      {scope === 'catalog' && <CatalogResults text={query} onTrackers={toSources} />}
+      {scope === 'sources' && (
+      <>
       <div class="m-chips m-add-chips">
         <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
           {sourcesLabel}
@@ -606,6 +676,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           );
         })}
       </div>
+      </>
+      )}
       {sheet === 'sources' && (
         <Sheet label={t('add.sourcesSheet')} testId="PD33" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sourcesSheet')}</div>

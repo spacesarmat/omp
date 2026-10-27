@@ -11,6 +11,12 @@ import { findMovie } from './tmdbMovie';
 
 const cache = new Map<string, CatalogCard | null>();
 
+/** The TMDB id of the film a torrent was matched to on its screen (this run); 0 when not looked up or not found. */
+export function cachedMovieId(hash: string): number {
+  const c = cache.get(hash);
+  return c ? c.id : 0;
+}
+
 export function useMovieCard(tor: Torrent | undefined | null): CatalogCard | null {
   return useMovieLookup(tor).card;
 }

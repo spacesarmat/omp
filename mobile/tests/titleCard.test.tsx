@@ -273,7 +273,7 @@ describe('TitleCard: series', () => {
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
     expect(button('Найти раздачи')).toBeTruthy();
-    expect(button('Смотреть на ТВ')).toBeUndefined();
+    expect(button('Смотреть на телефоне')).toBeUndefined();
     act(() => render(null, el));
     torrents.value = [{
       hash: 'h-s1',
@@ -283,7 +283,7 @@ describe('TitleCard: series', () => {
     serve(SHOW);
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(button('Смотреть на ТВ')).toBeTruthy();
+    expect(button('Смотреть на телефоне')).toBeTruthy();
     expect(button('Найти раздачи')).toBeUndefined();
   });
 
@@ -328,7 +328,7 @@ describe('SeasonCard', () => {
     expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('1.4 GB');
     expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('3 · Серия 3 - 50 мин');
     expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('нет в медиатеке');
-    expect(button('Смотреть на ТВ')).toBeTruthy();
+    expect(button('Смотреть на телефоне')).toBeTruthy();
   });
 
   it('an unreleased season has no find button; a future episode shows its date', async () => {
@@ -472,7 +472,7 @@ describe('TitleCard in English', () => {
       act(() => render(null, el));
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
-      expect(button('Watch on TV')).toBeTruthy();
+      expect(button('Watch on the phone')).toBeTruthy();
     } finally {
       restore();
       applyLanguageSetting('ru');

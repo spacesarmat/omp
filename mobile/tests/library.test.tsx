@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
+import { SearchMine } from '../src/screens/SearchMine';
 import { setWatchActions, noWifi } from '../src/watch';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
 import { currentRoute, resetTo } from '../src/nav';
@@ -44,6 +45,11 @@ function mount() {
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   act(() => render(<Library />, el));
+}
+
+/** «История»: the clock in the header (no chip any more). */
+function historyButton(): HTMLElement {
+  return el.querySelector('[data-lib-history]') as HTMLElement;
 }
 
 function tab(label: string): HTMLElement {
@@ -131,7 +137,9 @@ describe('Library', () => {
     expect(kids.indexOf(brand)).toBe(0);
     expect(kids.indexOf(seg)).toBe(1);
     expect(kids.indexOf(head.querySelector('.m-sort')!)).toBeGreaterThan(1);
-    expect(kids.indexOf(head.querySelector('.m-view')!)).toBeGreaterThan(1);
+    expect(kids.indexOf(head.querySelector('[data-lib-history]')!)).toBeGreaterThan(1);
+    // sort and view are one button now
+    expect(head.querySelector('.m-view')).toBeNull();
     // the switch is not a separate row any more
     expect(el.querySelectorAll('.m-seg').length).toBe(1);
     expect(seg.parentElement).toBe(head);
@@ -158,10 +166,8 @@ describe('Library', () => {
       act(() => render(null, el));
     }
     updateSettings({ libraryView: 'large' });
-    librarySearchOpen.value = true;
-    libraryQuery.value = 'spider';
-    mount();
-    await flush();
+    // «Поиск» → «Мои»
+    act(() => render(<SearchMine query="spider" onCatalog={() => undefined} onSources={() => undefined} />, el));
     expect(Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent)).toEqual(['Человек-паук: Новый день']);
   });
 
@@ -219,15 +225,13 @@ describe('Library', () => {
     act(() => tab('Сериалы').click());
     expect(el.querySelectorAll('.m-card').length).toBe(1);
     act(() => tab('Все').click());
+    // the search is the «Поиск» tab on «Мои»
     act(() => (el.querySelector('[aria-label="Поиск"]') as HTMLElement).click());
-    const input = el.querySelector('input[aria-label="Поиск по названию"]') as HTMLInputElement;
-    expect(input).toBeTruthy();
-    act(() => {
-      input.value = 'neon';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(el.querySelectorAll('.m-card').length).toBe(1);
-    expect(el.querySelector('.m-card')!.textContent).toContain('Neon');
+    expect(currentRoute.value).toEqual({ name: 'add', scope: 'mine' });
+    act(() => render(<SearchMine query="neon" onCatalog={() => undefined} onSources={() => undefined} />, el));
+    const rows = el.querySelectorAll('[data-mine-item]');
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Neon');
   });
 
   it('opens a torrent on card tap', async () => {
@@ -342,7 +346,7 @@ describe('Library', () => {
     it('works on the history tab too', async () => {
       mount();
       await flush();
-      act(() => tab('История').click());
+      act(() => historyButton().click());
       listSpy.mockClear();
       touch('touchstart', 100);
       touch('touchend', 260);
@@ -358,7 +362,7 @@ describe('Library', () => {
     setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     const rows = el.querySelectorAll('.m-hrow');
     expect(rows.length).toBe(1);
     expect(rows[0].textContent).toContain('Сезон 2 · Серия 2');
@@ -374,14 +378,105 @@ describe('Library', () => {
     expect(toast.value).toContain('Запустил на LG OLED');
   });
 
-  it('history play without a TV opens the TV screen', async () => {
+  it('history play without a TV plays on the phone from the position', async () => {
     saveProgress('h1', 2, 100, 3000);
+    const open = vi.fn();
+    const launch = vi.fn();
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, openExternal: open, remoteDelayMs: 0 });
     mount();
     await flush();
-    act(() => tab('История').click());
-    act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
+    act(() => historyButton().click());
+    expect(el.querySelector('[aria-label="Продолжить на ТВ"]')).toBeNull();
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
     await flush();
-    expect(currentRoute.value.name).toBe('tv');
+    expect(launch).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(String(open.mock.calls[0][0])).toContain('link=h1&index=2');
+    expect(currentRoute.value.name).toBe('library');
+  });
+
+  it('history play without a TV loads the files first when the cached entry has none, and shows an error when that fails', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    const full = torrents.value.find((x) => x.hash === 'h1')!;
+    const bare = torrents.value.map((x) => (x.hash === 'h1' ? { ...x, data: undefined, file_stats: undefined } : x));
+    torrents.value = bare;
+    listSpy.mockResolvedValue(bare);
+    const info = vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockResolvedValueOnce(full).mockRejectedValueOnce(new Error('Сервер не ответил'));
+    const open = vi.fn();
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: open, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => historyButton().click());
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    expect(info).toHaveBeenCalledWith('h1');
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(String(open.mock.calls[0][0])).toContain('link=h1&index=2');
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(el.textContent).toContain('Сервер не ответил');
+  });
+
+  it('history play without a TV does not start when the server is switched while the files load', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    const full = torrents.value.find((x) => x.hash === 'h1')!;
+    const bare = torrents.value.map((x) => (x.hash === 'h1' ? { ...x, data: undefined, file_stats: undefined } : x));
+    torrents.value = bare;
+    listSpy.mockResolvedValue(bare);
+    let done: (t: Torrent) => void = () => {};
+    vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockImplementation(() => new Promise<Torrent>((r) => (done = r)));
+    const open = vi.fn();
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: open, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => historyButton().click());
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    act(() => setActiveServer(addServer({ url: 'http://other:8090' }).id));
+    done(full);
+    await flush();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('«Продолжить просмотр» on top of «Мои»: a card per started item, «Вся история» opens the history', async () => {
+    saveProgress('h1', 2, 1394, 3651);
+    mount();
+    await flush();
+    const row = el.querySelector('[data-code="P02.19"]')!;
+    expect(row).toBeTruthy();
+    expect(row.querySelector('.m-resume-title')!.textContent).toBe('Продолжить просмотр');
+    const cards = row.querySelectorAll('[data-resume-hash]');
+    expect(cards.length).toBe(1);
+    expect(cards[0].getAttribute('data-resume-hash')).toBe('h1');
+    expect(cards[0].textContent).toContain('осталось 38 мин');
+    // the chips have no «История» any more
+    expect(tab('История')).toBeUndefined();
+    act(() => (row.querySelector('[data-code="P02.21"]') as HTMLElement).click());
+    expect(libraryTab.value).toBe('history');
+    expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
+    expect(el.querySelectorAll('.m-history .m-hrow').length).toBe(1);
+  });
+
+  it('two releases of one film are one card with «2 раздачи»; a tap opens the release that leads', async () => {
+    const list: Torrent[] = [
+      { hash: 'f1', title: 'Полуночный архив / Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 2 * 1024 ** 3, timestamp: 3 },
+      { hash: 'f2', title: 'Полуночный архив / Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3, torrent_size: 1024 ** 3, timestamp: 2 },
+      { hash: 'n1', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3, torrent_size: 1, timestamp: 1 },
+    ];
+    torrents.value = list;
+    listSpy.mockResolvedValue(list);
+    updateSettings({ libraryView: 'large' });
+    mount();
+    await flush();
+    const cards = el.querySelectorAll('.m-grid .m-card');
+    expect(cards.length).toBe(2);
+    expect(cards[0].classList.contains('m-film-card')).toBe(true);
+    expect(cards[0].querySelector('.m-badge')!.textContent).toBe('2 раздачи');
+    // the size of both releases
+    expect(cards[0].textContent).toContain('3,0 ГБ');
+    act(() => (cards[0] as HTMLElement).click());
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f1' });
   });
 
   it('shows empty states', async () => {
@@ -390,7 +485,7 @@ describe('Library', () => {
     mount();
     await flush();
     expect(el.textContent).toContain('Нет торрентов');
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     expect(el.textContent).toContain('История пуста');
   });
 
@@ -419,7 +514,7 @@ describe('Library', () => {
     setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     const b = el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement;
     act(() => b.click());
     act(() => b.click());
@@ -438,7 +533,7 @@ describe('Library', () => {
     setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn().mockRejectedValue(new Error(tvNoOmp())), remoteDelayMs: 0 });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
     await flush();
     act(() => byText('Сначала')!.click());
@@ -455,7 +550,7 @@ describe('Library', () => {
     setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: report, localIpv4: async () => null, launchOnTv: launch, remoteDelayMs: 0 });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     act(() => (el.querySelector('[aria-label="Продолжить на ТВ"]') as HTMLElement).click());
     await flush();
     act(() => byText('Сначала')!.click());
@@ -567,65 +662,50 @@ describe('Library', () => {
     expect(byText('Запустить сервер')).toBeUndefined();
   });
 
-  it('sort chip cycles and persists, hidden on history', async () => {
-    updateSettings({ librarySort: 'new' });
+  it('one «Вид и сортировка» sheet: the button shows the choice, a pick applies and persists, hidden on history', async () => {
+    updateSettings({ librarySort: 'new', libraryView: 'large' });
     mount();
     await flush();
     const chip = () => el.querySelector('.m-sort') as HTMLElement;
     const titles = () => Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent);
-    expect(chip().getAttribute('aria-label')).toBe('Сортировка: Новые');
+    const pick = (sel: string) => act(() => (document.querySelector(sel) as HTMLElement).click());
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: Новые, Крупные постеры');
+    expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('нов');
     expect(titles()[0]).toContain('Starbound');
     act(() => chip().click());
-    expect(chip().getAttribute('aria-label')).toBe('Сортировка: По названию');
+    const sheet = document.querySelector('[data-code="PD54"]')!;
+    expect(sheet).toBeTruthy();
+    expect(sheet.querySelector('[data-sort="new"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(sheet.querySelector('[data-view="large"]')!.getAttribute('aria-checked')).toBe('true');
+    pick('[data-sort="title"]');
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По названию, Крупные постеры');
     // the order that is on is visible, not only in the label (QA B13)
     expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('А-Я');
     expect(settings.value.librarySort).toBe('title');
     expect(titles()[0]).toBe('Neon Rivers');
-    act(() => chip().click());
-    expect(chip().getAttribute('aria-label')).toBe('Сортировка: По размеру');
+    expect(document.querySelector('[data-sort="title"]')!.getAttribute('aria-checked')).toBe('true');
+    pick('[data-sort="size"]');
     expect(titles()[0]).toContain('Starbound');
     expect(titles()[1]).toContain('Тихий');
-    act(() => tab('История').click());
-    expect(el.querySelector('.m-sort')).toBeNull();
-    updateSettings({ librarySort: 'new' });
-  });
-  it('view chip cycles all four modes, persists, hidden on history', async () => {
-    updateSettings({ libraryView: 'large' });
-    mount();
-    await flush();
-    const chip = () => el.querySelector('.m-view') as HTMLElement;
-    expect(chip().getAttribute('aria-label')).toBe('Вид: Крупные постеры');
-    expect(el.querySelector('.m-grid.m-view-large')).toBeTruthy();
-    expect(el.querySelectorAll('.m-card .m-small').length).toBe(3);
-    act(() => chip().click());
-    expect(chip().getAttribute('aria-label')).toBe('Вид: Мелкие постеры');
-    expect(toast.value).toBe('Вид: Мелкие постеры');
+    pick('[data-view="small"]');
     expect(settings.value.libraryView).toBe('small');
     expect(el.querySelector('.m-grid.m-view-small')).toBeTruthy();
-    expect(el.querySelectorAll('.m-card').length).toBe(3);
     expect(el.querySelector('.m-card .m-small')).toBeNull();
-    act(() => chip().click());
-    expect(settings.value.libraryView).toBe('list');
+    pick('[data-view="list"]');
     expect(el.querySelector('.m-vlist')).toBeTruthy();
     const rows = el.querySelectorAll('.m-vrow');
     expect(rows.length).toBe(3);
-    expect(rows[0].querySelector('.m-poster')).toBeTruthy();
-    expect(rows[0].textContent).toContain('2,0 ГБ');
     expect(rows[0].querySelector('.m-badge-inline')!.textContent).toBe('1080p');
     expect(rows[0].textContent).toContain('2 серии');
-    act(() => (rows[1] as HTMLElement).click());
-    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'h2' });
-    act(() => chip().click());
-    expect(settings.value.libraryView).toBe('compact');
-    const crows = el.querySelectorAll('.m-crow');
-    expect(crows.length).toBe(3);
-    expect(crows[0].querySelector('.m-poster')).toBeNull();
-    expect(crows[0].querySelector('.m-crow-size')!.textContent).toBe('2,0 ГБ');
-    act(() => chip().click());
+    pick('[data-view="compact"]');
+    expect(el.querySelectorAll('.m-crow').length).toBe(3);
+    expect(el.querySelectorAll('.m-crow')[0].querySelector('.m-poster')).toBeNull();
+    pick('[data-view="large"]');
     expect(settings.value.libraryView).toBe('large');
-    act(() => tab('История').click());
-    expect(el.querySelector('.m-view')).toBeNull();
-    updateSettings({ libraryView: 'large' });
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По размеру, Крупные постеры');
+    act(() => historyButton().click());
+    expect(el.querySelector('.m-sort')).toBeNull();
+    updateSettings({ librarySort: 'new', libraryView: 'large' });
   });
 
   it('history: source line per row and filter chips kept in settings', async () => {
@@ -641,7 +721,7 @@ describe('Library', () => {
     updateSettings({ historyFilter: 'all' });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     const chips = Array.from(el.querySelectorAll('.m-hist-seg .m-seg-btn')) as HTMLElement[];
     expect(chips.map((c) => c.textContent)).toEqual(['Все', 'С телевизора', 'С телефона']);
     expect(chips[0].getAttribute('aria-pressed')).toBe('true');
@@ -666,7 +746,7 @@ describe('Library', () => {
     updateSettings({ historyFilter: 'phone' });
     mount();
     await flush();
-    act(() => tab('История').click());
+    act(() => historyButton().click());
     expect(el.querySelector('.m-empty')!.textContent).toBe('С телефона пока ничего не смотрели');
     updateSettings({ historyFilter: 'all' });
   });
@@ -826,9 +906,9 @@ describe('Library in English', () => {
   it('header, tabs, cards and the episode count', async () => {
     mount();
     await flush();
-    expect(Array.from(el.querySelectorAll('.m-tabs [role=tab]')).map((b) => b.textContent)).toEqual(['History', 'All', 'Movies', 'Series', 'Music', 'Audiobooks', 'Other']);
-    expect(el.querySelector('[aria-label^="Sort: "]')).toBeTruthy();
-    expect(el.querySelector('[aria-label^="View: "]')).toBeTruthy();
+    expect(Array.from(el.querySelectorAll('.m-tabs [role=tab]')).map((b) => b.textContent)).toEqual(['All', 'Movies', 'Series', 'Music', 'Audiobooks', 'Other']);
+    expect(el.querySelector('[aria-label^="View and sort: "]')).toBeTruthy();
+    expect(el.querySelector('[aria-label="History"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Search"]')).toBeTruthy();
     expect(el.textContent).toContain('2.0 GB');
     act(() => updateSettings({ libraryView: 'list' }));
@@ -843,16 +923,11 @@ describe('Library in English', () => {
     mount();
     await flush();
     expect(el.textContent).toContain('No torrents. Add them via “Add” or the TorrServer web interface.');
-    act(() => tab('History').click());
+    act(() => historyButton().click());
     expect(el.textContent).toContain('History is empty. What you start watching will appear here');
-    act(() => (el.querySelector('[aria-label="Search"]') as HTMLElement).click());
-    const input = el.querySelector('input[type=search]') as HTMLInputElement;
-    expect(input.placeholder).toBe('Search by title');
-    act(() => {
-      input.value = 'zzz';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    expect(el.textContent).toContain('Nothing found');
+    act(() => render(<SearchMine query="zzz" onCatalog={() => undefined} onSources={() => undefined} />, el));
+    expect(el.textContent).toContain('Nothing like this in "Mine"');
+    expect(el.querySelector('[data-search-to="catalog"]')!.textContent).toBe('Search the catalog');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 
@@ -860,9 +935,14 @@ describe('Library in English', () => {
     saveProgress('e1', 2, 1394, 3651);
     mount();
     await flush();
-    act(() => tab('History').click());
+    act(() => historyButton().click());
     expect(el.querySelector('.m-hrow')!.textContent).toContain('Season 2 · Episode 2');
-    expect(el.querySelector('[aria-label="Continue on TV"]')).toBeTruthy();
+    expect(el.querySelector('.m-history [aria-label="Continue watching"]')).toBeTruthy();
+    act(() => render(null, el));
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    expect(el.querySelector('.m-history [aria-label="Continue on TV"]')).toBeTruthy();
   });
 
   it('a stopped phone server: start and download offers', async () => {

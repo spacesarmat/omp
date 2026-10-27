@@ -2,8 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
 import { Icon, ICONS } from '../../ui/Icon';
-import { CatalogSearch } from './CatalogSearch';
-import { navigate, scrollToTop } from '../../nav';
+import { navigate, scrollToTop, switchTab } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
@@ -24,7 +23,7 @@ import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverShe
 import { DiscoverHome } from './DiscoverHome';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 import { cancelTileCards } from '../../catalog/tileCards';
-import type { CatalogTitle, TrendingWindow } from '../../../../src/catalog/tmdb';
+import type { TrendingWindow } from '../../../../src/catalog/tmdb';
 
 export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 
@@ -57,7 +56,6 @@ export function Discover() {
   const [moreBusy, setMoreBusy] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  const [searching, setSearching] = useState(!!(kept && kept.search));
   // a kept feed is shown as is: the first run of the load effect skips the fetch
   const restored = useRef(!!(kept && kept.feed && !home));
   // the current request: answers of an older one (another chip, a retry) are dropped
@@ -74,7 +72,7 @@ export function Discover() {
   colsRef.current = cols;
   const rootRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
-    enabled: !searching && !home,
+    enabled: !home,
     levels: COLS_BY_SIZE.length,
     level: () => Math.max(0, COLS_BY_SIZE.indexOf(colsRef.current)),
     apply: (i) => {
@@ -173,15 +171,6 @@ export function Discover() {
   }, [hasMore, moreFailed, feed]);
 
   const current = filter;
-  if (searching)
-    return (
-      <CatalogSearch
-        onClose={() => {
-          saveDiscover({ search: null });
-          setSearching(false);
-        }}
-      />
-    );
   return (
     <div class="m-discover" ref={rootRef}>
       <div class="m-disc-head">
@@ -197,10 +186,7 @@ export function Discover() {
         >
           <Icon d={ICONS.sort} size={20} />
         </button>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P34.4" aria-label={t('add.search')} onClick={() => {
-            saveDiscover({ search: { text: '', items: null } });
-            setSearching(true);
-          }}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P34.4" aria-label={t('add.search')} onClick={() => switchTab({ name: 'add', scope: 'catalog' })}>
           <Icon d={SEARCH} size={18} />
         </button>
       </div>

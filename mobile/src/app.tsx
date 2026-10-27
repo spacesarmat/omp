@@ -8,7 +8,7 @@ import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { audioLaunch, rememberAudio } from './audiobooks/launch';
-import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
+import { NavBar, TAB_IDS, visibleTabIds, type Tab } from './ui/NavBar';
 import { Toast, showToast } from './ui/toast';
 import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
@@ -378,12 +378,12 @@ export function App() {
   useEffect(() => {
     if (!tabRoot) return;
     return installTabSwipe({
-      tabs: TABS,
+      tabs: visibleTabIds(),
       current: () => currentRoute.value.name,
       screen: () => document.querySelector<HTMLElement>('.m-screen'),
       go: (tab) => switchTab({ name: tab } as MRoute),
     });
-  }, [tabRoot]);
+  }, [tabRoot, !!activeTv.value]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   // a language change remounts the whole UI (t() does not subscribe components to the language)
   return (
@@ -417,7 +417,7 @@ export function App() {
       ) : route.name === 'torrent' ? (
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (
-        <Add link={route.link} query={route.query} run={route.run} entry={route} />
+        <Add link={route.link} query={route.query} run={route.run} scope={route.scope} entry={route} />
       ) : route.name === 'nowPlaying' ? (
         <NowPlaying />
       ) : route.name === 'localServer' ? (

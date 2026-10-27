@@ -48,6 +48,9 @@ const LIBRARY: Torrent[] = [
   { hash: 'f2', title: 'Достопримечательностинепереводимоедлинноеслово (2025) BDRip 1080p', category: 'movie', stat: 3, torrent_size: 12 * GB, timestamp: now / 1000 - 6000 },
   { hash: 'f3', title: 'Ледяной перевал / Frost Pass (2024) S03 1080p WEB-DL', category: 'tv', stat: 3, torrent_size: 9 * GB, timestamp: now / 1000 - 5000, data: files(['Frost.Pass.S03E01.mkv', 'Frost.Pass.S03E02.mkv', 'Frost.Pass.S03E03.mkv', 'Frost.Pass.S03E04.mkv']) },
   { hash: 'f4', title: 'Тихая гавань (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 4 * GB, timestamp: now / 1000 - 4000 },
+  // a second release of a film and of a season: one card with the releases inside, «Раздача: 1080p · Сменить»
+  { hash: 'f5', title: 'Полуночный архив / Midnight Archive (2026) BDRip 1080p | Лицензия', category: 'movie', stat: 3, torrent_size: 14 * GB, timestamp: now / 1000 - 3000, file_stats: fileStats(['Midnight.Archive.2026.1080p.BDRip.mkv']) },
+  { hash: 's3', title: 'Тёмная материя / Dark Matter (2024) [S01] 2160p WEB-DL HDR', category: 'tv', stat: 3, torrent_size: 31 * GB, timestamp: now / 1000 - 2000, data: files(S1_FILES), file_stats: fileStats(S1_FILES) },
 ];
 
 const CARDS: { [id: number]: CatalogCard } = {

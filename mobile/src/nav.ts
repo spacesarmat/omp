@@ -3,6 +3,9 @@ import { cancelRestore, currentScroll, rememberTab, restoreScroll, scrollToTop, 
 
 export { scrollToTop };
 
+/** The tabs of «Поиск». */
+export type SearchScope = 'mine' | 'catalog' | 'sources';
+
 export type MRoute =
   | { name: 'connect' }
   | { name: 'library' }
@@ -13,8 +16,12 @@ export type MRoute =
   /** «Настройки» → «Мониторинг». */
   | { name: 'monitor' }
   | { name: 'torrent'; hash: string }
-  /** `query` fills the tracker search; `run` starts it on arrival. */
-  | { name: 'add'; link?: string; query?: string; run?: boolean }
+  /**
+   * «Поиск» (the tab once named «Добавить»): one field with the tabs «Мои / Каталог / Источники» (`scope`, the last one
+   * used when not given; a link, `query` or `run` opens «Источники»). `query` fills the field; `run` starts the
+   * tracker search on arrival; `link` opens the magnet field with it.
+   */
+  | { name: 'add'; link?: string; query?: string; run?: boolean; scope?: SearchScope }
   | { name: 'remote' }
   | { name: 'nowPlaying' }
   | { name: 'tv' }
