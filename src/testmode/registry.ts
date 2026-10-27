@@ -223,7 +223,7 @@ export const FAQ_IDS = [
   'discover', 'add-magnet', 'search-filters', 'tmdb-key', 'names',
   'torrserver', 'ts-phone', 'ts-settings', 'ts-covers',
   'subscriptions', 'new-episodes', 'better-quality', 'find-better', 'series-card',
-  'log', 'report-bug', 'backup', 'support', 'telegram',
+  'log', 'report-bug', 'backup', 'support', 'telegram', 'omp-subscription',
 ];
 
 function faqItems(): RegItem[] {

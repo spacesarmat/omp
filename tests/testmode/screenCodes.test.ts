@@ -72,7 +72,8 @@ describe('screen code registry', () => {
   it('keeps FAQ question ids in STRUCT order', () => {
     expect(FAQ_IDS.join('\n')).toBe(FAQ.map((it) => it.id).join('\n'));
     expect(anchorItem('faq-lg-version')!.code).toBe('S11.10');
-    expect(anchorItem('faq-telegram')!.code).toBe('S11.' + (10 + FAQ_IDS.length - 1));
+    expect(anchorItem('faq-telegram')!.code).toBe('S11.77');
+    expect(anchorItem('faq-' + FAQ_IDS[FAQ_IDS.length - 1])!.code).toBe('S11.' + (10 + FAQ_IDS.length - 1));
   });
 
   it('keeps keypad keys and built-in sites in UI order', () => {

@@ -69,6 +69,16 @@ document.querySelectorAll("[data-set-lang]").forEach((a) => {
 syncLangLinks();
 window.addEventListener("hashchange", syncLangLinks);
 
+// A link to a FAQ answer (#adb) opens it.
+function openHashedDetails() {
+  const id = (location.hash || "").slice(1);
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (el && el.tagName === "DETAILS") el.open = true;
+}
+openHashedDetails();
+window.addEventListener("hashchange", openHashedDetails);
+
 const screens = ["remote", "catalog", "discover", "playing"];
 const tabs = [...document.querySelectorAll("[data-screen]")];
 const dots = [...document.querySelectorAll("[data-dot]")];

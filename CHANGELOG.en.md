@@ -6,6 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Help: a new answer "Install on Android with ADB" for the phone and TV boxes - developer mode, platform-tools, adb devices and adb connect, picking the APK by architecture, adb install -r without losing data, and the common errors
+- [phone] Help: "App not installed" no longer says that 32 or 64 bits never block an install, and warns that uninstalling OMP erases its data; a new question "OMP subscription: Jackett and JacRed"
+- [atv] Help: a full answer "Install on Android with ADB" (adb connect, picking the APK, errors); the built-in player is named 2160 Player
+- [tech] Site: the FAQ has the ADB install steps (a #adb link opens the answer) and an "Is OMP free?" question about the OMP subscription
 - [tech] Billing panel: a Monitoring tab with a table of checks (green or red status, time, 7-day history) and a "Check now" button
 - [tech] Checks every 15 minutes (the interval is set in the tab): every Jackett and JacRed tracker directly and through WARP, search through Jackett, Cloudflare trace through WARP, Postgres, backup, bot polling, disk, the 4 public sites, Jackett, JacRed and TorrServer on the internal network
 - [tech] Containers, restarts and memory through a read-only Docker proxy (new omp-docker-proxy container); the panel cannot restart anything

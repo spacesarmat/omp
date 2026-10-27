@@ -17,7 +17,7 @@
     <link rel="alternate" hreflang="ru" href="https://omp-player.online/" />
     <link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
     <link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
-    <link rel="stylesheet" href="/style.css?v=20261019b" />
+    <link rel="stylesheet" href="/style.css?v=20261027a" />
     <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="OMP - Open Movie Player" />
@@ -373,15 +373,87 @@
           <details data-reveal style="--reveal-delay: 4">
             <summary><h3>How do I install OMP?</h3></summary>
             <p>
-              The easiest way is from the phone: Settings → “Install OMP on TV”. The phone finds LG and
+              The easiest way is from the phone: Settings → “Install OMP on the TV”. The phone finds LG and
               Android TV devices on the network and installs OMP itself. Files for a manual install are in the
-              latest GitHub release;
+              latest GitHub release: for Android there are three APKs - arm64 (almost all phones), armv7 (many
+              TV boxes) and the universal one if you are not sure. From a computer, install the APK with ADB -
+              <a href="#adb">steps below</a>; for LG
               <a
                 href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install"
                 target="_blank"
                 rel="noopener noreferrer"
                 >see the install guide</a
               >.
+            </p>
+          </details>
+          <details id="adb" data-reveal style="--reveal-delay: 5">
+            <summary><h3>How do I install OMP on Android with ADB?</h3></summary>
+            <div class="faq-body">
+              <p>
+                ADB installs OMP from a computer on an Android phone, Android TV, Google TV or a TV box. You need
+                a computer with Windows, macOS or Linux and a USB cable (phone) or the same Wi-Fi network as the box (TV).
+              </p>
+              <ol>
+                <li>
+                  Turn on developer mode: press “Build number” 7 times (phone: Settings → “About phone”) or
+                  “Build” (TV: Settings → System or Device Preferences → About).
+                </li>
+                <li>
+                  In “Developer options” turn on “USB debugging” and connect the phone by cable. On the TV turn on
+                  “Network debugging” and find the box IP in the network settings.
+                </li>
+                <li>
+                  Download Google <a href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener noreferrer">platform-tools</a> for your system, unpack the archive and open a
+                  terminal in the platform-tools folder. On macOS and Linux type <code>./adb</code> instead of
+                  <code>adb</code>.
+                </li>
+                <li>
+                  For a TV first: <code>adb connect &lt;IP&gt;:5555</code>. Check the link:
+                  <code>adb devices</code> - the device must say <code>device</code>. On the device screen tick
+                  “Always allow from this computer” and choose “Allow”.
+                </li>
+                <li>
+                  Find the architecture: <code>adb shell getprop ro.product.cpu.abi</code>. The answer
+                  <code>arm64-v8a</code> - the file <code>OMP-&lt;version&gt;-arm64.apk</code>,
+                  <code>armeabi-v7a</code> - <code>OMP-&lt;version&gt;-armv7.apk</code> (many boxes say this even
+                  with a 64-bit processor). Not sure - the universal <code>OMP-&lt;version&gt;.apk</code>.
+                </li>
+                <li>
+                  Download the APK from the <a href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">latest GitHub release</a>, put it in the platform-tools folder
+                  and install: <code>adb install -r OMP-&lt;version&gt;-arm64.apk</code>. The <code>-r</code> flag
+                  installs over the old version and keeps the data. <code>Success</code> means it is done.
+                </li>
+              </ol>
+              <p>
+                Android 11 and newer without “Network debugging”: “Wireless debugging” → “Pair device with
+                pairing code”, then <code>adb pair &lt;IP&gt;:&lt;port&gt;</code> with the code from that window
+                and <code>adb connect &lt;IP&gt;:&lt;port&gt;</code> with the port from the “Wireless debugging” screen.
+              </p>
+              <h4>Common errors</h4>
+              <ul>
+                <li><code>unauthorized</code> - debugging was not confirmed: unlock the device screen and choose “Allow”.</li>
+                <li>
+                  <code>offline</code> - the link is lost: <code>adb kill-server</code>, then
+                  <code>adb connect</code> again or reconnect the cable.
+                </li>
+                <li>
+                  <code>INSTALL_FAILED_UPDATE_INCOMPATIBLE</code> - OMP with a different signature is already
+                  installed. Save a backup in OMP (Settings → “Advanced” → “Backup”), uninstall the old OMP (its
+                  data on the device is erased, including the TorrServer on the phone with its history) and install again.
+                </li>
+                <li><code>INSTALL_FAILED_INSUFFICIENT_STORAGE</code> - not enough space: free some memory.</li>
+                <li><code>INSTALL_FAILED_NO_MATCHING_ABIS</code> - the APK does not fit this system: take armv7 or the universal one.</li>
+              </ul>
+              <p>After the install, turn debugging off if you no longer need it.</p>
+            </div>
+          </details>
+          <details data-reveal style="--reveal-delay: 6">
+            <summary><h3>Is OMP free?</h3></summary>
+            <p>
+              Yes: the player, the remote, search in your own sources and torrent subscriptions work without
+              payment and without ads. Only the “OMP subscription” is paid - ready Jackett and JacRed on the OMP
+              server, if you do not want to run your own Jackett. The subscription and the code are in the
+              <a href="https://t.me/OMPBILLINGBOT" target="_blank" rel="noopener noreferrer">@OMPBILLINGBOT</a> bot.
             </p>
           </details>
         </div>
@@ -442,6 +514,6 @@
       </div>
       <p class="copyright">© 2026 OMP · Open Movie Player</p>
     </footer>
-    <script src="/app.js?v=20261019b"></script>
+    <script src="/app.js?v=20261027a"></script>
   </body>
 </html>
