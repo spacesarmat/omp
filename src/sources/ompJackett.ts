@@ -9,6 +9,7 @@ import {
   isLegacySession,
   onBillingChange,
   saveBillingSession,
+  saveSeenAccount,
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
@@ -82,6 +83,7 @@ function billingError(status: number, text: string): Error {
 
 /** «Отключить» on this phone: forgets the tokens (the Keystore copy too, when `ctx` can write it). */
 export function clearBilling(ctx?: SourceContext): void {
+  saveSeenAccount(null);
   dropDeviceTokens(ctx || null, '');
 }
 
@@ -155,17 +157,23 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         const err = tokenError(errorOf(res.text));
         if (session && err) throw err;
         if (session) clearBilling(ctx);
+        saveSeenAccount(null);
         return null;
       }
       if (res.status === 403) {
         // an unknown token of an app before PR-5 (the old answer); a token pair never gets 403 here
         if (session && isLegacySession(session)) clearBilling(ctx);
+        saveSeenAccount(null);
         return null;
       }
-      if (res.status === 404) return null;
+      if (res.status === 404) {
+        saveSeenAccount(null);
+        return null;
+      }
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
+      saveSeenAccount({ paidUntil });
       // Admin/bot may extend paidUntil; keep local session date in sync with the server.
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
         saveBillingSession({ ...session, paidUntil });

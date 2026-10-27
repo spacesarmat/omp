@@ -24,7 +24,9 @@ import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
-import { billingSession, onBillingChange } from '../../../src/billing/session';
+import { billingSession, onBillingChange, seenAccount, type BillingAccount } from '../../../src/billing/session';
+import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { phoneSourceContext } from '../searchContext';
 import { t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
@@ -221,14 +223,73 @@ function TvOmpRow({ v }: { v: TvOmp | null }) {
   );
 }
 
-/** «Подписка до …» or «Войти», opening the account screen. */
+type AccountFetcher = () => Promise<BillingAccount | null>;
+let accountFetcher: AccountFetcher | null = null;
+
+/** Replaces the /v1/me call of the account row (tests); null restores the real one. */
+export function setAccountFetcher(fn: AccountFetcher | null): void {
+  accountFetcher = fn;
+}
+
+/** What the account row shows: signed in (with the paid-until date when known), signed out, or still checking. */
+type AccountView = { kind: 'in'; until: number } | { kind: 'out' } | { kind: 'checking' };
+
+/** A device token on this phone (legacy or the pair) or the last /v1/me answer; otherwise the server has to say. */
+function localAccountView(): AccountView {
+  const session = billingSession();
+  if (session) return { kind: 'in', until: session.paidUntil };
+  const seen = seenAccount();
+  if (seen) return { kind: 'in', until: seen.paidUntil };
+  return { kind: 'checking' };
+}
+
+/**
+ * «Подписка до …», «Вход выполнен» or «Войти», opening the account screen. A phone with the token pair keeps an
+ * empty legacy `token`, and a phone linked by Telegram has no token at all, so the row asks /v1/me when there is no
+ * session and shows «Проверяю вход…» (or the last known answer) instead of flashing «Войти».
+ */
 function AccountRow() {
-  const [session, setSession] = useState(billingSession());
-  useEffect(() => onBillingChange(() => setSession(billingSession())), []);
-  const until = session && session.token ? billingDay(session.paidUntil) : '';
+  const [view, setView] = useState<AccountView>(localAccountView);
+  useEffect(() => {
+    let alive = true;
+    function check() {
+      const local = localAccountView();
+      setView(local);
+      if (billingSession()) return;
+      const fetcher = accountFetcher ?? (() => fetchBillingAccount(phoneSourceContext()));
+      fetcher().then(
+        (account) => {
+          if (!alive || billingSession()) return;
+          setView(account ? { kind: 'in', until: account.paidUntil } : { kind: 'out' });
+        },
+        () => {
+          // Server down: keep the last known answer, otherwise offer to sign in.
+          if (alive && !billingSession()) setView(local.kind === 'in' ? local : { kind: 'out' });
+        },
+      );
+    }
+    check();
+    const off = onBillingChange(() => {
+      if (billingSession()) setView(localAccountView());
+      else check();
+    });
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  const until = view.kind === 'in' ? billingDay(view.until) : '';
+  const label =
+    view.kind === 'checking'
+      ? t('settings.accountChecking')
+      : view.kind === 'out'
+        ? t('common.signIn')
+        : until
+          ? t('settings.subscribedUntil', { date: until })
+          : t('settings.signedIn');
   return (
-    <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" onClick={() => navigate({ name: 'account' })}>
-      <span>{until ? t('settings.subscribedUntil', { date: until }) : t('common.signIn')}</span>
+    <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" data-account={view.kind} aria-busy={view.kind === 'checking' ? 'true' : undefined} onClick={() => navigate({ name: 'account' })}>
+      <span class={view.kind === 'checking' ? 'm-muted' : undefined}>{label}</span>
       <Icon d={CHEVRON} size={20} />
     </button>
   );
