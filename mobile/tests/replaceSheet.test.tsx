@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 
 vi.mock('../../src/monitor/replace', async (orig) => ({
   ...(await orig<typeof import('../../src/monitor/replace')>()),
@@ -190,5 +192,23 @@ describe('ReplaceSheet in English', () => {
     click(byText('Replace and watch'));
     await flush();
     expect(el.querySelector('[role=alert]')!.textContent).toBe('Could not replace the release.');
+  });
+});
+
+describe('«Другая раздача» rows fit long titles (mobile.css)', () => {
+  const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+  const rule = (sel: string) => {
+    const m = new RegExp('(?:^|\\n)' + sel.replace(/[.>*]/g, '\\$&') + '\\s*\\{([^}]*)\\}').exec(css);
+    return m ? m[1] : '';
+  };
+
+  it('rows in a scrolling sheet part never shrink below their content (buttons have min-height: 44px)', () => {
+    expect(rule('.m-sheet > .m-sheet-scroll > *')).toMatch(/flex-shrink:\s*0/);
+  });
+
+  it('a long title wraps inside the row and the check keeps its size', () => {
+    expect(rule('.m-opt-name')).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule('.m-opt-text')).toMatch(/min-width:\s*0/);
+    expect(rule('.m-opt > svg')).toMatch(/flex-shrink:\s*0/);
   });
 });
