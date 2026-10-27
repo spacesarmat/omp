@@ -19,7 +19,7 @@ import {
   SITE_PEEK,
   PUBLIC_SITES,
 } from '../src/monitorChecks.mjs';
-import { alertPlan, historyStrip, monitorChatId, monitorEnabled, problemMessages, problemText, recoveredText, validInterval } from '../src/monitor.mjs';
+import { alertPlan, historyStrip, legacyAlertsOn, monitorChatId, monitorEnabled, problemMessages, problemText, recoveredText, validInterval } from '../src/monitor.mjs';
 
 const KEY = 'jk_' + 'x'.repeat(29);
 const RED_KEY = 'jr_' + 'y'.repeat(29);
@@ -668,5 +668,19 @@ describe('alerts', () => {
     expect(s).toHaveLength(168);
     expect(s.slice(-2)).toBe('gr');
     expect(s.slice(0, -2)).toBe('-'.repeat(166));
+  });
+});
+
+describe('old admin notices that «Мониторинг» duplicates', () => {
+  it('are off while the monitor schedule runs on this instance', () => {
+    expect(legacyAlertsOn({})).toBe(false);
+    expect(legacyAlertsOn({ BILLING_MONITOR: '1', BILLING_BOT_POLL: '1' })).toBe(false);
+  });
+  it('come back when the monitor does not alert here, or with BILLING_LEGACY_ALERTS=1', () => {
+    expect(legacyAlertsOn({ BILLING_MONITOR: '0' })).toBe(true);
+    expect(legacyAlertsOn({ BILLING_BOT_POLL: '0' })).toBe(true);
+    expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: '1' })).toBe(true);
+    expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: 'true' })).toBe(true);
+    expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: '0' })).toBe(false);
   });
 });
