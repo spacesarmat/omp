@@ -1,7 +1,7 @@
 // «Мои» on the phone: the releases of one film are one card (same TMDB id, else the same normalized title and year).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { groupPhoneLibrary, filmReleases, phoneItemHashes } from '../src/lib/filmGroups';
-import { reloadProgress, saveProgress } from '../../src/store/progress';
+import { reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
 import type { Torrent } from '../../src/api/types';
 
 const film = (hash: string, title: string, timestamp: number): Torrent => ({ hash, title, category: 'movie', stat: 3, torrent_size: 1, timestamp });
@@ -14,6 +14,7 @@ const S1: Torrent = { hash: 's1', title: 'Тёмная материя / Dark Mat
 beforeEach(() => {
   localStorage.clear();
   reloadProgress();
+  serverViewed.value = [];
 });
 
 describe('groupPhoneLibrary', () => {
@@ -36,6 +37,12 @@ describe('groupPhoneLibrary', () => {
 
   it('a release watched to the end still leads', () => {
     saveProgress('a2', 1, 5900, 6000);
+    const g = groupPhoneLibrary([A1, A2]).find((x) => x.kind === 'film');
+    expect(g && g.kind === 'film' ? g.lead.hash : '').toBe('a2');
+  });
+
+  it('with no history here, the release being watched on the TV leads', () => {
+    serverViewed.value = [{ hash: 'a2', file_index: 1, timecode: 900 }];
     const g = groupPhoneLibrary([A1, A2]).find((x) => x.kind === 'film');
     expect(g && g.kind === 'film' ? g.lead.hash : '').toBe('a2');
   });

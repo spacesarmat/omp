@@ -4,7 +4,7 @@
 import type { Torrent } from '../../../src/api/types';
 import { groupLibrary, isSeries, type LibraryItem } from '../../../src/lib/seriesGroups';
 import { cachedMovieId } from '../../../src/lib/useMovieCard';
-import { lastPlayedAt } from '../../../src/store/progress';
+import { continueWatching, lastPlayedAt } from '../../../src/store/progress';
 import { filmKeys } from './duplicates';
 
 export interface FilmGroup {
@@ -56,9 +56,11 @@ function filmOwners(list: Torrent[]): number[] {
 }
 
 function leadOf(members: Torrent[]): Torrent {
-  // the release played last, finished or not; else the newest
+  // the release played last here, finished or not; else the one being watched on the TV; else the newest
   const played = members.reduce((a, b) => (lastPlayedAt(b.hash) > lastPlayedAt(a.hash) ? b : a), members[0]);
   if (lastPlayedAt(played.hash) > 0) return played;
+  const recent = continueWatching(members, 1000)[0];
+  if (recent) return recent.torrent;
   return members.reduce((a, b) => ((b.timestamp || 0) > (a.timestamp || 0) ? b : a), members[0]);
 }
 
