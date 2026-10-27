@@ -14,6 +14,9 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Several releases of one movie in "Mine" are one card, and the release is picked inside with the "Release: ... · Change" line
 - [phone] Sort and view are one sheet, and the button shows the current choice
 - [phone] Settings: "Server on the phone" sits next to "Watch from"
+- [phone] The built-in player is now 2160 Player 0.2.13: the "Audio track" and "Subtitles" panels are wider and labels no longer break mid-word; in landscape the time is aligned to the right
+- [phone] 2160 Player: "LIVE" shows only for real live streams; while buffering a spinner replaces the play button
+- [phone] 2160 Player: the error dialog closes the open panel and draws on an opaque backdrop; intro detection starts only after the stream has opened
 
 ## 0.20.6-beta.4
 
