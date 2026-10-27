@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6-beta.5
 
 - [phone] With no TV chosen the main button is "Watch on the phone"; on a series page one tap starts the next unwatched episode, with "On the TV" next to it
 - [phone] The "Add" tab is now "Search": one field with the "Mine", "Catalog" and "Sources" tabs; a link or magnet is pasted there too
