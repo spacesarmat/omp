@@ -288,7 +288,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S11.14 | Помощь | Help | Режим разработчика и 1000 часов | Developer Mode and 1000 hours |
 | S11.15 | Помощь | Help | Как обновить OMP | How to update OMP |
 | S11.16 | Помощь | Help | Установить на Android TV | Install on Android TV |
-| S11.17 | Помощь | Help | Установить через adb | Install through adb |
+| S11.17 | Помощь | Help | Установка на Android через ADB | Install on Android with ADB |
 | S11.18 | Помощь | Help | На каких приставках работает OMP | Which boxes OMP works on |
 | S11.19 | Помощь | Help | Какой APK скачать | Which APK to download |
 | S11.20 | Помощь | Help | Установить на Xiaomi (Mi Box, Mi TV) | Install on Xiaomi (Mi Box, Mi TV) |
@@ -349,6 +349,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S11.75 | Помощь | Help | Резервная копия: сохранить и восстановить | Backup: save and restore |
 | S11.76 | Помощь | Help | Как поддержать OMP | How to support OMP |
 | S11.77 | Помощь | Help | Где брать новые версии (Telegram) | Where to get new versions (Telegram) |
+| S11.78 | Помощь | Help | Подписка OMP: Jackett и JacRed | OMP subscription: Jackett and JacRed |
 | S12 | Телефон | Phone |  |  |
 | S12.1 | Телефон | Phone | Готово | Done |
 | S12.2 | Телефон | Phone | Новый код | New code |

@@ -9,6 +9,7 @@ const ROOTING_URL = 'https://www.webosbrew.org/rooting/';
 const RELEASE_LINK: FaqLine = { text: 'OMP release on GitHub', url: RELEASES_URL };
 const DOWNLOAD_LINK: FaqLine = { text: 'Download the release on GitHub', url: RELEASES_URL };
 const TELEGRAM_LINK: FaqLine = { text: 't.me/ompplyaer - the OMP channel on Telegram', url: 'https://t.me/ompplyaer' };
+const PLATFORM_TOOLS_LINK: FaqLine = { text: 'platform-tools (adb) - download from Google', url: 'https://developer.android.com/tools/releases/platform-tools' };
 
 export const FAQ_EN: { [id: string]: FaqText } = {
   // ---- Installation ----
@@ -108,20 +109,36 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     more: [
       'It is easier from the phone: Settings → “Install OMP on the TV” installs OMP on Android TV over the network if “Network debugging” is turned on on the box (see the question about the install assistant). If it did not work - the manual way:',
       '1. Download the APK from the release page on GitHub: OMP-<version>-arm64.apk for a 64-bit system, OMP-<version>-armv7.apk for a 32-bit one (many boxes run a 32-bit system even with a 64-bit processor), the universal OMP-<version>.apk if you are not sure (details - the question “Which APK to download”).',
-      '2. Install the file on the TV in one of these ways: the “Downloader” app (enter the link), “Send Files to TV” from the phone, a USB drive with a file manager, or adb (see the question about adb).',
+      '2. Install the file on the TV in one of these ways: the “Downloader” app (enter the link), “Send Files to TV” from the phone, a USB drive with a file manager, or adb from a computer (the question “Install on Android with ADB”).',
       '3. The system asks to allow installs from unknown sources. On Android 8 and newer the permission is given to the app you install from (Downloader, the file manager), not to OMP.',
       DOWNLOAD_LINK,
     ],
   },
   'atv-adb': {
-    q: 'Install through adb',
+    q: 'Install on Android with ADB',
     short: [
-      '1. Turn on developer mode: Settings → System → About, press “Build” 7 times.',
-      '2. In “Developer options” turn on “Network debugging” (or USB debugging) and find out the TV IP.',
-      '3. On the computer: adb connect <IP>:5555, then adb install OMP-<version>.apk.',
+      'ADB installs OMP from a computer on a phone, Android TV, Google TV or a TV box. An update keeps the data.',
+      '1. Turn on developer mode: press “Build number” (phone) or “Build” (TV) in “About” 7 times.',
+      '2. In “Developer options” turn on “USB debugging” (phone, by cable) or “Network debugging” (TV).',
+      '3. Install Google platform-tools on the computer and check the link: adb devices. For a TV first adb connect <IP>:5555.',
+      '4. Install: adb install -r OMP-<version>-arm64.apk (or -armv7.apk, or the universal OMP-<version>.apk).',
+      'Which APK, Android 11 and newer and the errors - in the full answer.',
     ],
     more: [
-      'On Android 11 and newer use “Wireless debugging” instead: it shows a pairing code - first adb pair <IP>:<port> and the code, then adb connect. The install assistant on the phone cannot do this pairing yet - on such boxes install the APK from a computer or another way above.',
+      'What you need: a computer with Windows, macOS or Linux, the APK file and a USB cable (phone) or the same Wi‑Fi network as the box (TV). The APK is on the GitHub release page (link below) or in the OMP Telegram channel.',
+      'Developer mode. Phone: Settings → “About phone” → press “Build number” 7 times (Samsung: “About phone” → “Software information”; Xiaomi: “MIUI version” or “OS version”). Android TV: Settings → Device Preferences → About → press “Build” 7 times. Google TV: Settings → System → About → press “Android TV OS build” 7 times. Item names depend on the firmware.',
+      'Debugging. In “Developer options” turn on “USB debugging” and connect the phone by cable. On the TV turn on “Network debugging” (ADB over network) and find out the box IP: Settings → Network & Internet → your network.',
+      'platform-tools. Download the archive for your system (Windows, macOS or Linux) from the Google page, unpack it and open a terminal in the platform-tools folder. On Windows: type cmd in the folder address bar and press Enter. On macOS and Linux type ./adb instead of adb.',
+      'Connecting. adb devices lists the devices: the one you need must say device. For a TV first adb connect <IP>:5555. On the first connection the device asks “Allow debugging?” - tick “Always allow from this computer” and choose “Allow”.',
+      'Android 11 and newer without “Network debugging”: turn on “Wireless debugging” → “Pair device with pairing code”. Run adb pair <IP>:<port> with the port and the code from that window, then adb connect <IP>:<port> with the port from the “Wireless debugging” screen (not 5555). The phone install assistant cannot do this pairing yet.',
+      'Which APK. Run adb shell getprop ro.product.cpu.abi. The answer arm64-v8a - take OMP-<version>-arm64.apk, armeabi-v7a - OMP-<version>-armv7.apk (many boxes say this even with a 64-bit processor). Not sure - the universal OMP-<version>.apk: it fits all, but it is bigger.',
+      'Installing. Put the APK in the platform-tools folder and run adb install -r with your file name, for example adb install -r OMP-<version>-arm64.apk. The answer Success means OMP is installed. The -r flag installs the new version over the old one: servers, TV pairings, subscriptions and settings are kept. Several devices connected - add -s <IP>:5555 or the serial number: adb -s <IP>:5555 install -r ….',
+      'Errors. unauthorized - debugging was not confirmed on the device: unlock the screen and choose “Allow”. No prompt - reconnect the cable or run adb connect again. offline - the link is lost: adb kill-server, then adb devices again (TV - adb connect <IP>:5555); restarting “Network debugging” helps too.',
+      'INSTALL_FAILED_UPDATE_INCOMPATIBLE - OMP with a different signature is already installed (for example, built by hand), you cannot install over it. Save a backup (Settings → “Advanced” → “Backup”), uninstall the old OMP - this erases its data on the device - and install again.',
+      'INSTALL_FAILED_INSUFFICIENT_STORAGE - not enough space: free some memory. INSTALL_FAILED_NO_MATCHING_ABIS - the file does not fit this system: take armv7 or the universal one. INSTALL_FAILED_VERSION_DOWNGRADE - the device has a newer version than the file: download the latest release.',
+      'After the install turn debugging off if you no longer need it: “Network debugging” opens adb to every device on the home network.',
+      PLATFORM_TOOLS_LINK,
+      DOWNLOAD_LINK,
     ],
   },
   'atv-boxes': {
@@ -168,7 +185,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '6. The phone downloads OMP from GitHub, checks it and installs it - wait for “OMP installed”.',
       '7. Turn off “Network debugging” (the question “Security: network debugging”) and connect the phone by code (the question “Connect the phone to a Xiaomi TV”).',
       'Item names depend on the firmware. PatchWall is the Xiaomi launcher on top of Android TV: it opens the usual Android TV settings.',
-      'Google TV with Android 11 and newer may offer only “Wireless debugging” with a pairing code, which the phone assistant cannot do yet. Then install by hand or from a computer (see the question about adb).',
+      'Google TV with Android 11 and newer may offer only “Wireless debugging” with a pairing code, which the phone assistant cannot do yet. Then install by hand or from a computer (the question “Install on Android with ADB”).',
       'OMP needs Android 8 or newer: Mi Box 3 (Android 6) will not do. The built-in TorrServer runs only on 64-bit devices (arm64).',
       DOWNLOAD_LINK,
     ],
@@ -224,6 +241,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       '1. Download the APK from the release page on GitHub (usually OMP-<version>-arm64.apk, which to choose - “Which APK to download”) and open the file.',
       '2. Allow the install from the browser or file manager when Android asks.',
       'After that updates come inside the app.',
+      'From a computer by cable - the question “Install on Android with ADB”.',
     ],
     more: ['OMP checks for a new version at launch and offers to install it: the APK for your phone architecture is taken from the update feed.', 'Every release is also posted in the OMP Telegram channel.', TELEGRAM_LINK, DOWNLOAD_LINK],
   },
@@ -257,10 +275,14 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'apk-fail': {
     q: 'Android says “App not installed”',
     short: [
-      '1. If OMP with a different signature is already installed (for example, built by hand), remove the old one first, then install the new one.',
-      '2. Check the free space.',
+      '1. The file does not fit this system: an arm64 file does not install on a 32-bit system (many boxes). Take armv7 or the universal OMP-<version>.apk.',
+      '2. OMP with a different signature is already installed (for example, built by hand): you cannot install over it. Save a backup, uninstall the old OMP and install the new one.',
+      '3. Check the free space.',
     ],
-    more: ['32 or 64 bits does not get in the way of the install: it is the signature or the space.'],
+    more: [
+      'The exact reason shows up when you install from a computer: the question “Install on Android with ADB”, the errors part.',
+      'Uninstalling OMP erases its data on the device: servers, TV pairings, subscriptions and settings. A backup brings them back (Settings → “Advanced” → “Backup”). The watch history is stored on TorrServer and stays.',
+    ],
   },
   'lg-gone': {
     q: 'OMP disappeared from the TV',
@@ -292,7 +314,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'LG (webOS 4.0 and newer). If Homebrew Channel is already on the TV, OMP can be installed through it or straight from the phone. If not - the way through Developer Mode: an LG developer account, the “Developer Mode” app on the TV, Dev Mode Status and Key Server turned on. Then enter on the phone the code (Passphrase) from the Developer Mode screen: the phone downloads OMP from GitHub, checks the checksum and installs it on the TV. If you wish, the assistant also installs Homebrew Channel.',
       'Developer Mode on LG lasts 1000 hours. After the install the assistant offers a reminder: it arrives in about 928 hours (3 days before the end) - then open “Developer Mode” on the TV and extend the period. The countdown starts from the install, while the Developer Mode timer itself may have started earlier, so it is better to extend the period right after the install. The reminder is set for each TV separately.',
       'Android TV and Google TV. On the box turn on developer mode (Settings → System → About, press “Build” 7 times) and “Network debugging” (port 5555). The assistant connects over the network, “Allow debugging?” appears on the TV - confirm it. Then the phone downloads the APK, checks it and installs it.',
-      'Limitation: “Wireless debugging” on Android 11 and newer (pairing by code) is not supported by the phone yet. If the box has no “Network debugging” item, the assistant offers “Download APK”: install it manually or from a computer through adb (see the question about adb).',
+      'Limitation: “Wireless debugging” on Android 11 and newer (pairing by code) is not supported by the phone yet. If the box has no “Network debugging” item, the assistant offers “Download APK”: install it manually or from a computer through adb (the question “Install on Android with ADB”).',
       'The phone contacts only the TV and GitHub (to download OMP and Homebrew Channel). The code and keys are needed only during the install and do not get into the log. About security - in the question “Security: Key Server and network debugging”.',
       RELEASE_LINK,
     ],
@@ -326,7 +348,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
           'Open Settings → “Install OMP on the TV” (or the “Install assistant” link on the “TV” screen). The phone and the TV must be in the same network. The assistant looks for LG and Android TV; if the TV was not found, tap “Enter the IP manually”.',
           'For each TV found it shows the model, the system version and whether OMP is already on it. If OMP is already installed and a new version is out, the assistant offers to update.',
           'Android TV and Google TV. On the box turn on developer mode (Settings → System → About, press “Build” 7 times) and “Network debugging” (port 5555). The assistant connects over the network, “Allow debugging?” appears on the TV - confirm it. Then the phone downloads the APK, checks it and installs it.',
-          'Limitation: “Wireless debugging” on Android 11 and newer (pairing by code) is not supported by the phone yet. If the box has no “Network debugging” item, the assistant offers “Download APK”: install it manually or from a computer through adb (see the question about adb).',
+          'Limitation: “Wireless debugging” on Android 11 and newer (pairing by code) is not supported by the phone yet. If the box has no “Network debugging” item, the assistant offers “Download APK”: install it manually or from a computer through adb (the question “Install on Android with ADB”).',
           'The phone contacts only the TV and GitHub (to download OMP). The code and keys are needed only during the install and do not get into the log. About security - in the question about network debugging.',
           RELEASE_LINK,
         ],
@@ -544,7 +566,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'player-engine': {
     q: 'Player: built-in or VLC',
     short: [
-      'Android TV has two players: “Built-in” (the system Android player with the FFmpeg decoder) and VLC.',
+      'Android TV has two players: “Built-in” (2160 Player, based on Media3 with the FFmpeg decoder) and VLC.',
       'The choice: Settings → “Player”: “Auto” (the default), “Built-in” or “VLC”.',
       'VLC is needed when the built-in one cannot open a file or you need ASS subtitles with styles (anime). It opens a file a little slower.',
       'For one torrent the player is changed in the player menu: the first row “Change player: … → …”. The choice is remembered for this torrent.',
@@ -1008,6 +1030,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     more: [
       'The “New” tab is a feed of fresh torrents from rutor, nnmclub and torrent.by: “Movies”, “Series”, “Anime” and the 1080p+ filter. Each torrent has “Add” and “On TV”. The sources must be turned on in “Search sources”.',
       'A subscription is a query with rules: sources, the minimum quality and the number of seeds. Create it with the “+ New subscription” button on the “Subscriptions” tab. OMP checks the subscriptions itself and reports new torrents with a notification and a badge on the “New” tab.',
+      'These subscriptions are free and work with your sources. The paid “OMP subscription” is something else: access to Jackett and JacRed on the OMP server (the question “OMP subscription: Jackett and JacRed”).',
       'The first check of a new subscription goes without notifications: the torrents already on the sites are considered known. Notifications come only about what appeared later.',
       'You can also check by hand: the refresh button in the “New” header. How often OMP checks by itself and whether Wi‑Fi is needed for it - in Settings → “Follow new releases” (the monitoring icon in the “New” header and the “Monitoring settings” button at the bottom lead there too).',
       'Each subscription has its own check button. Subscriptions and found torrents can be searched with the search field and sorted: by date added, new findings, by name, by quality, by find age.',
@@ -1074,12 +1097,12 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'support': {
     q: 'How to support OMP',
     short: [
-      'OMP is free and has no ads, all features are available to everyone.',
+      'OMP is free and has no ads. Only the “OMP subscription” is paid - ready Jackett and JacRed (the question “OMP subscription: Jackett and JacRed”).',
       'To support: Settings → “Support the project” (a page opens in the browser).',
       'Already supported? Enter the Boosty code in “Support OMP” → “Already supported?”.',
     ],
     more: [
-      'OMP is free and has no ads, all features are available to everyone. If the app is useful to you, you can support the development: Settings → “Support the project”.',
+      'OMP is free and has no ads: the player, search in your own sources, torrent subscriptions and the remote work without payment. If the app is useful to you, you can support the development: Settings → “Support the project”. Boosty support turns nothing on - it is not the “OMP subscription”.',
       'The app sends nothing when you do this: the button just opens a page in the browser.',
       'On the TV, on pause and during the final credits, a card with a QR code appears - point the phone camera at it.',
       'Already supported? Boosty subscribers get a support code, it changes every month. Enter it in “Support OMP” → “Already supported?” - until the end of the month OMP will not ask for support, neither on the phone nor on the TVs. The code is checked on the phone, only the end date is written to the server.',
@@ -1097,6 +1120,21 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'The post has what is new and buttons to download the builds, to support the project and to see the list of changes.',
       TELEGRAM_LINK,
       RELEASE_LINK,
+    ],
+  },
+  'omp-subscription': {
+    q: 'OMP subscription: Jackett and JacRed',
+    short: [
+      'The “OMP subscription” is paid search through Jackett and JacRed on the OMP server: no need to run your own Jackett.',
+      'The subscription and the code - in the Telegram bot @OMPBILLINGBOT.',
+      'Enter the code: Settings → “OMP account” → “Subscription code” → “Connect”.',
+      'Found torrents are added to your TorrServer as usual.',
+    ],
+    more: [
+      'Without the subscription OMP works fully: search in the built-in sites, your own Jackett and Prowlarr, torrent subscriptions and the player are free. The subscription adds ready Jackett and JacRed as search sources.',
+      '“OMP account” shows the date the subscription runs until, with “Renew” and “Disconnect”. “Link Telegram” links the phone to the bot: the code comes there, and the subscription is managed there.',
+      'The code is bound to a device. If all devices of the subscription are taken, unlink one in the bot or buy an extra one. After the subscription ends, search keeps working for a grace period, the date is shown in “OMP account”.',
+      'Boosty support (“Support the project”) is separate and does not include the subscription.',
     ],
   },
 };
