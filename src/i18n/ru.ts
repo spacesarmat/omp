@@ -129,6 +129,8 @@ export const ru = {
     account: 'Аккаунт OMP',
     accountLink: 'Подписка и вход',
     subscribedUntil: 'Подписка до {date}',
+    signedIn: 'Вход выполнен',
+    accountChecking: 'Проверяю вход…',
     watch: 'Просмотр',
     watchFrom: 'Откуда смотреть',
     reachable: 'На связи',

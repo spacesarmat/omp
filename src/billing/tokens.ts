@@ -12,6 +12,7 @@ import {
   emitBillingChange,
   isLegacySession,
   saveBillingSession,
+  saveSeenAccount,
   sessionKey,
   setBillingNotice,
   type BillingNotice,
@@ -225,6 +226,8 @@ export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSessi
 export function dropDeviceTokens(ctx: SourceContext | null, notice: BillingNotice): void {
   saveBillingAccess(null);
   saveBillingSession(null);
+  // a known revocation is not a network blip: the Settings row must not keep the old «Подписка до …»
+  saveSeenAccount(null);
   setBillingNotice(notice);
   memoryRefresh = null;
   if (ctx && ctx.billing && ctx.billing.forget) ctx.billing.forget().then(undefined, () => undefined);

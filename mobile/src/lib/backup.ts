@@ -178,6 +178,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.billingDevice', // paid Jackett: install id, per device
   'tsp.billingSession', // paid Jackett: device access token (refresh token in the Keystore), never in a copy
   'tsp.billingNotice', // paid Jackett: «устройство отключено» after the server dropped this binding, per device
+  'tsp.billingAccountSeen', // the last OMP account answer for the Settings row, per device
   'tsp.billingAccess', // OMP subscription state from /v1/me (the monitoring cap), per session
   'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
   'tsp.billingOrigin', // paid Jackett: last public/LAN origin of apps before the LAN fallback was removed; never copied
