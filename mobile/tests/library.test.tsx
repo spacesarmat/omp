@@ -418,6 +418,27 @@ describe('Library', () => {
     expect(el.textContent).toContain('Сервер не ответил');
   });
 
+  it('history play without a TV does not start when the server is switched while the files load', async () => {
+    saveProgress('h1', 2, 100, 3000);
+    const full = torrents.value.find((x) => x.hash === 'h1')!;
+    const bare = torrents.value.map((x) => (x.hash === 'h1' ? { ...x, data: undefined, file_stats: undefined } : x));
+    torrents.value = bare;
+    listSpy.mockResolvedValue(bare);
+    let done: (t: Torrent) => void = () => {};
+    vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockImplementation(() => new Promise<Torrent>((r) => (done = r)));
+    const open = vi.fn();
+    setWatchActions({ recordWatch: async () => undefined, ompVersion: async () => null, reportUrl: async () => null, launchOnTv: vi.fn(), openExternal: open, remoteDelayMs: 0 });
+    mount();
+    await flush();
+    act(() => historyButton().click());
+    act(() => (el.querySelector('.m-history [aria-label="Продолжить просмотр"]') as HTMLElement).click());
+    await flush();
+    act(() => setActiveServer(addServer({ url: 'http://other:8090' }).id));
+    done(full);
+    await flush();
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it('«Продолжить просмотр» on top of «Мои»: a card per started item, «Вся история» opens the history', async () => {
     saveProgress('h1', 2, 1394, 3651);
     mount();

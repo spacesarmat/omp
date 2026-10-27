@@ -107,6 +107,13 @@ export function Library() {
   useHint('mine');
   const c = client.value;
   const tab = libraryTab.value;
+  const aliveRef = useRef(true);
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
   // the search is the «Поиск» tab now («Мои» there): the cards here are never filtered by a query
   const query = '';
   const list = torrents.value;
@@ -447,12 +454,14 @@ export function Library() {
       };
       return withFiles()
         .then((tor) => {
+          // the screen closed or the server was switched while the files loaded: nothing plays
+          if (!aliveRef.current || client.peek() !== c) return false;
           const file = filesOf(tor).find((f) => f.id === fileIndex);
           if (!file) throw new Error(t('torrent.noFiles'));
-          return playOnPhone(tor, file, time);
+          return playOnPhone(tor, file, time).then(() => true);
         })
         .then(
-          () => true,
+          (played) => played,
           (e) => {
             setTvError(errorMessage(e));
             return false;
