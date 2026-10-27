@@ -78,3 +78,33 @@ describe('TV search without Wi-Fi', () => {
     expect(el.innerHTML).toBe('');
   });
 });
+
+describe('«Телевизор» without Wi-Fi', () => {
+  it('starts no search, shows the note, and searches again once Wi-Fi is back', async () => {
+    const { Tv, setTvDiscoverer, setAtvDiscoverer } = await import('../src/screens/Tv');
+    let wifi = false;
+    setFoundTvWifi(async () => wifi);
+    const lg = vi.fn(async () => []);
+    const atv = vi.fn(async () => []);
+    setTvDiscoverer(lg);
+    setAtvDiscoverer(atv);
+    mount(<Tv />);
+    await flush();
+    expect(lg).not.toHaveBeenCalled();
+    expect(atv).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-tv-nowifi]')).toBeTruthy();
+    expect(el.querySelector('.m-searching')).toBeNull();
+    wifi = true;
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await flush();
+    await flush();
+    expect(lg).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[data-tv-nowifi]')).toBeNull();
+    expect(el.querySelector('[data-tv-notfound]')).toBeTruthy();
+    setTvDiscoverer(null);
+    setAtvDiscoverer(null);
+    setFoundTvWifi(null);
+  });
+});

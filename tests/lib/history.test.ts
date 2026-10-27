@@ -149,4 +149,11 @@ describe('buildHistory: failed starts and duplicates (QA B12)', () => {
     const other = { ...torrent('x', [{ f: 1, t: 500, d: 2000, at: at(9, 2, 19, 0), src: 'tv' }]), title: 'Other S01', category: 'tv', file_stats: files } as Torrent;
     expect(buildHistory([old, neu, other], 'all', [], noLocal).map((x) => x.torrent.hash)).toEqual(['n', 'x']);
   });
+
+  it('a file without a season takes the torrent season: E01 of S01 and E01 of S02 are two rows', () => {
+    const files = [{ id: 1, path: 'Show.E01.mkv', length: 1 }];
+    const s1 = { ...torrent('s1', [{ f: 1, t: 100, d: 2000, at: at(9, 1, 20, 0), src: 'tv' }]), title: 'Show S01 1080p', category: 'tv', file_stats: files } as Torrent;
+    const s2 = { ...torrent('s2', [{ f: 1, t: 500, d: 2000, at: at(9, 2, 20, 0), src: 'tv' }]), title: 'Show S02 1080p', category: 'tv', file_stats: files } as Torrent;
+    expect(buildHistory([s1, s2], 'all', [], noLocal).map((x) => x.torrent.hash)).toEqual(['s2', 's1']);
+  });
 });

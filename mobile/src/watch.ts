@@ -192,7 +192,8 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
     const saved = await play2160({ open2160: open }, c, queue, start, at, skip, w.duration);
     // the journal gets where the player stopped, not a start at 0:00: a start that never played (no network,
     // a dead source) is not a watch and must not show in «История» as «0:00»
-    if (saved && saved.item.fileIndex !== undefined && (saved.ended || saved.time >= 1)) {
+    // an end with no known length comes back at 0: nothing to write then, so an older real position stays
+    if (saved && saved.item.fileIndex !== undefined && saved.time >= 1) {
       void recordPhoneWatch(c, w.hash, saved.item.fileIndex, saved.time, saved.duration);
     }
     return;

@@ -4,7 +4,8 @@ import type { Torrent } from '../api/types';
 import { journalOf, type JournalSrc } from './journal';
 import { seriesKey } from './seriesGroups';
 import { parseEpisode } from './episodes';
-import { torrentFiles } from './torrentName';
+import { displayTitle, torrentFiles } from './torrentName';
+import { parseEpisodeRange } from '../monitor/episodes';
 import { t } from '../i18n';
 import { ru } from '../i18n/ru';
 import { en } from '../i18n/en';
@@ -133,7 +134,10 @@ function episodeKey(it: HistoryItem): string {
   if (!file) return '';
   const ep = parseEpisode(file.path);
   if (ep.episode === null) return '';
-  return show + '|' + (ep.season === null ? '' : ep.season) + '|' + ep.episode;
+  // «Show.E01.mkv» names no season: take the torrent's («Show S02»); unknown either way, no dedupe
+  const season = ep.season !== null ? ep.season : parseEpisodeRange(displayTitle(it.torrent)).season;
+  if (season === null || season === undefined) return '';
+  return show + '|' + season + '|' + ep.episode;
 }
 
 function pad(n: number): string {

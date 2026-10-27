@@ -68,12 +68,12 @@ export function setFoundTvNetwork(fn: NetReader | null): void {
   netReader = fn ?? (() => native.localIpv4().catch(() => null));
 }
 
-/** Whether the phone is on Wi-Fi (always true off the phone). The «Телевизор» screen asks before searching. */
-export function phoneOnWifi(): Promise<boolean> {
+/** Whether the phone is on Wi-Fi: true at once off the phone (web, tests), so a screen can search in the same tick. */
+export function phoneWifiNow(): boolean | Promise<boolean> {
   try {
-    return Promise.resolve(wifiCheck()).catch(() => true);
+    return wifiCheck();
   } catch {
-    return Promise.resolve(true);
+    return true;
   }
 }
 

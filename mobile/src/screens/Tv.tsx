@@ -16,7 +16,7 @@ import {
   tvForgot,
 } from '../tv/tvClient';
 import { LG_OMP_APP_ID } from '../../../src/lib/installPlan';
-import { phoneOnWifi } from '../tv/foundTvDiscovery';
+import { phoneWifiNow } from '../tv/foundTvDiscovery';
 import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { tvs, activeTv, forgetTv, isTvRenamed, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
@@ -86,31 +86,56 @@ export function Tv() {
     };
   }, [connectedIp]);
 
+  // a new round after the no-Wi-Fi note: the app came back or the network changed
+  const [round, setRound] = useState(0);
   useEffect(() => {
     let alive = true;
-    void phoneOnWifi().then((wifi) => {
-      if (alive && !wifi) {
-        setNoWifi(true);
-        setSearching(false);
-      }
-    });
-    // SSDP (LG) and NSD (Android TV with OMP) in parallel; each list shows as soon as it arrives
-    const lg = (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS)
-      .then((r) => alive && setFound(r))
-      .catch(() => {});
-    const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
-      .then((r) => {
-        if (!alive) return;
-        // a saved Android TV that answers on another port now (8095 taken on the box): its saved port follows
-        updateAtvPorts(r);
-        setFoundAtv(r);
-      })
-      .catch(() => {});
-    Promise.all([lg, atv]).then(() => alive && setSearching(false));
+    const discover = () => {
+      // SSDP (LG) and NSD (Android TV with OMP) in parallel; each list shows as soon as it arrives
+      const lg = (discoverer ?? ((ms: number) => native.discoverTvs(ms)))(SEARCH_MS)
+        .then((r) => alive && setFound(r))
+        .catch(() => {});
+      const atv = (atvDiscoverer ?? ((ms: number) => native.discoverOmpTvs(ms)))(SEARCH_MS)
+        .then((r) => {
+          if (!alive) return;
+          // a saved Android TV that answers on another port now (8095 taken on the box): its saved port follows
+          updateAtvPorts(r);
+          setFoundAtv(r);
+        })
+        .catch(() => {});
+      Promise.all([lg, atv]).then(() => alive && setSearching(false));
+    };
+    // no Wi-Fi: no search at all, the note says why (off the phone the check is true at once)
+    const gate = phoneWifiNow();
+    if (gate === true) {
+      setNoWifi(false);
+      discover();
+    } else {
+      void Promise.resolve(gate)
+        .catch(() => true)
+        .then((wifi) => {
+          if (!alive) return;
+          setNoWifi(!wifi);
+          setSearching(wifi);
+          if (wifi) discover();
+        });
+    }
     return () => {
       alive = false;
     };
-  }, []);
+  }, [round]);
+  useEffect(() => {
+    if (!noWifi) return undefined;
+    const again = () => {
+      if (document.visibilityState !== 'hidden') setRound((r) => r + 1);
+    };
+    window.addEventListener('online', again);
+    document.addEventListener('visibilitychange', again);
+    return () => {
+      window.removeEventListener('online', again);
+      document.removeEventListener('visibilitychange', again);
+    };
+  }, [noWifi]);
 
   const savedList = tvs.value;
   const ompMeta = (ip: string, version?: string) => ip + (version ? ' · OMP ' + version : '');
