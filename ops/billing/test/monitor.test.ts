@@ -679,6 +679,8 @@ describe('old admin notices that «Мониторинг» duplicates', () => {
   it('come back when the monitor does not alert here, or with BILLING_LEGACY_ALERTS=1', () => {
     expect(legacyAlertsOn({ BILLING_MONITOR: '0' })).toBe(true);
     expect(legacyAlertsOn({ BILLING_BOT_POLL: '0' })).toBe(true);
+    // read-only cutover: no monitor runs, the backup notice must stay
+    expect(legacyAlertsOn({ BILLING_READONLY: '1' })).toBe(true);
     expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: '1' })).toBe(true);
     expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: 'true' })).toBe(true);
     expect(legacyAlertsOn({ BILLING_LEGACY_ALERTS: '0' })).toBe(false);
