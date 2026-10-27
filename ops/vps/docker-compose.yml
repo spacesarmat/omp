@@ -78,6 +78,8 @@ services:
       BILLING_DOCKER_PROXY_URL: http://docker-proxy:2375
       BILLING_MONITOR: ${BILLING_MONITOR:-1}
       BILLING_MONITOR_CHAT_ID: ${BILLING_MONITOR_CHAT_ID:-536445442}
+      # 1 brings back the old admin notices the monitor duplicates (service down, Postgres backup)
+      BILLING_LEGACY_ALERTS: ${BILLING_LEGACY_ALERTS:-0}
     volumes:
       - ./data/billing:/data
     depends_on:

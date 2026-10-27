@@ -408,3 +408,32 @@ describe('pollBot: update types and the channel pin notice', () => {
     expect(calls.filter((u) => u.indexOf('/deleteMessage') >= 0)).toHaveLength(0);
   });
 });
+
+describe('«Сервис недоступен» while «Мониторинг» alerts on the same probes', () => {
+  async function jackettDown(legacyAlerts: boolean) {
+    const file = await dbFile();
+    await updateState(file, (s) => {
+      s.settings.jackettUrl = 'http://jackett.invalid:9117';
+      s.settings.jackettApiKey = 'k';
+      return s;
+    });
+    const calls: Call[] = [];
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+      if (String(url).indexOf('api.telegram.org') < 0) throw new Error('down');
+      if (String(url).indexOf('getUpdates') >= 0) return jsonResponse(200, { ok: true, result: [] });
+      return jsonResponse(200, { ok: true, result: { message_id: 1 } });
+    };
+    await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW, legacyAlerts });
+    return calls;
+  }
+  it('is not probed or sent when the monitor covers it', async () => {
+    const calls = await jackettDown(false);
+    expect(calls.some((c) => c.url.indexOf('jackett.invalid') >= 0)).toBe(false);
+    expect(calls.some((c) => c.body.indexOf('Сервис недоступен') >= 0)).toBe(false);
+  });
+  it('is still sent with legacy alerts on', async () => {
+    const calls = await jackettDown(true);
+    expect(calls.some((c) => c.body.indexOf('Сервис недоступен: Jackett') >= 0)).toBe(true);
+  });
+});
