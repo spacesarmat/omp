@@ -34,6 +34,12 @@ describe('groupPhoneLibrary', () => {
     expect(g && g.kind === 'film' ? g.lead.hash : '').toBe('a2');
   });
 
+  it('a release watched to the end still leads', () => {
+    saveProgress('a2', 1, 5900, 6000);
+    const g = groupPhoneLibrary([A1, A2]).find((x) => x.kind === 'film');
+    expect(g && g.kind === 'film' ? g.lead.hash : '').toBe('a2');
+  });
+
   it('a series release is never part of a film', () => {
     const S1B: Torrent = { ...S1, hash: 's1b', title: 'Тёмная материя / Dark Matter (2024) [S01] 2160p' };
     const items = groupPhoneLibrary([S1, S1B, A1, A2]);

@@ -172,6 +172,8 @@ const takenEntries = new WeakSet<object>();
 
 // the «Поиск» tab used last («Мои / Каталог / Источники»), for this run of the app
 let lastScope: SearchScope = 'sources';
+// the tab of each route entry: back from a title opened in «Каталог» comes back to «Каталог»
+const entryScopes = new WeakMap<object, SearchScope>();
 
 /** Tests: the next «Поиск» without a scope opens «Источники». */
 export function resetSearchScope(): void {
@@ -223,13 +225,18 @@ export function Add({
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
-  const [scope, setScopeState] = useState<SearchScope>(() => (link || run || initialQuery ? 'sources' : askedScope || lastScope));
+  // the route's fields choose only the first tab of the entry
+  const [scope, setScopeState] = useState<SearchScope>(
+    () => (entry && entryScopes.get(entry)) || (link || run || initialQuery ? 'sources' : askedScope || lastScope),
+  );
   const setScope = (v: SearchScope) => {
     lastScope = v;
+    if (entry) entryScopes.set(entry, v);
     setScopeState(v);
   };
   useEffect(() => {
     lastScope = scope;
+    if (entry) entryScopes.set(entry, scope);
   }, []);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));

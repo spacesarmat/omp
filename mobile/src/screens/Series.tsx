@@ -330,8 +330,9 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const info = season !== NO_SEASON ? tmdbOf(season) : undefined;
   const caption = info ? seasonCaption(info) : '';
 
-  const watch = (tor: Torrent) => {
-    const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
+  // `files`: the episodes shown for the season (a pack's own list may hold other seasons, or come later from the server)
+  const watch = (tor: Torrent, files?: TorrentFile[]) => {
+    const target = watchTarget(tor.hash, files || playableFiles(filesOf(tor)));
     if (!target) return;
     if (!activeTv.value) {
       navigate({ name: 'tv' });
@@ -379,7 +380,13 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const main = rows.filter((r) => r.hash === pickedHash)[0] || (rows.length ? seasonTarget(rows) : null);
   const [loadedFiles, setLoadedFiles] = useState<{ hash: string; files: TorrentFile[] } | null>(null);
   const ownFiles = main ? playableFiles(filesOf(main)) : [];
-  const files = ownFiles.length || !main ? ownFiles : loadedFiles && loadedFiles.hash === main.hash ? playableFiles(loadedFiles.files) : [];
+  const allFiles = ownFiles.length || !main ? ownFiles : loadedFiles && loadedFiles.hash === main.hash ? playableFiles(loadedFiles.files) : [];
+  // a pack holds other seasons too: only the chosen season's episodes (files without a season number stay)
+  const inSeason = season === NO_SEASON ? allFiles : allFiles.filter((f) => {
+    const n = parseEpisode(f.path).season;
+    return n === null || n === season;
+  });
+  const files = inSeason.length ? inSeason : allFiles;
   useEffect(() => {
     const c = client.peek();
     if (!c || !main || ownFiles.length) return;
@@ -495,7 +502,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           {main && mainFile && (
             <div class="m-tc-season-actions">
               {tvMain ? (
-                <button type="button" class="m-btn m-btn-primary tm" data-code="P26.5" data-main="tv" onClick={() => watch(main)}>
+                <button type="button" class="m-btn m-btn-primary tm" data-code="P26.5" data-main="tv" onClick={() => watch(main, files)}>
                   {mainAt > 0 ? t('library.continueOnTv') : t('news.watchOnTv')}
                 </button>
               ) : (
@@ -504,7 +511,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
                   <button type="button" class="m-btn m-btn-primary tm" data-code="P26.5" data-main="phone" onClick={watchHere}>
                     {phoneLabel(mainFile, mainAt)}
                   </button>
-                  <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P26.6" onClick={() => watch(main)}>
+                  <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P26.6" onClick={() => watch(main, files)}>
                     {t('nav.onTv')}
                   </button>
                 </>

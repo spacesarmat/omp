@@ -136,6 +136,14 @@ describe('release menu on the series screen', () => {
     expect(options()).toEqual(['Открыть', 'Переименовать', 'Удалить']);
   });
 
+  it('a pack holding two seasons shows only the chosen season\'s episodes', async () => {
+    await open([S1, PACK], 2);
+    expect(shown()).toBe('p12');
+    const eps = Array.from(el.querySelectorAll('.m-ep')).map((r) => r.textContent || '');
+    expect(eps.length).toBe(1);
+    expect(eps[0]).toContain('S02E01');
+  });
+
   it('«Открыть» in the menu opens the release page', async () => {
     await open([S1, S2A], 2);
     await menuOf('s2a');

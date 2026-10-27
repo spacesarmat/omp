@@ -54,6 +54,16 @@ export function getLocalProgress(hash: string, idx: number): Progress | null {
   return local[key(hash, idx)] || null;
 }
 
+/** When any file of `hash` was played here last (finished ones too); 0 when never. */
+export function lastPlayedAt(hash: string): number {
+  const head = hash + ':';
+  let best = 0;
+  Object.keys(local).forEach((k) => {
+    if (k.indexOf(head) === 0 && (local[k].updated || 0) > best) best = local[k].updated || 0;
+  });
+  return best;
+}
+
 function serverEntry(hash: string, idx: number): ViewedEntry | null {
   return serverViewed.value.find((e) => e.hash === hash && e.file_index === idx) || null;
 }

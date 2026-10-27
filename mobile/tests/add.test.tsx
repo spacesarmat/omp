@@ -1076,6 +1076,22 @@ describe('one «Поиск»: «Мои / Каталог / Источники»',
     expect(scopes()).toEqual(['mine', 'catalog*', 'sources']);
   });
 
+  it('back to the same entry comes back to the tab chosen there, not the one it was opened with', () => {
+    const entry = { name: 'add', scope: 'mine' };
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add scope="mine" entry={entry} />, el));
+    expect(scopes()).toEqual(['mine*', 'catalog', 'sources']);
+    click(el.querySelector('[data-scope="catalog"]')!);
+    act(() => render(null, el));
+    act(() => render(<Add scope="mine" entry={entry} />, el));
+    expect(scopes()).toEqual(['mine', 'catalog*', 'sources']);
+    // a new entry opened from «Мои» starts on «Мои» again
+    act(() => render(null, el));
+    act(() => render(<Add scope="mine" entry={{ name: 'add', scope: 'mine' }} />, el));
+    expect(scopes()).toEqual(['mine*', 'catalog', 'sources']);
+  });
+
   it('a link always opens «Источники»', () => {
     mountScope('mine');
     act(() => render(null, el));
