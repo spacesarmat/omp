@@ -289,6 +289,10 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
   // 3. one height for all labels (same font), then 4. write the positions
   const first = layer.children[0] as HTMLElement | undefined;
   const h = first ? first.offsetHeight || 0 : 0;
+  if (phone) {
+    paintPhonePositions(layer, shown, labels, h, view, win);
+    return;
+  }
   for (let i = 0; i < shown.length; i++) {
     const span = layer.children[i] as HTMLElement;
     const b = shown[i].b;
@@ -300,6 +304,119 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
     else if (shown[i].place === 'above') y = top - h >= 0 ? top - h : top;
     span.style.left = Math.round(x) + 'px';
     span.style.top = Math.round(y) + 'px';
+  }
+}
+
+/** Phone chrome that stays on screen over the scrolled page: the tab bar, the mini player, the keypad. */
+export const PHONE_CHROME = '.m-nav, .m-mini, .m-keypad';
+/** Phone controls a row label must not cover. A `[data-code]` control also has its own badge above its top edge. */
+export const PHONE_CONTROLS = 'button, a[href], input, select, textarea, [role="button"], [role="tab"], [data-code]';
+
+export interface PhoneLabelInput {
+  /** The element's box (viewport px). */
+  b: Box;
+  place: 'top' | 'bottom' | 'above' | string;
+  /** The label's own width. */
+  w: number;
+  /** Index of the chrome box the element itself is in, -1 when it is in the page. */
+  inChrome: number;
+}
+
+/**
+ * Phone label positions, null for a label that is not painted. Landscape leaves little room, so:
+ * - a label is never painted over the tab bar, the mini player or the keypad unless its element is in it
+ *   (an element scrolled under the tab bar keeps its label hidden);
+ * - a row label (`R#`) goes above the row's left end, else above its right end, else inside the row's top or
+ *   bottom right corner; the first spot that covers no control (and no control's own badge) wins. With no free
+ *   spot the row label is not painted: its posters and chips still carry their codes.
+ * Other labels stay on their own element (pulled into the screen at an edge). Pure: the tests call it with plain boxes.
+ */
+export function placePhoneLabels(items: PhoneLabelInput[], h: number, view: Box, chrome: Box[], controls: Box[]): ({ x: number; y: number } | null)[] {
+  const out: ({ x: number; y: number } | null)[] = [];
+  const free = (lb: Box, item: PhoneLabelInput, row: boolean): boolean => {
+    if (lb.left < view.left || lb.top < view.top || lb.right > view.right || lb.bottom > view.bottom) return false;
+    for (let c = 0; c < chrome.length; c++) if (c !== item.inChrome && overlaps(lb, chrome[c])) return false;
+    if (row) for (let c = 0; c < controls.length; c++) if (overlaps(lb, controls[c])) return false;
+    return true;
+  };
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const b = it.b;
+    const w = Math.max(0, it.w);
+    const spots: { x: number; y: number }[] = [];
+    if (it.place === 'above') {
+      const right = Math.max(b.left, b.right - w);
+      spots.push({ x: b.left, y: b.top - h }, { x: right, y: b.top - h }, { x: right, y: b.top }, { x: right, y: b.bottom - h });
+    } else {
+      // on its own element, pulled into the screen when the element is cut by an edge (a rail scrolled sideways)
+      const y = it.place === 'bottom' ? b.bottom - h : b.top;
+      spots.push({ x: Math.max(view.left, Math.min(b.left, view.right - w)), y: Math.max(view.top, Math.min(y, view.bottom - h)) });
+    }
+    let pick: { x: number; y: number } | null = null;
+    for (let s = 0; s < spots.length && !pick; s++) {
+      const p = spots[s];
+      if (free({ left: p.x, top: p.y, right: p.x + w, bottom: p.y + h }, it, it.place === 'above')) pick = p;
+    }
+    out.push(pick);
+  }
+  return out;
+}
+
+function visibleBox(el: Element, view: Box): Box | null {
+  const b = box(el);
+  if (b.right - b.left <= 0 || b.bottom - b.top <= 0 || !overlaps(b, view)) return null;
+  return b;
+}
+
+/** Phone pass of paintElementLabels: reads the chrome, the controls and the label widths, then places or drops each label. */
+function paintPhonePositions(layer: HTMLElement, shown: { code: string; place: string; b: Box }[], labels: ElementLabel[], h: number, view: Box, win: Element | null): void {
+  // An open sheet or dialog sits above the tab bar and covers the page: only its own controls count then,
+  // not the backdrop button, the sheet box itself or the page under it.
+  const chromeEls = win ? [] : toArray(document.querySelectorAll(PHONE_CHROME));
+  const chrome: Box[] = [];
+  const chromeOf: Element[] = [];
+  for (let i = 0; i < chromeEls.length; i++) {
+    const b = visibleBox(chromeEls[i], view);
+    if (b) {
+      chrome.push(b);
+      chromeOf.push(chromeEls[i]);
+    }
+  }
+  const controls: Box[] = [];
+  const ctrlEls = toArray((win || document).querySelectorAll(PHONE_CONTROLS));
+  // the fixed-code badge hangs above its control by about half a label (translateY(-55%) in mobile.css)
+  const badge = Math.ceil(h * 0.6);
+  if (win && win.hasAttribute('data-code')) {
+    // the sheet's own code (PD21) sits on its top edge: keep that strip free, not the whole sheet
+    const wb = visibleBox(win, view);
+    if (wb) controls.push({ left: wb.left, top: wb.top - badge, right: wb.right, bottom: wb.top + h - badge });
+  }
+  for (let i = 0; i < ctrlEls.length; i++) {
+    if (layer.contains(ctrlEls[i])) continue;
+    const b = visibleBox(ctrlEls[i], view);
+    if (!b) continue;
+    if (ctrlEls[i].hasAttribute('data-code')) b.top -= badge;
+    controls.push(b);
+  }
+  const byCode: { [code: string]: Element } = {};
+  for (let i = 0; i < labels.length; i++) byCode[labels[i].code] = labels[i].el;
+  const items: PhoneLabelInput[] = [];
+  for (let i = 0; i < shown.length; i++) {
+    const el = byCode[shown[i].code];
+    let inChrome = -1;
+    for (let c = 0; c < chromeOf.length && el; c++) if (chromeOf[c].contains(el)) inChrome = c;
+    items.push({ b: shown[i].b, place: shown[i].place, w: (layer.children[i] as HTMLElement).offsetWidth || 0, inChrome: inChrome });
+  }
+  const spots = placePhoneLabels(items, h, view, chrome, controls);
+  for (let i = spots.length - 1; i >= 0; i--) {
+    const span = layer.children[i] as HTMLElement;
+    const p = spots[i];
+    if (!p) {
+      layer.removeChild(span);
+      continue;
+    }
+    span.style.left = Math.round(p.x) + 'px';
+    span.style.top = Math.round(p.y) + 'px';
   }
 }
 

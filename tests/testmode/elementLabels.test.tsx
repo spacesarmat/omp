@@ -8,7 +8,7 @@ vi.mock('../../src/version', () => ({ APP_VERSION: '0.20.6-beta.2' }));
 import { SettingsScreen } from '../../src/screens/Settings';
 import { DEFAULT_SETTINGS, resetSettings, sanitizeSettings, settings, updateSettings } from '../../src/store/settings';
 import { ScreenCodeBadge } from '../../src/testmode/badge';
-import { collectElementLabels, ElementLabelsHost, labelSizeCss, paintElementLabels } from '../../src/testmode/elements';
+import { collectElementLabels, ElementLabelsHost, labelSizeCss, paintElementLabels, placePhoneLabels } from '../../src/testmode/elements';
 import { clampLabelPx, PHONE_LABEL_PX, TV_LABEL_PX } from '../../src/testmode/active';
 import { routeStack } from '../../src/ui/nav';
 
@@ -224,5 +224,114 @@ describe('label size slider on a beta build', () => {
     expect([both.testLabelPx, both.testLabelPhonePx]).toEqual([18, 10]);
     expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPx).toBe(36);
     expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPhonePx).toBe(8);
+  });
+});
+
+describe('phone labels in landscape (S21, 1024x461)', () => {
+  const rect = (l: number, t: number, w: number, hh: number) => () =>
+    ({ left: l, top: t, width: w, height: hh, right: l + w, bottom: t + hh, x: l, y: t, toJSON: () => ({}) }) as DOMRect;
+  const set = (id: string, l: number, t: number, w: number, hh: number) => {
+    (document.getElementById(id) as HTMLElement).getBoundingClientRect = rect(l, t, w, hh);
+  };
+  const box = (l: number, t: number, r: number, b: number) => ({ left: l, top: t, right: r, bottom: b });
+  const view = box(0, 0, 1024, 461);
+
+  it('keeps row and poster labels off the chips, their badges and the tab bar', () => {
+    document.body.innerHTML =
+      '<button class="test-screen-badge" id="scr"><span class="test-badge">P02</span></button>' +
+      '<button class="m-seg-btn" data-code="P02.1" id="mine">Мои</button>' +
+      '<div class="m-chips" id="chips"><button class="m-chip" data-code="P02.9" id="c1">Все</button><button class="m-chip" data-code="P02.10" id="c2">Фильмы</button></div>' +
+      '<div class="m-grid" id="g1"><div class="m-poster" id="p1"></div></div>' +
+      '<div class="m-grid" id="g2"><div class="m-poster" id="p2"></div></div>' +
+      '<nav class="m-nav" id="nav"><button data-code="P33.1" id="t1">Каталог</button></nav>' +
+      '<div class="test-el-layer" id="layer"></div>';
+    set('scr', 8, 52, 44, 44);
+    set('mine', 92, 66, 52, 36);
+    set('chips', 52, 127, 890, 40);
+    set('c1', 52, 127, 56, 40);
+    set('c2', 118, 127, 90, 40);
+    set('g1', 52, 250, 890, 120);
+    set('p1', 60, 258, 60, 90);
+    set('g2', 52, 410, 890, 200);
+    set('p2', 60, 418, 60, 90);
+    set('nav', 0, 404, 1024, 57);
+    set('t1', 100, 410, 120, 44);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 461 });
+    const hh = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(16);
+    const ww = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(60);
+    try {
+      const layer = document.getElementById('layer') as HTMLElement;
+      paintElementLabels(layer, true);
+      const at = (code: string) => {
+        const span = Array.from(layer.children).find((c) => c.textContent === code) as HTMLElement | undefined;
+        return span ? span.style.left + ',' + span.style.top : 'none';
+      };
+      // above the chips' left end sits the «Все» badge: the row label moves above the row's right end
+      expect(at('P02.R#1')).toBe('882px,111px');
+      // free space above the shelf: the label stays above its left end, the poster label on the poster
+      expect(at('P02.R#2')).toBe('52px,234px');
+      expect(at('P02.R2.P#1')).toBe('60px,258px');
+      // the third row and its poster are under the tab bar: no label over «Каталог»
+      expect(at('P02.R#3')).toBe('none');
+      expect(at('P02.R3.P#1')).toBe('none');
+      expect(Array.from(layer.children).map((c) => c.textContent)).toEqual(['P02.R#1', 'P02.R#2', 'P02.R2.P#1']);
+    } finally {
+      hh.mockRestore();
+      ww.mockRestore();
+    }
+  });
+
+  it('an open sheet keeps its row labels: the backdrop, the sheet box and the tab bar under it do not count', () => {
+    document.body.innerHTML =
+      '<button class="test-screen-badge" id="scr"><span class="test-badge">P02</span></button>' +
+      '<nav class="m-nav" id="nav"><button data-code="P33.1" id="t1">Каталог</button></nav>' +
+      '<div class="m-sheet-host"><button class="m-sheet-backdrop" id="bd"></button>' +
+      '<div class="m-sheet" role="dialog" data-code="PD21" id="sh"><div class="m-better-list" id="list"><button class="m-result" id="r1">1080p</button></div></div></div>' +
+      '<div class="test-el-layer" id="layer"></div>';
+    set('scr', 8, 52, 44, 44);
+    set('nav', 0, 404, 1024, 57);
+    set('t1', 100, 410, 120, 44);
+    set('bd', 0, 0, 1024, 461);
+    set('sh', 0, 120, 1024, 341);
+    set('list', 16, 200, 990, 240);
+    set('r1', 16, 200, 990, 60);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 461 });
+    const hh = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(16);
+    const ww = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(60);
+    try {
+      const layer = document.getElementById('layer') as HTMLElement;
+      paintElementLabels(layer, true);
+      const at = (code: string) => {
+        const span = Array.from(layer.children).find((c) => c.textContent === code) as HTMLElement | undefined;
+        return span ? span.style.left + ',' + span.style.top : 'none';
+      };
+      expect(at('PD21.R#1')).toBe('16px,184px');
+      expect(at('PD21.R1.L#1')).toBe('16px,200px');
+    } finally {
+      hh.mockRestore();
+      ww.mockRestore();
+    }
+  });
+
+  it('places a row label in the first free spot and drops it with none', () => {
+    const row = { b: box(50, 100, 950, 140), place: 'above', w: 60, inChrome: -1 };
+    expect(placePhoneLabels([row], 16, view, [], [])).toEqual([{ x: 50, y: 84 }]);
+    // a control above the left end, then above the right end too: inside the row's top right corner
+    const leftBadge = box(50, 90, 110, 140);
+    const rightBtn = box(880, 70, 950, 99);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge])).toEqual([{ x: 890, y: 84 }]);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge, box(880, 70, 950, 90)])).toEqual([{ x: 890, y: 100 }]);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge, rightBtn, box(50, 100, 950, 140)])).toEqual([null]);
+  });
+
+  it('never paints over the chrome unless the element is in it; edge posters are pulled into the screen', () => {
+    const nav = box(0, 404, 1024, 461);
+    const poster = { b: box(60, 400, 120, 490), place: 'top', w: 70, inChrome: -1 };
+    expect(placePhoneLabels([poster], 16, view, [nav], [])).toEqual([null]);
+    expect(placePhoneLabels([{ ...poster, inChrome: 0 }], 16, view, [nav], [])).toEqual([{ x: 60, y: 400 }]);
+    const cut = { b: box(-30, 200, 30, 290), place: 'top', w: 70, inChrome: -1 };
+    expect(placePhoneLabels([cut], 16, view, [nav], [])).toEqual([{ x: 0, y: 200 }]);
   });
 });
