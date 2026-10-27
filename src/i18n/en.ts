@@ -127,6 +127,8 @@ export const en: EnDict<typeof ru> = {
     account: 'OMP account',
     accountLink: 'Subscription and sign-in',
     subscribedUntil: 'Subscribed until {date}',
+    signedIn: 'Signed in',
+    accountChecking: 'Checking sign-in…',
     watch: 'Viewing',
     watchFrom: 'Where to watch',
     reachable: 'Reachable',

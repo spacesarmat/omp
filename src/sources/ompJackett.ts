@@ -9,6 +9,8 @@ import {
   isLegacySession,
   onBillingChange,
   saveBillingSession,
+  saveSeenAccount,
+  sessionKey,
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
@@ -146,26 +148,41 @@ export function clearTelegramLink(ctx: SourceContext): Promise<void> {
   );
 }
 
+/** The binding a request started with ('' without a session): an answer for an older binding is not cached. */
+function bindingKey(): string {
+  const row = billingSession();
+  return row ? sessionKey(row) : '';
+}
+
 export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount | null> {
+  const startedFor = bindingKey();
   return withDeviceToken(ctx, (headers) => billingGet(ctx, '/v1/me', { headers, timeoutMs: 12000 })).then(
     (res) => {
       const session = billingSession();
+      // «Отключить» (or a new code) while this request was in flight: its answer must not bring the old account back
+      const current = bindingKey() === startedFor;
       if (res.status === 401) {
         // revoked: withDeviceToken already forgot the binding; an expired token on a hidden page is not an answer
         const err = tokenError(errorOf(res.text));
         if (session && err) throw err;
         if (session) clearBilling(ctx);
+        saveSeenAccount(null);
         return null;
       }
       if (res.status === 403) {
         // an unknown token of an app before PR-5 (the old answer); a token pair never gets 403 here
         if (session && isLegacySession(session)) clearBilling(ctx);
+        saveSeenAccount(null);
         return null;
       }
-      if (res.status === 404) return null;
+      if (res.status === 404) {
+        saveSeenAccount(null);
+        return null;
+      }
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
+      if (current) saveSeenAccount({ paidUntil });
       // Admin/bot may extend paidUntil; keep local session date in sync with the server.
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
         saveBillingSession({ ...session, paidUntil });
