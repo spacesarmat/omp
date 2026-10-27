@@ -134,7 +134,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'Which APK. Run adb shell getprop ro.product.cpu.abi. The answer arm64-v8a - take OMP-<version>-arm64.apk, armeabi-v7a - OMP-<version>-armv7.apk (many boxes say this even with a 64-bit processor). Not sure - the universal OMP-<version>.apk: it fits all, but it is bigger.',
       'Installing. Put the APK in the platform-tools folder and run adb install -r with your file name, for example adb install -r OMP-<version>-arm64.apk. The answer Success means OMP is installed. The -r flag installs the new version over the old one: servers, TV pairings, subscriptions and settings are kept. Several devices connected - add -s <IP>:5555 or the serial number: adb -s <IP>:5555 install -r ….',
       'Errors. unauthorized - debugging was not confirmed on the device: unlock the screen and choose “Allow”. No prompt - reconnect the cable or run adb connect again. offline - the link is lost: adb kill-server, then adb devices again (TV - adb connect <IP>:5555); restarting “Network debugging” helps too.',
-      'INSTALL_FAILED_UPDATE_INCOMPATIBLE - OMP with a different signature is already installed (for example, built by hand), you cannot install over it. Save a backup (Settings → “Advanced” → “Backup”), uninstall the old OMP - this erases its data on the device - and install again.',
+      'INSTALL_FAILED_UPDATE_INCOMPATIBLE - OMP with a different signature is already installed (for example, built by hand), you cannot install over it. Save a backup (Settings → “Advanced” → “Backup”), uninstall the old OMP - this erases its data on the device, including the TorrServer on the phone with its torrents and history - and install again.',
       'INSTALL_FAILED_INSUFFICIENT_STORAGE - not enough space: free some memory. INSTALL_FAILED_NO_MATCHING_ABIS - the file does not fit this system: take armv7 or the universal one. INSTALL_FAILED_VERSION_DOWNGRADE - the device has a newer version than the file: download the latest release.',
       'After the install turn debugging off if you no longer need it: “Network debugging” opens adb to every device on the home network.',
       PLATFORM_TOOLS_LINK,
@@ -281,7 +281,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
     ],
     more: [
       'The exact reason shows up when you install from a computer: the question “Install on Android with ADB”, the errors part.',
-      'Uninstalling OMP erases its data on the device: servers, TV pairings, subscriptions and settings. A backup brings them back (Settings → “Advanced” → “Backup”). The watch history is stored on TorrServer and stays.',
+      'Uninstalling OMP erases its data on the device: servers, TV pairings, subscriptions and settings. A backup brings them back (Settings → “Advanced” → “Backup”). The watch history on a separate TorrServer (a computer, a NAS) stays. A TorrServer running on this phone is removed with OMP - with its torrents and history, and the backup does not keep them.',
     ],
   },
   'lg-gone': {
