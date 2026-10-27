@@ -3,7 +3,8 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setAccountFetcher, setUpdateChecker } from '../src/screens/Settings';
-import { saveBillingSession, saveSeenAccount } from '../../src/billing/session';
+import { saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
+import { dropDeviceTokens } from '../../src/billing/tokens';
 import { Advanced } from '../src/screens/Advanced';
 import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
@@ -601,6 +602,20 @@ describe('Settings: the OMP account row', () => {
     expect(row(el).textContent).toBe('Подписка до ' + day(paid));
     await flush();
     expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+  });
+
+  it('a revoked binding forgets the last known account, so the server being down then shows «Войти»', async () => {
+    saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
+    saveSeenAccount({ paidUntil: paid });
+    setAccountFetcher(async () => {
+      throw new Error('down');
+    });
+    const el = mount();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    await act(async () => dropDeviceTokens(null, 'revoked'));
+    await flush();
+    expect(seenAccount()).toBeNull();
+    expect(row(el).textContent).toBe('Войти');
   });
 
   it('a linked account without a paid date shows «Вход выполнен»; the server down with nothing known shows «Войти»', async () => {

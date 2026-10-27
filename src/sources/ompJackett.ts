@@ -83,7 +83,6 @@ function billingError(status: number, text: string): Error {
 
 /** «Отключить» on this phone: forgets the tokens (the Keystore copy too, when `ctx` can write it). */
 export function clearBilling(ctx?: SourceContext): void {
-  saveSeenAccount(null);
   dropDeviceTokens(ctx || null, '');
 }
 
