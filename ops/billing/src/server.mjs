@@ -133,7 +133,7 @@ import { notificationOk } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
 import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
-import { createMonitor, monitorEnabled, saveMonitorConfig } from './monitor.mjs';
+import { createMonitor, legacyAlertsOn, monitorEnabled, saveMonitorConfig } from './monitor.mjs';
 
 const EMPTY_RSS = '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel></channel></rss>';
 const PUBLIC_DIR = fileURLToPath(new URL('../public', import.meta.url));
@@ -457,6 +457,15 @@ export function healthPayload(now, extra) {
     out.pgBackupOk = !x.backup.stale && !x.backup.lastError;
     out.pgBackupAgoSec = x.backup.ageSec;
   }
+  // «Мониторинг» on this instance, for the external watchdog: seconds since the last full run (null before the first).
+  if (x.monitor) {
+    const now2 = now || Date.now();
+    out.monitorScheduled = !!x.monitor.scheduled;
+    out.monitorAgoSec = x.monitor.lastRunAt ? Math.max(0, Math.floor((now2 - x.monitor.lastRunAt) / 1000)) : null;
+    // seconds since the schedule started here, so a first run that never finishes is visible too
+    out.monitorScheduledAgoSec = x.monitor.scheduled && x.monitor.scheduledAt ? Math.max(0, Math.floor((now2 - x.monitor.scheduledAt) / 1000)) : null;
+    out.monitorIntervalMin = Number(x.monitor.intervalMin) || null;
+  }
   if (x.readOnly) out.readOnly = true;
   return out;
 }
@@ -667,7 +676,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'GET' && path === '/health') {
         const settings = backups ? (await store.read()).settings : null;
-        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly }));
+        return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly, monitor: monitor && monitor.health ? monitor.health() : null }));
       }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
@@ -1739,6 +1748,7 @@ export async function pollBot(file, fetchImpl, opts) {
   let sweptAt = 0;
   let servicesAt = 0;
   let serviceSnap = {};
+  const legacyAlerts = opts && opts.legacyAlerts !== undefined ? !!opts.legacyAlerts : legacyAlertsOn(process.env);
   /** chatId → { kind } waiting for the next free-text reply */
   const awaiting = new Map();
   /** chatId → 'user' | 'admin' — keyboard pad for admins (users always stay on user pad) */
@@ -1772,7 +1782,8 @@ export async function pollBot(file, fetchImpl, opts) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
-      if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn
+      if (!adminLoginOnly && legacyAlerts && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
         servicesAt = Date.now();
         try {
           const probes = await probeAllServices(state.settings, net);
@@ -2215,14 +2226,21 @@ if (started) {
       if (!readOnly) await ensureAdmin(store);
       const cfg = backupConfig(process.env);
       // Dumps read the database only, so they run in read-only mode too.
-      // A stale or failed backup is told to the admins in Telegram once (and once when it is fine again).
+      // A stale or failed backup is told to the admins in Telegram once (and once when it is fine again),
+      // unless «Мониторинг» already alerts on it (check backup, see legacyAlertsOn).
       const pgBackups = cfg
-        ? startPgBackups(cfg, async () => (await store.read()).settings, {
-            onAlert: async (text) => {
-              const st = await store.read();
-              await notifyAdmins(st, adminBroadcast(st.settings, text), fetch);
-            },
-          })
+        ? startPgBackups(
+            cfg,
+            async () => (await store.read()).settings,
+            legacyAlertsOn(process.env)
+              ? {
+                  onAlert: async (text) => {
+                    const st = await store.read();
+                    await notifyAdmins(st, adminBroadcast(st.settings, text), fetch);
+                  },
+                }
+              : {},
+          )
         : null;
       // Shared with HTTP login routes so Telegram confirm and browser poll see the same pending tokens.
       const consumedPath = adminAuthConsumedPath(process.env);

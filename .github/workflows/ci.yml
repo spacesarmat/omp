@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, 'feat/**', 'exp/**']
   pull_request:
+  # the TorrServer update workflow starts CI on its chore/torrserver-* branch this way (GITHUB_TOKEN pushes trigger nothing)
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

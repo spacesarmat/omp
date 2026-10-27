@@ -5,6 +5,7 @@ export function parseDigest(digest: unknown): string;
 export function bumpPatch(version: string): string;
 export function torrserverNote(tag: string, english?: boolean): string;
 export function insertChangelog(text: string, version: string, tag: string, note?: string): string;
+export function insertUnreleased(text: string, note: string, english?: boolean): string;
 export function setRootVersion(text: string, version: string, lock?: boolean): string;
 export const PIN_PATH: string;
 export const LEGACY_LIB: string;

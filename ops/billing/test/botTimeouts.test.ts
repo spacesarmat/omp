@@ -143,5 +143,13 @@ describe('/health bot fields', () => {
     noteBotPollOk(NOW - 42_500);
     expect(healthPayload(NOW)).toEqual({ ok: true, botPollEnabled: true, botPollOkAgoSec: 42 });
     expect(JSON.stringify(healthPayload(NOW))).not.toContain('token');
+    // «Мониторинг» freshness for the external watchdog
+    expect(healthPayload(NOW, { monitor: { scheduled: true, scheduledAt: NOW - 3_600_000, lastRunAt: NOW - 600_000, intervalMin: 15 } })).toMatchObject({
+      monitorScheduled: true,
+      monitorAgoSec: 600,
+      monitorIntervalMin: 15,
+      monitorScheduledAgoSec: 3600,
+    });
+    expect(healthPayload(NOW, { monitor: { scheduled: false, lastRunAt: 0, intervalMin: 15 } })).toMatchObject({ monitorScheduled: false, monitorAgoSec: null });
   });
 });

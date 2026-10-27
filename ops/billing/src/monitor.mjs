@@ -12,6 +12,8 @@
  *   never doubles an alert. «Проверить сейчас» runs on any writable instance.
  */
 import { GROUPS, buildTasks, finalize, runTasks } from './monitorChecks.mjs';
+import { botPollEnabled } from './botPoll.mjs';
+import { readOnlyMode } from './readOnly.mjs';
 
 export const MONITOR_DEFAULTS = { intervalMin: 15 };
 export const MONITOR_RETRY_MS = 30 * 1000;
@@ -32,6 +34,21 @@ export function validInterval(v) {
 export function monitorEnabled(env) {
   const raw = String(((env || process.env).BILLING_MONITOR) ?? '').trim().toLowerCase();
   return !(raw === '0' || raw === 'false' || raw === 'off' || raw === 'no');
+}
+
+/**
+ * The old admin Telegram notices that duplicate a «Мониторинг» alert: «Сервис недоступен: Jackett / JacRed / TorrServer»
+ * (checks svc:jackett, svc:jacred, svc:torrserver, the same probe) and the stale or failed Postgres backup notice
+ * (check backup). They stay off while the monitor schedule runs on this instance (BILLING_MONITOR on, this
+ * instance polls the bot and is not BILLING_READONLY); BILLING_LEGACY_ALERTS=1 brings them back. Payments and the getUpdates 409 conflict
+ * notice have no monitor counterpart and are always sent.
+ */
+export function legacyAlertsOn(env) {
+  const src = env || process.env;
+  const raw = String(src.BILLING_LEGACY_ALERTS ?? '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes') return true;
+  // read-only (cutover): monitorFor gives no monitor, while backups still run
+  return !(monitorEnabled(src) && botPollEnabled(src) && !readOnlyMode(src));
 }
 
 /** Chat for alerts: BILLING_MONITOR_CHAT_ID (a numeric id) or Andy's chat. */
@@ -203,6 +220,8 @@ export function createMonitor(deps) {
   // The last finished run, for the «готово» line: { trigger, startedAt, finishedAt, checked, failed, retried, ids }.
   let lastSummary = null;
   let lastRunAt = 0;
+  // When start() turned the schedule on, so /health can tell a first run that never finishes.
+  let scheduledAt = 0;
   let timers = [];
   // Last values read from Postgres, so a Postgres outage is still checked and reported.
   // `unsaved`: keys whose last write failed; memory is newer than Postgres until it is written.
@@ -500,6 +519,7 @@ export function createMonitor(deps) {
   function start(opts) {
     const o = opts || {};
     d.scheduled = true;
+    scheduledAt = now();
     const tick = async () => {
       try {
         if (running) return;
@@ -531,5 +551,10 @@ export function createMonitor(deps) {
     };
   }
 
-  return { run, snapshot, start, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
+  /** For /health (no secrets): is the schedule on here, when the last full run finished, the interval. */
+  function health() {
+    return { scheduled: !!d.scheduled, scheduledAt, lastRunAt, intervalMin: mem.config.intervalMin };
+  }
+
+  return { run, snapshot, start, health, isRunning: () => !!running, progress: () => (progress ? { ...progress, states: { ...progress.states } } : null) };
 }

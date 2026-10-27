@@ -8,6 +8,7 @@ import {
   ASSET_NAME,
   bumpPatch,
   insertChangelog,
+  insertUnreleased,
   torrserverNote,
   setRootVersion,
   pinFromRelease,
@@ -102,5 +103,20 @@ describe('torrserver-lib', () => {
   it('the committed pin matches torrserver.version', () => {
     const tag = parseVersionFile(readFileSync('torrserver.version', 'utf8'));
     expect(parsePin(readFileSync(PIN_PATH, 'utf8'), tag).tag).toBe(tag);
+  });
+  it('puts the TorrServer line under «Не выпущено» without a version', () => {
+    const ru = '# Изменения\n\n<!-- m -->\n\n## 0.20.6-beta.4\n\n- a\n';
+    const once = insertUnreleased(ru, torrserverNote('MatriX.147.1'));
+    expect(once).toBe('# Изменения\n\n<!-- m -->\n\n## Не выпущено\n\n- Встроенный TorrServer обновлён до MatriX.147.1\n\n## 0.20.6-beta.4\n\n- a\n');
+    // a second bump before the release replaces the line instead of adding one more
+    expect(insertUnreleased(once, torrserverNote('MatriX.148'))).toBe(once.replace('MatriX.147.1', 'MatriX.148'));
+    const en = '# Changes\n\n## Unreleased\n\n- [phone] b\n\n## 0.20.5\n\n- a\n';
+    expect(insertUnreleased(en, torrserverNote('MatriX.148', true), true)).toBe(
+      '# Changes\n\n## Unreleased\n\n- The built-in TorrServer is updated to MatriX.148\n- [phone] b\n\n## 0.20.5\n\n- a\n',
+    );
+    expect(insertUnreleased('# Changes\n\n## 0.20.5\n\n- a\n', 'x', true)).toContain('## Unreleased\n\n- x\n\n## 0.20.5');
+    const crlf = insertUnreleased(ru.replace(/\n/g, '\r\n'), 'x');
+    expect(crlf).toContain('## Не выпущено\r\n\r\n- x\r\n\r\n## 0.20.6-beta.4');
+    expect(crlf).not.toMatch(/[^\r]\n/);
   });
 });
