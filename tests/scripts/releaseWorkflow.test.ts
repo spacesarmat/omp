@@ -110,37 +110,41 @@ describe('TMDB_API_KEY scope', () => {
     expect(gate).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
   });
 
-  it('the TorrServer update check job does not receive the key', () => {
+  it('the TorrServer update workflow does not receive the key', () => {
     const upd = readFileSync('.github/workflows/torrserver-update.yml', 'utf8');
-    const check = upd.slice(0, upd.indexOf('uses: ./.github/workflows/release.yml'));
-    expect(check).not.toContain('TMDB_API_KEY');
-    expect(upd).toContain('TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}');
+    expect(upd).not.toContain('TMDB_API_KEY');
   });
 });
 
-describe('TorrServer update version gate', () => {
+describe('TorrServer update opens a pull request', () => {
   const upd = readFileSync('.github/workflows/torrserver-update.yml', 'utf8');
   const apply = upd.slice(upd.indexOf('Apply the TorrServer update'), upd.indexOf('Install dependencies'));
+  const push = upd.slice(upd.indexOf('Push the branch and open the pull request'));
 
-  it('computes the publish tag with bumpPatch and skips when that tag already exists', () => {
-    expect(apply).toContain('import { bumpPatch } from "./scripts/torrserver-lib.mjs"');
-    expect(apply).toContain('console.log(bumpPatch(process.argv[1]))');
-    expect(apply).toContain('refs/tags/v$TARGET');
-    expect(apply).toContain('tag v$TARGET already exists, skipping the TorrServer bump');
-    const targetCheck = apply.indexOf('refs/tags/v$TARGET');
-    const bump = apply.indexOf('scripts/torrserver-bump.mjs');
-    expect(targetCheck).toBeGreaterThan(0);
-    expect(targetCheck).toBeLessThan(bump);
+  it('never pushes to main, tags or releases', () => {
+    expect(upd).not.toContain('HEAD:main');
+    expect(upd).not.toContain('git tag');
+    expect(upd).not.toContain('release.yml');
+    expect(upd).not.toMatch(/^\s+release:/m);
+    expect(push).toContain('git push --force origin "HEAD:refs/heads/$BRANCH"');
+    expect(push).toContain('gh pr create');
   });
 
-  it('still waits while the current package.json version is unreleased', () => {
-    expect(apply).toContain('refs/tags/v$OMP_VERSION');
-    expect(apply).toContain('OMP $OMP_VERSION is not released yet');
-    expect(apply.indexOf('refs/tags/v$OMP_VERSION')).toBeLessThan(apply.indexOf('refs/tags/v$TARGET'));
+  it('skips when an open pull request for the same TorrServer tag exists, before changing anything', () => {
+    expect(apply).toContain('BRANCH="chore/torrserver-$LATEST"');
+    expect(apply).toContain('--state open --head "$BRANCH"');
+    expect(apply.indexOf('--state open')).toBeLessThan(apply.indexOf('scripts/torrserver-bump.mjs'));
   });
 
-  it('commits the English changelog the release tests read', () => {
-    const commit = upd.slice(upd.indexOf('Commit, tag and push the update'));
-    expect(commit).toContain('CHANGELOG.md CHANGELOG.en.md');
+  it('commits the pin and both changelogs, not the OMP version', () => {
+    expect(push).toContain('torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md');
+    expect(push).not.toContain('package.json');
+  });
+
+  it('starts CI on the branch, since GITHUB_TOKEN pushes trigger no workflows', () => {
+    expect(upd).toContain('actions: write');
+    expect(push).toContain('gh workflow run ci.yml');
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+    expect(ci).toMatch(/^on:[\s\S]*?^\s+workflow_dispatch:/m);
   });
 });

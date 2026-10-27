@@ -1,5 +1,9 @@
 name: TorrServer update
 
+# Opens (or refreshes) a pull request chore/torrserver-<tag> with the new pin and a changelog line under
+# «Не выпущено». It never pushes to main, never tags and never releases: the update ships with the next
+# release Andy approves. main is protected (changes only through pull requests), so a direct push fails anyway.
+
 on:
   schedule:
     - cron: '17 5 * * *'
@@ -14,9 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      release: ${{ steps.bump.outputs.release }}
-      tag: ${{ steps.bump.outputs.tag }}
+      pull-requests: write
+      # to start ci.yml on the PR branch: pushes and PRs made with GITHUB_TOKEN do not trigger other workflows
+      actions: write
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -26,7 +30,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      # applies the update to the working tree only: nothing is committed, tagged or pushed until the checks below pass
+      # applies the update to the working tree only: nothing is committed or pushed until the checks below pass
       - name: Apply the TorrServer update
         id: apply
         env:
@@ -46,24 +50,17 @@ jobs:
             sha256:*) ;;
             *) echo "::warning::$LATEST has no TorrServer-android-arm64 asset with a sha256 digest, skipping"; exit 0 ;;
           esac
-          # a merged feature waits for its manual release: do not ship it under a TorrServer bump
-          OMP_VERSION=$(jq -r '.version' package.json)
-          if ! git rev-parse -q --verify "refs/tags/v$OMP_VERSION" > /dev/null; then
-            echo "OMP $OMP_VERSION is not released yet (no tag v$OMP_VERSION), skipping the TorrServer bump"
+          BRANCH="chore/torrserver-$LATEST"
+          OPEN=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$BRANCH" --json number --jq 'length')
+          if [ "$OPEN" != "0" ]; then
+            echo "An open pull request for $LATEST already exists ($BRANCH), skipping"
             exit 0
           fi
-          # bumpPatch: X.Y.Z-beta.N releases that stable, a plain X.Y.Z steps the patch.
-          # Skip when the tag this bump would publish is already there.
-          TARGET=$(node --input-type=module -e 'import { bumpPatch } from "./scripts/torrserver-lib.mjs"; console.log(bumpPatch(process.argv[1]))' -- "$OMP_VERSION")
-          if git rev-parse -q --verify "refs/tags/v$TARGET" > /dev/null; then
-            echo "tag v$TARGET already exists, skipping the TorrServer bump"
-            exit 0
-          fi
-          VERSION=$(node scripts/torrserver-bump.mjs "$LATEST" "$RUNNER_TEMP/latest.json")
+          node scripts/torrserver-bump.mjs "$LATEST" "$RUNNER_TEMP/latest.json"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-      # the same checks the release runs (plus the type checks): a failing update leaves no commit, version bump or tag
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+      # the same checks the release runs (plus the type checks): a failing update opens no pull request
       - name: Install dependencies
         if: steps.apply.outputs.changed == 'true'
         run: npm ci
@@ -75,37 +72,37 @@ jobs:
         run: |
           npx tsc --noEmit -p .
           npx tsc --noEmit -p mobile
-      - name: Commit, tag and push the update
-        id: bump
+      - name: Push the branch and open the pull request
         if: steps.apply.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           LATEST: ${{ steps.apply.outputs.latest }}
-          VERSION: ${{ steps.apply.outputs.version }}
+          BRANCH: ${{ steps.apply.outputs.branch }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add torrserver.version android/app/src/main/res/raw/torrserver.json package.json package-lock.json webos/appinfo.json CHANGELOG.md CHANGELOG.en.md
+          git switch -c "$BRANCH"
+          git add torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md
           git commit -m "chore: TorrServer $LATEST"
-          git tag "v$VERSION"
-          git push --atomic origin HEAD:main "v$VERSION"
-          echo "release=true" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          # the branch belongs to this workflow; a leftover from a closed pull request is replaced with a fresh one on main
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+          cat > "$RUNNER_TEMP/body.md" <<BODY
+          Встроенный TorrServer обновлён до $LATEST (https://github.com/YouROK/TorrServer/releases/tag/$LATEST).
 
-  release:
-    needs: check
-    if: needs.check.outputs.release == 'true'
-    permissions:
-      contents: write
-    uses: ./.github/workflows/release.yml
-    with:
-      tag: ${{ needs.check.outputs.tag }}
-    # The check job above runs npm test with no TMDB key. This secret is only forwarded
-    # into release.yml, which sets it on the bundle steps and not on the job.
-    secrets:
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          - torrserver.version и закреплённая загрузка (android/app/src/main/res/raw/torrserver.json: url, sha256, размер)
+          - строка в CHANGELOG в «Не выпущено»
+          - версия OMP не меняется, тег и релиз не создаются: обновление уйдёт со следующим релизом
+
+          Открыто автоматически workflow «TorrServer update». CI на этой ветке запускается через workflow_dispatch;
+          если проверок в PR нет, запустите CI вручную: Actions, CI, Run workflow, ветка $BRANCH.
+          BODY
+          if ! gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
+              --title "chore: TorrServer $LATEST" --body-file "$RUNNER_TEMP/body.md"; then
+            echo "::error::Could not open the pull request. Turn on Settings, Actions, General, 'Allow GitHub Actions to create and approve pull requests', or open it by hand from $BRANCH."
+            exit 1
+          fi
+          # PRs and pushes made with GITHUB_TOKEN start no workflows, except workflow_dispatch: run CI on the branch
+          # so build, android and billing report on the pull request's head commit
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
+            || echo "::warning::Could not start CI on $BRANCH: run it from Actions, CI, Run workflow"
