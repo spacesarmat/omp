@@ -36,7 +36,7 @@ import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, t
 import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
 import { releaseLine, releaseName } from '../lib/duplicates';
 import { contentsText } from '../lib/releaseContents';
-import { swarmText } from '../../../src/lib/torrentStatus';
+import { knownSwarmText } from '../../../src/lib/torrentStatus';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
 import { BetterSheet } from '../ui/BetterSheet';
@@ -253,7 +253,7 @@ function Row({ tor, poster, onWatch, onMenu, onFind }: { tor: Torrent; poster: s
   const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
   const q = qualityBadge(displayTitle(tor));
   const contents = contentsText(tor);
-  const swarm = swarmText(tor);
+  const swarm = knownSwarmText(tor);
   const dead = isDeadRelease(tor.hash);
   const find = dead && canUpgrade(tor, files);
   return (
@@ -325,33 +325,38 @@ function DubRow({ group }: { group: SeriesGroup }) {
     setOpen(false);
     dub.pick(value).catch((e) => showToast(errorMessage(e)));
   };
+  // nothing remembered and no dubs seen yet: the only choice would be «По умолчанию (сбросить)», which is
+  // already the state, so the open row shows just how a dub gets remembered
+  const onlyReset = !dub.rec && dub.choices.length <= 1;
   return (
-    <div class="m-series-dub" data-series-dub>
+    <div class="m-series-dub tm" data-series-dub data-code="P26.2">
       <div class="m-series-dub-line">
         <span class="m-small">
           {t('series.dub') + ': '}
           <b data-dub-value>{dub.text}</b>
         </span>
-        <button type="button" class="m-btn-text" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {t('series.dubChange')}
+        <button type="button" class="m-btn-text tm" data-code="P26.3" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? t('common.hide') : t('series.dubChange')}
         </button>
       </div>
       {open && (
         <>
-          <div class="m-chips m-series-dub-chips">
-            {dub.choices.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                class={'m-chip' + (o.value === dub.value ? ' on' : '')}
-                aria-pressed={o.value === dub.value}
-                data-dub-choice={o.value}
-                onClick={() => pick(o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+          {!onlyReset && (
+            <div class="m-chips m-series-dub-chips">
+              {dub.choices.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  class={'m-chip' + (o.value === dub.value ? ' on' : '')}
+                  aria-pressed={o.value === dub.value}
+                  data-dub-choice={o.value}
+                  onClick={() => pick(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
           <span class="m-small m-muted">{t('series.dubNote')}</span>
         </>
       )}

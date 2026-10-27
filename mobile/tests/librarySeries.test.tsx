@@ -383,13 +383,17 @@ describe('Series screen', () => {
       expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
     });
 
-    it('«по умолчанию» when nothing is remembered; «Сменить» offers only the reset', async () => {
+    it('«по умолчанию» when nothing is remembered; «Сменить» explains how a dub is remembered and turns into «Скрыть»', async () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('по умолчанию');
       act(() => btn('Сменить')!.click());
-      expect(choices()).toEqual(['По умолчанию (сбросить)']);
+      // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
+      expect(choices()).toEqual([]);
       expect(el.textContent).toContain('общая для ТВ и телефона');
+      act(() => btn('Скрыть')!.click());
+      expect(btn('Сменить')).toBeTruthy();
+      expect(el.textContent).not.toContain('общая для ТВ и телефона');
     });
 
     it('shows the dub picked on the TV for any season, switches to another seen one and resets', async () => {

@@ -45,7 +45,8 @@ export function parseSize(s: string | null | undefined): number | null {
   const m = /^\s*(\d(?:[\d ,.]*\d)?)\s*([^\s\d]+)/.exec((s || '').replace(/ /g, ' '));
   if (!m) return null;
   // trailing punctuation of the surrounding text: '1.37 GB)', '700 MB,'
-  const unit = m[2].toLowerCase().replace(/[^a-zа-яё]+$/, '');
+  // «4.8 GCiB»: a Torznab feed through TorrServer writes binary units with a stray C (seen in QA): read it as GiB
+  const unit = m[2].toLowerCase().replace(/[^a-zа-яё]+$/, '').replace(/^([kmgt])cib$/, '$1ib');
   if (!UNIT.test(unit)) return null;
   const n = parseNumber(m[1]);
   if (!isFinite(n)) return null;

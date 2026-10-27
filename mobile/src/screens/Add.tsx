@@ -19,6 +19,7 @@ import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
 import { getSource } from '../../../src/sources/registry';
+import { online } from '../lib/online';
 import { isTlsMessage, tlsText } from '../../../src/sources/tls';
 import {
   ipBanNote,
@@ -428,6 +429,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const filtered = filterByKind(matching, kindF);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
+  // the search settled and not one source answered (no network, or every site down)
+  const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
@@ -519,7 +522,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           {t('add.byMagnet')}
         </button>
       )}
-      {memo.handle && memo.searched && (
+      {memo.handle && memo.searched && online.value && !noSourceAnswered && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}
       {prog && prog.total === 0 && <div class="m-muted">{t('add.noneSelected')}</div>}
@@ -575,8 +578,15 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         </div>
       )}
       {!searching && prog && prog.total > 0 && visible.length === 0 && (
-        <div class="m-muted" data-empty={kindEmpty ? 'kind' : 'all'}>
-          {kindEmpty ? t('search.kind.none') : t('catalog.nothingFound')}
+        <div class="m-muted" data-empty={noSourceAnswered ? 'noanswer' : kindEmpty ? 'kind' : 'all'}>
+          {/* no source answered: not «Ничего не найдено», which reads as an empty result */}
+          {noSourceAnswered
+            ? online.value
+              ? t('torrent.better.noAnswer')
+              : t('common.offlineTitle') + '. ' + t('common.offlineText')
+            : kindEmpty
+              ? t('search.kind.none')
+              : t('catalog.nothingFound')}
         </div>
       )}
       <div class="m-results">

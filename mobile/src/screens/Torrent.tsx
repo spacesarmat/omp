@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { torrentHeaderEpisodes } from '../lib/releaseContents';
 import { rememberedSeasonTotal, rememberSeasonTotals, seasonEpisodeTotal } from '../../../src/lib/episodesOutOf';
 import { t, fmtDuration, fmtSize } from '../../../src/i18n';
-import { swarmText } from '../../../src/lib/torrentStatus';
+import { knownSwarmText } from '../../../src/lib/torrentStatus';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
 import { Icon } from '../ui/Icon';
@@ -508,7 +508,7 @@ export function Torrent({ hash }: { hash: string }) {
     season !== null ? t('library.season', { n: season }) : '',
     hasEpisodes ? torrentHeaderEpisodes(allFiles, season, seasonTotal) : '',
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
-    swarmText(tor),
+    knownSwarmText(tor),
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one

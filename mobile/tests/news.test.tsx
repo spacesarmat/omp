@@ -239,7 +239,9 @@ describe('«Новое» · Подписки', () => {
       { subId: s.id, key: 'k2', at: 3, result: row({ Title: 'Дюна 2' }) },
     ]);
     await mount({ seg: 'subs' });
-    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Подписки · 2 новых');
+    // the count is a pill (the long «Подписки · 2 новых» wrapped to two lines, QA B10), the full text is the label
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Подписки2');
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.getAttribute('aria-label')).toBe('Подписки · 2 новых');
     const rows = Array.from(el.querySelectorAll('.m-sub-row'));
     expect(rows[0].textContent).toContain('Дюна 2160p');
     expect(rows[0].textContent).toContain('Все источники · 2160p · от 20 сидов');
@@ -522,7 +524,8 @@ describe('News in English', () => {
       }),
     ]);
     await mount({ seg: 'subs' });
-    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Subscriptions · 2 new');
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.textContent).toBe('Subscriptions2');
+    expect(el.querySelector('[role=tab][aria-selected=true]')!.getAttribute('aria-label')).toBe('Subscriptions · 2 new');
     const card = el.querySelector('.m-ep-card')!;
     expect(card.textContent).toContain('Starbound Frontier · Season 2');
     expect(card.textContent).toContain('Episodes 9-10 are out · you have 1-8');

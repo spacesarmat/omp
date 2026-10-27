@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 
 vi.mock('../../src/monitor/replace', async (orig) => ({
   ...(await orig<typeof import('../../src/monitor/replace')>()),
@@ -99,7 +101,8 @@ describe('ReplaceSheet', () => {
     click(Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').startsWith('Другая раздача')));
     expect(el.querySelector('[role=radiogroup][aria-label="Другая раздача"]')).toBeTruthy();
     click(Array.from(el.querySelectorAll('[role=radio]')).find((b) => (b.textContent || '').includes('720p')));
-    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-9 из 10 · 720p · 9 ГБ');
+    // the tracker's «9 GB» in the phone's one size format, like the current release above it (QA N1: «11.17 GB» next to «9,1 ГБ»)
+    expect(el.querySelectorAll('.m-rep-line')[1].textContent).toBe('Серии 1-9 из 10 · 720p · 9,0 ГБ');
     replaceMock.mockResolvedValue({ ok: true, hash: 'd'.repeat(40) });
     click(byText('Заменить'));
     await flush();
@@ -190,5 +193,23 @@ describe('ReplaceSheet in English', () => {
     click(byText('Replace and watch'));
     await flush();
     expect(el.querySelector('[role=alert]')!.textContent).toBe('Could not replace the release.');
+  });
+});
+
+describe('«Другая раздача» rows fit long titles (mobile.css)', () => {
+  const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+  const rule = (sel: string) => {
+    const m = new RegExp('(?:^|\\n)' + sel.replace(/[.>*]/g, '\\$&') + '\\s*\\{([^}]*)\\}').exec(css);
+    return m ? m[1] : '';
+  };
+
+  it('rows in a scrolling sheet part never shrink below their content (buttons have min-height: 44px)', () => {
+    expect(rule('.m-sheet > .m-sheet-scroll > *')).toMatch(/flex-shrink:\s*0/);
+  });
+
+  it('a long title wraps inside the row and the check keeps its size', () => {
+    expect(rule('.m-opt-name')).toMatch(/overflow-wrap:\s*anywhere/);
+    expect(rule('.m-opt-text')).toMatch(/min-width:\s*0/);
+    expect(rule('.m-opt > svg')).toMatch(/flex-shrink:\s*0/);
   });
 });

@@ -48,6 +48,9 @@ export const ru = {
     delete: 'Удалить',
     retry: 'Повторить',
     done: 'Готово',
+    /** No network at all (navigator.onLine is false): one honest state instead of «TMDB не отвечает». */
+    offlineTitle: 'Нет интернета',
+    offlineText: 'Телефон не подключён к сети. Проверьте Wi-Fi или мобильный интернет.',
     close: 'Закрыть',
     add: 'Добавить',
     later: 'Позже',
@@ -338,6 +341,10 @@ export const ru = {
     sortNew: 'Новые',
     sortTitle: 'По названию',
     sortSize: 'По размеру',
+    // the short tag on the phone's sort button: which order is on now
+    sortTagNew: 'нов',
+    sortTagTitle: 'А-Я',
+    sortTagSize: 'ГБ',
     viewLarge: 'Крупные постеры',
     viewSmall: 'Мелкие постеры',
     viewList: 'Список',
@@ -2208,6 +2215,7 @@ export const ru = {
     noTvTitle: 'Подключите телевизор',
     noTvText: 'Чтобы управлять ТВ с телефона, сначала подключите его.',
     noTvButton: 'Подключить ТВ',
+    searchingNear: 'Ищу телевизоры в этой сети…',
     foundTvs: 'Телевизоры в сети',
     /** While the shared scan has not found a TV yet: stands in for the empty list. */
     foundTvsSearching: 'Ищу…',
@@ -2479,6 +2487,10 @@ export const ru = {
     note: 'Телефон и телевизор должны быть в одной сети Wi-Fi. На телевизоре должен быть установлен OMP.',
     installLink: 'Нет OMP на телевизоре? Помощник установки',
     searching: 'Ищу телевизоры…',
+    /** The scan ended with no TV. */
+    notFound: 'Телевизоры не найдены. Проверьте, что ТВ включён и в той же сети Wi-Fi, или введите IP-адрес.',
+    /** No Wi-Fi: TV search is not started. */
+    noWifi: 'Телефон не подключён к Wi-Fi. Подключитесь к той же сети, что и ТВ.',
     savedMeta: '{ip} · сохранён',
     connectingSuffix: ' · подключение…',
     connected: 'Подключён',

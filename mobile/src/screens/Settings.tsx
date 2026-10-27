@@ -377,7 +377,8 @@ export function Settings() {
             </button>
           </div>
         )}
-        {isBetaBuild() && (
+        {/* the size of labels that are not shown is not a setting: the slider comes with the switch on */}
+        {isBetaBuild() && settings.value.testMode && (
           <div class="m-set-row m-test-size tm" data-code="P11.20">
             <span>{t('settings.testLabelSize')}</span>
             <span class="m-muted m-test-size-value">{testLabelPhone()} px</span>

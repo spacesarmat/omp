@@ -153,7 +153,21 @@ describe('watchOnPhone', () => {
     expect(a.player2160).not.toHaveBeenCalled();
     expect(a.openExternal).not.toHaveBeenCalled();
     expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
-    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
+    // the journal gets where the player stopped (episode 3 at 10:00), not the start at 2:05
+    await vi.waitFor(() => expect(a.recordWatch).toHaveBeenCalledTimes(1));
+    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 3, t: 600, d: 2400, src: 'phone' });
+    done();
+  });
+
+  it('a start that never played (the player is back at 0:00) is not written to the watch journal', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 0, durationMs: 0, url: 'http://h:8090/stream/Show.S01E02.mkv?link=abc&index=2&play' });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(a.recordWatch).not.toHaveBeenCalled();
     done();
   });
 
@@ -176,8 +190,8 @@ describe('watchOnPhone', () => {
     await watchOnPhone(c, tor as any, w(1, 300));
     expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(a.openExternal).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => expect(a.recordWatch).toHaveBeenCalledTimes(1));
-    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 1, t: 0 });
+    // an outside player reports nothing back: no «0:00» journal entry for it
+    expect(a.recordWatch).not.toHaveBeenCalled();
     a.embedded2160.mockRejectedValue(new Error('x'));
     await watchOnPhone(c, tor as any, w(1));
     expect(a.openExternal).toHaveBeenCalledTimes(2);
@@ -208,7 +222,8 @@ describe('watchOnPhone', () => {
     expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(getLocalProgress('abc', 3)).toMatchObject({ time: 600, duration: 2400 });
     expect(getLocalProgress('abc', 2)).toBeNull();
-    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 2, t: 125, src: 'phone' });
+    await vi.waitFor(() => expect(a.recordWatch).toHaveBeenCalledTimes(1));
+    expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 3, t: 600, src: 'phone' });
     done();
   });
 

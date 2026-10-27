@@ -5,7 +5,7 @@ import { CodeSheet } from './CodeSheet';
 import { Icon } from './Icon';
 import { activeTv, saveTv, setActiveTv, type SavedTv } from '../tv/tvStore';
 import { connectTv, pairAtv } from '../tv/tvClient';
-import { ensureFoundTvScan, foundTvRows, foundTvScanning, noteFoundTvScreen } from '../tv/foundTvDiscovery';
+import { ensureFoundTvScan, foundTvNoWifi, foundTvRows, foundTvScanning, noteFoundTvScreen } from '../tv/foundTvDiscovery';
 
 export { setFoundTvDiscoverer } from '../tv/foundTvDiscovery';
 
@@ -21,9 +21,11 @@ export function setFoundTvConnect(fn: ((tv: SavedTv) => void) | null): void {
  * that arrives later updates every open list. Opening a screen searches again when that scan is
  * empty, older than its TTL, or from another network. While a scan is still running and nothing is
  * known yet, a searching line stands in for the empty block. Nothing is rendered once the scan ends
- * with no TV, so a network with no TV stays as it was.
+ * with no TV, so a network with no TV stays as it was. Without Wi-Fi there is no scan and no line.
+ * `quiet` («Каталог»): no searching line at all, so the posters below do not jump while a scan runs
+ * and a tap lands where the user aimed; found TVs still appear.
  */
-export function FoundTvs() {
+export function FoundTvs({ quiet = false }: { quiet?: boolean } = {}) {
   const [coding, setCoding] = useState<FoundOmpTv | null>(null);
   // a TV chosen while this was open: the list was for the empty state
   const chosen = activeTv.value;
@@ -35,7 +37,7 @@ export function FoundTvs() {
   }
   if (!chosen) ensureFoundTvScan();
   const rows = foundTvRows.value;
-  const scanning = foundTvScanning.value;
+  const scanning = foundTvScanning.value && !foundTvNoWifi.value;
 
   function connectLg(f: FoundTv) {
     const tv: SavedTv = { ip: f.ip, name: f.name || 'LG ' + f.ip, kind: 'lg' };
@@ -45,10 +47,10 @@ export function FoundTvs() {
     else void connectTv(tv);
   }
 
-  if (chosen || (!rows.length && !scanning && !coding)) return null;
+  if (chosen || (!rows.length && (!scanning || quiet) && !coding)) return null;
   return (
     <div class="m-found-tvs">
-      {scanning && rows.length === 0 && (
+      {scanning && !quiet && rows.length === 0 && (
         <div class="m-muted m-searching" role="status">
           <svg class="m-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F5B700" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
             <path d="M12 3a9 9 0 1 0 9 9" />
