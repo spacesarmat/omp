@@ -224,6 +224,7 @@ export const FAQ_IDS = [
   'torrserver', 'ts-phone', 'ts-settings', 'ts-covers',
   'subscriptions', 'new-episodes', 'better-quality', 'find-better', 'series-card',
   'log', 'report-bug', 'backup', 'support', 'telegram', 'omp-subscription',
+  'ts-https',
 ];
 
 function faqItems(): RegItem[] {

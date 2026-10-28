@@ -26,6 +26,7 @@ const ALLOWLIST: { [file: string]: string } = {
   'src/sources/html.ts': 'tracker page parsing (relative dates «вчера»)',
   'src/sources/kinozal.ts': 'tracker page parsing (copy migrated): category labels matched by the category mapper, «сейчас» in dates',
   'src/sources/merge.ts': 'tracker title matching (ё→е normalization)',
+  'mobile/src/lib/duplicates.ts': 'release title parsing (Russian tech tags and season words in tracker titles)',
   'src/sources/rustorka.ts': 'tracker page parsing (copy migrated)',
   'src/sources/rutracker.ts': 'tracker page parsing (login form value, «дн» in the seeders cell)',
 };

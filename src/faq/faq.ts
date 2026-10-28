@@ -164,6 +164,7 @@ const STRUCT: FaqStruct[] = [
   { id: 'support', section: 'about', devices: ['common', 'phone'] },
   { id: 'telegram', section: 'about', devices: ['common', 'phone', 'atv', 'lg'] },
   { id: 'omp-subscription', section: 'about', devices: ['phone', 'common'] },
+  { id: 'ts-https', section: 'connect', devices: ['server', 'common'] },
 ];
 
 export const FAQ: FaqItem[] = STRUCT.map((s) => ({
