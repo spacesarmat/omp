@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { carryMap, carryWatch, mergeJournals, pickKeeper, seasonFiles, forgetRemoved, type CarryClient } from '../../src/store/releaseCarry';
-import { getLocalProgress, reloadProgress, saveProgress, serverViewed } from '../../src/store/progress';
+import { getLocalProgress, reloadProgress, resetViewed, saveProgress, serverViewed } from '../../src/store/progress';
 import { parseData, type JournalEntry } from '../../src/lib/journal';
 import { NO_SEASON } from '../../src/lib/seriesGroups';
 import type { Torrent } from '../../src/api/types';
@@ -216,5 +216,17 @@ describe('carryWatch', () => {
     const keep = tor('keep', S1_1080);
     const { c } = fakeClient([gone, keep], { dropWrite: true });
     expect((await carryWatch(c, gone, keep, 1)).ok).toBe(false);
+  });
+
+  it('another server chosen while the marks are written: the cache is not refilled with the old server marks', async () => {
+    serverViewed.value = [{ hash: 'gone', file_index: 1 }];
+    const { c } = fakeClient([tor('gone', S1), tor('keep', S1_1080)]);
+    const orig = c.setViewed!;
+    c.setViewed = vi.fn((h: string, f: number, tc?: number) => {
+      resetViewed();
+      return orig(h, f, tc);
+    });
+    expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(true);
+    expect(serverViewed.value).toEqual([]);
   });
 });

@@ -145,6 +145,11 @@ export function clearProgress(hash: string, idx?: number): void {
 
 let viewedGen = 0;
 
+/** Changes whenever the server marks are reset (another server): a late write must not refill the cache then. */
+export function viewedGeneration(): number {
+  return viewedGen;
+}
+
 export function resetViewed(): void {
   viewedGen++;
   serverViewed.value = [];

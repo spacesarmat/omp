@@ -11,7 +11,7 @@ import { JOURNAL_MAX, parseData, type JournalEntry, type SkipPrefs } from '../li
 import { episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
 import { NO_SEASON } from '../lib/seriesGroups';
 import { afterWrites, rewriteData, type JournalClient } from './journal';
-import { carryProgress, clearProgress, continueWatching, localFileIds, serverViewed } from './progress';
+import { carryProgress, clearProgress, continueWatching, localFileIds, serverViewed, viewedGeneration } from './progress';
 
 export type CarryClient = JournalClient & Pick<TorrServerClient, 'loadInfo'> & Partial<Pick<TorrServerClient, 'setViewed'>>;
 
@@ -115,6 +115,8 @@ function filesNow(c: CarryClient, t: Torrent): Promise<TorrentFile[]> {
  */
 export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, season: number, opts?: { allowLoss?: boolean }): Promise<CarryResult> {
   const allowLoss = !!(opts && opts.allowLoss);
+  // the cache of server marks belongs to the server of this call: another server chosen meanwhile resets it
+  const gen = viewedGeneration();
   // a playback write of the release that goes may still be on its way: it must be in what is moved
   return afterWrites(removed.hash).then(() => c.list()).then(
     (all) => {
@@ -165,7 +167,7 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
           const set = c.setViewed.bind(c);
           return Promise.all(marks.map((e) => set(e.hash, e.file_index, e.timecode || 0))).then(
             () => {
-              serverViewed.value = serverViewed.value.concat(marks);
+              if (viewedGeneration() === gen) serverViewed.value = serverViewed.value.concat(marks);
               return { ok: true, moved: moved + carried.length + marks.length } as CarryResult;
             },
             () => ({ ok: false }) as CarryResult,
