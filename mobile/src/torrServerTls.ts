@@ -7,6 +7,7 @@ interface TlsPlugin {
   torrServerHttp(o: object): Promise<{ status?: number; base64?: string }>;
   torrServerInspect(o: { url: string }): Promise<Inspection>;
   torrServerTrust(o: { hostPort: string; fingerprint: string }): Promise<unknown>;
+  torrServerForget(o: { hostPort: string }): Promise<unknown>;
 }
 
 /** The plugin's https path for TorrServer; null in a browser build. */
@@ -17,6 +18,7 @@ export function phoneTls(): NativeTls | null {
     http: (o) => p.torrServerHttp(o),
     inspect: (url) => p.torrServerInspect({ url }),
     trust: (hostPort, fingerprint) => p.torrServerTrust({ hostPort, fingerprint }),
+    forget: (hostPort) => p.torrServerForget({ hostPort }),
   };
 }
 

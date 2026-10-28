@@ -51,8 +51,11 @@ class TorrServerHttp {
         for ((k, v) in headers) b.header(k, v)
         if (method == "POST") b.post((body ?: ByteArray(0)).toRequestBody(contentType?.toMediaTypeOrNull()))
         else b.get()
-        val call = client.newCall(b.build())
-        call.timeout().timeout(timeoutMs.coerceIn(1000, 120_000), TimeUnit.MILLISECONDS)
+        // the caller's timeout is the whole call's: TorrServer may take long to start an answer (metadata, search)
+        val ms = timeoutMs.coerceIn(1000, 120_000)
+        val call = client.newBuilder().readTimeout(ms, TimeUnit.MILLISECONDS).writeTimeout(ms, TimeUnit.MILLISECONDS).build()
+            .newCall(b.build())
+        call.timeout().timeout(ms, TimeUnit.MILLISECONDS)
         try {
             call.execute().use { r ->
                 val src = r.body ?: return Response(r.code, ByteArray(0), null)

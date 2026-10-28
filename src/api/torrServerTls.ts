@@ -5,7 +5,9 @@
 // again. Nothing is trusted without that answer. LG has no such path: its error says a trusted certificate is needed.
 import { t } from '../i18n';
 import type { HttpTransport, TransportRequest } from './http';
+import { effect } from '@preact/signals';
 import { setTorrServerTransport } from './torrserver';
+import { servers } from '../store/servers';
 
 /** What the plugin says about a server's certificate. */
 export interface Inspection {
@@ -32,6 +34,8 @@ export interface NativeTls {
   http(o: TransportRequest & { url: string }): Promise<{ status?: number; base64?: string }>;
   inspect(url: string): Promise<Inspection>;
   trust(hostPort: string, fingerprint: string): Promise<unknown>;
+  /** Drops the accepted certificate of host:port. */
+  forget?(hostPort: string): Promise<unknown>;
 }
 
 export type TrustUi = (q: CertQuestion) => Promise<boolean>;
@@ -110,10 +114,45 @@ export function createTlsTransport(native: NativeTls): HttpTransport {
   };
 }
 
+/** «host:port» of an https URL as the plugin keys its pins (the scheme's port when none is given); null otherwise. */
+export function pinKey(url: string): string | null {
+  const m = /^https:\/\/(?:[^@/?#]*@)?(\[[^\]]+\]|[^:/?#]+)(?::(\d+))?(?:[/?#]|$)/i.exec(url);
+  if (!m) return null;
+  return m[1].toLowerCase() + ':' + (m[2] ? String(+m[2]) : '443');
+}
+
+/** The saved servers' https host:port keys. */
+function savedKeys(): { [k: string]: true } {
+  const out: { [k: string]: true } = {};
+  for (const s of servers.value) {
+    const k = pinKey(s.url);
+    if (k) out[k] = true;
+  }
+  return out;
+}
+
+/**
+ * A server removed (or its address changed) takes its accepted certificate with it: adding the address again asks
+ * again. Returns the stop function.
+ */
+export function forgetRemovedServers(native: NativeTls): () => void {
+  if (!native.forget) return () => {};
+  const forget = native.forget;
+  let before: { [k: string]: true } | null = null;
+  return effect(() => {
+    const now = savedKeys();
+    if (before) {
+      for (const k of Object.keys(before)) if (!now[k]) void forget(k).then(undefined, () => {});
+    }
+    before = now;
+  });
+}
+
 /** Turns the path on (Android APKs whose plugin has the methods). */
 export function installTorrServerTls(native: NativeTls, show: TrustUi): void {
   setTrustUi(show);
   setTorrServerTransport(createTlsTransport(native));
+  forgetRemovedServers(native);
 }
 
 /** «AB:CD:…» in lines of eight bytes. */

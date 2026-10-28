@@ -5,6 +5,8 @@ import {
   askTrust,
   certQuestionText,
   createTlsTransport,
+  forgetRemovedServers,
+  pinKey,
   formatFingerprint,
   resetTrustAnswers,
   setTrustUi,
@@ -12,6 +14,7 @@ import {
   type NativeTls,
 } from '../../src/api/torrServerTls';
 import { mockFetch } from '../helpers/fetchMock';
+import { servers, addServer, removeServer, updateServer } from '../../src/store/servers';
 
 const FP = 'ab'.repeat(32);
 const b64 = (s: string) => btoa(s);
@@ -146,5 +149,32 @@ describe('certQuestionText', () => {
     expect(x.body).toContain('TorrServer');
     expect(x.body).toContain('15.01.2030');
     expect(x.body).toContain('AB:AB');
+  });
+});
+
+describe('forgetRemovedServers', () => {
+  it('pinKey: host:port of an https URL, 443 by default', () => {
+    expect(pinKey('https://TS.lan:8091/x')).toBe('ts.lan:8091');
+    expect(pinKey('https://u:p@ts.lan')).toBe('ts.lan:443');
+    expect(pinKey('https://[fe80::1]:8443')).toBe('[fe80::1]:8443');
+    expect(pinKey('http://ts.lan:8091')).toBeNull();
+  });
+
+  it('a removed or re-addressed https server drops its certificate; one still saved keeps it', () => {
+    localStorage.clear();
+    servers.value = [];
+    const forget = vi.fn(() => Promise.resolve());
+    const stop = forgetRemovedServers({ ...fakeNative(), forget });
+    const a = addServer({ url: 'https://ts.lan:8091' });
+    const b = addServer({ url: 'https://other.lan:8443' });
+    addServer({ url: 'https://other.lan:8443/ts' });
+    addServer({ url: '192.168.1.5:8090' });
+    removeServer(b.id);
+    expect(forget).not.toHaveBeenCalled();
+    updateServer(a.id, { url: 'https://ts.lan:9443' });
+    expect(forget).toHaveBeenCalledWith('ts.lan:8091');
+    stop();
+    servers.value = [];
+    expect(forget).toHaveBeenCalledTimes(1);
   });
 });
