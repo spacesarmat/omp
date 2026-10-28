@@ -111,4 +111,28 @@ describe('TV torrent screen · rename and poster', () => {
     expect((set.mock.calls[0] as any)[1]).toBe('');
     expect(torrents.value[0].poster).toBe('');
   });
+
+  it('a late variants reply for a title the user has left does not replace the current one', async () => {
+    const item = (id: number) => ({ id, kind: 'tv', title: 'Кино ' + id, original: '', year: 2020, poster: 'http://p/' + id + '.jpg', rating: 7 });
+    const replies: { [id: number]: (urls: string[]) => void } = {};
+    setCatalogProvider(() =>
+      Promise.resolve({
+        search: () => Promise.resolve({ items: [item(1), item(2)], pages: 1 }),
+        posters: (_k: string, id: number) => new Promise<string[]>((r) => (replies[id] = r)),
+      } as any),
+    );
+    await click(btn('Сменить постер'));
+    await flush();
+    await click(host.querySelectorAll('.poster-tile')[0]);
+    await flush();
+    await click(btn('К результатам'));
+    await click(host.querySelectorAll('.poster-tile')[1]);
+    await flush();
+    act(() => replies[2](['http://p/2b.jpg']));
+    await flush();
+    act(() => replies[1](['http://p/1b.jpg', 'http://p/1c.jpg']));
+    await flush();
+    const srcs = Array.from(host.querySelectorAll('.poster-variant img')).map((n) => n.getAttribute('src'));
+    expect(srcs).toEqual(['http://p/2.jpg', 'http://p/2b.jpg']);
+  });
 });

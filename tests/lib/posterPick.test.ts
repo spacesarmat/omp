@@ -86,6 +86,15 @@ describe('savePoster', () => {
     expect(c.setPoster.mock.calls[1][0]).toEqual(expect.objectContaining({ hash: 'b', title: 'server b', category: 'tv' }));
   });
 
+  it('sends a freshly read empty category as it is, not the listed one', async () => {
+    const c = {
+      get: vi.fn(async (h: string) => film(h, 'server', { category: '' })),
+      setPoster: vi.fn(async (_t: { hash: string }, _p: string) => undefined),
+    };
+    await savePoster(c, [film('a', 'listed', { category: 'movie' })], 'https://p.jpg');
+    expect(c.setPoster.mock.calls[0][0]).toEqual(expect.objectContaining({ hash: 'a', title: 'server', category: '' }));
+  });
+
   it('uses the listed torrent when the read fails, counts failed writes and rejects only when none was written', async () => {
     const c = {
       get: vi.fn(async () => Promise.reject(new Error('down'))),
@@ -112,10 +121,39 @@ describe('resetPoster', () => {
       tmdbSettings: vi.fn(async () => ({ APIKey: 'k' })),
     };
     const fetchJson = vi.fn(async () => ({ results: [{ poster_path: '/f.jpg', release_date: '2026-06-26' }] }));
-    const found = await resetPoster(c, list, { fetchJson });
+    const r = await resetPoster(c, list, { fetchJson });
     const url = 'https://imagetmdb.com/t/p/' + posterImageSize() + '/f.jpg';
-    expect(found).toBe(url);
+    expect(r).toEqual({ poster: url, withPoster: ['a', 'b'], cleared: [], failed: 0 });
     expect(c.setPoster.mock.calls.map((x) => x[0].hash + '=' + x[1])).toEqual(['a=', 'b=', 'a=' + url, 'b=' + url]);
+  });
+
+  it('a release that could not be cleared keeps its poster: the lookup runs for the next one and the failure is reported', async () => {
+    const stored: { [h: string]: string } = { a: 'https://old/a.jpg', b: 'https://old/b.jpg', c: 'https://old/c.jpg' };
+    const list = [film('a', 'Кино (2026)'), film('b', 'Кино (2026) 1080p'), film('c', 'Кино (2026) 720p')];
+    const c = {
+      get: vi.fn(async (h: string) => ({ ...list.find((x) => x.hash === h)!, poster: stored[h] })),
+      setPoster: vi.fn(async (t: { hash: string }, p: string) => {
+        if (t.hash === 'a') throw new Error('down');
+        if (t.hash === 'c' && p) throw new Error('down');
+        stored[t.hash] = p;
+      }),
+      tmdbSettings: vi.fn(async () => ({ APIKey: 'k' })),
+    };
+    const fetchJson = vi.fn(async () => ({ results: [{ poster_path: '/f.jpg', release_date: '2026-06-26' }] }));
+    const r = await resetPoster(c, list, { fetchJson });
+    const url = 'https://imagetmdb.com/t/p/' + posterImageSize() + '/f.jpg';
+    // a kept its old poster, b got the new one, copying to c failed and c stays cleared
+    expect(r).toEqual({ poster: url, withPoster: ['b'], cleared: ['c'], failed: 2 });
+    expect(stored).toEqual({ a: 'https://old/a.jpg', b: url, c: '' });
+  });
+
+  it('rejects when no release could be cleared', async () => {
+    const c = {
+      get: vi.fn(async () => film('a', 'x')),
+      setPoster: vi.fn(async () => Promise.reject(new Error('down'))),
+      tmdbSettings: vi.fn(async () => ({ APIKey: 'k' })),
+    };
+    await expect(resetPoster(c, [film('a', 'x')])).rejects.toThrow('down');
   });
 });
 

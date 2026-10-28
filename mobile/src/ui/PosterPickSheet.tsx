@@ -15,6 +15,7 @@ import {
   resetPoster,
   savePoster,
   savedText,
+  resetText,
   searchCandidates,
   storedPosterUrl,
   titleVariants,
@@ -50,6 +51,8 @@ export function PosterPickSheet({
   const [linkError, setLinkError] = useState('');
   const alive = useRef(true);
   const gen = useRef(0);
+  // the variants request in flight: a reply for a title the user has left is dropped
+  const variantGen = useRef(0);
   useEffect(() => {
     search(query);
     return () => {
@@ -78,10 +81,11 @@ export function PosterPickSheet({
   }
 
   const openTitle = (item: CatalogTitle) => {
+    const my = ++variantGen.current;
     setChosen(item);
     setVariants(item.poster ? [item.poster] : []);
     titleVariants(item).then((urls) => {
-      if (alive.current) setVariants(urls);
+      if (alive.current && my === variantGen.current) setVariants(urls);
     });
   };
 
@@ -119,10 +123,12 @@ export function PosterPickSheet({
     if (!c || busy) return;
     setBusy(true);
     resetPoster(c, targets).then(
-      (found) => {
-        patchPosters(targets.map((x) => x.hash), found);
-        if (onSaved) onSaved(found);
-        showToast(found ? t('torrent.poster.resetFound') : t('torrent.poster.resetNone'));
+      (r) => {
+        patchPosters(r.cleared, '');
+        patchPosters(r.withPoster, r.poster);
+        if (onSaved && r.withPoster.indexOf(tor.hash) >= 0) onSaved(r.poster);
+        else if (onSaved && r.cleared.indexOf(tor.hash) >= 0) onSaved('');
+        showToast(resetText(r, targets.length));
         void refreshTorrents(c).catch(() => {});
         if (alive.current) onClose();
       },
@@ -134,7 +140,11 @@ export function PosterPickSheet({
   };
 
   if (chosen) {
-    return <PosterSheet urls={variants} current={tor.poster || ''} onPick={(u) => void save(u)} onClose={() => setChosen(null)} />;
+    const back = () => {
+      variantGen.current++;
+      setChosen(null);
+    };
+    return <PosterSheet urls={variants} current={tor.poster || ''} onPick={(u) => void save(u)} onClose={back} />;
   }
 
   return (

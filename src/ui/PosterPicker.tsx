@@ -25,6 +25,7 @@ import {
   resetPoster,
   savePoster,
   savedText,
+  resetText,
   searchCandidates,
   storedPosterUrl,
   titleVariants,
@@ -50,6 +51,8 @@ export function PosterPicker(p: {
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
   const gen = useRef(0);
+  // the variants request in flight: a reply for a title the user has left is dropped
+  const variantGen = useRef(0);
   const prev = useRef(getCurrentFocusKey() || 'torrent-poster');
 
   useEffect(() => {
@@ -87,10 +90,11 @@ export function PosterPicker(p: {
   }
 
   const openTitle = (item: CatalogTitle) => {
+    const my = ++variantGen.current;
     setChosen(item);
     setVariants(null);
     titleVariants(item).then((urls) => {
-      if (!alive.current) return;
+      if (!alive.current || my !== variantGen.current) return;
       setVariants(urls);
       focusSoon(urls.length ? 'poster-variant-0' : 'poster-back');
     });
@@ -98,6 +102,7 @@ export function PosterPicker(p: {
 
   const backToResults = () => {
     const at = chosen && items ? items.indexOf(chosen) : -1;
+    variantGen.current++;
     setChosen(null);
     setVariants(null);
     focusSoon(at >= 0 ? 'poster-tile-' + at : 'poster-search');
@@ -130,6 +135,7 @@ export function PosterPicker(p: {
       const q = v.trim();
       if (!q) return;
       setQuery(q);
+      variantGen.current++;
       setChosen(null);
       search(q);
     });
@@ -154,10 +160,12 @@ export function PosterPicker(p: {
     if (!c || busy) return;
     setBusy(true);
     resetPoster(c, p.targets).then(
-      (found) => {
-        patchPosters(p.targets.map((x) => x.hash), found);
-        p.onSaved(found);
-        toast(found ? t('torrent.poster.resetFound') : t('torrent.poster.resetNone'));
+      (r) => {
+        patchPosters(r.cleared, '');
+        patchPosters(r.withPoster, r.poster);
+        if (r.withPoster.indexOf(p.torrent.hash) >= 0) p.onSaved(r.poster);
+        else if (r.cleared.indexOf(p.torrent.hash) >= 0) p.onSaved('');
+        toast(resetText(r, p.targets.length), r.failed ? 'error' : 'info');
         void refreshTorrents(c).catch(() => {});
         if (alive.current) p.onClose();
       },

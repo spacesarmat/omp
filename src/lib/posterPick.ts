@@ -108,10 +108,12 @@ export function savePoster(c: PosterWriter, list: Torrent[], poster: string): Pr
     return c
       .get(tor.hash)
       .then(
+        // a successful read is sent back as it is (a category cleared elsewhere stays cleared); the listed torrent
+        // only stands in when the read fails
         (cur) => (cur && cur.hash ? cur : tor),
         () => tor,
       )
-      .then((cur) => c.setPoster({ hash: tor.hash, title: cur.title || tor.title, name: cur.name || tor.name, category: cur.category || tor.category }, poster))
+      .then((cur) => c.setPoster({ hash: tor.hash, title: cur.title, name: cur.name, category: cur.category }, poster))
       .then(
         () => {
           saved.push(tor.hash);
@@ -126,23 +128,50 @@ export function savePoster(c: PosterWriter, list: Torrent[], poster: string): Pr
   return step(0);
 }
 
+export interface ResetResult {
+  /** The poster found, '' when none. */
+  poster: string;
+  /** Releases that now have `poster`. */
+  withPoster: string[];
+  /** Releases that are cleared (no poster found for them, or copying it failed). */
+  cleared: string[];
+  /** Releases whose writes failed: they keep their old poster. */
+  failed: number;
+}
+
 /**
- * «Сбросить (найти автоматически)»: clears the poster of every release, then looks one up for the first release
- * (as for a new torrent: a film by its year, a series among series) and gives the others the same one.
- * Resolves with the poster found, '' when none.
+ * «Сбросить (найти автоматически)»: clears the poster of every release, then looks one up for the first release that
+ * was cleared (as for a new torrent: a film by its year, a series among series) and gives the other cleared ones the
+ * same. Releases whose clear failed keep their poster and are counted in `failed`, as are failed copies (those stay
+ * cleared). Rejects with the first error when no release could be cleared.
  */
-export function resetPoster(c: PosterClient & PosterWriter, list: Torrent[], deps: PosterDeps = {}): Promise<string> {
-  if (!list.length) return Promise.resolve('');
-  const lead = list[0];
-  return savePoster(c, list, '').then(() =>
-    attachPoster(c, lead.hash, displayTitle(lead), { ...deps, tries: 1 }).then((found) => {
-      if (!found || list.length < 2) return found;
-      return savePoster(c, list.slice(1), found).then(
-        () => found,
-        () => found,
+export function resetPoster(c: PosterClient & PosterWriter, list: Torrent[], deps: PosterDeps = {}): Promise<ResetResult> {
+  if (!list.length) return Promise.resolve({ poster: '', withPoster: [], cleared: [], failed: 0 });
+  return savePoster(c, list, '').then((first) => {
+    const failedClear = list.length - first.saved.length;
+    const lead = list.filter((x) => first.saved.indexOf(x.hash) >= 0)[0];
+    const done = (poster: string, withPoster: string[], copyFailed: number): ResetResult => ({
+      poster: poster,
+      withPoster: withPoster,
+      cleared: first.saved.filter((h) => withPoster.indexOf(h) < 0),
+      failed: failedClear + copyFailed,
+    });
+    return attachPoster(c, lead.hash, displayTitle(lead), { ...deps, tries: 1 }).then((found) => {
+      if (!found) return done('', [], 0);
+      const rest = list.filter((x) => x.hash !== lead.hash && first.saved.indexOf(x.hash) >= 0);
+      if (!rest.length) return done(found, [lead.hash], 0);
+      return savePoster(c, rest, found).then(
+        (r) => done(found, [lead.hash].concat(r.saved), r.failed),
+        () => done(found, [lead.hash], rest.length),
       );
-    }),
-  );
+    });
+  });
+}
+
+/** The toast after a reset: found, not found, or «у 2 из 3 раздач» when some writes failed. */
+export function resetText(r: ResetResult, total: number): string {
+  if (r.failed) return t('torrent.poster.savedSome', { ok: total - r.failed, n: total });
+  return r.poster ? t('torrent.poster.resetFound') : t('torrent.poster.resetNone');
 }
 
 /** The toast after a save: all written, or «у 2 из 3 раздач». */
