@@ -2050,7 +2050,8 @@ body.test-labels [data-code]::after {
 .m-pp-sub { margin: 4px 0 0; }
 .m-pp-search { display: flex; margin-top: 12px; }
 .m-pp-search .m-input { flex: 1 1 auto; min-width: 0; margin-right: 8px; }
-.m-pp-grid { margin-top: 12px; max-height: 52vh; overflow-y: auto; }
+/* max-content rows: in a max-height scroll grid auto rows shrank to the button min-height and the posters ran over the next row */
+.m-pp-grid { margin-top: 12px; max-height: 52vh; overflow-y: auto; grid-auto-rows: max-content; }
 .m-pp-item { display: flex; flex-direction: column; text-align: left; color: inherit; }
 .m-pp-cap { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-pp-link { margin-top: 12px; }
