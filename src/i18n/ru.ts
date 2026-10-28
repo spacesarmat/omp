@@ -2316,6 +2316,7 @@ export const ru = {
     releaseChange: 'Сменить',
     releaseChangeAria: 'Сменить раздачу: сейчас {name}',
     releasesTitle: 'Другая раздача',
+    releasesCount: 'Раздачи ({n})',
     releasesFind: 'Найти другую раздачу',
     watchOnPhone: 'Смотреть на телефоне',
     watchOnPhoneEp: 'Смотреть на телефоне · {ep}',

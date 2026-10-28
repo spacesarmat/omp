@@ -1963,6 +1963,10 @@ html.m-hint-hold .m-hint { display: none; }
 .m-release-switch .m-btn-text { color: var(--accent); min-height: 40px; }
 .m-release-more { flex-shrink: 0; }
 .m-releases .m-opt-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* «Раздачи (3)» on the film screen: the heading over the release rows, the rows full width */
+.m-film-releases { display: flex; flex-direction: column; gap: 8px; }
+.m-film-releases .m-section { margin: 0; }
+.m-film-releases .m-opt { width: 100%; color: inherit; font: inherit; }
 
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).

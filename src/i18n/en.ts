@@ -2271,6 +2271,7 @@ export const en: EnDict<typeof ru> = {
     releaseChange: 'Change',
     releaseChangeAria: 'Change the release: now {name}',
     releasesTitle: 'Another release',
+    releasesCount: 'Releases ({n})',
     releasesFind: 'Find another release',
     watchOnPhone: 'Watch on the phone',
     watchOnPhoneEp: 'Watch on the phone · {ep}',
