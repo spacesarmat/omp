@@ -3,14 +3,14 @@
 // (mapFiles / mapJournal of «Заменить»), the intro skip settings (omp.s) when the one that stays has none, the local
 // progress of this device and the server marks (/viewed). Only then the release is removed; when the history can not be
 // written, nothing is removed. Chromium 53 safe.
-import type { Torrent } from '../api/types';
+import type { Torrent, ViewedEntry } from '../api/types';
 import type { TorrServerClient } from '../api/torrserver';
 import { parseTorrentData } from '../api/torrserver';
 import { mapFiles, mapJournal } from '../monitor/replace';
 import { JOURNAL_MAX, parseData, type JournalEntry, type SkipPrefs } from '../lib/journal';
 import { episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
 import { NO_SEASON } from '../lib/seriesGroups';
-import { rewriteData, type JournalClient } from './journal';
+import { afterWrites, rewriteData, type JournalClient } from './journal';
 import { carryProgress, clearProgress, continueWatching, localFileIds, serverViewed } from './progress';
 
 export type CarryClient = JournalClient & Pick<TorrServerClient, 'loadInfo'> & Partial<Pick<TorrServerClient, 'setViewed'>>;
@@ -74,7 +74,12 @@ export function pickKeeper(rows: Torrent[], removed: Torrent): Torrent | null {
   return others.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
 }
 
-export type CarryResult = { ok: true; moved: number } | { ok: false };
+/**
+ * `ok: false` without `lost`: the history could not be written, the release must stay. With `lost`: that many files
+ * with watch marks have no match in the one that stays; nothing was written, the caller may ask and call again with
+ * `allowLoss`.
+ */
+export type CarryResult = { ok: true; moved: number } | { ok: false; lost?: number };
 
 const INFO_TIMEOUT = 30000;
 
@@ -108,8 +113,10 @@ function filesNow(c: CarryClient, t: Torrent): Promise<TorrentFile[]> {
  * Moves what was watched in `removed` to `keeper` (both of the same season `season`, NO_SEASON for a film).
  * `{ ok: false }`: the history could not be written (the release must then stay). Nothing is removed here.
  */
-export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, season: number): Promise<CarryResult> {
-  return c.list().then(
+export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, season: number, opts?: { allowLoss?: boolean }): Promise<CarryResult> {
+  const allowLoss = !!(opts && opts.allowLoss);
+  // a playback write of the release that goes may still be on its way: it must be in what is moved
+  return afterWrites(removed.hash).then(() => c.list()).then(
     (all) => {
       const from = (all || []).filter((x) => !!x && sameHash(x.hash, removed.hash))[0] || removed;
       const to = (all || []).filter((x) => !!x && sameHash(x.hash, keeper.hash))[0];
@@ -125,6 +132,13 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
         // the history can not be matched without the file lists: never drop it silently
         if ((journal.length || local.length || viewed.length) && (!ff.length || !tf.length)) return { ok: false } as CarryResult;
         const map = carryMap(ff, tf, season);
+        // the files with watch marks the one that stays has no match for: their marks would go with the release
+        const marked: number[] = [];
+        journal.forEach((e) => marked.indexOf(e.f) < 0 && marked.push(e.f));
+        local.forEach((f) => marked.indexOf(f) < 0 && marked.push(f));
+        viewed.forEach((e) => marked.indexOf(e.file_index) < 0 && marked.push(e.file_index));
+        const lost = marked.filter((f) => map[f] === null || map[f] === undefined).length;
+        if (lost && !allowLoss) return { ok: false, lost } as CarryResult;
         const carried = mapJournal(journal, map);
         const write = !carried.length && !skip
           ? Promise.resolve<'written' | 'same' | 'failed'>('same')
@@ -137,16 +151,25 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
         return write.then((w) => {
           if (w === 'failed') return { ok: false } as CarryResult;
           const moved = carryProgress(from.hash, to.hash, map);
-          if (c.setViewed) {
-            const set = c.setViewed.bind(c);
-            viewed.forEach((e) => {
-              const id = map[e.file_index];
-              if (id === null || id === undefined) return;
-              if (serverViewed.value.some((x) => sameHash(x.hash, to.hash) && x.file_index === id)) return;
-              set(to.hash, id, e.timecode || 0).then(() => undefined, () => undefined);
-            });
-          }
-          return { ok: true, moved: moved + carried.length } as CarryResult;
+          // the server marks: every one must be written (and known here, for a next delete) before the release goes
+          const marks: ViewedEntry[] = [];
+          viewed.forEach((e) => {
+            const id = map[e.file_index];
+            if (id === null || id === undefined) return;
+            if (serverViewed.value.some((x) => sameHash(x.hash, to.hash) && x.file_index === id)) return;
+            if (marks.some((x) => x.file_index === id)) return;
+            marks.push({ ...e, hash: to.hash, file_index: id });
+          });
+          if (!marks.length) return { ok: true, moved: moved + carried.length } as CarryResult;
+          if (!c.setViewed) return { ok: false } as CarryResult;
+          const set = c.setViewed.bind(c);
+          return Promise.all(marks.map((e) => set(e.hash, e.file_index, e.timecode || 0))).then(
+            () => {
+              serverViewed.value = serverViewed.value.concat(marks);
+              return { ok: true, moved: moved + carried.length + marks.length } as CarryResult;
+            },
+            () => ({ ok: false }) as CarryResult,
+          );
         });
       });
     },

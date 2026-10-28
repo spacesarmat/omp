@@ -420,6 +420,11 @@ export const en: EnDict<typeof ru> = {
     releaseDeletePack: 'This torrent holds other seasons too. It can only be deleted from the library together with them.',
     releaseCarryFailed: 'Could not move the watch marks, the torrent was not deleted',
     releaseDeleted: 'Torrent deleted',
+    releaseDeleteLossAsk: {
+      one: '“{keeper}” lacks {n} file with watch marks, its marks will be lost. Delete anyway?',
+      other: '“{keeper}” lacks {n} files with watch marks, their marks will be lost. Delete anyway?',
+    },
+    releaseDeleteBusy: 'Wait, the previous torrent is still being deleted',
     releasesHintDelete: 'delete the torrent',
     // the TV series screen
     watchEp: 'Watch {code}',

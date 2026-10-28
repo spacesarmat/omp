@@ -20,7 +20,7 @@ function tor(hash: string, names: string[], omp?: { [k: string]: unknown }, extr
   return { hash, title: hash + ' title', stat: 5, file_stats: f, data: dataOf(f, omp), ...(extra || {}) };
 }
 
-function fakeClient(list: Torrent[], opts: { failSet?: boolean; dropWrite?: boolean } = {}) {
+function fakeClient(list: Torrent[], opts: { failSet?: boolean; dropWrite?: boolean; failViewed?: boolean } = {}) {
   const server: { [h: string]: Torrent } = {};
   list.forEach((t) => (server[t.hash] = { ...t }));
   const sets: { hash: string; data: string }[] = [];
@@ -35,6 +35,7 @@ function fakeClient(list: Torrent[], opts: { failSet?: boolean; dropWrite?: bool
     }),
     loadInfo: vi.fn((h) => Promise.resolve({ ...server[h] })),
     setViewed: vi.fn((h, f, tc) => {
+      if (opts.failViewed) return Promise.reject(new Error('boom'));
       viewed.push([h, f, tc || 0]);
       return Promise.resolve();
     }),
@@ -177,5 +178,43 @@ describe('carryWatch', () => {
     const gone = tor('gone', S1, { h: [{ f: 1, t: 10, d: 100, at: T0, src: 'tv' }] });
     const { c } = fakeClient([gone]);
     expect((await carryWatch(c, gone, tor('keep', S1_1080), 1)).ok).toBe(false);
+  });
+
+  it('the server marks moved are known here at once: a next delete moves them on', async () => {
+    const a = tor('a', S1);
+    const b = tor('b', S1_1080);
+    const c3 = tor('c', S1_1080);
+    serverViewed.value = [{ hash: 'a', file_index: 2 }];
+    const { c } = fakeClient([a, b, c3]);
+    expect((await carryWatch(c, a, b, 1)).ok).toBe(true);
+    expect(serverViewed.value.some((e) => e.hash === 'b' && e.file_index === 2)).toBe(true);
+    const r2 = fakeClient([b, c3]);
+    expect((await carryWatch(r2.c, b, c3, 1)).ok).toBe(true);
+    expect(r2.viewed).toEqual([['c', 2, 0]]);
+  });
+
+  it('a server mark that can not be written fails: the release must stay', async () => {
+    serverViewed.value = [{ hash: 'gone', file_index: 1 }];
+    const { c } = fakeClient([tor('gone', S1), tor('keep', S1_1080)], { failViewed: true });
+    expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(false);
+  });
+
+  it('watch marks on an episode the one that stays lacks: says how many, writes only with allowLoss', async () => {
+    const gone = tor('gone', S1, { h: [{ f: 3, t: 10, d: 100, at: T0, src: 'tv' }, { f: 1, t: 50, d: 100, at: T0, src: 'tv' }] });
+    const keep = tor('keep', ['Show.S01E01.1080p.mkv', 'Show.S01E02.1080p.mkv']);
+    const first = fakeClient([gone, keep]);
+    expect(await carryWatch(first.c, gone, keep, 1)).toEqual({ ok: false, lost: 1 });
+    expect(first.sets.length).toBe(0);
+    const second = fakeClient([gone, keep]);
+    const r = await carryWatch(second.c, gone, keep, 1, { allowLoss: true });
+    expect(r.ok).toBe(true);
+    expect(parseData(second.server.keep.data)!.journal.map((e) => e.f)).toEqual([1]);
+  });
+
+  it('skip settings only: a write that does not read back fails', async () => {
+    const gone = tor('gone', S1, { h: [], s: { i: true, c: false } });
+    const keep = tor('keep', S1_1080);
+    const { c } = fakeClient([gone, keep], { dropWrite: true });
+    expect((await carryWatch(c, gone, keep, 1)).ok).toBe(false);
   });
 });

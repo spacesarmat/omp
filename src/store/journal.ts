@@ -399,9 +399,18 @@ export function rewriteData(
           const stored = torrentOf(all2, hash);
           const back = stored ? parseData(stored.data) : null;
           if (!back || JSON.stringify(back.journal) !== JSON.stringify(next.journal.slice(0, JOURNAL_MAX))) return;
+          if (JSON.stringify(back.skip || null) !== JSON.stringify(next.skip || null)) return;
           patchLibrary(tor.hash, data);
           result = 'written';
         });
     }),
   ).then(() => result);
+}
+
+/** Resolves once the pending history writes of a torrent are done (never rejects). */
+export function afterWrites(hash: string): Promise<void> {
+  return (chains[hash] || Promise.resolve()).then(
+    () => undefined,
+    () => undefined,
+  );
 }

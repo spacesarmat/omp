@@ -21,7 +21,7 @@ import {
 } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
-import { lang, t, fmtNumber } from '../i18n';
+import { lang, t, tp, fmtNumber } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
@@ -411,8 +411,12 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     const vars = { name: releaseLabel(m), keeper: releaseLabel(keeper) };
     const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
     if (!(await confirmDialog(ask, t('common.delete'), 'series-release-delete'))) return;
-    const carried = await carryWatch(c, m, keeper, season);
-    if (!carried.ok) {
+    let carried = await carryWatch(c, m, keeper, season);
+    if (!carried.ok && carried.lost) {
+      if (!(await confirmDialog(tp('series.releaseDeleteLossAsk', carried.lost, { keeper: vars.keeper }), t('common.delete'), 'series-release-delete'))) return;
+      carried = await carryWatch(c, m, keeper, season, { allowLoss: true });
+    }
+    if (!carried.ok || !torrents.value.some((x) => x.hash === keeper.hash)) {
       toast(t('series.releaseCarryFailed'), 'error');
       return;
     }

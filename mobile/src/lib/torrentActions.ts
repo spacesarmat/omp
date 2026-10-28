@@ -3,7 +3,7 @@ import { torrents, refreshTorrents } from '../../../src/store/library';
 import { pruneEpisodeFindings } from '../../../src/monitor/subs';
 import { reloadMonitor } from '../monitor/ui';
 import { showToast } from '../ui/toast';
-import { t } from '../../../src/i18n';
+import { t, tp } from '../../../src/i18n';
 import { continueWatching } from '../../../src/store/progress';
 import type { TorrentFile } from '../../../src/lib/episodes';
 import { episodeCopies, isEpisodeFile, seriesSiblings } from '../../../src/lib/episodeProgress';
@@ -97,8 +97,12 @@ export async function deleteRelease(
   c: TorrServerClient,
   p: { tor: Torrent; rows: Torrent[]; current: string; season: number; name: (x: Torrent) => string },
 ): Promise<Torrent | null> {
-  const playing = nowPlaying.value;
-  if (playing && playing.hash.toLowerCase() === p.tor.hash.toLowerCase()) {
+  // one at a time: two deletes in flight could each keep the release the other one removes
+  if (releaseDeleting) {
+    showToast(t('series.releaseDeleteBusy'));
+    return null;
+  }
+  if (isPlayingOnTv(p.tor.hash)) {
     showToast(t('series.releaseDeletePlaying'));
     return null;
   }
@@ -108,17 +112,47 @@ export async function deleteRelease(
   const vars = { name: p.name(p.tor), keeper: p.name(keeper) };
   const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
   if (!(await askConfirm(ask, t('common.delete'), { destructive: true, testId: 'PD57' }))) return null;
-  const carried = await carryWatch(c, p.tor, keeper, p.season);
-  if (!carried.ok) {
-    showToast(t('series.releaseCarryFailed'));
+  if (releaseDeleting) {
+    showToast(t('series.releaseDeleteBusy'));
     return null;
   }
-  const r = await deleteTorrents(c, [p.tor.hash]);
-  if (!r.deleted.length) {
-    reportDeleted(r);
-    return null;
+  releaseDeleting = true;
+  try {
+    let carried = await carryWatch(c, p.tor, keeper, p.season);
+    if (!carried.ok && carried.lost) {
+      const lossAsk = tp('series.releaseDeleteLossAsk', carried.lost, { keeper: vars.keeper });
+      if (!(await askConfirm(lossAsk, t('common.delete'), { destructive: true, testId: 'PD57' }))) return null;
+      carried = await carryWatch(c, p.tor, keeper, p.season, { allowLoss: true });
+    }
+    if (!carried.ok) {
+      showToast(t('series.releaseCarryFailed'));
+      return null;
+    }
+    // the one that stays must still be there, and the one that goes must not have started on the TV meanwhile
+    if (!torrents.value.some((x) => x.hash === keeper.hash)) {
+      showToast(t('series.releaseCarryFailed'));
+      return null;
+    }
+    if (isPlayingOnTv(p.tor.hash)) {
+      showToast(t('series.releaseDeletePlaying'));
+      return null;
+    }
+    const r = await deleteTorrents(c, [p.tor.hash]);
+    if (!r.deleted.length) {
+      reportDeleted(r);
+      return null;
+    }
+    forgetRemoved(p.tor.hash);
+    showToast(t('series.releaseDeleted'));
+    return keeper;
+  } finally {
+    releaseDeleting = false;
   }
-  forgetRemoved(p.tor.hash);
-  showToast(t('series.releaseDeleted'));
-  return keeper;
+}
+
+let releaseDeleting = false;
+
+function isPlayingOnTv(hash: string): boolean {
+  const playing = nowPlaying.value;
+  return !!playing && playing.hash.toLowerCase() === hash.toLowerCase();
 }
