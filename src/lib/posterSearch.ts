@@ -46,8 +46,17 @@ export interface TmdbSearchRequest {
 
 /** TMDB multi-search for a query; Russian titles and images. A v4 token is a bearer header, not api_key. */
 export function tmdbSearchRequest(cfg: TmdbConfig, query: string): TmdbSearchRequest {
+  return tmdbTypedSearchRequest(cfg, 'multi', query);
+}
+
+/**
+ * TMDB search of one kind (`multi`, `movie` or `tv`) in Russian. The year is not sent: TMDB would drop a film dated a
+ * year off, so the results are matched to the year here (yearPoster). A v4 token is a bearer header, not api_key.
+ */
+export function tmdbTypedSearchRequest(cfg: TmdbConfig, kind: 'multi' | 'movie' | 'tv', query: string): TmdbSearchRequest {
   let base = withScheme(cfg.APIURL, 'https://api.themoviedb.org');
-  if (base.indexOf('/3/search/multi') < 0) base = base.replace(/\/3.*$/, '').replace(/\/search.*$/, '') + '/3/search/multi';
+  if (base.indexOf('/3/search/') < 0) base = base.replace(/\/3.*$/, '').replace(/\/search.*$/, '') + '/3/search/' + kind;
+  else base = base.replace(/\/3\/search\/[a-z]+.*$/, '/3/search/' + kind);
   const key = (cfg.APIKey || '').trim();
   const bearer = isTmdbV4Token(key);
   const url =
@@ -73,4 +82,28 @@ export function firstPoster(cfg: TmdbConfig, results: unknown): string {
     if (typeof p === 'string' && p) return host + '/t/p/' + posterImageSize() + (p.charAt(0) === '/' ? p : '/' + p);
   }
   return '';
+}
+
+function resultYear(r: { [k: string]: unknown }): number {
+  const d = typeof r.release_date === 'string' ? r.release_date : typeof r.first_air_date === 'string' ? r.first_air_date : '';
+  const m = /^(\d{4})/.exec(d);
+  return m ? +m[1] : 0;
+}
+
+/**
+ * The poster of the TMDB result that matches `year`: the same year first, then a year off by one (a release dated a
+ * year later); with no year, the first result with a poster. '' when none matches: the caller falls back to multi.
+ */
+export function yearPoster(cfg: TmdbConfig, results: unknown, year: number): string {
+  if (!Array.isArray(results)) return '';
+  const rows = results.filter((r) => {
+    const p = r && (r as { poster_path?: unknown }).poster_path;
+    return typeof p === 'string' && !!p;
+  }) as { [k: string]: unknown }[];
+  if (!rows.length) return '';
+  if (!year) return firstPoster(cfg, rows);
+  const same = rows.filter((r) => resultYear(r) === year);
+  if (same.length) return firstPoster(cfg, same);
+  const near = rows.filter((r) => Math.abs(resultYear(r) - year) === 1);
+  return near.length ? firstPoster(cfg, near) : '';
 }

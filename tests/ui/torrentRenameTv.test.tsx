@@ -64,17 +64,75 @@ describe('TV torrent screen · rename and poster', () => {
     expect(torrents.value[0].title).toBe('Новое имя');
   });
 
-  it('picks another poster from the catalog results', async () => {
+  it('«Сменить постер»: a grid of the catalog results, a title opens its variants, the pick is saved', async () => {
     const set = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
-    const item = (id: number, p: string) => ({ id, kind: 'tv', title: 'Кино ' + id, original: '', year: 2020 + id, poster: p, rating: 7 });
-    setCatalogProvider(() => Promise.resolve({ search: () => Promise.resolve({ items: [item(1, 'http://p/1.jpg'), item(2, 'http://p/2.jpg')], pages: 1 }) } as any));
-    await click(btn('Другой постер'));
+    const item = (id: number, kind: string, p: string) => ({ id, kind, title: 'Кино ' + id, original: '', year: 2020 + id, poster: p, rating: 7 });
+    const search = vi.fn(() => Promise.resolve({ items: [item(1, 'movie', 'http://p/1.jpg'), item(2, 'tv', 'http://p/2.jpg'), item(3, 'tv', '')], pages: 1 }));
+    const posters = vi.fn(() => Promise.resolve(['http://p/2b.jpg']));
+    setCatalogProvider(() => Promise.resolve({ search, posters } as any));
+    await click(btn('Сменить постер'));
     await flush();
-    expect(btn('Кино 1 · 2021')).toBeTruthy();
-    await click(btn('Кино 2 · 2022'));
+    expect(search).toHaveBeenCalledWith('Starbound Frontier', 1);
+    // a series torrent: the series only, the result without a poster is left out
+    const tiles = host.querySelectorAll('.poster-tile');
+    expect(tiles.length).toBe(1);
+    expect(tiles[0].textContent).toBe('Кино 22022');
+    await click(tiles[0]);
+    await flush();
+    expect(posters).toHaveBeenCalledWith('tv', 2);
+    const variants = host.querySelectorAll('.poster-variant');
+    expect(variants.length).toBe(2);
+    await click(variants[1]);
     await flush();
     expect(set).toHaveBeenCalledTimes(1);
-    expect((set.mock.calls[0] as any)[1]).toBe('http://p/2.jpg');
-    expect(torrents.value[0].poster).toBe('http://p/2.jpg');
+    expect((set.mock.calls[0] as any)[1]).toBe('http://p/2b.jpg');
+    expect(torrents.value[0].poster).toBe('http://p/2b.jpg');
+    expect(host.querySelector('.poster-dialog')).toBeNull();
+  });
+
+  it('«Вставить ссылку» checks the link; «Сбросить» clears the poster', async () => {
+    const set = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue(null);
+    setCatalogProvider(() => Promise.resolve({ search: () => Promise.resolve({ items: [], pages: 1 }) } as any));
+    torrents.value = [{ ...tor, poster: 'https://old/p.jpg' }];
+    await click(btn('Сменить постер'));
+    await flush();
+    expect(host.querySelector('.poster-empty')!.textContent).toBe('Постеры не найдены');
+    await click(btn('Вставить ссылку'));
+    const input = host.querySelector('.text-dialog input') as HTMLInputElement;
+    act(() => { input.value = 'ftp://x/p.jpg'; input.dispatchEvent(new Event('input', { bubbles: true })); });
+    await click(btn('Сохранить'));
+    await flush();
+    expect(set).not.toHaveBeenCalled();
+    expect(host.textContent).toContain('Нужна ссылка http:// или https:// на картинку');
+    await click(btn('Сбросить (найти автоматически)'));
+    for (let i = 0; i < 6; i++) await flush();
+    expect(set).toHaveBeenCalledTimes(1);
+    expect((set.mock.calls[0] as any)[1]).toBe('');
+    expect(torrents.value[0].poster).toBe('');
+  });
+
+  it('a late variants reply for a title the user has left does not replace the current one', async () => {
+    const item = (id: number) => ({ id, kind: 'tv', title: 'Кино ' + id, original: '', year: 2020, poster: 'http://p/' + id + '.jpg', rating: 7 });
+    const replies: { [id: number]: (urls: string[]) => void } = {};
+    setCatalogProvider(() =>
+      Promise.resolve({
+        search: () => Promise.resolve({ items: [item(1), item(2)], pages: 1 }),
+        posters: (_k: string, id: number) => new Promise<string[]>((r) => (replies[id] = r)),
+      } as any),
+    );
+    await click(btn('Сменить постер'));
+    await flush();
+    await click(host.querySelectorAll('.poster-tile')[0]);
+    await flush();
+    await click(btn('К результатам'));
+    await click(host.querySelectorAll('.poster-tile')[1]);
+    await flush();
+    act(() => replies[2](['http://p/2b.jpg']));
+    await flush();
+    act(() => replies[1](['http://p/1b.jpg', 'http://p/1c.jpg']));
+    await flush();
+    const srcs = Array.from(host.querySelectorAll('.poster-variant img')).map((n) => n.getAttribute('src'));
+    expect(srcs).toEqual(['http://p/2.jpg', 'http://p/2b.jpg']);
   });
 });

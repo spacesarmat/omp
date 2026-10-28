@@ -10,6 +10,8 @@ import { CastStrip } from '../ui/CastStrip';
 import { useTorrentCast } from '../../../src/lib/useTorrentCast';
 import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
+import { PosterPickSheet } from '../ui/PosterPickSheet';
+import { posterTargets } from '../../../src/lib/posterPick';
 import { qualityBadge, posterStyle } from '../ui/Poster';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
@@ -20,7 +22,7 @@ import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
-import { torrents, refreshTorrents, findPosters, repairTitles } from '../../../src/store/library';
+import { torrents, refreshTorrents, repairTitles } from '../../../src/store/library';
 import {
   refreshViewed,
   progressVersion,
@@ -386,7 +388,7 @@ export function Torrent({ hash }: { hash: string }) {
     setSkipOpen(next);
     saveJson(SKIP_OPEN_KEY, next);
   };
-  const [finding, setFinding] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
@@ -632,21 +634,6 @@ export function Torrent({ hash }: { hash: string }) {
     }
   };
 
-  const findPoster = () => {
-    if (finding) return;
-    setFinding(true);
-    let found = '';
-    findPosters(c, [tor], (_h, poster) => (found = poster)).then((r) => {
-      setFinding(false);
-      if (!r.hasKey) showToast(t('torrent.screen.needTmdbKey'));
-      else if (!found) showToast(t('torrent.screen.posterNotFound'));
-      else {
-        showToast(t('torrent.screen.posterFound'));
-        if (!listed && fetched) setFetched({ ...fetched, poster: found });
-      }
-    });
-  };
-
   const rename = (raw: string) =>
     renameTorrent(c, tor, raw).then((saved) => {
       torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, title: saved } : x));
@@ -675,11 +662,9 @@ export function Torrent({ hash }: { hash: string }) {
             <Icon d={BACK} size={20} />
           </button>
           <div class="m-thead-actions">
-            {!tor.poster && (
-              <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.screen.findPoster')} disabled={finding} onClick={findPoster}>
-                <Icon d={IMAGE} size={20} />
-              </button>
-            )}
+            <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.poster.title')} onClick={() => setPicking(true)}>
+              <Icon d={IMAGE} size={20} />
+            </button>
             <button type="button" class="m-icon-btn m-glass" aria-label={t('torrent.rename.title')} onClick={() => setRenaming(true)}>
               <Icon d={PENCIL} size={20} />
             </button>
@@ -820,6 +805,14 @@ export function Torrent({ hash }: { hash: string }) {
         <EpisodeRows hash={hash} files={files} eps={tmdb.eps} coming={coming} onPick={setSheet} />
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
+      {picking && <PosterPickSheet
+          tor={tor}
+          targets={posterTargets(torrents.value, tor)}
+          onSaved={(poster) => {
+            if (!listed && fetched) setFetched({ ...fetched, poster: poster });
+          }}
+          onClose={() => setPicking(false)}
+        />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
       {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}

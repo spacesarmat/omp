@@ -96,16 +96,51 @@ describe('Library posters', () => {
       vi.unstubAllGlobals();
     });
     mount();
-    for (let i = 0; i < 6; i++) await flush();
-    expect(tmdb).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 8; i++) await flush();
+    // the series and the first film: their own kind, then the multi search; the second film is found among films
+    const paths = tmdb.mock.calls.map((c) => /\/3\/search\/([a-z]+)/.exec(String(c[0]))![1]);
+    expect(paths).toEqual(['tv', 'multi', 'movie', 'multi', 'movie']);
     expect(setPoster).toHaveBeenCalledTimes(1);
     expect(torrents.value.find((t) => t.hash === 'h3')!.poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/n.jpg');
-    expect(JSON.parse(localStorage.getItem('tsp.posterTried')!).sort()).toEqual(['h1', 'h2', 'h3']);
+    const tried = JSON.parse(localStorage.getItem('tsp.posterTried')!);
+    expect(Object.keys(tried.at).sort()).toEqual(['h1', 'h2', 'h3']);
+    // a fingerprint of the key, never the key itself
+    expect(tried.key).toMatch(/^[0-9a-f]{8}$/);
     // the next refresh does not search again
     act(() => render(null, el));
     mount();
-    for (let i = 0; i < 6; i++) await flush();
-    expect(tmdb).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(5);
+  });
+
+  it('tries the old list format, a week-old try and a new TMDB key again', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async (h: string) => T.find((t) => t.hash === h)!);
+    vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    const tmdb = vi.fn(async () => new Response(JSON.stringify({ results: [] })));
+    vi.stubGlobal('fetch', tmdb);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    // 0.20.6-beta.8 stored the hashes only
+    localStorage.setItem('tsp.posterTried', JSON.stringify(['h1', 'h2', 'h3']));
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(6);
+    const tried = JSON.parse(localStorage.getItem('tsp.posterTried')!);
+    // h3 was tried 8 days ago, h1 and h2 just now
+    tried.at.h3 = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    localStorage.setItem('tsp.posterTried', JSON.stringify(tried));
+    act(() => render(null, el));
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(8);
+    // another key: everything again
+    localStorage.setItem('tsp.posterTried', JSON.stringify({ ...JSON.parse(localStorage.getItem('tsp.posterTried')!), key: 'deadbeef' }));
+    act(() => render(null, el));
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb).toHaveBeenCalledTimes(14);
   });
 });
 

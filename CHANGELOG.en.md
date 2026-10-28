@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] «Change poster»: the picture button on the release screen is now always there, not only without a poster, and the long-press menu in «Mine» has the same item. Search TMDB by title (films or series of the same year first), pick one of the poster variants, «Paste a link» or «Reset (find automatically)»; a film with several releases gets the poster on all of them
+- [tv] «Change poster» replaces «Another poster»: a poster grid with title search, the poster variants of the picked film or series, a link field and reset; all with the remote, and the poster shows on the phone too
+- The automatic poster lookup is more accurate: a film is looked up among films of its year and a series among series, so a 2026 film no longer gets the poster of a series with the same name. Releases with no poster found are tried again after a week and after the TMDB key changes
+- [tech] The poster is written with TorrServer `set` to every release of the film, each read again right before the write so the title and category are kept; an http:// link is accepted for the home network only; tsp.posterTried keeps the try time and a fingerprint of the TMDB key (FNV, never the key)
+
 ## 0.20.6-beta.8
 
 - The built-in TorrServer is updated to MatriX.147.1

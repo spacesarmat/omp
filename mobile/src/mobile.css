@@ -2045,3 +2045,13 @@ body.test-labels [data-code]::after {
 .m-test-size-value { margin-left: auto; }
 .m-test-size-range { flex: 1 1 100%; width: 100%; margin: 8px 0 4px; accent-color: var(--accent); }
 
+
+/* «Сменить постер» (PosterPickSheet) */
+.m-pp-sub { margin: 4px 0 0; }
+.m-pp-search { display: flex; margin-top: 12px; }
+.m-pp-search .m-input { flex: 1 1 auto; min-width: 0; margin-right: 8px; }
+.m-pp-grid { margin-top: 12px; max-height: 52vh; overflow-y: auto; }
+.m-pp-item { display: flex; flex-direction: column; text-align: left; color: inherit; }
+.m-pp-cap { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-pp-link { margin-top: 12px; }
+.m-pp-actions { margin-top: 12px; flex-wrap: wrap; }

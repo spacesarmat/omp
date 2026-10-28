@@ -133,7 +133,7 @@ describe('release menu on the series screen', () => {
     await open([S1, S2A], 2);
     await menuOf('s2a');
     expect(currentRoute.value.name).toBe('series');
-    expect(options()).toEqual(['Открыть', 'Переименовать', 'Удалить']);
+    expect(options()).toEqual(['Открыть', 'Переименовать', 'Сменить постер', 'Удалить']);
   });
 
   it('a pack holding two seasons shows only the chosen season\'s episodes', async () => {
@@ -171,7 +171,7 @@ describe('release menu on the series screen', () => {
     await open([S1, S2A, S2B, PACK], 2);
     expect(rowHashes().sort()).toEqual(['p12', 's2a', 's2b']);
     await menuOf('s2a');
-    expect(options()).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);
+    expect(options()).toEqual(['Открыть', 'Переименовать', 'Сменить постер', 'Оставить только эту', 'Удалить']);
     // the sheet names the release that stays: the series name and the release's quality
     expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Тёмная материя · 4K WEB-DL');
     act(() => option('Оставить только эту')!.click());
@@ -199,7 +199,7 @@ describe('release menu on the series screen', () => {
   it('only packs besides it: no «Оставить только эту»', async () => {
     await open([S1, S2A, PACK], 2);
     await menuOf('s2a');
-    expect(options()).toEqual(['Открыть', 'Переименовать', 'Удалить']);
+    expect(options()).toEqual(['Открыть', 'Переименовать', 'Сменить постер', 'Удалить']);
   });
 
   it('English: the plural confirm', async () => {

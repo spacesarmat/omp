@@ -18,18 +18,17 @@ import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
 import { restoreFocus, scrollScreenToTop } from '../ui/focus';
-import { confirmDialog, choose } from '../ui/dialog';
+import { confirmDialog } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
-import { activeCatalog } from '../catalog/activeCatalog';
-import { catalogErrorCode, catalogErrorKey } from '../catalog/client';
-import { libraryTitle } from '../lib/libraryView';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
+import { PosterPicker } from '../ui/PosterPicker';
+import { posterTargets } from '../lib/posterPick';
 import { pendingBetterHash } from '../player/anotherRelease';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { swarmText } from '../lib/torrentStatus';
@@ -153,6 +152,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const [betterOpen, setBetterOpen] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
   const upgradable = useMemo(() => (tor && files.length ? canUpgrade(tor, files) : false), [tor ? tor.hash : '', tor ? tor.title : '', tor ? tor.category : '', files]);
   // the player asked for another release: open «В лучшем качестве» once the files are known, otherwise stay on the details
   useEffect(() => {
@@ -223,32 +223,6 @@ export function TorrentScreen({ hash }: { hash: string }) {
         () => toast(t('torrent.rename.saveFailed'), 'error'),
       );
     });
-  };
-
-  const otherPoster = () => {
-    if (!tor) return;
-    activeCatalog()
-      .then((cat) => cat.search(libraryTitle(tor).title, 1))
-      .then(
-        (r) => {
-          const opts = r.items
-            .filter((x) => !!x.poster)
-            .slice(0, 8)
-            .map((x) => ({ label: x.year ? x.title + ' · ' + x.year : x.title, value: x.poster }));
-          if (!opts.length) {
-            toast(t('torrent.poster.none'));
-            return;
-          }
-          return choose(t('torrent.poster.pick'), opts, undefined, 'torrent-poster').then((url) => {
-            if (!url) return;
-            return c.setPoster(tor, url).then(
-              () => patch({ poster: url }),
-              (e) => toast(errorMessage(e), 'error'),
-            );
-          });
-        },
-        (e) => toast(t(catalogErrorKey(catalogErrorCode(e), 'tv')), 'error'),
-      );
   };
 
   const resetViewed = () => {
@@ -330,7 +304,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
               {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
               <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
               <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
-              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={otherPoster} />
+              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={() => setPosterOpen(true)} />
               <Button focusKey="torrent-delete" label={t('common.delete')} onFocused={() => showAction('torrent-delete')} onPress={remove} />
             </FocusGroup>
           </div>
@@ -377,6 +351,14 @@ export function TorrentScreen({ hash }: { hash: string }) {
           }}
           onClose={() => setBetterOpen(false)}
           focusAfterReplace={['torrent-play']}
+        />
+      )}
+      {posterOpen && tor && (
+        <PosterPicker
+          torrent={tor}
+          targets={posterTargets(torrents.value, tor)}
+          onSaved={(poster) => patch({ poster: poster })}
+          onClose={() => setPosterOpen(false)}
         />
       )}
       {loadingInfo && <Spinner text={t('torrent.gettingFiles')} />}

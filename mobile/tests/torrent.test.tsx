@@ -462,14 +462,102 @@ describe('Torrent', () => {
   });
 });
 
-describe('Torrent poster button', () => {
-  const btn = () => el.querySelector('button[aria-label="Найти обложку"]') as HTMLButtonElement | null;
+describe('Torrent «Сменить постер»', () => {
+  const btn = () => el.querySelector('button[aria-label="Сменить постер"]') as HTMLButtonElement | null;
+  const film = (hash: string, title: string, poster = ''): T => ({ hash, title, category: 'movie', stat: 3, poster, file_stats: [{ id: 1, path: 'movie.mkv', length: 1e9 }] });
+  const item = (id: number, kind: 'movie' | 'tv', year: number) => ({ id, kind, title: 'Супергёрл ' + id, original: 'Supergirl', year, poster: 'https://imagetmdb.com/t/p/w342/p' + id + '.jpg', rating: 7 });
+  afterEach(() => setCatalogClientForTests(null));
 
-  it('finds a poster on demand and the button goes away', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
-    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+  it('is shown even when the torrent has a poster, and the search starts with the title proper', async () => {
+    torrents.value = [{ ...tor, poster: 'https://p/x.jpg' }];
+    const search = vi.fn(async () => ({ items: [], pages: 1 }));
+    setCatalogClientForTests({ search } as any);
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    expect(search).toHaveBeenCalledWith('Starbound Frontier', 1);
+    expect((document.querySelector('.m-pp-search input') as HTMLInputElement).value).toBe('Starbound Frontier');
+    expect(document.body.textContent).toContain('Постеры не найдены');
+  });
+
+  it('a film: films of its year first; a result opens its variants and the pick goes to every release of the film', async () => {
+    const a = film('f1', 'Супергерл / Supergirl / 2026 / ДБ / 4K Remux');
+    const b = film('f2', 'Супергерл / Supergirl (2026) WEB-DL 1080p', 'https://old/p.jpg');
+    torrents.value = [a, b];
+    const search = vi.fn(async () => ({ items: [item(1, 'tv', 2015), item(2, 'movie', 1984), item(3, 'movie', 2026)], pages: 1 }));
+    const posters = vi.fn(async () => ['https://imagetmdb.com/t/p/w500/p3.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    setCatalogClientForTests({ search, posters } as any);
+    const get = vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async (h: string) => ({ ...(h === 'f1' ? a : b), title: h === 'f1' ? 'Свежее имя' : b.title }));
     const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/s.jpg' }] }))));
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Torrent hash="f1" />, el));
+    await flush();
+    click(btn());
+    await flush();
+    expect(search).toHaveBeenCalledWith('Супергерл', 1);
+    expect(document.body.textContent).toContain('Для всех раздач фильма (2)');
+    const caps = Array.from(document.querySelectorAll('.m-pp-cap')).map((n) => n.textContent);
+    // films only (the 2015 series is dropped), the 2026 one first
+    expect(caps).toEqual(['Супергёрл 3 · 2026', 'Супергёрл 2 · 1984']);
+    act(() => (document.querySelectorAll('.m-pp-item')[0] as HTMLElement).click());
+    await flush();
+    expect(posters).toHaveBeenCalledWith('movie', 3);
+    // the search poster and TMDB's copy of it at another size are one variant
+    const picks = Array.from(document.querySelectorAll('.m-art-pick img')).map((n) => n.getAttribute('src'));
+    expect(picks).toEqual(['https://imagetmdb.com/t/p/w342/p3.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    act(() => (document.querySelectorAll('.m-art-pick')[1] as HTMLElement).click());
+    await flush();
+    expect(get).toHaveBeenCalledWith('f1');
+    expect(get).toHaveBeenCalledWith('f2');
+    expect(setPoster).toHaveBeenCalledTimes(2);
+    // read again before the write: the title on the server goes back, not the listed one
+    expect(setPoster.mock.calls[0][0]).toEqual(expect.objectContaining({ hash: 'f1', title: 'Свежее имя', category: 'movie' }));
+    expect(setPoster.mock.calls[0][1]).toBe('https://imagetmdb.com/t/p/w500/v2.jpg');
+    expect(setPoster.mock.calls[1][0]).toEqual(expect.objectContaining({ hash: 'f2' }));
+    expect(torrents.value.map((x) => x.poster)).toEqual(['https://imagetmdb.com/t/p/w500/v2.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    expect(toast.value).toBe('Постер сохранён');
+  });
+
+  it('«Вставить ссылку» refuses plain http to the internet and saves an https link', async () => {
+    setCatalogClientForTests({ search: vi.fn(async () => ({ items: [], pages: 1 })) } as any);
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    act(() => (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Вставить ссылку') as HTMLElement).click());
+    const input = document.getElementById('poster-link') as HTMLInputElement;
+    const typeLink = (v: string) =>
+      act(() => {
+        input.value = v;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    const saveBtn = () => Array.from(document.querySelectorAll('.m-pp-link button')).find((b) => b.textContent === 'Сохранить') as HTMLElement;
+    typeLink('http://example.com/p.jpg');
+    act(() => saveBtn().click());
+    expect(document.querySelector('.m-pp-link [role=alert]')!.textContent).toBe('Ссылка http:// работает только в домашней сети, нужна https://');
+    expect(setPoster).not.toHaveBeenCalled();
+    typeLink('https://example.com/p.jpg');
+    act(() => saveBtn().click());
+    await flush();
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://example.com/p.jpg');
+    expect(torrents.value[0].poster).toBe('https://example.com/p.jpg');
+  });
+
+  it('«Сбросить» clears the poster and looks one up again', async () => {
+    torrents.value = [{ ...tor, poster: 'https://old/p.jpg' }];
+    setCatalogClientForTests({ search: vi.fn(async () => ({ items: [], pages: 1 })) } as any);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    let stored = 'https://old/p.jpg';
+    vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async () => ({ ...tor, poster: stored }));
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockImplementation(async (_t, p) => {
+      stored = p;
+    });
+    vi.spyOn(TorrServerClient.prototype, 'list').mockImplementation(async () => [{ ...tor, poster: stored }]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/s.jpg', first_air_date: '2024-01-01' }] }))));
     onTestFinished(() => {
       vi.unstubAllGlobals();
     });
@@ -477,26 +565,11 @@ describe('Torrent poster button', () => {
     await flush();
     click(btn());
     await flush();
-    await flush();
-    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg');
-    expect(toast.value).toBe('Обложка найдена');
-    expect(btn()).toBeNull();
-  });
-
-  it('asks for the TMDB key when the server has none', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
-    mount();
-    await flush();
-    click(btn());
-    await flush();
-    expect(toast.value).toBe('Задайте ключ TMDB в «Настройках сервера»');
-  });
-
-  it('is hidden when the torrent has a poster', async () => {
-    torrents.value = [{ ...tor, poster: 'http://p/x.jpg' }];
-    mount();
-    await flush();
-    expect(btn()).toBeNull();
+    act(() => (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Сбросить (найти автоматически)') as HTMLElement).click());
+    for (let i = 0; i < 4; i++) await flush();
+    expect(setPoster.mock.calls.map((c) => c[1])).toEqual(['', 'https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg']);
+    expect(toast.value).toBe('Постер найден заново');
+    expect(torrents.value[0].poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg');
   });
 });
 
@@ -678,7 +751,7 @@ describe('Torrent in English', () => {
     for (const w of ['Skip the intro', 'Skip the credits', 'Intro and credits', 'Episodes']) {
       expect(text, w).toContain(w);
     }
-    for (const l of ['Back', 'Find a poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {
+    for (const l of ['Back', 'Change poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {
       expect(labels(), l).toContain(l);
     }
     noCyrillic();
@@ -759,12 +832,17 @@ describe('Torrent in English', () => {
   });
 
   it('poster toasts, the delete question and not found', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
+    setCatalogClientForTests({ search: vi.fn(async () => Promise.reject(Object.assign(new Error('catalog:nokey'), { code: 'nokey' }))) } as any);
+    onTestFinished(() => setCatalogClientForTests(null));
     mount();
     await flush();
-    click('button[aria-label="Find a poster"]');
+    click('button[aria-label="Change poster"]');
     await flush();
-    expect(toast.value).toBe('Set a TMDB key in “Server settings”');
+    expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Change poster');
+    expect(document.body.textContent).toContain('Searching needs a TMDB key in “Server settings”. A link works without one.');
+    expect(document.body.textContent).toContain('Reset (find automatically)');
+    expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    act(() => (document.querySelector('.m-sheet-backdrop, .m-sheet-bg') as HTMLElement | null)?.click());
     click('button[aria-label="Delete the torrent"]');
     expect(confirmText()).toBe('Delete the torrent “Starbound Frontier”?');
     expect(document.querySelector('[data-confirm-cancel]')!.textContent).toBe('Cancel');
