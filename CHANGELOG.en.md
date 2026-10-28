@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6-beta.7
 
 - [phone] The built-in player is now 2160 Player 0.2.14: the elapsed time no longer clips while the file length is still unknown (buffering in portrait showed "3:2" instead of "3:29")
 
