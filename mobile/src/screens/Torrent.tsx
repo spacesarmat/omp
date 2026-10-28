@@ -53,7 +53,7 @@ import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } f
 import { comingEpisodes, comingEpisodeText, lastEpisodes, realEpisodeName, type ComingEpisode, type EpisodeMap } from '../../../src/lib/episodeNames';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { filmReleases } from '../lib/filmGroups';
-import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
+import { ReleasesBlock } from '../ui/ReleasesSheet';
 import { phoneLabel } from '../watchHere';
 import { isoDay } from '../../../src/lib/seriesStatus';
 
@@ -389,8 +389,6 @@ export function Torrent({ hash }: { hash: string }) {
   const [finding, setFinding] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
-  // «Другая раздача» of a film with several releases in «Мои»
-  const [releasesOpen, setReleasesOpen] = useState(false);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   // «Watch the quality» (omp.q in the journal); null until read from the server
@@ -562,7 +560,7 @@ export function Torrent({ hash }: { hash: string }) {
     );
   };
   const badges = [qualityBadge(title)].filter(Boolean);
-  // the other releases of this film in «Мои» (one card there): «Раздача: 1080p · Сменить»
+  // the releases of this film in «Мои» (one card there): the «Раздачи (N)» block under the watch buttons
   const releases = book ? [] : filmReleases(torrents.value, tor);
   const group = gkey ? findGroup(torrents.value, gkey) : null;
   const own0 = seasonsOf(tor);
@@ -733,7 +731,6 @@ export function Torrent({ hash }: { hash: string }) {
         </div>
       </div>
       <div class="m-tbody">
-        {releases.length > 1 && <ReleaseSwitch tor={tor} code="P06.2" onChange={() => setReleasesOpen(true)} />}
         {tv || book ? (
           <>
             <button type="button" class="m-btn m-btn-primary" disabled={busy || !target} onClick={watchMain}>
@@ -759,6 +756,7 @@ export function Torrent({ hash }: { hash: string }) {
           </>
         )}
         {status && <LaunchError message={status} />}
+        {releases.length > 1 && <ReleasesBlock releases={releases} current={hash} code="P06.2" onPick={(x) => replaceTop({ name: 'torrent', hash: x.hash })} />}
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
         {!book && files.length > 0 && (
@@ -824,15 +822,6 @@ export function Torrent({ hash }: { hash: string }) {
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
-      {releasesOpen && (
-        <ReleasesSheet
-          releases={releases}
-          current={hash}
-          onPick={(x) => replaceTop({ name: 'torrent', hash: x.hash })}
-          onFind={upgrade ? () => setBetterOpen(true) : undefined}
-          onClose={() => setReleasesOpen(false)}
-        />
-      )}
       {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
       {launch.sheet}
     </div>

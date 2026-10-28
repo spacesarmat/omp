@@ -30,9 +30,14 @@ function keysOf(tor: Torrent): string[] {
   return id ? ['tmdb:' + id].concat(out) : out;
 }
 
-/** The film group of each torrent (index of its first member), or -1; films sharing any key are one film. */
+/**
+ * The film group of each torrent (index of its first member), or -1; films sharing any key are one film, except that
+ * two groups matched to different TMDB films are never joined (a shared name key must not chain different films).
+ */
 function filmOwners(list: Torrent[]): number[] {
   const parent = list.map((_, i) => i);
+  // the TMDB id of each group root, 0 while unknown
+  const movie = list.map((tor) => (isFilm(tor) ? cachedMovieId(tor.hash) : 0));
   const find = (i: number): number => {
     while (parent[i] !== i) {
       parent[i] = parent[parent[i]];
@@ -48,7 +53,12 @@ function filmOwners(list: Torrent[]): number[] {
       else {
         const a = find(owner[k]);
         const b = find(i);
-        if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+        if (a === b) return;
+        if (movie[a] && movie[b] && movie[a] !== movie[b]) return;
+        const root = Math.min(a, b);
+        const other = Math.max(a, b);
+        parent[other] = root;
+        movie[root] = movie[root] || movie[other];
       }
     });
   });

@@ -116,7 +116,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
     en: 'Release',
     items: [
       it('P06.1', 'Назад', 'Back'),
-      it('P06.2', 'Раздача - Сменить', 'Release - Change'),
+      it('P06.2', 'Раздачи фильма', 'Releases of the film'),
       it('P06.3', 'Смотреть на телефоне', 'Watch on the phone'),
       it('P06.4', 'На ТВ', 'On the TV'),
     ],

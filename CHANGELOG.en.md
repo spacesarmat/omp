@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] «Mine»: different films no longer merge into one card because of a year, quality or tags in the title (Supergirl, Signal One and Minions are separate again); releases of different TMDB films are never grouped, and the «Already in the library» hint is more accurate too
+- [phone] Film screen with several releases: the «Release: ... · Change» line is replaced by a «Releases (N)» block - each release shows its quality, size and seeds, the current one is checked, a tap switches; «Files» below belong to the picked release
+
 ## 0.20.6-beta.7
 
 - [phone] The built-in player is now 2160 Player 0.2.14: the elapsed time no longer clips while the file length is still unknown (buffering in portrait showed "3:2" instead of "3:29")

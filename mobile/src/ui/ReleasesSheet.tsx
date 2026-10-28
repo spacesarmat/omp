@@ -40,7 +40,7 @@ export function ReleasesSheet({
               type="button"
               role="radio"
               aria-checked={on}
-              class="m-opt"
+              class="m-opt m-rel-row"
               data-release={tor.hash}
               onClick={() => {
                 onClose();
@@ -91,5 +91,47 @@ export function ReleaseSwitch({ tor, code, onChange, onMore }: { tor: Torrent; c
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * «Раздачи (3)» on the screen of a film with several releases in «Мои»: every release with its quality, size and seeds
+ * (when known), the one shown checked; a tap shows that one. The files below are those of the checked release.
+ * The release names are shown only when they differ from the checked one («Дюна» next to «Dune»).
+ */
+export function ReleasesBlock({ releases, current, code, onPick }: { releases: Torrent[]; current: string; code: string; onPick: (tor: Torrent) => void }) {
+  const shown = releases.find((x) => x.hash === current);
+  const shownName = shown ? shortTitle(displayTitle(shown)) : '';
+  const title = t('nav.releasesCount', { n: releases.length });
+  return (
+    <section class="m-film-releases tm" data-block="releases" data-code={code}>
+      <div class="m-section">{title}</div>
+      <div class="m-sub-pick m-releases" role="radiogroup" aria-label={title}>
+        {releases.map((tor) => {
+          const on = tor.hash === current;
+          const name = shortTitle(displayTitle(tor));
+          const sub = [name !== shownName ? name : '', knownSwarmText(tor)].filter(Boolean).join(' · ');
+          return (
+            <button
+              key={tor.hash}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              class="m-opt m-rel-row"
+              data-release={tor.hash}
+              onClick={() => {
+                if (!on) onPick(tor);
+              }}
+            >
+              <span class="m-opt-text m-grow">
+                <span class="m-opt-name">{releaseLine(tor)}</span>
+                {sub && <span class="m-opt-sub">{sub}</span>}
+              </span>
+              {on && <Icon d={CHECK} size={22} />}
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
