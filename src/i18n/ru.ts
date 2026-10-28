@@ -1456,6 +1456,18 @@ export const ru = {
       hintBack: 'Назад - закрыть',
     },
   },
+  /** A TorrServer over https with a self-signed certificate (Android): the trust question. */
+  tls: {
+    untrustedTitle: 'Доверять сертификату {host}?',
+    untrustedBody: 'Сервер прислал сертификат, которого нет среди доверенных (обычно самоподписанный сертификат TorrServer). Доверяйте ему, только если это ваш сервер и отпечаток совпадает с его сертификатом.',
+    changedTitle: 'Сертификат {host} изменился',
+    changedBody: 'Раньше этот сервер присылал другой сертификат. Так бывает после переустановки TorrServer или замены сертификата. Если вы ничего не меняли, соединение может подменять кто-то другой.',
+    issuedTo: 'Выдан: {name}',
+    validUntil: 'Действует до {date}',
+    fingerprint: 'Отпечаток SHA-256:',
+    trust: 'Доверять',
+    trustNew: 'Доверять новому',
+  },
   connect: {
     enterAddress: 'Введите адрес сервера',
     /** The server did not answer: «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт». */

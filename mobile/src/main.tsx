@@ -19,6 +19,7 @@ import { native } from './platform/native';
 import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
+import { installPhoneTls } from './torrServerTls';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -27,6 +28,9 @@ installCleartextSync(
 
 // a failed https connect asks the native http whether the certificate was the reason (a page's fetch cannot tell)
 if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
+
+// a TorrServer over https goes through the native trust; a self-signed certificate asks first
+installPhoneTls();
 
 installErrorHooks();
 startKeyboardWatch();

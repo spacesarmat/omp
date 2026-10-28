@@ -28,7 +28,19 @@ class EngineSwitcher(private val host: Host, val vlcAvailable: Boolean) {
 
         /** A short message on the player («VLC недоступен на этом устройстве»). */
         fun message(text: String)
+
+        /**
+         * libVLC cannot open [r]: its TorrServer has a self-signed certificate the user trusted in OMP, and VLC checks
+         * certificates on its own. The run stays on the built-in engine.
+         */
+        fun vlcRefused(r: PlayRequest): Boolean = false
     }
+
+    /** The run's TorrServer is one VLC cannot open ([Host.vlcRefused]). */
+    var vlcRefused = false
+        private set
+
+    private val vlcUsable: Boolean get() = vlcAvailable && !vlcRefused
 
     var chooser = EngineChooser(EngineMode.AUTO, vlcAvailable)
         private set
@@ -40,7 +52,8 @@ class EngineSwitcher(private val host: Host, val vlcAvailable: Boolean) {
     lateinit var session: PlayerSession
 
     private fun begin(r: PlayRequest): EngineKind {
-        chooser = EngineChooser(r.engine, vlcAvailable)
+        vlcRefused = vlcAvailable && host.vlcRefused(r)
+        chooser = EngineChooser(if (vlcRefused) EngineMode.BUILTIN else r.engine, vlcUsable)
         return chooser.initial(host.assSubs(r, r.index))
     }
 
@@ -104,11 +117,11 @@ class EngineSwitcher(private val host: Host, val vlcAvailable: Boolean) {
     }
 
     /** «Плеер: Встроенный → сменить на VLC» / «Плеер: VLC → сменить на встроенный» / «… · VLC недоступен …». */
-    fun menuRow(): String = EngineChooser.menuRow(kind, vlcAvailable)
+    fun menuRow(): String = EngineChooser.menuRow(kind, vlcUsable, if (vlcRefused) EngineChooser.VLC_SELF_SIGNED_TEXT else EngineChooser.VLC_UNAVAILABLE_TEXT)
 
     fun menuPressed() {
-        if (!vlcAvailable) {
-            host.message(EngineChooser.VLC_UNAVAILABLE_TEXT)
+        if (!vlcUsable) {
+            host.message(if (vlcRefused) EngineChooser.VLC_SELF_SIGNED_TEXT else EngineChooser.VLC_UNAVAILABLE_TEXT)
             return
         }
         switchTo(chooser.toggle(), SwitchReason.MANUAL)

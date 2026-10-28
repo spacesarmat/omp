@@ -5,6 +5,7 @@
 import { createSecretStore, createSourceHttp } from '../sources/http';
 import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
+import type { Inspection, NativeTls } from '../api/torrServerTls';
 import type { UpdateInfo } from '../lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
@@ -36,6 +37,11 @@ export interface OmpNativeTvPlugin {
   tvName(): Promise<{ name: string }>;
   /** Phone remote Back that no screen took: the app closes like with the box remote's Back (older APKs lack it). */
   appBack?(): Promise<unknown>;
+  /** TorrServer over https through the native trust (APKs with self-signed TorrServer support). */
+  torrServerHttp?(o: object): Promise<{ status?: number; base64?: string }>;
+  torrServerInspect?(o: { url: string }): Promise<Inspection>;
+  torrServerTrust?(o: { hostPort: string; fingerprint: string }): Promise<unknown>;
+  torrServerForget?(o: { hostPort: string }): Promise<unknown>;
   /** Search sources: HTTP without CORS, cookies per site, body decoded by charset. */
   http(o: NativeHttpRequest): Promise<{ status: number; url: string; text: string }>;
   /** Tracker scrape on this device: HTTP body (Latin-1) or UDP seeders/leechers. Missing on an older APK. */
@@ -162,6 +168,10 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     player2160: () => np.call(cap, NAME, 'player2160', {}),
     open2160: (o) => np.call(cap, NAME, 'open2160', o),
     vpnState: () => np.call(cap, NAME, 'vpnState', {}),
+    torrServerHttp: (o) => np.call(cap, NAME, 'torrServerHttp', o),
+    torrServerInspect: (o) => np.call(cap, NAME, 'torrServerInspect', o),
+    torrServerTrust: (o) => np.call(cap, NAME, 'torrServerTrust', o),
+    torrServerForget: (o) => np.call(cap, NAME, 'torrServerForget', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -188,6 +198,22 @@ export function nativePlugin(): OmpNativeTvPlugin | null {
     /* unavailable */
   }
   return null;
+}
+
+/** The native https path for TorrServer (TorrServerTrust); null outside the APK or in an APK without it. */
+export function nativeTorrServerTls(): NativeTls | null {
+  const p = nativePlugin();
+  if (!p || typeof p.torrServerHttp !== 'function' || typeof p.torrServerInspect !== 'function' || typeof p.torrServerTrust !== 'function') return null;
+  const http = p.torrServerHttp.bind(p);
+  const inspect = p.torrServerInspect.bind(p);
+  const trust = p.torrServerTrust.bind(p);
+  const forget = typeof p.torrServerForget === 'function' ? p.torrServerForget.bind(p) : null;
+  return {
+    forget: forget ? (hostPort) => forget({ hostPort }) : undefined,
+    http: (o) => http(o),
+    inspect: (url) => inspect({ url }),
+    trust: (hostPort, fingerprint) => trust({ hostPort, fingerprint }),
+  };
 }
 
 /** Wi-Fi/Ethernet IPv4 of the device; null when unknown or the plugin is missing. */

@@ -463,6 +463,23 @@ class OmpNativePlugin : Plugin() {
         }
     }
 
+    // ---- TorrServer with a self-signed certificate the user trusted (TorrServerTrust) ----
+
+    @PluginMethod
+    fun torrServerPins(call: PluginCall) = torrServerPinsOp(call)
+
+    @PluginMethod
+    fun torrServerInspect(call: PluginCall) = torrServerInspectOp(call)
+
+    @PluginMethod
+    fun torrServerTrust(call: PluginCall) = torrServerTrustOp(call)
+
+    @PluginMethod
+    fun torrServerForget(call: PluginCall) = torrServerForgetOp(call)
+
+    @PluginMethod
+    fun torrServerHttp(call: PluginCall) = torrServerHttpOp(call)
+
     @PluginMethod
     fun tvConnect(call: PluginCall) = tvConnectOp(call)
 

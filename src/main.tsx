@@ -7,8 +7,10 @@ import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
-import { nativePlugin, nativeSetCleartextHosts } from './platform/androidNative';
+import { nativePlugin, nativeSetCleartextHosts, nativeTorrServerTls } from './platform/androidNative';
 import { nativeTlsProbe, setTlsProbe } from './api/tlsProbe';
+import { certQuestionText, installTorrServerTls } from './api/torrServerTls';
+import { confirmWithBody } from './ui/dialog';
 import { installCleartextSync } from './cleartextSync';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
@@ -32,6 +34,17 @@ if (platformKind() === 'androidtv') installCleartextSync((hosts) => nativeSetCle
 if (platformKind() === 'androidtv') {
   const p = nativePlugin();
   if (p) setTlsProbe(nativeTlsProbe((req) => p.http(req)));
+}
+
+// a TorrServer over https: the native trust; a self-signed certificate is trusted only after this question
+if (platformKind() === 'androidtv') {
+  const tls = nativeTorrServerTls();
+  if (tls) {
+    installTorrServerTls(tls, (q) => {
+      const x = certQuestionText(q);
+      return confirmWithBody(x.title, x.body, x.ok);
+    });
+  }
 }
 
 installErrorHooks();

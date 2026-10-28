@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.tls.TorrServerTrust
 import com.spacesarmat.omp.I18n
 
 import android.app.Instrumentation
@@ -217,6 +218,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         I18n.load(this)
+        // the player can be recreated without the page's activity: the trusted TorrServer certificates first
+        TorrServerTrust.install(this)
         val r = NativePlayerBridge.request
         if (r == null) {
             // process restarted without a request from the page
@@ -433,6 +436,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         override fun post(block: () -> Unit) {
             handler.post(block)
         }
+
+        override fun vlcRefused(r: PlayRequest): Boolean = r.queue.any { TorrServerTrust.isPinnedUrl(it.url) }
 
         override fun assSubs(r: PlayRequest, index: Int): Boolean =
             r.queue.getOrNull(index)?.assSubs == true || NativePlayerBridge.assSubs(index)

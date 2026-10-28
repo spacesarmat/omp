@@ -9,6 +9,9 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] «Mine»: different films no longer merge into one card because of a year, quality or tags in the title (Supergirl, Signal One and Minions are separate again); releases of different TMDB films are never grouped, and the «Already in the library» hint is more accurate too
 - [phone] Film screen with several releases: the «Release: ... · Change» line is replaced by a «Releases (N)» block - each release shows its quality, size and seeds, the current one is checked, a tap switches; «Files» below belong to the picked release
 - TorrServer over https on a non-standard port (for example, https://ts.example.com:8443) and behind a reverse proxy with a path: an address without https:// is tried over both http and https (https first on ports 443, 8443 and 8091) and the one that answers is saved; errors and the server list show https://, and a refused certificate is named as such (#193)
+- [atv] TorrServer over https with a self-signed certificate: on the first connect the app shows the SHA-256 fingerprint and connects only after "Trust"; the certificate is remembered for that address and port, and a changed certificate shows a warning. The built-in player plays such a server, VLC cannot - the built-in one stays (#193)
+- [phone] TorrServer over https with a self-signed certificate: the first connect shows the SHA-256 fingerprint and connects only after "Trust"; the certificate is remembered for the address and port, a changed certificate shows a warning; the background subscription check uses the certificates already accepted (#193)
+- [tech] Android: https requests to TorrServer go through native OkHttp with TorrServerTrust (system CAs, then a pin per host:port); the same trust is the HttpsURLConnection default, so Media3 and 2160 Player work without submodule changes; webOS still needs a trusted certificate
 
 ## 0.20.6-beta.7
 
