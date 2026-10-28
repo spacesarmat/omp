@@ -3,6 +3,8 @@ import { t } from '../../../src/i18n';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { TorrentRenameSheet } from './TorrentRenameSheet';
+import { PosterPickSheet } from './PosterPickSheet';
+import { posterTargets } from '../../../src/lib/posterPick';
 import { showToast } from './toast';
 import { navigate } from '../nav';
 import { routeForTorrent } from '../audiobooks/route';
@@ -22,6 +24,7 @@ const OPEN = 'M9 6l6 6-6 6';
 const TV_PLAY = 'M3 5h18v11H3zM8 20h8M10 8.5l4 2.5-4 2.5z';
 const PENCIL = 'M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4';
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
+const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
 const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 
 /**
@@ -37,7 +40,7 @@ export interface TorrentMenuItem {
 
 /**
  * What a long press on a torrent in «Мои» (and on a release of the series screen) opens: open, watch on the TV, rename,
- * select (without `onSelect`: none), the `extra` items, delete.
+ * change the poster (on every release of a film card), select (without `onSelect`: none), the `extra` items, delete.
  */
 export function TorrentMenu({
   tor,
@@ -58,6 +61,7 @@ export function TorrentMenu({
 }) {
   const tv = activeTv.value;
   const [renaming, setRenaming] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const title = displayTitle(tor);
 
@@ -105,6 +109,7 @@ export function TorrentMenu({
     if (done) onClose();
   };
 
+  if (picking) return <PosterPickSheet tor={tor} targets={posterTargets(torrents.value, tor)} onClose={() => { setPicking(false); onClose(); }} />;
   if (renaming) return <TorrentRenameSheet initial={title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
 
   return (
@@ -123,6 +128,10 @@ export function TorrentMenu({
       <button type="button" class="m-opt" disabled={busy} onClick={() => setRenaming(true)}>
         <Icon d={PENCIL} size={22} />
         <span class="m-opt-name">{t('torrent.rename.title')}</span>
+      </button>
+      <button type="button" class="m-opt" disabled={busy} onClick={() => setPicking(true)}>
+        <Icon d={IMAGE} size={22} />
+        <span class="m-opt-name">{t('torrent.poster.title')}</span>
       </button>
       {onSelect && (
         <button

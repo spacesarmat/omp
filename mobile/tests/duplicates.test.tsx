@@ -233,7 +233,7 @@ describe('series screen', () => {
     expect(document.querySelector('.m-sheet-title')!.textContent).toMatch(/ · 1080p WEB-DL$/);
     // only the normal manual actions of a release (deleting asks its own confirm)
     const options = Array.from(document.querySelectorAll('.m-opt')).map((b) => (b.textContent || '').trim());
-    expect(options).toEqual(['Открыть', 'Переименовать', 'Оставить только эту', 'Удалить']);
+    expect(options).toEqual(['Открыть', 'Переименовать', 'Сменить постер', 'Оставить только эту', 'Удалить']);
     expect(removeSpy).not.toHaveBeenCalled();
   });
 

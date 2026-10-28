@@ -356,6 +356,7 @@ export const PHONE_DIALOGS: ExtraDialog[] = [
   },
   { code: 'PD54', id: 'p-library-view', ru: 'Вид и сортировка', en: 'View and sort', items: [] },
   { code: 'PD55', id: 'p-releases', ru: 'Другая раздача', en: 'Another release', items: [it('PD55.1', 'Найти другую раздачу', 'Find another release')] },
+  { code: 'PD56', id: 'p-poster-change', ru: 'Сменить постер', en: 'Change poster', items: [] },
 ];
 
 /** Native Android TV player (PlayerActivity). The shared web UI on the box stays on S / D. */

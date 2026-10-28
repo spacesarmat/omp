@@ -65,7 +65,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S03.3 | Раздача | Release | Найти в лучшем качестве | Find better quality |
 | S03.4 | Раздача | Release | Сбросить просмотр | Reset watched |
 | S03.5 | Раздача | Release | Переименовать | Rename |
-| S03.6 | Раздача | Release | Другой постер | Other poster |
+| S03.6 | Раздача | Release | Сменить постер | Change poster |
 | S03.7 | Раздача | Release | Удалить | Delete |
 | S03.8 | Раздача | Release | Найти другую | Find another |
 | S03.9 | Раздача | Release | Пропускать заставку | Skip the intro |
@@ -530,7 +530,11 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D30.1 | Переименовать | Rename | Поле | Field |
 | D30.2 | Переименовать | Rename | Сохранить | Save |
 | D30.3 | Переименовать | Rename | Отмена | Cancel |
-| D31 | Другой постер | Other poster |  |  |
+| D31 | Сменить постер | Change poster |  |  |
+| D31.1 | Сменить постер | Change poster | Поиск | Search |
+| D31.2 | Сменить постер | Change poster | Вставить ссылку | Paste a link |
+| D31.3 | Сменить постер | Change poster | Сбросить (найти автоматически) | Reset (find automatically) |
+| D31.4 | Сменить постер | Change poster | К результатам | Back to results |
 | D32 | Сбросить просмотр | Reset watched |  |  |
 | D32.1 | Сбросить просмотр | Reset watched | Сбросить | Reset |
 | D32.2 | Сбросить просмотр | Reset watched | Отмена | Cancel |
@@ -653,6 +657,14 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D46.24 | Сервер | Server | Клавиатура | Keyboard |
 | D46.25 | Сервер | Server | Готово | Done |
 | D47 | История серверов | Server history |  |  |
+| D48 | Поиск постера | Poster search |  |  |
+| D48.1 | Поиск постера | Poster search | Поле | Field |
+| D48.2 | Поиск постера | Poster search | Найти | Search |
+| D48.3 | Поиск постера | Poster search | Отмена | Cancel |
+| D49 | Ссылка на постер | Poster link |  |  |
+| D49.1 | Ссылка на постер | Poster link | Поле | Field |
+| D49.2 | Ссылка на постер | Poster link | Сохранить | Save |
+| D49.3 | Ссылка на постер | Poster link | Отмена | Cancel |
 | P01 | Подключение | Connect |  |  |
 | P01.1 | Подключение | Connect | TorrServer на телефоне | TorrServer on the phone |
 | P01.2 | Подключение | Connect | Логин и пароль | Login and password |
@@ -887,6 +899,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD54 | Вид и сортировка | View and sort |  |  |
 | PD55 | Другая раздача | Another release |  |  |
 | PD55.1 | Другая раздача | Another release | Найти другую раздачу | Find another release |
+| PD56 | Сменить постер | Change poster |  |  |
 | A01 | Нативный плеер | Native player |  |  |
 | A01.1 | Нативный плеер | Native player | Пауза | Pause |
 | A01.2 | Нативный плеер | Native player | Аудио | Audio |

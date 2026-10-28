@@ -348,7 +348,7 @@ addScreen('S03', ['torrent'], 'Раздача', 'Release', [
   item('S03.3', ['torrent-better'], 'Найти в лучшем качестве', 'Find better quality'),
   item('S03.4', ['torrent-reset'], 'Сбросить просмотр', 'Reset watched'),
   item('S03.5', ['torrent-rename'], 'Переименовать', 'Rename'),
-  item('S03.6', ['torrent-poster'], 'Другой постер', 'Other poster'),
+  item('S03.6', ['torrent-poster'], 'Сменить постер', 'Change poster'),
   item('S03.7', ['torrent-delete'], 'Удалить', 'Delete'),
   item('S03.8', ['torrent-dead-find'], 'Найти другую', 'Find another'),
   item('S03.9', ['skip-intro'], 'Пропускать заставку', 'Skip the intro'),
@@ -632,7 +632,12 @@ addDialog('D27', 'update-allow', 'Разрешить установку', 'Allow
 addDialog('D28', 'delete-server', 'Удалить сервер', 'Delete the server', confirmItems('D28', 'Удалить', 'Delete'));
 addDialog('D29', 'torrent-delete', 'Удалить торрент', 'Delete the torrent', confirmItems('D29', 'Удалить', 'Delete'));
 addDialog('D30', 'torrent-rename', 'Переименовать', 'Rename', textItems('D30', 'Сохранить', 'Save'));
-addDialog('D31', 'torrent-poster', 'Другой постер', 'Other poster', []);
+addDialog('D31', 'torrent-poster', 'Сменить постер', 'Change poster', [
+  item('D31.1', ['poster-search'], 'Поиск', 'Search'),
+  item('D31.2', ['poster-url'], 'Вставить ссылку', 'Paste a link'),
+  item('D31.3', ['poster-reset'], 'Сбросить (найти автоматически)', 'Reset (find automatically)'),
+  item('D31.4', ['poster-back'], 'К результатам', 'Back to results'),
+]);
 addDialog('D32', 'torrent-reset', 'Сбросить просмотр', 'Reset watched', confirmItems('D32', 'Сбросить', 'Reset'));
 addDialog('D33', 'discover-search', 'Поиск в каталоге', 'Catalog search', textItems('D33', 'Найти', 'Search'));
 addDialog('D34', 'discover-sort', 'Сортировка каталога', 'Catalog sort', [
@@ -704,6 +709,8 @@ addDialog('D46', 'edit-server', 'Сервер', 'Server', [
   item('D46.8', ['edit-delete'], 'Удалить', 'Delete'),
 ].concat(kpItems('D46', 9, 'edit-url')));
 addDialog('D47', 'server-history', 'История серверов', 'Server history', []);
+addDialog('D48', 'poster-query', 'Поиск постера', 'Poster search', textItems('D48', 'Найти', 'Search'));
+addDialog('D49', 'poster-url', 'Ссылка на постер', 'Poster link', textItems('D49', 'Сохранить', 'Save'));
 
 export function dialogs(): DialogDef[] {
   return DIALOGS;

@@ -187,6 +187,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/ui/DonateSheet.tsx',
       'mobile/src/ui/FiltersSheet.tsx',
       'mobile/src/ui/LocalUpdateSheet.tsx',
+      'mobile/src/ui/PosterPickSheet.tsx',
       'mobile/src/ui/ReleasesSheet.tsx',
       'mobile/src/ui/RenameSheet.tsx',
       'mobile/src/ui/ReplaceSheet.tsx',

@@ -2,7 +2,8 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import type { Torrent } from '../api/types';
 import type { LibraryTab } from '../lib/libraryView';
-import { attachPoster, fillPosters, type FillResult, type PosterClient } from '../lib/autoPoster';
+import { attachPoster, fillPosters, posterConfig, type FillResult, type PosterClient } from '../lib/autoPoster';
+import type { TmdbConfig } from '../api/types';
 import { displayTitle } from '../lib/torrentName';
 import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
 import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
@@ -149,39 +150,111 @@ export function rememberAdded(c: PosterClient & { list(): Promise<Torrent[]> }, 
 }
 
 const TRIED_KEY = 'tsp.posterTried';
+/** A torrent the background lookup found nothing for is tried again after this long (TMDB gets new films). */
+export const POSTER_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
+const TRIED_MAX = 500;
 let filling: Promise<FillResult | null> | null = null;
+
+/**
+ * `tsp.posterTried`: when each torrent was last tried, and a fingerprint of the TMDB key it was tried with (a new key
+ * tries everything again). The fingerprint is a short hash, never the key. The old format (a list of hashes) counts
+ * as tried long ago, so those torrents get one more try.
+ */
+export interface PosterTried {
+  key: string;
+  at: { [hash: string]: number };
+}
+
+/** A short non-reversible fingerprint of the TMDB key and API address (FNV-1a), to notice a changed key. */
+export function tmdbKeyPrint(cfg: TmdbConfig | null | undefined): string {
+  const s = (cfg && cfg.APIKey ? cfg.APIKey.trim() : '') + '|' + (cfg && cfg.APIURL ? cfg.APIURL.trim() : '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return ('0000000' + h.toString(16)).slice(-8);
+}
+
+export function loadPosterTried(): PosterTried {
+  const raw = loadJson<unknown>(TRIED_KEY, null, () => true);
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as { key?: unknown; at?: unknown };
+    const at: { [hash: string]: number } = {};
+    if (o.at && typeof o.at === 'object') {
+      const src = o.at as { [hash: string]: unknown };
+      Object.keys(src).forEach((h) => {
+        const v = src[h];
+        if (typeof v === 'number' && isFinite(v)) at[h] = v;
+      });
+    }
+    return { key: typeof o.key === 'string' ? o.key : '', at: at };
+  }
+  // 0.20.6-beta.8 and older: the hashes only
+  const at: { [hash: string]: number } = {};
+  if (Array.isArray(raw)) raw.forEach((h) => { if (typeof h === 'string') at[h] = 0; });
+  return { key: '', at: at };
+}
+
+function savePosterTried(v: PosterTried): void {
+  const hashes = Object.keys(v.at).sort((a, b) => v.at[b] - v.at[a]).slice(0, TRIED_MAX);
+  const at: { [hash: string]: number } = {};
+  hashes.forEach((h) => (at[h] = v.at[h]));
+  saveJson(TRIED_KEY, { key: v.key, at: at });
+}
+
+/** True when the background lookup should skip `hash`: tried with this key less than POSTER_RETRY_MS ago. */
+export function triedRecently(v: PosterTried, key: string, hash: string, now: number): boolean {
+  if (v.key !== key) return false;
+  const at = v.at[hash];
+  return typeof at === 'number' && at > 0 && now - at < POSTER_RETRY_MS;
+}
 
 function patchPoster(hash: string, poster: string): void {
   torrents.value = torrents.value.map((x) => (x.hash === hash ? { ...x, poster } : x));
 }
 
+/** The list after a poster choice: `poster` on each of `hashes` ('' clears it). */
+export function patchPosters(hashes: string[], poster: string): void {
+  const set: { [h: string]: boolean } = {};
+  hashes.forEach((h) => (set[h] = true));
+  torrents.value = torrents.value.map((x) => (set[x.hash] ? { ...x, poster } : x));
+}
+
 /**
  * Background lookup for torrents without a poster, e.g. added from the TorrServer page or Lampa.
- * Each torrent is tried once (remembered in `tsp.posterTried`); nothing happens without a TMDB key.
+ * Each torrent is tried once per POSTER_RETRY_MS and again when the TMDB key changes (remembered in
+ * `tsp.posterTried`); nothing happens without a TMDB key.
  */
-export function autoFillPosters(c: PosterClient): Promise<FillResult | null> {
+export function autoFillPosters(c: PosterClient, now: () => number = Date.now): Promise<FillResult | null> {
   if (filling) return filling;
-  const tried = loadJson<unknown[]>(TRIED_KEY, [], Array.isArray).filter((h): h is string => typeof h === 'string');
-  const seen: { [h: string]: boolean } = {};
-  tried.forEach((h) => (seen[h] = true));
-  filling = fillPosters(c, torrents.value, {
-    skip: (h) => !!seen[h],
-    onEach: (h, poster) => {
-      if (poster) patchPoster(h, poster);
-      seen[h] = true;
-      tried.push(h);
-      saveJson(TRIED_KEY, tried.slice(-500));
-    },
-  }).then(
-    (r) => {
-      filling = null;
-      return r;
-    },
-    () => {
-      filling = null;
-      return null;
-    },
-  );
+  filling = posterConfig(c, undefined)
+    .then((cfg) => {
+      if (!cfg || !cfg.APIKey) return { tried: 0, found: 0, hasKey: false };
+      const key = tmdbKeyPrint(cfg);
+      const stored = loadPosterTried();
+      const tried: PosterTried = stored.key === key ? stored : { key: key, at: {} };
+      const start = now();
+      return fillPosters(c, torrents.value, {
+        cfg: cfg,
+        skip: (h) => triedRecently(tried, key, h, start),
+        onEach: (h, poster) => {
+          if (poster) patchPoster(h, poster);
+          tried.at[h] = now();
+          savePosterTried(tried);
+        },
+      });
+    })
+    .then(
+      (r) => {
+        filling = null;
+        return r;
+      },
+      () => {
+        filling = null;
+        return null;
+      },
+    );
   return filling;
 }
 

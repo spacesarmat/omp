@@ -1024,6 +1024,7 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'Posters are looked up in the TMDB database with the key stored in TorrServer.',
       'The key needs TorrServer version MatriX.138 or newer; older versions do not have this item.',
       'An API v3 key is required. TMDB does not accept a v4 token (it starts with eyJ).',
+      'Wrong poster or none: “Change poster” on the release card (on the phone the picture button, or a long press on the poster in “Mine”). It has a title search, your own https:// link and “Reset (find automatically)”. The poster is saved in TorrServer and shows on every device.',
     ],
   },
 
