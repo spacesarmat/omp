@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.6-beta.7
 
 - [phone] Встроенный плеер обновлён до 2160 Player 0.2.14: прошедшее время больше не обрезается, пока длина файла ещё неизвестна (при буферизации в портрете было «3:2» вместо «3:29»)
 
