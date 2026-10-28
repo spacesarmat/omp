@@ -4,11 +4,24 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6
 
-- [phone] «Change poster»: the year in a result tile now has its own line under the title (as on the TV); a long title is cut, the year always shows
-- Torrents without a poster that the automatic lookup found nothing for are searched once more with the new search (yo variants and the English title) without waiting a week
-- [tech] `tsp.posterTried` stores the search version (`POSTER_SEARCH_VERSION`, now 2); marks of another version are dropped
+- «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them
+- The automatic poster lookup is more accurate: a film is looked up among films of its year, found even when the release spells a Russian name without the letter yo, and by the English title from the release name; releases with no poster are tried again
+- [phone] A film or series on one screen: seasons, episodes and releases (quality, size, seeds), one tap plays the next episode; several releases of one film are one card in «Mine»
+- [phone] The «Search» tab replaces «Add»: «Mine», «Catalog» and «Sources» in one row, paste a link or magnet right there; «Continue watching» on top of «Mine»
+- TorrServer over https: on a custom port, behind a proxy with a path, and with a self-signed certificate after you confirm its fingerprint
+- The built-in TorrServer is updated to MatriX.147.1
+- [phone] The built-in player is updated to 2160 Player 0.2.14: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut
+- [phone] Offline you get one clear «No internet», and the TV search does not run without Wi-Fi
+- [phone] «History» skips plays that never started (0:00), one episode is one line; in landscape screens no longer go under the system bar
+- [phone] «OMP account» shows «Subscription until ...» right away; different films with similar titles no longer merge in «Mine»
+- Help: a detailed guide to installing on Android over ADB without losing data
+- [tech] Android: https to TorrServer goes through OkHttp with TorrServerTrust (system CAs, then a pin per host:port)
+- [tech] The poster is written with TorrServer `set` to every release of the film; tsp.posterTried keeps the try time, a TMDB key fingerprint and the search version
+- [tech] The Telegram release post is a photo, a caption and buttons only; one bot @OMPBILLINGBOT for billing and posts, the admin bot and the parser monitor are removed
+- [tech] Billing panel: a «Monitoring» tab (trackers, sites, Postgres, backup, containers) with Telegram alerts
+- [tech] JacRed on the NUC: sync goes through WARP, the working config is kept on the host; ops/vps/deploy.sh runs on the NUC
 
 ## 0.20.6-beta.10
 
