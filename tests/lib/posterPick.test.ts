@@ -172,11 +172,11 @@ describe('the background poster lookup', () => {
     expect(fetchJson).toHaveBeenCalledTimes(1);
   });
 
-  it('a film dated a year off counts; no film of that year falls back to the multi search', async () => {
+  it('a film dated a year off counts; no film of that year tries the ё variants, then the multi search', async () => {
     expect(yearPoster(cfg, [{ poster_path: '/x.jpg', release_date: '2027-01-02' }], 2026)).toContain('/x.jpg');
     const fetchJson = respond({ movie: [{ poster_path: '/old.jpg', release_date: '1984-07-19' }], multi: [{ poster_path: '/m.jpg' }] });
     expect(await findPoster(cfg, fetchJson, 'Супергерл (2026)', 'movie')).toContain('/m.jpg');
-    expect(fetchJson.mock.calls.map((c) => /search\/([a-z]+)/.exec(String(c[0]))![1])).toEqual(['movie', 'multi']);
+    expect(fetchJson.mock.calls.map((c) => /search\/([a-z]+)/.exec(String(c[0]))![1])).toEqual(['movie', 'movie', 'movie', 'multi']);
   });
 
   it('a series is looked up among series, the year only breaks ties; a failed typed search falls back', async () => {
