@@ -2054,5 +2054,6 @@ body.test-labels [data-code]::after {
 .m-pp-grid { margin-top: 12px; max-height: 52vh; overflow-y: auto; grid-auto-rows: max-content; }
 .m-pp-item { display: flex; flex-direction: column; text-align: left; color: inherit; }
 .m-pp-cap { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-pp-year { display: block; white-space: nowrap; }
 .m-pp-link { margin-top: 12px; }
 .m-pp-actions { margin-top: 12px; flex-wrap: wrap; }

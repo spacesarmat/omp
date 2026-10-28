@@ -500,7 +500,10 @@ describe('Torrent «Сменить постер»', () => {
     expect(document.body.textContent).toContain('Для всех раздач фильма (2)');
     const caps = Array.from(document.querySelectorAll('.m-pp-cap')).map((n) => n.textContent);
     // films only (the 2015 series is dropped), the 2026 one first
-    expect(caps).toEqual(['Супергёрл 3 · 2026', 'Супергёрл 2 · 1984']);
+    expect(caps).toEqual(['Супергёрл 3', 'Супергёрл 2']);
+    // the year has its own line under the title (a long title is cut, the year stays)
+    const years = Array.from(document.querySelectorAll('.m-pp-item')).map((n) => n.querySelector('.m-pp-year')!.textContent);
+    expect(years).toEqual(['2026', '1984']);
     act(() => (document.querySelectorAll('.m-pp-item')[0] as HTMLElement).click());
     await flush();
     expect(posters).toHaveBeenCalledWith('movie', 3);

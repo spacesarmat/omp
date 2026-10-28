@@ -13,7 +13,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { toast } from '../src/ui/toast';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
-import { torrents, torrentsAt, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
+import { torrents, torrentsAt, libraryTab, libraryQuery, librarySearchOpen, POSTER_SEARCH_VERSION } from '../../src/store/library';
 import { saveProgress, reloadProgress, serverViewed } from '../../src/store/progress';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { posterImageSize } from '../../src/catalog/tmdb';
@@ -141,6 +141,37 @@ describe('Library posters', () => {
     mount();
     for (let i = 0; i < 8; i++) await flush();
     expect(tmdb).toHaveBeenCalledTimes(14);
+  });
+
+  it('marks of an older search (0.20.6-beta.9 stored no version) are dropped: everything is tried once with the new one', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async (h: string) => T.find((t) => t.hash === h)!);
+    vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    const tmdb = vi.fn(async () => new Response(JSON.stringify({ results: [] })));
+    vi.stubGlobal('fetch', tmdb);
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
+    // a first run writes the marks with this key and the current version
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    const calls = tmdb.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
+    const fresh = JSON.parse(localStorage.getItem('tsp.posterTried')!);
+    expect(fresh.v).toBe(POSTER_SEARCH_VERSION);
+    // the same marks, just made, as beta.9 wrote them (no version): tried again anyway
+    const { v: _v, ...old } = fresh;
+    localStorage.setItem('tsp.posterTried', JSON.stringify(old));
+    act(() => render(null, el));
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb.mock.calls.length).toBe(2 * calls);
+    expect(JSON.parse(localStorage.getItem('tsp.posterTried')!).v).toBe(POSTER_SEARCH_VERSION);
+    // with the current version the fresh marks hold: no new searches
+    act(() => render(null, el));
+    mount();
+    for (let i = 0; i < 8; i++) await flush();
+    expect(tmdb.mock.calls.length).toBe(2 * calls);
   });
 });
 

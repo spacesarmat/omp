@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] «Change poster»: the year in a result tile now has its own line under the title (as on the TV); a long title is cut, the year always shows
+- Torrents without a poster that the automatic lookup found nothing for are searched once more with the new search (yo variants and the English title) without waiting a week
+- [tech] `tsp.posterTried` stores the search version (`POSTER_SEARCH_VERSION`, now 2); marks of another version are dropped
+
 ## 0.20.6-beta.10
 
 - [phone] «Change poster»: search result tiles no longer run over each other, the title and year captions show
