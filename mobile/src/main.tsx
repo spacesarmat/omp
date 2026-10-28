@@ -18,11 +18,15 @@ import { tvState, tvKind, sessionIp } from './tv/tvClient';
 import { native } from './platform/native';
 import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
+import { installPhoneTls } from './torrServerTls';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
   () => tvs.value.map((tv) => tv.ip),
 );
+
+// a TorrServer over https goes through the native trust; a self-signed certificate asks first
+installPhoneTls();
 
 installErrorHooks();
 startKeyboardWatch();

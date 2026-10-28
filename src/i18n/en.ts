@@ -1429,6 +1429,17 @@ export const en: EnDict<typeof ru> = {
       hintBack: 'Back - close',
     },
   },
+  tls: {
+    untrustedTitle: 'Trust the certificate of {host}?',
+    untrustedBody: 'The server sent a certificate that is not among the trusted ones (usually TorrServer\'s self-signed certificate). Trust it only if this is your server and the fingerprint matches its certificate.',
+    changedTitle: 'The certificate of {host} changed',
+    changedBody: 'This server used to send another certificate. That happens after TorrServer is reinstalled or its certificate is replaced. If you changed nothing, someone else may be intercepting the connection.',
+    issuedTo: 'Issued to: {name}',
+    validUntil: 'Valid until {date}',
+    fingerprint: 'SHA-256 fingerprint:',
+    trust: 'Trust',
+    trustNew: 'Trust the new one',
+  },
   connect: {
     enterAddress: 'Enter the server address',
     unreachable: 'Could not connect to {host} - check the address and the port',

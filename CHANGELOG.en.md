@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [atv] TorrServer over https with a self-signed certificate: on the first connect the app shows the SHA-256 fingerprint and connects only after "Trust"; the certificate is remembered for that address and port, and a changed certificate shows a warning. The built-in player plays such a server, VLC cannot - the built-in one stays (#193)
+- [phone] TorrServer over https with a self-signed certificate: the first connect shows the SHA-256 fingerprint and connects only after "Trust"; the certificate is remembered for the address and port, a changed certificate shows a warning; the background subscription check uses the certificates already accepted (#193)
+- [tech] Android: https requests to TorrServer go through native OkHttp with TorrServerTrust (system CAs, then a pin per host:port); the same trust is the HttpsURLConnection default, so Media3 and 2160 Player work without submodule changes; webOS still needs a trusted certificate
+
 ## 0.20.6-beta.7
 
 - [phone] The built-in player is now 2160 Player 0.2.14: the elapsed time no longer clips while the file length is still unknown (buffering in portrait showed "3:2" instead of "3:29")

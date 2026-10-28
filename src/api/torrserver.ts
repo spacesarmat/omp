@@ -1,4 +1,4 @@
-import { request, apiError, isApiError, HttpOptions } from './http';
+import { request, apiError, isApiError, HttpOptions, HttpTransport, transportFetch, toBase64, FetchLike } from './http';
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
@@ -38,6 +38,13 @@ export function parseTorrentData(data?: string): TorrentFile[] {
   }
 }
 
+/** Android: every https TorrServer request goes through the native trust (system CAs, then the user's pins). */
+let httpsTransport: HttpTransport | null = null;
+
+export function setTorrServerTransport(t: HttpTransport | null): void {
+  httpsTransport = t;
+}
+
 export class TorrServerClient {
   readonly baseUrl: string;
   private readonly auth?: string;
@@ -50,7 +57,12 @@ export class TorrServerClient {
   }
 
   private call<T>(path: string, opts: HttpOptions = {}): Promise<T> {
-    return request<T>(this.baseUrl + path, { ...opts, auth: this.auth });
+    return request<T>(this.baseUrl + path, { ...opts, auth: this.auth, transport: this.via(this.baseUrl) });
+  }
+
+  /** The native transport for an https URL of this server (Android), undefined for the page's fetch(). */
+  private via(url: string): HttpTransport | undefined {
+    return httpsTransport && /^https:\/\//i.test(url) && this.isOwnUrl(url) ? httpsTransport : undefined;
   }
 
   private isOwnUrl(url: string): boolean {
@@ -94,7 +106,19 @@ export class TorrServerClient {
     form.append('file', new Blob([bytes.slice().buffer as ArrayBuffer], { type: 'application/x-bittorrent' }), 'release.torrent');
     const headers: { [k: string]: string } = {};
     if (this.auth) headers['Authorization'] = 'Basic ' + this.auth;
-    return fetch(this.baseUrl + '/torrent/upload', { method: 'POST', headers, body: form }).then(
+    const url = this.baseUrl + '/torrent/upload';
+    const tr = this.via(url);
+    // through the transport the multipart body goes as bytes with its boundary in the type
+    const sent: Promise<FetchLike> = tr
+      ? (() => {
+          const packed = new Response(form);
+          const type = packed.headers.get('Content-Type') || undefined;
+          return packed.arrayBuffer().then((buf) =>
+            transportFetch(tr, url, { method: 'POST', headers, bodyBase64: toBase64(new Uint8Array(buf)), contentType: type, timeoutMs: 30000 }),
+          );
+        })()
+      : fetch(url, { method: 'POST', headers, body: form });
+    return sent.then(
       (res) => {
         if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
         return res.text().then((text) => {
@@ -105,8 +129,8 @@ export class TorrServerClient {
           }
         });
       },
-      () => {
-        throw apiError('network', 'Network error');
+      (e) => {
+        throw isApiError(e) ? e : apiError('network', 'Network error');
       },
     );
   }
@@ -204,11 +228,11 @@ export class TorrServerClient {
   }
 
   fetchText(url: string, timeoutMs = 15000): Promise<string> {
-    return request<string>(url, { responseType: 'text', timeoutMs, auth: this.ownAuth(url) });
+    return request<string>(url, { responseType: 'text', timeoutMs, auth: this.ownAuth(url), transport: this.via(url) });
   }
 
   fetchBytes(url: string, timeoutMs = 30000): Promise<ArrayBuffer> {
-    return request<ArrayBuffer>(url, { responseType: 'arraybuffer', timeoutMs, auth: this.ownAuth(url) });
+    return request<ArrayBuffer>(url, { responseType: 'arraybuffer', timeoutMs, auth: this.ownAuth(url), transport: this.via(url) });
   }
 
   ffprobeAvailable(): Promise<boolean> {

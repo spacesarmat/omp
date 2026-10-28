@@ -55,6 +55,29 @@ export function textDialog(title: string, body: string, closeLabel: string, test
   });
 }
 
+/**
+ * A question with a long text under the title (a certificate's fingerprint): [okLabel] or Cancel, focus starts on
+ * Cancel, Back cancels. Resolves true only for [okLabel].
+ */
+export function confirmWithBody(title: string, body: string, okLabel: string, testId?: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    if (dialog.value) dialog.value.resolve(null);
+    dialog.value = {
+      id: ++dialogSeq,
+      title,
+      body,
+      testId,
+      options: [
+        { label: okLabel, value: true, danger: true },
+        { label: t('common.cancel'), value: false },
+      ],
+      current: false,
+      resolve: (v) => resolve(v === true),
+      prevFocus: getCurrentFocusKey() || undefined,
+    };
+  });
+}
+
 const BODY_STEP = 160;
 
 /** Confirm: focus starts on Cancel, the action is a red danger button, Back cancels. */
