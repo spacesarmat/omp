@@ -155,17 +155,31 @@ describe('Torrent', () => {
     expect(localStorage.getItem('tsp.progress')).not.toContain('abc:');
   });
 
-  it('a film with two releases: «Раздача: ... · Сменить» opens «Другая раздача», a pick shows the other release', async () => {
+  it('a film with two releases: «Раздачи (2)» under the watch buttons lists both, a tap shows the other release', async () => {
     const f1: T = { hash: 'abc', title: 'Полуночный архив / Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 8 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.mkv', length: 1 }] };
     const f2: T = { hash: 'f2', title: 'Полуночный архив / Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3, torrent_size: 20 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.2160p.mkv', length: 1 }] };
     torrents.value = [f1, f2];
     mount();
     await flush();
-    const line = el.querySelector('[data-code="P06.2"]')!;
-    expect(line.textContent).toContain('Раздача: 1080p WEB-DL · 8,0 ГБ');
-    click(line.querySelector('.m-btn-text'));
-    expect(el.querySelector('[data-code="PD55"]')).toBeTruthy();
-    expect(Array.from(el.querySelectorAll('[data-release]')).map((r) => r.getAttribute('data-release'))).toEqual(['abc', 'f2']);
+    const block = el.querySelector('[data-code="P06.2"]')!;
+    expect(block.getAttribute('data-block')).toBe('releases');
+    expect(block.querySelector('.m-section')!.textContent).toBe('Раздачи (2)');
+    // no small «Раздача: ... · Сменить» line and no sheet any more
+    expect(el.querySelector('[data-release-switch]')).toBeNull();
+    const rows = Array.from(block.querySelectorAll('[data-release]'));
+    expect(rows.map((r) => r.getAttribute('data-release'))).toEqual(['abc', 'f2']);
+    expect(rows[0].getAttribute('aria-checked')).toBe('true');
+    expect(rows[1].getAttribute('aria-checked')).toBe('false');
+    expect(rows[0].querySelector('.m-opt-name')!.textContent).toBe('1080p WEB-DL · 8,0 ГБ');
+    expect(rows[1].querySelector('.m-opt-name')!.textContent).toContain('20,0 ГБ');
+    // the seeds are shown, the same film name is not repeated on every row
+    expect(rows[1].querySelector('.m-opt-sub')!.textContent).toBe('подключено: 0 сидов · 0 пиров');
+    // the block comes after the watch buttons and before the files of the shown release
+    const order = Array.from(el.querySelectorAll('[data-code="P06.3"], [data-block="releases"], .m-section')).map((n) => n.getAttribute('data-block') || n.getAttribute('data-code') || n.textContent);
+    expect(order.indexOf('P06.3')).toBeLessThan(order.indexOf('releases'));
+    expect(order.indexOf('releases')).toBeLessThan(order.indexOf('Файлы'));
+    click('[data-release="abc"]');
+    expect(currentRoute.value).not.toEqual({ name: 'torrent', hash: 'f2' });
     click('[data-release="f2"]');
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f2' });
   });
@@ -185,7 +199,7 @@ describe('Torrent', () => {
     expect(el.textContent).not.toContain('Midnight.Archive.1080p');
   });
 
-  it('a lone film has no release line', async () => {
+  it('a lone film has no releases block', async () => {
     torrents.value = [{ hash: 'abc', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'Neon.mkv', length: 1 }] }];
     mount();
     await flush();

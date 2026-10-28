@@ -11,6 +11,7 @@ import { contentsText } from './releaseContents';
 import { torrents } from '../../../src/store/library';
 import { fmtSize, t } from '../../../src/i18n';
 import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { cachedMovieId } from '../../../src/lib/useMovieCard';
 
 export { contentsText };
 
@@ -29,7 +30,42 @@ export function releaseLine(tor: Torrent, withContents = true): string {
   ].filter(Boolean).join(' · ');
 }
 
-/** The title and year keys of a film: the names before the first « (» or « [», with the release year; none without a year. */
+/**
+ * Words of a «Name / Name / 2026 / ДБ, СТ / 4K, HEVC, HDR / Blu-Ray Remux» part that are about the release, not the
+ * film: video, source, sound and translation tags. A part made only of these (and numbers) is not a title.
+ */
+const TECH_WORDS = new Set(
+  (
+    '4k uhd fhd hd sd hdr hdr10 hdr10+ sdr dv dovi dolby vision atmos imax hevc avc h264 h265 x264 x265 av1 vp9 10bit 8bit ' +
+    'remux bdremux bdrip blu ray bluray blu-ray web dl web-dl webdl webrip web-rip hdrip dvdrip dvd dvd5 dvd9 hdtv hdtvrip tvrip camrip ' +
+    'ts tc cam mkv mp4 avi hybrid ' +
+    'дб пд пм по ап ст лм ло мво дво аво ммво сабы суб sub subs rus eng ukr ориг оригинал original dub mvo dvo avo vo ' +
+    'дубляж многоголосый двухголосый одноголосый авторский профессиональный любительский лицензия itunes netflix amzn ma'
+  ).split(' '),
+);
+
+function techWord(w: string): boolean {
+  return TECH_WORDS.has(w) || /^\d+$/.test(w) || /^\d{3,4}[pi]$/.test(w) || /^p\d$/.test(w) || /^hdr\d*\+?$/.test(w) || /^\d+x$/.test(w) || w === 'x';
+}
+
+/** A slash part that names the release, not the film: a bare year, or only tags and numbers («4 x ДБ, ПМ, СТ», «WEB-DL»). */
+export function isTechPart(part: string): boolean {
+  const words = part
+    .toLowerCase()
+    .split(/[\s,;:+|()\[\]]+/)
+    .filter(Boolean);
+  if (!words.length) return true;
+  if (!/[a-zа-яё]/i.test(part)) return true;
+  // «Сезон: 5», «Серии: 1-22 из 22», «S4E1-8 of 8»: a season or episode range is not a name either
+  if (/^\s*(?:сезон|серии|серия|season|episodes?|s\d+e\d+|s\d+\b|e\d+\s+of)/i.test(part)) return true;
+  return words.every(techWord);
+}
+
+/**
+ * The title and year keys of a film: the names before the first « (» or « [», with the release year; none without a
+ * year. In «Супергерл / Supergirl / 2026 / ДБ, СТ / 4K ... / Blu-Ray Remux» only the parts before the bare year are
+ * names, and tag-only parts never are: otherwise «2026|2026» or «blu ray remux|2026» made different films one.
+ */
 export function filmKeys(tor: Torrent): string[] {
   const raw = displayTitle(tor);
   const field = /[\[(](?:[^\])]*[^0-9\])])?((?:19|20)\d\d)(?![0-9])/.exec(raw);
@@ -42,12 +78,26 @@ export function filmKeys(tor: Torrent): string[] {
     if (at > 0) head = head.slice(0, at);
   });
   const out: string[] = [];
-  head.split(' / ').forEach((part) => {
+  const parts = head.split(' / ');
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    // «… / 2026 / …»: the names end at the year
+    if (i > 0 && /^\s*(?:19|20)\d\d\s*$/.test(part)) break;
     const core = titleCore(part);
-    const k = core ? libraryKey(core, year) : '';
+    // a number is a name only first («1917 / 1917», «2012 (2009)»); later it is a part count or a tag
+    const numberTitle = i === 0 && /^\d+$/.test(core);
+    if (!core || (!numberTitle && (isTechPart(part) || isTechPart(core)))) continue;
+    const k = libraryKey(core, year);
     if (k && out.indexOf(k) < 0) out.push(k);
-  });
+  }
   return out;
+}
+
+/** Both films matched to TMDB, to different films: never one film, whatever the names say. */
+export function differentMovies(a: Torrent, b: Torrent): boolean {
+  const x = cachedMovieId(a.hash);
+  const y = cachedMovieId(b.hash);
+  return !!x && !!y && x !== y;
 }
 
 function groupOf(list: Torrent[], tor: Torrent): SeriesGroup | null {
@@ -78,7 +128,7 @@ export function sameReleases(list: Torrent[], tor: Torrent): Torrent[] {
   }
   const keys = filmKeys(tor);
   if (!keys.length) return [];
-  return others.filter((x) => !isSeries(x) && filmKeys(x).some((k) => keys.indexOf(k) >= 0));
+  return others.filter((x) => !isSeries(x) && !differentMovies(x, tor) && filmKeys(x).some((k) => keys.indexOf(k) >= 0));
 }
 
 /** After an add: the toast text when the library already has this release («Такая раздача уже есть: 4K · 9,7 ГБ»); '' otherwise. */

@@ -690,7 +690,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P05.2 | Следить за новыми | Follow new episodes | Как часто | How often |
 | P06 | Раздача | Release |  |  |
 | P06.1 | Раздача | Release | Назад | Back |
-| P06.2 | Раздача | Release | Раздача - Сменить | Release - Change |
+| P06.2 | Раздача | Release | Раздачи фильма | Releases of the film |
 | P06.3 | Раздача | Release | Смотреть на телефоне | Watch on the phone |
 | P06.4 | Раздача | Release | На ТВ | On the TV |
 | P07 | Поиск | Search |  |  |

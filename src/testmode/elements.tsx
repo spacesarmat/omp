@@ -27,7 +27,7 @@ export const ELEMENT_TYPES: ElementType[] = [
     ru: 'Ряд, полка, сетка или список',
     en: 'Row, shelf, grid or list',
     tv: '.disc-results, .views-tiles, .views-rows, .tc-cast-row, .series-seasons-row, .series-episodes, .faq-chips, .topbar-tabs, .better-list, .src-list, .whatsnew-list',
-    phone: '.m-disc-rail, .m-disc-grid, .m-grid, .m-art-grid, .m-list, .m-vlist, .m-clist, .m-results, .m-chips, .m-tabs, .m-tc-episodes, .m-series-rows, .m-now-ep-rail, .m-better-list, .m-srch-list',
+    phone: '.m-disc-rail, .m-disc-grid, .m-grid, .m-art-grid, .m-list, .m-vlist, .m-clist, .m-results, .m-chips, .m-tabs, .m-tc-episodes, .m-series-rows, .m-now-ep-rail, .m-better-list, .m-srch-list, .m-releases',
     place: 'above',
   },
   {
@@ -51,7 +51,7 @@ export const ELEMENT_TYPES: ElementType[] = [
     ru: 'Строка списка (раздача, файл, серия, результат поиска)',
     en: 'List row (torrent, file, episode, search hit)',
     tv: '.lrow, .crow, .file-row, .ep-row, .search-result, .better-row, .list-item, .src-row, .dialog-option',
-    phone: '.m-crow, .m-hrow, .m-vrow, .m-srch-row, .m-cal-row, .m-tc-ep-row, .m-server-row, .m-result, .m-sheet-row, .m-log-row',
+    phone: '.m-crow, .m-hrow, .m-vrow, .m-srch-row, .m-cal-row, .m-tc-ep-row, .m-server-row, .m-result, .m-sheet-row, .m-log-row, .m-rel-row',
     place: 'top',
   },
   {
