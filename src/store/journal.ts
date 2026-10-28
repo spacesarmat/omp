@@ -2,7 +2,7 @@
 // the torrent list first (another device may have written meanwhile) and every failure is swallowed: the journal must
 // never break playback.
 import type { Torrent } from '../api/types';
-import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf, withTrackerSeeds, trackerSeedsOf } from '../lib/journal';
+import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf, withTrackerSeeds, trackerSeedsOf, JOURNAL_MAX } from '../lib/journal';
 import { setCategoryWriter, torrents } from './library';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
@@ -362,4 +362,46 @@ export function saveSupport(c: JournalClient, until: number, now: number = Date.
         .then((ok) => ok || (left > 0 ? attempt(left - 1) : false));
     }, () => false);
   return attempt(1);
+}
+
+export type RewriteResult = 'written' | 'same' | 'failed';
+
+/**
+ * Rewrites the history and the skip settings of a torrent from `build` (null: nothing to change), after the pending
+ * writes of the same torrent, keeping every other key of `data`. The write is read back: `written` only when the stored
+ * history is the one built. `failed` also for an unknown torrent, data that is not OMP-readable or an empty title.
+ */
+export function rewriteData(
+  c: JournalClient,
+  hash: string,
+  build: (cur: ParsedData) => { journal: JournalEntry[]; skip: SkipPrefs | null } | null,
+): Promise<RewriteResult> {
+  let result: RewriteResult = 'failed';
+  return enqueue(hash, () =>
+    c.list().then((all) => {
+      const tor = torrentOf(all, hash);
+      if (!tor) return undefined;
+      const parsed = parseData(tor.data);
+      if (!parsed) return undefined;
+      const base = baseOf(tor, parsed);
+      const next = build(base);
+      if (!next) {
+        result = 'same';
+        return undefined;
+      }
+      // TorrServerClient.setData writes nothing for an empty title: that would lose the history
+      if (!(tor.title || tor.name)) return undefined;
+      const data = serializeData(base.obj, next.journal, next.skip);
+      return c
+        .setData(tor, data)
+        .then(() => c.list())
+        .then((all2) => {
+          const stored = torrentOf(all2, hash);
+          const back = stored ? parseData(stored.data) : null;
+          if (!back || JSON.stringify(back.journal) !== JSON.stringify(next.journal.slice(0, JOURNAL_MAX))) return;
+          patchLibrary(tor.hash, data);
+          result = 'written';
+        });
+    }),
+  ).then(() => result);
 }

@@ -5,6 +5,7 @@ import { DialogBadge, visibleDialogCode, visibleDialogOption } from '../testmode
 import { FocusGroup, Focusable } from './components';
 import { focusAfterClose } from './focus';
 import { useKeys } from './keys';
+import { KeyDot } from './icons';
 
 interface DialogState {
   id: number;
@@ -17,6 +18,10 @@ interface DialogState {
   prevFocus?: string;
   /** Stable id from src/testmode/registry.ts. Absent dialogs stay uncoded. */
   testId?: string;
+  /** The red key on an option: true closes the dialog with it (see chooseOrDelete). */
+  onRed?: (v: unknown) => boolean;
+  /** A line under the options for the red key («● удалить раздачу»). */
+  redHint?: string;
 }
 
 const dialog = signal<DialogState | null>(null);
@@ -34,6 +39,37 @@ export function choose<T>(title: string, options: { label: string; value: T; dan
       current,
       testId,
       resolve: resolve as (v: unknown) => void,
+      prevFocus: getCurrentFocusKey() || undefined,
+    };
+  });
+}
+
+/**
+ * A list to pick from where the red key acts on the focused option (deletes it): `{ value, red: false }` for OK,
+ * `{ value, red: true }` for the red key on an option `canRed` accepts, null for Back. `canRed` may say why not itself.
+ */
+export function chooseOrDelete<T>(
+  title: string,
+  options: { label: string; value: T }[],
+  canRed: (v: T) => boolean,
+  redHint: string,
+  testId?: string,
+): Promise<{ value: T; red: boolean } | null> {
+  return new Promise((resolve) => {
+    if (dialog.value) dialog.value.resolve(null);
+    let red = false;
+    dialog.value = {
+      id: ++dialogSeq,
+      title,
+      options,
+      testId,
+      redHint,
+      onRed: (v) => {
+        if (!canRed(v as T)) return false;
+        red = true;
+        return true;
+      },
+      resolve: (v) => resolve(v === null || v === undefined ? null : { value: v as T, red }),
       prevFocus: getCurrentFocusKey() || undefined,
     };
   });
@@ -109,6 +145,12 @@ export function DialogHost() {
       close(null);
       return true;
     }
+    if (a === 'red' && dialog.value.onRed) {
+      const m = /^dialog-opt-(\d+)$/.exec(getCurrentFocusKey() || '');
+      const o = m ? dialog.value.options[+m[1]] : undefined;
+      if (o && dialog.value.onRed(o.value)) close(o.value);
+      return true;
+    }
     if (dialog.value.body && (a === 'up' || a === 'down')) {
       const el = document.querySelector('.dialog-body') as HTMLElement | null;
       if (el) {
@@ -151,6 +193,11 @@ export function DialogHost() {
             </Focusable>
           );
         })}
+        {d.redHint ? (
+          <div class="dialog-hint">
+            <KeyDot color="red" /> {d.redHint}
+          </div>
+        ) : null}
       </FocusGroup>
     </div>
   );

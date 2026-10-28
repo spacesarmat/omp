@@ -22,7 +22,8 @@ import {
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
 import { lang, t, fmtNumber } from '../i18n';
-import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
+import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
+import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
@@ -34,7 +35,7 @@ import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
 import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
-import { choose } from '../ui/dialog';
+import { choose, chooseOrDelete, confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
@@ -371,16 +372,67 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     if (index >= 0) navigate({ name: 'player', queue, index });
   };
 
+  const releaseLabel = (m: Torrent) => [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · ');
+  // «Раздачи · N»: OK opens a release, red deletes it (a release of this season only: a pack of several seasons stays)
   const openReleases = () => {
     if (releases.length === 1) {
       navigate({ name: 'torrent', hash: releases[0].hash });
       return;
     }
-    const options = releases.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
-    choose(t('series.releasesTitle'), options, undefined, 'series-releases').then((hash) => {
-      if (hash) navigate({ name: 'torrent', hash });
+    const options = releases.map((m) => ({ label: releaseLabel(m), value: m.hash }));
+    const canRed = (hash: string) => {
+      const m = members.filter((x) => x.hash === hash)[0];
+      if (!m || members.length < 2) return false;
+      if (!onlyThisSeason(group, season, m)) {
+        toast(t('series.releaseDeletePack'));
+        return false;
+      }
+      return true;
+    };
+    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases').then((r) => {
+      if (!r) return;
+      if (!r.red) {
+        navigate({ name: 'torrent', hash: r.value });
+        return;
+      }
+      const m = members.filter((x) => x.hash === r.value)[0];
+      if (m) void removeRelease(m);
     });
   };
+
+  // the red key in «Раздачи»: what was watched in it moves to the release that stays, then it goes; with two or more
+  // left the list opens again for the next one
+  const removeRelease = async (m: Torrent) => {
+    // the release the season goes on in: the one of the next episode
+    const current = target ? target.tor : null;
+    const isCurrent = !!current && current.hash === m.hash;
+    const keeper = isCurrent || !current ? pickKeeper(members, m) : current;
+    if (!keeper) return;
+    const vars = { name: releaseLabel(m), keeper: releaseLabel(keeper) };
+    const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
+    if (!(await confirmDialog(ask, t('common.delete'), 'series-release-delete'))) return;
+    const carried = await carryWatch(c, m, keeper, season);
+    if (!carried.ok) {
+      toast(t('series.releaseCarryFailed'), 'error');
+      return;
+    }
+    try {
+      await c.remove(m.hash);
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+      return;
+    }
+    torrents.value = torrents.value.filter((x) => x.hash !== m.hash);
+    forgetRemoved(m.hash);
+    toast(t('series.releaseDeleted'));
+    if (members.filter((x) => x.hash !== m.hash).length > 1) setReopen((n) => n + 1);
+    else restoreFocus('SERIES-ACTIONS');
+  };
+  // the list again after a delete, built from the releases left (this render's `members`)
+  const [reopen, setReopen] = useState(0);
+  useEffect(() => {
+    if (reopen && releases.length > 1) openReleases();
+  }, [reopen]);
 
   // red on an episode row: mark it watched
   const rowByKey = useRef<{ [k: string]: FileRow }>({});

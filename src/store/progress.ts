@@ -106,6 +106,34 @@ export function markWatched(hash: string, idx: number): void {
   saveProgress(hash, idx, 1, 1);
 }
 
+/** The files of `hash` with progress on this device. */
+export function localFileIds(hash: string): number[] {
+  const head = hash + ':';
+  return Object.keys(local)
+    .filter((k) => k.indexOf(head) === 0)
+    .map((k) => +k.slice(head.length))
+    .filter((n) => isFinite(n));
+}
+
+/**
+ * The progress of `fromHash` copied onto the files of `toHash` (`map`: from id to id, null skipped) where it is newer
+ * than what is there; the times stay. Returns how many were copied.
+ */
+export function carryProgress(fromHash: string, toHash: string, map: { [fromId: number]: number | null }): number {
+  let n = 0;
+  localFileIds(fromHash).forEach((id) => {
+    const to = map[id];
+    if (to === null || to === undefined) return;
+    const src = local[key(fromHash, id)];
+    const dst = local[key(toHash, to)];
+    if (dst && (dst.updated || 0) >= (src.updated || 0)) return;
+    local[key(toHash, to)] = { time: src.time, duration: src.duration, updated: src.updated };
+    n++;
+  });
+  if (n) persist();
+  return n;
+}
+
 export function clearProgress(hash: string, idx?: number): void {
   if (idx === undefined) {
     Object.keys(local).forEach((k) => { if (k.indexOf(hash + ':') === 0) delete local[k]; });

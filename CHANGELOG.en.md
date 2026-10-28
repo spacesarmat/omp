@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
+
 ## 0.20.6
 
 - «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them

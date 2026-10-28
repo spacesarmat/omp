@@ -8,6 +8,10 @@ import { continueWatching } from '../../../src/store/progress';
 import type { TorrentFile } from '../../../src/lib/episodes';
 import { episodeCopies, isEpisodeFile, seriesSiblings } from '../../../src/lib/episodeProgress';
 import { sharedWatched } from './sharedProgress';
+import type { Torrent } from '../../../src/api/types';
+import { askConfirm } from '../ui/confirm';
+import { nowPlaying } from '../tv/playerLink';
+import { carryWatch, forgetRemoved, pickKeeper } from '../../../src/store/releaseCarry';
 
 /**
  * Where «Смотреть на ТВ» continues: the latest started episode of the torrent, also when it was started in another
@@ -81,4 +85,40 @@ export async function deleteTorrents(c: TorrServerClient, hashes: string[]): Pro
 export function reportDeleted(r: DeleteResult): void {
   if (r.failed.length) showToast(t('library.deleteFailed', { n: r.failed.length }));
   else if (r.deleted.length) showToast(t('library.deletedN', { n: r.deleted.length }));
+}
+
+/**
+ * The trash on a release in «Другая раздача» / «Раздачи (N)»: `tor` goes, what was watched in it moves to the one that
+ * stays first (src/store/releaseCarry). `rows`: the releases of the season (of the film), `current` the one shown now.
+ * The release playing on the TV is never removed; removing the one shown says so and the watching goes on in the one
+ * that stays. Resolves with the one that stays when `tor` was removed, else null (cancelled or failed, said in a toast).
+ */
+export async function deleteRelease(
+  c: TorrServerClient,
+  p: { tor: Torrent; rows: Torrent[]; current: string; season: number; name: (x: Torrent) => string },
+): Promise<Torrent | null> {
+  const playing = nowPlaying.value;
+  if (playing && playing.hash.toLowerCase() === p.tor.hash.toLowerCase()) {
+    showToast(t('series.releaseDeletePlaying'));
+    return null;
+  }
+  const isCurrent = p.tor.hash === p.current;
+  const keeper = isCurrent ? pickKeeper(p.rows, p.tor) : p.rows.filter((r) => r.hash === p.current)[0] || pickKeeper(p.rows, p.tor);
+  if (!keeper) return null;
+  const vars = { name: p.name(p.tor), keeper: p.name(keeper) };
+  const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
+  if (!(await askConfirm(ask, t('common.delete'), { destructive: true, testId: 'PD57' }))) return null;
+  const carried = await carryWatch(c, p.tor, keeper, p.season);
+  if (!carried.ok) {
+    showToast(t('series.releaseCarryFailed'));
+    return null;
+  }
+  const r = await deleteTorrents(c, [p.tor.hash]);
+  if (!r.deleted.length) {
+    reportDeleted(r);
+    return null;
+  }
+  forgetRemoved(p.tor.hash);
+  showToast(t('series.releaseDeleted'));
+  return keeper;
 }

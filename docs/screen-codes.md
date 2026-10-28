@@ -665,6 +665,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D49.1 | Ссылка на постер | Poster link | Поле | Field |
 | D49.2 | Ссылка на постер | Poster link | Сохранить | Save |
 | D49.3 | Ссылка на постер | Poster link | Отмена | Cancel |
+| D50 | Удалить раздачу сезона | Delete a release of the season |  |  |
+| D50.1 | Удалить раздачу сезона | Delete a release of the season | Удалить | Delete |
+| D50.2 | Удалить раздачу сезона | Delete a release of the season | Отмена | Cancel |
 | P01 | Подключение | Connect |  |  |
 | P01.1 | Подключение | Connect | TorrServer на телефоне | TorrServer on the phone |
 | P01.2 | Подключение | Connect | Логин и пароль | Login and password |
@@ -706,6 +709,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P06.2 | Раздача | Release | Раздачи фильма | Releases of the film |
 | P06.3 | Раздача | Release | Смотреть на телефоне | Watch on the phone |
 | P06.4 | Раздача | Release | На ТВ | On the TV |
+| P06.5 | Раздача | Release | Удалить раздачу фильма | Delete a release of the film |
 | P07 | Поиск | Search |  |  |
 | P07.1 | Поиск | Search | Найти | Search |
 | P07.2 | Поиск | Search | Magnet или ссылка | Magnet or link |
@@ -899,7 +903,11 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD54 | Вид и сортировка | View and sort |  |  |
 | PD55 | Другая раздача | Another release |  |  |
 | PD55.1 | Другая раздача | Another release | Найти другую раздачу | Find another release |
+| PD55.2 | Другая раздача | Another release | Удалить раздачу | Delete the release |
 | PD56 | Сменить постер | Change poster |  |  |
+| PD57 | Удалить раздачу из списка | Delete a release from the list |  |  |
+| PD57.1 | Удалить раздачу из списка | Delete a release from the list | Удалить | Delete |
+| PD57.2 | Удалить раздачу из списка | Delete a release from the list | Отмена | Cancel |
 | A01 | Нативный плеер | Native player |  |  |
 | A01.1 | Нативный плеер | Native player | Пауза | Pause |
 | A01.2 | Нативный плеер | Native player | Аудио | Audio |
