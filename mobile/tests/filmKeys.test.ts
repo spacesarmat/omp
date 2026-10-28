@@ -52,6 +52,14 @@ describe('filmKeys: only the names before the year, never tags', () => {
     expect(filmKeys(mk('n1', '1917 / 1917 (2019) BDRip 1080p'))).toEqual(['1917|2019']);
     expect(filmKeys(mk('n2', '2012 (2009) BDRip 1080p'))).toEqual(['2012|2009']);
   });
+
+  it('the first part is the film name even when it looks like a tag; a season or episode word needs a number', () => {
+    expect(filmKeys(mk('c1', 'Cam (2018) BDRip 1080p'))).toEqual(['cam|2018']);
+    for (const p of ['Season of the Witch', 'Episode One', 'Сезон охоты']) expect(isTechPart(p), p).toBe(false);
+    // two releases of «Cam» are still one card
+    const cams = [mk('c4', 'Cam (2018) BDRip 1080p'), mk('c5', 'Cam (2018) WEB-DL 2160p')];
+    expect(filmReleases(cams, cams[0]).map((x) => x.hash)).toEqual(['c4', 'c5']);
+  });
 });
 
 describe('«Мои» film cards with the real library', () => {

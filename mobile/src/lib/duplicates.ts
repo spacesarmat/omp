@@ -57,7 +57,7 @@ export function isTechPart(part: string): boolean {
   if (!words.length) return true;
   if (!/[a-zа-яё]/i.test(part)) return true;
   // «Сезон: 5», «Серии: 1-22 из 22», «S4E1-8 of 8»: a season or episode range is not a name either
-  if (/^\s*(?:сезон|серии|серия|season|episodes?|s\d+e\d+|s\d+\b|e\d+\s+of)/i.test(part)) return true;
+  if (/^\s*(?:(?:сезон|серии|серия|season|episodes?)\s*:?\s*\d|s\d+e\d+|s\d+\b|e\d+\s+of)/i.test(part)) return true;
   return words.every(techWord);
 }
 
@@ -84,9 +84,9 @@ export function filmKeys(tor: Torrent): string[] {
     // «… / 2026 / …»: the names end at the year
     if (i > 0 && /^\s*(?:19|20)\d\d\s*$/.test(part)) break;
     const core = titleCore(part);
-    // a number is a name only first («1917 / 1917», «2012 (2009)»); later it is a part count or a tag
-    const numberTitle = i === 0 && /^\d+$/.test(core);
-    if (!core || (!numberTitle && (isTechPart(part) || isTechPart(core)))) continue;
+    // the first part is always the name, even when it looks like a tag or a number («Cam (2018)», «1917 / 1917»);
+    // later parts that are only tags, numbers or a season range are about the release
+    if (!core || (i > 0 && (isTechPart(part) || isTechPart(core)))) continue;
     const k = libraryKey(core, year);
     if (k && out.indexOf(k) < 0) out.push(k);
   }
