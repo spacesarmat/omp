@@ -175,6 +175,18 @@ export function connectCandidates(input: string): string[] {
   return port && TLS_PORTS.indexOf(port[1]) >= 0 ? [s.url, c.url] : [c.url, s.url];
 }
 
+/**
+ * The typed address cleaned for the field (a full-width colon or a pasted NBSP gone) without changing what is tried:
+ * no default port is added and a typed scheme stays, so pressing Connect again tries the same candidates.
+ */
+export function fieldAddress(input: string): string {
+  const c = checkServerAddress(input);
+  if (!c.ok) return input;
+  if (hasScheme(input)) return c.url;
+  const s = checkServerAddress('https://' + cleanAddressText(input));
+  return s.ok ? s.url.replace(/^https:\/\//, '') : addressForField(c.url);
+}
+
 /** The address as the TV and phone fields show it: without http://. */
 export function addressForField(url: string): string {
   return url.replace(/^http:\/\//i, '');

@@ -12,7 +12,7 @@ import { RenameSheet } from '../ui/RenameSheet';
 import { AddressInput } from '../ui/AddressInput';
 import { servers, serverShown, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
-import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
+import { addressErrorText, checkServerAddress, fieldAddress } from '../../../src/api/serverAddress';
 import { errorMessage } from '../../../src/api/http';
 import {
   discover,
@@ -237,7 +237,7 @@ export function Connect() {
       return;
     }
     // the field shows the cleaned address (a pasted NBSP or a full-width colon is gone)
-    setAddr(addressForField(checked.url));
+    setAddr(fieldAddress(addr));
     // as typed: without a scheme connectServer tries http and https
     void enter({ url: addr, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }

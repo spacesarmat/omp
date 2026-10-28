@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addressErrorText, addressForField, checkServerAddress, cleanAddressText, connectCandidates, hasScheme, showChar } from '../../src/api/serverAddress';
+import { addressErrorText, addressForField, checkServerAddress, cleanAddressText, connectCandidates, fieldAddress, hasScheme, showChar } from '../../src/api/serverAddress';
 import { normalizeServerUrl } from '../../src/api/torrserver';
 import { normalizeIndexerUrl } from '../../src/sources/indexerStore';
 import { normalizeFlareUrl } from '../../src/sources/flareStore';
@@ -122,5 +122,15 @@ describe('https on non-standard ports (issue #193)', () => {
   it('connectCandidates: nothing for a bad address', () => {
     expect(connectCandidates('192.168.1.124;8090')).toEqual([]);
     expect(connectCandidates('ftp://h')).toEqual([]);
+  });
+});
+
+describe('fieldAddress', () => {
+  it('cleans the typed text without adding a port or dropping a typed scheme', () => {
+    expect(fieldAddress('ts.example.com')).toBe('ts.example.com');
+    expect(fieldAddress('１９２．１６８．１．１２４：８０９０')).toBe('192.168.1.124:8090');
+    expect(fieldAddress('https://ts.example.com')).toBe('https://ts.example.com');
+    expect(fieldAddress('http://h:5665/')).toBe('http://h:5665');
+    expect(connectCandidates(fieldAddress('ts.example.com'))).toEqual(connectCandidates('ts.example.com'));
   });
 });

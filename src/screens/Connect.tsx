@@ -13,7 +13,7 @@ import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
 import { nativeVpnState } from '../platform/androidNative';
-import { addressErrorText, addressForField, checkServerAddress, connectCandidates } from '../api/serverAddress';
+import { addressErrorText, checkServerAddress, connectCandidates, fieldAddress } from '../api/serverAddress';
 import { isProbeFailure, probeServer } from '../api/connectProbe';
 import { connectErrorText } from '../api/connectError';
 import { Logo } from '../ui/Logo';
@@ -112,7 +112,7 @@ export function ConnectScreen() {
       return;
     }
     // the field shows what is tried: «１９２．１６８…：８０９０» becomes 192.168.1.124:8090
-    if (address === url) setUrl(addressForField(checked.url));
+    if (address === url) setUrl(fieldAddress(address));
     const my = ++attempt.current;
     // no scheme typed: http and https are both tried (https first on 443 / 8443 / 8091), the one that answers is saved
     const candidates = connectCandidates(address);

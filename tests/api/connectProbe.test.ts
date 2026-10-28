@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { probeServer, retryOtherScheme, isProbeFailure, type ProbeFailure } from '../../src/api/connectProbe';
+import { probeServer, retryOtherScheme, isProbeFailure, isTorrServerVersion, type ProbeFailure } from '../../src/api/connectProbe';
 import { connectErrorText } from '../../src/api/connectError';
 import { apiError } from '../../src/api/http';
 import { nativeTlsProbe, setTlsProbe, certificateRefused, canDetectTls } from '../../src/api/tlsProbe';
@@ -26,6 +26,16 @@ describe('probeServer', () => {
       expect(r.url).toBe('https://h:5665');
       expect(seen).toEqual(['http://h:5665', 'https://h:5665']);
     }
+  });
+
+  it('a web page on the first scheme is not TorrServer: the other one is tried', async () => {
+    const r = await probeServer(['http://h', 'https://h'], (u) => Promise.resolve(u.indexOf('http:') === 0 ? '<!doctype html><html>' : ' MatriX.136\n'));
+    expect(r).toEqual({ url: 'https://h', version: 'MatriX.136' });
+    const f = await fail(probeServer(['http://h:8090'], () => Promise.resolve('<html>router</html>')));
+    expect((f.error as { kind: string }).kind).toBe('parse');
+    expect(isTorrServerVersion('1.2.133')).toBe(true);
+    expect(isTorrServerVersion('')).toBe(false);
+    expect(isTorrServerVersion('{"a":1}')).toBe(false);
   });
 
   it('a timeout or a 401 is not retried: the first error is the answer', async () => {

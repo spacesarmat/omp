@@ -31,13 +31,26 @@ export function isProbeFailure(e: unknown): e is ProbeFailure {
   return !!e && typeof (e as ProbeFailure).url === 'string' && 'error' in (e as object) && typeof (e as ProbeFailure).tls === 'boolean';
 }
 
+/**
+ * TorrServer's /echo answers its version on one short line («MatriX.136», «1.2.133»). A web page (a router's or a
+ * proxy's on the other scheme) is not one, so the next candidate is tried.
+ */
+export function isTorrServerVersion(v: unknown): v is string {
+  return typeof v === 'string' && /^[^\s<>{}"]{1,64}$/.test(v.trim());
+}
+
 /** The candidates in turn; rejects with a ProbeFailure. */
 export function probeServer(candidates: string[], echo: (url: string) => Promise<string>): Promise<ProbeOk> {
   if (!candidates.length) return Promise.reject({ url: '', error: apiError('parse', 'Bad address'), tls: false } as ProbeFailure);
   const failed: { url: string; error: unknown }[] = [];
   const attempt = (i: number): Promise<ProbeOk> =>
     echo(candidates[i]).then(
-      (version) => ({ url: candidates[i], version }),
+      (version) => {
+        if (!isTorrServerVersion(version)) throw apiError('parse', 'Not TorrServer');
+        return { url: candidates[i], version: version.trim() };
+      },
+    ).then(
+      (ok) => ok,
       (error) => {
         failed.push({ url: candidates[i], error });
         if (i + 1 < candidates.length && retryOtherScheme(error)) return attempt(i + 1);
