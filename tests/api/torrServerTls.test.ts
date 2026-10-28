@@ -51,6 +51,29 @@ describe('askTrust', () => {
     expect(n.trusted).toEqual(['ts.lan:8091 ' + FP]);
   });
 
+  it('two servers ask one after the other: the second question does not cancel the first', async () => {
+    const FP2 = 'cd'.repeat(32);
+    const n = fakeNative({
+      inspect: vi.fn((u: string) => Promise.resolve(u.indexOf('b.lan') >= 0
+        ? { state: 'untrusted', hostPort: 'b.lan:8091', fingerprint: FP2 }
+        : { state: 'untrusted', hostPort: 'a.lan:8091', fingerprint: FP })),
+    });
+    let open = 0;
+    let most = 0;
+    setTrustUi(() => {
+      open++;
+      most = Math.max(most, open);
+      return new Promise((r) => setTimeout(() => {
+        open--;
+        r(true);
+      }, 5));
+    });
+    const [a, b] = await Promise.all([askTrust(n, 'https://a.lan:8091/echo'), askTrust(n, 'https://b.lan:8091/echo')]);
+    expect([a, b]).toEqual([true, true]);
+    expect(most).toBe(1);
+    expect(n.trusted).toEqual(['a.lan:8091 ' + FP, 'b.lan:8091 ' + FP2]);
+  });
+
   it('remembers a no for that fingerprint and does not trust', async () => {
     const n = fakeNative();
     const ui = vi.fn(() => Promise.resolve(false));

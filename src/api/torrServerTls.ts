@@ -44,6 +44,8 @@ let ui: TrustUi | null = null;
 /** host:port → the fingerprint the user declined this session (asked again only for another one). */
 const declined: { [hostPort: string]: string } = {};
 const asking: { [key: string]: Promise<boolean> } = {};
+/** One question at a time: a dialog replaces the open one, so a second question must not count as a refusal. */
+let queue: Promise<unknown> = Promise.resolve();
 
 const FP = /^[0-9a-f]{64}$/;
 
@@ -56,6 +58,7 @@ export function setTrustUi(f: TrustUi | null): void {
 export function resetTrustAnswers(): void {
   for (const k of Object.keys(declined)) delete declined[k];
   for (const k of Object.keys(asking)) delete asking[k];
+  queue = Promise.resolve();
 }
 
 function isCertCode(e: unknown): boolean {
@@ -75,7 +78,9 @@ export function askTrust(native: NativeTls, url: string): Promise<boolean> {
     const key = hp + ' ' + fp;
     if (!asking[key]) {
       const q: CertQuestion = { kind: r.state, hostPort: hp, fingerprint: fp, subject: r.subject || '', notAfter: r.notAfter || 0 };
-      asking[key] = show(q)
+      const answer = queue.then(() => show(q));
+      queue = answer.then(undefined, () => undefined);
+      asking[key] = answer
         .then((ok) => {
           if (!ok) {
             declined[hp] = fp;
