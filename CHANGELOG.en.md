@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.6-beta.8
 
+- The built-in TorrServer is updated to MatriX.147.1
 - [phone] «Mine»: different films no longer merge into one card because of a year, quality or tags in the title (Supergirl, Signal One and Minions are separate again); releases of different TMDB films are never grouped, and the «Already in the library» hint is more accurate too
 - [phone] Film screen with several releases: the «Release: ... · Change» line is replaced by a «Releases (N)» block - each release shows its quality, size and seeds, the current one is checked, a tap switches; «Files» below belong to the picked release
 - TorrServer over https on a non-standard port (for example, https://ts.example.com:8443) and behind a reverse proxy with a path: an address without https:// is tried over both http and https (https first on ports 443, 8443 and 8091) and the one that answers is saved; errors and the server list show https://, and a refused certificate is named as such (#193)
