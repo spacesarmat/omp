@@ -103,7 +103,8 @@ export function Setup() {
     }
     setError('');
     setBusy(true);
-    show(await connectServer({ url: checked.url }));
+    // as typed: without a scheme connectServer tries http and https
+    show(await connectServer({ url: raw }));
   }
 
   async function find(): Promise<void> {
@@ -174,7 +175,7 @@ export function Setup() {
           <input
             class="m-input"
             data-setup-address=""
-            placeholder="192.168.1.10:8090"
+            placeholder="192.168.1.10:8090, https://host:8443"
             value={addr}
             onInput={(e) => setAddr((e.target as HTMLInputElement).value)}
           />

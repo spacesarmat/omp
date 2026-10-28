@@ -130,7 +130,8 @@ object NextPreload {
         val scheme = u.scheme?.lowercase() ?: return null
         if (scheme != "http" && scheme != "https") return null
         val path = u.rawPath ?: return null
-        if (!path.startsWith("/stream")) return null
+        // a TorrServer behind a reverse proxy can sit under a path prefix: https://host:8443/ts/stream/...
+        if (!path.split('/').contains("stream")) return null
         val params = (u.rawQuery ?: "").split('&').filter { it.isNotEmpty() }
         if (params.none { it.startsWith("link=") }) return null
         val kept = params.filter { val k = it.substringBefore('='); k != "play" && k != "preload" && k != "stat" }

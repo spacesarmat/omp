@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addressErrorText, addressForField, checkServerAddress, cleanAddressText, showChar } from '../../src/api/serverAddress';
+import { addressErrorText, addressForField, checkServerAddress, cleanAddressText, connectCandidates, hasScheme, showChar } from '../../src/api/serverAddress';
 import { normalizeServerUrl } from '../../src/api/torrserver';
 import { normalizeIndexerUrl } from '../../src/sources/indexerStore';
 import { normalizeFlareUrl } from '../../src/sources/flareStore';
@@ -81,5 +81,46 @@ describe('cleanup helpers', () => {
     expect(normalizeServerUrl('192.168.1.124\uFF1A8090\u00A0')).toBe('http://192.168.1.124:8090');
     expect(normalizeIndexerUrl('http://192.168.1.5\uFF1A9117\u200B')).toBe('http://192.168.1.5:9117');
     expect(normalizeFlareUrl('192.168.1.5\uFF1A8191 ')).toBe('http://192.168.1.5:8191');
+  });
+});
+
+describe('https on non-standard ports (issue #193)', () => {
+  it('a typed https URL keeps its port, the default 443 and a reverse proxy path prefix', () => {
+    expect(url('https://ts.example.com:8443')).toBe('https://ts.example.com:8443');
+    expect(url('https://ts.example.com')).toBe('https://ts.example.com');
+    expect(url('https://ts.example.com:443')).toBe('https://ts.example.com:443');
+    expect(url('https://host:8443/ts/')).toBe('https://host:8443/ts');
+    expect(url('HTTPS://user:p@host:08443/ts')).toBe('https://user:p@host:8443/ts');
+    expect(normalizeServerUrl('https://host:8443/ts/')).toBe('https://host:8443/ts');
+    expect(addressForField('https://host:8443/ts')).toBe('https://host:8443/ts');
+  });
+
+  it('hasScheme: only a typed http:// or https://', () => {
+    expect(hasScheme('https://h:8443')).toBe(true);
+    expect(hasScheme('\u00A0HTTP://h')).toBe(true);
+    expect(hasScheme('h:8443')).toBe(false);
+  });
+
+  it('connectCandidates: a typed scheme alone', () => {
+    expect(connectCandidates('https://ts.example.com:8443')).toEqual(['https://ts.example.com:8443']);
+    expect(connectCandidates('http://192.168.1.191:8090')).toEqual(['http://192.168.1.191:8090']);
+  });
+
+  it('connectCandidates: no scheme on a TLS port (443, 8443, 8091) tries https first', () => {
+    expect(connectCandidates('ts.example.com:8443')).toEqual(['https://ts.example.com:8443', 'http://ts.example.com:8443']);
+    expect(connectCandidates('ts.example.com:443')).toEqual(['https://ts.example.com:443', 'http://ts.example.com:443']);
+    expect(connectCandidates('192.168.1.5:8091')).toEqual(['https://192.168.1.5:8091', 'http://192.168.1.5:8091']);
+    expect(connectCandidates('host:8443/ts/')).toEqual(['https://host:8443/ts', 'http://host:8443/ts']);
+  });
+
+  it('connectCandidates: no scheme elsewhere tries http first; a bare host is 8090, then https on 443', () => {
+    expect(connectCandidates('192.168.1.191:5665')).toEqual(['http://192.168.1.191:5665', 'https://192.168.1.191:5665']);
+    expect(connectCandidates('ts.example.com')).toEqual(['http://ts.example.com:8090', 'https://ts.example.com']);
+    expect(connectCandidates('ts.example.com/ts')).toEqual(['http://ts.example.com:8090/ts', 'https://ts.example.com/ts']);
+  });
+
+  it('connectCandidates: nothing for a bad address', () => {
+    expect(connectCandidates('192.168.1.124;8090')).toEqual([]);
+    expect(connectCandidates('ftp://h')).toEqual([]);
   });
 });

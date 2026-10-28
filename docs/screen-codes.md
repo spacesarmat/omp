@@ -350,6 +350,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S11.76 | Помощь | Help | Как поддержать OMP | How to support OMP |
 | S11.77 | Помощь | Help | Где брать новые версии (Telegram) | Where to get new versions (Telegram) |
 | S11.78 | Помощь | Help | Подписка OMP: Jackett и JacRed | OMP subscription: Jackett and JacRed |
+| S11.79 | Помощь | Help | TorrServer по https и на другом порту | TorrServer over https and on another port |
 | S12 | Телефон | Phone |  |  |
 | S12.1 | Телефон | Phone | Готово | Done |
 | S12.2 | Телефон | Phone | Новый код | New code |

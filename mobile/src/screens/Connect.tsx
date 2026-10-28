@@ -10,7 +10,7 @@ import { attachIfOmpForeground } from '../tv/playerLink';
 import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { AddressInput } from '../ui/AddressInput';
-import { servers, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
+import { servers, serverShown, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
 import { errorMessage } from '../../../src/api/http';
@@ -238,7 +238,8 @@ export function Connect() {
     }
     // the field shows the cleaned address (a pasted NBSP or a full-width colon is gone)
     setAddr(addressForField(checked.url));
-    void enter({ url: checked.url, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
+    // as typed: without a scheme connectServer tries http and https
+    void enter({ url: addr, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }
 
   async function startStopped() {
@@ -393,7 +394,7 @@ export function Connect() {
         <label for="addr">{t('connect.serverAddress')}</label>
         <AddressInput
           id="addr"
-          placeholder="192.168.1.10:8090"
+          placeholder="192.168.1.10:8090, https://host:8443"
           value={addr}
           onChange={setAddr}
           submitLabel={busy ? t('connect.connectingMe') : t('connect.connect')}
@@ -459,7 +460,7 @@ export function Connect() {
                   <span class="m-server-text">
                     <span class="m-server-name">{s.name}</span>
                     <span class="m-muted m-small">
-                      {s.url.replace(/^https?:\/\//, '')} · {statusText(st)}
+                      {serverShown(s.url)} · {statusText(st)}
                     </span>
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />

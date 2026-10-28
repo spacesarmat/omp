@@ -104,7 +104,7 @@ describe('serverLabel', () => {
   it('a server named after its address is shown once; a real name with the address', () => {
     expect(serverLabel({ name: '192.168.1.191:5665', url: 'http://192.168.1.191:5665' })).toBe('192.168.1.191:5665');
     expect(serverLabel({ name: 'http://192.168.1.191:5665/', url: 'http://192.168.1.191:5665' })).toBe('192.168.1.191:5665');
-    expect(serverLabel({ name: '192.168.1.191:5665', url: 'https://192.168.1.191:5665/' })).toBe('192.168.1.191:5665');
+    expect(serverLabel({ name: '192.168.1.191:5665', url: 'https://192.168.1.191:5665/' })).toBe('https://192.168.1.191:5665');
     expect(serverLabel({ name: 'Дом', url: 'http://192.168.1.191:5665' })).toBe('Дом · 192.168.1.191:5665');
     expect(serverLabel({ name: '', url: 'http://10.0.0.2:8090' })).toBe('10.0.0.2:8090');
     expect(serverHost('HTTP://Box.local:8090//')).toBe('Box.local:8090');
