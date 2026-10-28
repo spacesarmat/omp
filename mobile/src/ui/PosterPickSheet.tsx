@@ -181,7 +181,9 @@ export function PosterPickSheet({
           {items.map((x) => (
             <button key={x.kind + x.id} type="button" class="m-art-pick m-pp-item" disabled={busy} onClick={() => openTitle(x)}>
               <img src={x.poster} alt="" />
-              <span class="m-small m-pp-cap">{x.year ? x.title + ' · ' + x.year : x.title}</span>
+              {/* the title may be cut, the year has its own line and always shows (as on the TV) */}
+              <span class="m-small m-pp-cap">{x.title}</span>
+              {x.year ? <span class="m-small m-muted m-pp-year">{x.year}</span> : null}
             </button>
           ))}
         </div>

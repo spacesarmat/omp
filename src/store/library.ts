@@ -153,15 +153,24 @@ const TRIED_KEY = 'tsp.posterTried';
 /** A torrent the background lookup found nothing for is tried again after this long (TMDB gets new films). */
 export const POSTER_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
 const TRIED_MAX = 500;
+/**
+ * The version of the poster search (findPoster). Raise it when the search finds more than before: the marks of the
+ * older search are dropped, so every torrent without a poster is tried once more. 2: «ё» variants and the English
+ * title from the release name (0.20.6-beta.10).
+ */
+export const POSTER_SEARCH_VERSION = 2;
 let filling: Promise<FillResult | null> | null = null;
 
 /**
- * `tsp.posterTried`: when each torrent was last tried, and a fingerprint of the TMDB key it was tried with (a new key
- * tries everything again). The fingerprint is a short hash, never the key. The old format (a list of hashes) counts
- * as tried long ago, so those torrents get one more try.
+ * `tsp.posterTried`: when each torrent was last tried, a fingerprint of the TMDB key it was tried with and the version
+ * of the search (a new key or a newer search tries everything again). The fingerprint is a short hash, never the key.
+ * The old format (a list of hashes) counts as tried long ago, so those torrents get one more try; marks without a
+ * version are of version 1 (0.20.6-beta.9).
  */
 export interface PosterTried {
   key: string;
+  /** POSTER_SEARCH_VERSION of the search that made these marks */
+  v: number;
   at: { [hash: string]: number };
 }
 
@@ -179,7 +188,7 @@ export function tmdbKeyPrint(cfg: TmdbConfig | null | undefined): string {
 export function loadPosterTried(): PosterTried {
   const raw = loadJson<unknown>(TRIED_KEY, null, () => true);
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const o = raw as { key?: unknown; at?: unknown };
+    const o = raw as { key?: unknown; v?: unknown; at?: unknown };
     const at: { [hash: string]: number } = {};
     if (o.at && typeof o.at === 'object') {
       const src = o.at as { [hash: string]: unknown };
@@ -188,24 +197,28 @@ export function loadPosterTried(): PosterTried {
         if (typeof v === 'number' && isFinite(v)) at[h] = v;
       });
     }
-    return { key: typeof o.key === 'string' ? o.key : '', at: at };
+    const v = typeof o.v === 'number' && isFinite(o.v) ? o.v : 1;
+    return { key: typeof o.key === 'string' ? o.key : '', v: v, at: at };
   }
   // 0.20.6-beta.8 and older: the hashes only
   const at: { [hash: string]: number } = {};
   if (Array.isArray(raw)) raw.forEach((h) => { if (typeof h === 'string') at[h] = 0; });
-  return { key: '', at: at };
+  return { key: '', v: 0, at: at };
 }
 
 function savePosterTried(v: PosterTried): void {
   const hashes = Object.keys(v.at).sort((a, b) => v.at[b] - v.at[a]).slice(0, TRIED_MAX);
   const at: { [hash: string]: number } = {};
   hashes.forEach((h) => (at[h] = v.at[h]));
-  saveJson(TRIED_KEY, { key: v.key, at: at });
+  saveJson(TRIED_KEY, { key: v.key, v: v.v, at: at });
 }
 
-/** True when the background lookup should skip `hash`: tried with this key less than POSTER_RETRY_MS ago. */
+/**
+ * True when the background lookup should skip `hash`: tried with this key and this version of the search less than
+ * POSTER_RETRY_MS ago.
+ */
 export function triedRecently(v: PosterTried, key: string, hash: string, now: number): boolean {
-  if (v.key !== key) return false;
+  if (v.key !== key || v.v !== POSTER_SEARCH_VERSION) return false;
   const at = v.at[hash];
   return typeof at === 'number' && at > 0 && now - at < POSTER_RETRY_MS;
 }
@@ -233,7 +246,9 @@ export function autoFillPosters(c: PosterClient, now: () => number = Date.now): 
       if (!cfg || !cfg.APIKey) return { tried: 0, found: 0, hasKey: false };
       const key = tmdbKeyPrint(cfg);
       const stored = loadPosterTried();
-      const tried: PosterTried = stored.key === key ? stored : { key: key, at: {} };
+      // a new key or a newer search: the old marks are dropped, every torrent without a poster gets one more try
+      const tried: PosterTried =
+        stored.key === key && stored.v === POSTER_SEARCH_VERSION ? stored : { key: key, v: POSTER_SEARCH_VERSION, at: {} };
       const start = now();
       return fillPosters(c, torrents.value, {
         cfg: cfg,
