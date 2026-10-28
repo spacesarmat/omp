@@ -565,3 +565,40 @@ describe('Connect screen in English', () => {
     expect(t).not.toMatch(/[А-Яа-яЁё]/);
   });
 });
+
+describe('Connect screen: https on non-standard ports (issue #193)', () => {
+  it('no scheme on 8443: https is tried first and saved', async () => {
+    const f = mockFetch(() => ({ body: 'MatriX.145.1' }));
+    const el = mount();
+    type(el.querySelector<HTMLInputElement>('#addr')!, 'ts.example.com:8443');
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(String(f.mock.calls[0][0])).toBe('https://ts.example.com:8443/echo');
+    expect(activeServer.value?.url).toBe('https://ts.example.com:8443');
+  });
+
+  it('http has no answer: https of the same address is tried and saved with its path prefix', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', (u: string) => {
+      seen.push(u);
+      if (u.indexOf('http://') === 0) return Promise.reject(new TypeError('fail'));
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('MatriX.145.1') });
+    });
+    const el = mount();
+    type(el.querySelector<HTMLInputElement>('#addr')!, 'ts.example.com:5665/ts/');
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(seen).toEqual(['http://ts.example.com:5665/ts/echo', 'https://ts.example.com:5665/ts/echo']);
+    expect(activeServer.value?.url).toBe('https://ts.example.com:5665/ts');
+  });
+
+  it('a typed https address that does not answer keeps https:// in the error', async () => {
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('fail')));
+    const el = mount();
+    type(el.querySelector<HTMLInputElement>('#addr')!, 'https://ts.example.com:8443');
+    await act(async () => btn(el, 'Подключиться').click());
+    await flush();
+    expect(el.querySelector('.m-error')?.textContent).toContain('https://ts.example.com:8443');
+    expect(servers.value).toHaveLength(0);
+  });
+});

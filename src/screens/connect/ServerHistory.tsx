@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../i18n';
-import { servers, activeServerId, SavedServer } from '../../store/servers';
+import { servers, activeServerId, SavedServer, serverShown } from '../../store/servers';
 import { TorrServerClient } from '../../api/torrserver';
 import { DialogBadge, visibleDialogCode } from '../../testmode/badge';
 import { FocusGroup, Focusable, Button } from '../../ui/components';
@@ -46,7 +46,7 @@ export function ServerHistory(p: { onConnect: (s: SavedServer) => void; onEdit: 
                   {s.name}
                   {s.id === active && <span class="hist-current">{t('connect.current')}</span>}
                 </div>
-                <div class="hist-meta">{s.url.replace(/^https?:\/\//, '')} · {st ? st.text : t('connect.checking')}</div>
+                <div class="hist-meta">{serverShown(s.url)} · {st ? st.text : t('connect.checking')}</div>
               </div>
             </Focusable>
             <Button icon="pencil" label={t('connect.edit')} onPress={() => p.onEdit(s)} />

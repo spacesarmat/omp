@@ -7,7 +7,8 @@ import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
-import { nativeSetCleartextHosts } from './platform/androidNative';
+import { nativePlugin, nativeSetCleartextHosts } from './platform/androidNative';
+import { nativeTlsProbe, setTlsProbe } from './api/tlsProbe';
 import { installCleartextSync } from './cleartextSync';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
@@ -26,6 +27,12 @@ init({ debug: false, visualDebug: false });
 
 // The phone page registers saved HTTP hosts itself. This UI is what Android TV loads.
 if (platformKind() === 'androidtv') installCleartextSync((hosts) => nativeSetCleartextHosts(hosts));
+
+// a failed https connect asks the native http whether the certificate was the reason (a page's fetch cannot tell)
+if (platformKind() === 'androidtv') {
+  const p = nativePlugin();
+  if (p) setTlsProbe(nativeTlsProbe((req) => p.http(req)));
+}
 
 installErrorHooks();
 setCatalogProvider((fresh) => tvCatalog(fresh));

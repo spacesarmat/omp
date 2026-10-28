@@ -18,11 +18,15 @@ import { tvState, tvKind, sessionIp } from './tv/tvClient';
 import { native } from './platform/native';
 import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
+import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
   () => tvs.value.map((tv) => tv.ip),
 );
+
+// a failed https connect asks the native http whether the certificate was the reason (a page's fetch cannot tell)
+if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 
 installErrorHooks();
 startKeyboardWatch();

@@ -47,9 +47,15 @@ export function serverHost(url: string): string {
  */
 export function serverLabel(s: { name: string; url: string }): string {
   const host = serverHost(s.url);
+  const shown = serverShown(s.url);
   const name = (s.name || '').trim();
-  if (!name || serverHost(name).toLowerCase() === host.toLowerCase()) return host;
-  return name + ' · ' + host;
+  if (!name || serverHost(name).toLowerCase() === host.toLowerCase()) return shown;
+  return name + ' · ' + shown;
+}
+
+/** The address as lists show it: http:// goes, https:// stays (which one it is matters), no trailing slash. */
+export function serverShown(url: string): string {
+  return (url || '').trim().replace(/^http:\/\//i, '').replace(/\/+$/, '');
 }
 
 export function addServer(input: { name?: string; url: string; user?: string; password?: string }): SavedServer {

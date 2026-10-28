@@ -152,6 +152,41 @@ export function checkServerAddress(input: string): AddressCheck {
   return { ok: true, url: (scheme || 'http') + '://' + userinfo + host + (port ? ':' + port : '') + path };
 }
 
+/** True when the typed address names its scheme (http:// or https://, any case). */
+export function hasScheme(input: string): boolean {
+  return /^https?:\/\//i.test(cleanAddressText(input));
+}
+
+/** Ports a TLS server usually listens on: 443, 8443 (reverse proxies) and 8091 (TorrServer's own HTTPS). */
+const TLS_PORTS = ['443', '8443', '8091'];
+
+/**
+ * The URLs to try for a typed address, best first; [] when it is not an address. A typed scheme is the only one
+ * tried. Without one: http first and https after it, https first on a TLS port. A bare host is http on 8090
+ * (TorrServer's port) and then https on its default port (a reverse proxy).
+ */
+export function connectCandidates(input: string): string[] {
+  const c = checkServerAddress(input);
+  if (!c.ok) return [];
+  if (hasScheme(input)) return [c.url];
+  const s = checkServerAddress('https://' + cleanAddressText(input));
+  if (!s.ok) return [c.url];
+  const port = /^https:\/\/[^/?#]*:(\d+)(?:[/?#]|$)/.exec(s.url);
+  return port && TLS_PORTS.indexOf(port[1]) >= 0 ? [s.url, c.url] : [c.url, s.url];
+}
+
+/**
+ * The typed address cleaned for the field (a full-width colon or a pasted NBSP gone) without changing what is tried:
+ * no default port is added and a typed scheme stays, so pressing Connect again tries the same candidates.
+ */
+export function fieldAddress(input: string): string {
+  const c = checkServerAddress(input);
+  if (!c.ok) return input;
+  if (hasScheme(input)) return c.url;
+  const s = checkServerAddress('https://' + cleanAddressText(input));
+  return s.ok ? s.url.replace(/^https:\/\//, '') : addressForField(c.url);
+}
+
 /** The address as the TV and phone fields show it: without http://. */
 export function addressForField(url: string): string {
   return url.replace(/^http:\/\//i, '');

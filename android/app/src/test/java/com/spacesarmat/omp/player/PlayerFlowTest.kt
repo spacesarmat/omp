@@ -109,11 +109,16 @@ class PlayerFlowTest {
         val plain = NextPreload.request("https://ts.example/stream?link=h&index=0&play&preload&stat")!!
         assertEquals("https://ts.example/stream?link=h&index=0&preload", plain.url)
         assertNull(plain.authorization)
+        // a reverse proxy with a path prefix on a non-standard port
+        val proxied = NextPreload.request("https://u:p@ts.example.com:8443/ts/stream/A.mkv?link=h&index=3&play")!!
+        assertEquals("https://ts.example.com:8443/ts/stream/A.mkv?link=h&index=3&preload", proxied.url)
+        assertEquals("Basic " + java.util.Base64.getEncoder().encodeToString("u:p".toByteArray()), proxied.authorization)
     }
 
     @Test
     fun noPreloadForOtherUrls() {
         assertNull(NextPreload.request("http://h/video.mkv"))
+        assertNull(NextPreload.request("http://h/streams/x?link=h&index=1"))
         assertNull(NextPreload.request("http://h/stream/x?index=1&play"))
         assertNull(NextPreload.request("file:///sdcard/a.mkv"))
         assertNull(NextPreload.request("not a url"))

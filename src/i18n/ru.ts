@@ -1461,6 +1461,10 @@ export const ru = {
     /** The server did not answer: «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт». */
     unreachable: 'Не удалось подключиться к {host} - проверьте адрес и порт',
     unreachableWhy: 'Не удалось подключиться к {host}: {error}',
+    /** https: the handshake failed on the server's certificate (Android tells it; a self-signed one before it is trusted). */
+    certRefused: 'Сертификат сервера {host} не принят - нужен доверенный сертификат (например, Let\'s Encrypt через обратный прокси)',
+    /** https without an answer where a refused certificate cannot be told apart (LG): what a certificate needs. */
+    unreachableHttps: 'Не удалось подключиться к {host} - проверьте адрес и порт. Самоподписанный сертификат здесь не принимается: нужен доверенный (например, Let\'s Encrypt через обратный прокси)',
     /** The typed address still has a character no address can have (a TV keyboard look-alike): it is shown. */
     badChar: 'В адресе есть недопустимый символ: «{char}»',
     badAddress: 'Неверный адрес сервера - пример: 192.168.1.191:8090',
@@ -1473,7 +1477,7 @@ export const ru = {
     history: 'История серверов',
     address: 'Адрес TorrServer',
     addressShort: 'Адрес',
-    addressPlaceholder: 'Например, 192.168.1.191:8090',
+    addressPlaceholder: 'Например, 192.168.1.191:8090 или https://host:8443',
     advanced: 'Дополнительно: логин и пароль',
     connecting: 'Подключение…',
     connect: 'Подключиться',

@@ -999,6 +999,14 @@ export const FAQ_EN: { [id: string]: FaqText } = {
       'TorrServer is downloaded once and stored in the private OMP folder. When a new version is pinned in OMP, “Update” appears in Settings. On Android 10 and newer the server is started through the system loader, on Android 8-9 - directly.',
     ],
   },
+  'ts-https': {
+    q: 'TorrServer over https and on another port',
+    short: [
+      'Type the whole address: https://ts.example.com:8443 or https://ts.example.com/ts (behind a reverse proxy). The port and the path are kept.',
+      'Without https:// OMP tries both: https first on ports 443, 8443 and 8091, http first on the others. The one that answers is saved.',
+      'The server needs a trusted certificate, for example Let\'s Encrypt on a reverse proxy (Caddy, nginx). An LG TV does not accept TorrServer\'s self-signed certificate (port 8091).',
+    ],
+  },
   'ts-settings': {
     q: 'Where the server settings are',
     short: [
