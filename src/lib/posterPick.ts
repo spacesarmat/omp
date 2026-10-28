@@ -6,9 +6,9 @@ import type { CatalogTitle, Kind } from '../catalog/tmdb';
 import { sharpPosterUrl } from '../catalog/tmdb';
 import { yearOf } from '../catalog/library';
 import { hostOf, isLanOrLocal } from '../../mobile/src/cleartextHosts';
-import { titleCore } from './posterSearch';
+import { titleCore, normTitle, yoVariants, latinTitle, sourcesYear } from './posterSearch';
 import { displayTitle } from './torrentName';
-import { attachPoster, posterKind, type PosterClient, type PosterDeps } from './autoPoster';
+import { attachPoster, posterKind, posterSources, type PosterClient, type PosterDeps } from './autoPoster';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { filmReleases } from '../../mobile/src/lib/filmGroups';
 import { t, type Key } from '../i18n';
@@ -47,23 +47,26 @@ export function posterSearchText(tor: Torrent): string {
   return titleCore(name) || name.trim();
 }
 
-/** The year in the torrent's name (0 when none): its candidates of that year come first. */
+/** The year in the torrent's name, else in its other names (0 when none): its candidates of that year come first. */
 export function posterYear(tor: Torrent): number {
-  return yearOf(displayTitle(tor));
+  return yearOf(displayTitle(tor)) || sourcesYear(posterSources(tor));
 }
 
 /**
  * Search results worth showing: with a poster, of the torrent's kind (a film among films, a series among series; all
- * of them when none matches the kind), the same year first, then a year off, then the rest in TMDB's order.
+ * of them when none matches the kind), the same year first, then a year off, then the rest in TMDB's order; within
+ * each, a title equal to `query` (ё read as е) first.
  */
-export function posterCandidates(items: CatalogTitle[], kind: Kind | null, year: number): CatalogTitle[] {
+export function posterCandidates(items: CatalogTitle[], kind: Kind | null, year: number, query?: string): CatalogTitle[] {
   const withPoster = items.filter((x) => !!x.poster && (x.kind === 'movie' || x.kind === 'tv'));
   const ofKind = kind ? withPoster.filter((x) => x.kind === kind) : withPoster;
   const list = ofKind.length ? ofKind : withPoster;
   const rank = (x: CatalogTitle) => (!year || !x.year ? 2 : x.year === year ? 0 : Math.abs(x.year - year) === 1 ? 1 : 2);
+  const q = normTitle(query || '');
+  const named = (x: CatalogTitle) => (q && (normTitle(x.title) === q || normTitle(x.original || '') === q) ? 0 : 1);
   return list
-    .map((x, i) => ({ x: x, i: i, r: rank(x) }))
-    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x, i) => ({ x: x, i: i, r: rank(x), n: named(x) }))
+    .sort((a, b) => a.r - b.r || a.n - b.n || a.i - b.i)
     .map((o) => o.x)
     .slice(0, CANDIDATES_MAX);
 }
@@ -189,13 +192,38 @@ export function posterTargets(list: Torrent[], tor: Torrent): Torrent[] {
   return [tor].concat(all.filter((x) => x.hash !== tor.hash));
 }
 
-/** TMDB titles for the picker: the catalog's search, filtered and ordered for `tor` (posterCandidates). */
-export function searchCandidates(query: string, tor: Torrent): Promise<CatalogTitle[]> {
+/**
+ * The searches for the picker: the query, its «ё» variants («Супергерл» finds «Супергёрл»), and, while the query is
+ * still the torrent's own title, the English title from the torrent's names («Supergirl / 2026», «Supergirl.2026...»).
+ */
+export function pickerQueries(query: string, tor: Torrent): string[] {
   const q = query.trim();
-  if (!q) return Promise.resolve([]);
-  return activeCatalog()
-    .then((cat) => cat.search(q, 1))
-    .then((r) => posterCandidates(r.items, pickerKind(tor), posterYear(tor)));
+  if (!q) return [];
+  const out = [q].concat(yoVariants(q));
+  if (normTitle(q) === normTitle(posterSearchText(tor))) {
+    const latin = latinTitle([displayTitle(tor)].concat(posterSources(tor)));
+    if (latin && out.map(normTitle).indexOf(normTitle(latin)) < 0) out.push(latin);
+  }
+  return out;
+}
+
+/**
+ * TMDB titles for the picker: the catalog's search, filtered and ordered for `tor` (posterCandidates). When a search
+ * shows nothing, the next of pickerQueries is tried.
+ */
+export function searchCandidates(query: string, tor: Torrent): Promise<CatalogTitle[]> {
+  const queries = pickerQueries(query, tor);
+  if (!queries.length) return Promise.resolve([]);
+  const kind = pickerKind(tor);
+  const year = posterYear(tor);
+  return activeCatalog().then((cat) => {
+    const step = (i: number): Promise<CatalogTitle[]> =>
+      cat.search(queries[i], 1).then((r) => {
+        const list = posterCandidates(r.items, kind, year, queries[i]);
+        return list.length || i + 1 >= queries.length ? list : step(i + 1);
+      });
+    return step(0);
+  });
 }
 
 /** The part of a TMDB image URL after the size («/abc.jpg»), so the same poster at two sizes is one variant. */

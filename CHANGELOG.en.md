@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] «Change poster»: search result tiles no longer run over each other, the title and year captions show
+- The poster search finds a film even when the release title writes «е» instead of «ё» (for example, «Супергерл» finds «Супергёрл»), and when nothing is found in Russian it searches by the English title from the release name (Supergirl.2026... - «Supergirl», 2026); in the automatic lookup and in «Change poster» on the phone and the TV
+- [tech] Search order: the title, its «ё» variants, the English title; all the typed searches (a film with its year, a series) first, then the multi search; titles are compared with «ё» read as «е»
+
 ## 0.20.6-beta.9
 
 - The built-in TorrServer is updated to MatriX.147.1

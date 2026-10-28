@@ -1,9 +1,8 @@
 import type { Torrent, TmdbConfig } from '../api/types';
 import type { TmdbSettingsRead } from '../api/torrserver';
 import { request } from '../api/http';
-import { posterQuery, tmdbSearchRequest, tmdbTypedSearchRequest, firstPoster, yearPoster } from './posterSearch';
+import { posterQueries, sourcesYear, tmdbSearchRequest, tmdbTypedSearchRequest, firstPoster, yearPoster } from './posterSearch';
 import type { TmdbSource } from '../catalog/localTmdb';
-import { yearOf } from '../catalog/library';
 import { isSeries } from './seriesGroups';
 import { resolveTmdbKey } from '../catalog/resolveTmdb';
 import { TMDB_FALLBACK_KEY } from '../catalog/fallbackKey';
@@ -65,35 +64,53 @@ export function posterKind(t: Torrent | null | undefined): 'movie' | 'tv' | null
 }
 
 /**
- * The poster for a torrent title. A film is looked up among films and matched to the year in its title (the same
- * year, else one off), a series among series (the year only breaks ties); then the multi search as before, which
- * takes its first result with a poster. A failed typed search falls back to the multi one. '' when nothing is found.
+ * Other names of a torrent to search by: its title and its name (the release name, «Supergirl.2026.BDRemux...», often
+ * carries the English title). File names are not used: «movie.mkv» would search for «movie».
+ */
+export function posterSources(t: Torrent | null | undefined): string[] {
+  if (!t) return [];
+  return [t.title || '', t.name || ''].filter(Boolean);
+}
+
+/**
+ * The poster for a torrent title. The searches (posterQueries) are the title proper, its «ё» variants («Супергерл»
+ * finds «Супергёрл»), then the English title from `alt` (the torrent's other names: «Supergirl / 2026»,
+ * «Supergirl.2026.BDRemux...»). A film is looked up among films with each of them in turn and matched to the year
+ * (the same year, else one off), a series among series (the year only breaks ties); then the multi search with each,
+ * which takes its first result with a poster. A failed typed search goes straight to the multi ones; a failed multi
+ * search rejects. '' when nothing is found.
  */
 export function findPoster(
   cfg: TmdbConfig,
   fetchJson: (url: string, headers?: { [name: string]: string }) => Promise<unknown>,
   name: string,
   kind: 'movie' | 'tv' | null,
+  alt: string[] = [],
 ): Promise<string> {
-  const q = posterQuery(name);
-  if (!q) return Promise.resolve('');
+  const queries = posterQueries(name, alt);
+  if (!queries.length) return Promise.resolve('');
+  const year = sourcesYear([name].concat(alt));
   const resultsOf = (r: unknown) => r && (r as { results?: unknown }).results;
-  const multi = () => {
-    const req = tmdbSearchRequest(cfg, q);
-    return fetchJson(req.url, req.headers).then((r) => firstPoster(cfg, resultsOf(r)));
+  const multi = (i: number): Promise<string> => {
+    if (i >= queries.length) return Promise.resolve('');
+    const req = tmdbSearchRequest(cfg, queries[i]);
+    return fetchJson(req.url, req.headers).then((r) => firstPoster(cfg, resultsOf(r)) || multi(i + 1));
   };
-  if (!kind) return multi();
-  const year = yearOf(name);
-  const req = tmdbTypedSearchRequest(cfg, kind, q);
-  return fetchJson(req.url, req.headers)
-    .then(
+  if (!kind) return multi(0);
+  const typed = (i: number): Promise<string> => {
+    if (i >= queries.length) return multi(0);
+    const q = queries[i];
+    const req = tmdbTypedSearchRequest(cfg, kind, q);
+    return fetchJson(req.url, req.headers).then(
       (r) => {
         const list = resultsOf(r);
-        return kind === 'movie' ? yearPoster(cfg, list, year) : yearPoster(cfg, list, year) || firstPoster(cfg, list);
+        const found = kind === 'movie' ? yearPoster(cfg, list, year, q) : yearPoster(cfg, list, year, q) || firstPoster(cfg, list);
+        return found || typed(i + 1);
       },
-      () => '',
-    )
-    .then((found) => found || multi());
+      () => multi(0),
+    );
+  };
+  return typed(0);
 }
 
 /**
@@ -120,7 +137,7 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
         });
       return named(tries).then((got) => {
         if (!got || !got.name) return '';
-        return findPoster(cfg, fetchJson, got.name, posterKind(got.t)).then((poster) => {
+        return findPoster(cfg, fetchJson, got.name, posterKind(got.t), posterSources(got.t)).then((poster) => {
           if (!poster) return '';
           // re-read: the title may have arrived and the user may have set a poster meanwhile
           return getOrNull(c, hash).then((t) => {
