@@ -42,6 +42,15 @@ describe('search fallbacks: ё and the English title', () => {
   it('normTitle reads ё as е and drops case and punctuation', () => {
     expect(normTitle('Супергёрл!')).toBe(normTitle('супергерл'));
     expect(normTitle('Ёлки: 2')).toBe('елки 2');
+    expect(normTitle('Supergirl: Woman of Tomorrow')).toBe('supergirl woman of tomorrow');
+    expect(normTitle('君の名は。')).toBe('君の名は。');
+  });
+
+  it('a title in another script is still searched (its comparison key is not empty)', async () => {
+    expect(posterQueries('君の名は')).toEqual(['君の名は']);
+    expect(posterQueries('Ялла / يلا')).toEqual(['Ялла']);
+    const f = vi.fn(async () => ({ results: [{ poster_path: '/kimi.jpg', release_date: '2016-08-26' }] }));
+    expect(await findPoster(cfg, f, '君の名は', 'movie')).toBe(img('/kimi.jpg'));
   });
 
   it('latinTitle takes the English part of «a / b / year» or of a release name', () => {

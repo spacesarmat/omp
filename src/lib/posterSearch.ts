@@ -33,12 +33,13 @@ export function titleCore(title: string): string {
   return s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').replace(/\s+/g, ' ').trim();
 }
 
-/** A title for comparing: lower case, «ё» read as «е», punctuation and extra spaces dropped. */
+/** A title for comparing: lower case, «ё» read as «е», punctuation and extra spaces dropped (letters of any script kept). */
 export function normTitle(s: string): string {
   return (s || '')
     .toLowerCase()
     .replace(/ё/g, '\u0435')
-    .replace(/[^0-9a-zа-я]+/g, ' ')
+    // spaces and punctuation only: letters of any script (君の名は, Arabic) stay
+    .replace(/[\s!-\/:-@[-`{-~\u00a0-\u00bf\u2010-\u205f]+/g, ' ')
     .trim();
 }
 
@@ -99,7 +100,7 @@ export function posterQueries(primary: string, sources: string[] = []): string[]
   const seen: { [k: string]: boolean } = {};
   const out: string[] = [];
   const add = (q: string, exact?: boolean) => {
-    const k = exact ? q.toLowerCase() : normTitle(q);
+    const k = exact ? q.toLowerCase() : normTitle(q) || q.toLowerCase();
     if (!q || !k || seen[k]) return;
     seen[k] = true;
     out.push(q);
