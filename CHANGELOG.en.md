@@ -4,8 +4,9 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.6-beta.9
 
+- The built-in TorrServer is updated to MatriX.147.1
 - [phone] «Change poster»: the picture button on the release screen is now always there, not only without a poster, and the long-press menu in «Mine» has the same item. Search TMDB by title (films or series of the same year first), pick one of the poster variants, «Paste a link» or «Reset (find automatically)»; a film with several releases gets the poster on all of them
 - [tv] «Change poster» replaces «Another poster»: a poster grid with title search, the poster variants of the picked film or series, a link field and reset; all with the remote, and the poster shows on the phone too
 - The automatic poster lookup is more accurate: a film is looked up among films of its year and a series among series, so a 2026 film no longer gets the poster of a series with the same name. Releases with no poster found are tried again after a week and after the TMDB key changes
@@ -13,7 +14,6 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## 0.20.6-beta.8
 
-- The built-in TorrServer is updated to MatriX.147.1
 - [phone] «Mine»: different films no longer merge into one card because of a year, quality or tags in the title (Supergirl, Signal One and Minions are separate again); releases of different TMDB films are never grouped, and the «Already in the library» hint is more accurate too
 - [phone] Film screen with several releases: the «Release: ... · Change» line is replaced by a «Releases (N)» block - each release shows its quality, size and seeds, the current one is checked, a tap switches; «Files» below belong to the picked release
 - TorrServer over https on a non-standard port (for example, https://ts.example.com:8443) and behind a reverse proxy with a path: an address without https:// is tried over both http and https (https first on ports 443, 8443 and 8091) and the one that answers is saved; errors and the server list show https://, and a refused certificate is named as such (#193)
