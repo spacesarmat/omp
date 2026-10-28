@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] The built-in player is now 2160 Player 0.2.14: the elapsed time no longer clips while the file length is still unknown (buffering in portrait showed "3:2" instead of "3:29")
+
 ## 0.20.6-beta.6
 
 - [phone] Test mode in landscape: row and poster labels no longer cover the filter chips and the bottom tab bar; a row label moves to a free spot, and labels of elements under the tab bar are not drawn
