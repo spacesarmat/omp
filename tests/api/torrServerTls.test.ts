@@ -156,7 +156,9 @@ describe('forgetRemovedServers', () => {
   it('pinKey: host:port of an https URL, 443 by default', () => {
     expect(pinKey('https://TS.lan:8091/x')).toBe('ts.lan:8091');
     expect(pinKey('https://u:p@ts.lan')).toBe('ts.lan:443');
-    expect(pinKey('https://[fe80::1]:8443')).toBe('[fe80::1]:8443');
+    expect(pinKey('https://[fe80::1]:8443')).toBe('fe80::1:8443');
+    expect(pinKey('https://[::FFFF:192.168.1.5]:8443')).toBe('192.168.1.5:8443');
+    expect(pinKey('https://[fe80::1%25wlan0]:8443')).toBe('fe80::1:8443');
     expect(pinKey('http://ts.lan:8091')).toBeNull();
   });
 
@@ -170,6 +172,9 @@ describe('forgetRemovedServers', () => {
     addServer({ url: 'https://other.lan:8443/ts' });
     addServer({ url: '192.168.1.5:8090' });
     removeServer(b.id);
+    const c = addServer({ url: 'https://[::ffff:192.168.1.5]:8443' });
+    addServer({ url: 'https://192.168.1.5:8443' });
+    removeServer(c.id);
     expect(forget).not.toHaveBeenCalled();
     updateServer(a.id, { url: 'https://ts.lan:9443' });
     expect(forget).toHaveBeenCalledWith('ts.lan:8091');

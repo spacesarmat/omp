@@ -118,7 +118,17 @@ export function createTlsTransport(native: NativeTls): HttpTransport {
 export function pinKey(url: string): string | null {
   const m = /^https:\/\/(?:[^@/?#]*@)?(\[[^\]]+\]|[^:/?#]+)(?::(\d+))?(?:[/?#]|$)/i.exec(url);
   if (!m) return null;
-  return m[1].toLowerCase() + ':' + (m[2] ? String(+m[2]) : '443');
+  return pinHost(m[1]) + ':' + (m[2] ? String(+m[2]) : '443');
+}
+
+/** The host as Android keys it (CertPins.normalize): lower case, no brackets or zone, ::ffff:a.b.c.d as a.b.c.d. */
+function pinHost(host: string): string {
+  let h = host.trim().toLowerCase();
+  if (h.charAt(0) === '[' && h.charAt(h.length - 1) === ']') h = h.slice(1, -1);
+  const zone = h.indexOf('%');
+  if (zone >= 0) h = h.slice(0, zone);
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(h);
+  return mapped ? mapped[1] : h;
 }
 
 /** The saved servers' https host:port keys. */
