@@ -5,62 +5,45 @@
 // (the CSS classes of the grid decide there).
 import { useEffect, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
-import { linkStatus } from '../tv/playerLink';
 
-/**
- * One card size of a grid: poster height / width, the tallest caption under the poster, the column gap and the
- * narrowest card (px). The floor wins over the height: with the TV mini-player up on a short phone a whole card may
- * not fit any more, and then the cards stay readable instead of turning into stamps.
- */
-export type CardFit = { aspect: number; caption: number; gap: number; minWidth: number };
+/** One card size of a grid: poster height / width, the tallest caption under the poster, the column gap (px). */
+export type CardFit = { aspect: number; caption: number; gap: number };
 
 /** Free space kept above and below a card that is fully on screen. */
 export const LANDSCAPE_MARGIN = 8;
 /** The biggest size never has fewer cards per row than this in landscape. */
 export const LANDSCAPE_MIN_COLS = 3;
 
-/**
- * The fewest columns of `width` px where a whole card of `fit` is at most `height` px tall (Infinity when even the
- * caption does not fit: the narrowest card decides then).
- */
+/** The fewest columns of `width` px where a whole card of `fit` is at most `height` px tall. */
 export function colsToFit(width: number, height: number, fit: CardFit): number {
   const poster = height - fit.caption - 2 * LANDSCAPE_MARGIN;
-  if (!(width > 0)) return 1;
-  if (!(poster > 0)) return Infinity;
+  if (!(width > 0) || !(poster > 0)) return 1;
   const card = poster / fit.aspect;
   return Math.max(1, Math.ceil((width + fit.gap) / (card + fit.gap) - 1e-6));
 }
 
-/** The most columns of `width` px where a card is still at least `fit.minWidth` px wide (one at least). */
-export function maxCols(width: number, fit: CardFit): number {
-  return Math.max(1, Math.floor((width + fit.gap) / (fit.minWidth + fit.gap) + 1e-6));
-}
-
 /**
  * Columns per card size, biggest size first: the biggest is the fewest columns where its card fits the height (at
- * least LANDSCAPE_MIN_COLS), every smaller size at least one more than the size before it; no size goes past the
- * columns its narrowest card allows (unless that would break the one-more step).
+ * least LANDSCAPE_MIN_COLS), every smaller size at least one more than the size before it.
  */
 export function landscapeCols(width: number, height: number, fits: CardFit[]): number[] {
   const out: number[] = [];
   fits.forEach((fit, i) => {
     const least = i === 0 ? LANDSCAPE_MIN_COLS : out[i - 1] + 1;
-    out.push(Math.max(least, Math.min(colsToFit(width, height, fit), maxCols(width, fit))));
+    out.push(Math.max(least, colsToFit(width, height, fit)));
   });
   return out;
 }
 
 /**
- * The screen's visible height for the grid: from the top inset down to the top of the tab bar, or of the mini-player
- * above it while a TV is linked (it covers the cards too).
+ * The screen's visible height for the grid: from the top inset down to the top of the tab bar. The TV mini-player is
+ * not taken off on purpose (Andy): the columns stay the same whether a TV is linked or not, and the last row scrolls
+ * clear of it.
  */
 function visibleHeight(): number {
-  let bottom = window.innerHeight;
-  for (const sel of ['.m-nav', '.m-mini']) {
-    const node = document.querySelector(sel);
-    const r = node ? node.getBoundingClientRect() : null;
-    if (r && r.height > 0) bottom = Math.min(bottom, r.top);
-  }
+  const nav = document.querySelector('.m-nav');
+  const r = nav ? nav.getBoundingClientRect() : null;
+  const bottom = r && r.height > 0 ? r.top : window.innerHeight;
   const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--m-safe-top')) || 0;
   return bottom - top;
 }
@@ -74,8 +57,6 @@ export type GridBox = { width: number; height: number };
  */
 export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = true): GridBox | null {
   const [box, setBox] = useState<GridBox | null>(null);
-  // the mini-player comes and goes with the TV link: measure again then
-  const mini = linkStatus.value !== 'none';
   useEffect(() => {
     let tallest = { w: 0, h: 0 };
     const measure = () => {
@@ -95,7 +76,7 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
     };
     if (!active) return;
     measure();
-    // the mini-player is drawn by the app shell, maybe after this effect: one more look on the next frame
+    // the tab bar is drawn by the app shell, maybe after this effect: one more look on the next frame
     const raf = requestAnimationFrame(measure);
     // the tab bar gets short in landscape by a media query: measure again once the new layout is in
     const later = () => requestAnimationFrame(measure);
@@ -109,7 +90,7 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
       if (ro) ro.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [ref, active, mini]);
+  }, [ref, active]);
   return box;
 }
 
