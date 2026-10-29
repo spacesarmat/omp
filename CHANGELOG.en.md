@@ -12,7 +12,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] The «Search» tab replaces «Add»: «Mine», «Catalog» and «Sources» in one row, paste a link or magnet right there; «Continue watching» on top of «Mine»
 - TorrServer over https: on a custom port, behind a proxy with a path, and with a self-signed certificate after you confirm its fingerprint
 - The built-in TorrServer is updated to MatriX.147.1
-- [phone] The built-in player is updated to 2160 Player 0.2.14: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut
+- [phone] The built-in player is updated to 2160 Player 0.2.16: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut, and on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only
 - [phone] Offline you get one clear «No internet», and the TV search does not run without Wi-Fi
 - [phone] «History» skips plays that never started (0:00), one episode is one line; in landscape screens no longer go under the system bar
 - [phone] «OMP account» shows «Subscription until ...» right away; different films with similar titles no longer merge in «Mine»
