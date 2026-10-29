@@ -1,6 +1,6 @@
 // Device limit as a composition: base (settings.baseDevices, or the subscription's individual limit) + bonus slots
 // (free; forever or until a date; from promos or the admin) + paid monthly extra slots. Plus device names.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { userPayload } from '../src/adminApi.mjs';
 import { botReply } from '../src/bot.mjs';
 import { grantBonus, removeBonus, setDeviceLimit } from '../src/deviceAdmin.mjs';
@@ -173,7 +173,13 @@ describe('composition', () => {
     expect(say(state, 'Устройства')).toContain(
       'Устройства: 1 из 6 (2 базовых + 1 бонусный (навсегда) + 2 бонусных (до 29.10.2026) + 1 купленный до 18.11.2026)',
     );
-    expect(userPayload(state, f.accountId, {}).subscription.limitText).toBe(limit.text);
+    // userPayload reads the clock itself: pin it to NOW, or the 10-day bonus expires in real time (29.10.2026)
+    vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
+    try {
+      expect(userPayload(state, f.accountId, {}).subscription.limitText).toBe(limit.text);
+    } finally {
+      vi.useRealTimers();
+    }
     // renewal: base + the one paid extra slot; bonus slots are free
     const after = renewalPrice(state, sub, NOW);
     expect(after.extras).toBe(1);
