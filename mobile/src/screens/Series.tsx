@@ -19,7 +19,7 @@ import { Poster } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
-import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { deleteRelease, deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { askConfirm } from '../ui/confirm';
 import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
 import { client } from '../../../src/store/servers';
@@ -30,7 +30,7 @@ import { continueWatching, getLocalProgress, progressVersion, serverViewed } fro
 import { libraryTitle } from '../../../src/lib/libraryView';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
-import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
 import { releaseName } from '../lib/duplicates';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
@@ -413,6 +413,26 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   };
   const dead = !!main && isDeadRelease(main.hash);
   const canFind = !!main && canUpgrade(main, files);
+  // the trash in «Другая раздача»: the shown one going hands the season over to the one that stays
+  const removeRelease = async (x: Torrent) => {
+    const c = client.value;
+    if (!c || !main) return;
+    const count = rows.length;
+    const keeper = await deleteRelease(c, {
+      tor: x,
+      rows,
+      current: main.hash,
+      season,
+      name: (r) => releaseName(r, card && card.title ? card.title : lead.title),
+    });
+    if (!keeper) return;
+    if (x.hash === main.hash) {
+      pickedRelease.set(pickKey, keeper.hash);
+      setLoadedFiles(null);
+      setEpisode(null);
+    }
+    if (count - 1 < 2) setReleasesOpen(false);
+  };
 
   return (
     <>
@@ -549,6 +569,8 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           }}
           onFind={canFind ? () => setBetter(main) : undefined}
           onClose={() => setReleasesOpen(false)}
+          onDelete={(x) => void removeRelease(x)}
+          canDelete={(x) => rows.length > 1 && onlyThisSeason(group, season, x)}
         />
       )}
       {episode && main && <WatchSheet torrent={main} file={episode} onClose={() => setEpisode(null)} />}

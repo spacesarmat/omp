@@ -1,5 +1,7 @@
 // «Другая раздача» of a series season or a film in «Мои»: its releases in the library, the one shown checked; a tap
-// shows that one instead. «Найти другую раздачу» goes on to the search for a better one.
+// shows that one instead. «Найти другую раздачу» goes on to the search for a better one. With `onDelete` every release
+// that may go has a trash button (what was watched in it moves to one that stays, see deleteRelease).
+import type { VNode } from 'preact';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { t } from '../../../src/i18n';
@@ -11,6 +13,34 @@ import { releaseLine } from '../lib/duplicates';
 
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
+const TRASH = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
+
+/** The trash of a release row (beside the row, never inside its button). */
+function DeleteButton({ tor, code, onDelete }: { tor: Torrent; code?: string; onDelete: (tor: Torrent) => void }) {
+  return (
+    <button
+      type="button"
+      class="m-icon-btn m-rel-del m-danger tm"
+      data-code={code}
+      data-release-delete={tor.hash}
+      aria-label={t('series.releaseDelete') + ': ' + releaseLine(tor)}
+      onClick={() => onDelete(tor)}
+    >
+      <Icon d={TRASH} size={22} />
+    </button>
+  );
+}
+
+/** A release row with its trash beside it when it may go. */
+function withDelete(row: VNode, tor: Torrent, del?: (tor: Torrent) => void, canDelete?: (tor: Torrent) => boolean, code?: string) {
+  if (!del || (canDelete && !canDelete(tor))) return row;
+  return (
+    <div key={tor.hash} class="m-rel-line">
+      {row}
+      <DeleteButton tor={tor} code={code} onDelete={del} />
+    </div>
+  );
+}
 
 export function ReleasesSheet({
   releases,
@@ -18,11 +48,16 @@ export function ReleasesSheet({
   onPick,
   onFind,
   onClose,
+  onDelete,
+  canDelete,
 }: {
   releases: Torrent[];
   /** The hash shown now. */
   current: string;
   onPick: (tor: Torrent) => void;
+  /** The trash of a release (absent: none); `canDelete` false hides it for that one (a pack of several seasons). */
+  onDelete?: (tor: Torrent) => void;
+  canDelete?: (tor: Torrent) => boolean;
   /** «Найти другую раздачу»; omitted when there is nothing to search with. */
   onFind?: () => void;
   onClose: () => void;
@@ -34,7 +69,7 @@ export function ReleasesSheet({
         {releases.map((tor) => {
           const on = tor.hash === current;
           const swarm = knownSwarmText(tor);
-          return (
+          return withDelete(
             <button
               key={tor.hash}
               type="button"
@@ -52,7 +87,11 @@ export function ReleasesSheet({
                 <span class="m-opt-sub">{[shortTitle(displayTitle(tor)), swarm].filter(Boolean).join(' · ')}</span>
               </span>
               {on && <Icon d={CHECK} size={22} />}
-            </button>
+            </button>,
+            tor,
+            onDelete,
+            canDelete,
+            'PD55.2',
           );
         })}
       </div>
@@ -99,7 +138,22 @@ export function ReleaseSwitch({ tor, code, onChange, onMore }: { tor: Torrent; c
  * (when known), the one shown checked; a tap shows that one. The files below are those of the checked release.
  * The release names are shown only when they differ from the checked one («Дюна» next to «Dune»).
  */
-export function ReleasesBlock({ releases, current, code, onPick }: { releases: Torrent[]; current: string; code: string; onPick: (tor: Torrent) => void }) {
+export function ReleasesBlock({
+  releases,
+  current,
+  code,
+  onPick,
+  onDelete,
+  deleteCode,
+}: {
+  releases: Torrent[];
+  current: string;
+  code: string;
+  onPick: (tor: Torrent) => void;
+  /** The trash of a release (absent: none) and its test-mode code. */
+  onDelete?: (tor: Torrent) => void;
+  deleteCode?: string;
+}) {
   const shown = releases.find((x) => x.hash === current);
   const shownName = shown ? shortTitle(displayTitle(shown)) : '';
   const title = t('nav.releasesCount', { n: releases.length });
@@ -111,7 +165,7 @@ export function ReleasesBlock({ releases, current, code, onPick }: { releases: T
           const on = tor.hash === current;
           const name = shortTitle(displayTitle(tor));
           const sub = [name !== shownName ? name : '', knownSwarmText(tor)].filter(Boolean).join(' · ');
-          return (
+          return withDelete(
             <button
               key={tor.hash}
               type="button"
@@ -128,7 +182,11 @@ export function ReleasesBlock({ releases, current, code, onPick }: { releases: T
                 {sub && <span class="m-opt-sub">{sub}</span>}
               </span>
               {on && <Icon d={CHECK} size={22} />}
-            </button>
+            </button>,
+            tor,
+            onDelete,
+            undefined,
+            deleteCode,
           );
         })}
       </div>
