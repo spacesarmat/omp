@@ -9,7 +9,8 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, type DiscoverCols } from './discoverCols';
+import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
+import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 import { usePinchStep } from '../../ui/usePinchStep';
 import {
   discoverQueryKey,
@@ -83,7 +84,10 @@ export function Discover() {
     },
     anchorAttr: 'data-anchor',
   });
-  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
+  const gridClass = discoverGridClass(cols);
+  // landscape: as many posters per row as it takes for a whole tile to fit the screen height
+  const box = useLandscapeBox(rootRef);
+  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height) : null);
 
   useEffect(() => {
     if (home) {
@@ -231,7 +235,7 @@ export function Discover() {
           }}
         />
       ) : !feed ? (
-        <div class={gridClass} aria-busy="true">
+        <div class={gridClass} style={gridStyle} aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (
             <div key={i} class="m-disc-tile m-disc-skel" aria-hidden="true">
               <span class="m-disc-poster" />
@@ -243,7 +247,7 @@ export function Discover() {
         <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>
       ) : (
         <>
-          <div class={gridClass}>
+          <div class={gridClass} style={gridStyle}>
             {feed.items.map((x) => (
               <button
                 key={x.kind + ':' + x.id}

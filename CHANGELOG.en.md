@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] The catalog on its side: a whole card shows, from the poster down to its caption, and a row holds as many cards as fit across. At the biggest size that is 5-6 instead of 2, more at the smaller sizes; «Mine» does the same for large and small tiles. Portrait is unchanged
+- The built-in TorrServer is updated to MatriX.147.2
 - External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes
 - A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
 - [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, the language is ISO 639-2 (rus, eng, ukr, und), forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track from the series dub and the settings, `src/player/externalTracks.ts` is the hand-off stub for 2160 Player (its Intent keys are not published yet)
