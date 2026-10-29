@@ -135,6 +135,31 @@ describe('NowPlaying swipes', () => {
     scrollTo(0);
     expect(el.querySelector('.m-now-edge-top')).not.toBeNull();
     expect(el.querySelector('.m-now-edge-bot')).not.toBeNull();
+    // a short screen: the first screen is taller than the pane, so the room kept for «Серии» is below the fold
+    const fold = el.querySelector('.m-now-fold') as HTMLElement;
+    Object.defineProperty(fold, 'offsetHeight', { configurable: true, get: () => 900 });
+    act(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+    expect(el.querySelector('.m-now-edge-top')).not.toBeNull();
+    expect(el.querySelector('.m-now-edge-bot')).toBeNull();
+  });
+
+  it('the edges are rechecked when the card grows without a scroll (more chapters)', () => {
+    const now = el.querySelector('section[data-pane="now"]') as HTMLElement;
+    let height = 1200;
+    Object.defineProperty(now, 'scrollTop', { configurable: true, get: () => 400 });
+    Object.defineProperty(now, 'clientHeight', { configurable: true, get: () => 800 });
+    Object.defineProperty(now, 'scrollHeight', { configurable: true, get: () => height });
+    act(() => {
+      now.dispatchEvent(new Event('scroll'));
+    });
+    expect(el.querySelector('.m-now-edge-bot')).not.toBeNull();
+    height = 1600;
+    act(() => {
+      nowPlaying.value = { ...nowPlaying.value!, chapters: [{ t: 0, title: 'A' }, { t: 100, title: 'B' }] };
+    });
+    expect(el.querySelector('.m-now-edge-bot')).toBeNull();
   });
 
   it('swipe down reveals the remote from above, swipe up the episodes of the release', async () => {
