@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- Встроенный TorrServer обновлён до MatriX.147.2
+
 ## 0.20.6-beta.11
 
 - [phone] Встроенный плеер обновлён до 2160 Player 0.2.16: у фильмов с главами оставшееся время снова прижато вправо; AVI (XviD/DivX, звук MP3) играет и перематывается с верной длительностью, а если видео нечем декодировать, плеер называет кодек вместо звука без картинки
