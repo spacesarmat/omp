@@ -1872,6 +1872,7 @@ export const ru = {
       notFound: 'Раздача не найдена',
       continueOnTv: 'Продолжить на ТВ · {ep}с {time}',
       episodesHead: 'Серии',
+      episodesNoFiles: 'Файлы раздачи пока не получены - список серий из TMDB',
       /** A muted row after the last episode: «7. Пирамида · выйдет 8 окт.». */
       episodeComes: 'выйдет {date}',
       filesHead: 'Файлы',
@@ -1921,6 +1922,7 @@ export const ru = {
       lowSeedsWarn: 'У раздачи мало сидов - получить её может не получиться',
       seasons: 'сезоны {from}-{to}',
       allSeasons: 'все сезоны',
+      episodesOf: 'серии {from}-{to} из {total}',
       failTimeout: 'Не удалось получить раздачу: TorrServer не дождался данных - возможно, мало сидов. Ваша раздача не тронута.',
       failLogin: 'Сайт не отдал раздачу - нужен вход в {site}. Ваша раздача не тронута.',
       failLink: 'Трекер «{site}» не отдал файл раздачи - попробуйте другую раздачу. Ваша раздача не тронута.',

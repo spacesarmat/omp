@@ -62,6 +62,21 @@ describe('recordWatch', () => {
     expect(JSON.parse(s.sets[0].data).TorrServer).toEqual({ Files: [{ id: 1, path: 'a.mkv', length: 9 }] });
   });
 
+  it('data OMP wrote before the metadata (the tracker seed count) gets the file list too, other keys kept', async () => {
+    const s = fakeServer({ data: JSON.stringify({ omp: { v: 1, h: [], ts: { s: 10, at: T0 } } }), file_stats: [{ id: 1, path: 'S01E01.mkv', length: 9 }] });
+    await recordWatch(s.c, 'h', { f: 1, t: 30, d: 100, src: 'tv' }, T0);
+    const out = JSON.parse(s.sets[0].data);
+    expect(out.TorrServer).toEqual({ Files: [{ id: 1, path: 'S01E01.mkv', length: 9 }] });
+    expect(out.omp.ts).toEqual({ s: 10, at: T0 });
+    expect(out.omp.h).toHaveLength(1);
+  });
+
+  it('a file list already in data is left as it is', async () => {
+    const s = fakeServer({ data: JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'old.mkv', length: 1 }] } }), file_stats: [{ id: 1, path: 'new.mkv', length: 2 }] });
+    await recordWatch(s.c, 'h', { f: 1, t: 30, d: 100, src: 'tv' }, T0);
+    expect(JSON.parse(s.sets[0].data).TorrServer).toEqual({ Files: [{ id: 1, path: 'old.mkv', length: 1 }] });
+  });
+
   it('chains writes of one torrent: each reads the previous result', async () => {
     const s = fakeServer({ data: '{}' });
     const p1 = recordWatch(s.c, 'h', { f: 1, t: 1, d: 9, src: 'tv' }, T0);
