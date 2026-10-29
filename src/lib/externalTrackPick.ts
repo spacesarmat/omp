@@ -84,6 +84,12 @@ export function pickExternalAudio(
   return null;
 }
 
+/** Full (not forced) subtitles in `g`; null when none. */
+function fullInLang(tracks: ExternalTrack[], g: string): string | null {
+  for (let i = 0; i < tracks.length; i++) if (sameLang(tracks[i].lang, g) && !tracks[i].forced) return tracks[i].id;
+  return null;
+}
+
 /** Full subtitles in `g` first, forced ones after. */
 function subInLang(tracks: ExternalTrack[], g: string): string | null {
   let forced: string | null = null;
@@ -107,9 +113,19 @@ export function pickExternalSubtitle(
   if (want) {
     if (want.l) {
       if (embedded && embedded.some((e) => sameDub(dubOf(e), want.l) && langOk(e.language, want.g))) return null;
-      // the same name first («LostFilm · Forced» is not «LostFilm»), then the same studio
+      // the same name first («LostFilm · Forced» is not «LostFilm»), then the same studio, full subtitles first
       for (let i = 0; i < tracks.length; i++) if (normDub(tracks[i].name) === normDub(want.l) && langOk(tracks[i].lang, want.g)) return tracks[i].id;
-      for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), want.l) && langOk(tracks[i].lang, want.g)) return tracks[i].id;
+      let forcedHit: string | null = null;
+      for (let i = 0; i < tracks.length; i++) {
+        if (!sameDub(labelOf(tracks[i]), want.l) || !langOk(tracks[i].lang, want.g)) continue;
+        if (!tracks[i].forced) return tracks[i].id;
+        if (!forcedHit) forcedHit = tracks[i].id;
+      }
+      // only the studio's forced ones here: full subtitles of the language (another studio) are closer to the choice
+      if (forcedHit) {
+        const full = want.g ? fullInLang(tracks, want.g) : null;
+        return full || forcedHit;
+      }
     }
     if (want.g) {
       if (embeddedLang(embedded, want.g, true)) return null;

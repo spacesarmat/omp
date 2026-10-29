@@ -82,6 +82,21 @@ describe('pickExternalSubtitle', () => {
     expect(pickExternalSubtitle(E2.subtitles, rec({ s: { l: 'Forced', g: 'ru' } }), { subLang: 'ru', subtitlesOn: false })).toBeNull();
   });
 
+  it('the studio\'s forced subtitles only: full ones of the language (another studio) first', () => {
+    const files = list([
+      'S/Show.S01E01.mkv', 'S/Show.S01E02.mkv',
+      'S/Rus Subs/LostFilm/Forced/Show.S01E02.srt', 'S/Rus Subs/HDRezka/Show.S01E02.srt',
+      'S/Rus Subs/LostFilm/Forced/Show.S01E01.srt',
+    ]);
+    const r = releaseTracks(files);
+    const s = { subLang: 'ru', subtitlesOn: false };
+    expect(pickExternalSubtitle(r.byVideo[2].subtitles, rec({ s: { l: 'LostFilm', g: 'ru' } }), s)).toBe('s:rus:hdrezka');
+    // the forced ones themselves were chosen: found by their name
+    expect(pickExternalSubtitle(r.byVideo[2].subtitles, rec({ s: { l: 'LostFilm · Forced', g: 'ru' } }), s)).toBe('s:rus:lostfilm:forced');
+    // nothing else in the language: the studio's forced ones
+    expect(pickExternalSubtitle(r.byVideo[1].subtitles, rec({ s: { l: 'LostFilm', g: 'ru' } }), s)).toBe('s:rus:lostfilm:forced');
+  });
+
   it('embedded subtitles in the language leave the choice to the player', () => {
     expect(pickExternalSubtitle(E1.subtitles, null, { subLang: 'ru', subtitlesOn: true }, [{ language: 'ru' }])).toBeNull();
     // forced embedded ones do not count as full subtitles

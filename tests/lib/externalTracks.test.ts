@@ -209,6 +209,32 @@ describe('releaseTracks: review cases', () => {
     expect(audioOf(releaseTracks(files), files, 'S/Show.S01E01.Pilot.1080p.mkv')).toEqual([['a:rus:jaskier', 'Jaskier', 'rus']]);
   });
 
+  it('an episode title after the marker never replaces the studio folder', () => {
+    const files = list([
+      'S/Show.S01E01.1080p.mkv', 'S/Show.S01E02.1080p.mkv',
+      'S/Rus Sound/LostFilm/Show.S01E01.Pilot.mka', 'S/Rus Sound/LostFilm/Show.S01E02.Finale.mka',
+    ]);
+    const r = releaseTracks(files);
+    expect(audioOf(r, files, 'S/Show.S01E01.1080p.mkv')).toEqual([['a:rus:lostfilm', 'LostFilm', 'rus']]);
+    expect(audioOf(r, files, 'S/Show.S01E02.1080p.mkv')).toEqual([['a:rus:lostfilm', 'LostFilm', 'rus']]);
+    expect(externalSummary(files)).toEqual({ dubs: 1, subtitles: false });
+  });
+
+  it('a flags folder below the studio («LostFilm/Forced/») keeps the studio', () => {
+    const files = list([
+      'S/Show.S01E01.mkv', 'S/Show.S01E02.mkv',
+      'S/Rus Subs/LostFilm/Forced/Show.S01E01.srt', 'S/Rus Subs/LostFilm/Full/Show.S01E01.srt', 'S/Rus Subs/HDRezka/Forced/Show.S01E01.srt',
+      'S/Eng Subs/SDH/Show.S01E02.srt',
+    ]);
+    const r = releaseTracks(files);
+    expect(subsOf(r, files, 'S/Show.S01E01.mkv')).toEqual([
+      ['s:rus:hdrezka:forced', 'HDRezka · Forced', 'rus'],
+      ['s:rus:lostfilm:forced', 'LostFilm · Forced', 'rus'],
+      ['s:rus:lostfilm', 'LostFilm', 'rus'],
+    ]);
+    expect(subsOf(r, files, 'S/Show.S01E02.mkv')).toEqual([['s:eng::sdh', 'SDH', 'eng']]);
+  });
+
   it('a film beside a sample or extras keeps its tracks', () => {
     const files: TorrentFile[] = [
       { id: 1, path: 'F/Film.2026.mkv', length: 20e9 },

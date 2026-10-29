@@ -154,16 +154,24 @@ interface FolderInfo {
   studio: string;
   lang: string;
   season: number | null;
+  /** A subtitle folder of flags only («Forced», «Надписи», «SDH»), read apart from the studio. */
+  forced: boolean;
+  sdh: boolean;
 }
+
+/** A subtitle folder that only says what kind of subtitles («Forced», «Full», «SDH», «Полные»). */
+const SUB_FLAG_WORD = /^(?:forced|forsed|надписи|форсированные|форс|signs|full|полные|sdh|cc|hoh)$/i;
 
 /**
  * The folders between the video's folder and the track: the deepest one that names something other than its contents is
  * the studio; language words and season folders say the language and the season.
  */
-function folderInfo(dirs: string[]): FolderInfo {
+function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
   let studio = '';
   let lang = '';
   let season: number | null = null;
+  let forced = false;
+  let sdh = false;
   for (let i = dirs.length - 1; i >= 0; i--) {
     const seg = dirs[i];
     const sn = seasonOfFolder(seg);
@@ -172,6 +180,15 @@ function folderInfo(dirs: string[]): FolderInfo {
       continue;
     }
     const ts = tokens(seg.toLowerCase());
+    // «Rus Subs/LostFilm/Forced/»: the flags, and the studio is looked for further up
+    if (kind === 'subtitle' && ts.length && ts.every((t) => SUB_FLAG_WORD.test(t) || !!langWord(t, true))) {
+      ts.forEach((t) => {
+        if (FORCED.test(t)) forced = true;
+        if (/^(?:sdh|cc|hoh)$/i.test(t)) sdh = true;
+        if (!lang && langWord(t, true)) lang = langWord(t, true);
+      });
+      continue;
+    }
     const langs = ts.map((t) => langWord(t, true)).filter(Boolean);
     const generic = ts.every((t) => !!GENERIC_WORDS[t] || !!langWord(t, true) || /^\d+$/.test(t));
     if (generic) {
@@ -184,7 +201,7 @@ function folderInfo(dirs: string[]): FolderInfo {
       if (!lang && parts.lang) lang = parts.lang;
     }
   }
-  return { studio, lang, season };
+  return { studio, lang, season, forced, sdh };
 }
 
 const FORCED = /^(?:forced|forsed|надписи|форсированные|форс|signs)$/i;
@@ -382,6 +399,11 @@ interface Match {
   video: TorrentFile | null;
   /** What the track's name says after the video's own name; null when the names are not the same. */
   suffix: string | null;
+  /**
+   * The suffix is what follows the episode marker, not the video's own name: it may be an episode title
+   * («Show.S01E01.Pilot.mka»), so a studio folder wins over it.
+   */
+  weak?: true;
 }
 
 function matchVideo(
@@ -447,7 +469,7 @@ function matchVideo(
       found = i;
     }
   }
-  return found >= 0 ? { video: videos[found], suffix: suffixAfterEpisode(name, stripExt(baseName(videos[found].path))) } : { video: null, suffix: null };
+  return found >= 0 ? { video: videos[found], suffix: suffixAfterEpisode(name, stripExt(baseName(videos[found].path))), weak: true } : { video: null, suffix: null };
 }
 
 /** Samples and trailers are no part of the film. */
@@ -498,16 +520,17 @@ function describe(
   matched: TorrentFile | null,
 ): ExternalTrack {
   const below = dirsBelow(file.path, matched ? dirsOf(matched.path) : root);
-  const folder = folderInfo(below);
+  const folder = folderInfo(below, kind);
   const own = match.suffix !== null ? suffixInfo(match.suffix, kind) : nameInfo(stripExt(baseName(file.path)), kind);
   // a subtitle folder may be only flags («Forced», «Full»): no studio then
   const dir = kind === 'subtitle' && folder.studio ? suffixInfo(folder.studio, kind) : null;
   const folderStudio = dir ? dir.studio : folder.studio;
-  // a studio named in the file's own suffix («Show.S01E01.LostFilm.mka») is closer than its folder
-  const studio = own.studio || folderStudio;
+  // a studio named after the video's own name («Show.S01E01.1080p.LostFilm.mka») is closer than its folder; after an
+  // episode marker it may be the episode's title, so the folder wins then
+  const studio = match.weak ? folderStudio || own.studio : own.studio || folderStudio;
   const lang = own.lang || folder.lang || (dir ? dir.lang : '') || guessLang(studio) || 'und';
-  const forced = kind === 'subtitle' && (own.forced || (!!dir && dir.forced));
-  const sdh = kind === 'subtitle' && (own.sdh || (!!dir && dir.sdh));
+  const forced = kind === 'subtitle' && (own.forced || folder.forced || (!!dir && dir.forced));
+  const sdh = kind === 'subtitle' && (own.sdh || folder.sdh || (!!dir && dir.sdh));
   const flags = [forced ? 'Forced' : '', sdh ? 'SDH' : ''].filter(Boolean).join(' ');
   const ext = extOf(file.path);
   const t: ExternalTrack = {
