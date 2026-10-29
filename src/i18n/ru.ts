@@ -427,6 +427,21 @@ export const ru = {
       few: 'Удалить ещё {n} раздачи без сезона?',
       many: 'Удалить ещё {n} раздач без сезона?',
     },
+    // the trash on a release in «Раздачи» (phone and TV): what was watched there moves to a release that stays
+    releaseDelete: 'Удалить раздачу',
+    releaseDeleteAsk: 'Удалить раздачу «{name}»? Отметки просмотра перейдут в «{keeper}».',
+    releaseDeleteCurrentAsk: 'Вы смотрите эту раздачу: «{name}». Удалить её? Просмотр продолжится в «{keeper}», отметки перейдут туда.',
+    releaseDeletePlaying: 'Эта раздача сейчас играет на ТВ. Удалить её можно после остановки.',
+    releaseDeletePack: 'В этой раздаче есть и другие сезоны. Удалить её можно только из «Мои» вместе с ними.',
+    releaseCarryFailed: 'Не удалось перенести отметки просмотра, раздача не удалена',
+    releaseDeleted: 'Раздача удалена',
+    releaseDeleteLossAsk: {
+      one: 'В «{keeper}» нет {n} серии с отметками просмотра, её отметки пропадут. Всё равно удалить?',
+      few: 'В «{keeper}» нет {n} серий с отметками просмотра, их отметки пропадут. Всё равно удалить?',
+      many: 'В «{keeper}» нет {n} серий с отметками просмотра, их отметки пропадут. Всё равно удалить?',
+    },
+    releaseDeleteBusy: 'Подождите, предыдущая раздача ещё удаляется',
+    releasesHintDelete: 'удалить раздачу',
     // the TV series screen
     watchEp: 'Смотреть {code}',
     releasesBtn: 'Раздачи · {n}',

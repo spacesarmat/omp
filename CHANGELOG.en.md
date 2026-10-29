@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
 - [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
 
 ## 0.20.6

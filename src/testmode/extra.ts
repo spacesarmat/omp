@@ -119,6 +119,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P06.2', 'Раздачи фильма', 'Releases of the film'),
       it('P06.3', 'Смотреть на телефоне', 'Watch on the phone'),
       it('P06.4', 'На ТВ', 'On the TV'),
+      it('P06.5', 'Удалить раздачу фильма', 'Delete a release of the film'),
     ],
   },
   {
@@ -355,8 +356,9 @@ export const PHONE_DIALOGS: ExtraDialog[] = [
     ],
   },
   { code: 'PD54', id: 'p-library-view', ru: 'Вид и сортировка', en: 'View and sort', items: [] },
-  { code: 'PD55', id: 'p-releases', ru: 'Другая раздача', en: 'Another release', items: [it('PD55.1', 'Найти другую раздачу', 'Find another release')] },
+  { code: 'PD55', id: 'p-releases', ru: 'Другая раздача', en: 'Another release', items: [it('PD55.1', 'Найти другую раздачу', 'Find another release'), it('PD55.2', 'Удалить раздачу', 'Delete the release')] },
   { code: 'PD56', id: 'p-poster-change', ru: 'Сменить постер', en: 'Change poster', items: [] },
+  confirm('PD57', 'p-confirm-release-delete', 'Удалить раздачу из списка', 'Delete a release from the list', 'Удалить', 'Delete'),
 ];
 
 /** Native Android TV player (PlayerActivity). The shared web UI on the box stays on S / D. */
