@@ -2,6 +2,8 @@
   --m-nav-h: 78px;
   --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
+  /* read by the landscape poster grids (landscapeCols.ts) */
+  --m-safe-top: env(safe-area-inset-top, 0px);
   --bg: #0F1115;
   --panel: #181B22;
   --panel-2: #252A35;
@@ -1907,6 +1909,9 @@ html.m-hint-hold .m-hint { display: none; }
 }
 @media (orientation: landscape) and (max-height: 560px) {
   :root { --m-nav-h: 48px; }
+  /* the poster grids get narrow tiles on their side (landscapeCols.ts): a poster without an image keeps its title small */
+  .m-disc-grid .m-disc-ph { padding: 8px; font-size: 12px; }
+  .m-disc-grid.m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
   .m-nav { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
   .m-nav-item { flex-direction: row; justify-content: center; gap: 6px; padding-top: 0; min-height: 40px; }
   .m-nav-pill { width: 40px; height: 28px; }

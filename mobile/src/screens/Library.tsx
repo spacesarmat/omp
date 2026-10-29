@@ -36,6 +36,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
+import { colsStyle, landscapeCols, useLandscapeBox, type CardFit } from '../ui/landscapeCols';
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
@@ -46,6 +47,15 @@ import { tvFirst, playOnPhone } from '../watchHere';
 import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 
 const POLL_MS = 15000;
+/**
+ * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the tallest caption under it (title, meta
+ * line, the series badge (up to three lines on a narrow card) and, for large, the size line, with their gaps) and the
+ * column gap.
+ */
+export const LIBRARY_FITS: CardFit[] = [
+  { aspect: 240 / 173, caption: 140, gap: 12 },
+  { aspect: 240 / 173, caption: 110, gap: 8 },
+];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;
 const PULL_MAX = 110;
@@ -330,6 +340,11 @@ export function Library() {
     else if (!list.length) empty = t('library.noTorrents');
     else empty = t('catalog.categoryEmpty');
   }
+
+  // landscape: the poster views get as many cards per row as it takes for a whole card to fit the screen height
+  const gridView = mine && (view === 'large' || view === 'small');
+  const box = useLandscapeBox(bodyRef, gridView);
+  const gridStyle = colsStyle(box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : null);
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
@@ -861,7 +876,7 @@ export function Library() {
                 })}
               </div>
             ) : (
-              <div class={'m-grid m-view-' + view}>
+              <div class={'m-grid m-view-' + view} style={gridStyle}>
                 {shown.map((it) => {
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
