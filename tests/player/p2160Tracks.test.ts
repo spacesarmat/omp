@@ -31,6 +31,7 @@ const FILES = list([
   'S/Rus Sound/LostFilm/Show.S01E01.mka',
   'S/Rus Sound/LostFilm/Show.S01E02.mka',
   'S/Rus Subs/Show.S01E01.srt',
+  'S/Rus Sound/HDRezka/Show.S01E01.mka',
 ]);
 const streamUrl = (hash: string, i: number, name = 'file') => 'http://ts:8090/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + i + '&play';
 const S = { audioLang: 'ru', subLang: 'ru', subtitlesOn: false };
@@ -69,14 +70,15 @@ describe('the Intent extras (2160 Player API §3.7)', () => {
     const e = p2160TrackExtras(items, 0);
     const audio = e[P2160_TRACKS.audioTracks] as string[];
     expect(audio.length).toBe(2);
-    expect(JSON.parse(audio[0])).toEqual([
+    expect(JSON.parse(audio[0])).toContainEqual(
       { uri: streamUrl(H, 2, 'Show.S01E01.mka'), id: 'a:rus:lostfilm', language: 'rus', name: 'LostFilm', mime: 'audio/x-matroska' },
-    ]);
+    );
+    expect(JSON.parse(audio[0]).length).toBe(2);
     expect(JSON.parse(audio[1])[0].uri).toContain('index=3');
     const text = e[P2160_TRACKS.textTracks] as string[];
     expect(JSON.parse(text[0])[0]).toEqual({ uri: streamUrl(H, 4, 'Show.S01E01.srt'), id: 's:rus:', language: 'rus', mime: 'application/x-subrip' });
     expect(text[1]).toBe('[]');
-    expect(e[P2160_TRACKS.audioSelect]).toBe('id:a:rus:lostfilm');
+    expect(e[P2160_TRACKS.audioSelect]).toBe('id:' + items[0].startAudio);
     expect(e[P2160_TRACKS.textSelect]).toBe('id:s:rus:');
   });
 
@@ -106,13 +108,25 @@ describe('reading the result', () => {
     expect(p2160TrackResult(null)).toEqual({});
   });
 
-  it('the series patch: external choice, embedded dub, codec-only titles kept out, unchanged parts dropped', () => {
+  it('the series patch: a change by hand, never OMP own pick; codec-only titles out; unchanged parts dropped', () => {
     const items = externalTracksForQueue({ streamUrl }, H, FILES, [0, 1], null, S);
-    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: 'a:rus:lostfilm' }, null)).toEqual({ l: 'LostFilm', g: 'ru' });
-    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: null, audioName: 'HDrezka Studio', audioLang: 'rus' }, null)).toEqual({ l: 'HDrezka Studio', g: 'ru' });
-    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: null, audioName: 'AC3 5.1', audioLang: 'ru' }, null)).toBeNull();
-    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: 'a:rus:lostfilm', subtitleId: 'off' }, { at: 1, l: 'LostFilm', g: 'ru', s: 'off' })).toBeNull();
-    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: 'a:rus:lostfilm', subtitleId: 'off' }, { at: 1, l: 'LostFilm', g: 'ru' })).toEqual({ s: 'off' });
+    const picked = items[0].startAudio as string;
+    const other = items[0].audio.filter((a) => a.id !== picked)[0];
+    // OMP asked for this one (a fallback, say): no new choice
+    expect(seriesPatchFromResult(items, { fileIndex: 0, audioId: picked }, { at: 1, l: 'Kubik', g: 'ru' }, items[0])).toBeNull();
+    expect(seriesPatchFromResult(items, { fileIndex: 0, audioId: other.id }, null, items[0])).toEqual({ l: other.name, g: 'ru' });
+    // the next episode carried the start choice: still OMP own
+    expect(seriesPatchFromResult(items, { fileIndex: 1, audioId: 'a:rus:lostfilm' }, null, items[0])).toBeNull();
+    // embedded after OMP asked for an external dub: by hand
+    expect(seriesPatchFromResult(items, { fileIndex: 0, audioId: null, audioName: 'HDrezka Studio', audioLang: 'rus' }, null, items[0])).toEqual({ l: 'HDrezka Studio', g: 'ru' });
+    expect(seriesPatchFromResult(items, { fileIndex: 0, audioId: null, audioName: 'AC3 5.1', audioLang: 'ru' }, null, items[0])).toBeNull();
+    // nothing external asked: an embedded track may be the player own default
+    const bare = externalTracksForQueue({ streamUrl }, H, list(['a.mkv']), [0], null, S);
+    expect(seriesPatchFromResult(bare, { fileIndex: 0, audioId: null, audioName: 'HDrezka Studio', audioLang: 'ru', subtitleId: 'off' }, null, bare[0])).toBeNull();
+    // subtitles turned off by hand after OMP asked for external ones; unchanged parts dropped
+    const subs = externalTracksForQueue({ streamUrl }, H, FILES, [0, 1], null, { ...S, subtitlesOn: true });
+    expect(seriesPatchFromResult(subs, { fileIndex: 0, audioId: other.id, subtitleId: 'off' }, { at: 1, l: other.name, g: 'ru' }, subs[0])).toEqual({ s: 'off' });
+    expect(seriesPatchFromResult(subs, { fileIndex: 0, subtitleId: 'off' }, { at: 1, s: 'off' }, subs[0])).toBeNull();
   });
 
   it('sanitizeP2160 keeps only the asked result keys with plain values, and is idempotent', () => {
@@ -127,19 +141,21 @@ describe('play2160 with external tracks', () => {
   it('uris carry the credentials, extras and result keys go to the plugin, the start dub is preloaded, the choice is kept', async () => {
     const c = client();
     let sent: any = null;
+    const startId = queueExternalTracks(c as any, queue, S)[0].startAudio;
+    const otherId = startId === 'a:rus:lostfilm' ? 'a:rus:hdrezka' : 'a:rus:lostfilm';
     const plugin = {
       open2160: (o: unknown) => {
         sent = o;
-        return Promise.resolve({ returned: true, positionMs: 600000, durationMs: 2400000, url: queue[1].url, extras: { [P2160_TRACKS.result.audioExternal]: true, [P2160_TRACKS.result.audioId]: 'a:rus:lostfilm' } });
+        return Promise.resolve({ returned: true, positionMs: 600000, durationMs: 2400000, url: queue[0].url, extras: { [P2160_TRACKS.result.audioExternal]: true, [P2160_TRACKS.result.audioId]: otherId } });
       },
     };
     await play2160(plugin, c as any, queue, 0, 0, null, 0);
     expect(sent.resultKeys).toEqual(P2160_RESULT_KEYS);
     const audio = sent.extras[P2160_TRACKS.audioTracks] as string[];
-    expect(JSON.parse(audio[0])[0].uri).toBe('http://u:p@ts:8090/stream/Show.S01E01.mka?link=' + H + '&index=2&play');
-    expect(sent.extras[P2160_TRACKS.audioSelect]).toBe('id:a:rus:lostfilm');
-    expect(c.preloaded).toEqual([2]);
-    expect(remembered).toEqual([{ hash: H, patch: { l: 'LostFilm', g: 'ru' } }]);
+    expect(JSON.parse(audio[0]).map((a: any) => a.uri)).toContain('http://u:p@ts:8090/stream/Show.S01E01.mka?link=' + H + '&index=2&play');
+    expect(sent.extras[P2160_TRACKS.audioSelect]).toBe('id:' + startId);
+    expect(c.preloaded).toEqual([startId === 'a:rus:lostfilm' ? 2 : 5]);
+    expect(remembered).toEqual([{ hash: H, patch: { l: otherId === 'a:rus:lostfilm' ? 'LostFilm' : 'HDRezka', g: 'ru' } }]);
   });
 
   it('a release without external tracks launches as before', async () => {

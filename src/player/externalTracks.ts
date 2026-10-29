@@ -251,10 +251,28 @@ export function seriesPatchFor(chosen: ReturnType<typeof chosenTracks>): SeriesT
 
 /**
  * What to remember for the series from the player's answer: the external choice (seriesPatchFor), else an embedded dub
- * by its title + language and embedded subtitles by title + language. Parts equal to the series' record are dropped,
+ * by its title + language and embedded subtitles by title + language. Only a change by hand counts: a track OMP itself
+ * asked for (`start` = the start item, or the item's own pick) is no new choice, so a fallback dub picked because the
+ * series' one was missing never replaces it; an embedded track counts only when OMP had asked for an external one (or
+ * subtitles off), since otherwise it may be the player's own default. Parts equal to the series' record are dropped,
  * so a plain return writes nothing. null when nothing to keep.
  */
-export function seriesPatchFromResult(items: ExternalTracksForItem[], res: ExternalTracksResult, current: SeriesTracks | null): SeriesTracksPatch | null {
+export function seriesPatchFromResult(
+  items: ExternalTracksForItem[],
+  res: ExternalTracksResult,
+  current: SeriesTracks | null,
+  start?: ExternalTracksForItem,
+): SeriesTracksPatch | null {
+  const chosen = chosenTracks(items, res);
+  const item = chosen ? chosen.item : undefined;
+  const autoAudio = [item ? item.startAudio : null, start ? start.startAudio : null].filter((x): x is string => !!x);
+  const autoSub = [item ? item.startSubtitle : null, start ? start.startSubtitle : null].filter((x): x is string => !!x);
+  const r: ExternalTracksResult = { ...res };
+  if (typeof r.audioId === 'string' && autoAudio.indexOf(r.audioId) >= 0) delete r.audioId;
+  if (r.audioId === null && !autoAudio.length) delete r.audioId;
+  if (typeof r.subtitleId === 'string' && autoSub.indexOf(r.subtitleId) >= 0) delete r.subtitleId;
+  if ((r.subtitleId === null || r.subtitleId === 'off') && !autoSub.length) delete r.subtitleId;
+  res = r;
   const ext = seriesPatchFor(chosenTracks(items, res));
   const patch: { l?: string; g?: string; s?: 'off' | { l: string; g: string } } = ext && ext !== 'reset' ? { ...ext } : {};
   if (patch.l === undefined && res.audioId === null) {

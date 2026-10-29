@@ -166,7 +166,7 @@ const SUB_FLAG_WORD = /^(?:forced|forsed|надписи|форсированны
  * The folders between the video's folder and the track: the deepest one that names something other than its contents is
  * the studio; language words and season folders say the language and the season.
  */
-function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
+function folderInfo(dirs: string[], kind: ExternalKind, videoName = ''): FolderInfo {
   let studio = '';
   let lang = '';
   let season: number | null = null;
@@ -179,9 +179,14 @@ function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
       if (season === null) season = sn;
       continue;
     }
-    // a release or season container («Show.S01.1080p», «Show (2026) WEB-DL 1080p»): no studio
-    if (isContainerFolder(seg)) continue;
-    const ts = tokens(seg.toLowerCase());
+    // a release or season container («Show.S01.1080p», «Show (2026) WEB-DL 1080p»): no studio, but «LostFilm 1080p»
+    // keeps «LostFilm» (the season, resolution, release words and the video's own name words go)
+    let seg2 = seg;
+    if (isContainerFolder(seg)) {
+      seg2 = containerRest(seg, videoName);
+      if (!seg2) continue;
+    }
+    const ts = tokens(seg2.toLowerCase());
     // «Rus Subs/LostFilm/Forced/»: the flags, and the studio is looked for further up
     if (kind === 'subtitle' && ts.length && ts.every((t) => SUB_FLAG_WORD.test(t) || !!langWord(t, true))) {
       ts.forEach((t) => {
@@ -198,12 +203,30 @@ function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
       continue;
     }
     if (!studio) {
-      const parts = splitLang(cleanStudio(seg), true);
+      const parts = splitLang(cleanStudio(seg2), true);
       studio = parts.rest;
       if (!lang && parts.lang) lang = parts.lang;
     }
   }
   return { studio, lang, season, forced, sdh };
+}
+
+const RELEASE_WORD = /^(?:s\d{1,2}|season|сезон|сезона|\d{3,4}[pi]|(?:19|20)\d\d|web|dl|webdl|webrip|bdrip|bdremux|bluray|remux|hdtv|hdrip|dvdrip|uhd|hdr|hdr10|sdr|dv|x264|x265|h264|h265|hevc|avc|\d{1,2})$/i;
+
+/**
+ * What a release / season folder says besides the release itself: its words without the season, resolution, year,
+ * release words and the words of the video's own name («LostFilm 1080p» → «LostFilm», «Show.S01.1080p» → '').
+ */
+function containerRest(seg: string, videoName: string): string {
+  // no video to tell the show's own words from a studio: the folder names the release
+  if (!videoName) return '';
+  const own: { [w: string]: true } = {};
+  tokens(videoName.toLowerCase()).forEach((w) => {
+    own[w] = true;
+  });
+  return tokens(seg)
+    .filter((w) => !RELEASE_WORD.test(w) && !own[w.toLowerCase()])
+    .join(' ');
 }
 
 /** A release or season folder: it names a season («S01», «Season 1», «Сезон 1») or a resolution («1080p», «2160p»). */
@@ -531,7 +554,7 @@ function describe(
   matched: TorrentFile | null,
 ): ExternalTrack {
   const below = dirsBelow(file.path, matched ? dirsOf(matched.path) : root);
-  const folder = folderInfo(below, kind);
+  const folder = folderInfo(below, kind, matched ? stripExt(baseName(matched.path)) : '');
   const own = match.suffix !== null ? suffixInfo(match.suffix, kind) : nameInfo(stripExt(baseName(file.path)), kind);
   // a subtitle folder may be only flags («Forced», «Full»): no studio then
   const dir = kind === 'subtitle' && folder.studio ? suffixInfo(folder.studio, kind) : null;

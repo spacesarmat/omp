@@ -136,12 +136,13 @@ export function preloadStartTracks(c: Pick<TorrServerClient, 'preload' | 'files'
   });
 }
 
-/** Keeps the dub / subtitles the user ended with for the series (nothing when unchanged or for a film). */
-function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefined, queue: PlayItem[], items: ExternalTracksForItem[], r: P2160Result): void {
+/** Keeps the dub / subtitles the user changed to for the series (nothing when unchanged, picked by OMP, or a film). */
+function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefined, queue: PlayItem[], items: ExternalTracksForItem[], r: P2160Result, index: number): void {
   if (!c || !item || !item.hash || item.fileIndex === undefined || !r.extras) return;
   const res = p2160TrackResult(r.extras, item.fileIndex);
   const own = items.filter((x, i) => queue[i] && queue[i].hash === item.hash);
-  const patch = seriesPatchFromResult(own, res, seriesTracksFor(item.hash));
+  const start = queue[index] && queue[index].hash === item.hash ? items[index] : undefined;
+  const patch = seriesPatchFromResult(own, res, seriesTracksFor(item.hash), start);
   if (patch) rememberSeriesTracks(c, item.hash, patch);
 }
 
@@ -264,7 +265,7 @@ export function play2160(
       busy = false;
       const r = sanitizeP2160(raw);
       const saved = saveP2160Result(c, queue, index, r, knownDuration);
-      if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r);
+      if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r, index);
       return saved;
     },
     (e) => {

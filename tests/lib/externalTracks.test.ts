@@ -235,6 +235,21 @@ describe('releaseTracks: review cases', () => {
     expect(externalSummary(files)).toEqual({ dubs: 3, subtitles: false });
   });
 
+  it('a studio folder with a resolution («LostFilm 1080p») keeps the studio', () => {
+    const files = list([
+      'S/Show.S01E01.mkv', 'S/Show.S01E02.mkv',
+      'S/Rus Sound/LostFilm 1080p/Show.S01E01.mka', 'S/Rus Sound/HDRezka 1080p/Show.S01E01.mka',
+      'S/Rus Sound/Show.S01.1080p/Show.S01E02.LostFilm.mka',
+    ]);
+    const r = releaseTracks(files);
+    expect(audioOf(r, files, 'S/Show.S01E01.mkv')).toEqual([
+      ['a:rus:hdrezka', 'HDRezka', 'rus'],
+      ['a:rus:lostfilm', 'LostFilm', 'rus'],
+    ]);
+    expect(audioOf(r, files, 'S/Show.S01E02.mkv')).toEqual([['a:rus:lostfilm', 'LostFilm', 'rus']]);
+    expect(externalSummary(files)).toEqual({ dubs: 2, subtitles: false });
+  });
+
   it('a flags folder below the studio («LostFilm/Forced/») keeps the studio', () => {
     const files = list([
       'S/Show.S01E01.mkv', 'S/Show.S01E02.mkv',
