@@ -193,6 +193,36 @@ describe('carryWatch', () => {
     expect(r2.viewed).toEqual([['c', 2, 0]]);
   });
 
+  it('the server marks are read again: a mark missing from the cache still moves', async () => {
+    serverViewed.value = [];
+    const { c, viewed } = fakeClient([tor('gone', S1), tor('keep', S1_1080)]);
+    c.viewedList = vi.fn(() => Promise.resolve([{ hash: 'gone', file_index: 3 }]));
+    expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(true);
+    expect(viewed).toEqual([['keep', 3, 0]]);
+  });
+
+  it('the server marks can not be read: fails, the release must stay', async () => {
+    const { c, viewed } = fakeClient([tor('gone', S1), tor('keep', S1_1080)]);
+    c.viewedList = vi.fn(() => Promise.reject(new Error('boom')));
+    expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(false);
+    expect(viewed).toEqual([]);
+  });
+
+  it('a watched mark replaces a resume position of the one that stays, never the other way round', async () => {
+    serverViewed.value = [
+      { hash: 'gone', file_index: 1 },
+      { hash: 'keep', file_index: 1, timecode: 300 },
+      { hash: 'gone', file_index: 2, timecode: 200 },
+      { hash: 'keep', file_index: 2 },
+    ];
+    const { c, viewed } = fakeClient([tor('gone', S1), tor('keep', S1_1080)]);
+    expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(true);
+    expect(viewed).toEqual([['keep', 1, 0]]);
+    const k1 = serverViewed.value.filter((e) => e.hash === 'keep' && e.file_index === 1);
+    expect(k1.length).toBe(1);
+    expect(k1[0].timecode || 0).toBe(0);
+  });
+
   it('a server mark that can not be written fails: the release must stay', async () => {
     serverViewed.value = [{ hash: 'gone', file_index: 1 }];
     const { c } = fakeClient([tor('gone', S1), tor('keep', S1_1080)], { failViewed: true });

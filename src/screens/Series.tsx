@@ -402,7 +402,18 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
 
   // the red key in «Раздачи»: what was watched in it moves to the release that stays, then it goes; with two or more
   // left the list opens again for the next one
+  // one delete at a time, from the confirm to the remove: a list opened again meanwhile must not delete the keeper
+  const deleting = useRef(false);
   const removeRelease = async (m: Torrent) => {
+    if (deleting.current) return;
+    deleting.current = true;
+    try {
+      await removeReleaseNow(m);
+    } finally {
+      deleting.current = false;
+    }
+  };
+  const removeReleaseNow = async (m: Torrent) => {
     // the release the season goes on in: the one of the next episode
     const current = target ? target.tor : null;
     const isCurrent = !!current && current.hash === m.hash;

@@ -11,9 +11,9 @@ import { JOURNAL_MAX, parseData, type JournalEntry, type SkipPrefs } from '../li
 import { episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
 import { NO_SEASON } from '../lib/seriesGroups';
 import { afterWrites, rewriteData, type JournalClient } from './journal';
-import { carryProgress, clearProgress, continueWatching, localFileIds, serverViewed, viewedGeneration } from './progress';
+import { carryProgress, clearProgress, continueWatching, localFileIds, MIN_RESUME, serverViewed, viewedGeneration } from './progress';
 
-export type CarryClient = JournalClient & Pick<TorrServerClient, 'loadInfo'> & Partial<Pick<TorrServerClient, 'setViewed'>>;
+export type CarryClient = JournalClient & Pick<TorrServerClient, 'loadInfo'> & Partial<Pick<TorrServerClient, 'setViewed' | 'viewedList'>>;
 
 export type FileMap = { [fromId: number]: number | null };
 
@@ -109,6 +109,28 @@ function filesNow(c: CarryClient, t: Torrent): Promise<TorrentFile[]> {
   );
 }
 
+/** A server mark without a resume position (timecode below MIN_RESUME) means the file was watched. */
+function markWatched(e: ViewedEntry): boolean {
+  return !(e.timecode && e.timecode >= MIN_RESUME);
+}
+
+/**
+ * The server marks of this call, read again from the server: the cache can miss marks saved on another device after
+ * it was loaded (or its load failed). null: the list could not be read, nothing may be removed then. A client without
+ * viewedList (tests) keeps the cache.
+ */
+function viewedNow(c: CarryClient, gen: number): Promise<ViewedEntry[] | null> {
+  if (!c.viewedList) return Promise.resolve(serverViewed.value);
+  return withTimeout(c.viewedList(), INFO_TIMEOUT).then(
+    (list) => {
+      const fresh = Array.isArray(list) ? list : [];
+      if (viewedGeneration() === gen) serverViewed.value = fresh;
+      return fresh;
+    },
+    () => null,
+  );
+}
+
 /**
  * Moves what was watched in `removed` to `keeper` (both of the same season `season`, NO_SEASON for a film).
  * `{ ok: false }`: the history could not be written (the release must then stay). Nothing is removed here.
@@ -118,8 +140,9 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
   // the cache of server marks belongs to the server of this call: another server chosen meanwhile resets it
   const gen = viewedGeneration();
   // a playback write of the release that goes may still be on its way: it must be in what is moved
-  return afterWrites(removed.hash).then(() => c.list()).then(
-    (all) => {
+  return afterWrites(removed.hash).then(() => Promise.all([c.list(), viewedNow(c, gen)])).then(
+    ([all, known]) => {
+      if (!known) return { ok: false } as CarryResult;
       const from = (all || []).filter((x) => !!x && sameHash(x.hash, removed.hash))[0] || removed;
       const to = (all || []).filter((x) => !!x && sameHash(x.hash, keeper.hash))[0];
       if (!to) return { ok: false } as CarryResult;
@@ -127,7 +150,7 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
       const journal = fromParsed ? fromParsed.journal : [];
       const skip: SkipPrefs | null = fromParsed ? fromParsed.skip : null;
       const local = localFileIds(from.hash);
-      const viewed = serverViewed.value.filter((e) => sameHash(e.hash, from.hash));
+      const viewed = known.filter((e) => sameHash(e.hash, from.hash));
       // nothing watched there: nothing to move
       if (!journal.length && !skip && !local.length && !viewed.length) return { ok: true, moved: 0 } as CarryResult;
       return Promise.all([filesNow(c, from), filesNow(c, to)]).then(([ff, tf]) => {
@@ -158,16 +181,27 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
           viewed.forEach((e) => {
             const id = map[e.file_index];
             if (id === null || id === undefined) return;
-            if (serverViewed.value.some((x) => sameHash(x.hash, to.hash) && x.file_index === id)) return;
-            if (marks.some((x) => x.file_index === id)) return;
-            marks.push({ ...e, hash: to.hash, file_index: id });
+            // the keeper's own mark stays, unless it is only a resume position and this one says watched
+            const have = known.filter((x) => sameHash(x.hash, to.hash) && x.file_index === id)[0];
+            if (have && (markWatched(have) || !markWatched(e))) return;
+            const next: ViewedEntry = { ...e, hash: to.hash, file_index: id, timecode: markWatched(e) ? 0 : e.timecode };
+            const dup = marks.filter((x) => x.file_index === id)[0];
+            if (dup) {
+              if (markWatched(next) && !markWatched(dup)) marks[marks.indexOf(dup)] = next;
+              return;
+            }
+            marks.push(next);
           });
           if (!marks.length) return { ok: true, moved: moved + carried.length } as CarryResult;
           if (!c.setViewed) return { ok: false } as CarryResult;
           const set = c.setViewed.bind(c);
           return Promise.all(marks.map((e) => set(e.hash, e.file_index, e.timecode || 0))).then(
             () => {
-              if (viewedGeneration() === gen) serverViewed.value = serverViewed.value.concat(marks);
+              if (viewedGeneration() === gen) {
+                serverViewed.value = serverViewed.value
+                  .filter((x) => !(sameHash(x.hash, to.hash) && marks.some((m) => m.file_index === x.file_index)))
+                  .concat(marks);
+              }
               return { ok: true, moved: moved + carried.length + marks.length } as CarryResult;
             },
             () => ({ ok: false }) as CarryResult,
