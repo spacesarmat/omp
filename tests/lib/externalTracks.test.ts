@@ -220,6 +220,21 @@ describe('releaseTracks: review cases', () => {
     expect(externalSummary(files)).toEqual({ dubs: 1, subtitles: false });
   });
 
+  it('a release or season folder is no studio: the name suffix says it', () => {
+    const files = list([
+      'Video/Show.S01E01.1080p.mkv', 'Video/Show.S01E02.1080p.mkv',
+      'Audio/Show.S01.1080p/Show.S01E01.LostFilm.mka', 'Audio/Show.S01.1080p/Show.S01E01.HDRezka.mka',
+      'Audio/Show (2026) WEB-DL 2160p/NewStudio/Show.S01E02.mka',
+    ]);
+    const r = releaseTracks(files);
+    expect(audioOf(r, files, 'Video/Show.S01E01.1080p.mkv')).toEqual([
+      ['a:rus:hdrezka', 'HDRezka', 'rus'],
+      ['a:rus:lostfilm', 'LostFilm', 'rus'],
+    ]);
+    expect(audioOf(r, files, 'Video/Show.S01E02.1080p.mkv')).toEqual([['a:rus:newstudio', 'NewStudio', 'rus']]);
+    expect(externalSummary(files)).toEqual({ dubs: 3, subtitles: false });
+  });
+
   it('a flags folder below the studio («LostFilm/Forced/») keeps the studio', () => {
     const files = list([
       'S/Show.S01E01.mkv', 'S/Show.S01E02.mkv',

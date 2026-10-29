@@ -179,6 +179,8 @@ function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
       if (season === null) season = sn;
       continue;
     }
+    // a release or season container («Show.S01.1080p», «Show (2026) WEB-DL 1080p»): no studio
+    if (isContainerFolder(seg)) continue;
     const ts = tokens(seg.toLowerCase());
     // «Rus Subs/LostFilm/Forced/»: the flags, and the studio is looked for further up
     if (kind === 'subtitle' && ts.length && ts.every((t) => SUB_FLAG_WORD.test(t) || !!langWord(t, true))) {
@@ -202,6 +204,15 @@ function folderInfo(dirs: string[], kind: ExternalKind): FolderInfo {
     }
   }
   return { studio, lang, season, forced, sdh };
+}
+
+/** A release or season folder: it names a season («S01», «Season 1», «Сезон 1») or a resolution («1080p», «2160p»). */
+function isContainerFolder(seg: string): boolean {
+  return (
+    /(?:^|[^a-z0-9])s\d{1,2}(?:[^0-9e]|$)/i.test(seg) ||
+    /(?:^|[^a-zа-яё])(?:season|сезон)[ ._-]?\d{1,2}/i.test(seg) ||
+    /(?:^|[^0-9])\d{3,4}[pi](?:[^a-z0-9]|$)/i.test(seg)
+  );
 }
 
 const FORCED = /^(?:forced|forsed|надписи|форсированные|форс|signs)$/i;
