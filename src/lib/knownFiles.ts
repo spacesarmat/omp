@@ -36,15 +36,17 @@ function sameFiles(a: TorrentFile[], b: TorrentFile[]): boolean {
   return true;
 }
 
-/** Puts one release first; true when the stored list changed. */
-function put(hash: string, files: TorrentFile[]): boolean {
+/**
+ * Puts one release first; true when the stored list changed. `touch`: an unchanged release moves first too (a release
+ * just opened is not the next to drop out). The list refresh does not touch: its order would change on every refresh.
+ */
+function put(hash: string, files: TorrentFile[], touch: boolean): boolean {
   const h = (hash || '').toLowerCase();
   const f = slim(files || []);
   if (!h || !f.length) return false;
   const all = entries();
   const at = all.findIndex((e) => e.h === h);
-  if (at === 0 && sameFiles(all[0].f, f)) return false;
-  if (at > 0 && sameFiles(all[at].f, f)) return false;
+  if (at >= 0 && sameFiles(all[at].f, f) && (at === 0 || !touch)) return false;
   const rest = all.filter((e) => e.h !== h);
   cache = [{ h, f }].concat(rest).slice(0, KNOWN_FILES_MAX);
   return true;
@@ -60,7 +62,7 @@ export function knownFiles(hash: string | undefined): TorrentFile[] {
 
 /** Remembers the files of a release (a loadInfo answer, a list entry with file_stats). */
 export function rememberFiles(hash: string, files: TorrentFile[] | undefined): void {
-  if (put(hash, files || [])) saveJson(KEY, entries());
+  if (put(hash, files || [], true)) saveJson(KEY, entries());
 }
 
 /** The files kept in a torrent's `data` by TorrServer ({"TorrServer":{"Files":[...]}}); [] when there are none. */
@@ -83,7 +85,7 @@ export function rememberListed(list: { hash: string; data?: string; file_stats?:
   let changed = false;
   (list || []).forEach((t) => {
     if (!t || !t.file_stats || !t.file_stats.length || dataFiles(t.data).length) return;
-    if (put(t.hash, t.file_stats)) changed = true;
+    if (put(t.hash, t.file_stats, false)) changed = true;
   });
   if (changed) saveJson(KEY, entries());
 }

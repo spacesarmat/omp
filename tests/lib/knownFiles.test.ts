@@ -38,6 +38,21 @@ describe('knownFiles', () => {
     expect(knownFiles('h' + KNOWN_FILES_MAX)).toEqual(EPS);
   });
 
+  it('a release opened again moves first and is not the next to drop out', () => {
+    for (let i = 0; i < KNOWN_FILES_MAX; i++) rememberFiles('h' + i, EPS);
+    rememberFiles('h0', EPS);
+    rememberFiles('fresh', EPS);
+    expect(knownFiles('h0')).toEqual(EPS);
+    expect(knownFiles('h1')).toEqual([]);
+  });
+
+  it('the list refresh does not reorder unchanged releases', () => {
+    for (let i = 0; i < KNOWN_FILES_MAX; i++) rememberFiles('h' + i, EPS);
+    rememberListed([{ hash: 'h0', data: '', file_stats: EPS }]);
+    rememberFiles('fresh', EPS);
+    expect(knownFiles('h0')).toEqual([]);
+  });
+
   it('reads a corrupt store as empty', () => {
     localStorage.setItem('omp.knownFiles', '{"x":1}');
     expect(knownFiles('a')).toEqual([]);
