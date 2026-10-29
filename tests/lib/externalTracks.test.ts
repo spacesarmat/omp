@@ -179,6 +179,58 @@ describe('releaseTracks: tracks next to the video', () => {
   });
 });
 
+describe('releaseTracks: review cases', () => {
+  it('a folder with two language words («Rus Eng Studio») does not hang and keeps the first language', () => {
+    const files = list(['F/Film.mkv', 'F/Sound/Rus Eng Studio/Film.mka', 'F/Sound/Studio Eng Rus/x.mka', 'F/Sound/Rus Eng/y.mka']);
+    expect(releaseTracks(files).audio.map((t) => [t.studio, t.lang])).toEqual([
+      ['Studio', 'rus'],
+      ['', 'rus'],
+      ['Studio', 'rus'],
+    ]);
+  });
+
+  it('tracks matched by episode keep the studio of their name suffix', () => {
+    const files = list([
+      'S/Show.S01E01.1080p.mkv', 'S/Show.S01E02.1080p.mkv',
+      'S/Show.S01E01.LostFilm.mka', 'S/Show.S01E01.HDRezka.mka', 'S/Show.S01E02.LostFilm.mka', 'S/Show.S01E02.rus.forced.srt',
+    ]);
+    const r = releaseTracks(files);
+    expect(audioOf(r, files, 'S/Show.S01E01.1080p.mkv')).toEqual([
+      ['a:rus:hdrezka', 'HDRezka', 'rus'],
+      ['a:rus:lostfilm', 'LostFilm', 'rus'],
+    ]);
+    expect(audioOf(r, files, 'S/Show.S01E02.1080p.mkv')).toEqual([['a:rus:lostfilm', 'LostFilm', 'rus']]);
+    expect(subsOf(r, files, 'S/Show.S01E02.1080p.mkv')).toEqual([['s:rus::forced', 'Forced', 'rus']]);
+    expect(externalSummary(files)).toEqual({ dubs: 2, subtitles: true });
+  });
+
+  it('an episode title both names share is no studio', () => {
+    const files = list(['S/Show.S01E01.Pilot.1080p.mkv', 'S/Show.S01E02.Next.1080p.mkv', 'S/Sound/Jaskier/Show.S01E01.Pilot.mka']);
+    expect(audioOf(releaseTracks(files), files, 'S/Show.S01E01.Pilot.1080p.mkv')).toEqual([['a:rus:jaskier', 'Jaskier', 'rus']]);
+  });
+
+  it('a film beside a sample or extras keeps its tracks', () => {
+    const files: TorrentFile[] = [
+      { id: 1, path: 'F/Film.2026.mkv', length: 20e9 },
+      { id: 2, path: 'F/Sample.mkv', length: 1e8 },
+      { id: 3, path: 'F/Subs/Eng/full.srt', length: 1e5 },
+      { id: 4, path: 'F/Sound/LostFilm/track.mka', length: 1e9 },
+    ];
+    const r = releaseTracks(files);
+    expect(r.byVideo[1].subtitles.map((t) => t.file.id)).toEqual([3]);
+    expect(r.byVideo[1].audio.map((t) => t.file.id)).toEqual([4]);
+    expect(r.unmatched).toEqual([]);
+    const extras: TorrentFile[] = [
+      { id: 1, path: 'F/Film.mkv', length: 20e9 },
+      { id: 2, path: 'F/Extras/Making of.mkv', length: 2e9 },
+      { id: 3, path: 'F/Subs/rus.srt', length: 1e5 },
+    ];
+    expect(releaseTracks(extras).byVideo[1].subtitles.map((t) => t.file.id)).toEqual([3]);
+    // a set of episodes has no film: a track that names no episode stays unmatched
+    expect(releaseTracks(list(['S/a.mkv', 'S/b.mkv', 'S/Subs/rus.srt'])).unmatched.length).toBe(1);
+  });
+});
+
 describe('releaseTracks: season packs', () => {
   it('several seasons, the same file names in season folders, studio above or below the season', () => {
     const files = list([

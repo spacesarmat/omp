@@ -138,8 +138,15 @@ function splitLang(text: string, short: boolean): { rest: string; lang: string }
   const words = text.split(/\s+/).filter(Boolean);
   let lang = '';
   const strip = (w: string) => w.replace(/^[[(]+|[\])]+$/g, '');
-  while (words.length > 1 && langWord(strip(words[0]), short)) lang = lang || langWord(strip(words.shift() as string), short);
-  while (words.length > 1 && langWord(strip(words[words.length - 1]), short)) lang = lang || langWord(strip(words.pop() as string), short);
+  // the word goes first, then its language is kept if none yet («Rus Eng Studio» must not loop)
+  while (words.length > 1 && langWord(strip(words[0]), short)) {
+    const found = langWord(strip(words.shift() as string), short);
+    lang = lang || found;
+  }
+  while (words.length > 1 && langWord(strip(words[words.length - 1]), short)) {
+    const found = langWord(strip(words.pop() as string), short);
+    lang = lang || found;
+  }
   return { rest: words.join(' ').replace(/^[\s\-:|,.]+|[\s\-:|,.]+$/g, ''), lang };
 }
 
@@ -247,20 +254,40 @@ function notEpisodeNumber(s: string, next: string): boolean {
  * starts with the number («02. Title», «02»). Years and resolutions («2026», «1080p») never count. null when none.
  */
 export function trackEpisode(name: string): TrackEpisode | null {
-  const n = stripExt(name);
+  const m = episodeMatch(stripExt(name));
+  return m ? m.ep : null;
+}
+
+/** The episode of a name (without its extension) and where its marker ends in the name. */
+function episodeMatch(n: string): { ep: TrackEpisode; end: number } | null {
+  const at = (r: RegExpExecArray, ep: TrackEpisode, extra = 0) => ({ ep, end: r.index + r[0].length - extra });
   let m = /(?:^|[^a-z0-9])s(\d{1,2})[ ._-]?e(\d{1,3})(?!\d)/i.exec(n);
-  if (m) return { season: +m[1], episode: +m[2] };
+  if (m) return at(m, { season: +m[1], episode: +m[2] });
   m = /(?:^|[^0-9])(\d{1,2})x(\d{1,3})(?![0-9p])/i.exec(n);
-  if (m) return { season: +m[1], episode: +m[2] };
+  if (m) return at(m, { season: +m[1], episode: +m[2] });
   m = /(?:^|[^a-zа-яё0-9])(?:e|ep|episode|серия|эпизод|эп)[ ._-]?(\d{1,3})(?![0-9])/i.exec(n);
-  if (m) return { season: null, episode: +m[1] };
+  if (m) return at(m, { season: null, episode: +m[1] });
   m = /(?:^|[^0-9])(\d{1,3})[ ._-]?(?:серия|series|эпизод)(?:[^a-zа-яё]|$)/i.exec(n);
-  if (m) return { season: null, episode: +m[1] };
+  if (m) return at(m, { season: null, episode: +m[1] });
   m = /(?:^|\s)-\s*(\d{1,4})(.?)/.exec(n);
-  if (m && !notEpisodeNumber(m[1], m[2]) && /^(?:|\s|\.|\[|\(|_)$/.test(m[2])) return { season: null, episode: +m[1] };
+  if (m && !notEpisodeNumber(m[1], m[2]) && /^(?:|\s|\.|\[|\(|_)$/.test(m[2])) return at(m, { season: null, episode: +m[1] }, m[2].length);
   m = /^(\d{1,4})(.?)/.exec(n);
-  if (m && !notEpisodeNumber(m[1], m[2]) && /^(?:|\s|\.|_|-|\)|\])$/.test(m[2])) return { season: null, episode: +m[1] };
+  if (m && !notEpisodeNumber(m[1], m[2]) && /^(?:|\s|\.|_|-|\)|\])$/.test(m[2])) return at(m, { season: null, episode: +m[1] }, m[2].length);
   return null;
+}
+
+/**
+ * What a track's name says after its episode marker, without the words the video's own name has
+ * («Show.S01E01.LostFilm» next to «Show.S01E01.1080p» → «LostFilm»; an episode title both share is dropped).
+ */
+function suffixAfterEpisode(trackName: string, videoName: string): string {
+  const m = episodeMatch(trackName);
+  if (!m) return '';
+  const known: { [w: string]: true } = {};
+  tokens(videoName.toLowerCase()).forEach((w) => {
+    known[w] = true;
+  });
+  return tokens(trackName.slice(m.end)).filter((w) => !known[w.toLowerCase()]).join(' ');
 }
 
 /** The season from the folders of a path («Season 2/», «S02/», «Сезон 2/», «Show.S02.1080p/»). */
@@ -363,6 +390,7 @@ function matchVideo(
   bases: string[],
   episodes: (TrackEpisode | null)[],
   seasons: number,
+  main: TorrentFile | null,
 ): Match {
   if (videos.length === 1) {
     const b = bases[0];
@@ -402,8 +430,8 @@ function matchVideo(
     }
   }
   if (hit >= 0) return { video: videos[hit], suffix: '' };
-  // 3. the same episode
-  if (!e) return { video: null, suffix: null };
+  // 3. the same episode; a track that names none belongs to the film when there is one (beside samples or extras)
+  if (!e) return { video: main, suffix: null };
   let found = -1;
   for (let i = 0; i < videos.length; i++) {
     if (!sameEpisode(e, episodes[i], seasons)) continue;
@@ -419,7 +447,29 @@ function matchVideo(
       found = i;
     }
   }
-  return found >= 0 ? { video: videos[found], suffix: null } : { video: null, suffix: null };
+  return found >= 0 ? { video: videos[found], suffix: suffixAfterEpisode(name, stripExt(baseName(videos[found].path))) } : { video: null, suffix: null };
+}
+
+/** Samples and trailers are no part of the film. */
+const SAMPLE = /(?:^|[^a-z])(?:sample|trailer|трейлер)(?:[^a-z]|$)/i;
+const MAIN_SHARE = 0.7;
+
+/**
+ * The film of a release: its only video once samples and trailers are aside, or one video with 70%+ of the videos'
+ * size (a film with extras); null for a set of episodes.
+ */
+export function mainVideo(videos: TorrentFile[]): TorrentFile | null {
+  if (videos.length === 1) return videos[0];
+  const own = videos.filter((v) => !SAMPLE.test(baseName(v.path)));
+  if (own.length === 1) return own[0];
+  const size = (f: TorrentFile) => (typeof f.length === 'number' && f.length > 0 ? f.length : 0);
+  const total = videos.reduce((n, v) => n + size(v), 0);
+  if (!total) return null;
+  let big: TorrentFile | null = null;
+  videos.forEach((v) => {
+    if (size(v) / total >= MAIN_SHARE) big = v;
+  });
+  return big;
 }
 
 function guessLang(studio: string): string {
@@ -502,8 +552,9 @@ export function releaseTracks(files: TorrentFile[]): ReleaseTracks {
   });
   const seasons = Object.keys(seasonSet).length;
   const root = commonDirs(c.videos.map((v) => v.path));
+  const main = mainVideo(c.videos);
   const take = (file: TorrentFile, kind: ExternalKind) => {
-    const m = matchVideo(file, c.videos, bases, episodes, seasons);
+    const m = matchVideo(file, c.videos, bases, episodes, seasons, main);
     const t = describe(file, kind, m, root, m.video);
     (kind === 'audio' ? out.audio : out.subtitles).push(t);
     if (m.video) (kind === 'audio' ? byVideo[m.video.id].audio : byVideo[m.video.id].subtitles).push(t);
