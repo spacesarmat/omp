@@ -49,11 +49,12 @@ import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMa
 const POLL_MS = 15000;
 /**
  * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the tallest caption under it (title, meta
- * line, the series badge (two lines on a narrow card) and, for large, the size line, with their gaps) and the column gap.
+ * line, the series badge (up to three lines on a narrow card) and, for large, the size line, with their gaps), the column
+ * gap and the narrowest card.
  */
 export const LIBRARY_FITS: CardFit[] = [
-  { aspect: 240 / 173, caption: 124, gap: 12 },
-  { aspect: 240 / 173, caption: 96, gap: 8 },
+  { aspect: 240 / 173, caption: 140, gap: 12, minWidth: 96 },
+  { aspect: 240 / 173, caption: 110, gap: 8, minWidth: 80 },
 ];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;

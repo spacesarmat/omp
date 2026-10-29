@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { colsToFit, landscapeCols, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, type CardFit } from '../src/ui/landscapeCols';
+import { colsToFit, landscapeCols, maxCols, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, type CardFit } from '../src/ui/landscapeCols';
 import { DISCOVER_FITS, discoverLandscapeCols, saveDiscoverCols, type DiscoverCols } from '../src/screens/catalog/discoverCols';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
@@ -38,13 +38,18 @@ describe('landscape columns', () => {
     expect(landscapeCols(800 - 32 - 80, 360 - 48 - 24, DISCOVER_FITS)).toEqual([6, 7, 8]);
   });
 
-  it('every size: a whole card fits the height, and one column fewer would not', () => {
+  it('every size: a whole card fits the height (unless that needs cards under the narrowest), and one column fewer would not', () => {
     for (let width = 560; width <= 1400; width += 37) {
       for (let height = 260; height <= 700; height += 23) {
         for (const fits of [DISCOVER_FITS, LIBRARY_FITS]) {
           const cols = landscapeCols(width, height, fits);
           cols.forEach((n, i) => {
-            expect(cardHeight(width, n, fits[i])).toBeLessThanOrEqual(height - 2 * LANDSCAPE_MARGIN + 0.01);
+            if (colsToFit(width, height, fits[i]) <= maxCols(width, fits[i])) {
+              expect(cardHeight(width, n, fits[i])).toBeLessThanOrEqual(height - 2 * LANDSCAPE_MARGIN + 0.01);
+            } else if (i === 0 || n > cols[i - 1] + 1) {
+              // capped: the cards are as narrow as allowed, not narrower
+              expect(n).toBe(Math.max(i === 0 ? LANDSCAPE_MIN_COLS : cols[i - 1] + 1, maxCols(width, fits[i])));
+            }
             if (i > 0) expect(n).toBeGreaterThan(cols[i - 1]);
           });
           const fit0 = colsToFit(width, height, fits[0]);
@@ -61,9 +66,18 @@ describe('landscape columns', () => {
     expect(discoverLandscapeCols(4, 1248, 752)).toBe(5);
   });
 
+  it('a short screen (the TV mini-player up): the cards stop at their narrowest instead of shrinking to stamps', () => {
+    // the S21 with the mini-player: 240px above it
+    expect(landscapeCols(768, 240, DISCOVER_FITS)).toEqual([7, 8, 9]);
+    expect(landscapeCols(768, 240, LIBRARY_FITS)).toEqual([7, 8]);
+    for (const [cols, fits] of [[landscapeCols(768, 240, DISCOVER_FITS), DISCOVER_FITS], [landscapeCols(768, 240, LIBRARY_FITS), LIBRARY_FITS]] as [number[], CardFit[]][]) {
+      cols.forEach((n, i) => expect((768 - fits[i].gap * (n - 1)) / n).toBeGreaterThanOrEqual(fits[i].minWidth));
+    }
+  });
+
   it('a screen too short for any poster still gives a sane number', () => {
-    expect(colsToFit(700, 50, DISCOVER_FITS[0])).toBe(1);
-    expect(landscapeCols(700, 50, DISCOVER_FITS)).toEqual([3, 4, 5]);
+    expect(colsToFit(700, 50, DISCOVER_FITS[0])).toBe(Infinity);
+    expect(landscapeCols(700, 50, DISCOVER_FITS)).toEqual([6, 8, 10]);
     expect(colsToFit(0, 300, DISCOVER_FITS[0])).toBe(1);
   });
 });
@@ -156,6 +170,26 @@ describe('«Обзор» on its side', () => {
     expect(grid().style.gridTemplateColumns).toBe('');
   });
 
+  it('a linked TV: the mini-player above the tab bar is taken off the height too', async () => {
+    windowSize(800, 360, 768);
+    mount(<Discover />);
+    await flush();
+    const bar = (cls: string, top: number, height: number) => {
+      const n = document.createElement('div');
+      n.className = cls;
+      n.getBoundingClientRect = () => ({ top, bottom: top + height, height, left: 0, right: 800, width: 800, x: 0, y: top, toJSON() {} }) as DOMRect;
+      document.body.appendChild(n);
+    };
+    bar('m-nav', 312, 48);
+    bar('m-mini', 240, 64);
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(2, 768, 240)}, minmax(0, 1fr))`);
+    expect(discoverLandscapeCols(2, 768, 240)).toBeGreaterThan(discoverLandscapeCols(2, 768, 312));
+  });
+
   it('the soft keyboard (same width, shorter window) does not shrink the posters', async () => {
     windowSize(800, 360, 768);
     mount(<Discover />);
@@ -212,8 +246,8 @@ describe('«Мои» on its side', () => {
     act(() => updateSettings({ libraryView: 'small' }));
     await flush();
     expect(g().style.gridTemplateColumns).toBe(`repeat(${large[1]}, minmax(0, 1fr))`);
-    // the S21 with its tab bar: 6 large, 7 small (was 2 and 3)
-    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([6, 7]);
+    // the S21 with its tab bar: 7 large, 8 small (was 2 and 3)
+    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([7, 8]);
     act(() => render(null, el));
     windowSize(360, 800, 328);
     updateSettings({ libraryView: 'large' });

@@ -22,12 +22,13 @@ export function saveDiscoverCols(n: DiscoverCols): void {
 
 /**
  * Landscape: a tile per card size, biggest first (the 2, 3 and 4 classes): a 2:3 poster, the tallest caption (two
- * title lines, the meta line and the date line with their gaps) and the column gap of that class.
+ * title lines, the meta line and the date line with their gaps), the column gap of that class and the narrowest tile
+ * (about the portrait tile of the next smaller size).
  */
 export const DISCOVER_FITS: CardFit[] = [
-  { aspect: 1.5, caption: 86, gap: 12 },
-  { aspect: 1.5, caption: 80, gap: 8 },
-  { aspect: 1.5, caption: 62, gap: 6 },
+  { aspect: 1.5, caption: 86, gap: 12, minWidth: 96 },
+  { aspect: 1.5, caption: 80, gap: 8, minWidth: 80 },
+  { aspect: 1.5, caption: 62, gap: 6, minWidth: 64 },
 ];
 
 /** Posters per row in landscape for the chosen size, in a grid `width` px wide with `height` px of screen. */
