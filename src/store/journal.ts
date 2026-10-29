@@ -4,6 +4,7 @@
 import type { Torrent } from '../api/types';
 import { addEntry, parseData, removeFile, serializeData, type JournalEntry, type ParsedData, sanitizeSkip, type SkipPrefs, watchesNewEpisodes, watchesBetterQuality, withQualityWatch, categoryPicked, withCategoryPicked, withCategoryAuto, withWatch, supportOfList, withSupport, journalOf, withTrackerSeeds, trackerSeedsOf } from '../lib/journal';
 import { setCategoryWriter, torrents } from './library';
+import { dataFiles } from '../lib/knownFiles';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 import { t } from '../i18n';
@@ -43,12 +44,18 @@ function patchLibrary(hash: string, data: string): void {
   }
 }
 
-/** Data with an empty `data` seeded by TorrServer's own file list, which it would otherwise add itself later. */
+/**
+ * Data seeded by TorrServer's own file list when it has none: TorrServer adds the list itself only to an empty `data`,
+ * so a release whose `data` OMP wrote before the metadata arrived (the tracker seed count right after adding) would
+ * never get one, and its episodes vanished once TorrServer stopped working on it. The other keys stay.
+ */
 export function baseOf(t: Torrent, parsed: ParsedData): ParsedData {
-  if (t.data && t.data.trim()) return parsed;
   if (!t.file_stats || !t.file_stats.length) return parsed;
+  if (dataFiles(t.data).length) return parsed;
   const files = t.file_stats.map((f) => ({ id: f.id, path: f.path, length: f.length }));
-  return { obj: { TorrServer: { Files: files } }, journal: parsed.journal, skip: parsed.skip };
+  const prev = parsed.obj.TorrServer;
+  const ts = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...(prev as { [k: string]: unknown }), Files: files } : { Files: files };
+  return { obj: { ...parsed.obj, TorrServer: ts }, journal: parsed.journal, skip: parsed.skip };
 }
 
 function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => JournalEntry[]): Promise<void> {

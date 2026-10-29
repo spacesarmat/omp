@@ -2,6 +2,7 @@ import { request, apiError, isApiError, HttpOptions, HttpTransport, transportFet
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
+import { knownFiles, rememberFiles } from '../lib/knownFiles';
 import { t } from '../i18n';
 import { checkServerAddress, cleanAddressText } from './serverAddress';
 
@@ -201,11 +202,18 @@ export class TorrServerClient {
 
   /** Activates the torrent and waits for metadata (file list). */
   loadInfo(hash: string): Promise<Torrent> {
-    return this.call<Torrent>('/stream?link=' + hash + '&stat', { timeoutMs: 60000 });
+    return this.call<Torrent>('/stream?link=' + hash + '&stat', { timeoutMs: 60000 }).then((info) => {
+      // kept on this device: the episodes stay listed when the release stops answering
+      if (info && info.file_stats) rememberFiles(hash, info.file_stats);
+      return info;
+    });
   }
 
+  /** TorrServer's file list, else the one kept in `data`, else the one this device saw last (knownFiles). */
   files(t: Torrent): TorrentFile[] {
-    return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+    if (t.file_stats && t.file_stats.length) return t.file_stats;
+    const own = parseTorrentData(t.data);
+    return own.length ? own : knownFiles(t.hash);
   }
 
   streamUrl(hash: string, fileIndex: number, name = 'file'): string {

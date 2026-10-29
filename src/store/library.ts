@@ -8,6 +8,7 @@ import { displayTitle } from '../lib/torrentName';
 import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
 import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
 import { t } from '../i18n';
+import { rememberListed } from '../lib/knownFiles';
 
 const KEY = 'tsp.torrents';
 const AT_KEY = 'tsp.torrentsAt';
@@ -95,6 +96,8 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
       if (my !== gen) return sorted;
       inflight = null;
       torrents.value = sorted;
+      // the files of the releases TorrServer works on now, for when one stops answering (knownFiles)
+      rememberListed(sorted);
       torrentsAt.value = Date.now();
       saveJson(AT_KEY, torrentsAt.value);
       saveJson(

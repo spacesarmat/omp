@@ -24,6 +24,7 @@ import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
 import { isAudiobookTorrent } from '../../src/lib/audiobookRoute';
 import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
+import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
 import { launchLabel } from './lib/playingNames';
@@ -236,8 +237,11 @@ export async function watchAddedOnPhone(c: TorrServerClient, hash: string): Prom
   return 'played';
 }
 
+/** TorrServer's file list, else the one kept in `data`, else the one this device saw last (a release not answering). */
 export function filesOf(t: Torrent): TorrentFile[] {
-  return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+  if (t.file_stats && t.file_stats.length) return t.file_stats;
+  const own = parseTorrentData(t.data);
+  return own.length ? own : knownFiles(t.hash);
 }
 
 const sameRoute = (a: MRoute, b: MRoute) =>

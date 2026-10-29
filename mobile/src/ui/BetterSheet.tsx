@@ -27,7 +27,7 @@ import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { LibraryTorrent } from '../../../src/monitor/newEpisodes';
-import { coverageNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
+import { coverageNote, episodesNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
 import type { Torrent } from '../../../src/api/types';
 
 export { failureOf };
@@ -40,9 +40,9 @@ function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
-/** «18,2 ГБ · 940 сидов · rutor · сезоны 1-3». */
+/** «18,2 ГБ · 940 сидов · rutor · сезоны 1-3», «15,3 ГБ · 10 сидов · JacRed · S01 · 8 серий». */
 function rowMeta(lib: LibraryTorrent, r: SourceResult): string {
-  return [resultSizeText(r), seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)].filter(Boolean).join(' · ');
+  return [resultSizeText(r), seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r) || episodesNote(lib, r)].filter(Boolean).join(' · ');
 }
 
 /** The cards of the monitoring findings about the replaced torrent go with it. */

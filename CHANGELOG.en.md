@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Series episodes stay listed when a release is not answering: the phone shows the files it has already seen, and for a release never opened the season's episodes from TMDB (not playable). Releases added through OMP now keep their file list on TorrServer
+- [phone] «Find better quality» shows the season and episodes of each series release: «S01 · 8 episodes»
+- [tech] Release files are cached on the device (omp.knownFiles, up to 150 releases); a journal write adds TorrServer.Files to data when TorrServer did not save it (data already held omp.ts)
+
 ## 0.20.6
 
 - «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them

@@ -1,12 +1,13 @@
 // The words of «Найти в лучшем качестве» shared by the phone sheet and the TV dialog: the quality of a release, the
 // seasons a series candidate covers, and why a replace failed. Chromium 53 safe.
-import { t } from '../i18n';
+import { t, tp } from '../i18n';
 import { sourceName } from '../sources/view';
 import type { SourceResult } from '../sources/types';
 import type { LibraryTorrent } from './newEpisodes';
 import { qualityLabel } from './quality';
 import type { ReplaceResult } from './replace';
-import { seasonsCovered } from './upgrade';
+import { seasonsCovered, upgradeKind } from './upgrade';
+import { parseEpisodeRange } from './episodes';
 
 /** «1080p WEB-DL», or «качество не указано». */
 export function qualityOrUnknown(title: string): string {
@@ -18,6 +19,23 @@ export function coverageNote(lib: LibraryTorrent, r: SourceResult): string {
   const s = seasonsCovered(lib, r);
   if (!s) return '';
   return 'all' in s ? t('torrent.better.allSeasons') : t('torrent.better.seasons', { from: s.from, to: s.to });
+}
+
+/**
+ * What a series candidate holds, from its title: «S01 · 8 серий», «S01 · серии 1-6 из 8», «S01». '' for a film, a pack
+ * of seasons (coverageNote says it) or a title without a season.
+ */
+export function episodesNote(lib: LibraryTorrent, r: Pick<SourceResult, 'Title'>): string {
+  if (upgradeKind(lib) !== 'series') return '';
+  const range = parseEpisodeRange(r.Title || '');
+  if (range.season === undefined || range.seasonTo !== undefined) return '';
+  const code = 'S' + (range.season < 10 ? '0' : '') + range.season;
+  if (range.to === undefined) return code;
+  const from = range.from === undefined ? 1 : range.from;
+  if (range.total !== undefined && (from > 1 || range.to < range.total)) {
+    return code + ' · ' + t('torrent.better.episodesOf', { from, to: range.to, total: range.total });
+  }
+  return code + ' · ' + tp('library.episodes', range.to - from + 1);
 }
 
 export interface Failure {

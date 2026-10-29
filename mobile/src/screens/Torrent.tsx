@@ -52,7 +52,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
-import { comingEpisodes, comingEpisodeText, lastEpisodes, realEpisodeName, type ComingEpisode, type EpisodeMap } from '../../../src/lib/episodeNames';
+import { comingEpisodeName, comingEpisodes, comingEpisodeText, lastEpisodes, seasonEpisodeList, realEpisodeName, type ComingEpisode, type EpisodeMap } from '../../../src/lib/episodeNames';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { filmReleases } from '../lib/filmGroups';
 import { ReleasesBlock } from '../ui/ReleasesSheet';
@@ -298,6 +298,26 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
   );
 }
 
+/**
+ * The season's episodes as TMDB lists them, muted and not tappable: the release does not answer, so its files (and
+ * the episode each one holds) are not known yet. A note above says why.
+ */
+export function TmdbEpisodeRows({ episodes }: { episodes: ComingEpisode[] }) {
+  if (!episodes.length) return null;
+  return (
+    <div class="m-list m-eps" data-block="tmdb-episodes">
+      <p class="m-muted m-note">{t('torrent.screen.episodesNoFiles')}</p>
+      {episodes.map((e) => (
+        <div class="m-ep m-ep-named m-ep-coming" key={'tmdb:' + e.season + ':' + e.episode} data-tmdb={e.season + ':' + e.episode} aria-disabled="true">
+          <span class="m-ep-text">
+            <span class="m-ep-name">{comingEpisodeName(e)}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The episodes (or files) of a release with their progress, then the episodes TMDB announces after the last one. */
 export function EpisodeRows({
   hash,
@@ -405,7 +425,11 @@ export function Torrent({ hash }: { hash: string }) {
   const fileSeasons = playableFiles(allFiles)
     .map((f) => parseEpisode(f.path).season)
     .filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
-  const tmdb = useTmdbEpisodes(tor, fileSeasons, !!tor && isSeries(tor) && fileSeasons.length > 0);
+  // no files known (the release does not answer and was never seen here): the title's one season from TMDB instead
+  const titleSeasons = tor && !allFiles.length ? seasonsOf(tor) : [];
+  const noFilesSeason = titleSeasons.length === 1 ? titleSeasons[0] : null;
+  const epSeasons = fileSeasons.length ? fileSeasons : noFilesSeason !== null ? [noFilesSeason] : [];
+  const tmdb = useTmdbEpisodes(tor, epSeasons, !!tor && isSeries(tor) && epSeasons.length > 0);
   // the hook keeps the previous torrent's show until its effect runs; the header must not borrow that season total
   const tmdbHash = useRef(hash);
   const tmdbStale = tmdbHash.current !== hash;
@@ -803,6 +827,12 @@ export function Torrent({ hash }: { hash: string }) {
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
         <EpisodeRows hash={hash} files={files} eps={tmdb.eps} coming={coming} onPick={setSheet} />
+        {!book && !files.length && noFilesSeason !== null && epsNow && seasonEpisodeList(epsNow, noFilesSeason).length > 0 && (
+          <>
+            <div class="m-section">{t('torrent.screen.episodesHead')}</div>
+            <TmdbEpisodeRows episodes={seasonEpisodeList(epsNow, noFilesSeason)} />
+          </>
+        )}
       </div>
       {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
       {picking && <PosterPickSheet

@@ -120,6 +120,20 @@ export function realEpisodeName(name: string): string {
 /** The episodes of a torrent's seasons by number, as TMDB lists them. */
 export type EpisodeMap = { [season: number]: { [ep: number]: Episode } };
 
+/**
+ * Every episode TMDB lists for a season, in order (the release's files are not known: it does not answer and was
+ * never seen on this device). The same shape as an announced episode, its air date included.
+ */
+export function seasonEpisodeList(eps: EpisodeMap, season: number): ComingEpisode[] {
+  const m = eps[season];
+  if (!m) return [];
+  return Object.keys(m)
+    .map(Number)
+    .filter((n) => n > 0)
+    .sort((a, b) => a - b)
+    .map((n) => ({ season, episode: n, name: realEpisodeName(m[n].title), airDate: m[n].airDate || '' }));
+}
+
 /** An announced episode the torrent does not have yet (a muted row after its last one). */
 export interface ComingEpisode { season: number; episode: number; name: string; airDate: string; }
 

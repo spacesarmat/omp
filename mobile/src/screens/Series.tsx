@@ -45,7 +45,8 @@ import { useSeriesDub } from '../../../src/ui/seriesDub';
 import { errorMessage } from '../../../src/api/http';
 import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
-import { EpisodeRows, WatchSheet } from './Torrent';
+import { EpisodeRows, TmdbEpisodeRows, WatchSheet } from './Torrent';
+import { seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { phoneLabel, playOnPhone } from '../watchHere';
 
@@ -400,7 +401,11 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     };
   }, [main ? main.hash : '', ownFiles.length]);
   const fileSeasons = files.map((f) => parseEpisode(f.path).season).filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
-  const tmdb = useTmdbEpisodes(main, fileSeasons, !!main && fileSeasons.length > 0);
+  // no files known (the release does not answer and was never seen here): the season's episodes from TMDB instead
+  const noFiles = !!main && !files.length && season !== NO_SEASON;
+  const epSeasons = fileSeasons.length ? fileSeasons : noFiles ? [season] : [];
+  const tmdb = useTmdbEpisodes(main, epSeasons, !!main && epSeasons.length > 0);
+  const tmdbOnly = noFiles ? seasonEpisodeList(tmdb.eps, season) : [];
   const [releasesOpen, setReleasesOpen] = useState(false);
   const [episode, setEpisode] = useState<TorrentFile | null>(null);
   const mainFile = main ? watchTarget(main.hash, files) : undefined;
@@ -523,6 +528,12 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             <>
               <div class="m-section">{files.length > 1 ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>
               <EpisodeRows hash={main.hash} files={files} eps={tmdb.eps} coming={[]} onPick={setEpisode} />
+            </>
+          )}
+          {tmdbOnly.length > 0 && (
+            <>
+              <div class="m-section">{t('torrent.screen.episodesHead')}</div>
+              <TmdbEpisodeRows episodes={tmdbOnly} />
             </>
           )}
           {card && <CastStrip cast={card.cast} />}
