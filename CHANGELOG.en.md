@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
+
 ## 0.20.6
 
 - «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them
