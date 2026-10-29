@@ -65,8 +65,13 @@ object Embedded2160 {
         returnResult = true,
     )
 
-    /** The explicit intent to OMP's own copy of `Player2160Activity` (exported=false: fine in-process). */
-    fun intent(context: Context, plan: Plan): Intent = P2160.PlayContract().createIntent(context, request(plan))
+    /**
+     * The explicit intent to OMP's own copy of `Player2160Activity` (exported=false: fine in-process). [page]: the
+     * page's extras (external tracks, Intent API §3.7), read by player-core's intent parser once OMP carries a
+     * player-core with them; an older player-core ignores them.
+     */
+    fun intent(context: Context, plan: Plan, page: Map<String, Any> = emptyMap()): Intent =
+        Player2160.putPageExtras(P2160.PlayContract().createIntent(context, request(plan)), page)
 
     /**
      * «Звук в фоне»: player-core's PlaybackService (notification with controls, lock screen, headset/Bluetooth

@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { TorrentScreen } from '../../src/screens/Torrent';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
+import { settings } from '../../src/store/settings';
 import { routeStack } from '../../src/ui/nav';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
@@ -75,8 +76,31 @@ describe('TV torrent screen · external dubs and subtitles', () => {
     const rows = Array.prototype.slice.call(host.querySelectorAll('.file-row')) as HTMLElement[];
     expect(rows).toHaveLength(3);
     expect(rows.every((r) => !/\.(mka|ac3|srt)/.test(r.textContent || ''))).toBe(true);
-    const note = host.querySelector('.torrent-extras');
+    const note = host.querySelector('[data-extras]');
     expect(note && note.textContent).toBe('+2 озвучки, субтитры');
+  });
+
+  it('webOS says honestly that the separate dubs do not play there', async () => {
+    await mount(dubbed);
+    const note = host.querySelector('[data-extras-note]');
+    expect(note && note.textContent).toContain('webOS');
+    expect(note && note.className).toContain('torrent-extras');
+  });
+
+  it('Android TV: a hint to 2160 Player with OMP own player, nothing with 2160 Player', async () => {
+    (window as any).Capacitor = { getPlatform: () => 'android' };
+    try {
+      await mount(dubbed);
+      expect((host.querySelector('[data-extras-note]') || { textContent: '' }).textContent).toContain('2160 Player');
+      act(() => render(null, host));
+      host.remove();
+      settings.value = { ...settings.value, videoPlayer: 'p2160' };
+      await mount(dubbed);
+      expect(host.querySelector('[data-extras-note]')).toBeNull();
+    } finally {
+      delete (window as any).Capacitor;
+      settings.value = { ...settings.value, videoPlayer: 'builtin' };
+    }
   });
 
   it('no note without external files', async () => {

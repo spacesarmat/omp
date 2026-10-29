@@ -2,13 +2,28 @@
 // resume position and the «Пропуск» marks; where the user stopped (maybe on another item of the playlist) is saved
 // like the built-in players' progress (local + TorrServer /viewed).
 import type { TorrServerClient } from '../api/torrserver';
-import type { OmpNativeTvPlugin } from '../platform/androidNative';
+import type { OmpNativeTvPlugin, Open2160Request } from '../platform/androidNative';
 import type { SkipPrefs } from '../lib/journal';
 import { MIN_RESUME, markWatched } from '../store/progress';
 import { saveItemProgress } from './progressSave';
 import { itemHeading } from './heading';
 import type { PlayItem } from './types';
 import { t } from '../i18n';
+import { baseName, type TorrentFile } from '../lib/episodes';
+import { knownFiles } from '../lib/knownFiles';
+import { releaseTracks } from '../lib/externalTracks';
+import type { ExternalStartSettings } from '../lib/externalTrackPick';
+import { torrents } from '../store/library';
+import { settings } from '../store/settings';
+import { rememberSeriesTracks, seriesTracksFor } from '../store/seriesTracks';
+import {
+  externalTracksForItem,
+  p2160TrackExtras,
+  p2160TrackResult,
+  seriesPatchFromResult,
+  P2160_RESULT_KEYS,
+  type ExternalTracksForItem,
+} from './externalTracks';
 
 export const P2160_RELEASES_URL = 'https://github.com/spacesarmat/2160player/releases/latest';
 
@@ -20,6 +35,8 @@ export interface P2160Result {
   ended?: boolean;
   /** The item the user stopped at. */
   url?: string;
+  /** The result extras asked for by `resultKeys` (the chosen tracks), as the player handed them back. */
+  extras?: { [key: string]: string | number | boolean };
 }
 
 /** The installed 2160 Player package, null when it is missing or the plugin cannot tell. */
@@ -58,7 +75,74 @@ export function sanitizeP2160(r: unknown): P2160Result {
   if (pos !== undefined) out.positionMs = pos;
   if (dur !== undefined) out.durationMs = dur;
   if (typeof o.url === 'string' && o.url) out.url = o.url;
+  const ex = o.extras && typeof o.extras === 'object' ? (o.extras as { [k: string]: unknown }) : null;
+  if (ex) {
+    const kept: { [key: string]: string | number | boolean } = {};
+    let any = false;
+    P2160_RESULT_KEYS.forEach((k) => {
+      const v = ex[k];
+      if (typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v))) {
+        kept[k] = v;
+        any = true;
+      }
+    });
+    if (any) out.extras = kept;
+  }
   return out;
+}
+
+type TracksClient = Pick<TorrServerClient, 'streamUrl' | 'videoSrc' | 'files'>;
+
+/** The torrent's file list: TorrServer's (library copy), else the one this device saw last. */
+function filesOfHash(c: Pick<TorrServerClient, 'files'> | null, hash: string): TorrentFile[] {
+  const tor = torrents.peek().filter((x) => x.hash === hash)[0];
+  if (tor && c) return c.files(tor);
+  return knownFiles(hash);
+}
+
+/**
+ * The external dubs and subtitles of every queue item (its own torrent's files), with the start choice of the series'
+ * record and the settings. Uris carry the server's credentials like the videos' (videoSrc).
+ */
+export function queueExternalTracks(c: TracksClient | null, queue: PlayItem[], s: ExternalStartSettings): ExternalTracksForItem[] {
+  const byHash: { [hash: string]: ReturnType<typeof releaseTracks> } = {};
+  const stream = { streamUrl: (h: string, i: number, n?: string) => (c ? c.videoSrc(c.streamUrl(h, i, n)) : '') };
+  return queue.map((it) => {
+    const empty: ExternalTracksForItem = { fileIndex: it.fileIndex === undefined ? -1 : it.fileIndex, audio: [], subtitles: [], startAudio: null, startSubtitle: null };
+    if (!c || !it.hash || it.fileIndex === undefined) return empty;
+    if (!byHash[it.hash]) byHash[it.hash] = releaseTracks(filesOfHash(c, it.hash));
+    const tracks = byHash[it.hash].byVideo[it.fileIndex];
+    if (!tracks || (!tracks.audio.length && !tracks.subtitles.length)) return empty;
+    return externalTracksForItem(stream, it.hash, tracks, it.fileIndex, seriesTracksFor(it.hash), s);
+  });
+}
+
+/**
+ * TorrServer starts filling its cache with the start item's chosen external dub and subtitles while the player opens
+ * the video, so switching to them (or starting with them) does not wait for the swarm. Fire and forget.
+ */
+export function preloadStartTracks(c: Pick<TorrServerClient, 'preload' | 'files'> | null, queue: PlayItem[], index: number, items: ExternalTracksForItem[]): void {
+  const it = queue[index];
+  const cur = items[index];
+  if (!c || !it || !it.hash || !cur) return;
+  const ids: string[] = [];
+  if (cur.startAudio) ids.push(cur.startAudio);
+  if (cur.startSubtitle && cur.startSubtitle !== 'off') ids.push(cur.startSubtitle);
+  if (!ids.length) return;
+  const r = releaseTracks(filesOfHash(c, it.hash)).byVideo[cur.fileIndex];
+  if (!r) return;
+  r.audio.concat(r.subtitles).forEach((tr) => {
+    if (ids.indexOf(tr.id) >= 0) c.preload(it.hash!, tr.file.id, baseName(tr.file.path));
+  });
+}
+
+/** Keeps the dub / subtitles the user ended with for the series (nothing when unchanged or for a film). */
+function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefined, queue: PlayItem[], items: ExternalTracksForItem[], r: P2160Result): void {
+  if (!c || !item || !item.hash || item.fileIndex === undefined || !r.extras) return;
+  const res = p2160TrackResult(r.extras, item.fileIndex);
+  const own = items.filter((x, i) => queue[i] && queue[i].hash === item.hash);
+  const patch = seriesPatchFromResult(own, res, seriesTracksFor(item.hash));
+  if (patch) rememberSeriesTracks(c, item.hash, patch);
 }
 
 /** `link` (hash) and `index` (file) of a TorrServer stream URL, null when it is not one. */
@@ -155,17 +239,33 @@ export function play2160(
   if (typeof open !== 'function') return Promise.reject(new Error(t('nativePlayer.unavailable')));
   busy = true;
   const fromStart = startAt < MIN_RESUME;
-  const o = {
+  const s = settings.peek();
+  let tracks: ExternalTracksForItem[] = [];
+  try {
+    tracks = queueExternalTracks(c, queue, { audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn });
+  } catch (e) {
+    tracks = [];
+  }
+  const extras = p2160TrackExtras(tracks, index);
+  const o: Open2160Request = {
     items: queue.map((i) => ({ url: c ? c.videoSrc(i.url) : i.url, title: itemHeading(i) })),
     start: index,
     positionMs: fromStart ? 0 : Math.floor(startAt) * 1000,
     fromStart,
     segments: segmentsText(prefs, knownDuration, queue.length === 1),
+    resultKeys: P2160_RESULT_KEYS,
   };
+  // the native side drops items without a url (Player2160.playable), which would shift the per-item track lists
+  const aligned = o.items.every((i) => !!(i.url || '').trim());
+  if (aligned && Object.keys(extras).length) o.extras = extras;
+  preloadStartTracks(c, queue, index, tracks);
   return Promise.resolve().then(() => open.call(plugin, o)).then(
     (raw) => {
       busy = false;
-      return saveP2160Result(c, queue, index, sanitizeP2160(raw), knownDuration);
+      const r = sanitizeP2160(raw);
+      const saved = saveP2160Result(c, queue, index, r, knownDuration);
+      if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r);
+      return saved;
     },
     (e) => {
       busy = false;

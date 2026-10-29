@@ -216,6 +216,18 @@ export class TorrServerClient {
     return own.length ? own : knownFiles(t.hash);
   }
 
+  /**
+   * Asks TorrServer to fill its cache with the start of one file (`&preload`, its own «Предзагрузка» size), so a file
+   * the player opens beside the video (an external dub or subtitles) starts without waiting. Never rejects.
+   */
+  preload(hash: string, fileIndex: number, name = 'file'): Promise<void> {
+    const path = '/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + fileIndex + '&preload';
+    return this.call<string>(path, { method: 'GET', responseType: 'text', timeoutMs: 120000, quiet: true }).then(
+      () => undefined,
+      () => undefined,
+    );
+  }
+
   streamUrl(hash: string, fileIndex: number, name = 'file'): string {
     return this.baseUrl + '/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + fileIndex + '&play';
   }

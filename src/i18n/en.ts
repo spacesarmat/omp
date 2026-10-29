@@ -1750,6 +1750,10 @@ export const en: EnDict<typeof ru> = {
     seedsUnknown: '-',
     /** Active ~60s with 0 seeders and 0 downloaded bytes. */
     deadRelease: 'This release is not responding - try another one',
+    /** Torrent screen, a release with external dub files, on webOS: LG's player cannot add them. */
+    extDubsWebos: 'Separate dub files do not play on webOS: you hear the video track. 2160 Player on Android TV plays them',
+    /** Torrent screen, a release with external dub files, Android TV with OMP's own player chosen. */
+    extDubsBuiltin: 'Separate dub files play in 2160 Player: Settings → Video player',
     deleteAsk: 'Delete the torrent from the server?',
     resetAsk: 'Reset the watched marks?',
     continueFrom: 'Resume {ep}from {time}',

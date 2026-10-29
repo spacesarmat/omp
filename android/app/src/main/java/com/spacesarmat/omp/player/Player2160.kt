@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Parcelable
 import androidx.core.net.toUri
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -17,6 +18,13 @@ object Player2160 {
     val PACKAGES = listOf("tv.p2160.player", "tv.p2160.player.debug")
     const val ACTIVITY = "tv.p2160.core.Player2160Activity"
     private const val END_COMPLETED = "playback_completion"
+
+    /**
+     * The page's extras (external tracks, 2160 Player API §3.7) and the result keys it asks for are taken only under
+     * this prefix. The key names themselves live on the page (src/player/externalTracks.ts), so a change of the
+     * player's preliminary format needs no change here.
+     */
+    const val EXTRA_PREFIX = "tv.p2160.extra."
 
     /** The first installed 2160 Player package (release before debug), or null. */
     fun installed(pm: PackageManager): String? = PACKAGES.firstOrNull { pkg ->
@@ -40,6 +48,8 @@ object Player2160 {
         val durationMs: Long? = null,
         val ended: Boolean = false,
         val url: String? = null,
+        /** The asked result extras the player handed back (String, Boolean, Int or Long). */
+        val extras: Map<String, Any> = emptyMap(),
     ) {
         fun toJson(): JSONObject {
             val o = JSONObject().put("returned", returned)
@@ -47,8 +57,51 @@ object Player2160 {
             positionMs?.let { o.put("positionMs", it) }
             durationMs?.let { o.put("durationMs", it) }
             url?.let { o.put("url", it) }
+            if (extras.isNotEmpty()) {
+                val e = JSONObject()
+                for ((k, v) in extras) e.put(k, v)
+                o.put("extras", e)
+            }
             return o.put("ended", ended)
         }
+    }
+
+    /** The page's extra Intent extras: String or String[] values under [EXTRA_PREFIX]; anything else is dropped. */
+    fun pageExtras(raw: JSONObject?): Map<String, Any> {
+        val out = LinkedHashMap<String, Any>()
+        if (raw == null) return out
+        val keys = raw.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            if (!k.startsWith(EXTRA_PREFIX) || k.length == EXTRA_PREFIX.length) continue
+            when (val v = raw.opt(k)) {
+                is String -> out[k] = v
+                is JSONArray -> {
+                    val arr = Array(v.length()) { i -> v.opt(i) as? String }
+                    if (arr.all { it != null }) out[k] = arr.map { it!! }.toTypedArray()
+                }
+            }
+        }
+        return out
+    }
+
+    /** The result keys the page asks for, only under [EXTRA_PREFIX]. */
+    fun resultKeys(raw: JSONArray?): List<String> {
+        if (raw == null) return emptyList()
+        return (0 until raw.length()).mapNotNull { raw.opt(it) as? String }
+            .filter { it.startsWith(EXTRA_PREFIX) && it.length > EXTRA_PREFIX.length }
+            .distinct()
+    }
+
+    /** Adds the page's extras to a launch intent (2160 Player app, or the embedded screen's intent). */
+    fun putPageExtras(i: Intent, extras: Map<String, Any>): Intent {
+        for ((k, v) in extras) {
+            when (v) {
+                is String -> i.putExtra(k, v)
+                is Array<*> -> @Suppress("UNCHECKED_CAST") i.putExtra(k, v as Array<String>)
+            }
+        }
+        return i
     }
 
     /** Drops items without a url keeping the order; start is remapped to the start item's new index, null when it has none. */
@@ -60,7 +113,14 @@ object Player2160 {
         return kept to idx
     }
 
-    fun spec(items: List<Item>, start: Int, positionMs: Long, fromStart: Boolean, segments: String): Spec {
+    fun spec(
+        items: List<Item>,
+        start: Int,
+        positionMs: Long,
+        fromStart: Boolean,
+        segments: String,
+        page: Map<String, Any> = emptyMap(),
+    ): Spec {
         val cur = items[start.coerceIn(0, items.lastIndex)]
         val extras = LinkedHashMap<String, Any>()
         val name = cur.title.trim()
@@ -69,6 +129,8 @@ object Player2160 {
         else if (positionMs > 0) extras["position"] = positionMs.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         if (segments.isNotBlank()) extras["tv.p2160.extra.SEGMENTS"] = segments
         if (items.size > 1) extras["video_list.name"] = items.map { it.title }.toTypedArray()
+        // the page's own (external tracks) never replace the extras above
+        for ((k, v) in page) if (!extras.containsKey(k)) extras[k] = v
         extras["return_result"] = true
         return Spec(cur.url, extras)
     }
@@ -90,24 +152,33 @@ object Player2160 {
     }
 
     /** "position"/"duration" (Int or Long, ms) with VLC's "extra_*" as fallback; "end_by" tells how it ended. */
-    fun parseExtras(extras: Map<String, Any?>?, dataUrl: String?): Result {
+    fun parseExtras(extras: Map<String, Any?>?, dataUrl: String?, asked: List<String> = emptyList()): Result {
         if (extras == null) return Result(false)
         val position = millis(extras["position"]) ?: millis(extras["extra_position"])
         val duration = millis(extras["duration"]) ?: millis(extras["extra_duration"])
         val ended = extras["end_by"] == END_COMPLETED
         if (position == null && !ended) return Result(false)
-        return Result(true, position, duration, ended, dataUrl)
+        val more = LinkedHashMap<String, Any>()
+        for (k in asked) {
+            when (val v = extras[k]) {
+                is String -> more[k] = v
+                is Boolean -> more[k] = v
+                is Int -> more[k] = v
+                is Long -> more[k] = v
+            }
+        }
+        return Result(true, position, duration, ended, dataUrl, more)
     }
 
-    fun parse(resultCode: Int, data: Intent?): Result {
+    fun parse(resultCode: Int, data: Intent?, asked: List<String> = emptyList()): Result {
         if (resultCode != Activity.RESULT_OK) return Result(false)
         val b = data?.extras ?: return Result(false)
         val map = HashMap<String, Any?>()
-        for (k in KEYS) {
+        for (k in KEYS + asked) {
             @Suppress("DEPRECATION")
             if (b.containsKey(k)) map[k] = b.get(k)
         }
-        return parseExtras(map, data.dataString)
+        return parseExtras(map, data.dataString, asked)
     }
 
     private val KEYS = listOf("position", "duration", "end_by", "extra_position", "extra_duration")

@@ -1,20 +1,17 @@
-// The hand-off of a release's external dubs and subtitles (src/lib/externalTracks.ts) to 2160 Player.
-//
-// TODO(2160 Player): the player is adding Intent extras for external tracks; their keys are not published yet. Once they
-// are, the only missing piece is a thin adapter that implements `ExternalTracksAdapter` below: `toExtras` turns the
-// `ExternalTracksForItem` of every queue item into the player's extras, `fromResult` reads the chosen tracks back from
-// the player's result. Nothing in this file invents a key. What goes to the player, per item:
-//   - audio: [{ id, uri, lang, name, mime? }]: uri = the TorrServer stream of that file index (like the video's own uri),
-//     lang = ISO 639-2 («rus», «und» when unknown), name = the studio («LostFilm»), mime = a hint from the extension;
-//   - subtitles: the same, plus forced / sdh flags and charset? (unknown here: the player detects cp1251 by itself);
-//   - start: which external dub / subtitles to select at start (null: the player's own choice, 'off': no subtitles);
-//   - the result: which track ids the user ended with (and for which item), read back with `chosenTracks` and kept for
-//     the series with `seriesPatchFor` (rememberSeriesTracks, src/store/seriesTracks.ts) like a choice in OMP's players.
-// The same lists must go with every item of the queue, so the next episode (autoplay) starts with its own files.
+// The hand-off of a release's external dubs and subtitles (src/lib/externalTracks.ts) to 2160 Player, by its Intent API
+// (2160 Player docs/API.md §3.7, spacesarmat/2160player PR #20). The format is preliminary: every key name and value
+// format of it lives in P2160_TRACKS below and nowhere else (the Kotlin side puts and reads the keys it is given), so a
+// change of the player's format is a change of this one object. What goes to the player:
+//   - AUDIO_TRACKS / TEXT_TRACKS: String[], element i = the JSON array of the tracks of queue item i
+//     ({ uri, language, name, mime, id, charset }); uri = the TorrServer stream of that file index (like the video's);
+//   - AUDIO_SELECT / TEXT_SELECT: the start item's choice («id:<id>», «off»), from the series' record and the settings
+//     (pickExternalStart); the player carries it to the next items of the playlist by id, then name, then language;
+//   - the result: which track the user ended with (external by id, embedded by name + language), kept for the series
+//     (rememberSeriesTracks, src/store/seriesTracks.ts) like a choice in OMP's own players.
 import type { TorrServerClient } from '../api/torrserver';
 import { baseName, type TorrentFile } from '../lib/episodes';
 import { normalizeLang } from '../lib/tracks';
-import type { SeriesTracks, SeriesTracksPatch } from '../lib/seriesTracks';
+import { dubOf, isReset, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { releaseTracks, type EpisodeTracks, type ExternalTrack } from '../lib/externalTracks';
 import { pickExternalStart, type EmbeddedTrack, type ExternalStartSettings } from '../lib/externalTrackPick';
 
@@ -56,12 +53,118 @@ export interface ExternalTracksResult {
   audioId?: string | null;
   /** The external subtitles chosen, 'off', or null: embedded ones. Absent: the player did not say. */
   subtitleId?: string | 'off' | null;
+  /** An embedded dub chosen: its title and language as the player tells them. */
+  audioName?: string;
+  audioLang?: string;
+  /** Embedded subtitles chosen: their title and language. */
+  subtitleName?: string;
+  subtitleLang?: string;
 }
 
-/** To be implemented when 2160 Player publishes its keys (see the top of this file). */
-export interface ExternalTracksAdapter {
-  toExtras(items: ExternalTracksForItem[]): { [key: string]: unknown };
-  fromResult(raw: unknown): ExternalTracksResult;
+/**
+ * 2160 Player's Intent keys and value formats for external tracks (preliminary, §3.7). The one place to change them.
+ * Chromium 53: no Object.values, so the result keys are listed by P2160_RESULT_KEYS.
+ */
+export const P2160_TRACKS = {
+  audioTracks: 'tv.p2160.extra.AUDIO_TRACKS',
+  textTracks: 'tv.p2160.extra.TEXT_TRACKS',
+  audioSelect: 'tv.p2160.extra.AUDIO_SELECT',
+  textSelect: 'tv.p2160.extra.TEXT_SELECT',
+  selectId: 'id:',
+  selectOff: 'off',
+  result: {
+    audioId: 'tv.p2160.extra.AUDIO_ID',
+    audioName: 'tv.p2160.extra.AUDIO_NAME',
+    audioLang: 'tv.p2160.extra.AUDIO_LANGUAGE',
+    audioExternal: 'tv.p2160.extra.AUDIO_EXTERNAL',
+    audioEmbeddedIndex: 'tv.p2160.extra.AUDIO_EMBEDDED_INDEX',
+    audioExternalIndex: 'tv.p2160.extra.AUDIO_EXTERNAL_INDEX',
+    textOff: 'tv.p2160.extra.TEXT_OFF',
+    textId: 'tv.p2160.extra.TEXT_ID',
+    textName: 'tv.p2160.extra.TEXT_NAME',
+    textLang: 'tv.p2160.extra.TEXT_LANGUAGE',
+    textExternal: 'tv.p2160.extra.TEXT_EXTERNAL',
+    textEmbeddedIndex: 'tv.p2160.extra.TEXT_EMBEDDED_INDEX',
+    textExternalIndex: 'tv.p2160.extra.TEXT_EXTERNAL_INDEX',
+  },
+};
+
+/** The result keys the native side reads back from the player's answer. */
+export const P2160_RESULT_KEYS: string[] = (() => {
+  const r = P2160_TRACKS.result as { [k: string]: string };
+  const out: string[] = [];
+  for (const k in r) if (Object.prototype.hasOwnProperty.call(r, k)) out.push(r[k]);
+  return out;
+})();
+
+/** The extras the player gets (String or String[] values); every key starts with this. */
+export const P2160_EXTRA_PREFIX = 'tv.p2160.extra.';
+
+export type P2160Extras = { [key: string]: string | string[] };
+
+function trackJson(t: PlayerExternalTrack | PlayerExternalSubtitle): { [k: string]: string } {
+  const o: { [k: string]: string } = { uri: t.uri, id: t.id };
+  const lang = normalizeLang(t.lang) ? t.lang : '';
+  if (lang) o.language = lang;
+  if (t.name) o.name = t.name;
+  if (t.mime) o.mime = t.mime;
+  const cs = (t as PlayerExternalSubtitle).charset;
+  if (cs) o.charset = cs;
+  return o;
+}
+
+/**
+ * The player's extras for the queue (`items` in queue order, `start` = the start item): {} when no item has an external
+ * track, so a release without them launches exactly as before.
+ */
+export function p2160TrackExtras(items: ExternalTracksForItem[], start: number): P2160Extras {
+  const out: P2160Extras = {};
+  const anyAudio = items.some((x) => x.audio.length > 0);
+  const anyText = items.some((x) => x.subtitles.length > 0);
+  if (anyAudio) out[P2160_TRACKS.audioTracks] = items.map((x) => JSON.stringify(x.audio.map(trackJson)));
+  if (anyText) out[P2160_TRACKS.textTracks] = items.map((x) => JSON.stringify(x.subtitles.map(trackJson)));
+  const cur = items[start];
+  if (cur && cur.startAudio) out[P2160_TRACKS.audioSelect] = P2160_TRACKS.selectId + cur.startAudio;
+  if (cur && cur.startSubtitle === 'off') {
+    // «off» only matters when there is something to switch off: the player's own default is kept otherwise
+    if (cur.subtitles.length) out[P2160_TRACKS.textSelect] = P2160_TRACKS.selectOff;
+  } else if (cur && cur.startSubtitle) out[P2160_TRACKS.textSelect] = P2160_TRACKS.selectId + cur.startSubtitle;
+  return out;
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+/**
+ * The tracks part of the player's answer (`raw`: result key → value as the native side read it). An absent key means
+ * the player did not say (an older 2160 Player answers none of them).
+ */
+export function p2160TrackResult(raw: unknown, fileIndex?: number): ExternalTracksResult {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as { [k: string]: unknown };
+  const k = P2160_TRACKS.result;
+  const out: ExternalTracksResult = {};
+  if (fileIndex !== undefined) out.fileIndex = fileIndex;
+  const aId = str(o[k.audioId]);
+  if (o[k.audioExternal] === true && aId) out.audioId = aId;
+  else if (o[k.audioExternal] === false) {
+    out.audioId = null;
+    const n = str(o[k.audioName]);
+    const g = str(o[k.audioLang]);
+    if (n) out.audioName = n;
+    if (g) out.audioLang = g;
+  }
+  const tId = str(o[k.textId]);
+  if (o[k.textOff] === true) out.subtitleId = 'off';
+  else if (o[k.textExternal] === true && tId) out.subtitleId = tId;
+  else if (o[k.textExternal] === false) {
+    out.subtitleId = null;
+    const n = str(o[k.textName]);
+    const g = str(o[k.textLang]);
+    if (n) out.subtitleName = n;
+    if (g) out.subtitleLang = g;
+  }
+  return out;
 }
 
 type StreamClient = Pick<TorrServerClient, 'streamUrl'>;
@@ -143,5 +246,38 @@ export function seriesPatchFor(chosen: ReturnType<typeof chosenTracks>): SeriesT
   }
   if (chosen.subtitle === 'off') patch.s = 'off';
   else if (chosen.subtitle) patch.s = { l: chosen.subtitle.name, g: normalizeLang(chosen.subtitle.lang) };
+  return patch.l !== undefined || patch.s !== undefined ? patch : null;
+}
+
+/**
+ * What to remember for the series from the player's answer: the external choice (seriesPatchFor), else an embedded dub
+ * by its title + language and embedded subtitles by title + language. Parts equal to the series' record are dropped,
+ * so a plain return writes nothing. null when nothing to keep.
+ */
+export function seriesPatchFromResult(items: ExternalTracksForItem[], res: ExternalTracksResult, current: SeriesTracks | null): SeriesTracksPatch | null {
+  const ext = seriesPatchFor(chosenTracks(items, res));
+  const patch: { l?: string; g?: string; s?: 'off' | { l: string; g: string } } = ext && ext !== 'reset' ? { ...ext } : {};
+  if (patch.l === undefined && res.audioId === null) {
+    const l = dubOf({ title: res.audioName });
+    if (l) {
+      patch.l = l;
+      patch.g = normalizeLang(res.audioLang);
+    }
+  }
+  if (patch.s === undefined && res.subtitleId === null && (res.subtitleName || res.subtitleLang)) {
+    patch.s = { l: dubOf({ title: res.subtitleName }), g: normalizeLang(res.subtitleLang) };
+  }
+  const rec = current && !isReset(current) ? current : null;
+  if (rec && patch.l !== undefined && sameDub(rec.l, patch.l) && normalizeLang(rec.g) === (patch.g || '')) {
+    delete patch.l;
+    delete patch.g;
+  }
+  if (rec && patch.s !== undefined) {
+    const was = rec.s;
+    const same = patch.s === 'off'
+      ? was === 'off'
+      : !!was && was !== 'off' && normalizeLang(was.g) === patch.s.g && (was.l === patch.s.l || sameDub(was.l, patch.s.l));
+    if (same) delete patch.s;
+  }
   return patch.l !== undefined || patch.s !== undefined ? patch : null;
 }

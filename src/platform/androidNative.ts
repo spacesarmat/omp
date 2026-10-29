@@ -100,12 +100,27 @@ export interface OmpNativeTvPlugin {
   /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
   player2160?(): Promise<{ package: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
-  open2160?(o: { items: { url: string; title: string }[]; start: number; positionMs: number; fromStart: boolean; segments: string }): Promise<unknown>;
+  open2160?(o: Open2160Request): Promise<unknown>;
   /** OMP's traffic goes through a VPN (the active network has TRANSPORT_VPN); missing in an older APK. */
   vpnState?(): Promise<{ active?: unknown; lockdown?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
+
+/**
+ * What open2160 / playEmbedded2160 get. `extras`: more Intent extras for 2160 Player (String or String[], keys under
+ * «tv.p2160.extra.»: the external tracks, src/player/externalTracks.ts); `resultKeys`: the player's result extras to
+ * hand back in `extras` of the answer. Both are ignored by an older APK.
+ */
+export interface Open2160Request {
+  items: { url: string; title: string }[];
+  start: number;
+  positionMs: number;
+  fromStart: boolean;
+  segments: string;
+  extras?: { [key: string]: string | string[] };
+  resultKeys?: string[];
+}
 
 export interface OpenOnStartupState {
   enabled?: boolean;
