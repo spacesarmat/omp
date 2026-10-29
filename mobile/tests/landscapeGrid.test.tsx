@@ -181,11 +181,28 @@ describe('«Обзор» on its side', () => {
     expect(grid().style.gridTemplateColumns).toBe(without);
   });
 
+  it('a shorter window without the keyboard (split screen) does count: more, smaller posters', async () => {
+    windowSize(800, 500, 768);
+    mount(<Discover />);
+    await flush();
+    expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(2, 768, 500)}, minmax(0, 1fr))`);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 360 });
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(2, 768, 360)}, minmax(0, 1fr))`);
+    expect(discoverLandscapeCols(2, 768, 360)).toBeGreaterThan(discoverLandscapeCols(2, 768, 500));
+  });
+
   it('the soft keyboard (same width, shorter window) does not shrink the posters', async () => {
     windowSize(800, 360, 768);
     mount(<Discover />);
     await flush();
     const before = grid().style.gridTemplateColumns;
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: 180 });
     await act(async () => {
       window.dispatchEvent(new Event('resize'));

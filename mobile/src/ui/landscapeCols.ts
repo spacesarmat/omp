@@ -5,6 +5,7 @@
 // (the CSS classes of the grid decide there).
 import { useEffect, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
+import { editableFocused } from './keyboard';
 
 /** One card size of a grid: poster height / width, the tallest caption under the poster, the column gap (px). */
 export type CardFit = { aspect: number; caption: number; gap: number };
@@ -52,8 +53,8 @@ export type GridBox = { width: number; height: number };
 
 /**
  * The grid box in landscape (null in portrait or before layout). `ref` is the element whose width the grid takes.
- * The soft keyboard only makes the window shorter: for one width the tallest height seen is kept, so typing in the
- * search does not shrink the posters.
+ * The soft keyboard only makes the window shorter: while a text field has the focus, the tallest height seen for that
+ * width is kept, so typing in the search does not shrink the posters. Any other shorter window (split screen) counts.
  */
 export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = true): GridBox | null {
   const [box, setBox] = useState<GridBox | null>(null);
@@ -68,7 +69,7 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
         setBox((b) => (b ? null : b));
         return;
       }
-      if (tallest.w !== w || h > tallest.h) tallest = { w, h };
+      if (tallest.w !== w || h > tallest.h || !editableFocused()) tallest = { w, h };
       const width = el.clientWidth;
       const height = Math.round(visibleHeight() + (tallest.h - h));
       if (!(width > 0) || !(height > 0)) return;
