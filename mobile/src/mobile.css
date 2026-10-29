@@ -1007,6 +1007,10 @@ button, .m-btn {
 .m-now-deck[data-peek='remote'] .m-now-track,
 .m-now-deck[data-peek='episodes'] .m-now-track { filter: brightness(0.78); }
 .m-now-deck .m-now-pane > .m-screen { min-height: 100%; height: 100%; box-sizing: border-box; }
+/* «Сейчас на ТВ» grows with its chapter list so the pane scrolls (and a swipe pulls «Серии» only at the end) */
+.m-now-deck .m-now-pane > .m-now-bleed { height: auto; }
+/* the remote pulled down over «Сейчас на ТВ» fills the pane (no tab bar here): its last row ends above the system bar */
+.m-now-deck .m-now-pane > .m-remote { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .m-now-eps { display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; }
 .m-now-eps h2 { margin: 0 0 4px; font-size: 20px; }
 .m-now-ep-hint { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--accent); }
@@ -1045,11 +1049,16 @@ button, .m-btn {
   padding: 0;
 }
 .m-now-hero { position: relative; width: 100%; flex: 0 0 auto; }
+/* first screen: the poster takes what the controls leave, the controls end above the «Серии» chip and the system bar */
+.m-now-fold { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; }
+.m-now-fold .m-now-hero { flex: 1 1 0; min-height: 200px; }
 .m-now-body {
   position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
   margin-top: -72px;
-  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(var(--m-now-chip-room, 12px) + env(safe-area-inset-bottom));
 }
+.m-now-bleed { --m-now-chip-room: 64px; }
+.m-now-bleed > .m-now-chlist { padding: 0 16px calc(var(--m-now-chip-room) + env(safe-area-inset-bottom)); }
 .m-now-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .m-now-bleed .m-now-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 6;
@@ -1073,6 +1082,15 @@ button, .m-btn {
   flex: 0 0 auto; align-self: stretch; width: 100%; max-width: none;
   min-height: 240px; max-height: min(72dvh, 720px);
   border-radius: 0;
+}
+.m-now-fold .m-now-stage {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  width: auto; height: auto; min-height: 0; max-height: none; aspect-ratio: auto;
+}
+/* the plain cover (no art) fades into the page like the art does, so its edge never cuts through the titles */
+.m-now-fold .m-now-poster:not(.has-art) {
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 .m-now-poster {
   position: relative; width: 100%; height: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box;
@@ -1968,6 +1986,10 @@ html.m-hint-hold .m-hint { display: none; }
 .m-film-releases { display: flex; flex-direction: column; gap: 8px; }
 .m-film-releases .m-section { margin: 0; }
 .m-film-releases .m-opt { width: 100%; color: inherit; font: inherit; }
+/* the trash beside a release row («Другая раздача», «Раздачи (N)») */
+.m-rel-line { display: flex; align-items: center; gap: 4px; }
+.m-rel-line > .m-opt { flex: 1; min-width: 0; }
+.m-rel-line > .m-rel-del { color: #FF9EA2; }
 
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).

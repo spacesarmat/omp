@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
+// @ts-ignore
+import { resolve } from 'node:path';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
@@ -320,6 +324,68 @@ describe('NowPlaying', () => {
     expect(dialog).not.toBeNull();
     expect(dialog!.closest('.m-now-track')).toBeNull();
     expect(dialog!.closest('.m-sheet-host')).not.toBeNull();
+  });
+
+  describe('layout', () => {
+    const css = readFileSync(resolve('mobile/src/mobile.css'), 'utf8') as string;
+    const rule = (sel: string) => {
+      const m = new RegExp('^' + sel.replace(/[.*+?^${}()|[\]\\>]/g, '\\$&') + ' \\{[^}]+\\}', 'm').exec(css);
+      if (!m) throw new Error('no rule ' + sel);
+      return m[0];
+    };
+    const px = (text: string, prop: string) => {
+      const m = new RegExp(prop + ':\\s*(\\d+)px').exec(text);
+      if (!m) throw new Error('no ' + prop);
+      return Number(m[1]);
+    };
+
+    it('the title shows once: the art without a poster image does not repeat it', () => {
+      setState(state());
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('.m-now-poster-title')).toBeNull();
+      const hits = Array.from(el.querySelectorAll('.m-now-hero, .m-now-body')).filter((n) =>
+        (n.textContent || '').includes('Тишина в эфире'),
+      );
+      expect(hits.map((n) => n.className)).toEqual(['m-now-body']);
+    });
+
+    it('poster and controls share the first screen, the chapter list follows below it', () => {
+      setState(state({ chapters: [{ t: 0, title: 'Пролог' }, { t: 92, title: 'Заставка' }] }));
+      mount(<NowPlaying volume={volume} />);
+      const fold = el.querySelector('.m-now-fold')!;
+      expect(fold.querySelector('.m-now-hero')).not.toBeNull();
+      expect(fold.querySelector('.m-now-controls')).not.toBeNull();
+      expect(fold.querySelector('.m-now-row')).not.toBeNull();
+      expect(fold.querySelector('.m-now-chlist')).toBeNull();
+      expect(el.querySelector('.m-now-bleed > .m-now-chlist')).not.toBeNull();
+    });
+
+    it('css: the first screen fits the viewport and the pane scrolls the chapter list', () => {
+      expect(rule('.m-now-fold')).toContain('min-height: 100dvh');
+      expect(rule('.m-now-fold .m-now-hero')).toContain('flex: 1 1 0');
+      expect(rule('.m-now-fold .m-now-stage')).toContain('position: absolute');
+      expect(rule('.m-now-deck .m-now-pane > .m-now-bleed')).toContain('height: auto');
+    });
+
+    it('css: the controls and the chapter list end above the «Серии» chip and the system bar', () => {
+      const edge = rule('.m-now-edge');
+      const chip = px(edge, 'padding') * 2 + 18;
+      const bot = rule('.m-now-edge-bot');
+      expect(bot).toContain('env(safe-area-inset-bottom)');
+      const room = px(rule('.m-now-bleed'), '--m-now-chip-room');
+      expect(room).toBeGreaterThanOrEqual(chip + 12 + 8);
+      const body = /^\.m-now-body \{[^}]+\}/m.exec(css)![0];
+      expect(body).toContain('var(--m-now-chip-room');
+      expect(body).toContain('env(safe-area-inset-bottom)');
+      expect(rule('.m-now-bleed > .m-now-chlist')).toContain('var(--m-now-chip-room) + env(safe-area-inset-bottom)');
+    });
+
+    it('css: the remote over «Сейчас на ТВ» keeps its last row above the system bar', () => {
+      const deck = rule('.m-now-deck .m-now-pane > .m-screen');
+      expect(deck).toContain('height: 100%');
+      expect(deck).toContain('box-sizing: border-box');
+      expect(rule('.m-now-deck .m-now-pane > .m-remote')).toContain('padding-bottom: calc(12px + env(safe-area-inset-bottom))');
+    });
   });
 
   it('shows play when paused', () => {

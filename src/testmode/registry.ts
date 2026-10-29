@@ -711,6 +711,7 @@ addDialog('D46', 'edit-server', 'Сервер', 'Server', [
 addDialog('D47', 'server-history', 'История серверов', 'Server history', []);
 addDialog('D48', 'poster-query', 'Поиск постера', 'Poster search', textItems('D48', 'Найти', 'Search'));
 addDialog('D49', 'poster-url', 'Ссылка на постер', 'Poster link', textItems('D49', 'Сохранить', 'Save'));
+addDialog('D50', 'series-release-delete', 'Удалить раздачу сезона', 'Delete a release of the season', confirmItems('D50', 'Удалить', 'Delete'));
 
 export function dialogs(): DialogDef[] {
   return DIALOGS;

@@ -260,7 +260,12 @@ export function seasonMembers(g: SeriesGroup, season: number): Torrent[] {
  * (deleting it would take that season away too).
  */
 export function otherSeasonReleases(g: SeriesGroup, season: number, keep: Torrent): Torrent[] {
-  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && memberSeasons(g.members, m).every((s) => s === season));
+  return seasonMembers(g, season).filter((m) => m.hash !== keep.hash && onlyThisSeason(g, season, m));
+}
+
+/** The torrent holds only `season` of the series: removing it takes no other season away (a pack never qualifies). */
+export function onlyThisSeason(g: SeriesGroup, season: number, tor: Torrent): boolean {
+  return memberSeasons(g.members, tor).every((s) => s === season);
 }
 
 /** Every torrent hash of the cards. */

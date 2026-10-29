@@ -412,6 +412,20 @@ export const en: EnDict<typeof ru> = {
     keepOnly: 'Keep only this one',
     keepOnlyAsk: { one: 'Delete {n} more torrent of season {season}?', other: 'Delete {n} more torrents of season {season}?' },
     keepOnlyAskNoSeason: { one: 'Delete {n} more torrent with no season?', other: 'Delete {n} more torrents with no season?' },
+    // the trash on a release in the releases list (phone and TV): what was watched there moves to a release that stays
+    releaseDelete: 'Delete the torrent',
+    releaseDeleteAsk: 'Delete the torrent “{name}”? Watch marks move to “{keeper}”.',
+    releaseDeleteCurrentAsk: 'You are watching this torrent: “{name}”. Delete it? Watching goes on in “{keeper}”, the marks move there.',
+    releaseDeletePlaying: 'This torrent is playing on the TV now. It can be deleted once it stops.',
+    releaseDeletePack: 'This torrent holds other seasons too. It can only be deleted from the library together with them.',
+    releaseCarryFailed: 'Could not move the watch marks, the torrent was not deleted',
+    releaseDeleted: 'Torrent deleted',
+    releaseDeleteLossAsk: {
+      one: '“{keeper}” lacks {n} file with watch marks, its marks will be lost. Delete anyway?',
+      other: '“{keeper}” lacks {n} files with watch marks, their marks will be lost. Delete anyway?',
+    },
+    releaseDeleteBusy: 'Wait, the previous torrent is still being deleted',
+    releasesHintDelete: 'delete the torrent',
     // the TV series screen
     watchEp: 'Watch {code}',
     releasesBtn: 'Torrents · {n}',

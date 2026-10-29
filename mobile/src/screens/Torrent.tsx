@@ -47,7 +47,8 @@ import { BetterSheet } from '../ui/BetterSheet';
 import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 import { reloadMonitor } from '../monitor/ui';
-import { deleteTorrents, watchTarget } from '../lib/torrentActions';
+import { deleteRelease, deleteTorrents, watchTarget } from '../lib/torrentActions';
+import { releaseName } from '../lib/duplicates';
 import { displayTitle } from '../../../src/lib/torrentName';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
@@ -588,6 +589,12 @@ export function Torrent({ hash }: { hash: string }) {
   const badges = [qualityBadge(title)].filter(Boolean);
   // the releases of this film in «Мои» (one card there): the «Раздачи (N)» block under the watch buttons
   const releases = book ? [] : filmReleases(torrents.value, tor);
+  // the trash in «Раздачи (N)»: the shown one going opens the one that stays
+  const removeRelease = async (x: TorrentT) => {
+    if (!c) return;
+    const keeper = await deleteRelease(c, { tor: x, rows: releases, current: hash, season: NO_SEASON, name: (r) => releaseName(r, '') });
+    if (keeper && x.hash === hash) replaceTop({ name: 'torrent', hash: keeper.hash });
+  };
   const group = gkey ? findGroup(torrents.value, gkey) : null;
   const own0 = seasonsOf(tor);
   const mine = own0.length ? own0 : fileSeasons;
@@ -765,7 +772,16 @@ export function Torrent({ hash }: { hash: string }) {
           </>
         )}
         {status && <LaunchError message={status} />}
-        {releases.length > 1 && <ReleasesBlock releases={releases} current={hash} code="P06.2" onPick={(x) => replaceTop({ name: 'torrent', hash: x.hash })} />}
+        {releases.length > 1 && (
+          <ReleasesBlock
+            releases={releases}
+            current={hash}
+            code="P06.2"
+            onPick={(x) => replaceTop({ name: 'torrent', hash: x.hash })}
+            onDelete={(x) => void removeRelease(x)}
+            deleteCode="P06.5"
+          />
+        )}
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
         {!book && files.length > 0 && (

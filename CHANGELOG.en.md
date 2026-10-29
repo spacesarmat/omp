@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
+- [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
 - [phone] Series episodes stay listed when a release is not answering: the phone shows the files it has already seen, and for a release never opened the season's episodes from TMDB (not playable). Releases added through OMP now keep their file list on TorrServer
 - [phone] «Find better quality» shows the season and episodes of each series release: «S01 · 8 episodes»
 - [tech] Release files are cached on the device (omp.knownFiles, up to 150 releases); a journal write adds TorrServer.Files to data when TorrServer did not save it (data already held omp.ts)
@@ -18,7 +21,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] The «Search» tab replaces «Add»: «Mine», «Catalog» and «Sources» in one row, paste a link or magnet right there; «Continue watching» on top of «Mine»
 - TorrServer over https: on a custom port, behind a proxy with a path, and with a self-signed certificate after you confirm its fingerprint
 - The built-in TorrServer is updated to MatriX.147.1
-- [phone] The built-in player is updated to 2160 Player 0.2.14: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut
+- [phone] The built-in player is updated to 2160 Player 0.2.16: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut, and on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only
 - [phone] Offline you get one clear «No internet», and the TV search does not run without Wi-Fi
 - [phone] «History» skips plays that never started (0:00), one episode is one line; in landscape screens no longer go under the system bar
 - [phone] «OMP account» shows «Subscription until ...» right away; different films with similar titles no longer merge in «Mine»

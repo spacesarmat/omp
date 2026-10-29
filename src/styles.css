@@ -205,6 +205,8 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .dialog-option { padding: 18px 24px; border-radius: 10px; margin-bottom: 8px; }
 .dialog-option.current { color: var(--accent); }
 .dialog-option.focused { background: var(--accent); color: #0f1115; transform: none; box-shadow: none; }
+.dialog-hint { margin-top: 16px; font-size: 24px; color: var(--muted); }
+.dialog-hint .keydot { vertical-align: middle; margin-right: 8px; }
 
 .toasts { position: absolute; top: 40px; right: 60px; z-index: 60; }
 .toast { background: var(--panel2); padding: 18px 28px; border-radius: 12px; margin-bottom: 12px; max-width: 800px; }
