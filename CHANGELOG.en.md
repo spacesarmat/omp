@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes
+- A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
+- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, the language is ISO 639-2 (rus, eng, ukr, und), forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track from the series dub and the settings, `src/player/externalTracks.ts` is the hand-off stub for 2160 Player (its Intent keys are not published yet)
+
 ## 0.20.6-beta.11
 
 - [phone] The built-in player is updated to 2160 Player 0.2.16: on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only

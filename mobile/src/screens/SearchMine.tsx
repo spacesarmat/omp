@@ -31,7 +31,7 @@ function nameOf(it: PhoneItem): string {
 function metaOf(it: PhoneItem): string {
   if (it.kind === 'series') return [groupLabel(it), fmtSize(groupSize(it))].join(' · ');
   if (it.kind === 'film') return [libraryTitle(it.lead).meta, tp('series.releases', it.members.length)].filter(Boolean).join(' · ');
-  return [libraryTitle(it.tor).meta, releaseLine(it.tor, false)].filter(Boolean).join(' · ');
+  return [libraryTitle(it.tor).meta, releaseLine(it.tor, false, false)].filter(Boolean).join(' · ');
 }
 
 export function SearchMine({ query, onCatalog, onSources }: { query: string; onCatalog: () => void; onSources: () => void }) {

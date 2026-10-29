@@ -361,6 +361,10 @@ export const ru = {
     addedMany: 'Добавлено торрентов: {n}',
     added: 'Добавлено: {titles}',
     episodes: { one: '{n} серия', few: '{n} серии', many: '{n} серий' },
+    // external dubs and subtitles of a release («Rus Sound/LostFilm/*.mka», «Rus Subs/*.srt»): «+3 озвучки, субтитры»
+    extDubs: { one: '+{n} озвучка', few: '+{n} озвучки', many: '+{n} озвучек' },
+    extDubsSubs: { one: '+{n} озвучка, субтитры', few: '+{n} озвучки, субтитры', many: '+{n} озвучек, субтитры' },
+    extSubs: '+субтитры',
     select: 'Выбрать',
     selectCancel: 'Отменить выбор',
     selected: 'Выбрано: {n}',

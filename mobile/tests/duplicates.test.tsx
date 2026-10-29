@@ -170,6 +170,23 @@ describe('what a release holds, for showing', () => {
     expect(releaseLine(FILM_1080)).toBe('1080p BDRip · 8,0 ГБ');
   });
 
+  it('external dubs and subtitles: counted in the release line, never as episodes or files', () => {
+    const names = eps('Show.S01E', 9);
+    const dubbed = {
+      ...S1_1080,
+      data: files(
+        names
+          .concat(names.map((n) => 'Rus Sound/LostFilm/' + n.replace(/\.mkv$/, '.mka')))
+          .concat(names.map((n) => 'Rus Sound/HDRezka Studio/' + n.replace(/\.mkv$/, '.ac3')))
+          .concat(names.map((n) => 'Rus Subs/' + n.replace(/\.mkv$/, '.srt'))),
+      ),
+    };
+    expect(contentsText(dubbed)).toBe('9 серий');
+    expect(releaseLine(dubbed)).toContain('9 серий · +2 озвучки, субтитры · ');
+    expect(releaseLine(dubbed, false)).toContain(' · +2 озвучки, субтитры · ');
+    expect(releaseLine(dubbed, false, false)).not.toContain('озвучк');
+  });
+
   it('the same season of a series, or the same film title and year; another season or another film is not', () => {
     expect(sameReleases([S1_1080, S1_4K, S2_4K], S1_4K)).toEqual([S1_1080]);
     expect(sameReleases([S1_1080, S1_4K, S2_4K], S2_4K)).toEqual([]);

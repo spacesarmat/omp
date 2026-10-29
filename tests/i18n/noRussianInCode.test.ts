@@ -19,6 +19,7 @@ const ALLOWLIST: { [file: string]: string } = {
   'src/lib/faqLinks.ts': 'FAQ link keys: legacy Russian question texts resolved to item ids by OLD_Q_LINKS (language-independent)',
   'src/lib/librarySearch.ts': 'title matching (ё→е normalization)',
   'src/lib/tracks.ts': 'language names in their own language and audio-language tokens of file names (parsing)',
+  'src/lib/externalTracks.ts': 'file and folder name parsing of external dubs and subtitles (language and folder words, «серия»)',
   'src/monitor/episodes.ts': 'tracker page parsing (season/episode patterns in tracker titles)',
   'mobile/src/tv/ssap.ts': 'LG pairing protocol: the signed localizedAppNames block copied verbatim from lgtv2 (its signature covers it)',
   'mobile/src/screens/Faq.tsx': 'FAQ search normalization (ё→е)',
