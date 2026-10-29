@@ -18,6 +18,22 @@ import { swipeBlocked } from '../ui/tabSwipe';
 import { filesOf, useTvLaunch } from '../watch';
 import { deckPaneAfter, episodeSwipePlays, type DeckPane } from './nowDeck';
 
+/**
+ * Where the «Сейчас на ТВ» card is scrolled: `top`, `tight` (at the top, but the first screen is taller than the
+ * pane, so the room kept for «Серии» is off screen), `mid` or `end`.
+ */
+export type CardScroll = 'top' | 'tight' | 'mid' | 'end';
+
+export function cardScroll(pane: HTMLElement): CardScroll {
+  const top = pane.scrollTop;
+  const view = pane.clientHeight;
+  if (top <= 8) {
+    const fold = pane.querySelector('.m-now-fold') as HTMLElement | null;
+    return fold && fold.offsetHeight > view + 1 ? 'tight' : 'top';
+  }
+  return top + view >= pane.scrollHeight - 8 ? 'end' : 'mid';
+}
+
 /** Where a vertical drag from the current pane is heading (for the peek chip). */
 export function deckPeekToward(pane: DeckPane, shift: number): 'remote' | 'episodes' | 'now' | null {
   if (Math.abs(shift) < 16) return null;
@@ -164,6 +180,20 @@ export function NowDeck({
   const [anim, setAnim] = useState(true);
   const [height, setHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 1));
   const [opened, setOpened] = useState({ remote: false, episodes: false });
+  // «Пульт» pulls in only from the top of the card, so its hint hides once the card is scrolled; «Серии» shows at
+  // the top and at the end, where the layout keeps room for it, and hides in between so it never covers a control
+  const [scroll, setScroll] = useState<CardScroll>('top');
+  const nowRef = useRef<HTMLElement>(null);
+  const remeasure = () => {
+    const el = nowRef.current;
+    if (el) setScroll(cardScroll(el));
+  };
+  // the card changes size without a scroll (more chapters, a rotated or resized window): recheck the edges
+  useLayoutEffect(remeasure);
+  useEffect(() => {
+    window.addEventListener('resize', remeasure);
+    return () => window.removeEventListener('resize', remeasure);
+  }, []);
   const paneRef = useRef(pane);
   const shiftRef = useRef(0);
   const heightRef = useRef(height);
@@ -304,7 +334,7 @@ export function NowDeck({
         <section class="m-now-pane" data-pane="remote">
           {opened.remote || pane === 'remote' ? remote : null}
         </section>
-        <section class="m-now-pane" data-pane="now">
+        <section class="m-now-pane" data-pane="now" ref={nowRef} onScroll={remeasure}>
           {children}
         </section>
         <section class="m-now-pane" data-pane="episodes">
@@ -314,20 +344,24 @@ export function NowDeck({
       </div>
       {pane === 'now' && !toward && (
         <>
-          <div class="m-now-edge m-now-edge-top" aria-hidden="true">
-            <span class="m-now-edge-chev">
-              <Icon d={ICONS.collapse} size={16} />
-            </span>
-            <Icon d={ICONS.remote} size={18} />
-            <span>{t('now.swipeRemote')}</span>
-          </div>
-          <div class="m-now-edge m-now-edge-bot" aria-hidden="true">
-            <Icon d={ICONS['view-list']} size={18} />
-            <span>{t('now.swipeEpisodes')}</span>
-            <span class="m-now-edge-chev up">
-              <Icon d={ICONS.collapse} size={16} />
-            </span>
-          </div>
+          {(scroll === 'top' || scroll === 'tight') && (
+            <div class="m-now-edge m-now-edge-top" aria-hidden="true">
+              <span class="m-now-edge-chev">
+                <Icon d={ICONS.collapse} size={16} />
+              </span>
+              <Icon d={ICONS.remote} size={18} />
+              <span>{t('now.swipeRemote')}</span>
+            </div>
+          )}
+          {(scroll === 'top' || scroll === 'end') && (
+            <div class="m-now-edge m-now-edge-bot" aria-hidden="true">
+              <Icon d={ICONS['view-list']} size={18} />
+              <span>{t('now.swipeEpisodes')}</span>
+              <span class="m-now-edge-chev up">
+                <Icon d={ICONS.collapse} size={16} />
+              </span>
+            </div>
+          )}
         </>
       )}
       {toward && (
