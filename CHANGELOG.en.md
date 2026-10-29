@@ -6,11 +6,38 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [phone] The catalog on its side: a whole card shows, from the poster down to its caption, and a row holds as many cards as fit across. At the biggest size that is 5-6 instead of 2, more at the smaller sizes; «Mine» does the same for large and small tiles. Portrait is unchanged
-- The built-in TorrServer is updated to MatriX.147.2
 - External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes
+- 2160 Player gets those dubs and subtitles by itself: every episode its own files, at start the dub chosen for the series or the language from the settings, and a dub picked in the player is remembered for the whole series. TorrServer preloads the chosen dub. It needs a 2160 Player version with external tracks, released separately; the phone's built-in player gets them with the next 2160 Player update
+- [lg] The release screen says honestly that separate dub files do not play on webOS: you hear the video track
+- [atv] With the OMP player chosen, a release screen with separate dubs suggests switching to 2160 Player
 - A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
-- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, the language is ISO 639-2 (rus, eng, ukr, und), forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track from the series dub and the settings, `src/player/externalTracks.ts` is the hand-off stub for 2160 Player (its Intent keys are not published yet)
+- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, ISO 639-2 language, forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track. `src/player/externalTracks.ts` hands them to 2160 Player by Intent API 3.7 (preliminary format, PR spacesarmat/2160player#20): every key in one object P2160_TRACKS, the native side only passes `tv.p2160.extra.*` extras and returns the asked result keys. The 2160 Player dependency is not bumped
+
+## 0.20.6
+
+- «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them
+- The automatic poster lookup is more accurate: a film is looked up among films of its year, found even when the release spells a Russian name without the letter yo, and by the English title from the release name; releases with no poster are tried again
+- [phone] A film or series on one screen: seasons, episodes and releases (quality, size, seeds), one tap plays the next episode; several releases of one film are one card in «Mine»
+- [phone] The «Search» tab replaces «Add»: «Mine», «Catalog» and «Sources» in one row, paste a link or magnet right there; «Continue watching» on top of «Mine»
+- TorrServer over https: on a custom port, behind a proxy with a path, and with a self-signed certificate after you confirm its fingerprint
+- The built-in TorrServer is updated to MatriX.147.2
+- [phone] The built-in player is updated to 2160 Player 0.2.16: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut, and on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only
+- [phone] Offline you get one clear «No internet», and the TV search does not run without Wi-Fi
+- [phone] «History» skips plays that never started (0:00), one episode is one line; in landscape screens no longer go under the system bar
+- [phone] The catalog on its side: a whole card shows, from the poster down to its caption, and a row holds as many cards as fit across. At the biggest size that is 5-6 instead of 2, more at the smaller sizes; «Mine» does the same for large and small tiles. Portrait is unchanged
+- [phone] «OMP account» shows «Subscription until ...» right away; different films with similar titles no longer merge in «Mine»
+- Help: a detailed guide to installing on Android over ADB without losing data
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
+- [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
+- [phone] Series episodes stay listed when a release is not answering: the phone shows the files it has already seen, and for a release never opened the season's episodes from TMDB (not playable). Releases added through OMP now keep their file list on TorrServer
+- [phone] «Find better quality» shows the season and episodes of each series release: «S01 · 8 episodes»
+- [tech] Android: https to TorrServer goes through OkHttp with TorrServerTrust (system CAs, then a pin per host:port)
+- [tech] The poster is written with TorrServer `set` to every release of the film; tsp.posterTried keeps the try time, a TMDB key fingerprint and the search version
+- [tech] The Telegram release post is a photo, a caption and buttons only; one bot @OMPBILLINGBOT for billing and posts, the admin bot and the parser monitor are removed
+- [tech] Billing panel: a «Monitoring» tab (trackers, sites, Postgres, backup, containers) with Telegram alerts
+- [tech] JacRed on the NUC: sync goes through WARP, the working config is kept on the host; ops/vps/deploy.sh runs on the NUC
+- [tech] Release files are cached on the device (omp.knownFiles, up to 150 releases); a journal write adds TorrServer.Files to data when TorrServer did not save it (data already held omp.ts)
 
 ## 0.20.6-beta.11
 
