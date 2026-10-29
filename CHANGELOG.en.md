@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] The catalog on its side: a whole card shows, from the poster down to its caption, and a row holds as many cards as fit across. At the biggest size that is 5-6 instead of 2, more at the smaller sizes; «Mine» does the same for large and small tiles. Portrait is unchanged
+
 ## 0.20.6-beta.11
 
 - [phone] The built-in player is updated to 2160 Player 0.2.16: on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only

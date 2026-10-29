@@ -2,6 +2,8 @@
   --m-nav-h: 78px;
   --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
+  /* read by the landscape poster grids (landscapeCols.ts) */
+  --m-safe-top: env(safe-area-inset-top, 0px);
   --bg: #0F1115;
   --panel: #181B22;
   --panel-2: #252A35;
