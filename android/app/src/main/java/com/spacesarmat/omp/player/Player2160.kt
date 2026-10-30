@@ -22,7 +22,8 @@ object Player2160 {
     /**
      * The page's extras (external tracks, 2160 Player API §3.7) and the result keys it asks for are taken only under
      * this prefix. The key names themselves live on the page (src/player/externalTracks.ts), so a change of the
-     * player's preliminary format needs no change here.
+     * player's format needs no change here. Values are String or String[] (AUDIO_TRACKS / TEXT_TRACKS: one JSON array
+     * per playlist item); the result's AUDIO_* / TEXT_* come back as String, Boolean or Int (2160 Player 0.2.17).
      */
     const val EXTRA_PREFIX = "tv.p2160.extra."
 

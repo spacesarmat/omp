@@ -67,8 +67,10 @@ object Embedded2160 {
 
     /**
      * The explicit intent to OMP's own copy of `Player2160Activity` (exported=false: fine in-process). [page]: the
-     * page's extras (external tracks, Intent API §3.7), read by player-core's intent parser once OMP carries a
-     * player-core with them; an older player-core ignores them.
+     * page's extras (external tracks, Intent API §3.7), read by player-core's intent parser (IntentApi.parse, since
+     * player-core 0.2.17) like the 2160 Player app's. The request itself has no external tracks, so the page's
+     * AUDIO_TRACKS / TEXT_TRACKS are the only ones; they follow [Plan.entries] one to one ([Player2160.playable]
+     * already dropped the items without a url, and the page sends them only when none was dropped).
      */
     fun intent(context: Context, plan: Plan, page: Map<String, Any> = emptyMap()): Intent =
         Player2160.putPageExtras(P2160.PlayContract().createIntent(context, request(plan)), page)

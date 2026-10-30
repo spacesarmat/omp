@@ -160,4 +160,28 @@ class Player2160Test {
         assertTrue(j.getBoolean("tv.p2160.extra.TEXT_OFF"))
         assertFalse(Player2160.parseExtras(mapOf("position" to 5_000), null).toJson().has("extras"))
     }
+
+    @Test
+    fun anEmbeddedChoiceComesBackWithItsIntIndexes() {
+        // 2160 Player 0.2.17 (API §3.4/§3.7): an embedded dub is AUDIO_EXTERNAL=false with Int indexes, -1 for the other kind
+        val keys = listOf(
+            "tv.p2160.extra.AUDIO_ID", "tv.p2160.extra.AUDIO_NAME", "tv.p2160.extra.AUDIO_EXTERNAL",
+            "tv.p2160.extra.AUDIO_EMBEDDED_INDEX", "tv.p2160.extra.AUDIO_EXTERNAL_INDEX", "tv.p2160.extra.TEXT_OFF",
+        )
+        val r = Player2160.parseExtras(
+            mapOf(
+                "position" to 5_000, "end_by" to "user", "tv.p2160.extra.POSITION" to 5_000L,
+                "tv.p2160.extra.AUDIO_ID" to "embedded:1", "tv.p2160.extra.AUDIO_NAME" to "HDrezka Studio",
+                "tv.p2160.extra.AUDIO_EXTERNAL" to false, "tv.p2160.extra.AUDIO_EMBEDDED_INDEX" to 1,
+                "tv.p2160.extra.AUDIO_EXTERNAL_INDEX" to -1, "tv.p2160.extra.TEXT_OFF" to false,
+            ),
+            "http://srv/1.mkv",
+            keys,
+        )
+        assertEquals(1, r.extras["tv.p2160.extra.AUDIO_EMBEDDED_INDEX"])
+        assertEquals(-1, r.extras["tv.p2160.extra.AUDIO_EXTERNAL_INDEX"])
+        assertEquals(false, r.extras["tv.p2160.extra.AUDIO_EXTERNAL"])
+        assertEquals(false, r.extras["tv.p2160.extra.TEXT_OFF"])
+        assertEquals(6, r.extras.size)
+    }
 }

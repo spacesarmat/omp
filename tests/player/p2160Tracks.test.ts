@@ -90,6 +90,27 @@ describe('the Intent extras (2160 Player API §3.7)', () => {
     expect(p2160TrackExtras(externalTracksForQueue({ streamUrl }, H, list(['a.mkv']), [0], null, S), 0)).toEqual({});
   });
 
+  it('the final 0.2.17 track object: uri required, no delayMs or select from OMP, charset only on subtitles', () => {
+    const items = externalTracksForQueue({ streamUrl }, H, FILES, [0, 1], null, { ...S, subtitlesOn: true });
+    items[0].audio[0] = { ...items[0].audio[0] };
+    (items[0].audio[0] as any).charset = 'windows-1251';
+    items[0].subtitles[0] = { ...items[0].subtitles[0], charset: 'windows-1251' };
+    const e = p2160TrackExtras(items, 0);
+    const allowed = ['uri', 'language', 'name', 'mime', 'id', 'charset'];
+    const audio = ([] as any[]).concat(...(e[P2160_TRACKS.audioTracks] as string[]).map((x) => JSON.parse(x)));
+    const text = ([] as any[]).concat(...(e[P2160_TRACKS.textTracks] as string[]).map((x) => JSON.parse(x)));
+    for (const t of audio.concat(text)) {
+      expect(typeof t.uri).toBe('string');
+      expect(Object.keys(t).every((f) => allowed.indexOf(f) >= 0)).toBe(true);
+    }
+    expect(audio.some((t) => 'charset' in t)).toBe(false);
+    expect(text[0].charset).toBe('windows-1251');
+    // the select values are the player's «id:<id>» (the id may itself hold colons) and «off»
+    expect(P2160_TRACKS.selectId).toBe('id:');
+    expect(P2160_TRACKS.selectOff).toBe('off');
+    expect(/^id:a:rus:/.test(e[P2160_TRACKS.audioSelect] as string)).toBe(true);
+  });
+
   it('result keys are the ones of P2160_TRACKS.result', () => {
     expect(P2160_RESULT_KEYS).toContain('tv.p2160.extra.AUDIO_ID');
     expect(P2160_RESULT_KEYS).toContain('tv.p2160.extra.TEXT_OFF');
@@ -106,6 +127,21 @@ describe('reading the result', () => {
     });
     expect(p2160TrackResult({})).toEqual({});
     expect(p2160TrackResult(null)).toEqual({});
+  });
+
+  it('reads the result as 2160 Player 0.2.17 builds it (IntentApi.buildResult)', () => {
+    // external dub, embedded subtitles
+    expect(p2160TrackResult({
+      [k.audioId]: 'a:rus:lostfilm', [k.audioName]: 'LostFilm', [k.audioLang]: 'rus', [k.audioExternal]: true,
+      [k.audioEmbeddedIndex]: -1, [k.audioExternalIndex]: 0, [k.textOff]: false,
+      [k.textId]: 'Full', [k.textName]: 'Full', [k.textLang]: 'eng', [k.textExternal]: false, [k.textEmbeddedIndex]: 0, [k.textExternalIndex]: -1,
+    }, 0)).toEqual({ fileIndex: 0, audioId: 'a:rus:lostfilm', subtitleId: null, subtitleName: 'Full', subtitleLang: 'eng' });
+    // embedded dub: its AUDIO_ID is the name or «embedded:<n>», never one of OMP's ids; subtitles off: no TEXT_* but TEXT_OFF
+    expect(p2160TrackResult({
+      [k.audioId]: 'embedded:1', [k.audioLang]: 'rus', [k.audioExternal]: false, [k.audioEmbeddedIndex]: 1, [k.audioExternalIndex]: -1, [k.textOff]: true,
+    })).toEqual({ audioId: null, audioLang: 'rus', subtitleId: 'off' });
+    // no subtitles at all: TEXT_OFF false and no TEXT_ID, nothing said
+    expect(p2160TrackResult({ [k.textOff]: false })).toEqual({});
   });
 
   it('the series patch: a change by hand, never OMP own pick; codec-only titles out; unchanged parts dropped', () => {

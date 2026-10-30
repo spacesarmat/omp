@@ -1,13 +1,20 @@
 // The hand-off of a release's external dubs and subtitles (src/lib/externalTracks.ts) to 2160 Player, by its Intent API
-// (2160 Player docs/API.md §3.7, spacesarmat/2160player PR #20). The format is preliminary: every key name and value
-// format of it lives in P2160_TRACKS below and nowhere else (the Kotlin side puts and reads the keys it is given), so a
-// change of the player's format is a change of this one object. What goes to the player:
+// (2160 Player docs/API.md §3.7, released in 2160 Player 0.2.17). Every key name and value format of it lives in
+// P2160_TRACKS below and nowhere else (the Kotlin side puts and reads the keys it is given), so a change of the
+// player's format is a change of this one object. What goes to the player:
 //   - AUDIO_TRACKS / TEXT_TRACKS: String[], element i = the JSON array of the tracks of queue item i
-//     ({ uri, language, name, mime, id, charset }); uri = the TorrServer stream of that file index (like the video's);
+//     ({ uri, language, name, mime, id, charset }; charset for subtitles only); uri = the TorrServer stream of that
+//     file index (like the video's). OMP sends no delayMs (it knows no offset) and no per-track select (the start
+//     choice goes as *_SELECT, which beats both the track's select and the player's history of the file);
 //   - AUDIO_SELECT / TEXT_SELECT: the start item's choice («id:<id>», «off»), from the series' record and the settings
-//     (pickExternalStart); the player carries it to the next items of the playlist by id, then name, then language;
-//   - the result: which track the user ended with (external by id, embedded by name + language), kept for the series
-//     (rememberSeriesTracks, src/store/seriesTracks.ts) like a choice in OMP's own players.
+//     (pickExternalStart); the player carries it to the next items of the playlist by id, then name, then language.
+//     The player also takes «index:<n>» and «embedded:<n>», which OMP does not need: its external tracks have ids,
+//     and an embedded track stays the player's own choice;
+//   - the result: which track the user ended with (AUDIO_ID / TEXT_ID with AUDIO_EXTERNAL / TEXT_EXTERNAL = true for
+//     an external one, by its id; an embedded one by AUDIO_NAME + AUDIO_LANGUAGE; TEXT_OFF), kept for the series
+//     (rememberSeriesTracks, src/store/seriesTracks.ts) like a choice in OMP's own players, only when changed by hand.
+// A TorrServer link has a query, so the player does not look for sidecar files itself: AUDIO_TRACKS is the only way
+// it gets them. A file it can not open gives a warning and the video goes on with its own track.
 import type { TorrServerClient } from '../api/torrserver';
 import { baseName, type TorrentFile } from '../lib/episodes';
 import { normalizeLang } from '../lib/tracks';
@@ -62,7 +69,8 @@ export interface ExternalTracksResult {
 }
 
 /**
- * 2160 Player's Intent keys and value formats for external tracks (preliminary, §3.7). The one place to change them.
+ * 2160 Player's Intent keys and value formats for external tracks (§3.7, 2160 Player 0.2.17). The one place to change
+ * them.
  * Chromium 53: no Object.values, so the result keys are listed by P2160_RESULT_KEYS.
  */
 export const P2160_TRACKS = {
@@ -102,14 +110,19 @@ export const P2160_EXTRA_PREFIX = 'tv.p2160.extra.';
 
 export type P2160Extras = { [key: string]: string | string[] };
 
-function trackJson(t: PlayerExternalTrack | PlayerExternalSubtitle): { [k: string]: string } {
+function trackJson(t: PlayerExternalTrack): { [k: string]: string } {
   const o: { [k: string]: string } = { uri: t.uri, id: t.id };
   const lang = normalizeLang(t.lang) ? t.lang : '';
   if (lang) o.language = lang;
   if (t.name) o.name = t.name;
   if (t.mime) o.mime = t.mime;
-  const cs = (t as PlayerExternalSubtitle).charset;
-  if (cs) o.charset = cs;
+  return o;
+}
+
+/** A subtitle's JSON: a track's plus `charset`, which the player reads for subtitles only. */
+function subtitleJson(t: PlayerExternalSubtitle): { [k: string]: string } {
+  const o = trackJson(t);
+  if (t.charset) o.charset = t.charset;
   return o;
 }
 
@@ -122,7 +135,7 @@ export function p2160TrackExtras(items: ExternalTracksForItem[], start: number):
   const anyAudio = items.some((x) => x.audio.length > 0);
   const anyText = items.some((x) => x.subtitles.length > 0);
   if (anyAudio) out[P2160_TRACKS.audioTracks] = items.map((x) => JSON.stringify(x.audio.map(trackJson)));
-  if (anyText) out[P2160_TRACKS.textTracks] = items.map((x) => JSON.stringify(x.subtitles.map(trackJson)));
+  if (anyText) out[P2160_TRACKS.textTracks] = items.map((x) => JSON.stringify(x.subtitles.map(subtitleJson)));
   const cur = items[start];
   if (cur && cur.startAudio) out[P2160_TRACKS.audioSelect] = P2160_TRACKS.selectId + cur.startAudio;
   if (cur && cur.startSubtitle === 'off') {
