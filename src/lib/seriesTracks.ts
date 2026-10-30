@@ -13,8 +13,9 @@ export interface SeriesSub {
   /** Audio only: the channel layout of the dub («5.1», «2.0»), shown next to its name; absent when unknown. */
   c?: string;
   /**
-   * Subtitles only: the external track id («s:und:», src/lib/externalTracks.ts trackId) of a choice with no title and
-   * no language (a release's nameless .ass), the only way to find it again in the next episode. Absent otherwise.
+   * Subtitles only: the external track id («s:und:», «s:und:#2», src/lib/externalTracks.ts trackId) of a choice with
+   * no title and no language (a release's nameless .ass), the only way to find it again in the next episode. Absent
+   * otherwise.
    */
   i?: string;
 }
@@ -55,9 +56,9 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim().slice(0, LABEL_MAX) : '';
 }
 
-/** A stored external subtitle id («s:und:», «s:und::forced»); '' when absent or malformed. */
+/** A stored external subtitle id («s:und:», «s:und::forced», «s:und:#2»); '' when absent or malformed. */
 export function subIdText(v: unknown): string {
-  return typeof v === 'string' && v.length <= LABEL_MAX && /^s:[a-z]{2,3}:[^\s#]*$/.test(v) ? v : '';
+  return typeof v === 'string' && v.length <= LABEL_MAX && /^s:[a-z]{2,3}:[^\s#]*(?:#\d+)?$/.test(v) ? v : '';
 }
 
 function sub(v: unknown): SeriesSub | null {

@@ -250,7 +250,8 @@ let busy = false;
 
 /**
  * Opens the queue in 2160 Player from `startAt` seconds (below MIN_RESUME: from the start) and saves the position it
- * hands back (resolved with what was saved, null when nothing). A call while one is open does nothing; rejects with the plugin's (native, translated) error.
+ * hands back (resolved with what was saved, null when nothing). `cancelled`: asked once the queue's files are known;
+ * true opens nothing (null). A call while one is open does nothing; rejects with the plugin's (native, translated) error.
  */
 export function play2160(
   plugin: Pick<OmpNativeTvPlugin, 'open2160'>,
@@ -260,12 +261,14 @@ export function play2160(
   startAt: number,
   prefs: SkipPrefs | null,
   knownDuration: number,
+  cancelled?: () => boolean,
 ): Promise<P2160Saved | null> {
   if (busy) return Promise.resolve(null);
   const open = plugin.open2160;
   if (typeof open !== 'function') return Promise.reject(new Error(t('nativePlayer.unavailable')));
   busy = true;
-  return ensureQueueFiles(c, queue).then(() => open2160(plugin, open, c, queue, index, startAt, prefs, knownDuration)).then(
+  // the files may take a few seconds: a screen left meanwhile (Back) opens no player over the one it went back to
+  return ensureQueueFiles(c, queue).then(() => (cancelled && cancelled() ? null : open2160(plugin, open, c, queue, index, startAt, prefs, knownDuration))).then(
     (saved) => {
       busy = false;
       return saved;

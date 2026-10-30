@@ -175,6 +175,11 @@ describe('reading the result', () => {
     expect(sub.lang).toBe('und');
     const res = p2160TrackResult({ [P2160_TRACKS.result.textExternal]: true, [P2160_TRACKS.result.textId]: sub.id }, 0);
     expect(seriesPatchFromResult(items, res, null, items[0])).toEqual({ s: { l: '', g: '', i: 's:und:' } });
+    // the second of two nameless files keeps its «#2»
+    const two = externalTracksForQueue({ streamUrl }, H, list(['S/Show.S01E01.mkv', 'S/Show.S01E01.srt', 'S/Show.S01E01.ass']), [0], null, S);
+    const res2 = p2160TrackResult({ [P2160_TRACKS.result.textExternal]: true, [P2160_TRACKS.result.textId]: 's:und:#2' }, 0);
+    expect(two[0].subtitles.map((x) => x.id)).toEqual(['s:und:', 's:und:#2']);
+    expect(seriesPatchFromResult(two, res2, null, two[0])).toEqual({ s: { l: '', g: '', i: 's:und:#2' } });
     // the same choice again: nothing new
     expect(seriesPatchFromResult(items, res, { at: 1, s: { l: '', g: '', i: 's:und:' } }, items[0])).toBeNull();
   });
@@ -227,6 +232,20 @@ describe('play2160 with external tracks', () => {
     expect(audio.length).toBe(2);
     expect(JSON.parse(audio[0]).length).toBe(2);
     expect(JSON.parse((sent.extras[P2160_TRACKS.textTracks] as string[])[0])[0].uri).toContain('index=4');
+  });
+
+  it('a screen left while the files are asked for opens no player', async () => {
+    const c: any = client();
+    c.files = () => [];
+    c.get = () => Promise.resolve({ hash: H, title: 'X', stat: 1 });
+    torrents.value = [{ hash: H, title: 'X', stat: 1 }];
+    let opened = 0;
+    const saved = await play2160({ open2160: () => { opened++; return Promise.resolve({ returned: false }); } }, c, queue, 0, 0, null, 0, () => true);
+    expect(saved).toBeNull();
+    expect(opened).toBe(0);
+    // and the next launch is not blocked
+    await play2160({ open2160: () => { opened++; return Promise.resolve({ returned: false }); } }, c, queue, 0, 0, null, 0);
+    expect(opened).toBe(1);
   });
 
   it('files known: nothing is asked; a server that does not answer only delays the launch', async () => {

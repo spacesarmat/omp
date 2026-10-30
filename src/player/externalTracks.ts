@@ -19,7 +19,7 @@ import type { TorrServerClient } from '../api/torrserver';
 import { baseName, type TorrentFile } from '../lib/episodes';
 import { normalizeLang } from '../lib/tracks';
 import { dubOf, isReset, sameDub, type SeriesSub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
-import { baseTrackId, releaseTracks, type EpisodeTracks, type ExternalTrack } from '../lib/externalTracks';
+import { releaseTracks, type EpisodeTracks, type ExternalTrack } from '../lib/externalTracks';
 import { pickExternalStart, type EmbeddedTrack, type ExternalStartSettings } from '../lib/externalTrackPick';
 
 export interface PlayerExternalTrack {
@@ -261,8 +261,9 @@ export function seriesPatchFor(chosen: ReturnType<typeof chosenTracks>): SeriesT
   else if (chosen.subtitle) {
     const l = chosen.subtitle.name;
     const g = normalizeLang(chosen.subtitle.lang);
-    // no title and no language (a nameless .ass): only its id finds it in the next episode
-    patch.s = l || g ? { l, g } : { l, g, i: baseTrackId(chosen.subtitle.id) };
+    // no title and no language (a nameless .ass): only its id finds it in the next episode; the «#2» part stays, so
+    // the second of two nameless files (an .srt and an .ass) is the one found again
+    patch.s = l || g ? { l, g } : { l, g, i: chosen.subtitle.id };
   }
   return patch.l !== undefined || patch.s !== undefined ? patch : null;
 }

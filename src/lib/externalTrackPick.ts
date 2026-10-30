@@ -111,9 +111,11 @@ export function pickExternalSubtitle(
   const want = series && !isReset(series) ? series.s : undefined;
   if (want === 'off') return 'off';
   if (want) {
-    // a nameless external choice: the same nameless track of this episode
+    // a nameless external choice: the same nameless track of this episode (the same «#2» first, then the same base id)
     if (want.i) {
-      for (let i = 0; i < tracks.length; i++) if (baseTrackId(tracks[i].id) === want.i) return tracks[i].id;
+      for (let i = 0; i < tracks.length; i++) if (tracks[i].id === want.i) return tracks[i].id;
+      const base = baseTrackId(want.i);
+      for (let i = 0; i < tracks.length; i++) if (baseTrackId(tracks[i].id) === base) return tracks[i].id;
     }
     if (want.l) {
       if (embedded && embedded.some((e) => sameDub(dubOf(e), want.l) && langOk(e.language, want.g))) return null;
