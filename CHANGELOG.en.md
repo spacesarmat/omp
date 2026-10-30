@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.7-beta.1
 
 - External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes
 - 2160 Player gets those dubs and subtitles by itself: every episode its own files, at start the dub chosen for the series or the language from the settings, and a dub picked in the player is remembered for the whole series. TorrServer preloads the chosen dub. It needs 2160 Player 0.2.17 or newer; the phone's built-in player gets them the same way
