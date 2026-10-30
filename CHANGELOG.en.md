@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.7-beta.2
 
 - 2160 Player gets the external dubs and subtitles again for a release added from the search and started right away: nothing went to the player before, since the new release's file list was not known yet
 - External subtitles with no name and no language (one .ass next to an episode, say) are now remembered for the series when picked in 2160 Player, and come on in the next episodes
