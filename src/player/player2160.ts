@@ -91,13 +91,39 @@ export function sanitizeP2160(r: unknown): P2160Result {
   return out;
 }
 
-type TracksClient = Pick<TorrServerClient, 'streamUrl' | 'videoSrc' | 'files'>;
+type TracksClient = Pick<TorrServerClient, 'streamUrl' | 'videoSrc' | 'files'> & Partial<Pick<TorrServerClient, 'get'>>;
+
+/** How long the launch waits for TorrServer's file list of a release this device does not know the files of. */
+export const FILES_WAIT_MS = 5000;
 
 /** The torrent's file list: TorrServer's (library copy), else the one this device saw last. */
 function filesOfHash(c: Pick<TorrServerClient, 'files'> | null, hash: string): TorrentFile[] {
   const tor = torrents.peek().filter((x) => x.hash === hash)[0];
   if (tor && c) return c.files(tor);
   return knownFiles(hash);
+}
+
+/**
+ * Asks TorrServer for the files of every queue release this device has none of (a release added a moment ago: its
+ * list copy is the add answer, from before the metadata), so its external tracks are not lost. Remembered by
+ * TorrServerClient.get (knownFiles). Never rejects; gives up after FILES_WAIT_MS.
+ */
+export function ensureQueueFiles(c: TracksClient | null, queue: PlayItem[], waitMs = FILES_WAIT_MS): Promise<void> {
+  if (!c || typeof c.get !== 'function') return Promise.resolve();
+  const get = c.get.bind(c);
+  const hashes: string[] = [];
+  queue.forEach((it) => {
+    if (it.hash && it.fileIndex !== undefined && hashes.indexOf(it.hash) < 0 && !filesOfHash(c, it.hash).length) hashes.push(it.hash);
+  });
+  if (!hashes.length) return Promise.resolve();
+  const all = Promise.all(hashes.map((h) => Promise.resolve().then(() => get(h)).then(() => undefined, () => undefined)));
+  return new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, waitMs);
+    all.then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
 }
 
 /**
@@ -224,7 +250,8 @@ let busy = false;
 
 /**
  * Opens the queue in 2160 Player from `startAt` seconds (below MIN_RESUME: from the start) and saves the position it
- * hands back (resolved with what was saved, null when nothing). A call while one is open does nothing; rejects with the plugin's (native, translated) error.
+ * hands back (resolved with what was saved, null when nothing). `cancelled`: asked once the queue's files are known;
+ * true opens nothing (null). A call while one is open does nothing; rejects with the plugin's (native, translated) error.
  */
 export function play2160(
   plugin: Pick<OmpNativeTvPlugin, 'open2160'>,
@@ -234,11 +261,35 @@ export function play2160(
   startAt: number,
   prefs: SkipPrefs | null,
   knownDuration: number,
+  cancelled?: () => boolean,
 ): Promise<P2160Saved | null> {
   if (busy) return Promise.resolve(null);
   const open = plugin.open2160;
   if (typeof open !== 'function') return Promise.reject(new Error(t('nativePlayer.unavailable')));
   busy = true;
+  // the files may take a few seconds: a screen left meanwhile (Back) opens no player over the one it went back to
+  return ensureQueueFiles(c, queue).then(() => (cancelled && cancelled() ? null : open2160(plugin, open, c, queue, index, startAt, prefs, knownDuration))).then(
+    (saved) => {
+      busy = false;
+      return saved;
+    },
+    (e) => {
+      busy = false;
+      throw e;
+    },
+  );
+}
+
+function open2160(
+  plugin: Pick<OmpNativeTvPlugin, 'open2160'>,
+  open: NonNullable<OmpNativeTvPlugin['open2160']>,
+  c: TorrServerClient | null,
+  queue: PlayItem[],
+  index: number,
+  startAt: number,
+  prefs: SkipPrefs | null,
+  knownDuration: number,
+): Promise<P2160Saved | null> {
   const fromStart = startAt < MIN_RESUME;
   const s = settings.peek();
   let tracks: ExternalTracksForItem[] = [];
@@ -260,17 +311,10 @@ export function play2160(
   const aligned = o.items.every((i) => !!(i.url || '').trim());
   if (aligned && Object.keys(extras).length) o.extras = extras;
   preloadStartTracks(c, queue, index, tracks);
-  return Promise.resolve().then(() => open.call(plugin, o)).then(
-    (raw) => {
-      busy = false;
-      const r = sanitizeP2160(raw);
-      const saved = saveP2160Result(c, queue, index, r, knownDuration);
-      if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r, index);
-      return saved;
-    },
-    (e) => {
-      busy = false;
-      throw e;
-    },
-  );
+  return Promise.resolve().then(() => open.call(plugin, o)).then((raw) => {
+    const r = sanitizeP2160(raw);
+    const saved = saveP2160Result(c, queue, index, r, knownDuration);
+    if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r, index);
+    return saved;
+  });
 }

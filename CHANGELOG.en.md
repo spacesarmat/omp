@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- 2160 Player gets the external dubs and subtitles again for a release added from the search and started right away: nothing went to the player before, since the new release's file list was not known yet
+- External subtitles with no name and no language (one .ass next to an episode, say) are now remembered for the series when picked in 2160 Player, and come on in the next episodes
+- [tech] `TorrServerClient.get` keeps `file_stats` in knownFiles like `loadInfo`: the library copy of a release just added is the `add` answer without metadata, so `filesOfHash` returned []. `play2160` asks TorrServer for the files of queue releases this device has none of before the launch (`ensureQueueFiles`, at most 5 s; a screen left meanwhile opens no player). The series record keeps the external track id of subtitles with no name and language (`s.i`, «s:und:» or «s:und:#2»), `pickExternalSubtitle` finds them by it
+
 ## 0.20.7-beta.1
 
 - External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes

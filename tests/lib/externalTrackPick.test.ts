@@ -65,6 +65,22 @@ describe('pickExternalAudio', () => {
 });
 
 describe('pickExternalSubtitle', () => {
+  it('a nameless choice (no studio, no language) finds the same nameless track of the next episode', () => {
+    const r = releaseTracks(list(['S/Show.S01E01.mkv', 'S/Show.S01E02.mkv', 'S/Subs/Show.S01E01.ass', 'S/Subs/Show.S01E02.ass']));
+    const e2 = r.byVideo[2].subtitles;
+    expect(e2.map((t) => t.id)).toEqual(['s:und:']);
+    expect(pickExternalSubtitle(e2, rec({ s: { l: '', g: '', i: 's:und:' } }), { subLang: 'ru', subtitlesOn: false })).toBe('s:und:');
+    // two nameless files of one episode (an .srt and an .ass): the second one stays the second one
+    const two = releaseTracks(list(['S/Show.S01E01.mkv', 'S/Show.S01E02.mkv', 'S/Show.S01E01.srt', 'S/Show.S01E01.ass', 'S/Show.S01E02.srt', 'S/Show.S01E02.ass']));
+    const e2b = two.byVideo[2].subtitles;
+    expect(e2b.map((t) => t.id)).toEqual(['s:und:', 's:und:#2']);
+    expect(pickExternalSubtitle(e2b, rec({ s: { l: '', g: '', i: 's:und:#2' } }), { subLang: 'ru', subtitlesOn: false })).toBe('s:und:#2');
+    // an episode with only one: the same base id
+    expect(pickExternalSubtitle(e2, rec({ s: { l: '', g: '', i: 's:und:#2' } }), { subLang: 'ru', subtitlesOn: false })).toBe('s:und:');
+    // not there: the settings decide as before
+    expect(pickExternalSubtitle(E1.subtitles, rec({ s: { l: '', g: '', i: 's:und:' } }), { subLang: 'ru', subtitlesOn: true })).toBe('s:rus:');
+  });
+
   it('off in the series record wins', () => {
     expect(pickExternalSubtitle(E1.subtitles, rec({ s: 'off' }), { subLang: 'ru', subtitlesOn: true })).toBe('off');
   });

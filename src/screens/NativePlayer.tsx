@@ -144,8 +144,13 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
           const prefs = io && first.hash ? io.load(first.hash).catch(() => null) : Promise.resolve(null);
           // the watch journal («История») like the built-in player: the start, then where the user stopped
           journal.start(first, pos, dur);
-          return prefs.then((p) => play2160(plugin, c, queue, index, pos, p, dur)).then(
+          return prefs.then((p) => play2160(plugin, c, queue, index, pos, p, dur, () => cancelled)).then(
             (saved) => {
+              if (cancelled && !saved) {
+                // left before the player opened: the screen is gone already
+                journal.end(first, pos, dur);
+                return true;
+              }
               if (saved) {
                 // another item of the playlist: its own entry
                 if (saved.item !== first) journal.start(saved.item, 0, saved.duration);

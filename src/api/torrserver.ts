@@ -83,7 +83,12 @@ export class TorrServerClient {
   }
 
   get(hash: string): Promise<Torrent> {
-    return this.call<Torrent>('/torrents', { body: { action: 'get', hash } });
+    return this.call<Torrent>('/torrents', { body: { action: 'get', hash } }).then((t) => {
+      // kept on this device like loadInfo's: the list copy of a release just added (the add answer, before its
+      // metadata) has no files, and the release screen gets them only from here (2160 Player's external tracks)
+      if (t && t.file_stats && t.file_stats.length) rememberFiles(hash, t.file_stats);
+      return t;
+    });
   }
 
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
