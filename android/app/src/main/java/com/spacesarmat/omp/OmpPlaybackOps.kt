@@ -99,6 +99,14 @@ internal fun OmpNativePlugin.queue2160(call: PluginCall): Pair<List<Player2160.I
     return playable
 }
 
+/** The page's extra Intent extras for 2160 Player (external tracks), safely typed; empty from an older page. */
+internal fun pageExtras2160(call: PluginCall): Map<String, Any> =
+    try { Player2160.pageExtras(call.getObject("extras")) } catch (_: Exception) { emptyMap() }
+
+/** The player's result extras the page asked for. */
+internal fun resultKeys2160(call: PluginCall): List<String> =
+    try { Player2160.resultKeys(call.getArray("resultKeys")) } catch (_: Exception) { emptyList() }
+
 internal fun OmpNativePlugin.playEmbedded2160Op(call: PluginCall) {
     val (items, start) = queue2160(call) ?: return
     val position = call.getDouble("positionMs")?.toLong() ?: 0L
@@ -108,7 +116,7 @@ internal fun OmpNativePlugin.playEmbedded2160Op(call: PluginCall) {
         Embedded2160.applyBackground(context, background)
         // Before the activity starts, so PiP dismiss and screen-off are observed even when the setting is off.
         PhonePlayback.install(context)
-        launchForResult(call, Embedded2160.intent(context, plan), "on2160Result")
+        launchForResult(call, Embedded2160.intent(context, plan, pageExtras2160(call)), "on2160Result")
         // After the activity exists, so the session is already created. No-op on TV and when the setting is off.
         if (background) PlaybackNotification.onPlayerOpened(context)
     } catch (_: RuntimeException) {
@@ -125,7 +133,9 @@ internal fun OmpNativePlugin.open2160Op(call: PluginCall) {
     }
     val (items, start) = queue2160(call) ?: return
     val position = call.getDouble("positionMs")?.toLong() ?: 0L
-    val spec = Player2160.spec(items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty())
+    val spec = Player2160.spec(
+        items, start, position, call.getBoolean("fromStart") ?: false, call.getString("segments").orEmpty(), pageExtras2160(call),
+    )
     val intent = Player2160.intent(pkg, spec, items.map { it.url })
     try {
         launchForResult(call, intent, "on2160Result")
@@ -141,7 +151,7 @@ internal fun OmpNativePlugin.open2160Op(call: PluginCall) {
 internal fun OmpNativePlugin.on2160ResultOp(call: PluginCall?, result: ActivityResult) {
     if (call == null) return
     val r = try {
-        Player2160.parse(result.resultCode, result.data)
+        Player2160.parse(result.resultCode, result.data, resultKeys2160(call))
     } catch (_: RuntimeException) {
         Player2160.Result(false)
     }

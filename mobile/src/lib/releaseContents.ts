@@ -6,6 +6,7 @@ import { tp } from '../../../src/i18n';
 import { episodesOutOf } from '../../../src/lib/episodesOutOf';
 import { baseName, playableFiles, type TorrentFile } from '../../../src/lib/episodes';
 import { fileEpisodes } from '../../../src/lib/categoryCheck';
+import { externalNoteText } from '../../../src/lib/externalNote';
 import { filesOf } from '../watch';
 
 /** Samples and trailers are no episodes. */
@@ -41,6 +42,11 @@ export function contentsTextOf(files: TorrentFile[]): string {
 
 export function contentsText(tor: Torrent): string {
   return contentsTextOf(filesOf(tor));
+}
+
+/** «+3 озвучки, субтитры»: the external dubs and subtitles of a release; '' when none (or its files are not known). */
+export function extrasText(tor: Torrent): string {
+  return externalNoteText(filesOf(tor));
 }
 
 /** Every content file's episodes belong to `season` (a file with no season number counts as this season). */

@@ -114,9 +114,15 @@ export function fileEpisode(path: string): { season: number | null; episode: num
   return e ? { season: e.season, episode: e.episodes[0] } : null;
 }
 
-/** One video holds at least 70% of the size: a film (with extras), never a set of episodes. */
+/**
+ * One video holds at least 70% of the size: a film (with extras), never a set of episodes. External dubs and subtitles
+ * («Rus Sound/*.dts» next to a film) are not part of the size: four DTS dubs must not turn a film into «episodes».
+ */
 export function hasMainVideo(files: TorrentFile[]): boolean {
-  const total = files.reduce((n, f) => n + sizeOf(f), 0);
+  const total = files.reduce((n, f) => {
+    const k = fileKind(f.path);
+    return k === 'audio' || k === 'subtitle' ? n : n + sizeOf(f);
+  }, 0);
   if (!total) return false;
   const main = files.filter((f) => fileKind(f.path) === 'video').reduce((m, f) => Math.max(m, sizeOf(f)), 0);
   return main / total >= MAIN_SHARE;

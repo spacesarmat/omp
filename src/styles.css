@@ -167,6 +167,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 /* one row that scrolls sideways (the focused chip is kept whole); the padding keeps the focus ring unclipped */
 .series-seasons { position: relative; overflow: hidden; margin: 0 -12px 12px; padding: 12px; }
 .series-swarm { font-size: 24px; margin: 0 0 16px; }
+.torrent-extras { font-size: 24px; margin: 0 0 16px; }
 .series-dead { font-size: 26px; margin: 0 0 16px; color: #f5b700; }
 .series-dead .button { margin-top: 12px; }
 .series-seasons-row { display: flex; flex-wrap: nowrap; white-space: nowrap; }

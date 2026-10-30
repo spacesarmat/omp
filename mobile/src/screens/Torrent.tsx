@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { torrentHeaderEpisodes } from '../lib/releaseContents';
+import { externalNoteText } from '../../../src/lib/externalNote';
 import { rememberedSeasonTotal, rememberSeasonTotals, seasonEpisodeTotal } from '../../../src/lib/episodesOutOf';
 import { t, fmtDuration, fmtSize } from '../../../src/i18n';
 import { knownSwarmText } from '../../../src/lib/torrentStatus';
@@ -621,6 +622,7 @@ export function Torrent({ hash }: { hash: string }) {
   const meta = [
     season !== null ? t('library.season', { n: season }) : '',
     hasEpisodes ? torrentHeaderEpisodes(allFiles, season, seasonTotal) : '',
+    externalNoteText(allFiles),
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     knownSwarmText(tor),
   ].filter(Boolean);

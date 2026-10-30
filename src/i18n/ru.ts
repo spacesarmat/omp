@@ -361,6 +361,10 @@ export const ru = {
     addedMany: 'Добавлено торрентов: {n}',
     added: 'Добавлено: {titles}',
     episodes: { one: '{n} серия', few: '{n} серии', many: '{n} серий' },
+    // external dubs and subtitles of a release («Rus Sound/LostFilm/*.mka», «Rus Subs/*.srt»): «+3 озвучки, субтитры»
+    extDubs: { one: '+{n} озвучка', few: '+{n} озвучки', many: '+{n} озвучек' },
+    extDubsSubs: { one: '+{n} озвучка, субтитры', few: '+{n} озвучки, субтитры', many: '+{n} озвучек, субтитры' },
+    extSubs: '+субтитры',
     select: 'Выбрать',
     selectCancel: 'Отменить выбор',
     selected: 'Выбрано: {n}',
@@ -1787,6 +1791,10 @@ export const ru = {
     seedsUnknown: '-',
     /** Active ~60s with 0 seeders and 0 downloaded bytes. */
     deadRelease: 'Раздача не отвечает - попробуйте другую',
+    /** Torrent screen, a release with external dub files, on webOS: LG's player cannot add them. */
+    extDubsWebos: 'Отдельные озвучки на webOS не подключаются: звучит дорожка из видео. Их подключает 2160 Player на Android TV',
+    /** Torrent screen, a release with external dub files, Android TV with OMP's own player chosen. */
+    extDubsBuiltin: 'Отдельные озвучки подключает 2160 Player: «Настройки» → «Плеер для видео»',
     deleteAsk: 'Удалить торрент с сервера?',
     resetAsk: 'Сбросить отметки просмотра?',
     continueFrom: 'Продолжить {ep}с {time}',

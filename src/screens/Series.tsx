@@ -28,6 +28,7 @@ import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
+import { externalNoteText } from '../lib/externalNote';
 import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
@@ -372,7 +373,8 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     if (index >= 0) navigate({ name: 'player', queue, index });
   };
 
-  const releaseLabel = (m: Torrent) => [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · ');
+  const releaseLabel = (m: Torrent) =>
+    [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), formatBytes(m.torrent_size || 0)].filter(Boolean).join(' · ');
   // «Раздачи · N»: OK opens a release, red deletes it (a release of this season only: a pack of several seasons stays)
   const openReleases = () => {
     if (releases.length === 1) {
