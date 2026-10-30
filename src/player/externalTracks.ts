@@ -18,8 +18,8 @@
 import type { TorrServerClient } from '../api/torrserver';
 import { baseName, type TorrentFile } from '../lib/episodes';
 import { normalizeLang } from '../lib/tracks';
-import { dubOf, isReset, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
-import { releaseTracks, type EpisodeTracks, type ExternalTrack } from '../lib/externalTracks';
+import { dubOf, isReset, sameDub, type SeriesSub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { baseTrackId, releaseTracks, type EpisodeTracks, type ExternalTrack } from '../lib/externalTracks';
 import { pickExternalStart, type EmbeddedTrack, type ExternalStartSettings } from '../lib/externalTrackPick';
 
 export interface PlayerExternalTrack {
@@ -252,13 +252,18 @@ export function chosenTracks(items: ExternalTracksForItem[], res: ExternalTracks
  */
 export function seriesPatchFor(chosen: ReturnType<typeof chosenTracks>): SeriesTracksPatch | null {
   if (!chosen) return null;
-  const patch: { l?: string; g?: string; s?: 'off' | { l: string; g: string } } = {};
+  const patch: { l?: string; g?: string; s?: 'off' | SeriesSub } = {};
   if (chosen.audio) {
     patch.l = chosen.audio.name;
     patch.g = normalizeLang(chosen.audio.lang);
   }
   if (chosen.subtitle === 'off') patch.s = 'off';
-  else if (chosen.subtitle) patch.s = { l: chosen.subtitle.name, g: normalizeLang(chosen.subtitle.lang) };
+  else if (chosen.subtitle) {
+    const l = chosen.subtitle.name;
+    const g = normalizeLang(chosen.subtitle.lang);
+    // no title and no language (a nameless .ass): only its id finds it in the next episode
+    patch.s = l || g ? { l, g } : { l, g, i: baseTrackId(chosen.subtitle.id) };
+  }
   return patch.l !== undefined || patch.s !== undefined ? patch : null;
 }
 
@@ -287,7 +292,7 @@ export function seriesPatchFromResult(
   if ((r.subtitleId === null || r.subtitleId === 'off') && !autoSub.length) delete r.subtitleId;
   res = r;
   const ext = seriesPatchFor(chosenTracks(items, res));
-  const patch: { l?: string; g?: string; s?: 'off' | { l: string; g: string } } = ext && ext !== 'reset' ? { ...ext } : {};
+  const patch: { l?: string; g?: string; s?: 'off' | SeriesSub } = ext && ext !== 'reset' ? { ...ext } : {};
   if (patch.l === undefined && res.audioId === null) {
     const l = dubOf({ title: res.audioName });
     if (l) {
@@ -307,7 +312,8 @@ export function seriesPatchFromResult(
     const was = rec.s;
     const same = patch.s === 'off'
       ? was === 'off'
-      : !!was && was !== 'off' && normalizeLang(was.g) === patch.s.g && (was.l === patch.s.l || sameDub(was.l, patch.s.l));
+      : !!was && was !== 'off' && normalizeLang(was.g) === patch.s.g && (was.i || '') === (patch.s.i || '') &&
+        (was.l === patch.s.l || sameDub(was.l, patch.s.l));
     if (same) delete patch.s;
   }
   return patch.l !== undefined || patch.s !== undefined ? patch : null;

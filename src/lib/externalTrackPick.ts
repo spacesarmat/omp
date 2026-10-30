@@ -10,7 +10,7 @@
 // Pure; not wired to a player yet (src/player/externalTracks.ts).
 import { normalizeLang } from './tracks';
 import { dubOf, isReset, normDub, sameDub, type SeriesTracks } from './seriesTracks';
-import type { EpisodeTracks, ExternalTrack } from './externalTracks';
+import { baseTrackId, type EpisodeTracks, type ExternalTrack } from './externalTracks';
 
 export interface ExternalStartSettings {
   /** «Язык озвучки» (settings.audioLang, «ru» by default). */
@@ -111,6 +111,10 @@ export function pickExternalSubtitle(
   const want = series && !isReset(series) ? series.s : undefined;
   if (want === 'off') return 'off';
   if (want) {
+    // a nameless external choice: the same nameless track of this episode
+    if (want.i) {
+      for (let i = 0; i < tracks.length; i++) if (baseTrackId(tracks[i].id) === want.i) return tracks[i].id;
+    }
     if (want.l) {
       if (embedded && embedded.some((e) => sameDub(dubOf(e), want.l) && langOk(e.language, want.g))) return null;
       // the same name first («LostFilm · Forced» is not «LostFilm»), then the same studio, full subtitles first

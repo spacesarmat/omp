@@ -9,7 +9,8 @@ vi.mock('../../src/store/seriesTracks', () => ({
   },
 }));
 
-import { play2160, queueExternalTracks, sanitizeP2160 } from '../../src/player/player2160';
+import { ensureQueueFiles, play2160, queueExternalTracks, sanitizeP2160 } from '../../src/player/player2160';
+import { knownFiles, rememberFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
 import {
   externalTracksForQueue,
   p2160TrackExtras,
@@ -59,6 +60,7 @@ function client() {
 
 beforeEach(() => {
   localStorage.clear();
+  resetKnownFilesForTests();
   reloadProgress();
   remembered.length = 0;
   torrents.value = [{ hash: H, title: 'Show S01', stat: 3, file_stats: FILES }];
@@ -165,6 +167,18 @@ describe('reading the result', () => {
     expect(seriesPatchFromResult(subs, { fileIndex: 0, subtitleId: 'off' }, { at: 1, s: 'off' }, subs[0])).toBeNull();
   });
 
+  it('a nameless external subtitle (no studio, no language) is kept by its id', () => {
+    const files = list(['S/Show.S01E01.mkv', 'S/Show.S01E02.mkv', 'S/Subs/Show.S01E01.ass', 'S/Subs/Show.S01E02.ass']);
+    const items = externalTracksForQueue({ streamUrl }, H, files, [0, 1], null, S);
+    const sub = items[0].subtitles[0];
+    expect(sub.name).toBe('');
+    expect(sub.lang).toBe('und');
+    const res = p2160TrackResult({ [P2160_TRACKS.result.textExternal]: true, [P2160_TRACKS.result.textId]: sub.id }, 0);
+    expect(seriesPatchFromResult(items, res, null, items[0])).toEqual({ s: { l: '', g: '', i: 's:und:' } });
+    // the same choice again: nothing new
+    expect(seriesPatchFromResult(items, res, { at: 1, s: { l: '', g: '', i: 's:und:' } }, items[0])).toBeNull();
+  });
+
   it('sanitizeP2160 keeps only the asked result keys with plain values, and is idempotent', () => {
     const r = sanitizeP2160({ returned: true, positionMs: 1, extras: { [k.audioId]: 'x', [k.textOff]: true, other: 'y', [k.audioName]: { a: 1 } } });
     expect(r.extras).toEqual({ [k.audioId]: 'x', [k.textOff]: true });
@@ -192,6 +206,42 @@ describe('play2160 with external tracks', () => {
     expect(sent.extras[P2160_TRACKS.audioSelect]).toBe('id:' + startId);
     expect(c.preloaded).toEqual([startId === 'a:rus:lostfilm' ? 2 : 5]);
     expect(remembered).toEqual([{ hash: H, patch: { l: otherId === 'a:rus:lostfilm' ? 'LostFilm' : 'HDRezka', g: 'ru' } }]);
+  });
+
+  it('a release just added (the add answer in the library, no files yet): its files are asked for, the tracks go', async () => {
+    const c: any = client();
+    // TorrServerClient.files: file_stats, else data, else knownFiles
+    c.files = (t: any) => (t.file_stats && t.file_stats.length ? t.file_stats : knownFiles(t.hash));
+    const asked: string[] = [];
+    c.get = (h: string) => {
+      asked.push(h);
+      rememberFiles(h, FILES);
+      return Promise.resolve({ hash: h, title: 'Show S01', stat: 3, file_stats: FILES });
+    };
+    torrents.value = [{ hash: H, title: 'Show S01', stat: 1, data: '{"omp":{"ts":{"s":38}}}' }];
+    expect(queueExternalTracks(c, queue, S).every((x) => !x.audio.length)).toBe(true);
+    let sent: any = null;
+    await play2160({ open2160: (o: unknown) => { sent = o; return Promise.resolve({ returned: false }); } }, c, queue, 0, 0, null, 0);
+    expect(asked).toEqual([H]);
+    const audio = sent.extras[P2160_TRACKS.audioTracks] as string[];
+    expect(audio.length).toBe(2);
+    expect(JSON.parse(audio[0]).length).toBe(2);
+    expect(JSON.parse((sent.extras[P2160_TRACKS.textTracks] as string[])[0])[0].uri).toContain('index=4');
+  });
+
+  it('files known: nothing is asked; a server that does not answer only delays the launch', async () => {
+    const c: any = client();
+    let asked = 0;
+    c.get = () => {
+      asked++;
+      return new Promise(() => undefined);
+    };
+    await ensureQueueFiles(c, queue, 10);
+    expect(asked).toBe(0);
+    c.files = () => [];
+    torrents.value = [{ hash: H, title: 'X', stat: 1 }];
+    await ensureQueueFiles(c, queue, 10);
+    expect(asked).toBe(1);
   });
 
   it('a release without external tracks launches as before', async () => {
