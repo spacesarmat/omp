@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
+- [tv] Season page: a poster on a backdrop, the series title and Season N, and room between the header, the buttons and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (size, time left, or the air date)
 
 ## 0.20.7
 

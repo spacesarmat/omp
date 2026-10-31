@@ -1,9 +1,10 @@
-// «Мои» → a series on the TV: the TMDB hero (backdrop, poster, status pill, year · rating · genres, overview),
-// «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season chips (focusing one shows it; with TMDB
-// every season of the show: released ones the library lacks are dashed «+ Сезон N» with «Найти раздачи», seasons
-// still to come are dashed with their date) and the chosen season's episodes with their TMDB names, then the announced
-// ones not out yet as dashed muted rows the focus skips («S02E08 Пирамида · выйдет 8 окт.»). Without TMDB (no key, offline,
-// no match) the library's poster and title stay and the episodes keep their file names.
+// «Мои» → a series on the TV: the TMDB hero (backdrop, poster, series title, «Сезон N», status pill,
+// year · rating · genres, overview), «Смотреть SxxEyy» / «Раздачи · N» / «Следить за сериями», a row of season
+// chips (focusing one shows it; with TMDB every season of the show: released ones the library lacks are dashed
+// «+ Сезон N» with «Найти раздачи», seasons still to come are dashed with their date) and «Серии»: each episode is
+// two lines (a number badge, the title up to two lines, then the length and the status). Announced episodes not out
+// yet are dashed muted rows the focus skips («4 Пирамида», «выйдет 8 окт.»). Without TMDB (no key, offline, no match)
+// the library's poster and title stay and the episodes keep their file names.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { client } from '../store/servers';
@@ -21,7 +22,7 @@ import {
 } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
-import { lang, t, tp, fmtNumber } from '../i18n';
+import { lang, t, tp, fmtNumber, fmtDuration } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
@@ -43,7 +44,7 @@ import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { tvGlyphs } from '../ui/tvText';
 import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
-import { swarmText } from '../lib/torrentStatus';
+import { knownSwarmText } from '../lib/torrentStatus';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -53,7 +54,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
-import { ComingRows, revealComing } from '../ui/ComingRows';
+import { ComingRows, episodeMetaLine, revealComing } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -475,6 +476,8 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const pill = card ? seriesPill(card, now) : null;
   const meta = card ? heroMeta(card) : groupLabel(group);
   const title = card && card.title ? card.title : libraryTitle(group.named).title;
+  const seasonMeta = card ? card.seasons.filter((s) => s.number === season)[0] : undefined;
+  const posterUrl = (seasonMeta && seasonMeta.poster) || (card && card.poster) || '';
 
   // the TMDB episodes announced after the season's last one here (dated today or later), as on the phone; a season
   // whose files carry no episode numbers cannot be placed, so it gets none
@@ -502,9 +505,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             <div class="series-shade" />
           </div>
         ) : null}
-        <div class="series-poster">{card && card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <Poster t={group.lead} showTitle />}</div>
+        <div class="series-poster">{posterUrl ? <img src={sharpPosterUrl(posterUrl)} alt="" /> : <Poster t={group.lead} showTitle />}</div>
         <div class="series-info">
           <h1>{tvGlyphs(title)}</h1>
+          <div class="series-kicker">{season !== NO_SEASON ? t('library.season', { n: season }) : t('series.noSeason')}</div>
           {pill && (
             <div class="series-status">
               <SeriesPill pill={pill} inline />
@@ -589,13 +593,14 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       )}
       {members.map((m) => {
-        const swarm = swarmText(m);
+        const swarm = knownSwarmText(m);
         const who = members.length > 1 ? qualityOrUnknown(displayTitle(m)) : '';
+        const line = who && swarm ? who + ' · ' + swarm : who || swarm;
         const dead = isDeadRelease(m.hash);
         const find = canUpgrade(m, c.files(m));
         return (
           <div key={m.hash}>
-            {swarm ? <div class="muted series-swarm">{who ? who + ' · ' + swarm : swarm}</div> : null}
+            {line ? <div class="muted series-swarm">{line}</div> : null}
             {dead && (
               <FocusGroup focusKey={'series-dead-' + m.hash} className="series-dead">
                 <div>{t('torrent.deadRelease')}</div>
@@ -605,6 +610,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           </div>
         );
       })}
+      {(rows.length > 0 || coming.length > 0) && <h2 class="series-eps-title">{t('titleCard.episodes')}</h2>}
       <FocusGroup focusKey="SERIES-EPISODES" className="series-episodes">
         {rows.map((r, i) => {
           const hash = r.tor.hash;
@@ -615,22 +621,35 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const left = !watched && at > 0 && p && p.duration > 0 ? Math.max(1, Math.round((p.duration - at) / 60)) : 0;
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
+          const runtime = (ep && ep.runtime > 0 ? ep.runtime : 0) || (card && card.runtime > 0 ? card.runtime : 0);
+          const status = left ? t('series.left', { n: left }) : formatBytes(r.file.length);
+          const badge = r.episode !== null ? String(r.episode) : r.code || '-';
           return (
-            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onArrow={arrowUpToAbove(rowKey(r))} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
-              <span class="ep">{r.code}</span>
-              <span class="name">{tvGlyphs(name)}</span>
-              {!watched && ratio > 0 && (
-                <span class="bar">
-                  <ProgressBar ratio={ratio} />
-                </span>
-              )}
-              <span class="size">{left ? t('series.left', { n: left }) : formatBytes(r.file.length)}</span>
+            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item ep-row ep-in" onPress={() => play(r)} onArrow={arrowUpToAbove(rowKey(r))} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
+              <span class="ep ep-num">{badge}</span>
+              <span class="ep-main">
+                <span class="name">{tvGlyphs(name)}</span>
+                <span class="ep-sub">{tvGlyphs(episodeMetaLine(runtime > 0 ? fmtDuration(runtime) : '', status))}</span>
+                {!watched && ratio > 0 && (
+                  <span class="bar">
+                    <ProgressBar ratio={ratio} />
+                  </span>
+                )}
+              </span>
               <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>
             </Focusable>
           );
         })}
         {/* the episodes announced after the last one here: muted and dashed, not focusable, no OK */}
-        <ComingRows list={coming} now={now} />
+        <ComingRows
+          list={coming}
+          now={now}
+          lines
+          runtime={(e) => {
+            const hit = eps[e.episode];
+            return (hit && hit.runtime > 0 ? hit.runtime : 0) || (card && card.runtime > 0 ? card.runtime : 0);
+          }}
+        />
       </FocusGroup>
       {!rows.length && !coming.length && futureSeason && (
         <div class="empty">
