@@ -5,7 +5,7 @@ import type { Torrent } from '../api/types';
 import { findGroup, isSeries, seriesKey } from '../lib/seriesGroups';
 import { newestSeriesTracks, seriesTracksOf, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { saveSeriesTracks, type JournalClient } from './journal';
-import { torrents } from './library';
+import { libraryGeneration, torrents } from './library';
 
 function sameHash(a: string | undefined, b: string | undefined): boolean {
   return !!a && !!b && a.toLowerCase() === b.toLowerCase();
@@ -83,11 +83,19 @@ export function rememberSeriesTracks(c: JournalClient | null, hash: string | und
       () => {
         if (torrents.peek().some((x) => sameHash(x.hash, hash))) return undefined;
         // the choice was written on the server, but this device's library copy did not have the torrent yet
-        return c.list().then((fresh) => {
-          if (torrents.peek().some((x) => sameHash(x.hash, hash))) return;
-          const cur = (fresh || []).filter((x) => sameHash(x.hash, hash))[0];
-          if (cur) torrents.value = torrents.peek().concat([cur]);
-        });
+        const epoch = libraryGeneration();
+        return c.list().then(
+          (fresh) => {
+            if (libraryGeneration() !== epoch) return;
+            if (torrents.peek().some((x) => sameHash(x.hash, hash))) return;
+            const cur = (fresh || []).filter((x) => sameHash(x.hash, hash))[0];
+            if (cur) torrents.value = torrents.peek().concat([cur]);
+          },
+          (e) => {
+            const msg = e && (e as Error).message ? (e as Error).message : String(e);
+            warnTracks('omp.tracks list failed hash=' + hash + ' err=' + msg);
+          },
+        );
       },
       (e) => {
         const msg = e && (e as Error).message ? (e as Error).message : String(e);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { seriesMembersOf, seriesTracksFor, rememberSeriesTracks } from '../../src/store/seriesTracks';
 import { saveSeriesTracks, type JournalClient } from '../../src/store/journal';
-import { torrents } from '../../src/store/library';
+import { resetLibrary, torrents } from '../../src/store/library';
 import { seriesTracksOf, newestSeriesTracks } from '../../src/lib/seriesTracks';
 import type { Torrent } from '../../src/api/types';
 
@@ -117,6 +117,38 @@ describe('saveSeriesTracks', () => {
     expect(seriesTracksFor('s1', both)!.e).toBe(0);
     expect(seriesTracksFor('s2', both)!.e).toBeUndefined();
     expect(seriesTracksFor('s2', both)!.l).toBe('Japanese');
+    warn.mockRestore();
+  });
+
+  it('does not put a torrent back after the library was reset, and a late list error does not reject', async () => {
+    const fresh: Torrent = { hash: 'aba', title: 'MahoAku (2024) BDRip', category: 'movie', stat: 2, data: '' };
+    const s = fakeServer([fresh]);
+    torrents.value = [];
+    let calls = 0;
+    let third!: (v: Torrent[]) => void;
+    s.c.list = vi.fn(() => {
+      calls++;
+      if (calls < 3) return Promise.resolve(s.all.map((x) => ({ ...x })));
+      return new Promise<Torrent[]>((r) => { third = r; });
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const pending = rememberSeriesTracks(s.c, 'aba', { s: { l: 'cr', g: 'ru' } }, true);
+    for (let i = 0; i < 30 && !third; i++) await Promise.resolve();
+    expect(typeof third).toBe('function');
+    resetLibrary();
+    third([]);
+    await pending;
+    expect(torrents.value).toEqual([]);
+    // the follow-up read fails: the save already happened, the promise still resolves
+    calls = 0;
+    torrents.value = [];
+    s.c.list = vi.fn(() => {
+      calls++;
+      if (calls < 3) return Promise.resolve(s.all.map((x) => ({ ...x })));
+      return Promise.reject(new Error('late'));
+    });
+    await expect(rememberSeriesTracks(s.c, 'aba', { l: 'AniLiberty', g: 'ru' }, true)).resolves.toBeUndefined();
+    expect(warn.mock.calls.some((c) => String(c[0]).indexOf('omp.tracks list failed') === 0)).toBe(true);
     warn.mockRestore();
   });
 });
