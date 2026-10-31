@@ -148,6 +148,22 @@ export function pickExternalSubtitle(
   return subInLang(tracks, s.subLang);
 }
 
+/** The built-in index to send. With a probed track list, only an index whose name and language still match. */
+function embeddedIndexFor(rec: SeriesTracks, tracks: EmbeddedTrack[] | undefined): number | undefined {
+  if (typeof rec.e !== 'number') return undefined;
+  if (!tracks) return rec.e;
+  const ok = (t: EmbeddedTrack | undefined) => !!t && (!rec.l || sameDub(dubOf(t), rec.l)) && langOk(t.language, rec.g);
+  if (ok(tracks[rec.e])) return rec.e;
+  for (let i = 0; i < tracks.length; i++) if (ok(tracks[i])) return i;
+  return undefined;
+}
+
+function withoutEmbedded(rec: SeriesTracks): SeriesTracks {
+  const copy: SeriesTracks = { ...rec };
+  delete copy.e;
+  return copy;
+}
+
 /** Both choices for one episode. */
 export function pickExternalStart(
   tracks: EpisodeTracks,
@@ -156,10 +172,13 @@ export function pickExternalStart(
   embedded?: { audio?: EmbeddedTrack[]; subtitles?: EmbeddedTrack[] },
 ): ExternalStart {
   const rec = series && !isReset(series) ? series : null;
+  const idx = rec ? embeddedIndexFor(rec, embedded ? embedded.audio : undefined) : undefined;
+  // a built-in index that does not match this release's tracks must not block the external dub
+  const audioSeries = rec && typeof rec.e === 'number' && idx === undefined ? withoutEmbedded(rec) : series;
   const out: ExternalStart = {
-    audio: pickExternalAudio(tracks.audio, series, s, embedded ? embedded.audio : undefined),
+    audio: pickExternalAudio(tracks.audio, audioSeries, s, embedded ? embedded.audio : undefined),
     subtitle: pickExternalSubtitle(tracks.subtitles, series, s, embedded ? embedded.subtitles : undefined),
   };
-  if (rec && typeof rec.e === 'number') out.embedded = rec.e;
+  if (typeof idx === 'number') out.embedded = idx;
   return out;
 }

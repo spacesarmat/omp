@@ -124,7 +124,13 @@ export function groupBySeason(files: TorrentFile[]): Season[] {
 export function playableFiles(files: TorrentFile[]): TorrentFile[] {
   const videos = files.filter((x) => fileKind(x.path) === 'video');
   const list = videos.length ? videos : files.filter((x) => fileKind(x.path) === 'audio');
-  return groupBySeason(list).reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  // season order stays inside each group (the release card). The flat playlist plays every episode before any extra,
+  // so a Season 0 NCOP does not open as «1 из N» ahead of S01E01.
+  const ordered = groupBySeason(list).reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  const main: TorrentFile[] = [];
+  const extra: TorrentFile[] = [];
+  ordered.forEach((f) => (isExtraFile(f.path) ? extra : main).push(f));
+  return main.concat(extra);
 }
 
 export function matchSubtitles(video: TorrentFile, subs: TorrentFile[]): TorrentFile[] {

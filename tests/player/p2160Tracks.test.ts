@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const remembered: { hash: string; patch: unknown; force: boolean }[] = [];
-vi.mock('../../src/store/seriesTracks', () => ({
-  seriesTracksFor: () => null,
-  rememberSeriesTracks: (_c: unknown, hash: string, patch: unknown, force?: boolean) => {
-    remembered.push({ hash, patch, force: !!force });
-    return Promise.resolve();
-  },
-}));
+vi.mock('../../src/store/seriesTracks', async () => {
+  const actual = await vi.importActual<typeof import('../../src/store/seriesTracks')>('../../src/store/seriesTracks');
+  return {
+    ...actual,
+    rememberSeriesTracks: (_c: unknown, hash: string, patch: unknown, force?: boolean) => {
+      remembered.push({ hash, patch, force: !!force });
+      return Promise.resolve();
+    },
+  };
+});
 
 import { ensureQueueFiles, play2160, queueExternalTracks, sanitizeP2160 } from '../../src/player/player2160';
 import { knownFiles, rememberFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
@@ -231,6 +234,14 @@ describe('reading the result', () => {
     const nextDub = externalTracksForQueue({ streamUrl }, H, files, [0, 1], { at: 3, l: dub.name, g: 'ru' }, S);
     expect(nextDub[1].startAudio).toBe(dub.id);
     expect(p2160TrackExtras(nextDub, 1)[P2160_TRACKS.audioSelect]).toBe('id:' + dub.id);
+    // same label, but leaving the built-in track for the external file: the label stays so e is cleared
+    const left = seriesPatchFromResult(
+      items,
+      { fileIndex: 0, audioId: dub.id },
+      { at: 1, e: 0, l: dub.name, g: 'ru' },
+      { ...items[0], startAudio: null, startEmbedded: 0 },
+    );
+    expect(left).toEqual({ l: dub.name, g: 'ru' });
   });
 
   it('sanitizeP2160 keeps only the asked result keys with plain values, and is idempotent', () => {
@@ -310,6 +321,20 @@ describe('play2160 with external tracks', () => {
     torrents.value = [{ hash: H, title: 'X', stat: 1 }];
     await ensureQueueFiles(c, queue, 10);
     expect(asked).toBe(1);
+  });
+
+  it('an episode with no external files still preselects a saved built-in track', () => {
+    const only = list(['S/Show.S01E01.mkv', 'S/Show.S01E02.mkv']);
+    torrents.value = [{
+      hash: H, title: 'Show S01', stat: 3, file_stats: only,
+      data: JSON.stringify({ omp: { v: 1, h: [], a: { at: 1, e: 0, l: 'Japanese', g: 'jpn' } } }),
+    }];
+    const c = client();
+    c.files = () => only;
+    const items = queueExternalTracks(c as any, queue, S);
+    expect(items[1].audio).toEqual([]);
+    expect(items[1].startEmbedded).toBe(0);
+    expect(p2160TrackExtras(items, 1)[P2160_TRACKS.audioSelect]).toBe('embedded:0');
   });
 
   it('a release without external tracks launches as before', async () => {

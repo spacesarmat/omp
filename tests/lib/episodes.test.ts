@@ -74,6 +74,12 @@ describe('playableFiles', () => {
       f(6, 'MahoAku/NC/Menu.mkv'),
     ]);
     expect(r.map((x) => x.id)).toEqual([3, 4, 2, 1, 6, 5]);
+    // a season-0 extra is not ahead of season 1 in the flat playlist
+    const flat = playableFiles([
+      f(1, 'Show/Season 0/Extras/NCOP.mkv'),
+      f(2, 'Show/Season 1/Show.S01E01.mkv'),
+    ]);
+    expect(flat.map((x) => x.id)).toEqual([2, 1]);
   });
   it('prefers video', () => {
     const r = playableFiles([f(1, 'a.mp3'), f(2, 'b.S01E02.mkv'), f(3, 'b.S01E01.mkv'), f(4, 'b.srt')]);

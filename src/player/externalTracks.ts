@@ -337,7 +337,10 @@ export function seriesPatchFromResult(
     patch.s = { l: dubOf({ title: res.subtitleName }), g: normalizeLang(res.subtitleLang) };
   }
   const rec = current && !isReset(current) ? current : null;
-  if (rec && patch.l !== undefined && sameDub(rec.l, patch.l) && normalizeLang(rec.g) === (patch.g || '')) {
+  const hadE = rec && typeof rec.e === 'number' ? rec.e : -1;
+  const nextE = patch.e !== undefined ? patch.e : -1;
+  // same label is not "unchanged" when the choice moves between a built-in track and an external file
+  if (hadE === nextE && rec && patch.l !== undefined && sameDub(rec.l, patch.l) && normalizeLang(rec.g) === (patch.g || '')) {
     delete patch.l;
     delete patch.g;
   }

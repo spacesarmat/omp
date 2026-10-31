@@ -137,8 +137,8 @@ export function queueExternalTracks(c: TracksClient | null, queue: PlayItem[], s
     const empty: ExternalTracksForItem = { fileIndex: it.fileIndex === undefined ? -1 : it.fileIndex, audio: [], subtitles: [], startAudio: null, startSubtitle: null };
     if (!c || !it.hash || it.fileIndex === undefined) return empty;
     if (!byHash[it.hash]) byHash[it.hash] = releaseTracks(filesOfHash(c, it.hash));
-    const tracks = byHash[it.hash].byVideo[it.fileIndex];
-    if (!tracks || (!tracks.audio.length && !tracks.subtitles.length)) return empty;
+    const tracks = byHash[it.hash].byVideo[it.fileIndex] || { audio: [], subtitles: [] };
+    // an episode with no external files still gets a saved built-in index (embedded:N)
     return externalTracksForItem(stream, it.hash, tracks, it.fileIndex, seriesTracksFor(it.hash), s);
   });
 }

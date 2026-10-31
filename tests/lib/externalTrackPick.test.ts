@@ -134,4 +134,16 @@ describe('pickExternalStart', () => {
     expect(start.embedded).toBe(0);
     expect(start.subtitle).toBe('s:rus:');
   });
+
+  it('a built-in index that does not match this release is not forced', () => {
+    const series = rec({ e: 0, l: 'Japanese', g: 'jpn' });
+    const wrong = [{ title: 'English', language: 'en' }];
+    const start = pickExternalStart(E1, series, S, { audio: wrong });
+    expect(start.embedded).toBeUndefined();
+    expect(start.audio).toBe('a:rus:hdrezka-studio');
+    const hit = [{ title: 'Japanese', language: 'jpn' }, { title: 'English', language: 'en' }];
+    expect(pickExternalStart(E1, series, S, { audio: hit }).embedded).toBe(0);
+    // index 0 is English here, Japanese is index 1: send 1, not 0
+    expect(pickExternalStart(E1, series, S, { audio: [hit[1], hit[0]] }).embedded).toBe(1);
+  });
 });

@@ -98,6 +98,7 @@ describe('saveSeriesTracks', () => {
     await rememberSeriesTracks(s.c, 'aba', { s: { l: 'cr', g: 'ru' } }, true);
     expect(s.sets.map((x) => x.hash)).toEqual(['aba']);
     expect(seriesTracksOf(s.sets[0].data)!.s).toEqual({ l: 'cr', g: 'ru' });
+    expect(seriesTracksFor('aba')!.s).toEqual({ l: 'cr', g: 'ru' });
     // already in the library, still without files: the playlist of episodes is enough
     torrents.value = s.all;
     s.sets.length = 0;
@@ -109,6 +110,13 @@ describe('saveSeriesTracks', () => {
     torrents.value = f.all;
     await rememberSeriesTracks(f.c, 'f1', { l: 'LostFilm', g: 'ru' }, true);
     expect(f.c.setData).not.toHaveBeenCalled();
+    // embedded:0 saved on season 1 is not reused on season 2 (its track 0 may be another language)
+    const withE = (n: number, data: string) => ({ ...season(n), data });
+    const saved = JSON.stringify({ omp: { v: 1, h: [], a: { at: 5, e: 0, l: 'Japanese', g: 'jpn' } } });
+    const both = [withE(1, saved), season(2)];
+    expect(seriesTracksFor('s1', both)!.e).toBe(0);
+    expect(seriesTracksFor('s2', both)!.e).toBeUndefined();
+    expect(seriesTracksFor('s2', both)!.l).toBe('Japanese');
     warn.mockRestore();
   });
 });

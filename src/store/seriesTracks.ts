@@ -40,7 +40,19 @@ export function seriesMembersOf(hash: string | undefined, list: Torrent[] = torr
 
 /** The series' record for the torrent `hash`; null for a film or when nothing was ever chosen. */
 export function seriesTracksFor(hash: string | undefined, list: Torrent[] = torrents.peek()): SeriesTracks | null {
-  return newestSeriesTracks(seriesMembersOf(hash, list));
+  const members = seriesMembersOf(hash, list);
+  const rec = newestSeriesTracks(members);
+  if (!rec || typeof rec.e !== 'number' || !hash) return rec;
+  // embedded:N belongs to the release it was saved on. Another release's track 0 may be a different language.
+  let owner: Torrent | undefined;
+  for (let i = 0; i < members.length; i++) {
+    const r = seriesTracksOf(members[i].data);
+    if (r && r.at === rec.at && r.e === rec.e) owner = members[i];
+  }
+  if (owner && sameHash(owner.hash, hash)) return rec;
+  const copy: SeriesTracks = { ...rec };
+  delete copy.e;
+  return copy;
 }
 
 function warnTracks(msg: string): void {
@@ -68,7 +80,15 @@ export function rememberSeriesTracks(c: JournalClient | null, hash: string | und
     const ids = members.map((m) => m.hash).join(',');
     warnTracks('omp.tracks hash=' + hash + ' members=' + ids + ' patch=' + JSON.stringify(patch));
     return saveSeriesTracks(c, hash, members.map((m) => m.hash), patch).then(
-      () => undefined,
+      () => {
+        if (torrents.peek().some((x) => sameHash(x.hash, hash))) return undefined;
+        // the choice was written on the server, but this device's library copy did not have the torrent yet
+        return c.list().then((fresh) => {
+          if (torrents.peek().some((x) => sameHash(x.hash, hash))) return;
+          const cur = (fresh || []).filter((x) => sameHash(x.hash, hash))[0];
+          if (cur) torrents.value = torrents.peek().concat([cur]);
+        });
+      },
       (e) => {
         const msg = e && (e as Error).message ? (e as Error).message : String(e);
         warnTracks('omp.tracks save failed hash=' + hash + ' err=' + msg);
