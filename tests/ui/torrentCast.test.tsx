@@ -130,6 +130,30 @@ describe('TV torrent screen · «В ролях»', () => {
     });
   };
 
+  it('Up from the cast reaches a wrapped second button row, and Down from Continue reaches the file list', async () => {
+    search.mockResolvedValue({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 });
+    card.mockResolvedValue({ kind: 'movie', id: 3, cast });
+    await mount(film('film6'));
+    place(host.querySelector('[data-fk="torrent-play"]'), 400, 200, 320, 64);
+    place(host.querySelector('[data-fk="torrent-delete"]'), 400, 500, 200, 64);
+    place(host.querySelector('[data-fk="torrent-cast-0"]'), 80, 540, 180, 220);
+    place(host.querySelector('[data-fk="file-1"]'), 80, 900, 1600, 64);
+    await act(async () => { setFocus('torrent-cast-0'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('torrent-delete');
+    await act(async () => { setFocus('torrent-play'); });
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    expect(getCurrentFocusKey()).toBe('torrent-delete');
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+    expect(getCurrentFocusKey()).toBe('torrent-cast-0');
+  });
+
   it('Up from the first cast item reaches Watch, and from one under the next button reaches that button', async () => {
     search.mockResolvedValue({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 });
     card.mockResolvedValue({ kind: 'movie', id: 3, cast });
