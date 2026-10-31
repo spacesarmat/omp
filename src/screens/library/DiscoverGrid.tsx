@@ -27,6 +27,9 @@ import { tvGlyphs } from '../../ui/tvText';
 import { scrollToShow } from '../../ui/focus';
 import { posterInitials } from './Poster';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
+import { withAds } from '../../ads/ads';
+import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
+import { TvAdCell } from './TvAdCell';
 
 /** Posters per row (the CSS widths match). */
 export const DISCOVER_COLS = 8;
@@ -150,6 +153,20 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     rowRef.current = r;
     setFocusRow(r);
   };
+  // search and «Хочу» are not the catalog grid: no ads there
+  const ads = useTvAds({
+    section: 'discoverGrid',
+    count: feed && !search && !isWant ? feed.items.length : 0,
+    perScreen: TV_PER_SCREEN.disc,
+    active: !isWant && !search && !error && !!feed && feed.items.length > 0,
+    listKey: kind + '|' + qkey,
+    itemEl: (i) => {
+      const root = document.querySelector('.disc-grid');
+      if (!root) return null;
+      const nodes = root.querySelectorAll('.disc-tile:not(.ad-tile)');
+      return nodes[i] || null;
+    },
+  });
 
   useEffect(() => {
     if (restored.current) {
@@ -364,8 +381,9 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const shown = isWant ? wantTitles() : search ? search.items : feed ? feed.items : null;
   const shownError = isWant ? null : search ? searchError : error;
   const keep = keepRows(DISCOVER_ROW_PX);
+  const gridRows = shown ? withAds(shown, !isWant && !search ? ads.admitted : []) : null;
   // another list (kind, search, the want list, a new page): the window follows the focused poster where it is now
-  const shownKeys = shown ? shown.map(tileKey) : [];
+  const shownKeys = gridRows ? gridRows.map((e) => (e.item === undefined ? 'ad-disc-' + e.ad : tileKey(e.item))) : [];
   const shownId = shownKeys.join('|');
   useEffect(() => {
     let cur = '';
@@ -450,7 +468,25 @@ export function DiscoverGrid(p: DiscoverGridProps) {
         <div class="empty">{isWant ? t('tv.discover.wantEmpty') : t('discover.nothingFound')}</div>
       ) : (
         <FocusGroup focusKey="DISC-GRID" className="disc-grid">
-          {shown.map((x, i) => (
+          {gridRows && gridRows.map((e, visual) => {
+            if (e.item === undefined) {
+              const b = ads.banner(e.ad);
+              if (!b) return null;
+              return (
+                <TvAdCell
+                  key={'ad-' + e.ad}
+                  kind="disc"
+                  banner={b}
+                  focusKey={'ad-disc-' + e.ad}
+                  onShown={() => ads.shown(e.ad)}
+                  onClick={() => ads.click(e.ad)}
+                />
+              );
+            }
+            const x = e.item;
+            let itemIndex = 0;
+            for (let k = 0; k < visual; k++) if (gridRows[k].item !== undefined) itemIndex++;
+            return (
             <Focusable
               key={x.kind + ':' + x.id}
               focusKey={tileKey(x)}
@@ -459,13 +495,13 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               onPress={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               onFocused={() => {
                 if (p.onFocused) p.onFocused();
-                setRow(rowOf(i, DISCOVER_COLS));
+                setRow(rowOf(visual, DISCOVER_COLS));
                 focused.current = x;
-                if (!isWant && !search && i >= lastRowStart(shown.length)) loadMore();
+                if (!isWant && !search && shown && itemIndex >= lastRowStart(shown.length)) loadMore();
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
+                {x.poster ? (keepsImage(visual, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>
@@ -476,7 +512,8 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               <div class="disc-title">{tvGlyphs(x.title)}</div>
               <div class="disc-meta">{(x.year ? x.year + ' · ' : '') + (x.kind === 'tv' ? t('discover.series') : t('library.movie'))}</div>
             </Focusable>
-          ))}
+            );
+          })}
         </FocusGroup>
       )}
       {!isWant && !search && moreFailed && (

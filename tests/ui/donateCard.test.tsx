@@ -73,7 +73,7 @@ describe('DonateCard', () => {
     render(h(DonateCard, { mode: 'credits', raised: true }), host);
     expect(host.querySelector('.donate-card.donate-credits.raised')).not.toBeNull();
     expect(host.textContent).toContain('Досмотрели? Спасибо!');
-    expect(host.textContent).toContain('OMP бесплатный и без рекламы. Поддержать - по коду с телефона');
+    expect(host.textContent).toContain('OMP бесплатный, с подпиской без рекламы. Поддержать - по коду с телефона');
     render(h(DonateCard, { mode: null }), host);
     expect(host.innerHTML).toBe('');
   });

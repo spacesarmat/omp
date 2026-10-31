@@ -10,6 +10,7 @@ import { Login } from '@/panels/Login';
 import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
+import { AdsPanel } from '@/panels/AdsPanel';
 import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
@@ -176,6 +177,7 @@ export function App() {
           <TabsTrigger value="promos">Промо</TabsTrigger>
           <TabsTrigger value="fails">Отказы</TabsTrigger>
           <TabsTrigger value="audit">Журнал</TabsTrigger>
+          <TabsTrigger value="ads">Реклама</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
           <TabsTrigger value="monitor">Мониторинг</TabsTrigger>
           <TabsTrigger value="changes">Изменения</TabsTrigger>
@@ -265,6 +267,7 @@ export function App() {
         <TabsContent value="settings">
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
         </TabsContent>
+        <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>

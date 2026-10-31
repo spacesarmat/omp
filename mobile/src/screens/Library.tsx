@@ -45,6 +45,9 @@ import { groupPhoneLibrary, phoneItemHashes, type FilmGroup, type PhoneItem } fr
 import { Sheet } from '../ui/Sheet';
 import { tvFirst, playOnPhone } from '../watchHere';
 import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { withAds } from '../../../src/ads/ads';
+import { AdCell, type AdCellKind } from '../ads/AdCell';
+import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
 /**
@@ -344,7 +347,8 @@ export function Library() {
   // landscape: the poster views get as many cards per row as it takes for a whole card to fit the screen height
   const gridView = mine && (view === 'large' || view === 'small');
   const box = useLandscapeBox(bodyRef, gridView);
-  const gridStyle = colsStyle(box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : null);
+  const landCols = box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : 0;
+  const gridStyle = colsStyle(landCols || null);
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
@@ -364,6 +368,20 @@ export function Library() {
   });
 
   const selecting = selected !== null;
+  // ads among the cards of «Мои» (not in History, a search, selection mode or a failed list); the same cell size as
+  // the cards in every view, only below the screen when it appears
+  const ads = useAdSlots({
+    section: 'mine',
+    count: shown.length,
+    perScreen: landCols || PER_SCREEN[view] || PER_SCREEN.list,
+    active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
+    listKey: tab + '|' + sort,
+    itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
+  });
+  const adCell = (pos: number, kind: AdCellKind) => {
+    const b = ads.banner(pos);
+    return b ? <AdCell key={'ad:mine:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+  };
   // only the torrents still in the list count (a refresh may drop some)
   const chosen = selected ? selected.filter((h) => shownHashes.indexOf(h) >= 0) : [];
   const isChosen = (it: PhoneItem) => hashesOf(it).every((h) => chosen.indexOf(h) >= 0);
@@ -801,7 +819,9 @@ export function Library() {
           ) : (
             view === 'list' ? (
               <div class="m-vlist">
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'list');
+                  const it = e.item;
                   const k = itemKey(it);
                   if (it.kind === 'series') {
                     return (
@@ -850,7 +870,9 @@ export function Library() {
               </div>
             ) : view === 'compact' ? (
               <div class="m-vlist m-clist">
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'compact');
+                  const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
                   const film = it.kind === 'film' ? it : null;
@@ -877,7 +899,9 @@ export function Library() {
               </div>
             ) : (
               <div class={'m-grid m-view-' + view} style={gridStyle}>
-                {shown.map((it) => {
+                {withAds(shown, ads.admitted).map((e) => {
+                  if (e.item === undefined) return adCell(e.ad, 'grid');
+                  const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
                   const film = it.kind === 'film' ? it : null;

@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Mine and Discover can show our own ads: a card the same size as its neighbours, with the Ad label, the advertiser and the erid. On the phone that is every Mine and Discover view, and between the rails on the Discover home. On a TV it is every Mine view and the Discover grid, and OK opens a QR code instead of the link. No ads in History or search, for subscribers, or on a TV linked to a subscribed phone. None in the first days after install, then one every few cards. With no banners configured, nothing is shown
+- The support card, the FAQ and the site now say "OMP is free, ad-free with a subscription". The only paid part is still the OMP subscription (Jackett and JacRed). Boosty support does not turn it on
+- [tech] Catalog ads: `settings.ads`, migration `003_ads` (`ad_images`, `ad_stats`, after the already shipped `002_monitor`), `GET /v1/ads-config`, `POST /v1/ads/event` with no device ids, and the Ads admin tab. The Android TV and webOS switches stay off until an admin turns them on. Android TV fetches the config with native HTTP, webOS with XHR; the public GETs answer `Access-Control-Allow-Origin: *` with no credentials
 - [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
 - [tv] Season page: a poster on a backdrop, the series title and Season N, and room between the header, the buttons and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (size, time left, or the air date)
 - A release size is shown one way everywhere: "27.0 GB", not "11.2 GB" next to "27,0 ГБ". An empty field no longer leaves " · -" in the line

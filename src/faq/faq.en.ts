@@ -1106,12 +1106,12 @@ export const FAQ_EN: { [id: string]: FaqText } = {
   'support': {
     q: 'How to support OMP',
     short: [
-      'OMP is free and has no ads. Only the “OMP subscription” is paid - ready Jackett and JacRed (the question “OMP subscription: Jackett and JacRed”).',
+      'OMP is free, ad-free with a subscription. Only the “OMP subscription” is paid - ready Jackett and JacRed (the question “OMP subscription: Jackett and JacRed”).',
       'To support: Settings → “Support the project” (a page opens in the browser).',
       'Already supported? Enter the Boosty code in “Support OMP” → “Already supported?”.',
     ],
     more: [
-      'OMP is free and has no ads: the player, search in your own sources, torrent subscriptions and the remote work without payment. If the app is useful to you, you can support the development: Settings → “Support the project”. Boosty support turns nothing on - it is not the “OMP subscription”.',
+      'OMP is free, ad-free with a subscription: the player, search in your own sources, torrent subscriptions and the remote work without payment. If the app is useful to you, you can support the development: Settings → “Support the project”. Boosty support turns nothing on - it is not the “OMP subscription”.',
       'The app sends nothing when you do this: the button just opens a page in the browser.',
       'On the TV, on pause and during the final credits, a card with a QR code appears - point the phone camera at it.',
       'Already supported? Boosty subscribers get a support code, it changes every month. Enter it in “Support OMP” → “Already supported?” - until the end of the month OMP will not ask for support, neither on the phone nor on the TVs. The code is checked on the phone, only the end date is written to the server.',

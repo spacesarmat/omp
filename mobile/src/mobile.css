@@ -2144,3 +2144,27 @@ body.test-labels [data-code]::after {
 .m-pp-year { display: block; white-space: nowrap; }
 .m-pp-link { margin-top: 12px; }
 .m-pp-actions { margin-top: 12px; flex-wrap: wrap; }
+
+/* Ad cells (ads/AdCell.tsx): the size of the cards around them in every view; «Реклама», the advertiser and the erid stay visible */
+.m-ad { cursor: pointer; }
+.m-ad-poster { position: relative; display: block; overflow: hidden; background: var(--panel); }
+.m-ad-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.m-ad-poster-lib { position: relative; width: 100%; height: 0; padding: 0 0 138.7% 0; border-radius: 14px; }
+.m-ad-poster-lib img { position: absolute; top: 0; left: 0; }
+.m-view-small .m-ad-poster-lib { border-radius: 10px; }
+.m-vrow .m-ad-poster { border-radius: 8px; }
+.m-ad-badge { position: absolute; top: 8px; left: 8px; padding: 1px 6px; border-radius: 6px; background: rgba(15, 17, 21, .82); color: var(--accent); font-size: 11px; font-weight: 700; line-height: 16px; }
+.m-view-small .m-ad-badge, .m-cols-3 .m-ad-badge { top: 6px; left: 6px; font-size: 10px; line-height: 14px; }
+.m-cols-4 .m-ad-badge { top: 4px; left: 4px; padding: 0 4px; font-size: 9px; line-height: 13px; }
+.m-ad-tag { flex-shrink: 0; padding: 1px 6px; border-radius: 6px; background: rgba(245, 183, 0, .16); color: var(--accent); font-size: 11px; font-weight: 700; line-height: 16px; }
+.m-ad-erid { display: block; min-width: 0; color: var(--muted); font-size: 10px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-ad-who { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-ad-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m-cols-4 .m-ad-erid { font-size: 9px; line-height: 12px; }
+.m-ad-rail-row { display: flex; align-items: flex-start; padding: 0 2px 6px; }
+.m-ad-rail-row > .m-disc-tile { margin-right: 12px; }
+.m-ad-rail-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.m-ad-rail-text > * { margin-bottom: 4px; }
+.m-ad-rail-text > *:last-child { margin-bottom: 0; }
+.m-ad-rail-text .m-card-title { min-height: 0; margin-top: 0; }
+.m-ad-more { align-self: flex-start; margin-top: 4px; }

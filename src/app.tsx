@@ -5,6 +5,7 @@ import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
+import { AdQrHost } from './screens/library/TvAdCell';
 import { TextDialogHost, textDialogOpen } from './ui/TextDialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
@@ -152,6 +153,7 @@ export function App() {
       {showTour && <OnboardingScreen />}
       <DialogHost />
       <TextDialogHost />
+      <AdQrHost />
       <ToastHost />
       <ScreenCodeBadge />
       <ElementLabelsHost />

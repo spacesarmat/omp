@@ -1,7 +1,7 @@
 import { loadJson, saveJson } from '../store/storage';
 
 const DEVICE_KEY = 'tsp.billingDevice';
-const SESSION_KEY = 'tsp.billingSession';
+export const SESSION_KEY = 'tsp.billingSession';
 const PENDING_CODE_KEY = 'tsp.billingPendingCode';
 const NOTICE_KEY = 'tsp.billingNotice';
 const ACCOUNT_KEY = 'tsp.billingAccountSeen';

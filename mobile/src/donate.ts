@@ -10,8 +10,10 @@ import { verifySupportCode, type CodeCheck } from './supportCode';
 
 // «Поддержать OMP» on the phone: the methods and the support code are shared with the TV (src/lib/donate.ts).
 import { activeMethods, donateMethods, supportActive, supportEndText, SUPPORT_MAX_AHEAD_MS, type DonateMethod } from '../../src/lib/donate';
+import { ensureFirstRun } from '../../src/ads/firstRun';
 
 export { donateMethods, DONATE_URL, activeMethods, type DonateMethod, type Wallet } from '../../src/lib/donate';
+export { FIRST_RUN_KEY, ensureFirstRun } from '../../src/ads/firstRun';
 
 /** The donate sheet; opened from Settings, «Что нового» and the card. */
 export const donateOpen = signal(false);
@@ -19,19 +21,8 @@ export const openDonate = () => (donateOpen.value = true);
 export const closeDonate = () => (donateOpen.value = false);
 
 // one gentle card after 30 days of use
-export const FIRST_RUN_KEY = 'tsp.firstRun';
 export const DONATE_CARD_KEY = 'tsp.donateCard';
 export const CARD_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
-
-const isTime = (v: unknown): v is number => typeof v === 'number' && isFinite(v) && v > 0;
-
-/** First-run time; an install from before this feature gets it now, so the card comes 30 days after the update. */
-export function ensureFirstRun(now: number = Date.now()): number {
-  const t = loadJson<unknown>(FIRST_RUN_KEY, null, isTime);
-  if (isTime(t)) return t;
-  saveJson(FIRST_RUN_KEY, now);
-  return now;
-}
 
 export function donateCardDue(methods: DonateMethod[] = donateMethods(), now: number = Date.now()): boolean {
   const first = ensureFirstRun(now);

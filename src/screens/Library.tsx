@@ -268,6 +268,7 @@ export function LibraryScreen() {
         <TorrentViews
           view={s.libraryView}
           list={list}
+          ads={!searching}
           group={tab === 'all' || tab === 'tv' || tab === 'movie'}
           onOpenSeries={(g) => navigate({ name: 'series', key: g.key })}
           onOpen={(t) => navigate({ name: 'torrent', hash: t.hash })}

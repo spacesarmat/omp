@@ -25,6 +25,9 @@ import { DiscoverHome } from './DiscoverHome';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 import { cancelTileCards } from '../../catalog/tileCards';
 import type { TrendingWindow } from '../../../../src/catalog/tmdb';
+import { withAds } from '../../../../src/ads/ads';
+import { AdCell } from '../../ads/AdCell';
+import { PER_SCREEN, useAdSlots } from '../../ads/useAdSlots';
 
 export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 
@@ -87,7 +90,18 @@ export function Discover() {
   const gridClass = discoverGridClass(cols);
   // landscape: as many posters per row as it takes for a whole tile to fit the screen height
   const box = useLandscapeBox(rootRef);
-  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height) : null);
+  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height) : 0;
+  const gridStyle = colsStyle(landCols || null);
+  // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
+  // Search lives on its own tab now, so this grid is never a search result.
+  const ads = useAdSlots({
+    section: 'discoverGrid',
+    count: feed ? feed.items.length : 0,
+    perScreen: landCols || (cols === 4 ? PER_SCREEN.cols4 : cols === 3 ? PER_SCREEN.cols3 : PER_SCREEN.cols2),
+    active: !home && !error && !!feed && feed.items.length > 0,
+    listKey: filter + '|' + qkey,
+    itemEl: (i) => (rootRef.current ? rootRef.current.querySelectorAll('.m-disc-grid [data-anchor]')[i] || null : null),
+  });
 
   useEffect(() => {
     if (home) {
@@ -248,7 +262,14 @@ export function Discover() {
       ) : (
         <>
           <div class={gridClass} style={gridStyle}>
-            {feed.items.map((x) => (
+            {withAds(feed.items, ads.admitted).map((e) => {
+              if (e.item === undefined) {
+                const b = ads.banner(e.ad);
+                const pos = e.ad;
+                return b ? <AdCell key={'ad:grid:' + pos} kind="disc" banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+              }
+              const x = e.item;
+              return (
               <button
                 key={x.kind + ':' + x.id}
                 data-anchor={x.kind + ':' + x.id}
@@ -264,7 +285,8 @@ export function Discover() {
                 <TileMeta x={x} />
                 <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
               </button>
-            ))}
+              );
+            })}
           </div>
           {moreFailed && (
             <div class="m-disc-more m-warn-row">

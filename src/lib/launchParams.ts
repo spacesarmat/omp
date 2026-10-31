@@ -10,6 +10,8 @@ export interface PhoneAddress {
   url: string;
   token: string;
   name: string;
+  /** The phone's OMP subscription at launch. Older phones omit it. */
+  sub?: boolean;
 }
 
 export interface LaunchPlan {
@@ -102,7 +104,10 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
   // a bad phone address is dropped without invalidating the launch: an older or newer phone must never break it
   if (has('phone')) {
     const ph = sanitizePhoneLink(o.phone, 0);
-    if (ph) plan.phone = { url: ph.url, token: ph.token, name: ph.name };
+    if (ph) {
+      plan.phone = { url: ph.url, token: ph.token, name: ph.name };
+      if (ph.sub === true || ph.sub === false) plan.phone.sub = ph.sub;
+    }
   }
   if (!plan.server && !plan.action && !plan.report && !plan.open && !plan.lang && !plan.phone && !plan.invalid) return null;
   return plan;

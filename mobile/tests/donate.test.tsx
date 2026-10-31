@@ -88,7 +88,7 @@ describe('DonateSheet', () => {
     setDonateActions({ openUrl });
     const el = mount(<DonateSheet />);
     await act(async () => { openDonate(); });
-    expect(el.textContent).toContain('бесплатный и без рекламы');
+    expect(el.textContent).toContain('бесплатный, с подпиской без рекламы');
     expect(el.textContent).not.toContain('ЮMoney');
     expect(el.textContent).not.toContain('Криптовалюта');
     await act(async () => btn(el, 'Boosty').click());

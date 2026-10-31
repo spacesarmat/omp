@@ -5,6 +5,7 @@ import { native, type RpcInfo } from '../platform/native';
 import { monitorNative } from '../monitor/native';
 import { tvs } from './tvStore';
 import { loadJson, saveJson } from '../../../src/store/storage';
+import { ompSubscribed } from '../../../src/billing/entitlement';
 
 export const TV_SEARCH_KEY = 'tsp.tvSearchService';
 
@@ -179,8 +180,8 @@ export function initPhoneRpc(d?: PhoneRpcDeps): void {
  * The `phone` launch param: where the TV reaches this phone's search; null when off, unknown, not running yet or
  * without Wi-Fi.
  */
-export function phoneParam(): { url: string; token: string; name: string } | null {
+export function phoneParam(): { url: string; token: string; name: string; sub: boolean } | null {
   const info = rpcInfo.value;
   if (!tvSearchOn.value || !info || !info.running || !info.ip) return null;
-  return { url: 'http://' + info.ip + ':' + info.port, token: info.token, name: info.name };
+  return { url: 'http://' + info.ip + ':' + info.port, token: info.token, name: info.name, sub: ompSubscribed() };
 }

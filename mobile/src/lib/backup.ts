@@ -164,6 +164,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.faqDevice', // FAQ device filter: per device
   'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device
+  'tsp.adsConfig', // cache of the catalog ads config from the billing server
   'tsp.donateCard', // the «Поддержать» card was closed
   'tsp.tmdbCache', // «Обзор»: cache of TMDB answers
   'tsp.liveSeeds', // live seeder counts: a ten-minute cache, per device

@@ -399,7 +399,7 @@ describe('tvClient commands', () => {
     let req = fake.sent[fake.sent.length - 1];
     expect(req.payload).toEqual({
       id: 'com.spacesarmat.torrplayer',
-      params: { torrent: 'h', lang: 'en', phone: { url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel' } },
+      params: { torrent: 'h', lang: 'en', phone: { url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel', sub: false } },
     });
     fake.emit({ type: 'response', id: req.id, payload: { returnValue: true } });
     await p;

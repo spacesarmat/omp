@@ -332,6 +332,30 @@ CREATE INDEX monitor_results_at ON monitor_results (run_at);
 CREATE INDEX monitor_results_check ON monitor_results (check_id, run_at);
 `,
   },
+  {
+    version: '003_ads',
+    sql: `
+-- Ads (src/ads.mjs): banner images uploaded in the admin, and impressions / clicks per MSK day, banner, section and
+-- platform. No device id and no IP. Kept 90 days (store.retention). 002_monitor already shipped, so this is 003.
+CREATE TABLE ad_images (
+  id text PRIMARY KEY,
+  mime text NOT NULL,
+  bytes bytea NOT NULL,
+  size integer NOT NULL,
+  created_at bigint NOT NULL
+);
+CREATE TABLE ad_stats (
+  day text NOT NULL,
+  banner_id text NOT NULL,
+  section text NOT NULL,
+  platform text NOT NULL,
+  impressions bigint NOT NULL DEFAULT 0,
+  clicks bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, banner_id, section, platform)
+);
+CREATE INDEX ad_stats_day ON ad_stats (day);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
