@@ -8,7 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] On the season page the backdrop no longer covers Find torrents for the season or the Episodes heading. The gap stays with and without the button, with the yellow air date and with a long title
 - [phone] A card can be shared: an icon next to Back on a film, a series and a season, a long press on a poster in the catalog and in Want, and Tell friends in Settings. The text is the title, the year, a short line and a link to omp-player.online. An unreleased season says something like "Season 2 comes out Nov 8". Magnets and torrent hashes are never included
-- [tech] Site: /t/movie/ID, /t/tv/ID and /t/tv/ID/s/N serve a card page with download buttons. Android App Links: an intent-filter for https://omp-player.online/t/ and assetlinks.json. The file has the debug certificate fingerprint, which is not the release key. Until assetlinks.json has the release certificate SHA-256 and the site is deployed, an https link does not open the app by itself: the site opens, and Open in OMP starts the installed release. Deploy site/ and the Caddyfile
+- [tech] Site: /t/movie/ID, /t/tv/ID and /t/tv/ID/s/N serve a card page with download buttons. Android App Links: an intent-filter for https://omp-player.online/t/ and assetlinks.json. The file has the release certificate SHA-256 from the v0.20.8-beta.1 APK and the debug certificate fingerprint. Until the site is deployed, an https link does not open the app by itself: the site opens, and Open in OMP starts the installed release. Deploy site/ and the Caddyfile
 
 ## 0.20.8-beta.1
 
