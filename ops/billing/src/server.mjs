@@ -319,6 +319,14 @@ async function readBody(req) {
   return out;
 }
 
+/**
+ * webOS loads ads with XHR from another origin. Only these public read-only GETs allow any origin, and never
+ * with credentials. POST /v1/ads/event and every authenticated route stay closed.
+ */
+function adsCors(headers) {
+  return Object.assign({ 'access-control-allow-origin': '*' }, headers || {});
+}
+
 function send(res, status, body, headers) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
   res.writeHead(status, { 'content-length': buf.length, ...(headers || {}) });
@@ -719,13 +727,13 @@ export function createApp(file, fetchImpl, opts) {
         // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
         const body = JSON.stringify(publicAdsConfig((await store.read()).settings, Date.now()));
         const etag = etagOf(body);
-        const headers = {
+        const headers = adsCors({
           'content-type': 'application/json; charset=utf-8',
           'cache-control': 'public, max-age=' + AD_CONFIG_TTL_SEC,
           etag,
-        };
+        });
         if (etagMatches(req.headers['if-none-match'], etag)) {
-          res.writeHead(304, { 'cache-control': headers['cache-control'], etag });
+          res.writeHead(304, adsCors({ 'cache-control': headers['cache-control'], etag }));
           return res.end();
         }
         return send(res, 200, body, headers);
@@ -733,13 +741,13 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path.indexOf('/v1/ads/img/') === 0) {
         const id = path.slice('/v1/ads/img/'.length);
         const img = isAdImageId(id) && store.ads ? await store.ads.getImage(id) : null;
-        if (!img) return send(res, 404, 'not found');
+        if (!img) return send(res, 404, 'not found', adsCors());
         // The id is the hash of the bytes: the same id never changes.
-        return send(res, 200, img.bytes, {
+        return send(res, 200, img.bytes, adsCors({
           'content-type': img.mime,
           'cache-control': 'public, max-age=31536000, immutable',
           'x-content-type-options': 'nosniff',
-        });
+        }));
       }
       if (req.method === 'GET' && path.indexOf('/go/') === 0) {
         const code = decodeURIComponent(path.slice(4));

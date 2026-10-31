@@ -152,6 +152,39 @@ describe('ads over HTTP (Postgres)', () => {
     await expect(readOnlyStore(store).ads.bump('2026-10-19', [{ banner: 'x', section: 'mine', platform: 'phone', impressions: 1, clicks: 0 }])).rejects.toThrow(/read-only/);
   });
 
+  it('public ad GETs allow any origin without credentials; other routes stay closed', async () => {
+    const store = await testStore();
+    await writeState(store, emptyState());
+    const app = createApp(store, noFetch, { env: {} });
+    const cfg = await call(app, 'GET', '/v1/ads-config');
+    expect(cfg.status).toBe(200);
+    expect(cfg.headers['access-control-allow-origin']).toBe('*');
+    expect(cfg.headers['access-control-allow-credentials']).toBeUndefined();
+    const again = await call(app, 'GET', '/v1/ads-config', { headers: { 'if-none-match': String(cfg.headers.etag) } });
+    expect(again.status).toBe(304);
+    expect(again.headers['access-control-allow-origin']).toBe('*');
+    const missing = await call(app, 'GET', '/v1/ads/img/' + 'a'.repeat(24));
+    expect(missing.status).toBe(404);
+    expect(missing.headers['access-control-allow-origin']).toBe('*');
+    const health = await call(app, 'GET', '/health');
+    expect(health.headers['access-control-allow-origin']).toBeUndefined();
+    const ev = await call(app, 'POST', '/v1/ads/event', { form: { events: '[]' } });
+    expect(ev.headers['access-control-allow-origin']).toBeUndefined();
+    const opt = await call(app, 'OPTIONS', '/v1/ads-config');
+    expect(opt.status).toBe(204);
+    expect(opt.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('re-uploading an unused image renews the grace period', async () => {
+    const store = await testStore();
+    const id = '4'.repeat(24);
+    const now = Date.now();
+    await store.ads.putImage({ id, mime: 'image/png', bytes: PNG }, now - 2 * 24 * 60 * 60 * 1000);
+    await store.ads.putImage({ id, mime: 'image/png', bytes: PNG }, now);
+    expect(await store.ads.gcImages([], now)).toBe(0);
+    expect(await store.ads.getImage(id)).not.toBeNull();
+  });
+
   it('retention drops ad counters older than 90 days and unused images', async () => {
     const store = await testStore();
     await writeState(store, emptyState());

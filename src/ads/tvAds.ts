@@ -1,7 +1,12 @@
-// The TV's side of the catalog ads: the same cached config as the phone (src/ads/ads.ts), fetched with XHR
-// (webOS Chromium 53). Nothing is asked for a subscriber, or for a TV whose linked phone is subscribed.
+// The TV's side of the catalog ads: the same cached config as the phone (src/ads/ads.ts). Android TV uses the
+// APK's native HTTP (no CORS: the page is http://localhost). webOS has no native HTTP, so it uses XHR; the public
+// GET routes answer Access-Control-Allow-Origin: * with no credentials. Nothing is asked for a subscriber, or for
+// a TV whose linked phone is subscribed.
 import { signal } from '@preact/signals';
 import { BILLING_ORIGIN } from '../billing/config';
+import { billingGet, billingPost } from '../billing/client';
+import { nativeSourceHttp } from '../platform/androidNative';
+import { tvSourceContext } from '../sources/tvContext';
 import { adsConfigStale, cachedAdsConfig, saveAdsConfig, type AdsConfig } from './ads';
 import { flushAdEvents, setAdEventSender } from './events';
 import { platformKind } from '../platform/env';
@@ -32,12 +37,19 @@ function xhr(method: 'GET' | 'POST', url: string, body: string | null): Promise<
 }
 
 const realIo: TvAdsIo = {
-  get: () => xhr('GET', BILLING_ORIGIN + '/v1/ads-config', null),
-  post: (form) => xhr('POST', BILLING_ORIGIN + '/v1/ads/event', 'events=' + encodeURIComponent(form.events)).then(() => undefined),
+  get: () => {
+    // Asked on each call: the plugin is missing on webOS and in tests, and may appear after the module loads.
+    if (nativeSourceHttp()) return billingGet(tvSourceContext(), '/v1/ads-config', { timeoutMs: 10000 }).then((r) => ({ status: r.status, text: r.text }));
+    return xhr('GET', BILLING_ORIGIN + '/v1/ads-config', null);
+  },
+  post: (form) => {
+    if (nativeSourceHttp()) return billingPost(tvSourceContext(), '/v1/ads/event', form, { timeoutMs: 10000 }).then(() => undefined);
+    return xhr('POST', BILLING_ORIGIN + '/v1/ads/event', 'events=' + encodeURIComponent(form.events)).then(() => undefined);
+  },
 };
 let io: TvAdsIo = realIo;
 
-/** Tests: replace the network (no argument: the real XHR). */
+/** Tests: replace the network (no argument: native HTTP on Android TV, XHR on webOS). */
 export function setTvAdsIo(next?: TvAdsIo | null): void {
   io = next || realIo;
   setAdEventSender((form) => io.post(form));

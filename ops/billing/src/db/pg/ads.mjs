@@ -45,9 +45,11 @@ export async function pruneAdStats(q, cutoffDay) {
   return r.rowCount || 0;
 }
 
+/** Insert an image. The same id again (a re-upload of unused bytes) moves created_at forward so grace starts over. */
 export async function putAdImage(q, img, now) {
   await q.query(
-    'INSERT INTO ad_images (id, mime, bytes, size, created_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+    'INSERT INTO ad_images (id, mime, bytes, size, created_at) VALUES ($1, $2, $3, $4, $5)' +
+      ' ON CONFLICT (id) DO UPDATE SET created_at = EXCLUDED.created_at',
     [img.id, img.mime, img.bytes, img.bytes.length, Number(now) || Date.now()],
   );
   return img.id;
