@@ -9,7 +9,7 @@ import { saveItemProgress } from './progressSave';
 import { itemHeading } from './heading';
 import type { PlayItem } from './types';
 import { t } from '../i18n';
-import { baseName, type TorrentFile } from '../lib/episodes';
+import { baseName, isExtraFile, type TorrentFile } from '../lib/episodes';
 import { knownFiles } from '../lib/knownFiles';
 import { releaseTracks } from '../lib/externalTracks';
 import type { ExternalStartSettings } from '../lib/externalTrackPick';
@@ -164,12 +164,23 @@ export function preloadStartTracks(c: Pick<TorrServerClient, 'preload' | 'files'
 
 /** Keeps the dub / subtitles the user changed to for the series (nothing when unchanged, picked by OMP, or a film). */
 function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefined, queue: PlayItem[], items: ExternalTracksForItem[], r: P2160Result, index: number): void {
-  if (!c || !item || !item.hash || item.fileIndex === undefined || !r.extras) return;
-  const res = p2160TrackResult(r.extras, item.fileIndex);
+  if (!c || !item || !item.hash || item.fileIndex === undefined) return;
+  const res = r.extras ? p2160TrackResult(r.extras, item.fileIndex) : null;
   const own = items.filter((x, i) => queue[i] && queue[i].hash === item.hash);
   const start = queue[index] && queue[index].hash === item.hash ? items[index] : undefined;
-  const patch = seriesPatchFromResult(own, res, seriesTracksFor(item.hash), start);
-  if (patch) rememberSeriesTracks(c, item.hash, patch);
+  const patch = res ? seriesPatchFromResult(own, res, seriesTracksFor(item.hash), start) : null;
+  let n = 0;
+  let main = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const q = queue[i];
+    if (!q || q.hash !== item.hash) continue;
+    n++;
+    // the title is the file name; NCOP/NCED are not episodes. A folder-only extra still counts, which is enough
+    if (!isExtraFile(q.title || '')) main++;
+  }
+  // logcat: what 2160 Player handed back, what OMP kept, and how many files this release had in the queue
+  console.warn('omp.tracks extras=' + JSON.stringify(r.extras || null) + ' patch=' + JSON.stringify(patch) + ' hash=' + item.hash + ' files=' + n);
+  if (patch) rememberSeriesTracks(c, item.hash, patch, main > 1);
 }
 
 /** `link` (hash) and `index` (file) of a TorrServer stream URL, null when it is not one. */

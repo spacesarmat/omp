@@ -6,10 +6,12 @@
 //     ({ uri, language, name, mime, id, charset }; charset for subtitles only); uri = the TorrServer stream of that
 //     file index (like the video's). OMP sends no delayMs (it knows no offset) and no per-track select (the start
 //     choice goes as *_SELECT, which beats both the track's select and the player's history of the file);
-//   - AUDIO_SELECT / TEXT_SELECT: the start item's choice («id:<id>», «off»), from the series' record and the settings
-//     (pickExternalStart); the player carries it to the next items of the playlist by id, then name, then language.
-//     The player also takes «index:<n>» and «embedded:<n>», which OMP does not need: its external tracks have ids,
-//     and an embedded track stays the player's own choice;
+//   - AUDIO_SELECT / TEXT_SELECT: the start item's choice («id:<id>», «off», «embedded:<n>»), from the series' record
+//     and the settings (pickExternalStart); the player carries it to the next items of the playlist by id, then name,
+//     then language. «embedded:<n>» is a built-in track the user picked (omp.a.e). OMP does not send «index:<n>».
+//     TEXT_SELECT is not cleared when the audio choice is a built-in track: subtitles stay selected. 2160 Player
+//     0.2.17 itself hides an external subtitle on screen when the audio track changes. OMP does not send TEXT_OFF
+//     for that. A result is saved as off only when the player reports TEXT_OFF;
 //   - the result: which track the user ended with (AUDIO_ID / TEXT_ID with AUDIO_EXTERNAL / TEXT_EXTERNAL = true for
 //     an external one, by its id; an embedded one by AUDIO_NAME + AUDIO_LANGUAGE; TEXT_OFF), kept for the series
 //     (rememberSeriesTracks, src/store/seriesTracks.ts) like a choice in OMP's own players, only when changed by hand.
@@ -50,6 +52,8 @@ export interface ExternalTracksForItem {
   startAudio: string | null;
   /** The external subtitles to select at start, 'off', or null: the player's own choice. */
   startSubtitle: string | 'off' | null;
+  /** Built-in audio to select (`embedded:N`). Wins over startAudio. */
+  startEmbedded?: number;
 }
 
 /** What the player hands back about the tracks, once its result has been read by the adapter. */
@@ -63,6 +67,8 @@ export interface ExternalTracksResult {
   /** An embedded dub chosen: its title and language as the player tells them. */
   audioName?: string;
   audioLang?: string;
+  /** Built-in audio index (AUDIO_EMBEDDED_INDEX, or AUDIO_ID «embedded:N»). */
+  audioEmbedded?: number;
   /** Embedded subtitles chosen: their title and language. */
   subtitleName?: string;
   subtitleLang?: string;
@@ -137,7 +143,8 @@ export function p2160TrackExtras(items: ExternalTracksForItem[], start: number):
   if (anyAudio) out[P2160_TRACKS.audioTracks] = items.map((x) => JSON.stringify(x.audio.map(trackJson)));
   if (anyText) out[P2160_TRACKS.textTracks] = items.map((x) => JSON.stringify(x.subtitles.map(subtitleJson)));
   const cur = items[start];
-  if (cur && cur.startAudio) out[P2160_TRACKS.audioSelect] = P2160_TRACKS.selectId + cur.startAudio;
+  if (cur && typeof cur.startEmbedded === 'number') out[P2160_TRACKS.audioSelect] = 'embedded:' + String(cur.startEmbedded);
+  else if (cur && cur.startAudio) out[P2160_TRACKS.audioSelect] = P2160_TRACKS.selectId + cur.startAudio;
   if (cur && cur.startSubtitle === 'off') {
     // «off» only matters when there is something to switch off: the player's own default is kept otherwise
     if (cur.subtitles.length) out[P2160_TRACKS.textSelect] = P2160_TRACKS.selectOff;
@@ -147,6 +154,17 @@ export function p2160TrackExtras(items: ExternalTracksForItem[], start: number):
 
 function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
+}
+
+/** A built-in track index: 0..63. -1 and anything else mean the player did not name one. */
+function embeddedIndex(v: unknown): number | undefined {
+  return typeof v === 'number' && isFinite(v) && v >= 0 && v < 64 && Math.floor(v) === v ? v : undefined;
+}
+
+function embeddedFromId(id: string): number | undefined {
+  const m = /^embedded:(\d{1,2})$/.exec(id);
+  if (!m) return undefined;
+  return embeddedIndex(parseInt(m[1], 10));
 }
 
 /**
@@ -166,6 +184,10 @@ export function p2160TrackResult(raw: unknown, fileIndex?: number): ExternalTrac
     const g = str(o[k.audioLang]);
     if (n) out.audioName = n;
     if (g) out.audioLang = g;
+    const idx = embeddedIndex(o[k.audioEmbeddedIndex]);
+    const fromId = embeddedFromId(aId);
+    if (idx !== undefined) out.audioEmbedded = idx;
+    else if (fromId !== undefined) out.audioEmbedded = fromId;
   }
   const tId = str(o[k.textId]);
   if (o[k.textOff] === true) out.subtitleId = 'off';
@@ -206,13 +228,15 @@ export function externalTracksForItem(
   embedded?: { audio?: EmbeddedTrack[]; subtitles?: EmbeddedTrack[] },
 ): ExternalTracksForItem {
   const start = pickExternalStart(tracks, series, s, embedded);
-  return {
+  const item: ExternalTracksForItem = {
     fileIndex,
     audio: tracks.audio.map((t) => toPlayer(c, hash, t)),
     subtitles: tracks.subtitles.map((t) => toPlayerSub(c, hash, t)),
     startAudio: start.audio,
     startSubtitle: start.subtitle,
   };
+  if (typeof start.embedded === 'number') item.startEmbedded = start.embedded;
+  return item;
 }
 
 /** Every video of the queue (`fileIndexes`, in queue order) with its own external tracks. */
@@ -272,9 +296,11 @@ export function seriesPatchFor(chosen: ReturnType<typeof chosenTracks>): SeriesT
  * What to remember for the series from the player's answer: the external choice (seriesPatchFor), else an embedded dub
  * by its title + language and embedded subtitles by title + language. Only a change by hand counts: a track OMP itself
  * asked for (`start` = the start item, or the item's own pick) is no new choice, so a fallback dub picked because the
- * series' one was missing never replaces it; an embedded track counts only when OMP had asked for an external one (or
- * subtitles off), since otherwise it may be the player's own default. Parts equal to the series' record are dropped,
- * so a plain return writes nothing. null when nothing to keep.
+ * series' one was missing never replaces it; an embedded track counts when OMP had asked for an external one, or when
+ * its index is not the built-in index OMP itself sent (`startEmbedded`). Otherwise it may be the player's own default.
+ * A built-in choice keeps the subtitles: TEXT_OFF is recorded only when the player says subtitles are off, and OMP
+ * never sends TEXT_OFF just because the audio changed. Parts equal to the series' record are dropped, so a plain
+ * return writes nothing. null when nothing to keep.
  */
 export function seriesPatchFromResult(
   items: ExternalTracksForItem[],
@@ -288,16 +314,22 @@ export function seriesPatchFromResult(
   const autoSub = [item ? item.startSubtitle : null, start ? start.startSubtitle : null].filter((x): x is string => !!x);
   const r: ExternalTracksResult = { ...res };
   if (typeof r.audioId === 'string' && autoAudio.indexOf(r.audioId) >= 0) delete r.audioId;
-  if (r.audioId === null && !autoAudio.length) delete r.audioId;
+  // -1: OMP did not ask for a built-in track. Index 0 is a real choice.
+  const sentEmbedded = start && typeof start.startEmbedded === 'number' ? start.startEmbedded : -1;
+  const sameEmbedded = sentEmbedded >= 0 && (r.audioEmbedded === undefined || r.audioEmbedded === sentEmbedded);
+  if (r.audioId === null && !autoAudio.length && (sentEmbedded < 0 || sameEmbedded)) delete r.audioId;
   if (typeof r.subtitleId === 'string' && autoSub.indexOf(r.subtitleId) >= 0) delete r.subtitleId;
   if ((r.subtitleId === null || r.subtitleId === 'off') && !autoSub.length) delete r.subtitleId;
   res = r;
   const ext = seriesPatchFor(chosenTracks(items, res));
-  const patch: { l?: string; g?: string; s?: 'off' | SeriesSub } = ext && ext !== 'reset' ? { ...ext } : {};
+  const patch: { l?: string; g?: string; s?: 'off' | SeriesSub; e?: number } = ext && ext !== 'reset' ? { ...ext } : {};
   if (patch.l === undefined && res.audioId === null) {
+    if (typeof res.audioEmbedded === 'number') patch.e = res.audioEmbedded;
     const l = dubOf({ title: res.audioName });
     if (l) {
       patch.l = l;
+      patch.g = normalizeLang(res.audioLang);
+    } else if (typeof res.audioEmbedded === 'number' && res.audioLang) {
       patch.g = normalizeLang(res.audioLang);
     }
   }
@@ -309,6 +341,7 @@ export function seriesPatchFromResult(
     delete patch.l;
     delete patch.g;
   }
+  if (rec && patch.e !== undefined && rec.e === patch.e) delete patch.e;
   if (rec && patch.s !== undefined) {
     const was = rec.s;
     const same = patch.s === 'off'
@@ -317,5 +350,5 @@ export function seriesPatchFromResult(
         (was.l === patch.s.l || sameDub(was.l, patch.s.l));
     if (same) delete patch.s;
   }
-  return patch.l !== undefined || patch.s !== undefined ? patch : null;
+  return patch.l !== undefined || patch.g !== undefined || patch.s !== undefined || patch.e !== undefined ? patch : null;
 }

@@ -34,6 +34,8 @@ export interface ExternalStart {
   audio: string | null;
   /** The id of the external subtitles to start with, 'off', or null: the player's own choice. */
   subtitle: string | 'off' | null;
+  /** Built-in audio index when the series choice is one (`embedded:N`). Absent: not a built-in choice. */
+  embedded?: number;
 }
 
 export const DEFAULT_AUDIO_LANG = 'ru';
@@ -70,6 +72,8 @@ export function pickExternalAudio(
   embedded?: EmbeddedTrack[],
 ): string | null {
   const rec = series && !isReset(series) ? series : null;
+  // a built-in track (embedded:N) wins over every external dub, including the settings language
+  if (rec && typeof rec.e === 'number') return null;
   if (rec && rec.l) {
     if (embeddedDub(embedded, rec.l, rec.g)) return null;
     for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), rec.l) && langOk(tracks[i].lang, rec.g)) return tracks[i].id;
@@ -151,8 +155,11 @@ export function pickExternalStart(
   s: ExternalStartSettings,
   embedded?: { audio?: EmbeddedTrack[]; subtitles?: EmbeddedTrack[] },
 ): ExternalStart {
-  return {
+  const rec = series && !isReset(series) ? series : null;
+  const out: ExternalStart = {
     audio: pickExternalAudio(tracks.audio, series, s, embedded ? embedded.audio : undefined),
     subtitle: pickExternalSubtitle(tracks.subtitles, series, s, embedded ? embedded.subtitles : undefined),
   };
+  if (rec && typeof rec.e === 'number') out.embedded = rec.e;
+  return out;
 }

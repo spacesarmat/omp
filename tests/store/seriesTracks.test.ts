@@ -81,9 +81,34 @@ describe('saveSeriesTracks', () => {
   it('rememberSeriesTracks never rejects and writes nothing for a film', async () => {
     const s = fakeServer([season(1, 'not json'), film]);
     torrents.value = s.all;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await expect(rememberSeriesTracks(s.c, 's1', { l: 'LostFilm', g: 'ru' })).resolves.toBeUndefined();
+    expect(warn.mock.calls.some((c) => String(c[0]).indexOf('omp.tracks save failed') === 0)).toBe(true);
     await rememberSeriesTracks(s.c, 'f1', { l: 'LostFilm', g: 'ru' });
     await rememberSeriesTracks(null, 's1', { l: 'LostFilm', g: 'ru' });
     expect(s.c.setData).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('a fresh release is saved on its own hash when the library copy is missing or still a film', async () => {
+    const fresh: Torrent = { hash: 'aba', title: 'MahoAku (2024) BDRip', category: 'movie', stat: 2, data: '' };
+    const s = fakeServer([fresh]);
+    torrents.value = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await rememberSeriesTracks(s.c, 'aba', { s: { l: 'cr', g: 'ru' } }, true);
+    expect(s.sets.map((x) => x.hash)).toEqual(['aba']);
+    expect(seriesTracksOf(s.sets[0].data)!.s).toEqual({ l: 'cr', g: 'ru' });
+    // already in the library, still without files: the playlist of episodes is enough
+    torrents.value = s.all;
+    s.sets.length = 0;
+    await rememberSeriesTracks(s.c, 'aba', { e: 0, g: 'jpn' }, true);
+    expect(seriesTracksOf(s.all[0].data!)!.e).toBe(0);
+    // a known film, even with several files in the queue, is not a series
+    const known = { ...film, file_stats: [{ id: 1, path: 'Movie.mkv', length: 1 }] };
+    const f = fakeServer([known]);
+    torrents.value = f.all;
+    await rememberSeriesTracks(f.c, 'f1', { l: 'LostFilm', g: 'ru' }, true);
+    expect(f.c.setData).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

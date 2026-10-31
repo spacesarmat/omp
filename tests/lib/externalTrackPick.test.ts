@@ -125,4 +125,13 @@ describe('pickExternalStart', () => {
     expect(pickExternalStart(E1, rec({ l: 'LostFilm', g: 'ru', s: { l: '', g: 'en' } }), S)).toEqual({ audio: 'a:rus:lostfilm', subtitle: 's:eng:' });
     expect(pickExternalStart({ audio: [], subtitles: [] }, null, S)).toEqual({ audio: null, subtitle: null });
   });
+
+  it('a built-in audio index is not replaced by the settings language, and subtitles stay', () => {
+    const series = rec({ e: 0, l: 'Japanese', g: 'jpn', s: { l: '', g: 'ru' } });
+    expect(pickExternalAudio(E1.audio, series, S)).toBeNull();
+    const start = pickExternalStart(E1, series, { ...S, subtitlesOn: true });
+    expect(start.audio).toBeNull();
+    expect(start.embedded).toBe(0);
+    expect(start.subtitle).toBe('s:rus:');
+  });
 });

@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- A dub and subtitles picked in 2160 Player are saved for a release that was just added too: the next episode starts with the same external subtitles (.ass), built-in audio or external dub
+- [tv] Up from the cast row reaches the buttons even when they wrap onto a second row. Down from Continue reaches the episode list
+- The playlist plays the episodes first and leaves NCOP, NCED and the Extras, SP and NC folders after them, so episode 1 opens as 1 of N
+- [tech] Fresh-release track memory: when the torrent is missing from the local library copy or is not grouped as a series yet, the server list is read and omp.a is written on that hash. A write error is logged (omp.tracks) instead of dropped. A built-in audio index is stored as omp.a.e and sent to 2160 Player as embedded:N, without clearing subtitles. playableFiles puts NCOP/NCED and Extras/SP/NC folders after the episodes. Release-card focus moves to the nearest row by button rectangles, including a wrapped second row and Down from Continue
+
 ## 0.20.8-beta.1
 
 - Mine and Discover can show our own ads: a card the same size as its neighbours, with the Ad label, the advertiser and the erid. On the phone that is every Mine and Discover view, and between the rails on the Discover home. On a TV it is every Mine view and the Discover grid, and OK opens a QR code instead of the link. No ads in History or search, for subscribers, or on a TV linked to a subscribed phone. None in the first days after install, then one every few cards. With no banners configured, nothing is shown

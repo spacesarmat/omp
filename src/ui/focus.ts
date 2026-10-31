@@ -264,17 +264,25 @@ interface AboveCand {
   overlap: boolean;
 }
 
+function boxOf(el: Element): { top: number; bottom: number; left: number; right: number } | null {
+  if (typeof el.getBoundingClientRect !== 'function') return null;
+  const b = el.getBoundingClientRect();
+  if (!(b.bottom > b.top) || !(b.right > b.left)) return null;
+  return b;
+}
+
 /**
- * The focusable directly above `from`, by viewport rectangles.
+ * The focusable directly above (`dir` up) or below (`dir` down) `from`, by viewport rectangles.
  * The library measures with offsetTop, and that coordinate does not line up between the flex hero (the Watch
- * button) and a row in a `position: relative` scroller (the cast, the seasons), so Up from the first item of
- * those rows never leaves them. Overlap wins; otherwise the nearest row, then the horizontally closest item,
- * which for the leftmost cast item is Watch.
+ * button, which wraps onto a second row) and a row in a `position: relative` scroller (the cast, the seasons),
+ * so Up from the cast and Down from Watch never leave those rows. The nearest row wins (a wrapped second row of
+ * buttons sits closer to the cast than the first, and still counts when its box overlaps the cast a little).
+ * On one row, horizontal overlap wins, then the closest item, which for the leftmost cast item is Watch.
  */
-export function focusAboveKey(from: Element | null): string | null {
-  if (!from || typeof from.getBoundingClientRect !== 'function') return null;
-  const cur = from.getBoundingClientRect();
-  if (!(cur.bottom > cur.top) || !(cur.right > cur.left)) return null;
+export function focusBesideKey(from: Element | null, dir: 'up' | 'down'): string | null {
+  if (!from) return null;
+  const cur = boxOf(from);
+  if (!cur) return null;
   const screen = screenOf(from);
   const root: ParentNode = screen || document;
   const nodes = root.querySelectorAll('[data-fk]');
@@ -286,39 +294,99 @@ export function focusAboveKey(from: Element | null): string | null {
     if (inOverlay(el)) continue;
     const key = el.getAttribute('data-fk');
     if (!key) continue;
-    const b = el.getBoundingClientRect();
-    if (!(b.bottom > b.top) || !(b.right > b.left)) continue;
-    if (b.bottom > cur.top + 1) continue;
+    const b = boxOf(el);
+    if (!b) continue;
+    if (b.top <= cur.top && b.bottom >= cur.bottom) continue;
+    const mid = (b.top + b.bottom) / 2;
+    if (dir === 'up') {
+      if (mid >= cur.top - 1) continue;
+    } else if (mid <= cur.bottom + 1) continue;
     found.push({
       key: key,
-      gap: cur.top - b.bottom,
+      gap: dir === 'up' ? cur.top - b.bottom : b.top - cur.bottom,
       dx: Math.abs((cur.left + cur.right) / 2 - (b.left + b.right) / 2),
       overlap: b.left < cur.right && b.right > cur.left,
     });
   }
-  let anyOverlap = false;
-  for (let i = 0; i < found.length; i++) if (found[i].overlap) anyOverlap = true;
   let best: AboveCand | null = null;
   for (let i = 0; i < found.length; i++) {
     const c = found[i];
-    if (anyOverlap && !c.overlap) continue;
-    if (!best || c.gap < best.gap - 0.5 || (Math.abs(c.gap - best.gap) <= 0.5 && c.dx < best.dx)) best = c;
+    if (!best || c.gap < best.gap - 0.5) best = c;
+    else if (Math.abs(c.gap - best.gap) <= 0.5) {
+      if (c.overlap && !best.overlap) best = c;
+      else if (c.overlap === best.overlap && c.dx < best.dx) best = c;
+    }
   }
   return best ? best.key : null;
 }
 
-/** Up leaves a row the library cannot measure onto the focusable above it. Other directions stay with the library. */
-export function arrowUpToAbove(key: string): (dir: string) => boolean {
+/** The focusable directly above `from`. */
+export function focusAboveKey(from: Element | null): string | null {
+  return focusBesideKey(from, 'up');
+}
+
+/** The focusable directly below `from`. */
+export function focusBelowKey(from: Element | null): string | null {
+  return focusBesideKey(from, 'down');
+}
+
+/**
+ * Up from the cast found nothing by rectangles (a wrapped button row whose box the WebView reports on top of the
+ * cast). The first action button still takes the focus, so Up is never a dead end on a release card.
+ */
+function actionButtonFallback(from: Element): string | null {
+  const node = from as HTMLElement;
+  if (typeof node.closest !== 'function' || !node.closest('.tc-cast-row')) return null;
+  const screen = screenOf(from);
+  if (!screen) return null;
+  const nodes = screen.querySelectorAll('.torrent-actions [data-fk], .series-actions [data-fk]');
+  const cur = boxOf(from);
+  let bestKey = '';
+  let bestTop = -Infinity;
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i] as HTMLElement;
+    if (el.classList.contains('disabled')) continue;
+    const key = el.getAttribute('data-fk');
+    if (!key || !cur) continue;
+    const b = boxOf(el);
+    if (!b) continue;
+    if ((b.top + b.bottom) / 2 >= cur.top - 1) continue;
+    if (b.top >= bestTop) {
+      bestTop = b.top;
+      bestKey = key;
+    }
+  }
+  if (bestKey) return bestKey;
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i] as HTMLElement;
+    if (el.classList.contains('disabled')) continue;
+    const key = el.getAttribute('data-fk');
+    if (key) return key;
+  }
+  return null;
+}
+
+/**
+ * Up and Down leave a row the library cannot measure, onto the focusable above or below it.
+ * Left and Right stay with the library (they work inside one flex row).
+ */
+export function arrowVertical(key: string): (dir: string) => boolean {
   return (dir: string) => {
-    if (dir !== 'up') return true;
+    if (dir !== 'up' && dir !== 'down') return true;
     const el = document.querySelector('[data-fk="' + key + '"]');
     if (!el) return true;
     const r = el.getBoundingClientRect();
     if (!(r.bottom > r.top)) return true;
-    const next = focusAboveKey(el);
-    if (next && doesFocusableExist(next)) setFocus(next);
+    const next = dir === 'up' ? focusAboveKey(el) : focusBelowKey(el);
+    const go = next || (dir === 'up' ? actionButtonFallback(el) : null);
+    if (go && doesFocusableExist(go)) setFocus(go);
     return false;
   };
+}
+
+/** Up leaves a row the library cannot measure onto the focusable above it. Down uses the same rectangles. */
+export function arrowUpToAbove(key: string): (dir: string) => boolean {
+  return arrowVertical(key);
 }
 
 /** How long a screen whose rows arrive later still gets the remembered focus. */
