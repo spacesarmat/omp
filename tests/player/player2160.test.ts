@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { segmentsText, sanitizeP2160, saveP2160Result, play2160 } from '../../src/player/player2160';
-import { getLocalProgress, isWatched, reloadProgress } from '../../src/store/progress';
+import { getLocalProgress, isWatched, reloadProgress, saveProgress } from '../../src/store/progress';
 import type { PlayItem } from '../../src/player/types';
 
 const H = 'c'.repeat(40);
@@ -47,9 +47,40 @@ describe('saveP2160Result', () => {
     expect(getLocalProgress(H, 2)!.time).toBe(600);
     expect(getLocalProgress(H, 1)).toBeNull();
   });
-  it('ended marks watched', () => {
+  it('ended without a position does not mark watched', () => {
     saveP2160Result(null, queue, 0, { returned: true, ended: true, durationMs: 1200000, url: queue[1].url }, 0);
-    expect(isWatched(H, 2)).toBe(true);
+    expect(isWatched(H, 2)).toBe(false);
+    expect(getLocalProgress(H, 2)).toBeNull();
+  });
+  it('a close before playback does not replace saved progress with the duration', () => {
+    saveProgress(H, 1, 80, 1441);
+    const saved = saveP2160Result(null, queue, 0, { returned: true, ended: true }, 1441);
+    expect(isWatched(H, 1)).toBe(false);
+    expect(getLocalProgress(H, 1)!.time).toBe(80);
+    expect(getLocalProgress(H, 1)!.duration).toBe(1441);
+    expect(saved).toEqual({ item: queue[0], time: 0, duration: 1441, ended: false });
+  });
+  it('ended with position 0 and a duration does not mark watched', () => {
+    saveProgress(H, 1, 80, 1441);
+    saveP2160Result(null, queue, 0, { returned: true, ended: true, positionMs: 0, durationMs: 1441000 }, 1441);
+    expect(isWatched(H, 1)).toBe(false);
+    expect(getLocalProgress(H, 1)!.time).toBe(80);
+  });
+  it('a reported position at the end marks watched', () => {
+    const saved = saveP2160Result(null, queue, 0, { returned: true, ended: true, positionMs: 1441000, durationMs: 1441000 }, 80);
+    expect(isWatched(H, 1)).toBe(true);
+    expect(getLocalProgress(H, 1)!.time).toBe(1441);
+    expect(saved && saved.ended).toBe(true);
+  });
+  it('a close near the end marks watched without an ended flag', () => {
+    saveP2160Result(null, queue, 0, { returned: true, positionMs: 1300000, durationMs: 1441000 }, 0);
+    expect(isWatched(H, 1)).toBe(true);
+    expect(getLocalProgress(H, 1)!.time).toBe(1300);
+  });
+  it('an ended flag with a mid position keeps that position', () => {
+    saveP2160Result(null, queue, 0, { returned: true, ended: true, positionMs: 100000, durationMs: 1441000 }, 1441);
+    expect(isWatched(H, 1)).toBe(false);
+    expect(getLocalProgress(H, 1)!.time).toBe(100);
   });
   it('matches by the link and index params when the url differs', () => {
     const u = 'http://u:p@other:8090/stream/x.mkv?index=2&link=' + H.toUpperCase() + '&play';

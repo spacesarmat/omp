@@ -184,4 +184,31 @@ class Player2160Test {
         assertEquals(false, r.extras["tv.p2160.extra.TEXT_OFF"])
         assertEquals(6, r.extras.size)
     }
+
+    @Test
+    fun longPositionWinsOverAZeroIntAndWatchedWithoutAPositionStaysPositionless() {
+        val moved = Player2160.parseExtras(
+            mapOf(
+                "position" to 0,
+                "duration" to 0,
+                "end_by" to "user",
+                "tv.p2160.extra.POSITION" to 1_441_000L,
+                "tv.p2160.extra.DURATION" to 1_441_000L,
+                "tv.p2160.extra.WATCHED" to false,
+            ),
+            "http://srv/e.mkv",
+        )
+        assertTrue(moved.returned)
+        assertFalse(moved.ended)
+        assertEquals(1_441_000L, moved.positionMs)
+        assertEquals(1_441_000L, moved.durationMs)
+        val bare = Player2160.parseExtras(
+            mapOf("tv.p2160.extra.WATCHED" to true, "tv.p2160.extra.DURATION" to 1_441_000L),
+            null,
+        )
+        assertTrue(bare.returned)
+        assertTrue(bare.ended)
+        assertNull(bare.positionMs)
+        assertEquals(1_441_000L, bare.durationMs)
+    }
 }

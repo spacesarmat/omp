@@ -151,7 +151,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
     : '';
 
   return (
-    <div class="m-screen m-tc" data-route="season">
+    <div class="m-screen" data-route="season">
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P25.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
