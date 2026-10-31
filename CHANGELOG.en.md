@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
+
 ## 0.20.7
 
 - External dubs and subtitles that a release ships as separate files show in the release lists («+3 dubs, subtitles») and go to 2160 Player 0.2.17 or newer by themselves: every episode its own, the chosen dub is remembered for the series

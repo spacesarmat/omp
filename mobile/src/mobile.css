@@ -504,11 +504,66 @@ button, .m-btn {
 .m-srch-lib { color: #8FE39A; font-weight: 700; }
 .m-srch-trackers { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel); }
 .m-tc { padding-top: 0; }
-/* The season page is not a full-bleed card. Sharing .m-tc dropped the status-bar inset, so a wrapped
-   title started at y=0 and only its last line stayed visible. The title card keeps padding-top: 0. */
-.m-screen[data-route='season'] { padding-top: calc(env(safe-area-inset-top) + 12px); }
-.m-screen[data-route='season'] > .m-bar { align-items: flex-start; }
-.m-screen[data-route='season'] > .m-bar .m-bar-title { line-height: 28px; padding-top: 8px; }
+/* Catalog season page. Not .m-tc: that class zeroes the top inset, and a bar title then started
+   under the status bar. The backdrop may run under the clock (body::before covers it). The series
+   title lives in .m-season-hero, which starts below the inset and the back button. */
+.m-screen[data-route='season'] { padding-top: 0; display: flex; flex-direction: column; }
+.m-season-hero { position: relative; margin: 0 -16px; padding: calc(env(safe-area-inset-top) + 72px) 16px 0; }
+.m-season-backdrop {
+  position: absolute; z-index: 0; top: 0; left: 0; right: 0; overflow: hidden; pointer-events: none;
+  height: calc(300px + env(safe-area-inset-top));
+  background: linear-gradient(160deg, #2A2F3D, #14161C);
+}
+.m-season-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.08); }
+.m-season-backdrop.is-poster img { filter: blur(18px); transform: scale(1.28); }
+.m-season-backdrop::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(15, 17, 21, 0.15) 0%, rgba(15, 17, 21, 0.5) 46%, var(--bg, #0F1115) 100%);
+}
+/* The back control stays out of the backdrop (that box clips overflow). Its test chip (P25.1)
+   hangs above the right of the button and grows to the right, so a 24px label stays on screen. */
+.m-season-back {
+  position: absolute; z-index: 2;
+  top: calc(env(safe-area-inset-top) + 20px); left: 16px;
+  background: rgba(15, 17, 21, 0.7);
+}
+body.test-labels .m-screen[data-route='season'] .m-season-back[data-code]::after {
+  right: auto; left: calc(100% + 6px); transform: translateY(-55%);
+}
+.m-season-head { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 14px; }
+.m-season-poster {
+  flex: none; display: block; width: 128px; height: 192px; border-radius: 14px;
+  background: var(--panel); object-fit: cover; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.m-season-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 2px; }
+.m-season-title { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; }
+.m-season-kicker { margin: 0; font-family: 'Manrope', sans-serif; font-size: 17px; font-weight: 700; line-height: 1.3; }
+.m-season-sub { overflow-wrap: anywhere; }
+.m-tc-skel .m-season-poster, .m-tc-skel .m-season-info .m-disc-skel-line { animation: m-disc-pulse 1.2s ease-in-out infinite; }
+.m-season-actions { margin-top: 20px; }
+.m-season-actions .m-btn { width: 100%; }
+.m-screen[data-route='season'] > .m-disc-error { margin-top: 20px; }
+.m-screen[data-route='season'] .m-tc-section { margin-top: 24px; }
+.m-screen[data-route='season'] .m-tc-section > h2 { margin: 0 0 12px; }
+.m-screen[data-route='season'] .m-tc-episodes { gap: 8px; }
+.m-screen[data-route='season'] .m-tc-ep {
+  flex-direction: row; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 14px;
+}
+.m-screen[data-route='season'] .m-tc-ep.in { background: #1C2028; box-shadow: inset 3px 0 0 var(--accent); }
+.m-season-ep-num {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px; background: var(--panel-2); color: var(--muted);
+  font-family: 'Unbounded', 'Manrope', sans-serif; font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.m-screen[data-route='season'] .m-tc-ep.in .m-season-ep-num { background: rgba(245, 183, 0, 0.16); color: var(--accent); }
+.m-season-ep-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 1px; }
+.m-season-ep-title {
+  font-size: 15px; font-weight: 700; line-height: 20px; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.m-screen[data-route='season'] .m-tc-ep-sub { line-height: 18px; overflow-wrap: anywhere; }
+.m-screen[data-route='season'] .m-season-ep-main .m-bar-track { margin-top: 4px; }
 .m-tc-backdrop { position: relative; height: calc(190px + env(safe-area-inset-top)); margin: 0 -16px; overflow: hidden; background: linear-gradient(160deg, #2A2F3D, #14161C); }
 .m-tc-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .m-tc-backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0) 45%, var(--bg, #0F1115)); pointer-events: none; }
