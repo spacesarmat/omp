@@ -96,6 +96,48 @@ describe('element codes', () => {
     expect(label.className).toBe('test-el');
   });
 
+  it('keeps a wide code fully inside the 1920 screen', () => {
+    document.body.innerHTML =
+      '<div class="app"><div class="test-screen-badge"><span class="test-badge">S03</span></div>' +
+      '<div class="tile" id="edge"></div><div class="test-el-layer" id="layer"></div></div>';
+    const proto = HTMLElement.prototype;
+    const widthDesc = Object.getOwnPropertyDescriptor(proto, 'offsetWidth');
+    const heightDesc = Object.getOwnPropertyDescriptor(proto, 'offsetHeight');
+    Object.defineProperty(proto, 'offsetWidth', {
+      configurable: true,
+      get() { return (this as HTMLElement).classList && (this as HTMLElement).classList.contains('test-el') ? 500 : 1920; },
+    });
+    Object.defineProperty(proto, 'offsetHeight', {
+      configurable: true,
+      get() { return (this as HTMLElement).classList && (this as HTMLElement).classList.contains('test-el') ? 32 : 1080; },
+    });
+    try {
+      const rect = (l: number, t: number, w: number, hh: number) => () => ({
+        left: l, top: t, width: w, height: hh, right: l + w, bottom: t + hh, x: l, y: t, toJSON: () => ({}),
+      }) as DOMRect;
+      const app = document.querySelector('.app') as HTMLElement;
+      Object.defineProperty(app, 'offsetWidth', { configurable: true, value: 1920 });
+      Object.defineProperty(app, 'offsetHeight', { configurable: true, value: 1080 });
+      app.getBoundingClientRect = rect(0, 0, 1920, 1080);
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1920 });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 1080 });
+      (document.getElementById('edge') as HTMLElement).getBoundingClientRect = rect(1700, 200, 180, 260);
+      const layer = document.getElementById('layer') as HTMLElement;
+      paintElementLabels(layer, false);
+      const label = layer.querySelector('.test-el') as HTMLElement;
+      expect(label.textContent).toBe('S03.C#1');
+      expect(label.style.left).toBe('1420px');
+      const left = parseInt(label.style.left, 10);
+      const top = parseInt(label.style.top, 10);
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(left + 500).toBeLessThanOrEqual(1920);
+      expect(top).toBeGreaterThanOrEqual(0);
+    } finally {
+      if (widthDesc) Object.defineProperty(proto, 'offsetWidth', widthDesc);
+      if (heightDesc) Object.defineProperty(proto, 'offsetHeight', heightDesc);
+    }
+  });
+
   it('counts a poster fallback inside a poster once and labels uncoded dialog choices', () => {
     const root = document.createElement('div');
     root.innerHTML =

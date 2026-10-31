@@ -41,7 +41,7 @@ describe('TorrentViews', () => {
     const { host } = mount('list');
     const row = host.querySelectorAll('.lrow')[1];
     expect(row.querySelector('.lrow-cat')!.textContent).toBe('Сериалы');
-    expect(row.querySelector('.lrow-size')!.textContent).toBe('913 MB');
+    expect(row.querySelector('.lrow-size')!.textContent).toBe('913 МБ');
   });
   it('compact rows open on click', () => {
     const { host, onOpen } = mount('compact');

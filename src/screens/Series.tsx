@@ -21,7 +21,7 @@ import {
 } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
-import { lang, t, tp, fmtNumber } from '../i18n';
+import { lang, t, tp, fmtNumber, fmtSize } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
@@ -29,7 +29,6 @@ import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from 
 import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { externalNoteText } from '../lib/externalNote';
-import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
@@ -43,7 +42,7 @@ import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { tvGlyphs } from '../ui/tvText';
 import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
-import { swarmText } from '../lib/torrentStatus';
+import { joinMeta, knownSwarmText } from '../lib/torrentStatus';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -355,7 +354,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       setBetter(upgradable[0]);
       return;
     }
-    const options = upgradable.map((m) => ({ label: [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · '), value: m.hash }));
+    const options = upgradable.map((m) => ({ label: joinMeta([tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), m.torrent_size ? fmtSize(m.torrent_size) : '']), value: m.hash }));
     choose(t('tv.better.which'), options, undefined, 'series-better').then((hash) => {
       const m = upgradable.filter((x) => x.hash === hash)[0];
       if (m) setBetter(m);
@@ -374,7 +373,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   };
 
   const releaseLabel = (m: Torrent) =>
-    [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), formatBytes(m.torrent_size || 0)].filter(Boolean).join(' · ');
+    joinMeta([tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), m.torrent_size ? fmtSize(m.torrent_size) : '']);
   // «Раздачи · N»: OK opens a release, red deletes it (a release of this season only: a pack of several seasons stays)
   const openReleases = () => {
     if (releases.length === 1) {
@@ -391,7 +390,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       }
       return true;
     };
-    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases').then((r) => {
+    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases', {
+      ok: t('series.releasesHintOk'),
+      back: t('series.releasesHintBack'),
+    }).then((r) => {
       if (!r) return;
       if (!r.red) {
         navigate({ name: 'torrent', hash: r.value });
@@ -589,13 +591,14 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
         </div>
       )}
       {members.map((m) => {
-        const swarm = swarmText(m);
+        const swarm = knownSwarmText(m);
         const who = members.length > 1 ? qualityOrUnknown(displayTitle(m)) : '';
+        const swarmLine = joinMeta([who, swarm]);
         const dead = isDeadRelease(m.hash);
         const find = canUpgrade(m, c.files(m));
         return (
           <div key={m.hash}>
-            {swarm ? <div class="muted series-swarm">{who ? who + ' · ' + swarm : swarm}</div> : null}
+            {swarmLine ? <div class="muted series-swarm">{swarmLine}</div> : null}
             {dead && (
               <FocusGroup focusKey={'series-dead-' + m.hash} className="series-dead">
                 <div>{t('torrent.deadRelease')}</div>
@@ -624,7 +627,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                   <ProgressBar ratio={ratio} />
                 </span>
               )}
-              <span class="size">{left ? t('series.left', { n: left }) : formatBytes(r.file.length)}</span>
+              <span class="size">{left ? t('series.left', { n: left }) : (r.file.length ? fmtSize(r.file.length) : '')}</span>
               <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>
             </Focusable>
           );

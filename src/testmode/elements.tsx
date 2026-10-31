@@ -293,15 +293,23 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
     paintPhonePositions(layer, shown, labels, h, view, win);
     return;
   }
+  const viewW = root ? ((root as HTMLElement).offsetWidth || 1920) : 1920;
+  const viewH = root ? ((root as HTMLElement).offsetHeight || 1080) : 1080;
   for (let i = 0; i < shown.length; i++) {
     const span = layer.children[i] as HTMLElement;
     const b = shown[i].b;
-    const x = (b.left - ox) / scale;
+    const w = span.offsetWidth || 0;
+    let x = (b.left - ox) / scale;
     const top = (b.top - oy) / scale;
     const bottom = (b.bottom - oy) / scale;
     let y = top;
     if (shown[i].place === 'bottom') y = bottom - h;
     else if (shown[i].place === 'above') y = top - h >= 0 ? top - h : top;
+    // a chip wider than the space left at the screen edge used to be cut off by the layer
+    if (w > 0 && x + w > viewW) x = Math.max(0, viewW - w);
+    if (x < 0) x = 0;
+    if (h > 0 && y + h > viewH) y = Math.max(0, viewH - h);
+    if (y < 0) y = 0;
     span.style.left = Math.round(x) + 'px';
     span.style.top = Math.round(y) + 'px';
   }

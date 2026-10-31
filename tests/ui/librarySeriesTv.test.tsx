@@ -72,6 +72,21 @@ describe('LibraryScreen on the TV: short titles and series tiles', () => {
     expect(tiles[0].querySelector('.tile-meta')!.textContent).toBe('2 сезона');
     expect(tiles[0].querySelector('.tile-count')!.textContent).toBe('2');
   });
+  it('shows two releases of one film as one card', async () => {
+    const fixture = [
+      { hash: 'f1', title: 'Quiet Signal (2024) 2160p', category: 'movie', timestamp: 9, torrent_size: 20e9, data: file('Quiet.Signal.2024.2160p.mkv') },
+      { hash: 'f2', title: 'Quiet Signal (2024) 1080p', category: 'movie', timestamp: 8, torrent_size: 8e9, data: file('Quiet.Signal.2024.1080p.mkv') },
+    ];
+    mockFetch((url) => ({ body: url.indexOf('/torrents') >= 0 ? JSON.stringify(fixture) : '[]' }));
+    torrents.value = fixture as any;
+    const host = mount();
+    await flush();
+    const tiles = host.querySelectorAll('.tile');
+    expect(tiles).toHaveLength(1);
+    expect(tiles[0].querySelector('.tile-title')!.textContent).toBe('Quiet Signal');
+    expect(tiles[0].querySelector('.tile-count')!.textContent).toBe('2');
+    expect(tiles[0].querySelector('.tile-meta')!.textContent).toContain('2 раздачи');
+  });
   it('shows a film with the short title and the year', async () => {
     const host = mount();
     await flush();

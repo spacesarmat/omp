@@ -10,6 +10,7 @@ import { shortTitle } from '../../../src/lib/libraryView';
 import { contentsText, extrasText } from './releaseContents';
 import { torrents } from '../../../src/store/library';
 import { fmtSize, t } from '../../../src/i18n';
+import { joinMeta } from '../../../src/lib/torrentStatus';
 import { groupLibrary, isSeries, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { cachedMovieId } from '../../../src/lib/useMovieCard';
 
@@ -23,12 +24,12 @@ export function releaseName(tor: Torrent, name: string): string {
 
 /** «4K WEB-DL · 18 серий · +3 озвучки, субтитры · 9,7 ГБ» (the parts known). */
 export function releaseLine(tor: Torrent, withContents = true, withExtras = true): string {
-  return [
+  return joinMeta([
     qualityLabel(displayTitle(tor)) || shortTitle(displayTitle(tor)),
     withContents ? contentsText(tor) : '',
     withExtras ? extrasText(tor) : '',
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
-  ].filter(Boolean).join(' · ');
+  ]);
 }
 
 /**

@@ -238,6 +238,15 @@ describe('people', () => {
     expect(c.cast.filter((p) => p.job === 'cast')).toHaveLength(15);
     expect(c.cast[1]).toMatchObject({ id: 100, name: 'A0', role: 'R0', job: 'cast' });
   });
+  it('lists a person once when they are both the director and in the cast', () => {
+    const raw = { ...MOVIE_CARD, credits: {
+      cast: [{ id: 7, name: 'Dir', character: 'Hero', profile_path: null }, { id: 100, name: 'A', character: 'R', profile_path: null }, { id: 100, name: 'A', character: 'Other', profile_path: null }],
+      crew: [{ id: 7, name: 'Dir', job: 'Director', profile_path: null }],
+    } };
+    const c = sanitizeCard(E, raw, 'movie')!;
+    expect(c.cast.map((p) => p.id)).toEqual([7, 100]);
+    expect(c.cast[0].job).toBe('director');
+  });
   it('tv card: creators from created_by', () => {
     const c = sanitizeCard(E, { ...TV_CARD, created_by: [{ id: 9, name: 'Cr', profile_path: '/c.jpg' }], credits: { cast: [] } }, 'tv')!;
     expect(c.cast).toEqual([{ id: 9, name: 'Cr', photo: imageUrl(E, '/c.jpg', 'w185'), role: '', job: 'creator' }]);

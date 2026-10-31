@@ -14,13 +14,14 @@ import { choose } from './dialog';
 import { toast } from './toast';
 import { navigate } from './nav';
 import { tvGlyphs } from './tvText';
-import { t } from '../i18n';
+import { fmtSize, t } from '../i18n';
 import { client } from '../store/servers';
 import { refreshTorrents } from '../store/library';
 import { errorMessage } from '../api/http';
 import type { Torrent } from '../api/types';
 import type { TorrentFile } from '../lib/episodes';
-import { formatBytes } from '../lib/format';
+import { joinMeta } from '../lib/torrentStatus';
+import { resultSizeText } from '../sources/resultSize';
 import { shortTitle } from '../lib/libraryView';
 import { displayTitle } from '../lib/torrentName';
 import type { LibraryTorrent } from '../monitor/newEpisodes';
@@ -233,7 +234,7 @@ export function BetterDialog(p: {
     navigate({ name: 'add', query: q, run: true });
   };
 
-  const size = p.torrent.torrent_size ? formatBytes(p.torrent.torrent_size) : '';
+  const size = p.torrent.torrent_size ? fmtSize(p.torrent.torrent_size) : '';
   const list = outcome ? outcome.candidates : [];
   return (
     <div
@@ -269,7 +270,7 @@ export function BetterDialog(p: {
             {list.map((r, i) => {
               const chips = qualityLabel(r.Title).split(' ').filter(Boolean);
               const low = isLowSeeds(r);
-              const meta = [r.Size, seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)].filter(Boolean).join(' · ');
+              const meta = joinMeta([resultSizeText(r), seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)]);
               return (
                 <Focusable
                   key={resultKey(r)}

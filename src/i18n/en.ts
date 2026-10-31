@@ -429,6 +429,8 @@ export const en: EnDict<typeof ru> = {
     },
     releaseDeleteBusy: 'Wait, the previous torrent is still being deleted',
     releasesHintDelete: 'delete the torrent',
+    releasesHintOk: 'OK - open the torrent',
+    releasesHintBack: 'Back - close',
     // the TV series screen
     watchEp: 'Watch {code}',
     releasesBtn: 'Torrents · {n}',

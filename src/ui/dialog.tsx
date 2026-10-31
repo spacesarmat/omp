@@ -22,6 +22,8 @@ interface DialogState {
   onRed?: (v: unknown) => boolean;
   /** A line under the options for the red key («● удалить раздачу»). */
   redHint?: string;
+  /** The screen footer while this dialog is open: the actions that actually work here. */
+  footer?: { ok: string; back: string };
 }
 
 const dialog = signal<DialogState | null>(null);
@@ -29,7 +31,7 @@ const dialog = signal<DialogState | null>(null);
 export const dialogOpen = computed(() => dialog.value !== null);
 let dialogSeq = 0;
 
-export function choose<T>(title: string, options: { label: string; value: T; danger?: boolean }[], current?: T, testId?: string): Promise<T | null> {
+export function choose<T>(title: string, options: { label: string; value: T; danger?: boolean }[], current?: T, testId?: string, footer?: { ok: string; back: string }): Promise<T | null> {
   return new Promise<T | null>((resolve) => {
     if (dialog.value) dialog.value.resolve(null);
     dialog.value = {
@@ -38,6 +40,7 @@ export function choose<T>(title: string, options: { label: string; value: T; dan
       options,
       current,
       testId,
+      footer,
       resolve: resolve as (v: unknown) => void,
       prevFocus: getCurrentFocusKey() || undefined,
     };
@@ -54,6 +57,7 @@ export function chooseOrDelete<T>(
   canRed: (v: T) => boolean,
   redHint: string,
   testId?: string,
+  footer?: { ok: string; back: string },
 ): Promise<{ value: T; red: boolean } | null> {
   return new Promise((resolve) => {
     if (dialog.value) dialog.value.resolve(null);
@@ -64,6 +68,7 @@ export function chooseOrDelete<T>(
       options,
       testId,
       redHint,
+      footer,
       onRed: (v) => {
         if (!canRed(v as T)) return false;
         red = true;
@@ -167,7 +172,7 @@ export function DialogHost() {
   const dlgCode = d.testId ? visibleDialogCode(d.testId) : '';
   return (
     <div
-      class="dialog-backdrop"
+      class={'dialog-backdrop' + (d.footer ? ' dialog-has-footer' : '')}
       onClick={(e) => {
         // a pointer click outside the box = Back; never reaches the screen's own click handler (player tap zones)
         if (e.target !== e.currentTarget) return;
@@ -199,6 +204,11 @@ export function DialogHost() {
           </div>
         ) : null}
       </FocusGroup>
+      {d.footer ? (
+        <div class="dialog-footer">
+          {d.footer.ok} · {d.redHint ? <KeyDot color="red" /> : null}{d.redHint ? ' ' + d.redHint + ' · ' : ''}{d.footer.back}
+        </div>
+      ) : null}
     </div>
   );
 }

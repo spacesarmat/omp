@@ -115,6 +115,11 @@ describe('TV «Раздачи · N»: delete with the red key', () => {
     await openList(host);
     expect(title()).toBe('Раздачи сериала');
     expect((document.querySelector('.dialog-hint') || { textContent: '' }).textContent).toContain('удалить раздачу');
+    const footer = (document.querySelector('.dialog-footer') || { textContent: '' }).textContent || '';
+    expect(footer).toContain('OK - открыть раздачу');
+    expect(footer).toContain('удалить раздачу');
+    expect(footer).toContain('Назад - закрыть');
+    expect(footer).not.toContain('отметить просмотренной');
   });
 
   it('red on a release asks, then deletes it and moves its progress to the one that stays', async () => {
@@ -123,7 +128,7 @@ describe('TV «Раздачи · N»: delete with the red key', () => {
     const host = await mount();
     await openList(host);
     await redOn('1080p');
-    expect(title()).toBe('Удалить раздачу «Dark Matter · 1080p · 2.8 GB»? Отметки просмотра перейдут в «Dark Matter · 4K · 5.6 GB».');
+    expect(title()).toBe('Удалить раздачу «Dark Matter · 1080p · 2,8 ГБ»? Отметки просмотра перейдут в «Dark Matter · 4K · 5,6 ГБ».');
     act(() => (document.querySelector('[data-fk="dialog-opt-0"]') as HTMLElement).click());
     await flush();
     expect(removed).toEqual(['s2b']);

@@ -4,18 +4,17 @@ import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sou
 import type { SourceResult } from '../../../src/sources/types';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import type { RowBusy } from '../addResult';
-import { fmtSize, t } from '../../../src/i18n';
-import { parseSize } from '../../../src/sources/html';
+import { t } from '../../../src/i18n';
+import { resultSizeText } from '../../../src/sources/resultSize';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
 import { releaseKind } from '../../../src/lib/releaseKind';
 import { resultKindLabel } from '../../../src/sources/releaseRow';
 
-/** The size in the phone's one format («1,5 ГБ»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
+/** The size in the one format («1,5 ГБ» / «1.5 GB»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
 export function sizeText(r: SourceResult): string {
-  const b = parseSize(r.Size);
-  return b && b > 0 ? fmtSize(b) : r.Size || '';
+  return resultSizeText(r);
 }
 
 /** «152 сида» when the count is known; '' for 0, which is what a feed without seed data gives. */

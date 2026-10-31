@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { statusText, statusLine, swarmText } from '../../src/lib/torrentStatus';
+import { statusText, statusLine, swarmText, joinMeta, knownSwarmText } from '../../src/lib/torrentStatus';
 import { fmtBytes, fmtSpeed, lang } from '../../src/i18n';
 
 afterEach(() => {
@@ -45,6 +45,14 @@ describe('TorrServer states in the UI language', () => {
     expect(swarmText({ stat: 3, connected_seeders: 12, active_peers: 3 })).toBe('connected: 12 seeds · 3 peers');
     expect(swarmText({ stat: 4, data: saved })).toBe('44 seeds (tracker)');
     expect(swarmText({})).toBe('-');
+  });
+
+  it('drops an empty field and the dash placeholder, separator included', () => {
+    const saved = JSON.stringify({ omp: { v: 1, h: [], ts: { s: 44, at: 1 } } });
+    expect(joinMeta(['1080p', '-', '8,0 ГБ'])).toBe('1080p · 8,0 ГБ');
+    expect(joinMeta(['', '  ', '-'])).toBe('');
+    expect(knownSwarmText({ stat: 5 })).toBe('');
+    expect(knownSwarmText({ stat: 5, data: saved })).toBe('44 сида (трекер)');
   });
 
   it('formats sizes and speeds per language', () => {
