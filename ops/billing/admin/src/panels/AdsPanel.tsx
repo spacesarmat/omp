@@ -99,7 +99,10 @@ export function AdsPanel({ csrf }: { csrf: string }) {
   const [form, setForm] = useState<AdsConfig | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  // Only the latest image pick may set the draft. A slower earlier upload must not overwrite it.
+  const uploadSeq = useRef(0);
   // The first load fills the settings form. Later loads for another stats period must not.
   const formReady = useRef(false);
 
@@ -285,16 +288,23 @@ export function AdsPanel({ csrf }: { csrf: string }) {
               draft={draft}
               setDraft={setDraft}
               busy={busy}
+              uploading={uploading}
               error={error}
               onUpload={async (file) => {
                 const localId = draft.localId;
-                const data = await fileBase64(file);
-                const res = await send('/admin/ads/image', { mime: file.type, data });
-                const extra = res.extra as { imageId?: string } | undefined;
-                const imageId = extra && extra.imageId;
-                if (!imageId) return;
-                // Field edits made while the upload was in flight stay. A canceled or replaced form is left alone.
-                setDraft((cur) => (cur && cur.localId === localId ? { ...cur, image: imageId } : cur));
+                const seq = ++uploadSeq.current;
+                setUploading(true);
+                try {
+                  const data = await fileBase64(file);
+                  const res = await send('/admin/ads/image', { mime: file.type, data });
+                  const extra = res.extra as { imageId?: string } | undefined;
+                  const imageId = extra && extra.imageId;
+                  if (!imageId || seq !== uploadSeq.current) return;
+                  // Field edits made while the upload was in flight stay. A canceled or replaced form is left alone.
+                  setDraft((cur) => (cur && cur.localId === localId ? { ...cur, image: imageId } : cur));
+                } finally {
+                  if (seq === uploadSeq.current) setUploading(false);
+                }
               }}
               onSave={async () => {
                 const { localId: _local, ...banner } = draft;
@@ -333,6 +343,7 @@ function BannerForm({
   draft,
   setDraft,
   busy,
+  uploading,
   error,
   onUpload,
   onSave,
@@ -340,6 +351,7 @@ function BannerForm({
   draft: Draft;
   setDraft: (d: Draft | null) => void;
   busy: boolean;
+  uploading: boolean;
   error: string;
   onUpload: (f: File) => Promise<void>;
   onSave: () => Promise<void>;
@@ -381,6 +393,7 @@ function BannerForm({
             type="file"
             accept="image/jpeg,image/png,image/webp"
             className="text-sm"
+            disabled={uploading}
             onChange={(e) => {
               const f = e.target.files && e.target.files[0];
               if (f) void onUpload(f);
