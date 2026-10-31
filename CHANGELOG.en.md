@@ -11,7 +11,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Catalog ads: `settings.ads`, migration `003_ads` (`ad_images`, `ad_stats`, after the already shipped `002_monitor`), `GET /v1/ads-config`, `POST /v1/ads/event` with no device ids, and the Ads admin tab. The Android TV and webOS switches stay off until an admin turns them on. Android TV fetches the config with native HTTP, webOS with XHR; the public GETs answer `Access-Control-Allow-Origin: *` with no credentials
 - [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
 - [tv] Season page: a poster on a backdrop, the series title and Season N, and room between the header, the buttons and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (size, time left, or the air date)
-- A release size is shown one way everywhere: "27.0 GB", not "11.2 GB" next to "27,0 ГБ". An empty field no longer leaves " · -" in the line
+- A release size now looks the same everywhere: "27.0 GB", with no "11.2 GB" in one place and "27,0 GB" in another. An empty field no longer leaves " · -" in the line
 - [tv] The releases dialog footer names opening and deleting a release, not "mark watched"
 - [tv] TV text is at least 24px. Test-mode code labels still follow the size slider
 - [tv] Several releases of one film in the library are one card. They can be switched on the release screen. The same person is not repeated in the cast row
