@@ -36,6 +36,7 @@ import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
 import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
+import { flushTvTitleLink } from './titleLink';
 import { ScreenCodeBadge } from './testmode/badge';
 import { ElementLabelsHost } from './testmode/elements';
 
@@ -127,6 +128,10 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   // «Открывать при включении» for the boot receiver. webOS has no receiver; the phone bundle does not run this UI.
   useEffect(() => (platformKind() === 'androidtv' ? syncOpenOnStartup() : undefined), []);
+  // a title link that arrived on the connect screen opens once a server is chosen
+  useEffect(() => {
+    if (platformKind() === 'androidtv') flushTvTitleLink();
+  });
   useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);
   useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   useEffect(() => armOnboardingBoot(), []);
