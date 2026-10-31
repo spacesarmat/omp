@@ -21,7 +21,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollScreenToTop } from '../ui/focus';
+import { arrowUpToAbove, restoreFocus, scrollScreenToTop } from '../ui/focus';
 import { confirmDialog } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -329,15 +329,15 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <span class="skip-title">{t('torrent.skip')}</span>
             <span class="muted">{t('torrent.skipSub')}</span>
           </div>
-          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')} onFocused={() => enter('skip')}>
+          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')} onArrow={arrowUpToAbove('skip-intro')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipIntro')}</span>
             <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label={t('torrent.skipIntro')} aria-checked={skip.prefs.i} />
           </Focusable>
-          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')} onFocused={() => enter('skip')}>
+          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')} onArrow={arrowUpToAbove('skip-credits')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipCredits')}</span>
             <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label={t('torrent.skipCreditsShort')} aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)} onFocused={() => enter('marks')}>
+          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)} onArrow={arrowUpToAbove('skip-status')} onFocused={() => enter('marks')}>
             <span class="skip-label">{t('tv.marks.title')}</span>
             <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
           </Focusable>
@@ -389,6 +389,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   focusKey={'file-' + f.id}
                   className="list-item file-row"
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
+                  onArrow={arrowUpToAbove('file-' + f.id)}
                   onFocused={() => {
                     enter('files');
                     if (i === g.files.length - 1 && g.season !== null) revealComing(g.season);
