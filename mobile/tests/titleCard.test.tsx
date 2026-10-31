@@ -354,7 +354,7 @@ describe('SeasonCard', () => {
     expect(e[0].classList.contains('in')).toBe(true);
     expect(e[0].querySelector('.m-season-ep-num')!.textContent).toBe('1');
     expect(e[0].querySelector('.m-season-ep-title')!.textContent).toBe('Эпизод 3.1');
-    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('48 мин · 1.4 GB');
+    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('48 мин · 1,4 ГБ');
     expect(e[2].classList.contains('in')).toBe(false);
     expect(e[2].querySelector('.m-season-ep-title')!.textContent).toBe('Серия 3');
     expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('50 мин · нет в медиатеке');

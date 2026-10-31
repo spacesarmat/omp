@@ -1,6 +1,6 @@
 // «Мои»: several releases of one film (the same TMDB id once known, else the same normalized title and year) are one
-// card; its releases are chosen on the film's screen («Раздача: 1080p · Сменить»). Series keep their own grouping
-// (seriesGroups); the TV library is not changed.
+// card; its releases are chosen on the film's screen («Раздача: 1080p · Сменить» on the phone, «Раздачи · N» on the TV).
+// Series keep their own grouping (seriesGroups). The TV library uses the same grouping.
 import type { Torrent } from '../../../src/api/types';
 import { groupLibrary, isSeries, type LibraryItem } from '../../../src/lib/seriesGroups';
 import { cachedMovieId } from '../../../src/lib/useMovieCard';

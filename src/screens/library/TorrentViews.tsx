@@ -1,5 +1,5 @@
 import type { Torrent } from '../../api/types';
-import { formatBytes } from '../../lib/format';
+import { fmtSize, tp } from '../../i18n';
 import { parseReleaseInfo, releaseBadges, displayBadge } from '../../lib/releaseInfo';
 import { categoryTabs, categoryOf } from '../../lib/category';
 import type { LibraryView } from '../../lib/libraryView';
@@ -7,7 +7,8 @@ import { FocusGroup, Focusable } from '../../ui/components';
 import { Poster } from './Poster';
 import { displayTitle } from '../../lib/torrentName';
 import { libraryTitle } from '../../lib/libraryView';
-import { groupLibrary, groupLabel, groupSize, singleGroup, type SeriesGroup } from '../../lib/seriesGroups';
+import { groupLabel, groupSize, singleGroup, type SeriesGroup } from '../../lib/seriesGroups';
+import { groupPhoneLibrary, type FilmGroup } from '../../../mobile/src/lib/filmGroups';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { SeriesTile, useSeriesPill, SeriesPill } from './SeriesTile';
 import { tvGlyphs } from '../../ui/tvText';
@@ -27,6 +28,22 @@ interface ItemProps {
   onFocused: (t: Torrent | SeriesGroup) => void;
   /** Far from the focus: the poster image is let go. */
   unload?: boolean;
+  /** Replaces the usual meta line (a film card: the year and how many releases). */
+  metaLine?: string;
+  /** Replaces the torrent's own size (a film card: every release). */
+  sizeBytes?: number;
+  /** A count on the poster when several releases share the card. */
+  count?: number;
+}
+
+function filmLine(g: FilmGroup): string {
+  const year = libraryTitle(g.lead).meta;
+  const n = g.members.length > 1 ? tp('series.releases', g.members.length) : '';
+  return [year, n].filter(Boolean).join(' · ');
+}
+
+function filmBytes(g: FilmGroup): number {
+  return g.members.reduce((n, m) => n + (m.torrent_size || 0), 0);
 }
 
 /**
@@ -69,10 +86,11 @@ function Tile(p: ItemProps & { size: 'large' | 'small' }) {
   return (
     <Focusable focusKey={'torrent-' + t.hash} className={'tile tile-' + p.size} onPress={() => p.onOpen(t)} onFocused={() => p.onFocused(t)}>
       <Poster t={t} showTitle unload={p.unload}>
+        {p.count && p.count >= 2 ? <div class="tile-count">{p.count}</div> : null}
         <Badges list={badgesOf(t, p.size === 'large' ? 2 : 1)} className="art-badges" />
       </Poster>
       <div class="tile-title">{tvGlyphs(name)}</div>
-      <div class="tile-meta">{metaOf(t) || (p.size === 'large' ? formatBytes(t.torrent_size || 0) : '\u00a0')}</div>
+      <div class="tile-meta">{p.metaLine !== undefined ? (p.metaLine || '\u00a0') : (metaOf(t) || (p.size === 'large' ? fmtSize(t.torrent_size || 0) : '\u00a0'))}</div>
     </Focusable>
   );
 }
@@ -85,11 +103,11 @@ function Row(p: ItemProps) {
       <Poster t={t} unload={p.unload} />
       <div class="lrow-main">
         <div class="lrow-title">{tvGlyphs(name)}</div>
-        {metaOf(t) && <div class="lrow-meta">{metaOf(t)}</div>}
+        {(p.metaLine !== undefined ? p.metaLine : metaOf(t)) && <div class="lrow-meta">{p.metaLine !== undefined ? p.metaLine : metaOf(t)}</div>}
         <Badges list={badgesOf(t, 5)} />
       </div>
       <div class="lrow-cat">{categoryLabel(t)}</div>
-      <div class="lrow-size">{formatBytes(t.torrent_size || 0)}</div>
+      <div class="lrow-size">{fmtSize(p.sizeBytes !== undefined ? p.sizeBytes : t.torrent_size || 0)}</div>
     </Focusable>
   );
 }
@@ -99,9 +117,9 @@ function CompactRow(p: ItemProps) {
   const name = useLoneName(t);
   return (
     <Focusable focusKey={'torrent-' + t.hash} className="crow" onPress={() => p.onOpen(t)} onFocused={() => p.onFocused(t)}>
-      <div class="crow-title">{tvGlyphs(name)}{metaOf(t) && <span class="crow-meta">{' · ' + metaOf(t)}</span>}</div>
+      <div class="crow-title">{tvGlyphs(name)}{(p.metaLine !== undefined ? p.metaLine : metaOf(t)) && <span class="crow-meta">{' · ' + (p.metaLine !== undefined ? p.metaLine : metaOf(t))}</span>}</div>
       <Badges list={badgesOf(t, 2)} className="crow-badges" />
-      <div class="crow-size">{formatBytes(t.torrent_size || 0)}</div>
+      <div class="crow-size">{fmtSize(p.sizeBytes !== undefined ? p.sizeBytes : t.torrent_size || 0)}</div>
     </Focusable>
   );
 }
@@ -118,7 +136,7 @@ function SeriesRow(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocu
         {pill && <SeriesPill pill={pill} inline />}
       </div>
       <div class="lrow-cat">{categoryLabel(g.named)}</div>
-      <div class="lrow-size">{formatBytes(groupSize(g))}</div>
+      <div class="lrow-size">{fmtSize(groupSize(g))}</div>
     </Focusable>
   );
 }
@@ -130,7 +148,7 @@ function SeriesCompact(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; on
     <Focusable focusKey={'series-' + g.key} className="crow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
       <div class="crow-title">{tvGlyphs(seriesName(g))}<span class="crow-meta">{' · ' + groupLabel(g)}</span></div>
       {pill && <SeriesPill pill={pill} inline />}
-      <div class="crow-size">{formatBytes(groupSize(g))}</div>
+      <div class="crow-size">{fmtSize(groupSize(g))}</div>
     </Focusable>
   );
 }
@@ -147,7 +165,7 @@ export function TorrentViews(p: {
   const tiles = p.view === 'large' || p.view === 'small';
   const grouped = p.group !== false;
   const items = useMemo(
-    () => (grouped ? groupLibrary(p.list) : p.list.map((tor) => ({ kind: 'torrent' as const, tor }))),
+    () => (grouped ? groupPhoneLibrary(p.list) : p.list.map((tor) => ({ kind: 'torrent' as const, tor }))),
     [p.list, grouped],
   );
   const openSeries = p.onOpenSeries || (() => undefined);
@@ -163,7 +181,7 @@ export function TorrentViews(p: {
   };
   const focusAt = (i: number) => setRow(rowOf(i, cols));
   // another tab, a search or a refresh: the window follows the focused tile where it is now (the top when none)
-  const keys = items.map((it) => (it.kind === 'series' ? 'series-' + it.key : 'torrent-' + it.tor.hash));
+  const keys = items.map((it) => (it.kind === 'series' ? 'series-' + it.key : 'torrent-' + (it.kind === 'film' ? it.lead.hash : it.tor.hash)));
   const keysId = keys.join('|') + '#' + cols;
   useEffect(() => {
     let cur = '';
@@ -186,6 +204,14 @@ export function TorrentViews(p: {
           if (p.view === 'large' || p.view === 'small') return <SeriesTile key={'s-' + it.key} g={it} size={p.view} onOpen={openSeries} onFocused={focused} unload={unload} />;
           if (p.view === 'list') return <SeriesRow key={'s-' + it.key} g={it} onOpen={openSeries} onFocused={focused} unload={unload} />;
           return <SeriesCompact key={'s-' + it.key} g={it} onOpen={openSeries} onFocused={focused} />;
+        }
+        if (it.kind === 'film') {
+          const g = it;
+          const line = filmLine(g);
+          const bytes = filmBytes(g);
+          if (p.view === 'large' || p.view === 'small') return <Tile key={'f-' + g.lead.hash} t={g.lead} size={p.view} metaLine={line} count={g.members.length} onOpen={p.onOpen} onFocused={focused} unload={unload} />;
+          if (p.view === 'list') return <Row key={'f-' + g.lead.hash} t={g.lead} metaLine={line} sizeBytes={bytes} onOpen={p.onOpen} onFocused={focused} unload={unload} />;
+          return <CompactRow key={'f-' + g.lead.hash} t={g.lead} metaLine={line} sizeBytes={bytes} onOpen={p.onOpen} onFocused={focused} />;
         }
         const t = it.tor;
         if (p.view === 'large' || p.view === 'small') return <Tile key={t.hash} t={t} size={p.view} onOpen={p.onOpen} onFocused={focused} unload={unload} />;
