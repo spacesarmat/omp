@@ -144,6 +144,7 @@ export const ru = {
     followNew: 'Следить за новыми раздачами',
     app: 'Приложение',
     help: 'Помощь',
+    tellFriends: 'Рассказать друзьям',
     showOnboarding: 'Показать знакомство с приложением',
     resetHints: 'Сбросить подсказки',
     hintsAgain: 'Подсказки покажутся снова',
@@ -1460,6 +1461,7 @@ export const ru = {
       hintOk: 'ОК - выбрать',
       hintDown: 'Вниз - сезоны и актёры',
       hintBack: 'Назад - к «Обзору»',
+      seasonMissing: 'Сезона {n} в карточке нет. Открыт сериал.',
     },
     // «В лучшем качестве» on the torrent and series screens
     better: {
@@ -2649,5 +2651,12 @@ export const ru = {
     open: 'Подробнее',
     qrHint: 'Наведите камеру телефона на код',
     qrClose: 'Закрыть',
+  },
+  share: {
+    action: 'Поделиться',
+    failed: 'Не удалось поделиться',
+    copied: 'Ссылка скопирована',
+    friendsText: 'OMP - плеер для фильмов и сериалов',
+    seasonOut: 'Сезон {n} выходит {date}',
   },
 };

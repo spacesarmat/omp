@@ -6,7 +6,7 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 | Host | Upstream |
 |------|----------|
-| `omp-player.online` | static `site/` (landing); unknown paths are a real 404 with `site/404.html` |
+| `omp-player.online` | static `site/` (landing). `/t/movie|tv/<id>` and `/t/tv/<id>/s/<n>` rewrite to `site/t/index.html`. Other unknown paths are a real 404 with `site/404.html`. `/.well-known/assetlinks.json` is the Android App Links statement |
 | `www.omp-player.online` | 301 to `https://omp-player.online{uri}` (path and query kept) |
 | `billing.omp-player.online` | `billing:8787` |
 | `jackett.omp-player.online` | `jackett:9117` (+ basic auth) |
@@ -64,6 +64,8 @@ On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy
 ## Landing SEO
 
 Both pages carry a title and description, `meta keywords`, `canonical`, hreflang ru/en/x-default, Open Graph and Twitter tags with `assets/og-image.jpg` (1200×630, the hero scene), and one JSON-LD `SoftwareApplication` block. JSON-LD is a data block, so CSP `script-src` does not apply and the Metrika hash is unchanged. `site/robots.txt` points at `site/sitemap.xml`; update `lastmod` there when page copy changes. `test/seo.test.ts` checks the tags, the image size, the JSON-LD and the sitemap. They ship with `site/`, so no Caddy change is needed.
+
+Shared title links need a deploy of `site/` and both Caddyfiles (`/t/...` rewrite, `site/t/index.html`, `site/title-link.js`, `site/.well-known/assetlinks.json`). `assetlinks.json` lists the release certificate SHA-256 of `com.spacesarmat.omp` (from the signed APK v0.20.8-beta.1) and the public debug certificate. Users need an APK that contains this change. The published v0.20.8-beta.1 build has no title-link filter, so deploying the site and the certificate file alone does not open the card there: the page stays in the browser. Android TV with this build opens the film or series card, and the season when that card lists it. If the title or the season is missing, the series card or the catalog error stays on screen. Links have no magnets, torrent hashes or tracking parameters.
 
 ## Emergency admin login
 

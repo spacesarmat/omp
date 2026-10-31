@@ -9,6 +9,7 @@ import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import type { HomeSection, HomeSectionId, Kind, TrendingWindow } from '../../../../src/catalog/tmdb';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { PosterButton } from '../../share/PosterButton';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
 import { useAdSlots } from '../../ads/useAdSlots';
@@ -42,12 +43,12 @@ function Rail({ section, owned }: { section: HomeSection; owned: (x: HomeSection
       <h3 class="m-disc-rail-title">{sectionTitle(section.id)}</h3>
       <div class="m-disc-rail-row">
         {section.items.map((x) => (
-          <button
+          <PosterButton
             key={x.kind + ':' + x.id}
-            type="button"
-            class="m-disc-tile m-disc-rail-tile"
-            aria-label={x.year ? x.title + ' ' + x.year : x.title}
-            onClick={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
+            item={x}
+            className="m-disc-tile m-disc-rail-tile"
+            label={x.year ? x.title + ' ' + x.year : x.title}
+            onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
           >
             <DiscPoster x={x} owned={owned(x)} />
             <span class="m-card-title m-disc-title">
@@ -55,7 +56,7 @@ function Rail({ section, owned }: { section: HomeSection; owned: (x: HomeSection
             </span>
             <TileMeta x={x} />
             <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
-          </button>
+          </PosterButton>
         ))}
       </div>
     </section>

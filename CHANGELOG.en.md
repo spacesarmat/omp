@@ -6,9 +6,13 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] On the season page the backdrop no longer covers Find torrents for the season or the Episodes heading. The gap stays with and without the button, with the yellow air date and with a long title
+- [phone] A card can be shared: an icon next to Back on a film, a series and a season, a long press on a poster in the catalog and in Want, and Tell friends in Settings. The text is the title, the year, a short line and a link to omp-player.online. An unreleased season says something like "Season 2 comes out Nov 8". Magnets and torrent hashes are never included
+- [tv] A film or series link from omp-player.online opened on Android TV shows the card. A season in the link is selected when the card lists it. If the season or the title is missing, the series card or the catalog error stays on screen
 - A dub and subtitles picked in 2160 Player are saved for a release that was just added too: the next episode starts with the same external subtitles (.ass), built-in audio or external dub
 - [tv] Up from the cast row reaches the buttons even when they wrap onto a second row. Down from Continue reaches the episode list
 - The playlist plays the episodes first and leaves NCOP, NCED and the Extras, SP and NC folders after them, so episode 1 opens as 1 of N
+- [tech] Site: /t/movie/ID, /t/tv/ID and /t/tv/ID/s/N serve a card page with download buttons. Android App Links: an intent-filter for https://omp-player.online/t/ and assetlinks.json. The file has the release certificate SHA-256 from the v0.20.8-beta.1 APK and the debug certificate fingerprint. Open in OMP and an https link open the card only in a build that has this filter. The published 0.20.8-beta.1 APK does not, so deploying the site alone does not send that build to the card. Deploy site/ and the Caddyfile
 - [tech] Fresh-release track memory: when the torrent is missing from the local library copy or is not grouped as a series yet, the server list is read and omp.a is written on that hash. A write error is logged (omp.tracks) instead of dropped. A built-in audio index is stored as omp.a.e and sent to 2160 Player as embedded:N, without clearing subtitles. playableFiles puts NCOP/NCED and Extras/SP/NC folders after the episodes. Release-card focus moves to the nearest row by button rectangles, including a wrapped second row and Down from Continue
 
 ## 0.20.8-beta.1

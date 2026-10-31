@@ -508,10 +508,17 @@ button, .m-btn {
    under the status bar. The backdrop may run under the clock (body::before covers it). The series
    title lives in .m-season-hero, which starts below the inset and the back button. */
 .m-screen[data-route='season'] { padding-top: 0; display: flex; flex-direction: column; }
-.m-season-hero { position: relative; margin: 0 -16px; padding: calc(env(safe-area-inset-top) + 72px) 16px 0; }
+/* The backdrop fills the hero (bottom: 0) and never paints over the button or «Серии».
+   min-height keeps the short case (no button, one-line title) as tall as the old 300px fade.
+   A long title or the yellow air date grows the hero, and the fade grows with it.
+   padding-bottom is the air under the poster inside that fade. */
+.m-season-hero {
+  position: relative; margin: 0 -16px;
+  padding: calc(env(safe-area-inset-top) + 72px) 16px 16px;
+  min-height: calc(300px + env(safe-area-inset-top));
+}
 .m-season-backdrop {
-  position: absolute; z-index: 0; top: 0; left: 0; right: 0; overflow: hidden; pointer-events: none;
-  height: calc(300px + env(safe-area-inset-top));
+  position: absolute; z-index: 0; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: none;
   background: linear-gradient(160deg, #2A2F3D, #14161C);
 }
 .m-season-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.08); }
@@ -526,6 +533,10 @@ button, .m-btn {
   position: absolute; z-index: 2;
   top: calc(env(safe-area-inset-top) + 20px); left: 16px;
   background: rgba(15, 17, 21, 0.7);
+}
+.m-season-share {
+  position: absolute; z-index: 2;
+  top: calc(env(safe-area-inset-top) + 20px); right: 16px;
 }
 body.test-labels .m-screen[data-route='season'] .m-season-back[data-code]::after {
   right: auto; left: calc(100% + 6px); transform: translateY(-55%);
@@ -568,6 +579,7 @@ body.test-labels .m-screen[data-route='season'] .m-season-back[data-code]::after
 .m-tc-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .m-tc-backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0) 45%, var(--bg, #0F1115)); pointer-events: none; }
 .m-tc-back { position: absolute; z-index: 1; top: calc(env(safe-area-inset-top) + 10px); left: 16px; background: rgba(15, 17, 21, 0.7); }
+.m-tc-share { position: absolute; z-index: 1; top: calc(env(safe-area-inset-top) + 10px); right: 16px; }
 .m-tc-body { position: relative; display: flex; flex-direction: column; gap: 16px; margin-top: -72px; }
 .m-tc-head { display: flex; gap: 14px; align-items: flex-end; }
 .m-tc-poster { flex: none; display: block; width: 110px; height: 165px; border-radius: 12px; background: var(--panel); object-fit: cover; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
@@ -1515,6 +1527,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-news-status { display: flex; align-items: center; gap: 8px; }
 .m-news-status .m-btn-text { flex-shrink: 0; min-height: 36px; color: var(--accent); }
 .m-sub-row { display: flex; align-items: center; gap: 10px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
+.m-sub-poster { flex: none; width: 40px; height: 60px; border-radius: 6px; object-fit: cover; background: var(--panel-2); }
 .m-sub-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .m-sub-q { font-size: 15px; font-weight: 700; }
 .m-sub-paused { opacity: 0.55; }

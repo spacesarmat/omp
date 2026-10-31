@@ -13,6 +13,7 @@ vi.mock('../../src/monitor/replace', async (orig) => ({
 }));
 
 import { News, resetNews } from '../src/screens/News';
+import { setShareSender } from '../src/share/send';
 import { currentRoute, resetTo } from '../src/nav';
 import { toast } from '../src/ui/toast';
 import { setWatchActions } from '../src/watch';
@@ -109,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setShareSender(null);
   vi.useRealTimers();
   act(() => render(null, el));
   unregisterSource('feedy');
@@ -248,6 +250,37 @@ describe('«Новое» · Подписки', () => {
     expect(rows[0].querySelector('.m-fresh')!.textContent).toBe('2 новых');
     expect(rows[1].querySelector('.m-fresh')).toBeNull();
     click(rows[0]);
+    expect(currentRoute.value).toEqual({ name: 'subFindings', id: s.id });
+  });
+
+  it('a long press on a «Хочу» poster shares the catalog title and a tap still opens findings', async () => {
+    const s = addSubscription({
+      query: 'Институт 2026',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'tv', id: 42, title: 'Институт', year: 2026, poster: 'https://img.test/p.jpg' },
+    }, 3000)!;
+    await mount({ seg: 'subs' });
+    const row = el.querySelector('.m-sub-row') as HTMLButtonElement;
+    expect(row.querySelector('.m-sub-poster')).toBeTruthy();
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const sent: string[] = [];
+    setShareSender(async (o) => {
+      sent.push(o.text);
+      return 'sheet';
+    });
+    act(() => (document.querySelector('[data-share="title"]') as HTMLButtonElement).click());
+    expect(sent[0]).toContain('Институт');
+    expect(sent[0]).toContain('https://omp-player.online/t/tv/42');
+    expect(sent[0]).not.toMatch(/magnet:|xt=urn:btih/i);
+    expect(currentRoute.value.name).not.toBe('subFindings');
+    setShareSender(null);
+    resetTo({ name: 'news', seg: 'subs' });
+    await mount({ seg: 'subs' });
+    click(el.querySelector('.m-sub-row')!);
     expect(currentRoute.value).toEqual({ name: 'subFindings', id: s.id });
   });
 

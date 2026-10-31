@@ -5,6 +5,7 @@ import { App } from './app';
 import { activeServer } from './store/servers';
 import { resetTo } from './ui/nav';
 import { readLaunchParams, onRelaunch } from './platform/launch';
+import { installTvTitleLinks } from './titleLink';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
 import { nativePlugin, nativeSetCleartextHosts, nativeTorrServerTls } from './platform/androidNative';
@@ -62,6 +63,7 @@ function start(): void {
 
   runLaunchParams(readLaunchParams());
   onRelaunch(runLaunchParams);
+  if (platformKind() === 'androidtv') installTvTitleLinks();
 }
 
 // The built-in tracker parsers need the native http of the Android APK; LG search stays TorrServer-only, so the

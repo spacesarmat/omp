@@ -1948,6 +1948,29 @@ footer .copyright {
   color: var(--muted);
 }
 
+/* Title link (/t/...). The header button switches the page language. */
+.lang-btn {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+#share-card .eyebrow {
+  margin-bottom: 8px;
+}
+
+#share-card .actions {
+  margin-top: 22px;
+}
+
+#share-card .actions .button,
+#share-card .actions .text-link {
+  margin: 6px;
+}
+
 @media (max-width: 560px) {
   .notfound .actions {
     flex-direction: column;

@@ -30,6 +30,8 @@ import { phoneSourceContext } from '../searchContext';
 import { t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { friendsShare } from '../share/text';
+import { sendShare } from '../share/send';
 import { phonePlayerName } from './VideoPlayer';
 import { localServer, canRun } from '../server/localServer';
 
@@ -495,6 +497,9 @@ export function Settings() {
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.14" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
+        </button>
+        <button type="button" class="m-set-row m-set-row-btn tm" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
+          <span>{t('settings.tellFriends')}</span>
         </button>
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>
           <span>{t('settings.showOnboarding')}</span>

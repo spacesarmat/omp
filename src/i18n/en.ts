@@ -142,6 +142,7 @@ export const en: EnDict<typeof ru> = {
     followNew: 'Follow new releases',
     app: 'App',
     help: 'Help',
+    tellFriends: 'Tell friends',
     showOnboarding: 'Show onboarding',
     resetHints: 'Reset hints',
     hintsAgain: 'Hints will show again',
@@ -1431,6 +1432,7 @@ export const en: EnDict<typeof ru> = {
       hintOk: 'OK - select',
       hintDown: 'Down - seasons and cast',
       hintBack: 'Back - to "Discover"',
+      seasonMissing: 'Season {n} is not on this card. Showing the series.',
     },
     // «В лучшем качестве» on the torrent and series screens
     better: {
@@ -2597,5 +2599,12 @@ export const en: EnDict<typeof ru> = {
     open: 'Learn more',
     qrHint: 'Point the phone camera at the code',
     qrClose: 'Close',
+  },
+  share: {
+    action: 'Share',
+    failed: 'Could not share',
+    copied: 'Link copied',
+    friendsText: 'OMP - a player for films and series',
+    seasonOut: 'Season {n} comes out {date}',
   },
 };

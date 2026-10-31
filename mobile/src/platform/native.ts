@@ -250,6 +250,11 @@ export interface OmpNativeApi {
   billingForget(): Promise<void>;
   /** Writes `text` to a file `name` and opens the system «Поделиться». */
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  /**
+   * Opens the system share sheet with plain text (ACTION_SEND, EXTRA_TEXT). No file.
+   * 'sheet' when the chooser opened, 'copied' when this browser has no plugin and the text went to the clipboard.
+   */
+  shareMessage(o: { text: string; title?: string; subject?: string }): Promise<'sheet' | 'copied'>;
   /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); never rejects, no-op off-device. */
   setLanguage(lang: 'ru' | 'en'): Promise<void>;
   /** Phone only: lock Activity to portrait or restore sensor; never rejects, no-op off-device / TV / old APK. */
@@ -361,6 +366,7 @@ interface OmpNativePlugin {
   billingStatus(): Promise<{ present?: boolean; volatile?: boolean }>;
   billingForget(): Promise<void>;
   shareText(o: { name: string; text: string; title?: string }): Promise<void>;
+  shareMessage?(o: { text: string; title?: string; subject?: string }): Promise<void>;
   setLanguage(o: { lang: string }): Promise<void>;
   setOrientation?(o: { mode: string }): Promise<void>;
   cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
@@ -942,6 +948,23 @@ export const native: OmpNativeApi = {
   shareText(o) {
     if (!plugin) return unavailable();
     return logged('shareText', plugin.shareText(o));
+  },
+
+  async shareMessage(o) {
+    if (plugin && typeof plugin.shareMessage === 'function') {
+      await logged('shareMessage', plugin.shareMessage({ text: o.text, title: o.title, subject: o.subject }));
+      return 'sheet';
+    }
+    const nav = typeof navigator === 'undefined' ? null : navigator;
+    if (nav && typeof nav.share === 'function') {
+      await nav.share({ text: o.text, title: o.title || o.subject });
+      return 'sheet';
+    }
+    if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
+      await nav.clipboard.writeText(o.text);
+      return 'copied';
+    }
+    return unavailable();
   },
 
   setLanguage(lang) {

@@ -10,6 +10,10 @@ import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
 import { RawTitle, ReleaseChips, ResultThumb } from '../ui/ReleaseRow';
 import { navigate } from '../nav';
+import { useLongPress } from '../ui/longPress';
+import { ShareMenu } from '../share/ShareMenu';
+import { posterShare } from '../share/text';
+import { sendShare } from '../share/send';
 import { monitorNative } from '../monitor/native';
 import { askNotifyOnce, lastCheck, monitorDoneCount, monitorVersion, reloadMonitor, useMonitorStatus } from '../monitor/ui';
 import { betterLine, checkedLine, clock, dayWord, episodesLine, freshText, subRule } from '../monitor/text';
@@ -29,6 +33,7 @@ import type { SearchHandle } from '../../../src/sources/search';
 import { FEED_CATEGORIES, type FeedCategory, type SourceResult } from '../../../src/sources/types';
 import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../src/monitor/feedCache';
 import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
+import type { Subscription } from '../../../src/monitor/types';
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
@@ -206,6 +211,64 @@ function scrollToHighlight(): void {
   if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
 }
 
+function SubBody(p: { s: Subscription; off: boolean; n: number }) {
+  const cat = p.s.catalog;
+  return (
+    <>
+      {cat && (cat.poster ? <img class="m-sub-poster" src={cat.poster} alt="" width={40} height={60} /> : <span class="m-sub-poster" />)}
+      <span class="m-sub-text">
+        <span class="m-sub-q">{p.s.query}</span>
+        <span class="m-muted m-small">{subRule(p.s)}</span>
+        {p.off && <span class="m-small m-sub-paused-note">{t('monitor.limit.paused')}</span>}
+      </span>
+      {p.n > 0 && <span class="m-fresh">{freshText(p.n)}</span>}
+    </>
+  );
+}
+
+/** A typed subscription: a tap opens its findings. No long press, so the tap stays as it was. */
+function PlainSub(p: { s: Subscription; off: boolean; n: number }) {
+  return (
+    <button
+      type="button"
+      class={'m-sub-row' + (p.off ? ' m-sub-paused' : '')}
+      data-paused={p.off ? '' : undefined}
+      onClick={() => navigate({ name: 'subFindings', id: p.s.id })}
+    >
+      <SubBody s={p.s} off={p.off} n={p.n} />
+    </button>
+  );
+}
+
+/** «Хочу посмотреть» keeps the catalog title: a tap still opens findings, a long press shares the card. */
+function WantSub(p: { s: Subscription; off: boolean; n: number }) {
+  const cat = p.s.catalog!;
+  const [menu, setMenu] = useState(false);
+  const press = useLongPress(
+    () => setMenu(true),
+    () => navigate({ name: 'subFindings', id: p.s.id }),
+  );
+  return (
+    <>
+      <button
+        type="button"
+        class={'m-sub-row' + (p.off ? ' m-sub-paused' : '')}
+        data-paused={p.off ? '' : undefined}
+        {...press}
+      >
+        <SubBody s={p.s} off={p.off} n={p.n} />
+      </button>
+      {menu && (
+        <ShareMenu
+          label={cat.title}
+          onClose={() => setMenu(false)}
+          onShare={() => void sendShare(posterShare(cat))}
+        />
+      )}
+    </>
+  );
+}
+
 function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; running: boolean }) {
   void monitorVersion.value;
   const [polling, setPolling] = useState(false);
@@ -352,22 +415,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {shownSubs.map((s) => {
         const n = unseenCount(s.id);
         const off = paused[s.id] === true;
-        return (
-          <button
-            key={s.id}
-            type="button"
-            class={'m-sub-row' + (off ? ' m-sub-paused' : '')}
-            data-paused={off ? '' : undefined}
-            onClick={() => navigate({ name: 'subFindings', id: s.id })}
-          >
-            <span class="m-sub-text">
-              <span class="m-sub-q">{s.query}</span>
-              <span class="m-muted m-small">{subRule(s)}</span>
-              {off && <span class="m-small m-sub-paused-note">{t('monitor.limit.paused')}</span>}
-            </span>
-            {n > 0 && <span class="m-fresh">{freshText(n)}</span>}
-          </button>
-        );
+        return s.catalog ? <WantSub key={s.id} s={s} off={off} n={n} /> : <PlainSub key={s.id} s={s} off={off} n={n} />;
       })}
       {searching && (
         <div data-found-releases>

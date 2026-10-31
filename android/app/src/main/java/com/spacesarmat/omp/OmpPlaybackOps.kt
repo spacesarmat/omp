@@ -181,6 +181,38 @@ internal fun OmpNativePlugin.openExternalOp(call: PluginCall) {
     }
 }
 
+/** Plain text for ACTION_SEND. Empty is refused. A magnet is refused: a share never carries a torrent. */
+internal fun sharePlainText(raw: String?): String? {
+    val text = raw?.trim().orEmpty()
+    if (text.isEmpty() || text.length > 4000) return null
+    if (text.contains("magnet:", ignoreCase = true)) return null
+    if (text.contains("xt=urn:btih", ignoreCase = true)) return null
+    return text
+}
+
+/** System share sheet for a title link: EXTRA_TEXT only, no file and no stream. */
+internal fun OmpNativePlugin.shareMessageOp(call: PluginCall) {
+    val text = sharePlainText(call.getString("text"))
+    if (text == null) {
+        call.reject(I18n.s("plugin.shareFailed"))
+        return
+    }
+    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+    val subject = call.getString("subject")?.trim().orEmpty()
+    if (subject.isNotEmpty()) send.putExtra(Intent.EXTRA_SUBJECT, subject.take(120))
+    val chooser = Intent.createChooser(send, call.getString("title")?.trim().orEmpty().take(60).ifEmpty { I18n.s("plugin.shareMessage") })
+    try {
+        val act = activity
+        if (act != null) act.startActivity(chooser)
+        else context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        call.resolve()
+    } catch (_: ActivityNotFoundException) {
+        call.reject(I18n.s("plugin.noShareApp"))
+    } catch (_: RuntimeException) {
+        call.reject(I18n.s("plugin.shareFailed"))
+    }
+}
+
 internal fun OmpNativePlugin.shareTextOp(call: PluginCall) {
     val name = shareFileName(call.getString("name"))
     val text = call.getString("text")

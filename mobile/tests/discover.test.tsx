@@ -309,6 +309,21 @@ describe('Discover («Новинки»)', () => {
     expect(currentRoute.value).toEqual({ name: 'title', kind: 'tv', id: 21 });
   });
 
+  it('a long press on a poster opens Share and does not open the card', async () => {
+    fake();
+    mount(<Discover />);
+    await flush();
+    const tile = tiles()[0];
+    act(() => {
+      tile.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const share = document.querySelector('[data-share="title"]') as HTMLButtonElement;
+    expect(share.textContent).toContain('Поделиться');
+    expect(currentRoute.value.name).not.toBe('title');
+    act(() => tile.click());
+    expect(currentRoute.value.name).not.toBe('title');
+  });
+
   it('loads the next page at the sentinel while page < pages, then stops', async () => {
     const nov = fake();
     mount(<Discover />);
