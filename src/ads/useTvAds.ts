@@ -81,11 +81,13 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
   useEffect(() => {
     syncTvAdsFromCache();
     const hideLinked = () => cfgRef.current.tvHideIfLinkedSubscriber && phoneLink.peek() && phoneLink.peek()!.sub === true;
+    const syncSub = () => setSubscribed(ompSubscribed());
     const tick = () => {
+      // An expiry while the screen stays open has no billing event. The timer is what notices it.
+      syncSub();
       if (ompSubscribed() || hideLinked()) return;
       void refreshTvAds();
     };
-    const syncSub = () => setSubscribed(ompSubscribed());
     const first = setTimeout(tick, FIRST_FETCH_MS);
     const id = setInterval(tick, REFRESH_MS);
     const off = onBillingChange(syncSub);

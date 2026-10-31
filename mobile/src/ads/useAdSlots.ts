@@ -83,14 +83,15 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
 
   // the config is read while a catalog screen is open: the cached one now, the server's a moment later (not
   // competing with the catalog's own first requests) and then every 5 minutes. A subscriber never asks.
-  // Subscription is re-read on a billing change, when the app comes back, and when the background page writes
-  // the session or the cached /v1/me answer (another document: this page hears that as a storage event).
+  // Subscription is re-read on that timer too (an expiry has no storage event), on a billing change, when the
+  // app comes back, and when the background page writes the session or the cached /v1/me answer.
   useEffect(() => {
     syncAdsFromCache();
+    const syncSub = () => setSubscribed(ompSubscribed());
     const tick = () => {
+      syncSub();
       if (!ompSubscribed()) void refreshAds();
     };
-    const syncSub = () => setSubscribed(ompSubscribed());
     const first = setTimeout(tick, FIRST_FETCH_MS);
     const id = setInterval(tick, REFRESH_MS);
     const off = onBillingChange(syncSub);

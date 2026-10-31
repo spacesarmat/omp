@@ -259,6 +259,27 @@ describe('ads in «Мои»', () => {
     saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY });
   }
 
+  it('shows ads again when the subscription expires while the catalog stays open', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'Date'] });
+    try {
+      saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 30_000 } as never);
+      saveBillingAccess({ active: true, accessUntil: Date.now() + 30_000 });
+      expect(ompSubscribed()).toBe(true);
+      mount(<Library />);
+      await flush();
+      expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60 * 1000);
+      });
+      await flush();
+      expect(ompSubscribed()).toBe(false);
+      expect(el.querySelectorAll('.m-ad').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+      saveBillingSession(null as never);
+    }
+  });
+
   it('drops the ads when a renewal lands while the catalog stays open', async () => {
     mount(<Library />);
     await flush();

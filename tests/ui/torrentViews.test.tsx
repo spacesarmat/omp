@@ -9,6 +9,8 @@ import { FIRST_RUN_KEY } from '../../src/ads/firstRun';
 import { markTvAdImagesLoaded, TV_PER_SCREEN } from '../../src/ads/useTvAds';
 import { setTvAdsIo, tvAdsConfig } from '../../src/ads/tvAds';
 import { forgetPhoneLink } from '../../src/phone/phoneStore';
+import { saveBillingAccess } from '../../src/billing/entitlement';
+import { saveBillingSession } from '../../src/billing/session';
 
 beforeAll(() => init({ debug: false, visualDebug: false }));
 
@@ -147,5 +149,45 @@ describe('TorrentViews ads on grouped films', () => {
     await act(async () => {
       render(null, host);
     });
+  });
+
+  it('shows the cell after the TV subscription expires without a billing event', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'Date'] });
+    try {
+      localStorage.clear();
+      forgetPhoneLink();
+      localStorage.setItem(FIRST_RUN_KEY, String(Date.now() - 10 * DAY));
+      const saved = sanitizeAdsConfig(AD_CFG);
+      saveAdsConfig(AD_CFG);
+      tvAdsConfig.value = saved;
+      markTvAdImagesLoaded(saved.banners.map((b) => b.image));
+      setTvAdsIo({ get: async () => ({ status: 200, text: JSON.stringify(AD_CFG) }), post: async () => undefined });
+      saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 30_000 } as never);
+      saveBillingAccess({ active: true, accessUntil: Date.now() + 30_000 });
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => ({ top: 2000, bottom: 2100, left: 0, right: 100, width: 100, height: 100, x: 0, y: 2000, toJSON: () => ({}) }) as DOMRect);
+      document.body.innerHTML = '';
+      const raw: Torrent[] = [];
+      for (let i = 0; i < 15; i++) {
+        const name = 'Film Number ' + (i + 1);
+        raw.push({ hash: 'a' + i, title: name + ' (2020) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 1, timestamp: 200 - i });
+        raw.push({ hash: 'b' + i, title: name + ' (2020) BDRip 2160p', category: 'movie', stat: 3, torrent_size: 2, timestamp: 50 - i });
+      }
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      await act(async () => {
+        render(h(TorrentViews as any, { view: 'list', list: raw, ads: true, group: true, onOpen: vi.fn(), onFocused: vi.fn() }), host);
+      });
+      expect(host.querySelectorAll('.lrow.ad-row')).toHaveLength(0);
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60 * 1000);
+      });
+      expect(host.querySelectorAll('.lrow.ad-row')).toHaveLength(1);
+      await act(async () => {
+        render(null, host);
+      });
+    } finally {
+      vi.useRealTimers();
+      saveBillingSession(null);
+    }
   });
 });
