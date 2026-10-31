@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { arrowUpToAbove, focusAboveKey } from '../../src/ui/focus';
+import { arrowUpToAbove, focusAboveKey, focusBelowKey } from '../../src/ui/focus';
 
 function place(parent: HTMLElement, key: string, x: number, y: number, w: number, h: number, cls?: string): HTMLElement {
   const el = document.createElement('div');
@@ -85,6 +85,33 @@ describe('focusAboveKey', () => {
     const cast = place(screen, 'torrent-cast-0', 80, 560, 180, 220);
     expect(focusAboveKey(cast)).toBe('torrent-playlist');
     outside.remove();
+  });
+
+  it('Up from the cast reaches the wrapped second button row, even when that row overlaps the cast', () => {
+    screen = document.createElement('div');
+    screen.className = 'screen';
+    document.body.appendChild(screen);
+    place(screen, 'torrent-play', 400, 200, 280, 64);
+    place(screen, 'torrent-delete', 400, 500, 200, 64);
+    const cast = place(screen, 'torrent-cast-0', 80, 540, 180, 220);
+    // delete bottom 564 is below the cast top 540, but its centre is still above the cast
+    expect(focusAboveKey(cast)).toBe('torrent-delete');
+    const fifth = place(screen, 'torrent-cast-4', 900, 540, 180, 220);
+    // the wrapped row is the nearest one above, for the first actor and for one further along
+    expect(focusAboveKey(fifth)).toBe('torrent-delete');
+  });
+
+  it('Down from Continue reaches the second button row, then the cast', () => {
+    screen = document.createElement('div');
+    screen.className = 'screen';
+    document.body.appendChild(screen);
+    const play = place(screen, 'torrent-play', 400, 200, 280, 64);
+    const del = place(screen, 'torrent-delete', 400, 280, 200, 64);
+    const cast = place(screen, 'torrent-cast-0', 80, 560, 180, 220);
+    place(screen, 'file-1', 80, 900, 1600, 64);
+    expect(focusBelowKey(play)).toBe('torrent-delete');
+    expect(focusBelowKey(del)).toBe('torrent-cast-0');
+    expect(focusBelowKey(cast)).toBe('file-1');
   });
 
   it('leaves other directions to the library', () => {

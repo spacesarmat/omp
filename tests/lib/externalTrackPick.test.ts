@@ -125,4 +125,25 @@ describe('pickExternalStart', () => {
     expect(pickExternalStart(E1, rec({ l: 'LostFilm', g: 'ru', s: { l: '', g: 'en' } }), S)).toEqual({ audio: 'a:rus:lostfilm', subtitle: 's:eng:' });
     expect(pickExternalStart({ audio: [], subtitles: [] }, null, S)).toEqual({ audio: null, subtitle: null });
   });
+
+  it('a built-in audio index is not replaced by the settings language, and subtitles stay', () => {
+    const series = rec({ e: 0, l: 'Japanese', g: 'jpn', s: { l: '', g: 'ru' } });
+    expect(pickExternalAudio(E1.audio, series, S)).toBeNull();
+    const start = pickExternalStart(E1, series, { ...S, subtitlesOn: true });
+    expect(start.audio).toBeNull();
+    expect(start.embedded).toBe(0);
+    expect(start.subtitle).toBe('s:rus:');
+  });
+
+  it('a built-in index that does not match this release is not forced', () => {
+    const series = rec({ e: 0, l: 'Japanese', g: 'jpn' });
+    const wrong = [{ title: 'English', language: 'en' }];
+    const start = pickExternalStart(E1, series, S, { audio: wrong });
+    expect(start.embedded).toBeUndefined();
+    expect(start.audio).toBe('a:rus:hdrezka-studio');
+    const hit = [{ title: 'Japanese', language: 'jpn' }, { title: 'English', language: 'en' }];
+    expect(pickExternalStart(E1, series, S, { audio: hit }).embedded).toBe(0);
+    // index 0 is English here, Japanese is index 1: send 1, not 0
+    expect(pickExternalStart(E1, series, S, { audio: [hit[1], hit[0]] }).embedded).toBe(1);
+  });
 });

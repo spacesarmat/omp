@@ -21,7 +21,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { arrowUpToAbove, restoreFocus, scrollScreenToTop } from '../ui/focus';
+import { arrowUpToAbove, arrowVertical, restoreFocus, scrollScreenToTop } from '../ui/focus';
 import { choose, confirmDialog } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
@@ -323,14 +323,14 @@ export function TorrentScreen({ hash }: { hash: string }) {
           })()}
           <div class="torrent-actions" ref={actionsRef}>
             <FocusGroup focusKey="TORRENT-ACTIONS" className="row torrent-actions-row" preferredChildFocusKey="torrent-play">
-              {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
-              {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(torrentName(tor, list)) : '' })} />}
-              {films.length > 1 && <Button focusKey="torrent-releases" label={t('series.releasesBtn', { n: films.length })} onFocused={() => showAction('torrent-releases')} onPress={openFilms} />}
-              {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
-              <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
-              <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
-              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={() => setPosterOpen(true)} />
-              <Button focusKey="torrent-delete" label={t('common.delete')} onFocused={() => showAction('torrent-delete')} onPress={remove} />
+              {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onArrow={arrowVertical('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
+              {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onArrow={arrowVertical('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(torrentName(tor, list)) : '' })} />}
+              {films.length > 1 && <Button focusKey="torrent-releases" label={t('series.releasesBtn', { n: films.length })} onFocused={() => showAction('torrent-releases')} onArrow={arrowVertical('torrent-releases')} onPress={openFilms} />}
+              {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onArrow={arrowVertical('torrent-better')} onPress={() => setBetterOpen(true)} />}
+              <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onArrow={arrowVertical('torrent-reset')} onPress={resetViewed} />
+              <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onArrow={arrowVertical('torrent-rename')} onPress={rename} />
+              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onArrow={arrowVertical('torrent-poster')} onPress={() => setPosterOpen(true)} />
+              <Button focusKey="torrent-delete" label={t('common.delete')} onFocused={() => showAction('torrent-delete')} onArrow={arrowVertical('torrent-delete')} onPress={remove} />
             </FocusGroup>
           </div>
         </div>

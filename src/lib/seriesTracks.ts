@@ -41,9 +41,14 @@ export interface SeriesTracks {
    * count, also after a later choice of only audio or only subtitles. Kept by every later record.
    */
   x?: true;
+  /**
+   * Built-in audio index (2160 Player «embedded:N»). Set when the choice is a track inside the video, not an external
+   * file. 0 is the first built-in track. An external dub clears it.
+   */
+  e?: number;
 }
 
-export type SeriesTracksPatch = { l?: string; g?: string; c?: string; s?: 'off' | SeriesSub; k?: SeriesSub[] } | 'reset';
+export type SeriesTracksPatch = { l?: string; g?: string; c?: string; s?: 'off' | SeriesSub; k?: SeriesSub[]; e?: number } | 'reset';
 
 export const LABEL_MAX = 80;
 export const SEEN_MAX = 12;
@@ -120,6 +125,7 @@ export function sanitizeSeriesTracks(v: unknown): SeriesTracks | null {
     if (k.length) out.k = k.slice(0, SEEN_MAX);
   }
   if (v.x === true) out.x = true;
+  if (typeof v.e === 'number' && isFinite(v.e) && v.e >= 0 && v.e < 64 && Math.floor(v.e) === v.e) out.e = v.e;
   return out;
 }
 
@@ -147,7 +153,7 @@ export function torrentChoicesCount(r: SeriesTracks | null): boolean {
 
 /** The record says «по умолчанию»: a reset (or nothing chosen). */
 export function isReset(r: SeriesTracks | null): boolean {
-  return !!r && !r.l && !r.g && !r.s;
+  return !!r && !r.l && !r.g && !r.s && typeof r.e !== 'number';
 }
 
 /** Seen dubs merged: `add` first, no duplicates (by label), at most SEEN_MAX. */
@@ -176,13 +182,16 @@ export function nextSeriesTracks(base: SeriesTracks | null, patch: SeriesTracksP
   const out: SeriesTracks = { at: now };
   const seenAdd: SeriesSub[] = [];
   if (patch !== 'reset') {
-    const audio = patch.l !== undefined || patch.g !== undefined;
+    const audio = patch.l !== undefined || patch.g !== undefined || patch.e !== undefined;
     const l = audio ? titleText(patch.l) : base && base.l ? base.l : '';
     const g = audio ? str(patch.g) : base && base.g ? base.g : '';
     if (l) out.l = l;
     if (g) out.g = g;
     const c = audio ? (l ? channelsText(patch.c) : '') : base && base.l && base.c ? base.c : '';
     if (c) out.c = c;
+    // an external dub (l/g without e) drops a built-in index; a subtitle-only patch keeps it
+    if (typeof patch.e === 'number') out.e = patch.e;
+    else if (!audio && base && typeof base.e === 'number') out.e = base.e;
     const s0 = patch.s !== undefined ? patch.s : base ? base.s : undefined;
     const s = s0 && s0 !== 'off' ? sub(s0) : s0;
     if (s) out.s = s;

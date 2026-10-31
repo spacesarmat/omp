@@ -63,6 +63,23 @@ export function episodeLabel(path: string): string {
   return (e.season !== null ? 'S' + pad(e.season) : '') + 'E' + pad(e.episode);
 }
 
+/** A folder that holds extras, not episodes («Extras», «SP», «NC»). */
+const EXTRA_DIR = /^(?:extras?|specials?|sp|nc|ncop\d*|nced\d*|creditless|bonus|bonuses)$/i;
+/** NCOP / NCED (and NCOP2) in the file name: a creditless opening or ending. */
+const EXTRA_NAME = /(?:^|[^a-z0-9])(?:ncop|nced)\d*(?:[^a-z0-9]|$)/i;
+
+/**
+ * An extra, not an episode: NCOP/NCED in the file name, or a folder Extras, SP, NC and the like.
+ * Main episodes stay ahead of these in the playlist, so E01 is «1 из N» and auto-next reaches extras only after them.
+ */
+export function isExtraFile(path: string): boolean {
+  const parts = (path || '').split('/');
+  const name = parts[parts.length - 1] || '';
+  if (EXTRA_NAME.test(name)) return true;
+  for (let i = 0; i < parts.length - 1; i++) if (EXTRA_DIR.test(parts[i])) return true;
+  return false;
+}
+
 export function naturalCompare(a: string, b: string): number {
   return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
 }
@@ -87,6 +104,9 @@ export function groupBySeason(files: TorrentFile[]): Season[] {
   const groups = keys.map((k) => map[k]);
   groups.forEach((g) =>
     g.files.sort((a, b) => {
+      const ax = isExtraFile(a.path) ? 1 : 0;
+      const bx = isExtraFile(b.path) ? 1 : 0;
+      if (ax !== bx) return ax - bx;
       const ea = parseEpisode(a.path).episode;
       const eb = parseEpisode(b.path).episode;
       if (ea !== null && eb !== null && ea !== eb) return ea - eb;
@@ -104,7 +124,13 @@ export function groupBySeason(files: TorrentFile[]): Season[] {
 export function playableFiles(files: TorrentFile[]): TorrentFile[] {
   const videos = files.filter((x) => fileKind(x.path) === 'video');
   const list = videos.length ? videos : files.filter((x) => fileKind(x.path) === 'audio');
-  return groupBySeason(list).reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  // season order stays inside each group (the release card). The flat playlist plays every episode before any extra,
+  // so a Season 0 NCOP does not open as «1 из N» ahead of S01E01.
+  const ordered = groupBySeason(list).reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
+  const main: TorrentFile[] = [];
+  const extra: TorrentFile[] = [];
+  ordered.forEach((f) => (isExtraFile(f.path) ? extra : main).push(f));
+  return main.concat(extra);
 }
 
 export function matchSubtitles(video: TorrentFile, subs: TorrentFile[]): TorrentFile[] {

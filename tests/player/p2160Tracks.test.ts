@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const remembered: { hash: string; patch: unknown }[] = [];
-vi.mock('../../src/store/seriesTracks', () => ({
-  seriesTracksFor: () => null,
-  rememberSeriesTracks: (_c: unknown, hash: string, patch: unknown) => {
-    remembered.push({ hash, patch });
-    return Promise.resolve();
-  },
-}));
+const remembered: { hash: string; patch: unknown; force: boolean }[] = [];
+vi.mock('../../src/store/seriesTracks', async () => {
+  const actual = await vi.importActual<typeof import('../../src/store/seriesTracks')>('../../src/store/seriesTracks');
+  return {
+    ...actual,
+    rememberSeriesTracks: (_c: unknown, hash: string, patch: unknown, force?: boolean) => {
+      remembered.push({ hash, patch, force: !!force });
+      return Promise.resolve();
+    },
+  };
+});
 
 import { ensureQueueFiles, play2160, queueExternalTracks, sanitizeP2160 } from '../../src/player/player2160';
 import { knownFiles, rememberFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
@@ -141,7 +144,7 @@ describe('reading the result', () => {
     // embedded dub: its AUDIO_ID is the name or «embedded:<n>», never one of OMP's ids; subtitles off: no TEXT_* but TEXT_OFF
     expect(p2160TrackResult({
       [k.audioId]: 'embedded:1', [k.audioLang]: 'rus', [k.audioExternal]: false, [k.audioEmbeddedIndex]: 1, [k.audioExternalIndex]: -1, [k.textOff]: true,
-    })).toEqual({ audioId: null, audioLang: 'rus', subtitleId: 'off' });
+    })).toEqual({ audioId: null, audioLang: 'rus', audioEmbedded: 1, subtitleId: 'off' });
     // no subtitles at all: TEXT_OFF false and no TEXT_ID, nothing said
     expect(p2160TrackResult({ [k.textOff]: false })).toEqual({});
   });
@@ -184,6 +187,63 @@ describe('reading the result', () => {
     expect(seriesPatchFromResult(items, res, { at: 1, s: { l: '', g: '', i: 's:und:' } }, items[0])).toBeNull();
   });
 
+  it('subtitles only, built-in audio and an external dub are kept and preselected on the next episode', () => {
+    const k = P2160_TRACKS.result;
+    const files = list([
+      'S/Show.S01E01.mkv',
+      'S/Show.S01E02.mkv',
+      'S/Rus Subs/Crunchyroll/Show.S01E01.ass',
+      'S/Rus Subs/Crunchyroll/Show.S01E02.ass',
+      'S/Rus Sound/AniLiberty/Show.S01E01.mka',
+      'S/Rus Sound/AniLiberty/Show.S01E02.mka',
+      'S/Rus Sound/HDRezka/Show.S01E01.mka',
+      'S/Rus Sound/HDRezka/Show.S01E02.mka',
+    ]);
+    const items = externalTracksForQueue({ streamUrl }, H, files, [0, 1], null, S);
+    const sub = items[0].subtitles[0];
+    const dub = items[0].audio.filter((a) => a.id !== items[0].startAudio)[0];
+    expect(sub.name.toLowerCase()).toContain('crunchyroll');
+    // only the external .ass, audio left as the player had it (OMP had asked for the external dub)
+    const subsOnly = seriesPatchFromResult(items, { fileIndex: 0, subtitleId: sub.id }, null, items[0]);
+    expect(subsOnly).toEqual({ s: { l: sub.name, g: 'ru' } });
+    const nextSubs = externalTracksForQueue({ streamUrl }, H, files, [0, 1], { at: 1, s: { l: sub.name, g: 'ru' } }, { ...S, subtitlesOn: true });
+    expect(nextSubs[1].startSubtitle).toBe(nextSubs[1].subtitles[0].id);
+    expect(p2160TrackExtras(nextSubs, 1)[P2160_TRACKS.textSelect]).toBe('id:' + nextSubs[1].subtitles[0].id);
+    // built-in Japanese (embedded:0) after OMP had selected the external dub; subtitles stay, TEXT_OFF is not sent
+    const builtIn = seriesPatchFromResult(
+      items,
+      p2160TrackResult({
+        [k.audioExternal]: false, [k.audioId]: 'embedded:0', [k.audioEmbeddedIndex]: 0, [k.audioName]: 'Japanese', [k.audioLang]: 'jpn',
+        [k.textExternal]: true, [k.textId]: sub.id, [k.textOff]: false,
+      }, 0),
+      null,
+      items[0],
+    );
+    if (!builtIn || builtIn === 'reset') throw new Error('expected a track patch');
+    expect(builtIn.e).toBe(0);
+    expect(builtIn.s).toEqual({ l: sub.name, g: 'ru' });
+    expect(builtIn.s).not.toBe('off');
+    const nextIn = externalTracksForQueue({ streamUrl }, H, files, [0, 1], { at: 2, e: 0, g: 'jpn', s: { l: sub.name, g: 'ru' } }, { ...S, subtitlesOn: true });
+    const ex = p2160TrackExtras(nextIn, 1);
+    expect(ex[P2160_TRACKS.audioSelect]).toBe('embedded:0');
+    expect(ex[P2160_TRACKS.textSelect]).toBe('id:' + nextIn[1].subtitles[0].id);
+    expect(ex[P2160_TRACKS.textSelect]).not.toBe('off');
+    // external dub
+    const extDub = seriesPatchFromResult(items, { fileIndex: 0, audioId: dub.id }, null, items[0]);
+    expect(extDub).toEqual({ l: dub.name, g: 'ru' });
+    const nextDub = externalTracksForQueue({ streamUrl }, H, files, [0, 1], { at: 3, l: dub.name, g: 'ru' }, S);
+    expect(nextDub[1].startAudio).toBe(dub.id);
+    expect(p2160TrackExtras(nextDub, 1)[P2160_TRACKS.audioSelect]).toBe('id:' + dub.id);
+    // same label, but leaving the built-in track for the external file: the label stays so e is cleared
+    const left = seriesPatchFromResult(
+      items,
+      { fileIndex: 0, audioId: dub.id },
+      { at: 1, e: 0, l: dub.name, g: 'ru' },
+      { ...items[0], startAudio: null, startEmbedded: 0 },
+    );
+    expect(left).toEqual({ l: dub.name, g: 'ru' });
+  });
+
   it('sanitizeP2160 keeps only the asked result keys with plain values, and is idempotent', () => {
     const r = sanitizeP2160({ returned: true, positionMs: 1, extras: { [k.audioId]: 'x', [k.textOff]: true, other: 'y', [k.audioName]: { a: 1 } } });
     expect(r.extras).toEqual({ [k.audioId]: 'x', [k.textOff]: true });
@@ -210,7 +270,7 @@ describe('play2160 with external tracks', () => {
     expect(JSON.parse(audio[0]).map((a: any) => a.uri)).toContain('http://u:p@ts:8090/stream/Show.S01E01.mka?link=' + H + '&index=2&play');
     expect(sent.extras[P2160_TRACKS.audioSelect]).toBe('id:' + startId);
     expect(c.preloaded).toEqual([startId === 'a:rus:lostfilm' ? 2 : 5]);
-    expect(remembered).toEqual([{ hash: H, patch: { l: otherId === 'a:rus:lostfilm' ? 'LostFilm' : 'HDRezka', g: 'ru' } }]);
+    expect(remembered).toEqual([{ hash: H, patch: { l: otherId === 'a:rus:lostfilm' ? 'LostFilm' : 'HDRezka', g: 'ru' }, force: true }]);
   });
 
   it('a release just added (the add answer in the library, no files yet): its files are asked for, the tracks go', async () => {
@@ -261,6 +321,20 @@ describe('play2160 with external tracks', () => {
     torrents.value = [{ hash: H, title: 'X', stat: 1 }];
     await ensureQueueFiles(c, queue, 10);
     expect(asked).toBe(1);
+  });
+
+  it('an episode with no external files still preselects a saved built-in track', () => {
+    const only = list(['S/Show.S01E01.mkv', 'S/Show.S01E02.mkv']);
+    torrents.value = [{
+      hash: H, title: 'Show S01', stat: 3, file_stats: only,
+      data: JSON.stringify({ omp: { v: 1, h: [], a: { at: 1, e: 0, l: 'Japanese', g: 'jpn' } } }),
+    }];
+    const c = client();
+    c.files = () => only;
+    const items = queueExternalTracks(c as any, queue, S);
+    expect(items[1].audio).toEqual([]);
+    expect(items[1].startEmbedded).toBe(0);
+    expect(p2160TrackExtras(items, 1)[P2160_TRACKS.audioSelect]).toBe('embedded:0');
   });
 
   it('a release without external tracks launches as before', async () => {

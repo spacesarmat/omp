@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extOf, baseName, stripExt, fileKind, parseEpisode, episodeLabel, naturalCompare,
-  groupBySeason, playableFiles, matchSubtitles, subtitleLabel, TorrentFile,
+  groupBySeason, playableFiles, matchSubtitles, subtitleLabel, isExtraFile, TorrentFile,
 } from '../../src/lib/episodes';
 
 const f = (id: number, path: string): TorrentFile => ({ id, path, length: 100 });
@@ -59,6 +59,28 @@ describe('groupBySeason', () => {
 });
 
 describe('playableFiles', () => {
+  it('puts NCOP/NCED and Extras/SP/NC after the episodes', () => {
+    expect(isExtraFile('Show/Extras/NCOP.mkv')).toBe(true);
+    expect(isExtraFile('Show/SP/01.mkv')).toBe(true);
+    expect(isExtraFile('Show/NC/Menu.mkv')).toBe(true);
+    expect(isExtraFile('Show/Show E01 NCED.mkv')).toBe(true);
+    expect(isExtraFile('Show/Show E01.mkv')).toBe(false);
+    const r = playableFiles([
+      f(1, 'MahoAku/Extras/NCOP.mkv'),
+      f(2, 'MahoAku/Extras/NCED.mkv'),
+      f(3, 'MahoAku/MahoAku E01.mkv'),
+      f(4, 'MahoAku/MahoAku E02.mkv'),
+      f(5, 'MahoAku/SP/01.mkv'),
+      f(6, 'MahoAku/NC/Menu.mkv'),
+    ]);
+    expect(r.map((x) => x.id)).toEqual([3, 4, 2, 1, 6, 5]);
+    // a season-0 extra is not ahead of season 1 in the flat playlist
+    const flat = playableFiles([
+      f(1, 'Show/Season 0/Extras/NCOP.mkv'),
+      f(2, 'Show/Season 1/Show.S01E01.mkv'),
+    ]);
+    expect(flat.map((x) => x.id)).toEqual([2, 1]);
+  });
   it('prefers video', () => {
     const r = playableFiles([f(1, 'a.mp3'), f(2, 'b.S01E02.mkv'), f(3, 'b.S01E01.mkv'), f(4, 'b.srt')]);
     expect(r.map((x) => x.id)).toEqual([3, 2]);

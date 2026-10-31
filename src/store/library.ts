@@ -35,6 +35,11 @@ export const libraryQuery = signal('');
 let inflight: Promise<Torrent[]> | null = null;
 let gen = 0;
 
+/** Bumped by resetLibrary. A late write must not put the previous server's torrents into the new list. */
+export function libraryGeneration(): number {
+  return gen;
+}
+
 // drop data of the previous server and invalidate any pending refresh
 export function resetLibrary(): void {
   gen++;
