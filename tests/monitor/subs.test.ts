@@ -342,9 +342,19 @@ describe('«Лучшее качество»', () => {
       id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 1,
       catalog: { kind: 'movie', id: 0, title: 'x', poster: 'http://insecure/p.jpg' },
     })).not.toHaveProperty('catalog');
-    const s = addSubscription({ query: 'Северный ветер', quality: '', sources: null, notify: true, better: true }, 1)!;
-    expect(s.better).toBe(true);
-    expect(updateSubscription(s.id, { better: false })).not.toHaveProperty('better');
+    const kept = addSubscription({ query: 'Северный ветер', quality: '', sources: null, notify: true, better: true }, 1)!;
+    expect(kept.better).toBe(true);
+    expect(updateSubscription(kept.id, { better: false })).not.toHaveProperty('better');
+  });
+
+  it('drops the catalog card when the query changes, and keeps it for the same search', () => {
+    const card = { kind: 'tv' as const, id: 12, title: 'Институт', year: 2026, poster: 'https://img.test/p.jpg' };
+    const s = addSubscription({ query: 'Институт 2026', quality: '', sources: null, notify: true, catalog: card }, 3000)!;
+    expect(updateSubscription(s.id, { quality: '1080' })!.catalog).toEqual(card);
+    expect(updateSubscription(s.id, { query: '  институт   2026 ' })!.catalog).toEqual(card);
+    expect(updateSubscription(s.id, { query: 'Другой фильм' })!.catalog).toBeUndefined();
+    const next = { kind: 'movie' as const, id: 7, title: 'Яга', year: 2026, poster: '' };
+    expect(updateSubscription(s.id, { query: 'Яга 2026', catalog: next })!.catalog).toEqual(next);
   });
 
   it('the best rank lives in the seen record: kept by rememberSeen, only raised, forgotten with it', () => {

@@ -230,6 +230,10 @@ export function updateSubscription(id: string, patch: Partial<SubscriptionInput>
     Object.keys(patch).forEach((k) => {
       merged[k] = (patch as { [k: string]: unknown })[k];
     });
+    // a new search is not the old card: drop its poster and share link unless the edit names another card
+    if (patch.query !== undefined && !sameQuery(patch.query, list[i].query) && !Object.prototype.hasOwnProperty.call(patch, 'catalog')) {
+      delete merged.catalog;
+    }
     const next = sanitizeSubscription(merged);
     if (!next) return null;
     const changed = searchOf(next) !== searchOf(list[i]);

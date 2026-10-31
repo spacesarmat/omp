@@ -177,7 +177,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
         {view && (
           <button
             type="button"
-            class="m-icon-btn m-season-share"
+            class="m-icon-btn m-glass m-season-share"
             aria-label={t('share.action')}
             onClick={() => void sendShare(seasonShare(view.card, season, view.meta))}
           >

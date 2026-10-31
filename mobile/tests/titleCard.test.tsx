@@ -150,6 +150,7 @@ describe('TitleCard: film', () => {
     });
     const share = el.querySelector('.m-tc-share') as HTMLButtonElement;
     expect(share.getAttribute('aria-label')).toBe('Поделиться');
+    expect(share.classList.contains('m-glass')).toBe(true);
     act(() => share.click());
     expect(sent[0]).toBe('Полуночный архив\n2026\nдрама · 1 ч 58 мин\nhttps://omp-player.online/t/movie/11');
   });
@@ -398,6 +399,7 @@ describe('SeasonCard', () => {
     expect(episodes()[0].querySelector('.m-tc-ep-sub')!.textContent).not.toBe('нет в медиатеке');
     const share = el.querySelector('.m-season-share') as HTMLButtonElement;
     expect(share).toBeTruthy();
+    expect(share.classList.contains('m-glass')).toBe(true);
     const sent: string[] = [];
     setShareSender(async (o) => {
       sent.push(o.text);
