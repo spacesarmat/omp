@@ -380,9 +380,17 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
   };
   if (kind === 'movie') eachObj(credits.crew, (x) => { if (x.job === 'Director') addHead(x, 'director'); });
   else eachObj(o.created_by, (x) => addHead(x, 'creator'));
+  const seen: { [id: number]: boolean } = {};
+  heads.forEach((h) => { seen[h.id] = true; });
   const actors: Person[] = [];
-  eachObj(credits.cast, (x) => { actors.push(personOf(e, x, 'cast', str(x.character))); });
-  const cast: Person[] = heads.concat(actors.filter(valid).slice(0, CAST_LIMIT));
+  eachObj(credits.cast, (x) => {
+    const p = personOf(e, x, 'cast', str(x.character));
+    // the same person as a director and as an actor, or twice in the cast, is one card
+    if (!valid(p) || seen[p.id]) return;
+    seen[p.id] = true;
+    actors.push(p);
+  });
+  const cast: Person[] = heads.concat(actors.slice(0, CAST_LIMIT));
   const last = o.last_episode_to_air && typeof o.last_episode_to_air === 'object' ? (o.last_episode_to_air as { [k: string]: unknown }) : null;
   const lastSeason = last ? n(last.season_number) : 0;
   const lastEp = last ? n(last.episode_number) : 0;

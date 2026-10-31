@@ -2,8 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { errorMessage } from '../../../../src/api/http';
 import { playOnPhone } from '../../watchHere';
-import { t, tp, fmtDuration } from '../../../../src/i18n';
-import { formatBytes } from '../../../../src/lib/format';
+import { t, tp, fmtDuration, fmtSize } from '../../../../src/i18n';
 import { baseName, episodeLabel, stripExt } from '../../../../src/lib/episodes';
 import { airDateText, isoDay } from '../../../../src/lib/seriesStatus';
 import { getLocalProgress } from '../../../../src/store/progress';
@@ -49,7 +48,7 @@ function Episodes({ card, season, details }: { card: CatalogCard; season: Season
             const size = sizes[e.n] || 0;
             const future = !size && ((e.airDate && e.airDate > today) || e.n > season.aired);
             const line2 = size
-              ? formatBytes(size)
+              ? fmtSize(size)
               : future && e.airDate
                 ? airDateText(e.airDate)
                 : future

@@ -240,7 +240,7 @@ describe('TV series screen', () => {
     expect(text(host.querySelector('.series-kicker'))).toBe('Сезон 2');
     expect(text(host.querySelector('.series-eps-title'))).toBe('Серии');
     expect(text(rows[0].querySelector('.ep')) + ' ' + text(rows[0].querySelector('.name'))).toBe('1 Пилот');
-    expect(text(rows[0].querySelector('.ep-sub'))).toBe('50 мин · 1.9 GB');
+    expect(text(rows[0].querySelector('.ep-sub'))).toBe('50 мин · 1,9 ГБ');
     expect(rows[0].classList.contains('ep-in')).toBe(true);
     expect(text(rows[1].querySelector('.ep')) + ' ' + text(rows[1].querySelector('.name'))).toBe('2 Второй');
   });
@@ -586,6 +586,7 @@ describe('TV series screen: episodes still to come', () => {
     expect(css).toMatch(/\.ep-coming \{[^}]*border: 2px dashed/);
     expect(css).toMatch(/\.ep-coming \{[^}]*color: var\(--muted\)/);
     expect(css).toMatch(/\.series-episodes \.ep-row \.name \{[^}]*-webkit-line-clamp: 2/);
+    expect(css).toMatch(/\.series-episodes \.ep-sub \{[^}]*display: block/);
     const start = css.indexOf('/* Season page, same language');
     const block = css.slice(start, css.indexOf('.spinner-wrap', start));
     expect(block).not.toMatch(/\bgap\s*:/);

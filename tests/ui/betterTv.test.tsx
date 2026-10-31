@@ -134,7 +134,7 @@ describe('TV «В лучшем качестве»', () => {
     expect(names[0]).toContain('BDRemux 2160p');
     expect(names[1]).toContain('WEB-DL 2160p');
     expect(names[2]).toContain('BDRip 1080p');
-    expect(rows()[0].querySelector('.better-meta')!.textContent).toContain('20 GB');
+    expect(rows()[0].querySelector('.better-meta')!.textContent).toContain('20,0 ГБ');
     expect(rows()[0].className).toContain('focused');
     // the follow switch is on by default; without a phone a note says who reports
     expect(host.querySelector('.better-follow [role="switch"]')!.getAttribute('aria-checked')).toBe('true');

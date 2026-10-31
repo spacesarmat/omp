@@ -22,7 +22,7 @@ import {
 } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
-import { lang, t, tp, fmtNumber, fmtDuration } from '../i18n';
+import { lang, t, tp, fmtNumber, fmtDuration, fmtSize } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
@@ -30,7 +30,6 @@ import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from 
 import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { externalNoteText } from '../lib/externalNote';
-import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
@@ -44,7 +43,7 @@ import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { tvGlyphs } from '../ui/tvText';
 import { seasonChipSub, type SeasonChipSub } from '../lib/seasonChip';
-import { knownSwarmText } from '../lib/torrentStatus';
+import { joinMeta, knownSwarmText } from '../lib/torrentStatus';
 import { qualityOrUnknown } from '../monitor/upgradeText';
 import { displayTitle } from '../lib/torrentName';
 import { Poster } from './library/Poster';
@@ -54,7 +53,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { errorMessage } from '../api/http';
 import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
-import { ComingRows, episodeMetaLine, revealComing } from '../ui/ComingRows';
+import { ComingRows, revealComing } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
@@ -356,7 +355,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       setBetter(upgradable[0]);
       return;
     }
-    const options = upgradable.map((m) => ({ label: [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · '), value: m.hash }));
+    const options = upgradable.map((m) => ({ label: joinMeta([tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), m.torrent_size ? fmtSize(m.torrent_size) : '']), value: m.hash }));
     choose(t('tv.better.which'), options, undefined, 'series-better').then((hash) => {
       const m = upgradable.filter((x) => x.hash === hash)[0];
       if (m) setBetter(m);
@@ -375,7 +374,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   };
 
   const releaseLabel = (m: Torrent) =>
-    [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), formatBytes(m.torrent_size || 0)].filter(Boolean).join(' · ');
+    joinMeta([tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), m.torrent_size ? fmtSize(m.torrent_size) : '']);
   // «Раздачи · N»: OK opens a release, red deletes it (a release of this season only: a pack of several seasons stays)
   const openReleases = () => {
     if (releases.length === 1) {
@@ -392,7 +391,10 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       }
       return true;
     };
-    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases').then((r) => {
+    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases', {
+      ok: t('series.releasesHintOk'),
+      back: t('series.releasesHintBack'),
+    }).then((r) => {
       if (!r) return;
       if (!r.red) {
         navigate({ name: 'torrent', hash: r.value });
@@ -595,12 +597,12 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       {members.map((m) => {
         const swarm = knownSwarmText(m);
         const who = members.length > 1 ? qualityOrUnknown(displayTitle(m)) : '';
-        const line = who && swarm ? who + ' · ' + swarm : who || swarm;
+        const swarmLine = joinMeta([who, swarm]);
         const dead = isDeadRelease(m.hash);
         const find = canUpgrade(m, c.files(m));
         return (
           <div key={m.hash}>
-            {line ? <div class="muted series-swarm">{line}</div> : null}
+            {swarmLine ? <div class="muted series-swarm">{swarmLine}</div> : null}
             {dead && (
               <FocusGroup focusKey={'series-dead-' + m.hash} className="series-dead">
                 <div>{t('torrent.deadRelease')}</div>
@@ -622,14 +624,14 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
           const runtime = (ep && ep.runtime > 0 ? ep.runtime : 0) || (card && card.runtime > 0 ? card.runtime : 0);
-          const status = left ? t('series.left', { n: left }) : formatBytes(r.file.length);
+          const status = left ? t('series.left', { n: left }) : (r.file.length ? fmtSize(r.file.length) : '');
           const badge = r.episode !== null ? String(r.episode) : r.code || '-';
           return (
             <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item ep-row ep-in" onPress={() => play(r)} onArrow={arrowUpToAbove(rowKey(r))} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
               <span class="ep ep-num">{badge}</span>
               <span class="ep-main">
                 <span class="name">{tvGlyphs(name)}</span>
-                <span class="ep-sub">{tvGlyphs(episodeMetaLine(runtime > 0 ? fmtDuration(runtime) : '', status))}</span>
+                <span class="ep-sub">{tvGlyphs(joinMeta([runtime > 0 ? fmtDuration(runtime) : '', status]))}</span>
                 {!watched && ratio > 0 && (
                   <span class="bar">
                     <ProgressBar ratio={ratio} />

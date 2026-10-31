@@ -446,6 +446,8 @@ export const ru = {
     },
     releaseDeleteBusy: 'Подождите, предыдущая раздача ещё удаляется',
     releasesHintDelete: 'удалить раздачу',
+    releasesHintOk: 'OK - открыть раздачу',
+    releasesHintBack: 'Назад - закрыть',
     // the TV series screen
     watchEp: 'Смотреть {code}',
     releasesBtn: 'Раздачи · {n}',

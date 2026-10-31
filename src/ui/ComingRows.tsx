@@ -3,14 +3,9 @@
 // The series screen (`lines`) matches its episode rows: a number badge, the title, then the length and the date.
 import { fmtDuration } from '../i18n';
 import { comingEpisodeDate, comingEpisodeTitle, type ComingEpisode } from '../lib/episodeNames';
+import { joinMeta } from '../lib/torrentStatus';
 import { tvGlyphs } from './tvText';
 import { scrollIntoViewSafe } from './focus';
-
-/** «50 мин · 1.9 GB», or just the one part that exists. */
-export function episodeMetaLine(duration: string, status: string): string {
-  if (duration && status) return duration + ' · ' + status;
-  return duration || status;
-}
 
 /**
  * The focus never reaches these rows, so the screen does not scroll to them by itself: when the last real row takes
@@ -44,14 +39,16 @@ export function ComingRows({ list, now, lines, runtime }: { list: ComingEpisode[
           );
         }
         const mins = runtime ? runtime(e) : 0;
+        const dur = mins > 0 ? fmtDuration(mins) : '';
+        const when = joinMeta([date]);
         return (
           <div key={'coming-' + e.season + '-' + e.episode} class="list-item ep-row ep-coming" data-coming={e.season + ':' + e.episode} aria-disabled="true">
             <span class="ep ep-num">{String(e.episode)}</span>
             <span class="ep-main">
               <span class="name">{title}</span>
               <span class="ep-sub">
-                {mins > 0 ? fmtDuration(mins) + ' · ' : ''}
-                <span class="size">{date}</span>
+                {dur && when ? dur + ' · ' : ''}
+                <span class="size">{when || joinMeta([dur])}</span>
               </span>
             </span>
             <span class="check" />
