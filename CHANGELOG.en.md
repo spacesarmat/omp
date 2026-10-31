@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.1
 
 - Mine and Discover can show our own ads: a card the same size as its neighbours, with the Ad label, the advertiser and the erid. On the phone that is every Mine and Discover view, and between the rails on the Discover home. On a TV it is every Mine view and the Discover grid, and OK opens a QR code instead of the link. No ads in History or search, for subscribers, or on a TV linked to a subscribed phone. None in the first days after install, then one every few cards. With no banners configured, nothing is shown
 - The support card, the FAQ and the site now say "OMP is free, ad-free with a subscription". The only paid part is still the OMP subscription (Jackett and JacRed). Boosty support does not turn it on
