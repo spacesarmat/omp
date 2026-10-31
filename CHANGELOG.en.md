@@ -4,11 +4,23 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.7
 
-- [atv] If 2160 Player closes before playback has started, or returns no position, the episode is no longer marked watched and the saved progress is not replaced with the duration. Finishing the episode, or leaving near the end, still marks it watched
-- [tv] On a release card and on a catalog title card, D-pad Up from the cast row reaches Watch or Find torrents again. Up from the season row, the intro-skip row and the episode list also move to the row above
-- [phone] On a catalog season page a long title no longer slides under the status bar: the whole title shows when the page opens, above the poster and the season block
+- External dubs and subtitles that a release ships as separate files show in the release lists («+3 dubs, subtitles») and go to 2160 Player 0.2.17 or newer by themselves: every episode its own, the chosen dub is remembered for the series
+- [phone] The built-in player is updated to 2160 Player 0.2.17: external dubs and subtitles, subtitles from «Load from file…» and MKV chapters on 32-bit devices work again
+- [atv] An episode is no longer marked watched when 2160 Player closes before playback has started
+- [tv] On a release card, D-pad Up from the cast row reaches Watch again
+- External subtitles with no name (one .ass next to an episode, say) are remembered for the series
+- Dubs and subtitles reach 2160 Player for a release just added from the search and started right away, too (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode). TorrServer preloads the chosen dub
+- [phone] An unsupported external dub no longer stops the video: the embedded track plays and a warning shows; Back in the player closes the side panels
+- [atv] The saved progress is not replaced with the duration when the player returns no position. Finishing the episode, or leaving near the end, still marks it watched
+- [tv] On a catalog title card Up from the cast row reaches Find torrents; Up from the season row, the intro-skip row and the episode list also moves to the row above
+- [phone] On a catalog season page a long title no longer slides under the status bar
+- [lg] The release screen says honestly that separate dub files do not play on webOS: you hear the video track
+- [atv] With the OMP player chosen, a release screen with separate dubs suggests switching to 2160 Player
+- A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
+- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, ISO 639-2 language, forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track. `src/player/externalTracks.ts` hands them to 2160 Player by Intent API §3.7 (2160 Player 0.2.17): every key in one object P2160_TRACKS, the native side only passes `tv.p2160.extra.*` extras and returns the asked result keys. `charset` goes with subtitles only; OMP sends no `delayMs` or `select`: AUDIO_SELECT / TEXT_SELECT set the start. The android/vendor/2160player submodule is bumped to v0.2.17 (f292a8b), player-core coordinate 0.2.17
+- [tech] `TorrServerClient.get` keeps `file_stats` in knownFiles like `loadInfo`: the library copy of a release just added is the `add` answer without metadata, so `filesOfHash` returned []. `play2160` asks TorrServer for the files of queue releases this device has none of before the launch (`ensureQueueFiles`, at most 5 s; a screen left meanwhile opens no player). The series record keeps the external track id of subtitles with no name and language (`s.i`, «s:und:» or «s:und:#2»), `pickExternalSubtitle` finds them by it
 - [tech] `saveP2160Result` marks watched only when the player reported a position of at least 90% of the duration. `ended` without that position no longer fills in the known duration. `Player2160.parseExtras` reads `tv.p2160.extra.POSITION`, `DURATION` and `WATCHED` (API 3.4)
 
 ## 0.20.7-beta.2
