@@ -12,7 +12,7 @@ import { externalSummary } from '../lib/externalTracks';
 import { settings } from '../store/settings';
 import { platformKind } from '../platform/env';
 import { formatDuration } from '../lib/format';
-import { fmtBytes } from '../i18n';
+import { fmtSize } from '../i18n';
 import { statusLine } from '../lib/torrentStatus';
 import { seriesGroupOf, torrentName } from '../lib/cleanNames';
 import { requestSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
@@ -22,7 +22,7 @@ import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
 import { arrowUpToAbove, restoreFocus, scrollScreenToTop } from '../ui/focus';
-import { confirmDialog } from '../ui/dialog';
+import { choose, confirmDialog } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
 import { toast } from '../ui/toast';
@@ -35,7 +35,7 @@ import { PosterPicker } from '../ui/PosterPicker';
 import { posterTargets } from '../lib/posterPick';
 import { pendingBetterHash } from '../player/anotherRelease';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
-import { swarmText } from '../lib/torrentStatus';
+import { knownSwarmText } from '../lib/torrentStatus';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { displayTitle } from '../lib/torrentName';
 import { t } from '../i18n';
@@ -44,6 +44,8 @@ import { ComingRows, revealComing } from '../ui/ComingRows';
 import { comingEpisodes, lastEpisodes } from '../lib/episodeNames';
 import { useTmdbEpisodes } from '../lib/useTmdbEpisodes';
 import { isSeries } from '../lib/seriesGroups';
+import { filmReleases } from '../../mobile/src/lib/filmGroups';
+import { releaseLine } from '../../mobile/src/lib/duplicates';
 import { isAudiobookTorrent } from '../lib/audiobookRoute';
 import { sharpPosterUrl } from '../catalog/tmdb';
 import { isoDay } from '../lib/seriesStatus';
@@ -267,6 +269,17 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const targetLabel = queue[target] ? episodeLabel(queue[target].title) : '';
   const book = !!tor && isAudiobookTorrent(tor);
   const showSkip = queue.length > 0 && !!tor && isSeries(tor) && !book;
+  const films = tor && !isSeries(tor) ? filmReleases(list, tor) : [];
+  const openFilms = () => {
+    if (!tor || films.length < 2) return;
+    const options = films.map((m) => ({ label: tvGlyphs(releaseLine(m)), value: m.hash }));
+    choose<string>(t('nav.releasesTitle'), options, tor.hash, undefined, {
+      ok: t('series.releasesHintOk'),
+      back: t('series.releasesHintBack'),
+    }).then((next) => {
+      if (next && next !== tor.hash) replaceRoute({ name: 'torrent', hash: next });
+    });
+  };
   const playLabel = book
     ? (targetPos > 0
       ? t('torrent.continueListen', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
@@ -296,7 +309,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
           {extras && <div class="muted torrent-extras" data-extras>{extras}</div>}
           {extNote && <div class="muted torrent-extras" data-extras-note>{extNote}</div>}
-          {tor && <div class="muted series-swarm">{swarmText(tor)}</div>}
+          {tor && knownSwarmText(tor) ? <div class="muted series-swarm">{knownSwarmText(tor)}</div> : null}
           {tor && isDeadRelease(tor.hash) && (
             <FocusGroup focusKey="torrent-dead" className="series-dead">
               <div>{t('torrent.deadRelease')}</div>
@@ -312,6 +325,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <FocusGroup focusKey="TORRENT-ACTIONS" className="row torrent-actions-row" preferredChildFocusKey="torrent-play">
               {queue.length > 0 && <Button focusKey="torrent-play" label={playLabel} onFocused={() => showAction('torrent-play')} onPress={() => play(target, targetPos || undefined)} />}
               {queue.length > 0 && <Button focusKey="torrent-playlist" label={t('playlist.title')} onFocused={() => showAction('torrent-playlist')} onPress={() => navigate({ name: 'playlist', url: c.playlistUrl(hash), title: tor ? tvGlyphs(torrentName(tor, list)) : '' })} />}
+              {films.length > 1 && <Button focusKey="torrent-releases" label={t('series.releasesBtn', { n: films.length })} onFocused={() => showAction('torrent-releases')} onPress={openFilms} />}
               {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
               <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
               <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
@@ -398,7 +412,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   <span class="ep">{episodeLabel(f.path)}</span>
                   <span class="name">{tvGlyphs(baseName(f.path))}</span>
                   {!watched && ratio > 0 && <span class="bar"><ProgressBar ratio={ratio} /></span>}
-                  <span class="size">{fmtBytes(f.length)}</span>
+                  <span class="size">{f.length ? fmtSize(f.length) : ''}</span>
                   <span class="check">{watched ? <Icon name="check" size={28} /> : null}</span>
                 </Focusable>
               );

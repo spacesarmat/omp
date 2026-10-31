@@ -336,9 +336,9 @@ describe('TV audit stylesheet', () => {
     expect(css).toContain('.skip-status .muted { font-size: 24px;');
     expect(css).toContain('.link-toggle { font-size: 24px;');
     expect(css).toContain('.faq-chips-hint { font-size: 24px;');
-    expect(css).toContain('.history-count { font-size: 20px;');
+    expect(css).toContain('.history-count { font-size: 24px;');
     expect(css).toContain('.series-status .series-pill, .tc-meta .series-pill-inline, .lrow .series-pill-inline { font-size: 24px; }');
-    expect(css).toContain('.tile .series-pill, .tile-small .series-pill { font-size: 20px; }');
+    expect(css).toContain('.tile .series-pill, .tile-small .series-pill { font-size: 24px; }');
     expect(css).toContain('.season-chip .chip-sub { font-size: 24px; }');
     expect(css).toContain('.disc-ph {');
     expect(css).toMatch(/\.disc-ph \{[^}]*font-size: 42px/);

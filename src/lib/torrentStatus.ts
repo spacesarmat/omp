@@ -63,3 +63,14 @@ export function knownSwarmText(tor: { stat?: number; connected_seeders?: number;
   const s = swarmText(tor);
   return s === t('torrent.seedsUnknown') ? '' : s;
 }
+
+/** Joins the parts that are actually there. An empty part or the bare «-» placeholder is dropped, separator too. */
+export function joinMeta(parts: string[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const s = (parts[i] || '').trim();
+    if (!s || s === '-') continue;
+    out.push(s);
+  }
+  return out.join(' · ');
+}

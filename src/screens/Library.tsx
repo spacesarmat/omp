@@ -269,7 +269,7 @@ export function LibraryScreen() {
           view={s.libraryView}
           list={list}
           ads={!searching}
-          group={tab === 'all' || tab === 'tv'}
+          group={tab === 'all' || tab === 'tv' || tab === 'movie'}
           onOpenSeries={(g) => navigate({ name: 'series', key: g.key })}
           onOpen={(t) => navigate({ name: 'torrent', hash: t.hash })}
           onFocused={(x) => setSel('kind' in x ? { hash: x.lead.hash, group: x } : { hash: x.hash })}
