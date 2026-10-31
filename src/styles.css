@@ -189,6 +189,33 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .ep-coming { background: transparent; border: 2px dashed #3a3f4b; color: var(--muted); }
 .ep-coming .ep { color: var(--muted); }
 .ep-coming .size { width: 300px; }
+/* Season page, same language as the phone: «Сезон N» under the title, air before the buttons and before
+   «Серии», then a two-line episode (number badge, title, length and status). Chromium 53 on webOS 4.
+   Text stays at least 24px. */
+.series-kicker { margin: 0 0 16px; font-size: 36px; line-height: 44px; font-weight: 700; }
+.screen.series .series-info h1 { margin-bottom: 6px; }
+.screen.series .series-hero { margin-bottom: 40px; }
+.screen.series .series-actions { margin-top: 24px; }
+.series-eps-title { margin: 28px 0 18px; font-size: 32px; font-weight: 500; color: var(--muted); }
+.series-episodes .ep-row { display: flex; align-items: flex-start; padding: 16px 24px; border-radius: 16px; margin-bottom: 14px; }
+.series-episodes .ep-num {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  min-width: 76px; height: 76px; padding: 0 12px; margin-right: 22px; border-radius: 18px;
+  background: #22262f; color: var(--muted); font-size: 32px; font-weight: 700; line-height: 40px;
+}
+.series-episodes .ep-in { background: #1c2028; border-left: 4px solid var(--accent); }
+.series-episodes .ep-in .ep-num { background: rgba(245, 183, 0, 0.18); color: var(--accent); }
+.series-episodes .ep-row.focused { background: var(--panel2); }
+.series-episodes .ep-coming .ep-num { background: var(--panel2); color: var(--muted); }
+.series-episodes .ep-main { flex: 1; min-width: 0; padding-top: 4px; }
+.series-episodes .ep-row .name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  white-space: normal; max-width: 100%; font-size: 30px; line-height: 38px; font-weight: 700;
+}
+.series-episodes .ep-sub { display: block; margin-top: 6px; font-size: 24px; line-height: 32px; color: var(--muted); }
+.series-episodes .ep-row .size, .series-episodes .ep-coming .size { width: auto; text-align: left; }
+.series-episodes .ep-row .bar { display: block; width: auto; margin: 0; }
+.series-episodes .ep-row .check { flex: none; align-self: center; width: 44px; margin-left: 18px; text-align: center; color: var(--ok); }
 
 .spinner-wrap { display: flex; align-items: center; padding: 24px 0; }
 .spinner { width: 48px; height: 48px; border: 5px solid rgba(255, 255, 255, .2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-right: 20px; }
