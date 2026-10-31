@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [atv] If 2160 Player closes before playback has started, or returns no position, the episode is no longer marked watched and the saved progress is not replaced with the duration. Finishing the episode, or leaving near the end, still marks it watched
+- [tv] On a release card and on a catalog title card, D-pad Up from the cast row reaches Watch or Find torrents again. Up from the season row, the intro-skip row and the episode list also move to the row above
+- [phone] On a catalog season page a long title no longer slides under the status bar: the whole title shows when the page opens, above the poster and the season block
+- [tech] `saveP2160Result` marks watched only when the player reported a position of at least 90% of the duration. `ended` without that position no longer fills in the known duration. `Player2160.parseExtras` reads `tv.p2160.extra.POSITION`, `DURATION` and `WATCHED` (API 3.4)
+
 ## 0.20.7-beta.2
 
 - 2160 Player gets the external dubs and subtitles again for a release added from the search and started right away: nothing went to the player before, since the new release's file list was not known yet

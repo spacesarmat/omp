@@ -152,12 +152,17 @@ object Player2160 {
         return i
     }
 
-    /** "position"/"duration" (Int or Long, ms) with VLC's "extra_*" as fallback; "end_by" tells how it ended. */
+    /**
+     * Position and duration: the Long keys of API 3.4 (`tv.p2160.extra.POSITION` / `DURATION`), then VLC's
+     * `extra_*`, then MX `position` / `duration`. A positive value wins over a zero in an earlier key.
+     * `tv.p2160.extra.WATCHED` or `end_by=playback_completion` means the player says it finished. A missing
+     * position is still returned (the page decides whether that is a real finish).
+     */
     fun parseExtras(extras: Map<String, Any?>?, dataUrl: String?, asked: List<String> = emptyList()): Result {
         if (extras == null) return Result(false)
-        val position = millis(extras["position"]) ?: millis(extras["extra_position"])
-        val duration = millis(extras["duration"]) ?: millis(extras["extra_duration"])
-        val ended = extras["end_by"] == END_COMPLETED
+        val position = bestMillis(extras, POSITION_KEYS)
+        val duration = bestMillis(extras, DURATION_KEYS)
+        val ended = extras["tv.p2160.extra.WATCHED"] == true || extras["end_by"] == END_COMPLETED
         if (position == null && !ended) return Result(false)
         val more = LinkedHashMap<String, Any>()
         for (k in asked) {
@@ -182,7 +187,23 @@ object Player2160 {
         return parseExtras(map, data.dataString, asked)
     }
 
-    private val KEYS = listOf("position", "duration", "end_by", "extra_position", "extra_duration")
+    private val KEYS = listOf(
+        "position", "duration", "end_by", "extra_position", "extra_duration",
+        "tv.p2160.extra.POSITION", "tv.p2160.extra.DURATION", "tv.p2160.extra.WATCHED",
+    )
+    private val POSITION_KEYS = listOf("tv.p2160.extra.POSITION", "extra_position", "position")
+    private val DURATION_KEYS = listOf("tv.p2160.extra.DURATION", "extra_duration", "duration")
+
+    /** The first positive millis among [keys], or a zero when that is all the player sent. */
+    private fun bestMillis(extras: Map<String, Any?>, keys: List<String>): Long? {
+        var zero: Long? = null
+        for (k in keys) {
+            val v = millis(extras[k]) ?: continue
+            if (v > 0) return v
+            if (zero == null) zero = v
+        }
+        return zero
+    }
 
     private fun millis(v: Any?): Long? = when (v) {
         is Int -> v.toLong()

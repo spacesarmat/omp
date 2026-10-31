@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins, no @types/node in this project
+import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
@@ -313,6 +315,22 @@ describe('TitleCard: series', () => {
 });
 
 describe('SeasonCard', () => {
+  it('keeps a long title whole, below the status bar', async () => {
+    const title = 'Я стал сильнейшим в мире с провальным навыком призывателем';
+    serve({ ...SHOW, title });
+    mount(<SeasonCard id={21} season={1} />);
+    await flush();
+    const h = el.querySelector('.m-bar-title') as HTMLElement;
+    expect(h.textContent).toBe(title);
+    expect(h.closest('[data-route="season"]')!.classList.contains('m-tc')).toBe(false);
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const season = /\.m-screen\[data-route='season'\] \{[^}]+\}/.exec(css)![0];
+    expect(season).toContain('env(safe-area-inset-top)');
+    expect(css).toMatch(/\.m-tc \{ padding-top: 0; \}/);
+    expect(css).toMatch(/\.m-tc-title \{[^}]*overflow-wrap: anywhere/);
+    expect(/\.m-tc-title \{[^}]*line-clamp/.test(css)).toBe(false);
+  });
+
   it('episode line: number, title and runtime, then the file size', async () => {
     expect(episodeHead(3, 'Название', 52)).toBe('3 · Название - 52 мин');
     torrents.value = [{

@@ -35,7 +35,7 @@ import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
+import { arrowUpToAbove, restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
 import { choose, chooseOrDelete, confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
@@ -564,6 +564,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
                 onFocused={() => { pick(n); showChip(n); }}
+                onArrow={arrowUpToAbove('season-' + n)}
                 onPress={() => pick(n)}
               >
                 <div class="chip-name">
@@ -615,7 +616,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
           return (
-            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
+            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onArrow={arrowUpToAbove(rowKey(r))} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
               <span class="ep">{r.code}</span>
               <span class="name">{tvGlyphs(name)}</span>
               {!watched && ratio > 0 && (

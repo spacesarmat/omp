@@ -4,7 +4,7 @@ import { useRef } from 'preact/hooks';
 import { t } from '../i18n';
 import { CAST_LIMIT, type Person } from '../catalog/tmdb';
 import { FocusGroup, Focusable } from './components';
-import { scrollToShow } from './focus';
+import { arrowUpToAbove, scrollToShow } from './focus';
 import { navigate } from './nav';
 import { tvGlyphs } from './tvText';
 
@@ -44,6 +44,7 @@ export function CastRow({ cast, groupKey, focusPrefix }: { cast: Person[]; group
               focusKey={focusPrefix + i}
               className="tc-person"
               onPress={() => navigate({ name: 'person', id: p.id, label: p.name })}
+              onArrow={arrowUpToAbove(focusPrefix + i)}
               onFocused={() => showInRow(rowRef.current, focusPrefix + i)}
             >
               <div class="tc-photo">{p.photo ? <img src={p.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>

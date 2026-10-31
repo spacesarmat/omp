@@ -149,6 +149,36 @@ describe('TV title card', () => {
     cards['tv:1'] = series;
   });
 
+  function place(el: Element | null, x: number, y: number, w: number, h: number) {
+    const node = el as HTMLElement;
+    node.getBoundingClientRect = () => ({
+      x: x, y: y, left: x, top: y, right: x + w, bottom: y + h, width: w, height: h, toJSON: () => ({}),
+    }) as DOMRect;
+  }
+  const pressUp = async () => {
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+  };
+
+  it('Up from the cast reaches Find torrents, and Up from a season chip does too when there is no cast', async () => {
+    const filmHost = await mount('movie', 7);
+    place(filmHost.querySelector('[data-fk="title-find"]'), 400, 180, 280, 64);
+    place(filmHost.querySelector('[data-fk="title-want"]'), 700, 180, 240, 64);
+    place(filmHost.querySelector('[data-fk="title-cast-0"]'), 80, 640, 180, 200);
+    await act(async () => { setFocus('title-cast-0'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('title-find');
+
+    const seriesHost = await mount('tv', 1);
+    place(seriesHost.querySelector('[data-fk="title-find"]'), 400, 180, 280, 64);
+    place(seriesHost.querySelector('[data-fk="title-season-1"]'), 80, 640, 190, 80);
+    await act(async () => { setFocus('title-season-1'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('title-find');
+  });
+
   it('OK on a person opens the person screen', async () => {
     cards['movie:7'] = { ...film, cast: [director, person(0)] };
     const host = await mount('movie', 7);
