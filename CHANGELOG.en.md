@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.2
 
 - [phone] On the season page the backdrop no longer covers Find torrents for the season or the Episodes heading. The gap stays with and without the button, with the yellow air date and with a long title
 - [phone] A card can be shared: an icon next to Back on a film, a series and a season, a long press on a poster in the catalog and in Want, and Tell friends in Settings. The text is the title, the year, a short line and a link to omp-player.online. An unreleased season says something like "Season 2 comes out Nov 8". Magnets and torrent hashes are never included
