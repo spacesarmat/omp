@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
+- [tv] Season page: a poster on a backdrop, the series title and Season N, and room between the header, the buttons and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (size, time left, or the air date)
 - A release size is shown one way everywhere: "27.0 GB", not "11.2 GB" next to "27,0 ГБ". An empty field no longer leaves " · -" in the line
 - [tv] The releases dialog footer names opening and deleting a release, not "mark watched"
 - [tv] TV text is at least 24px. Test-mode code labels still follow the size slider

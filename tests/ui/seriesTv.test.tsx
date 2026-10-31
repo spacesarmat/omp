@@ -237,8 +237,12 @@ describe('TV series screen', () => {
     const host = await mount(2);
     const rows = host.querySelectorAll('.ep-row');
     expect(rows).toHaveLength(2);
-    expect(text(rows[0].querySelector('.ep')) + ' ' + text(rows[0].querySelector('.name'))).toBe('S02E01 Пилот');
-    expect(text(rows[1].querySelector('.ep')) + ' ' + text(rows[1].querySelector('.name'))).toBe('S02E02 Второй');
+    expect(text(host.querySelector('.series-kicker'))).toBe('Сезон 2');
+    expect(text(host.querySelector('.series-eps-title'))).toBe('Серии');
+    expect(text(rows[0].querySelector('.ep')) + ' ' + text(rows[0].querySelector('.name'))).toBe('1 Пилот');
+    expect(text(rows[0].querySelector('.ep-sub'))).toBe('50 мин · 1,9 ГБ');
+    expect(rows[0].classList.contains('ep-in')).toBe(true);
+    expect(text(rows[1].querySelector('.ep')) + ' ' + text(rows[1].querySelector('.name'))).toBe('2 Второй');
   });
 
   it('plays the next episode without a start position (the player asks where to start)', async () => {
@@ -314,7 +318,7 @@ describe('TV series screen', () => {
     await flush();
     expect(host.querySelector('.season-chip.focused')!.getAttribute('data-fk')).toBe('season-2');
     expect(host.querySelector('.season-chip.on')!.getAttribute('data-fk')).toBe('season-2');
-    expect(text(host.querySelector('.ep-row .ep'))).toBe('S02E01');
+    expect(text(host.querySelector('.ep-row .ep'))).toBe('1');
   });
 
   describe('every season of the TMDB card', () => {
@@ -553,7 +557,7 @@ describe('TV series screen: episodes still to come', () => {
   });
   const coming = (host: HTMLElement) => Array.prototype.slice.call(host.querySelectorAll('.series-episodes .ep-coming')) as HTMLElement[];
 
-  it('after the last episode: dashed muted rows «S02E04 Пирамида · выйдет …», «Серия 5» without a name', async () => {
+  it('after the last episode: dashed muted rows «4 Пирамида · выйдет …», «Серия 5» without a name', async () => {
     withEpisodes([
       dated(1, 'Пилот', '2024-05-08'),
       dated(2, 'Второй', '2024-05-15'),
@@ -564,7 +568,7 @@ describe('TV series screen: episodes still to come', () => {
     ]);
     const host = await mount(2);
     const rows = Array.prototype.slice.call(host.querySelectorAll('.series-episodes .ep-row')) as HTMLElement[];
-    expect(rows.map((r) => text(r.querySelector('.ep')))).toEqual(['S02E01', 'S02E02', 'S02E04', 'S02E05']);
+    expect(rows.map((r) => text(r.querySelector('.ep')))).toEqual(['1', '2', '4', '5']);
     const c = coming(host);
     expect(c).toHaveLength(2);
     expect(rows.indexOf(c[0])).toBe(2);
@@ -581,6 +585,14 @@ describe('TV series screen: episodes still to come', () => {
     const css = readFileSync('src/styles.css', 'utf8') as string;
     expect(css).toMatch(/\.ep-coming \{[^}]*border: 2px dashed/);
     expect(css).toMatch(/\.ep-coming \{[^}]*color: var\(--muted\)/);
+    expect(css).toMatch(/\.series-episodes \.ep-row \.name \{[^}]*-webkit-line-clamp: 2/);
+    expect(css).toMatch(/\.series-episodes \.ep-sub \{[^}]*display: block/);
+    const start = css.indexOf('/* Season page, same language');
+    const block = css.slice(start, css.indexOf('.spinner-wrap', start));
+    expect(block).not.toMatch(/\bgap\s*:/);
+    expect(block).not.toMatch(/\binset\s*:/);
+    expect(block).not.toMatch(/aspect-ratio/);
+    expect(block).not.toMatch(/:has\(/);
   });
 
   it('Down from the last real episode does not land on them', async () => {
@@ -600,7 +612,7 @@ describe('TV series screen: episodes still to come', () => {
     withEpisodes([dated(1, 'Пилот', '2024-05-08'), dated(2, 'Второй', '2099-01-01'), dated(3, 'Пирамида', '2099-01-08')]);
     const host = await mount(2);
     expect(host.querySelector('[data-fk="ep-s2-2"]')).not.toBeNull();
-    expect(coming(host).map((r) => text(r.querySelector('.ep')))).toEqual(['S02E03']);
+    expect(coming(host).map((r) => text(r.querySelector('.ep')))).toEqual(['3']);
   });
 
   it('none without TMDB dates or without TMDB at all', async () => {
