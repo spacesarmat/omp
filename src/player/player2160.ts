@@ -4,7 +4,7 @@
 import type { TorrServerClient } from '../api/torrserver';
 import type { OmpNativeTvPlugin, Open2160Request } from '../platform/androidNative';
 import type { SkipPrefs } from '../lib/journal';
-import { MIN_RESUME, markWatched } from '../store/progress';
+import { MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import { saveItemProgress } from './progressSave';
 import { itemHeading } from './heading';
 import type { PlayItem } from './types';
@@ -201,15 +201,18 @@ function itemOfUrl(c: TorrServerClient | null, queue: PlayItem[], url: string): 
 
 export interface P2160Saved {
   item: PlayItem;
-  /** Seconds where the user stopped (the duration when ended). */
+  /** Seconds where the user stopped. */
   time: number;
   duration: number;
   ended: boolean;
 }
 
 /**
- * Saves what the player handed back: the end marks the item watched, a position of MIN_RESUME or more is kept.
- * An url that matches no item saves nothing in a queue of several items (a single item takes it).
+ * Saves what the player handed back. Watched only when it reported a position at or past WATCHED_RATIO of the
+ * length (a real finish, or a close near the end). `ended` with no such position does not count: 2160 Player can
+ * close while the file is still opening and say it finished, and the length already stored must not be written
+ * back as the position. A position of MIN_RESUME or more is kept. An url that matches no item saves nothing in a
+ * queue of several items (a single item takes it).
  */
 export function saveP2160Result(
   c: TorrServerClient | null,
@@ -229,17 +232,19 @@ export function saveP2160Result(
   const hash = item.hash;
   const idx = item.fileIndex;
   const known = item === queue[startIndex] ? knownDuration : 0;
-  const dur = r.durationMs !== undefined && r.durationMs > 0 ? r.durationMs / 1000 : known;
-  if (r.ended) {
-    if (dur > 0) saveItemProgress(c, item, dur, dur, true);
-    else {
-      markWatched(hash, idx);
-      if (c) c.setViewed(hash, idx, 0).catch(() => undefined);
-    }
-    return { item, time: dur, duration: dur, ended: true };
+  const reportedDur = r.durationMs !== undefined && r.durationMs > 0 ? r.durationMs / 1000 : 0;
+  const dur = reportedDur > 0 ? reportedDur : known;
+  const rawPos = r.positionMs;
+  const hasPos = typeof rawPos === 'number';
+  const pos = hasPos ? rawPos / 1000 : -1;
+  // the length we already knew is only the denominator. It is never written as the position.
+  const nearEnd = pos >= 0 && dur > 0 && pos / dur >= WATCHED_RATIO;
+  if (nearEnd) {
+    const time = pos > dur ? dur : pos;
+    saveItemProgress(c, item, time, dur, true);
+    return { item, time: time, duration: dur, ended: true };
   }
-  const pos = r.positionMs !== undefined ? r.positionMs / 1000 : 0;
-  if (pos < MIN_RESUME) return { item, time: 0, duration: dur, ended: false };
+  if (!hasPos || pos < MIN_RESUME) return { item, time: 0, duration: dur, ended: false };
   if (dur > 0) saveItemProgress(c, item, pos, dur, true);
   // no duration anywhere: only the server's resume point can be kept
   else if (c) c.setViewed(hash, idx, Math.floor(pos)).catch(() => undefined);
