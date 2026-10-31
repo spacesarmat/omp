@@ -15,6 +15,9 @@ import { seriesName } from '../../lib/cleanNames';
 import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../../lib/seriesMatch';
 import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
+import { withAds } from '../../ads/ads';
+import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
+import { TvAdCell } from './TvAdCell';
 
 /** Tiles per row. The safe width is 1728px (96-1824); the CSS column count matches. */
 export const VIEW_COLS: { [v in LibraryView]: number } = { large: 6, small: 9, list: 1, compact: 1 };
@@ -143,6 +146,8 @@ export function TorrentViews(p: {
   onOpen: (t: Torrent) => void;
   onOpenSeries?: (g: SeriesGroup) => void;
   onFocused: (t: Torrent | SeriesGroup) => void;
+  /** False while «Мои» is searching. History does not use this grid. */
+  ads?: boolean;
 }) {
   const tiles = p.view === 'large' || p.view === 'small';
   const grouped = p.group !== false;
@@ -162,8 +167,26 @@ export function TorrentViews(p: {
     setFocusRow(r);
   };
   const focusAt = (i: number) => setRow(rowOf(i, cols));
+  const adsOn = p.ads !== false && items.length > 0;
+  const ads = useTvAds({
+    section: 'mine',
+    count: items.length,
+    perScreen: TV_PER_SCREEN[p.view],
+    active: adsOn,
+    listKey: p.view + '|' + items.length + '|' + (items[0] ? (items[0].kind === 'series' ? items[0].key : items[0].tor.hash) : ''),
+    itemEl: (i) => {
+      const root = document.querySelector('.views-tiles, .views-rows');
+      if (!root) return null;
+      const nodes = root.querySelectorAll('.tile:not(.ad-tile), .lrow:not(.ad-row), .crow:not(.ad-crow)');
+      return nodes[i] || null;
+    },
+  });
+  const rows = withAds(items, ads.admitted);
   // another tab, a search or a refresh: the window follows the focused tile where it is now (the top when none)
-  const keys = items.map((it) => (it.kind === 'series' ? 'series-' + it.key : 'torrent-' + it.tor.hash));
+  const keys = rows.map((e) => {
+    if (e.item === undefined) return 'ad-mine-' + e.ad;
+    return e.item.kind === 'series' ? 'series-' + e.item.key : 'torrent-' + e.item.tor.hash;
+  });
   const keysId = keys.join('|') + '#' + cols;
   useEffect(() => {
     let cur = '';
@@ -176,7 +199,22 @@ export function TorrentViews(p: {
   }, [keysId]);
   return (
     <FocusGroup focusKey="LIB-GRID" className={tiles ? 'views-tiles' : 'views-rows'}>
-      {items.map((it, i) => {
+      {rows.map((e, i) => {
+        if (e.item === undefined) {
+          const b = ads.banner(e.ad);
+          if (!b) return null;
+          return (
+            <TvAdCell
+              key={'ad-' + e.ad}
+              kind={p.view}
+              banner={b}
+              focusKey={'ad-mine-' + e.ad}
+              onShown={() => ads.shown(e.ad)}
+              onClick={() => ads.click(e.ad)}
+            />
+          );
+        }
+        const it = e.item;
         const unload = !keepsImage(i, focusRow, cols, keep);
         const focused = (x: Torrent | SeriesGroup) => {
           focusAt(i);

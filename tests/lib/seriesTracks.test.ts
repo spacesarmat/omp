@@ -79,6 +79,20 @@ describe('series records', () => {
     expect(sanitizeSeriesTracks({ at: 5, s: { l: 'Надписи', g: 'ru' }, l: 7 })).toEqual({ at: 5, s: { l: 'Надписи', g: 'ru' } });
   });
 
+  it('nameless external subtitles are kept by their id, a malformed id is not', () => {
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '', i: 's:und:' } })).toEqual({ at: 5, s: { l: '', g: '', i: 's:und:' } });
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '', i: 's:und::forced' } })!.s).toEqual({ l: '', g: '', i: 's:und::forced' });
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '', i: 'a:rus:x' } })).toEqual({ at: 5 });
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '', i: 's:und:#2' } })!.s).toEqual({ l: '', g: '', i: 's:und:#2' });
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '', i: 's:und:#x' } })).toEqual({ at: 5 });
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: '', g: '' } })).toEqual({ at: 5 });
+    // a named choice needs no id
+    expect(sanitizeSeriesTracks({ at: 5, s: { l: 'YSS', g: 'ru', i: 's:rus:yss' } })!.s).toEqual({ l: 'YSS', g: 'ru' });
+    const next = nextSeriesTracks({ at: 1, l: 'LostFilm', g: 'ru' }, { s: { l: '', g: '', i: 's:und:' } }, 9);
+    expect(next).toEqual({ at: 9, l: 'LostFilm', g: 'ru', s: { l: '', g: '', i: 's:und:' } });
+    expect(isReset(next)).toBe(false);
+  });
+
   it('the newest record among the torrents of the series wins', () => {
     const members = [
       { data: data({ at: 10, l: 'LostFilm', g: 'ru' }) },

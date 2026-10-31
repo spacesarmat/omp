@@ -13,7 +13,9 @@ import { restoreFocus } from '../ui/focus';
 import { toast } from '../ui/toast';
 import { platformKind } from '../platform/env';
 import { nativeVpnState } from '../platform/androidNative';
-import { addressErrorText, addressForField, checkServerAddress } from '../api/serverAddress';
+import { addressErrorText, checkServerAddress, connectCandidates, fieldAddress } from '../api/serverAddress';
+import { isProbeFailure, probeServer } from '../api/connectProbe';
+import { connectErrorText } from '../api/connectError';
 import { Logo } from '../ui/Logo';
 import { AddressField } from '../ui/AddressField';
 import { ServerHistory } from './connect/ServerHistory';
@@ -39,12 +41,7 @@ export function connectEcho(client: TorrServerClient, ms: number): Promise<strin
   });
 }
 
-/** «Не удалось подключиться к 192.168.1.191:8090 — проверьте адрес и порт»; a server that answered wrongly says how. */
-export function connectErrorText(baseUrl: string, e: unknown): string {
-  const host = baseUrl.replace(/^https?:\/\//i, '');
-  if (isApiError(e) && (e.kind === 'http' || e.kind === 'parse')) return t('connect.unreachableWhy', { host: host, error: errorMessage(e) });
-  return t('connect.unreachable', { host: host });
-}
+export { connectErrorText } from '../api/connectError';
 
 /** No server answered (a failed connect, an empty scan): VPN on → the VPN line; Android TV without one → the lockdown note. */
 export function networkHint(vpn: { active: boolean } | null): string {
@@ -115,26 +112,30 @@ export function ConnectScreen() {
       return;
     }
     // the field shows what is tried: «１９２．１６８…：８０９０» becomes 192.168.1.124:8090
-    if (address === url) setUrl(addressForField(checked.url));
+    if (address === url) setUrl(fieldAddress(address));
     const my = ++attempt.current;
-    allowTypedHost(checked.url);
-    const cfg = { url: checked.url, user: user || undefined, password: password || undefined };
-    const client = new TorrServerClient(cfg);
+    // no scheme typed: http and https are both tried (https first on 443 / 8443 / 8091), the one that answers is saved
+    const candidates = connectCandidates(address);
+    const auth = { user: user || undefined, password: password || undefined };
     setBusy(true);
     setError('');
-    connectEcho(client, CONNECT_TIMEOUT_MS).then(
-      (v) => {
+    probeServer(candidates, (u) => {
+      allowTypedHost(u);
+      return connectEcho(new TorrServerClient({ url: u, ...auth }), CONNECT_TIMEOUT_MS);
+    }).then(
+      (r) => {
         if (!alive.current) return;
-        toast(t('connect.connected', { version: v }));
-        open(addServer(cfg));
+        toast(t('connect.connected', { version: r.version }));
+        open(addServer({ url: r.url, ...auth }));
       },
-      (e) => {
+      (f) => {
         if (!alive.current) return;
         setBusy(false);
-        const text = connectErrorText(client.baseUrl, e);
+        const e = isProbeFailure(f) ? f.error : f;
+        const text = isProbeFailure(f) ? connectErrorText(f.url, f.error, f.tls) : connectErrorText(checked.url, f);
         setError(text);
         toast(text, 'error');
-        if (noAnswer(e)) showNetHint(() => attempt.current === my);
+        if (noAnswer(e) && !(isProbeFailure(f) && f.tls)) showNetHint(() => attempt.current === my);
         // the button stays focused: OK tries again
         if (doesFocusableExist('connect-btn')) setFocus('connect-btn');
       },
@@ -215,14 +216,14 @@ export function ConnectScreen() {
           </Focusable>
           {advanced && (
             <div class="row">
-              <TextInput value={user} onChange={setUser} placeholder={t('common.login')} />
-              <TextInput value={password} onChange={setPassword} placeholder={t('common.password')} type="password" />
+              <TextInput focusKey="connect-user" value={user} onChange={setUser} placeholder={t('common.login')} />
+              <TextInput focusKey="connect-pass" value={password} onChange={setPassword} placeholder={t('common.password')} type="password" />
             </div>
           )}
           <div class="row">
             {/* never disabled while connecting: a disabled item would lose the focus; connect() ignores a second OK */}
             <Button focusKey="connect-btn" label={busy ? t('connect.connecting') : t('connect.connect')} className="primary grow" onPress={() => connect()} />
-            <Button icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
+            <Button focusKey="connect-scan" icon="search" label={t('connect.scan')} onPress={scanNetwork} disabled={!!scan} />
           </div>
           {(error || netHint) && !busy && (
             <div class="connect-error" role="alert">

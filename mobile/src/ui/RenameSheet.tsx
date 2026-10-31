@@ -23,7 +23,7 @@ export function RenameSheet({
     onSave(text.trim());
   }
   return (
-    <Sheet onClose={onCancel} label={title}>
+    <Sheet onClose={onCancel} testId="PD28" label={title}>
       <form class="m-field" onSubmit={submit}>
         <label class="m-sheet-title" for="rename-input">
           {title}

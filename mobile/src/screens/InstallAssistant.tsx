@@ -32,7 +32,7 @@ const TV_ICON = 'M3 5h18v11H3zM8 20h8';
 function Bar(p: { title: string }) {
   return (
     <div class="m-bar">
-      <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn tm" data-code="P18.1" aria-label={t('common.back')} onClick={() => goBack()}>
         <Icon d={BACK} />
       </button>
       <h1 class="m-bar-title">{p.title}</h1>
@@ -190,7 +190,7 @@ function Find() {
           </button>
         </form>
       ) : (
-        <button type="button" class="m-install-manual" onClick={() => setManual(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-install-manual" onClick={() => setManual(true)}>
           {t('install.assistant.manualIp')}
         </button>
       )}
@@ -393,6 +393,7 @@ function Steps(p: { ip: string; kind?: InstallDeviceKind; brand?: AtvBrand }) {
       )}
       {ask && (
         <Sheet
+          testId="PD35"
           label={t('install.assistant.connectSheet')}
           onClose={() => {
             setAsk(null);

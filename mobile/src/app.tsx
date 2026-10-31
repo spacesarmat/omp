@@ -8,7 +8,7 @@ import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { audioLaunch, rememberAudio } from './audiobooks/launch';
-import { NavBar, TAB_IDS, type Tab } from './ui/NavBar';
+import { NavBar, TAB_IDS, visibleTabIds, type Tab } from './ui/NavBar';
 import { Toast, showToast } from './ui/toast';
 import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
@@ -53,6 +53,9 @@ import { checkWhatsNew } from '../../src/store/whatsNew';
 import { Onboarding } from './ui/Onboarding';
 import { Setup } from './ui/Setup';
 import { HintHost } from './ui/Hint';
+import { TestModeHost } from './testmode/host';
+import { ElementLabelsHost } from '../../src/testmode/elements';
+import { markPhoneUi } from '../../src/testmode/active';
 import { armOnboardingBoot, holdOnboarding, onboardingVisible, setupHandoff, setupNotice, setupStep, setupVisible, trackOnboardingBoot } from '../../src/onboarding/gate';
 import { phoneChangelog } from './lib/phoneChangelog';
 import { APP_VERSION } from '../../src/version';
@@ -80,6 +83,9 @@ import { Fragment } from 'preact';
 import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import './mobile.css';
+
+// test-mode labels read the phone size (P11.20)
+markPhoneUi();
 
 const TABS: string[] = TAB_IDS;
 
@@ -372,12 +378,12 @@ export function App() {
   useEffect(() => {
     if (!tabRoot) return;
     return installTabSwipe({
-      tabs: TABS,
+      tabs: visibleTabIds(),
       current: () => currentRoute.value.name,
       screen: () => document.querySelector<HTMLElement>('.m-screen'),
       go: (tab) => switchTab({ name: tab } as MRoute),
     });
-  }, [tabRoot]);
+  }, [tabRoot, !!activeTv.value]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   // a language change remounts the whole UI (t() does not subscribe components to the language)
   return (
@@ -411,7 +417,7 @@ export function App() {
       ) : route.name === 'torrent' ? (
         <Torrent hash={route.hash} />
       ) : route.name === 'add' ? (
-        <Add link={route.link} query={route.query} run={route.run} entry={route} />
+        <Add link={route.link} query={route.query} run={route.run} scope={route.scope} entry={route} />
       ) : route.name === 'nowPlaying' ? (
         <NowPlaying />
       ) : route.name === 'localServer' ? (
@@ -458,6 +464,8 @@ export function App() {
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <ConfirmHost />
+      <TestModeHost />
+      <ElementLabelsHost phone />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

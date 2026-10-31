@@ -16,7 +16,7 @@ import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
 import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
-import { restoreFocus } from '../ui/focus';
+import { arrowUpToAbove, restoreFocus } from '../ui/focus';
 import { navigate, type Route } from '../ui/nav';
 import { tvGlyphs } from '../ui/tvText';
 import { CastRow, initials, showInRow } from '../ui/CastRow';
@@ -166,6 +166,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
                   className={'season-chip tc-chip tc-chip-' + c.state + (c.state === 'future' ? ' chip-future' : '')}
                   role="button"
                   onPress={() => pressChip(c)}
+                  onArrow={arrowUpToAbove('title-season-' + c.n)}
                   onFocused={() => showInRow(seasonsRef.current, 'title-season-' + c.n)}
                 >
                   <div class="chip-name">{c.name}</div>

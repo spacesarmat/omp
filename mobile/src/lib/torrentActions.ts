@@ -3,11 +3,15 @@ import { torrents, refreshTorrents } from '../../../src/store/library';
 import { pruneEpisodeFindings } from '../../../src/monitor/subs';
 import { reloadMonitor } from '../monitor/ui';
 import { showToast } from '../ui/toast';
-import { t } from '../../../src/i18n';
+import { t, tp } from '../../../src/i18n';
 import { continueWatching } from '../../../src/store/progress';
 import type { TorrentFile } from '../../../src/lib/episodes';
 import { episodeCopies, isEpisodeFile, seriesSiblings } from '../../../src/lib/episodeProgress';
 import { sharedWatched } from './sharedProgress';
+import type { Torrent } from '../../../src/api/types';
+import { askConfirm } from '../ui/confirm';
+import { nowPlaying } from '../tv/playerLink';
+import { carryWatch, forgetRemoved, pickKeeper } from '../../../src/store/releaseCarry';
 
 /**
  * Where «Смотреть на ТВ» continues: the latest started episode of the torrent, also when it was started in another
@@ -81,4 +85,74 @@ export async function deleteTorrents(c: TorrServerClient, hashes: string[]): Pro
 export function reportDeleted(r: DeleteResult): void {
   if (r.failed.length) showToast(t('library.deleteFailed', { n: r.failed.length }));
   else if (r.deleted.length) showToast(t('library.deletedN', { n: r.deleted.length }));
+}
+
+/**
+ * The trash on a release in «Другая раздача» / «Раздачи (N)»: `tor` goes, what was watched in it moves to the one that
+ * stays first (src/store/releaseCarry). `rows`: the releases of the season (of the film), `current` the one shown now.
+ * The release playing on the TV is never removed; removing the one shown says so and the watching goes on in the one
+ * that stays. Resolves with the one that stays when `tor` was removed, else null (cancelled or failed, said in a toast).
+ */
+export async function deleteRelease(
+  c: TorrServerClient,
+  p: { tor: Torrent; rows: Torrent[]; current: string; season: number; name: (x: Torrent) => string },
+): Promise<Torrent | null> {
+  // one at a time: two deletes in flight could each keep the release the other one removes
+  if (releaseDeleting) {
+    showToast(t('series.releaseDeleteBusy'));
+    return null;
+  }
+  if (isPlayingOnTv(p.tor.hash)) {
+    showToast(t('series.releaseDeletePlaying'));
+    return null;
+  }
+  const isCurrent = p.tor.hash === p.current;
+  const keeper = isCurrent ? pickKeeper(p.rows, p.tor) : p.rows.filter((r) => r.hash === p.current)[0] || pickKeeper(p.rows, p.tor);
+  if (!keeper) return null;
+  const vars = { name: p.name(p.tor), keeper: p.name(keeper) };
+  const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
+  if (!(await askConfirm(ask, t('common.delete'), { destructive: true, testId: 'PD57' }))) return null;
+  if (releaseDeleting) {
+    showToast(t('series.releaseDeleteBusy'));
+    return null;
+  }
+  releaseDeleting = true;
+  try {
+    let carried = await carryWatch(c, p.tor, keeper, p.season);
+    if (!carried.ok && carried.lost) {
+      const lossAsk = tp('series.releaseDeleteLossAsk', carried.lost, { keeper: vars.keeper });
+      if (!(await askConfirm(lossAsk, t('common.delete'), { destructive: true, testId: 'PD57' }))) return null;
+      carried = await carryWatch(c, p.tor, keeper, p.season, { allowLoss: true });
+    }
+    if (!carried.ok) {
+      showToast(t('series.releaseCarryFailed'));
+      return null;
+    }
+    // the one that stays must still be there, and the one that goes must not have started on the TV meanwhile
+    if (!torrents.value.some((x) => x.hash === keeper.hash)) {
+      showToast(t('series.releaseCarryFailed'));
+      return null;
+    }
+    if (isPlayingOnTv(p.tor.hash)) {
+      showToast(t('series.releaseDeletePlaying'));
+      return null;
+    }
+    const r = await deleteTorrents(c, [p.tor.hash]);
+    if (!r.deleted.length) {
+      reportDeleted(r);
+      return null;
+    }
+    forgetRemoved(p.tor.hash);
+    showToast(t('series.releaseDeleted'));
+    return keeper;
+  } finally {
+    releaseDeleting = false;
+  }
+}
+
+let releaseDeleting = false;
+
+function isPlayingOnTv(hash: string): boolean {
+  const playing = nowPlaying.value;
+  return !!playing && playing.hash.toLowerCase() === hash.toLowerCase();
 }

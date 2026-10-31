@@ -5,6 +5,7 @@ import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
 import { DialogHost, confirmDialog, dialogOpen } from './ui/dialog';
+import { AdQrHost } from './screens/library/TvAdCell';
 import { TextDialogHost, textDialogOpen } from './ui/TextDialog';
 import { ToastHost } from './ui/toast';
 import { ConnectScreen } from './screens/Connect';
@@ -35,6 +36,8 @@ import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
 import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
+import { ScreenCodeBadge } from './testmode/badge';
+import { ElementLabelsHost } from './testmode/elements';
 
 /**
  * The Android TV search sources screen (on LG: the TorrServer sources) is a separate chunk: its indexer status code stays out of the main bundle.
@@ -100,7 +103,7 @@ function renderRoute(r: Route) {
 }
 
 function exitApp() {
-  confirmDialog(t('tv.exitAsk'), t('tv.exit')).then((ok) => {
+  confirmDialog(t('tv.exitAsk'), t('tv.exit'), 'exit').then((ok) => {
     if (ok) window.close();
   });
 }
@@ -150,7 +153,10 @@ export function App() {
       {showTour && <OnboardingScreen />}
       <DialogHost />
       <TextDialogHost />
+      <AdQrHost />
       <ToastHost />
+      <ScreenCodeBadge />
+      <ElementLabelsHost />
     </div>
   );
 }

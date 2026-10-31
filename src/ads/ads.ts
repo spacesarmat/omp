@@ -193,6 +193,11 @@ export interface AdContext {
   appVersion: string;
   /** The OMP subscription is on (grace included). */
   subscribed: boolean;
+  /**
+   * TV only: a linked phone has an OMP subscription. Honoured when `tvHideIfLinkedSubscriber` is on, apart from
+   * `hideForSubscribers` (that one is this device's own subscription).
+   */
+  linkedSubscriber?: boolean;
   /** First run of this install (ms). */
   firstRun: number;
   now: number;
@@ -213,6 +218,7 @@ export function adsFor(cfg: AdsConfig, ctx: AdContext): AdBanner[] {
   if (!cfg.sections[ctx.section] || !cfg.platforms[ctx.platform]) return [];
   if (!versionAtLeast(ctx.appVersion, cfg.minAppVersion)) return [];
   if (cfg.hideForSubscribers && ctx.subscribed) return [];
+  if (ctx.platform !== 'phone' && cfg.tvHideIfLinkedSubscriber && ctx.linkedSubscriber) return [];
   if (ctx.now - ctx.firstRun < cfg.afterInstallDays * DAY_MS) return [];
   return cfg.banners.filter((b) => bannerLive(b, ctx));
 }

@@ -86,8 +86,8 @@ function usePosterParallax(stageRef: { current: HTMLDivElement | null }, cardRef
   }, [stageRef, cardRef]);
 }
 
-/** Poster card of «Сейчас играет». `title` shows only when there is no image. */
-export function NowPoster({ state, title }: { state: PlayerState; title: string }) {
+/** Poster card of «Сейчас играет». `title` shows only when there is no image and a title is passed. */
+export function NowPoster({ state, title }: { state: PlayerState; title?: string }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   usePosterParallax(stageRef, cardRef);
@@ -105,7 +105,7 @@ export function NowPoster({ state, title }: { state: PlayerState; title: string 
           </>
         )}
         <div class="m-now-poster-glare" aria-hidden="true" />
-        {!image && <span class="m-now-poster-title">{title}</span>}
+        {!image && title && <span class="m-now-poster-title">{title}</span>}
       </div>
     </div>
   );

@@ -22,6 +22,8 @@ class MainActivity : BridgeActivity() {
         BootLaunch.acknowledge(this, intent)
         I18n.load(this)
         CertPins.attach(getSharedPreferences(CertPins.PREFS, MODE_PRIVATE))
+        // a TorrServer certificate the user trusted: for the page's native requests and every player
+        com.spacesarmat.omp.tls.TorrServerTrust.install(this)
         skipLaunchIntent = savedInstanceState != null ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TorrServerClient, normalizeServerUrl, parseTorrentData } from '../../src/api/torrserver';
 import { mockFetch } from '../helpers/fetchMock';
+import { knownFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -27,6 +28,25 @@ describe('parseTorrentData', () => {
 
 describe('TorrServerClient', () => {
   const c = new TorrServerClient({ url: '192.168.1.191:5665' });
+
+  it('get remembers the file list it shows (a release just added has none in the library copy)', async () => {
+    localStorage.clear();
+    resetKnownFilesForTests();
+    const files = [{ id: 1, path: 'S/a.mkv', length: 5 }, { id: 2, path: 'S/Rus Sound/X/a.mka', length: 3 }];
+    mockFetch(() => ({ body: JSON.stringify({ hash: HASH, title: 'T', stat: 3, file_stats: files }) }));
+    await c.get(HASH);
+    expect(knownFiles(HASH)).toEqual(files);
+    // the add answer (no metadata yet) falls back to it
+    expect(c.files({ hash: HASH, title: 'T', stat: 1, data: '{"omp":{"ts":{"s":38}}}' } as any)).toEqual(files);
+  });
+
+  it('get without files keeps what was known', async () => {
+    localStorage.clear();
+    resetKnownFilesForTests();
+    mockFetch(() => ({ body: JSON.stringify({ hash: HASH, title: 'T', stat: 1 }) }));
+    await c.get(HASH);
+    expect(knownFiles(HASH)).toEqual([]);
+  });
 
   it('lists torrents', async () => {
     const fn = mockFetch(() => ({ body: JSON.stringify([{ hash: HASH, title: 'T', stat: 5 }]) }));

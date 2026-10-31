@@ -102,7 +102,7 @@ const STRUCT: FaqStruct[] = [
   { id: 'lg-devmode-expiry', section: 'install', devices: ['lg'] },
   { id: 'lg-update', section: 'install', devices: ['lg'] },
   { id: 'atv-install', section: 'install', devices: ['atv'] },
-  { id: 'atv-adb', section: 'install', devices: ['atv'] },
+  { id: 'atv-adb', section: 'install', devices: ['atv', 'phone'] },
   { id: 'atv-boxes', section: 'install', devices: ['atv', 'server'] },
   { id: 'apk-choice', section: 'install', devices: ['phone', 'atv'] },
   { id: 'xiaomi', section: 'install', devices: ['atv'] },
@@ -163,6 +163,8 @@ const STRUCT: FaqStruct[] = [
   { id: 'backup', section: 'log', devices: ['common', 'phone'] },
   { id: 'support', section: 'about', devices: ['common', 'phone'] },
   { id: 'telegram', section: 'about', devices: ['common', 'phone', 'atv', 'lg'] },
+  { id: 'omp-subscription', section: 'about', devices: ['phone', 'common'] },
+  { id: 'ts-https', section: 'connect', devices: ['server', 'common'] },
 ];
 
 export const FAQ: FaqItem[] = STRUCT.map((s) => ({

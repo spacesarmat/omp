@@ -149,4 +149,12 @@ class BridgeProtocolTest {
         assertTrue(BridgeProtocol.parse(msg("billingRefresh", JSONObject(), id = 11)) is BridgeRequest.Invalid)
         assertTrue(BridgeProtocol.parse(msg("billingRefresh", JSONObject().put("deviceId", "a".repeat(32)).put("stale", "x".repeat(3_000)), id = 12)) is BridgeRequest.Invalid)
     }
+
+    @Test
+    fun aTorrServerRequestNeedsItsBody() {
+        val r = BridgeProtocol.parse(msg("tsHttp", JSONObject().put("request", JSONObject().put("url", "https://ts:8091/echo")), id = 20))
+        assertTrue(r is BridgeRequest.TsHttp)
+        assertEquals("https://ts:8091/echo", (r as BridgeRequest.TsHttp).request.getString("url"))
+        assertTrue(BridgeProtocol.parse(msg("tsHttp", JSONObject(), id = 21)) is BridgeRequest.Invalid)
+    }
 }

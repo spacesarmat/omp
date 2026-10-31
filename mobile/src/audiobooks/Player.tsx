@@ -72,7 +72,7 @@ export function AudioPlayer({ hash, token }: { hash: string; token: number }) {
   if (!mine) {
     return (
       <div class="m-screen" data-route="audiobook-player">
-        <AudiobookBar title={t('audiobooks.player')} />
+        <AudiobookBar title={t('audiobooks.player')} code="P32.1" />
         <p class="m-muted m-note">{t('audiobooks.nothingToPlay')}</p>
       </div>
     );
@@ -108,7 +108,7 @@ export function AudioPlayer({ hash, token }: { hash: string; token: number }) {
 
   return (
     <div class="m-screen" data-route="audiobook-player">
-      <AudiobookBar title={mine.book} />
+      <AudiobookBar title={mine.book} code="P32.1" />
       <p class="m-audio-place" data-audio-place="">{place}</p>
       <p class="m-audio-title" data-audio-title="">{title}</p>
       <p class="m-audio-time" data-audio-time="">

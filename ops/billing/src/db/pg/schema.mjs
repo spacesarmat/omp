@@ -311,10 +311,32 @@ INSERT INTO kv (key, value) VALUES ('store_version', '0');
 `,
   },
   {
-    version: '002_ads',
+    version: '002_monitor',
+    sql: `
+-- «Мониторинг» (src/monitor.mjs): one row per run with every check (the tab shows the newest), and one row
+-- per judged check for the 7-day history. Both are pruned to 7 days after each run. Not part of the state.
+CREATE TABLE monitor_runs (
+  run_at bigint PRIMARY KEY,
+  finished_at bigint NOT NULL,
+  trigger text NOT NULL,
+  total integer NOT NULL,
+  failed integer NOT NULL,
+  rows jsonb NOT NULL
+);
+CREATE TABLE monitor_results (
+  run_at bigint NOT NULL,
+  check_id text NOT NULL,
+  ok boolean NOT NULL
+);
+CREATE INDEX monitor_results_at ON monitor_results (run_at);
+CREATE INDEX monitor_results_check ON monitor_results (check_id, run_at);
+`,
+  },
+  {
+    version: '003_ads',
     sql: `
 -- Ads (src/ads.mjs): banner images uploaded in the admin, and impressions / clicks per MSK day, banner, section and
--- platform. No device id and no IP. Kept 90 days (store.retention).
+-- platform. No device id and no IP. Kept 90 days (store.retention). 002_monitor already shipped, so this is 003.
 CREATE TABLE ad_images (
   id text PRIMARY KEY,
   mime text NOT NULL,

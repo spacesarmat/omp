@@ -109,8 +109,8 @@ class EngineChooser(val mode: EngineMode, val vlcAvailable: Boolean = true) {
 
     companion object {
         /** «Плеер: VLC → сменить на встроенный» (the player menu row). */
-        fun menuRow(current: EngineKind, vlcAvailable: Boolean = true): String =
-            if (!vlcAvailable) I18n.s("player.menuRowNoVlc", "current" to current.label, "note" to VLC_UNAVAILABLE_TEXT)
+        fun menuRow(current: EngineKind, vlcAvailable: Boolean = true, note: String = VLC_UNAVAILABLE_TEXT): String =
+            if (!vlcAvailable) I18n.s("player.menuRowNoVlc", "current" to current.label, "note" to note)
             else I18n.s("player.menuRowSwitch", "current" to current.label, "other" to (if (current.other == EngineKind.VLC) "VLC" else I18n.s("player.engineBuiltinLower")))
 
         /** Media3's PlaybackException code name of a decoder that failed while decoding. */
@@ -121,6 +121,9 @@ class EngineChooser(val mode: EngineMode, val vlcAvailable: Boolean = true) {
 
         /** libVLC has no native libraries for this device (menu row, message, TV settings). */
         val VLC_UNAVAILABLE_TEXT: String get() = I18n.s("player.vlcUnavailable")
+
+        /** The TorrServer's certificate is a self-signed one the user trusted in OMP: VLC cannot open it. */
+        val VLC_SELF_SIGNED_TEXT: String get() = I18n.s("player.vlcSelfSigned")
 
         /** The message after the automatic switch because of the format. */
         val FORMAT_SWITCH_TEXT: String get() = I18n.s("player.formatSwitch")

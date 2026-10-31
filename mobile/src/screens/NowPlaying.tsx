@@ -65,7 +65,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
 
   const head = (
     <div class="m-now-head">
-      <button type="button" class="m-icon-btn" aria-label={t('now.collapse')} onClick={() => goBack()}>
+      <button type="button" class="m-icon-btn tm" data-code="P09.1" aria-label={t('now.collapse')} onClick={() => goBack()}>
         <Icon d={ICONS.collapse} />
       </button>
       <div class="m-now-status">
@@ -134,156 +134,160 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     <>
       <NowDeck hash={s.hash} fileId={s.file} remote={<Remote />}>
         <div class="m-screen m-now m-now-bleed" data-route="nowPlaying">
-          <div class="m-now-hero">
-            <NowPoster state={posterState} title={names.title} />
-            {head}
-          </div>
-          <div class="m-now-body">
-            <div class="m-now-titles">
-              <div class="m-now-title">{names.title}</div>
-              {names.sub && <div class="m-now-sub">{names.sub}</div>}
+          {/* the fold fills the first screen: the poster shrinks so the controls clear the «Серии» chip and the system bar */}
+          <div class="m-now-fold">
+            <div class="m-now-hero">
+              {/* no title on the poster: the body already shows it under the art */}
+              <NowPoster state={posterState} />
+              {head}
             </div>
-            <div class="m-now-seek">
-              <div class="m-seek">
-                <div class="m-seek-fill" style={{ width: pct + '%' }} />
-                {s.duration > 0 &&
-                  list.map(
-                    (c, i) =>
-                      c.start > 0 &&
-                      c.start < s.duration && (
-                        <span key={i} class="m-seek-tick" style={{ left: (c.start / s.duration) * 100 + '%' }} />
-                      ),
-                  )}
-                <input
-                  type="range"
-                  class="m-seek-input"
-                  aria-label={t('now.seek')}
-                  min={0}
-                  max={max}
-                  step={1}
-                  disabled={off || s.duration <= 0}
-                  value={shown}
-                  onInput={(e) => setDrag(Number((e.currentTarget as HTMLInputElement).value))}
-                  onPointerUp={(e) => {
-                    // Preact aliases onChange→onInput for <input>; commit only when the finger/mouse is released.
-                    const t = Number((e.currentTarget as HTMLInputElement).value);
-                    sendCmd({ type: 'seek', t });
-                    setHeld({ t, seen: lastSeen.value, at: Date.now() });
-                    setDrag(null);
-                  }}
-                  onKeyUp={(e) => {
-                    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
-                    const t = Number((e.currentTarget as HTMLInputElement).value);
-                    sendCmd({ type: 'seek', t });
-                    setHeld({ t, seen: lastSeen.value, at: Date.now() });
-                    setDrag(null);
-                  }}
+            <div class="m-now-body">
+              <div class="m-now-titles">
+                <div class="m-now-title">{names.title}</div>
+                {names.sub && <div class="m-now-sub">{names.sub}</div>}
+              </div>
+              <div class="m-now-seek">
+                <div class="m-seek">
+                  <div class="m-seek-fill" style={{ width: pct + '%' }} />
+                  {s.duration > 0 &&
+                    list.map(
+                      (c, i) =>
+                        c.start > 0 &&
+                        c.start < s.duration && (
+                          <span key={i} class="m-seek-tick" style={{ left: (c.start / s.duration) * 100 + '%' }} />
+                        ),
+                    )}
+                  <input
+                    type="range"
+                    class="m-seek-input"
+                    aria-label={t('now.seek')}
+                    min={0}
+                    max={max}
+                    step={1}
+                    disabled={off || s.duration <= 0}
+                    value={shown}
+                    onInput={(e) => setDrag(Number((e.currentTarget as HTMLInputElement).value))}
+                    onPointerUp={(e) => {
+                      // Preact aliases onChange→onInput for <input>; commit only when the finger/mouse is released.
+                      const t = Number((e.currentTarget as HTMLInputElement).value);
+                      sendCmd({ type: 'seek', t });
+                      setHeld({ t, seen: lastSeen.value, at: Date.now() });
+                      setDrag(null);
+                    }}
+                    onKeyUp={(e) => {
+                      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return;
+                      const t = Number((e.currentTarget as HTMLInputElement).value);
+                      sendCmd({ type: 'seek', t });
+                      setHeld({ t, seen: lastSeen.value, at: Date.now() });
+                      setDrag(null);
+                    }}
+                  />
+                </div>
+                <div class="m-now-times">
+                  <span>{formatDuration(shown)}</span>
+                  <span>{left}</span>
+                </div>
+              </div>
+              {list.length > 0 && (
+                <div class="m-now-chapter">
+                  <button
+                    type="button"
+                    class="m-now-chbtn"
+                    aria-label={t('now.prevChapter')}
+                    disabled={off}
+                    onClick={() => stepChapter(-1)}
+                  >
+                    <Icon d={ICONS.prev} size={22} />
+                  </button>
+                  <span class="m-now-chtext">
+                    <span class="m-now-chnum">
+                      {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
+                    </span>
+                    {cur >= 0 && list[cur].title.trim() !== '' && chapterName(cur)}
+                  </span>
+                  <button
+                    type="button"
+                    class="m-now-chbtn"
+                    aria-label={t('now.nextChapter')}
+                    disabled={off || chapterStepIndex(list, shown, 1) === null}
+                    onClick={() => stepChapter(1)}
+                  >
+                    <Icon d={ICONS.next} size={22} />
+                  </button>
+                </div>
+              )}
+              <div class="m-now-controls">
+                <Skip label={t('now.prevEpisode')} text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
+                <Skip
+                  label={t('remote.mini.back10')}
+                  text="10"
+                  d={ICONS.back10}
+                  disabled={off}
+                  onClick={() => sendCmd({ type: 'skip', d: -10 })}
+                />
+                <button
+                  type="button"
+                  class="m-now-play"
+                  aria-label={s.paused ? t('remote.mini.play') : t('remote.mini.pause')}
+                  disabled={off}
+                  onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
+                >
+                  <Icon d={s.paused ? ICONS.play : ICONS.pause} size={32} />
+                </button>
+                <Skip
+                  label={t('now.fwd10')}
+                  text="10"
+                  d={ICONS.fwd10}
+                  disabled={off}
+                  onClick={() => sendCmd({ type: 'skip', d: 10 })}
+                />
+                <Skip
+                  label={t('now.nextEpisode')}
+                  text=""
+                  d={ICONS.next}
+                  disabled={off || !s.next}
+                  onClick={() => sendCmd({ type: 'next' })}
                 />
               </div>
-              <div class="m-now-times">
-                <span>{formatDuration(shown)}</span>
-                <span>{left}</span>
-              </div>
-            </div>
-            {list.length > 0 && (
-              <div class="m-now-chapter">
-                <button
-                  type="button"
-                  class="m-now-chbtn"
-                  aria-label={t('now.prevChapter')}
-                  disabled={off}
-                  onClick={() => stepChapter(-1)}
-                >
-                  <Icon d={ICONS.prev} size={22} />
+              <div class="m-now-row">
+                <button type="button" class="m-now-wide" disabled={off} onClick={() => setTracks(true)}>
+                  <Icon d={ICONS.tracks} size={20} />
+                  {t('remote.tracks.label')}
                 </button>
-                <span class="m-now-chtext">
-                  <span class="m-now-chnum">
-                    {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
-                  </span>
-                  {cur >= 0 && list[cur].title.trim() !== '' && chapterName(cur)}
-                </span>
-                <button
-                  type="button"
-                  class="m-now-chbtn"
-                  aria-label={t('now.nextChapter')}
-                  disabled={off || chapterStepIndex(list, shown, 1) === null}
-                  onClick={() => stepChapter(1)}
-                >
-                  <Icon d={ICONS.next} size={22} />
-                </button>
-              </div>
-            )}
-            <div class="m-now-controls">
-              <Skip label={t('now.prevEpisode')} text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
-              <Skip
-                label={t('remote.mini.back10')}
-                text="10"
-                d={ICONS.back10}
-                disabled={off}
-                onClick={() => sendCmd({ type: 'skip', d: -10 })}
-              />
-              <button
-                type="button"
-                class="m-now-play"
-                aria-label={s.paused ? t('remote.mini.play') : t('remote.mini.pause')}
-                disabled={off}
-                onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
-              >
-                <Icon d={s.paused ? ICONS.play : ICONS.pause} size={32} />
-              </button>
-              <Skip
-                label={t('now.fwd10')}
-                text="10"
-                d={ICONS.fwd10}
-                disabled={off}
-                onClick={() => sendCmd({ type: 'skip', d: 10 })}
-              />
-              <Skip
-                label={t('now.nextEpisode')}
-                text=""
-                d={ICONS.next}
-                disabled={off || !s.next}
-                onClick={() => sendCmd({ type: 'next' })}
-              />
-            </div>
-            <div class="m-now-row">
-              <button type="button" class="m-now-wide" disabled={off} onClick={() => setTracks(true)}>
-                <Icon d={ICONS.tracks} size={20} />
-                {t('remote.tracks.label')}
-              </button>
-              <div class="m-now-wide m-now-vol">
-                <button type="button" aria-label={t('now.volDown')} onClick={() => vol('down')}>
-                  −
-                </button>
-                <Icon d={ICONS.volume} size={20} />
-                <button type="button" aria-label={t('now.volUp')} onClick={() => vol('up')}>
-                  +
-                </button>
-              </div>
-            </div>
-            {list.length > 0 && (
-              <div class="m-now-chlist" role="group" aria-label={t('player.chapters')}>
-                <div class="m-now-chhead">{t('player.chapters')}</div>
-                {list.map((c, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    class={'m-now-chitem' + (i === cur ? ' on' : '')}
-                    aria-current={i === cur ? 'true' : undefined}
-                    aria-label={i === cur ? t('now.chapterNow', { label: chapterLabelAria(i, c.start) }) : chapterLabelAria(i, c.start)}
-                    disabled={off}
-                    onClick={() => {
-                      sendCmd({ type: 'chapter', i });
-                      setHeld({ t: c.start, seen: lastSeen.value, at: Date.now() });
-                    }}
-                  >
-                    <span class="m-now-chtime">{formatDuration(c.start)}</span>
-                    <span class="m-now-chname">{chapterName(i)}</span>
+                <div class="m-now-wide m-now-vol">
+                  <button type="button" aria-label={t('now.volDown')} onClick={() => vol('down')}>
+                    −
                   </button>
-                ))}
+                  <Icon d={ICONS.volume} size={20} />
+                  <button type="button" aria-label={t('now.volUp')} onClick={() => vol('up')}>
+                    +
+                  </button>
+                </div>
               </div>
-            )}
+            </div>
           </div>
+          {list.length > 0 && (
+            <div class="m-now-chlist" role="group" aria-label={t('player.chapters')}>
+              <div class="m-now-chhead">{t('player.chapters')}</div>
+              {list.map((c, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  class={'m-now-chitem' + (i === cur ? ' on' : '')}
+                  aria-current={i === cur ? 'true' : undefined}
+                  aria-label={i === cur ? t('now.chapterNow', { label: chapterLabelAria(i, c.start) }) : chapterLabelAria(i, c.start)}
+                  disabled={off}
+                  onClick={() => {
+                    sendCmd({ type: 'chapter', i });
+                    setHeld({ t: c.start, seen: lastSeen.value, at: Date.now() });
+                  }}
+                >
+                  <span class="m-now-chtime">{formatDuration(c.start)}</span>
+                  <span class="m-now-chname">{chapterName(i)}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </NowDeck>
       {tracks && !off && (

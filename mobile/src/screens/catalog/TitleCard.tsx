@@ -1,6 +1,8 @@
 // «Обзор» → a film or series card. A film: poster, meta, «Найти раздачи» and «Хочу посмотреть».
 // A series: dates and status, «Смотреть на ТВ» when a season is in the library, two cast strips, every season as its own card, similar titles.
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { errorMessage } from '../../../../src/api/http';
+import { playOnPhone } from '../../watchHere';
 import { t, tp, fmtDuration } from '../../../../src/i18n';
 import { airDateText } from '../../../../src/lib/seriesStatus';
 import { SeriesPill } from '../../ui/SeriesPill';
@@ -240,11 +242,12 @@ function Body({ card }: { card: CatalogCard }) {
       if (hash) navigate(routeForHash(hash));
       return;
     }
+    setLaunchError('');
+    // no TV chosen: the main action plays on this phone
     if (!activeTv.value) {
-      navigate({ name: 'tv' });
+      playOnPhone(spot.hash, spot.file, spot.at).catch((e) => setLaunchError(errorMessage(e)));
       return;
     }
-    setLaunchError('');
     void launch.start({
       hash: spot.hash,
       file: spot.file.id,
@@ -279,7 +282,7 @@ function Body({ card }: { card: CatalogCard }) {
       <div class={tv ? 'm-tc-actions m-tc-actions-row' : 'm-tc-actions'}>
         {tv && (spot || hash) ? (
           <button type="button" class="m-btn m-btn-primary" onClick={watch}>
-            {t('news.watchOnTv')}
+            {activeTv.value ? t('news.watchOnTv') : t('nav.watchOnPhone')}
           </button>
         ) : (
           <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'add', query: torrentQuery(card), run: true })}>
@@ -347,7 +350,7 @@ export function TitleCard({ kind, id }: { kind: Kind; id: number }) {
     <div class="m-screen m-tc" data-route="title">
       <div class="m-tc-backdrop">
         {card && card.backdrop && <img src={card.backdrop} alt="" />}
-        <button type="button" class="m-icon-btn m-tc-back" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn m-tc-back" data-code="P24.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>

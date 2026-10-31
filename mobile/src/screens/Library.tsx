@@ -12,19 +12,19 @@ import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentAction
 import { askConfirm } from '../ui/confirm';
 import { LaunchError } from '../ui/LaunchError';
 import { CatalogUnavailable } from '../ui/CatalogUnavailable';
-import { navigate, scrollToTop } from '../nav';
+import { navigate, scrollToTop, switchTab } from '../nav';
 import { routeForTorrent } from '../audiobooks/route';
 import { filesOf, useTvLaunch } from '../watch';
 import { client, activeServer } from '../../../src/store/servers';
 import { activeTv } from '../tv/tvStore';
 import { FoundTvs } from '../ui/FoundTvs';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
-import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, resumePosition, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { filterTorrents, sortTorrents, nextSort, sortLabel } from '../../../src/lib/librarySearch';
-import { libraryTabs, nextView, BY_SIZE, viewLabel, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
+import { sortTorrents, sortLabel, sortOptions } from '../../../src/lib/librarySearch';
+import { libraryTabs, BY_SIZE, viewLabel, viewOptions, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
@@ -36,16 +36,29 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
+import { colsStyle, landscapeCols, useLandscapeBox, type CardFit } from '../ui/landscapeCols';
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
-import { groupLabel, groupLibrary, groupSize, itemHashes, singleGroup, type LibraryItem, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { groupLabel, groupSize, singleGroup, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { groupPhoneLibrary, phoneItemHashes, type FilmGroup, type PhoneItem } from '../lib/filmGroups';
+import { Sheet } from '../ui/Sheet';
+import { tvFirst, playOnPhone } from '../watchHere';
 import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { withAds } from '../../../src/ads/ads';
 import { AdCell, type AdCellKind } from '../ads/AdCell';
 import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
+/**
+ * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the tallest caption under it (title, meta
+ * line, the series badge (up to three lines on a narrow card) and, for large, the size line, with their gaps) and the
+ * column gap.
+ */
+export const LIBRARY_FITS: CardFit[] = [
+  { aspect: 240 / 173, caption: 140, gap: 12 },
+  { aspect: 240 / 173, caption: 110, gap: 8 },
+];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;
 const PULL_MAX = 110;
@@ -80,8 +93,10 @@ function tileMeta(tor: Torrent, g?: SeriesGroup | null): string {
   return g ? groupLabel(g) : libraryTitle(tor).meta;
 }
 
-const itemKey = (it: LibraryItem) => (it.kind === 'torrent' ? it.tor.hash : 'g:' + it.key);
-const hashesOf = (it: LibraryItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
+const itemKey = (it: PhoneItem) => (it.kind === 'torrent' ? it.tor.hash : it.kind === 'film' ? 'f:' + it.key : 'g:' + it.key);
+const hashesOf = (it: PhoneItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
+/** The size of every release of a film card. */
+const filmSize = (g: FilmGroup) => g.members.reduce((n, m) => n + (m.torrent_size || 0), 0);
 
 /** «18 серий» (from the file names, «1-2 серия» counted as two), else «16 файлов»; '' for a film. */
 function episodesText(tor: Torrent): string {
@@ -105,8 +120,15 @@ export function Library() {
   useHint('mine');
   const c = client.value;
   const tab = libraryTab.value;
-  const query = libraryQuery.value;
-  const searchOpen = librarySearchOpen.value;
+  const aliveRef = useRef(true);
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
+  // the search is the «Поиск» tab now («Мои» there): the cards here are never filtered by a query
+  const query = '';
   const list = torrents.value;
   const cachedAt = torrentsAt.value;
   const sort = settings.value.librarySort;
@@ -130,7 +152,8 @@ export function Library() {
   const bodyRef = useRef<HTMLDivElement>(null);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
-  const [menuFor, setMenuFor] = useState<LibraryItem | null>(null);
+  const [menuFor, setMenuFor] = useState<PhoneItem | null>(null);
+  const [viewSheet, setViewSheet] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({ timer: undefined, x: 0, y: 0, fired: false });
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -289,21 +312,22 @@ export function Library() {
 
   const isHistory = tab === 'history';
   // «Все» and «Сериалы»: the torrents of one series are one card
-  const shown = useMemo<LibraryItem[]>(() => {
+  // and the releases of one film are one card too («Все», «Фильмы»)
+  const shown = useMemo<PhoneItem[]>(() => {
     if (isHistory) return [];
     const inTab = sortTorrents(list.filter((t) => tab === 'all' || categoryOf(t.category) === tab), sort);
-    if (tab === 'all' || tab === 'tv') return groupLibrary(inTab, query);
-    return filterTorrents(inTab, query).map((tor) => ({ kind: 'torrent' as const, tor }));
-  }, [list, tab, query, isHistory, sort]);
-  const shownHashes = useMemo(() => itemHashes(shown), [shown]);
+    if (tab === 'all' || tab === 'tv' || tab === 'movie') return groupPhoneLibrary(inTab);
+    return inTab.map((tor) => ({ kind: 'torrent' as const, tor }));
+  }, [list, tab, isHistory, sort]);
+  const shownHashes = useMemo(() => phoneItemHashes(shown), [shown]);
   const pv = progressVersion.value;
   const sv = serverViewed.value;
   const history = useMemo(() => {
     if (!isHistory) return [];
-    const all = buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress, 40, { src: 'phone', name: phoneName });
-    const match = filterTorrents(all.map((e) => e.torrent), query);
-    return all.filter((e) => match.indexOf(e.torrent) >= 0);
-  }, [list, isHistory, hfilter, query, pv, sv, phoneName]);
+    return buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress, 40, { src: 'phone', name: phoneName });
+  }, [list, isHistory, hfilter, pv, sv, phoneName]);
+  // «Продолжить просмотр»: what was started and not finished, newest first (the top of «Мои»)
+  const resume = useMemo(() => (isHistory ? [] : continueWatching(list, 12)), [list, isHistory, pv, sv]);
 
   // nothing to show: no server, or the server failed and there is no cached list
   const unavailable = !c || (!!error && !list.length);
@@ -319,6 +343,12 @@ export function Library() {
     else if (!list.length) empty = t('library.noTorrents');
     else empty = t('catalog.categoryEmpty');
   }
+
+  // landscape: the poster views get as many cards per row as it takes for a whole card to fit the screen height
+  const gridView = mine && (view === 'large' || view === 'small');
+  const box = useLandscapeBox(bodyRef, gridView);
+  const landCols = box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : 0;
+  const gridStyle = colsStyle(landCols || null);
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
@@ -343,7 +373,7 @@ export function Library() {
   const ads = useAdSlots({
     section: 'mine',
     count: shown.length,
-    perScreen: PER_SCREEN[view] || PER_SCREEN.list,
+    perScreen: landCols || PER_SCREEN[view] || PER_SCREEN.list,
     active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
     listKey: tab + '|' + sort,
     itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
@@ -354,7 +384,7 @@ export function Library() {
   };
   // only the torrents still in the list count (a refresh may drop some)
   const chosen = selected ? selected.filter((h) => shownHashes.indexOf(h) >= 0) : [];
-  const isChosen = (it: LibraryItem) => hashesOf(it).every((h) => chosen.indexOf(h) >= 0);
+  const isChosen = (it: PhoneItem) => hashesOf(it).every((h) => chosen.indexOf(h) >= 0);
   // a series card selects (or clears) all its torrents
   const toggle = (hashes: string[]) =>
     setSelected((cur) => {
@@ -364,7 +394,7 @@ export function Library() {
     });
   const deleteChosen = async () => {
     if (!c || deleting || !chosen.length) return;
-    if (!(await askConfirm(tp('library.deleteAsk', chosen.length), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(tp('library.deleteAsk', chosen.length), t('common.delete'), { destructive: true, testId: 'PD45' }))) return;
     setDeleting(true);
     try {
       reportDeleted(await deleteTorrents(c, chosen));
@@ -374,7 +404,7 @@ export function Library() {
     }
   };
   // long press (500 ms without moving more than 10 px) or contextmenu opens the menu; a tap opens the card or toggles the selection
-  const pressProps = (it: LibraryItem) => ({
+  const pressProps = (it: PhoneItem) => ({
     onPointerDown: (e: PointerEvent) => {
       const p = press.current;
       clearTimeout(p.timer);
@@ -412,22 +442,24 @@ export function Library() {
       }
       if (selecting) toggle(hashesOf(it));
       else if (it.kind === 'torrent') navigate(routeForTorrent(it.tor));
+      // a film with several releases: its screen opens on the one watched last, «Сменить» there picks another
+      else if (it.kind === 'film') navigate({ name: 'torrent', hash: it.lead.hash });
       else navigate({ name: 'series', key: it.key });
     },
     'aria-pressed': selecting ? isChosen(it) : undefined,
   });
-  const moreBtn = (it: LibraryItem) => (
+  const moreBtn = (it: PhoneItem) => (
     <button type="button" class="m-icon-btn m-card-more" aria-label={t('library.actions')} disabled={selecting} onClick={() => setMenuFor(it)}>
       <Icon d={MORE} size={20} />
     </button>
   );
-  const mark = (it: LibraryItem) =>
+  const mark = (it: PhoneItem) =>
     selecting && isChosen(it) ? (
       <span class="m-check" aria-hidden="true">
         <Icon d={CHECK} size={16} />
       </span>
     ) : null;
-  const sel = (it: LibraryItem) => (selecting && isChosen(it) ? ' selected' : '');
+  const sel = (it: PhoneItem) => (selecting && isChosen(it) ? ' selected' : '');
 
   const watchOnTv = (tor: Torrent) => {
     const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
@@ -442,8 +474,34 @@ export function Library() {
     });
   };
 
-  const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) =>
-    launch.start({
+  // no TV chosen: «Продолжить» plays on this phone (from the same place)
+  const continueOnTv = (hash: string, fileIndex: number, time: number, duration: number, label: string) => {
+    if (!tvFirst()) {
+      const cached = list.find((x) => x.hash === hash);
+      setTvError('');
+      // the saved library cache has no file_stats: the files are loaded first, as on the torrent screen
+      const withFiles = async (): Promise<Torrent> => {
+        if (cached && filesOf(cached).some((f) => f.id === fileIndex)) return cached;
+        if (!c) throw new Error(t('torrent.noFiles'));
+        return c.loadInfo(hash);
+      };
+      return withFiles()
+        .then((tor) => {
+          // the screen closed or the server was switched while the files loaded: nothing plays
+          if (!aliveRef.current || client.peek() !== c) return false;
+          const file = filesOf(tor).find((f) => f.id === fileIndex);
+          if (!file) throw new Error(t('torrent.noFiles'));
+          return playOnPhone(tor, file, time).then(() => true);
+        })
+        .then(
+          (played) => played,
+          (e) => {
+            setTvError(errorMessage(e));
+            return false;
+          },
+        );
+    }
+    return launch.start({
       hash,
       file: fileIndex,
       at: time,
@@ -451,6 +509,7 @@ export function Library() {
       label,
       onError: setTvError,
     });
+  };
 
   const pullStyle = pull > 0 || dragging
     ? { transform: 'translateY(' + pull + 'px)', transition: dragging ? 'none' : 'transform .25s ease' }
@@ -460,19 +519,20 @@ export function Library() {
     <div class="m-screen m-library" data-route="library" ref={rootRef}>
       {selecting && mine && !isHistory ? (
         <div class="m-lib-head m-select-bar">
-          <button type="button" class="m-icon-btn" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
+          <button type="button" class="m-icon-btn tm" data-code="P02.6" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
             <Icon d={CLOSE} size={20} />
           </button>
           <span class="m-select-count" role="status">{t('library.selected', { n: chosen.length })}</span>
           <button
             type="button"
-            class="m-btn m-btn-secondary m-btn-sm"
+            class="m-btn m-btn-secondary m-btn-sm tm"
+            data-code="P02.7"
             disabled={deleting}
             onClick={() => setSelected(chosen.length === shownHashes.length ? [] : shownHashes.slice())}
           >
             {chosen.length === shownHashes.length && shownHashes.length > 0 ? t('library.selectNone') : t('library.selectAll')}
           </button>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
+          <button type="button" class="m-btn m-btn-secondary m-btn-sm m-danger tm" data-code="P02.15" disabled={deleting || !chosen.length} onClick={() => void deleteChosen()}>
             {t('library.deleteN', { n: chosen.length })}
           </button>
         </div>
@@ -490,7 +550,8 @@ export function Library() {
               type="button"
               role="tab"
               aria-selected={mode === m}
-              class={'m-seg-btn' + (mode === m ? ' on' : '')}
+              class={'m-seg-btn tm' + (mode === m ? ' on' : '')}
+              data-code={m === 'mine' ? (mode === 'discover' ? 'P34.1' : 'P02.1') : mode === 'discover' ? 'P34.2' : 'P02.2'}
               data-hint-anchor={m === 'mine' ? 'mine' : undefined}
               onClick={() => {
                 if (m === mode) return;
@@ -504,34 +565,45 @@ export function Library() {
           ))}
         </div>
         <TvChip />
-        {mine && !isHistory && (
+        {mine && (
           <button
             type="button"
-            class="m-icon-btn m-sort"
-            aria-label={t('tv.topbar.sort', { name: sortLabel(sort) })}
-            onClick={() => updateSettings({ librarySort: nextSort(sort) })}
+            class={'m-icon-btn tm' + (isHistory ? ' on' : '')}
+            data-code="P02.20"
+            data-lib-history
+            aria-label={t('nav.history')}
+            aria-pressed={isHistory}
+            onClick={() => {
+              libraryTab.value = isHistory ? 'all' : 'history';
+              scrollToTop();
+            }}
           >
-            <Icon d={ICONS.sort} size={20} />
+            <Icon d={ICONS.clock} size={20} />
           </button>
         )}
         {mine && !isHistory && (
           <button
             type="button"
-            class="m-icon-btn m-view"
-            aria-label={t('tv.topbar.view', { name: viewLabel(view) })}
-            onClick={() => updateSettings({ libraryView: nextView(view) })}
+            class="m-icon-btn m-sort tm"
+            data-code="P02.3"
+            aria-label={t('nav.viewSortNow', { sort: sortLabel(sort), view: viewLabel(view) })}
+            aria-haspopup="dialog"
+            onClick={() => setViewSheet(true)}
           >
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
+            <span class="m-icon-tag" aria-hidden="true" data-sort-tag={sort}>
+              {t(sort === 'title' ? 'library.sortTagTitle' : sort === 'size' ? 'library.sortTagSize' : 'library.sortTagNew')}
+            </span>
           </button>
         )}
         {mine && (
           <button
             type="button"
-            class="m-icon-btn"
-            aria-label={t('add.search')}
-            aria-pressed={searchOpen}
+            class="m-icon-btn tm"
+            data-code="P02.5"
+            aria-label={t('nav.search')}
             data-hint-anchor="catalog"
-            onClick={() => (librarySearchOpen.value = !searchOpen)}
+            onClick={() => switchTab({ name: 'add', scope: 'mine' })}
           >
             <Icon d={SEARCH} size={20} />
           </button>
@@ -540,25 +612,19 @@ export function Library() {
       )}
       {mine ? (
       <>
-      {searchOpen && (
-        <input
-          class="m-input m-lib-search"
-          type="search"
-          aria-label={t('catalog.searchPlaceholder')}
-          placeholder={t('catalog.searchPlaceholder')}
-          value={query}
-          onInput={(e) => (libraryQuery.value = (e.target as HTMLInputElement).value)}
-        />
-      )}
       <div class="m-tabs" role="tablist">
-        {libraryTabs().map((t) => (
+        {/* «История» is the clock in the header and «Вся история» of «Продолжить просмотр», not a chip */}
+        {libraryTabs().filter((x) => x.id !== 'history').map((t) => (
           <button
             key={t.id}
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            class={'m-tab' + (tab === t.id ? ' on' : '')}
-            onClick={() => (libraryTab.value = t.id as LibraryTab)}
+            class={'m-tab tm' + (tab === t.id ? ' on' : '')}
+            data-code={t.id === 'history' ? 'P02.8' : t.id === 'all' ? 'P02.9' : t.id === 'movie' ? 'P02.10' : t.id === 'tv' ? 'P02.11' : t.id === 'music' ? 'P02.12' : t.id === 'audiobook' ? 'P02.13' : 'P02.14'}
+            onClick={() => {
+              libraryTab.value = t.id as LibraryTab;
+            }}
           >
             {t.label}
           </button>
@@ -595,14 +661,15 @@ export function Library() {
           </div>
         )}
         <div class="m-lib-body" style={pullStyle} ref={bodyRef}>
-          {!activeTv.value && <FoundTvs />}
+          {!activeTv.value && <FoundTvs quiet />}
           {donateCard && !unavailable && !supporterActive() && (
             <div class="m-donate-card" role="region" aria-label={t('donate.title')}>
               <span>{t('library.donateText')}</span>
               <div class="m-donate-actions">
                 <button
                   type="button"
-                  class="m-btn m-btn-primary"
+                  class="m-btn m-btn-primary tm"
+                  data-code="P02.17"
                   onClick={() => {
                     dismissDonateCard();
                     setDonateCard(false);
@@ -613,7 +680,8 @@ export function Library() {
                 </button>
                 <button
                   type="button"
-                  class="m-btn m-btn-secondary"
+                  class="m-btn m-btn-secondary tm"
+                  data-code="P02.18"
                   onClick={() => {
                     dismissDonateCard();
                     setDonateCard(false);
@@ -628,7 +696,7 @@ export function Library() {
           {error && !unavailable && (
             <div class="m-hint-warn m-warn-row">
               <span>{cachedBanner(cachedAt)}</span>
-              <button type="button" class="m-btn m-btn-secondary" onClick={() => void loadRef.current()}>{t('common.retry')}</button>
+              <button type="button" class="m-btn m-btn-secondary tm" data-code="P02.16" onClick={() => void loadRef.current()}>{t('common.retry')}</button>
             </div>
           )}
           {unavailable && (
@@ -653,6 +721,53 @@ export function Library() {
           )}
           {c && !loaded && !list.length && <p class="m-muted m-note">{t('catalog.loading')}</p>}
           {empty && <p class="m-muted m-note m-empty">{empty}</p>}
+          {!unavailable && !isHistory && !selecting && resume.length > 0 && (
+            <div class="m-resume tm" data-code="P02.19" data-resume role="region" aria-label={t('nav.continueRow')}>
+              <div class="m-resume-head">
+                <span class="m-resume-title">{t('nav.continueRow')}</span>
+                <button
+                  type="button"
+                  class="m-btn-text tm"
+                  data-code="P02.21"
+                  onClick={() => {
+                    libraryTab.value = 'history';
+                    scrollToTop();
+                  }}
+                >
+                  {t('nav.historyAll')}
+                </button>
+              </div>
+              <div class="m-resume-row m-scroll-x">
+                {resume.map((e) => {
+                  const tor = e.torrent;
+                  const file = filesOf(tor).find((f) => f.id === e.fileIndex);
+                  const isMovie = tor.category === 'movie' || playableFiles(filesOf(tor)).length <= 1;
+                  const { time, duration } = e.progress;
+                  const label = [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · ');
+                  return (
+                    <button
+                      key={tor.hash}
+                      type="button"
+                      class="m-resume-card"
+                      data-resume-hash={tor.hash}
+                      aria-label={(tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')) + ': ' + label}
+                      onClick={() => void continueOnTv(tor.hash, e.fileIndex, time, duration, label)}
+                    >
+                      <Poster torrent={tor} class="m-poster-mini" />
+                      <span class="m-resume-text">
+                        <span class="m-resume-name"><ShortTitle tor={tor} /></span>
+                        <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
+                        <span class="m-muted m-small">{remainingLabel(time, duration)}</span>
+                        <span class="m-bar-track thin">
+                          <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {unavailable ? null : isHistory ? (
             <div class="m-list m-history">
               <div class="m-seg m-hist-seg" role="group" aria-label={t('add.source')}>
@@ -692,7 +807,7 @@ export function Library() {
                         <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                       </span>
                     </button>
-                    <button type="button" class="m-play" aria-label={t('library.continueOnTv')} onClick={() => void continueOnTv(tor.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · '))}>
+                    <button type="button" class="m-play" aria-label={tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')} onClick={() => void continueOnTv(tor.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · '))}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d="M8 5l11 7-11 7z" />
                       </svg>
@@ -727,20 +842,21 @@ export function Library() {
                       </div>
                     );
                   }
-                  const t = it.tor;
-                  const eps = episodesText(t);
-                  const q = qualityBadge(titleOf(t));
+                  const film = it.kind === 'film' ? it : null;
+                  const t = it.kind === 'film' ? it.lead : it.tor;
+                  const eps = film ? tp('series.releases', film.members.length) : episodesText(t);
+                  const q = film ? '' : qualityBadge(titleOf(t));
                   const meta = tileMeta(t);
                   return (
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
-                      <button type="button" class="m-vrow" {...pressProps(it)}>
+                      <button type="button" class={'m-vrow' + (film ? ' m-film-card' : '')} {...pressProps(it)}>
                         <Poster torrent={t} class="m-poster-row" morphKey={k} />
                         {mark(it)}
                         <span class="m-vrow-text">
                           <span class="m-card-title"><TileName tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
                             {meta && <span class="m-tile-meta">{meta}</span>}
-                            <span>{fmtSize(t.torrent_size || 0)}</span>
+                            <span>{fmtSize(film ? filmSize(film) : t.torrent_size || 0)}</span>
                             {q && <span class="m-badge-inline">{q}</span>}
                             {eps && <span>{eps}</span>}
                             <SeriesTileBadge tor={t} />
@@ -759,19 +875,20 @@ export function Library() {
                   const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
-                  const tor = it.kind === 'series' ? it.named : it.tor;
-                  const meta = tileMeta(tor, g);
+                  const film = it.kind === 'film' ? it : null;
+                  const tor = it.kind === 'series' ? it.named : it.kind === 'film' ? it.lead : it.tor;
+                  const meta = film ? [tileMeta(tor), tp('series.releases', film.members.length)].filter(Boolean).join(' · ') : tileMeta(tor, g);
                   return (
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
-                      <button type="button" class={'m-crow' + (g ? ' m-series-card' : '')} {...pressProps(it)}>
+                      <button type="button" class={'m-crow' + (g ? ' m-series-card' : film ? ' m-film-card' : '')} {...pressProps(it)}>
                         {mark(it)}
                         {/* two lines: the whole first for the name (up to two lines), the meta, the badge and the size under it */}
                         <span class="m-crow-main">
                           <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
                           <span class="m-crow-sub">
                             {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
-                            {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={it.tor} />}
-                            <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : it.tor.torrent_size || 0)}</span>
+                            {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={tor} />}
+                            <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : film ? filmSize(film) : tor.torrent_size || 0)}</span>
                           </span>
                         </span>
                       </button>
@@ -781,23 +898,25 @@ export function Library() {
                 })}
               </div>
             ) : (
-              <div class={'m-grid m-view-' + view}>
+              <div class={'m-grid m-view-' + view} style={gridStyle}>
                 {withAds(shown, ads.admitted).map((e) => {
                   if (e.item === undefined) return adCell(e.ad, 'grid');
                   const it = e.item;
                   const k = itemKey(it);
                   const g = it.kind === 'series' ? it : null;
-                  const tor = it.kind === 'series' ? it.lead : it.tor;
+                  const film = it.kind === 'film' ? it : null;
+                  const tor = it.kind === 'torrent' ? it.tor : it.lead;
                   const meta = g ? '' : tileMeta(tor);
                   return (
-                    <button type="button" class={'m-card' + (g ? ' m-series-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
-                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : undefined} />
+                    <button type="button" class={'m-card' + (g ? ' m-series-card' : film ? ' m-film-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
+                      {/* a film with several releases: «2 раздачи» on the poster, as a series card has its count */}
+                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : film ? tp('series.releases', film.members.length) : undefined} initial />
                       {mark(it)}
                       <span class="m-card-title"><TileName tor={g ? g.named : tor} g={g} /></span>
-                      {/* a series card has its count on the poster badge */}
-                      {meta && <span class="m-muted m-card-meta m-tile-meta">{meta}</span>}
+                      {/* a series card has its count on the poster badge; an empty line keeps the cards of a row one height (QA B15) */}
+                      {meta ? <span class="m-muted m-card-meta m-tile-meta">{meta}</span> : <span class="m-card-meta-pad" aria-hidden="true" />}
                       {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
-                      {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : tor.torrent_size || 0)}</span>}
+                      {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : film ? filmSize(film) : tor.torrent_size || 0)}</span>}
                     </button>
                   );
                 })}
@@ -811,8 +930,53 @@ export function Library() {
         <Discover />
       )}
       {launch.sheet}
-      {menuFor && menuFor.kind === 'torrent' && (
-        <TorrentMenu tor={menuFor.tor} onClose={() => setMenuFor(null)} onSelect={(h) => setSelected([h])} onWatchTv={watchOnTv} />
+      {menuFor && menuFor.kind !== 'series' && (
+        <TorrentMenu
+          tor={menuFor.kind === 'film' ? menuFor.lead : menuFor.tor}
+          onClose={() => setMenuFor(null)}
+          onSelect={(h) => setSelected(menuFor.kind === 'film' ? menuFor.members.map((m) => m.hash) : [h])}
+          onWatchTv={watchOnTv}
+        />
+      )}
+      {viewSheet && (
+        <Sheet label={t('nav.viewSort')} testId="PD54" onClose={() => setViewSheet(false)}>
+          <div class="m-sheet-title">{t('nav.viewSort')}</div>
+          <div class="m-section">{t('nav.sortHead')}</div>
+          <div class="m-sub-pick" role="radiogroup" aria-label={t('nav.sortHead')} data-sheet-sort>
+            {sortOptions().map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={sort === o.value}
+                class="m-opt"
+                data-sort={o.value}
+                onClick={() => updateSettings({ librarySort: o.value })}
+              >
+                <span class="m-opt-name m-grow">{o.label}</span>
+                {sort === o.value && <Icon d={CHECK} size={20} />}
+              </button>
+            ))}
+          </div>
+          <div class="m-section">{t('nav.viewHead')}</div>
+          <div class="m-sub-pick tm" data-code="P02.4" role="radiogroup" aria-label={t('nav.viewHead')} data-sheet-view>
+            {viewOptions().map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={view === o.value}
+                class="m-opt"
+                data-view={o.value}
+                onClick={() => updateSettings({ libraryView: o.value })}
+              >
+                <Icon d={ICONS[('view-' + o.value) as keyof typeof ICONS]} size={20} />
+                <span class="m-opt-name m-grow">{o.label}</span>
+                {view === o.value && <Icon d={CHECK} size={20} />}
+              </button>
+            ))}
+          </div>
+        </Sheet>
       )}
       {menuFor && menuFor.kind === 'series' && <SeriesMenu group={menuFor} onClose={() => setMenuFor(null)} onSelect={(hs) => setSelected(hs)} />}
     </div>

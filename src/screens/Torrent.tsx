@@ -7,6 +7,10 @@ import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatch
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
 import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
+import { externalNoteText } from '../lib/externalNote';
+import { externalSummary } from '../lib/externalTracks';
+import { settings } from '../store/settings';
+import { platformKind } from '../platform/env';
 import { formatDuration } from '../lib/format';
 import { fmtBytes } from '../i18n';
 import { statusLine } from '../lib/torrentStatus';
@@ -17,19 +21,18 @@ import { buildTorrentQueue } from '../player/queue';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollScreenToTop } from '../ui/focus';
-import { confirmDialog, choose } from '../ui/dialog';
+import { arrowUpToAbove, restoreFocus, scrollScreenToTop } from '../ui/focus';
+import { confirmDialog } from '../ui/dialog';
 import { askText } from '../ui/TextDialog';
 import { checkTitle, renameTorrent } from '../lib/renameTorrent';
-import { activeCatalog } from '../catalog/activeCatalog';
-import { catalogErrorCode, catalogErrorKey } from '../catalog/client';
-import { libraryTitle } from '../lib/libraryView';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { useSkip, firstPlayableId } from '../lib/useSkip';
 import { skipStatus } from '../lib/skipMarks';
 import { MarksDialog } from '../ui/MarksDialog';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
+import { PosterPicker } from '../ui/PosterPicker';
+import { posterTargets } from '../lib/posterPick';
 import { pendingBetterHash } from '../player/anotherRelease';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { swarmText } from '../lib/torrentStatus';
@@ -133,6 +136,11 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
+  // «+3 озвучки, субтитры»: the release's external dubs and subtitles (never episodes themselves)
+  const extras = useMemo(() => externalNoteText(files), [files]);
+  // honest about where those dubs play: never on webOS (LG's player takes one file), on Android TV only in 2160 Player
+  const extDubs = useMemo(() => externalSummary(files).dubs > 0, [files]);
+  const extNote = !extDubs ? '' : platformKind() === 'webos' ? t('torrent.extDubsWebos') : settings.value.videoPlayer !== 'p2160' ? t('torrent.extDubsBuiltin') : '';
   // a series matched to TMDB: the episodes announced after the last one here, as dashed rows the focus skips (as on the
   // phone's torrent screen and the TV series screen)
   const playable = groups.reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);
@@ -153,6 +161,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const [betterOpen, setBetterOpen] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
   const upgradable = useMemo(() => (tor && files.length ? canUpgrade(tor, files) : false), [tor ? tor.hash : '', tor ? tor.title : '', tor ? tor.category : '', files]);
   // the player asked for another release: open «В лучшем качестве» once the files are known, otherwise stay on the details
   useEffect(() => {
@@ -191,7 +200,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   };
 
   const remove = () => {
-    confirmDialog(t('torrent.deleteAsk'), t('common.delete')).then((ok) => {
+    confirmDialog(t('torrent.deleteAsk'), t('common.delete'), 'torrent-delete').then((ok) => {
       if (!ok) return;
       c.remove(hash).then(
         () => {
@@ -211,7 +220,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
 
   const rename = () => {
     if (!tor) return;
-    askText(t('torrent.rename.title'), displayTitle(tor)).then((raw) => {
+    askText(t('torrent.rename.title'), displayTitle(tor), undefined, 'torrent-rename').then((raw) => {
       if (raw === null) return;
       const v = checkTitle(raw);
       if (!v.ok) {
@@ -225,34 +234,8 @@ export function TorrentScreen({ hash }: { hash: string }) {
     });
   };
 
-  const otherPoster = () => {
-    if (!tor) return;
-    activeCatalog()
-      .then((cat) => cat.search(libraryTitle(tor).title, 1))
-      .then(
-        (r) => {
-          const opts = r.items
-            .filter((x) => !!x.poster)
-            .slice(0, 8)
-            .map((x) => ({ label: x.year ? x.title + ' · ' + x.year : x.title, value: x.poster }));
-          if (!opts.length) {
-            toast(t('torrent.poster.none'));
-            return;
-          }
-          return choose(t('torrent.poster.pick'), opts).then((url) => {
-            if (!url) return;
-            return c.setPoster(tor, url).then(
-              () => patch({ poster: url }),
-              (e) => toast(errorMessage(e), 'error'),
-            );
-          });
-        },
-        (e) => toast(t(catalogErrorKey(catalogErrorCode(e), 'tv')), 'error'),
-      );
-  };
-
   const resetViewed = () => {
-    confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset')).then((ok) => {
+    confirmDialog(t('torrent.resetAsk'), t('tv.marks.reset'), 'torrent-reset').then((ok) => {
       if (!ok) return;
       clearProgress(hash);
       c.removeViewed(hash).then(() => refreshViewed(c), () => undefined);
@@ -311,6 +294,8 @@ export function TorrentScreen({ hash }: { hash: string }) {
             ];
           })()}
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
+          {extras && <div class="muted torrent-extras" data-extras>{extras}</div>}
+          {extNote && <div class="muted torrent-extras" data-extras-note>{extNote}</div>}
           {tor && <div class="muted series-swarm">{swarmText(tor)}</div>}
           {tor && isDeadRelease(tor.hash) && (
             <FocusGroup focusKey="torrent-dead" className="series-dead">
@@ -330,7 +315,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
               {upgradable && <Button focusKey="torrent-better" label={t('torrent.better.find')} onFocused={() => showAction('torrent-better')} onPress={() => setBetterOpen(true)} />}
               <Button focusKey="torrent-reset" label={t('torrent.resetViewed')} onFocused={() => showAction('torrent-reset')} onPress={resetViewed} />
               <Button focusKey="torrent-rename" label={t('torrent.rename.title')} onFocused={() => showAction('torrent-rename')} onPress={rename} />
-              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={otherPoster} />
+              <Button focusKey="torrent-poster" label={t('torrent.poster.other')} onFocused={() => showAction('torrent-poster')} onPress={() => setPosterOpen(true)} />
               <Button focusKey="torrent-delete" label={t('common.delete')} onFocused={() => showAction('torrent-delete')} onPress={remove} />
             </FocusGroup>
           </div>
@@ -344,15 +329,15 @@ export function TorrentScreen({ hash }: { hash: string }) {
             <span class="skip-title">{t('torrent.skip')}</span>
             <span class="muted">{t('torrent.skipSub')}</span>
           </div>
-          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')} onFocused={() => enter('skip')}>
+          <Focusable focusKey="skip-intro" className="skip-row" onPress={() => toggleSkip('i')} onArrow={arrowUpToAbove('skip-intro')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipIntro')}</span>
             <span class={'skip-switch' + (skip.prefs.i ? ' on' : '')} role="switch" aria-label={t('torrent.skipIntro')} aria-checked={skip.prefs.i} />
           </Focusable>
-          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')} onFocused={() => enter('skip')}>
+          <Focusable focusKey="skip-credits" className="skip-row" onPress={() => toggleSkip('c')} onArrow={arrowUpToAbove('skip-credits')} onFocused={() => enter('skip')}>
             <span class="skip-label">{t('torrent.skipCredits')}</span>
             <span class={'skip-switch' + (skip.prefs.c ? ' on' : '')} role="switch" aria-label={t('torrent.skipCreditsShort')} aria-checked={skip.prefs.c} />
           </Focusable>
-          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)} onFocused={() => enter('marks')}>
+          <Focusable focusKey="skip-status" className="skip-row skip-status" role="button" ariaLabel={t('torrent.marksAria')} onPress={() => setMarksOpen(true)} onArrow={arrowUpToAbove('skip-status')} onFocused={() => enter('marks')}>
             <span class="skip-label">{t('tv.marks.title')}</span>
             <span class="muted">{skipStatus(skip.hasChapters, skip.prefs)}</span>
           </Focusable>
@@ -379,6 +364,14 @@ export function TorrentScreen({ hash }: { hash: string }) {
           focusAfterReplace={['torrent-play']}
         />
       )}
+      {posterOpen && tor && (
+        <PosterPicker
+          torrent={tor}
+          targets={posterTargets(torrents.value, tor)}
+          onSaved={(poster) => patch({ poster: poster })}
+          onClose={() => setPosterOpen(false)}
+        />
+      )}
       {loadingInfo && <Spinner text={t('torrent.gettingFiles')} />}
       {error && <div class="banner-error">{error}</div>}
       {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">{t('torrent.noFiles')}</div>}
@@ -396,6 +389,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
                   focusKey={'file-' + f.id}
                   className="list-item file-row"
                   onPress={() => play(queue.findIndex((q) => q.fileIndex === f.id))}
+                  onArrow={arrowUpToAbove('file-' + f.id)}
                   onFocused={() => {
                     enter('files');
                     if (i === g.files.length - 1 && g.season !== null) revealComing(g.season);

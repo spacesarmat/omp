@@ -252,6 +252,75 @@ export function scrollToShow(scroll: number, view: number, start: number, size: 
   return scroll;
 }
 
+function inOverlay(el: Element): boolean {
+  const node = el as HTMLElement;
+  return typeof node.closest === 'function' && !!node.closest('.dialog, .dialog-backdrop, .onboarding-host, .better-backdrop, .marks-backdrop');
+}
+
+interface AboveCand {
+  key: string;
+  gap: number;
+  dx: number;
+  overlap: boolean;
+}
+
+/**
+ * The focusable directly above `from`, by viewport rectangles.
+ * The library measures with offsetTop, and that coordinate does not line up between the flex hero (the Watch
+ * button) and a row in a `position: relative` scroller (the cast, the seasons), so Up from the first item of
+ * those rows never leaves them. Overlap wins; otherwise the nearest row, then the horizontally closest item,
+ * which for the leftmost cast item is Watch.
+ */
+export function focusAboveKey(from: Element | null): string | null {
+  if (!from || typeof from.getBoundingClientRect !== 'function') return null;
+  const cur = from.getBoundingClientRect();
+  if (!(cur.bottom > cur.top) || !(cur.right > cur.left)) return null;
+  const screen = screenOf(from);
+  const root: ParentNode = screen || document;
+  const nodes = root.querySelectorAll('[data-fk]');
+  const found: AboveCand[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i] as HTMLElement;
+    if (el === from) continue;
+    if (el.classList.contains('disabled')) continue;
+    if (inOverlay(el)) continue;
+    const key = el.getAttribute('data-fk');
+    if (!key) continue;
+    const b = el.getBoundingClientRect();
+    if (!(b.bottom > b.top) || !(b.right > b.left)) continue;
+    if (b.bottom > cur.top + 1) continue;
+    found.push({
+      key: key,
+      gap: cur.top - b.bottom,
+      dx: Math.abs((cur.left + cur.right) / 2 - (b.left + b.right) / 2),
+      overlap: b.left < cur.right && b.right > cur.left,
+    });
+  }
+  let anyOverlap = false;
+  for (let i = 0; i < found.length; i++) if (found[i].overlap) anyOverlap = true;
+  let best: AboveCand | null = null;
+  for (let i = 0; i < found.length; i++) {
+    const c = found[i];
+    if (anyOverlap && !c.overlap) continue;
+    if (!best || c.gap < best.gap - 0.5 || (Math.abs(c.gap - best.gap) <= 0.5 && c.dx < best.dx)) best = c;
+  }
+  return best ? best.key : null;
+}
+
+/** Up leaves a row the library cannot measure onto the focusable above it. Other directions stay with the library. */
+export function arrowUpToAbove(key: string): (dir: string) => boolean {
+  return (dir: string) => {
+    if (dir !== 'up') return true;
+    const el = document.querySelector('[data-fk="' + key + '"]');
+    if (!el) return true;
+    const r = el.getBoundingClientRect();
+    if (!(r.bottom > r.top)) return true;
+    const next = focusAboveKey(el);
+    if (next && doesFocusableExist(next)) setFocus(next);
+    return false;
+  };
+}
+
 /** How long a screen whose rows arrive later still gets the remembered focus. */
 export const FOCUS_RESTORE_MS = 1500;
 const RETRY_MS = 100;

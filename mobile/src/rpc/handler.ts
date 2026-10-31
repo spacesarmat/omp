@@ -12,6 +12,7 @@ import { monitorMethods } from './monitorMethods';
 import type { SearchHandle } from '../../../src/sources/search';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
 import type { RpcFailure, RpcPoll, RpcResult, RpcSource, RpcSourceState } from '../../../src/phone/rpcTypes';
+import { ompSubscribed as phoneIsSubscribed } from '../../../src/billing/entitlement';
 
 export interface RpcDeps {
   sources(): Source[];
@@ -373,6 +374,11 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         const real = h.rows.get(key);
         return real === undefined ? undefined : h.search.results().filter((x) => resultKey(x) === real)[0];
       });
+    },
+
+    /** The TV hides catalog ads when this phone's OMP subscription is on. No token, no dates. */
+    ompSubscribed() {
+      return { subscribed: phoneIsSubscribed() };
     },
 
     ...monitorMethods({ deps, resolveRow }),

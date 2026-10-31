@@ -16,7 +16,8 @@ import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
 import { Overview } from './TitleCard';
-import { readDiscoverCols } from './discoverCols';
+import { readDiscoverCols, discoverGridClass, discoverLandscapeCols } from './discoverCols';
+import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -87,7 +88,11 @@ function Body({ card }: { card: PersonCard }) {
   const owned = useMemo(() => ownedChecker(list), [list]);
   const items = useMemo(() => filmography(card, job, sort, owned, onlyOwned), [card, job, sort, owned, onlyOwned]);
   const cols = readDiscoverCols();
-  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
+  const gridClass = discoverGridClass(cols);
+  // landscape: the posters per row of «Обзор» (a whole tile fits the screen height); the filter row is full width
+  const widthRef = useRef<HTMLDivElement>(null);
+  const box = useLandscapeBox(widthRef);
+  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height) : null);
   const years = yearsText(card);
   return (
     <>
@@ -114,7 +119,7 @@ function Body({ card }: { card: PersonCard }) {
           ]}
         />
       )}
-      <div class="m-person-filters">
+      <div class="m-person-filters" ref={widthRef}>
         <Segment
           value={onlyOwned ? 'owned' : 'all'}
           items={[
@@ -134,7 +139,7 @@ function Body({ card }: { card: PersonCard }) {
       {items.length === 0 ? (
         <p class="m-muted m-disc-empty">{onlyOwned ? t('person.ownedEmpty', { name: card.name }) : t('discover.nothingFound')}</p>
       ) : (
-        <div class={gridClass}>
+        <div class={gridClass} style={gridStyle}>
           {items.map((x) => {
             const c = x.credit;
             return (
@@ -194,7 +199,7 @@ export function Person({ id, label }: { id: number; label?: string }) {
   return (
     <div class="m-screen m-library m-person" data-route="person">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P27.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>

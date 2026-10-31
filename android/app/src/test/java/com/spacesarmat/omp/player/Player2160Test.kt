@@ -117,4 +117,98 @@ class Player2160Test {
         assertEquals(three, kept)
         assertEquals(2, start)
     }
+
+    @Test
+    fun pageExtrasKeepOnlyStringsAndStringArraysUnderThePrefix() {
+        val raw = org.json.JSONObject()
+            .put("tv.p2160.extra.AUDIO_TRACKS", org.json.JSONArray().put("[{\"uri\":\"http://srv/a.mka\"}]").put("[]"))
+            .put("tv.p2160.extra.AUDIO_SELECT", "id:a:rus:lostfilm")
+            .put("tv.p2160.extra.BAD", org.json.JSONArray().put(1))
+            .put("tv.p2160.extra.", "x")
+            .put("position", "1")
+            .put("tv.p2160.extra.NUM", 5)
+        val e = Player2160.pageExtras(raw)
+        assertEquals(setOf("tv.p2160.extra.AUDIO_TRACKS", "tv.p2160.extra.AUDIO_SELECT"), e.keys)
+        assertArrayEquals(arrayOf("[{\"uri\":\"http://srv/a.mka\"}]", "[]"), e["tv.p2160.extra.AUDIO_TRACKS"] as Array<*>)
+        assertEquals("id:a:rus:lostfilm", e["tv.p2160.extra.AUDIO_SELECT"])
+        assertTrue(Player2160.pageExtras(null).isEmpty())
+    }
+
+    @Test
+    fun pageExtrasGoIntoTheSpecWithoutReplacingOwnOnes() {
+        val page = mapOf<String, Any>("tv.p2160.extra.TEXT_SELECT" to "off", "tv.p2160.extra.SEGMENTS" to "intro:0-1")
+        val s = Player2160.spec(one, 0, 0L, false, "intro:5-9", page)
+        assertEquals("off", s.extras["tv.p2160.extra.TEXT_SELECT"])
+        assertEquals("intro:5-9", s.extras["tv.p2160.extra.SEGMENTS"])
+        assertEquals(true, s.extras["return_result"])
+    }
+
+    @Test
+    fun resultKeysAreFilteredAndTheAskedResultExtrasHandedBack() {
+        val keys = Player2160.resultKeys(
+            org.json.JSONArray().put("tv.p2160.extra.AUDIO_ID").put("position").put(3).put("tv.p2160.extra.TEXT_OFF").put("tv.p2160.extra.AUDIO_ID"),
+        )
+        assertEquals(listOf("tv.p2160.extra.AUDIO_ID", "tv.p2160.extra.TEXT_OFF"), keys)
+        val r = Player2160.parseExtras(
+            mapOf("position" to 5_000, "tv.p2160.extra.AUDIO_ID" to "a:rus:lostfilm", "tv.p2160.extra.TEXT_OFF" to true, "tv.p2160.extra.OTHER" to "x"),
+            "http://srv/1.mkv",
+            keys,
+        )
+        assertEquals(mapOf<String, Any>("tv.p2160.extra.AUDIO_ID" to "a:rus:lostfilm", "tv.p2160.extra.TEXT_OFF" to true), r.extras)
+        val j = r.toJson().getJSONObject("extras")
+        assertEquals("a:rus:lostfilm", j.getString("tv.p2160.extra.AUDIO_ID"))
+        assertTrue(j.getBoolean("tv.p2160.extra.TEXT_OFF"))
+        assertFalse(Player2160.parseExtras(mapOf("position" to 5_000), null).toJson().has("extras"))
+    }
+
+    @Test
+    fun anEmbeddedChoiceComesBackWithItsIntIndexes() {
+        // 2160 Player 0.2.17 (API §3.4/§3.7): an embedded dub is AUDIO_EXTERNAL=false with Int indexes, -1 for the other kind
+        val keys = listOf(
+            "tv.p2160.extra.AUDIO_ID", "tv.p2160.extra.AUDIO_NAME", "tv.p2160.extra.AUDIO_EXTERNAL",
+            "tv.p2160.extra.AUDIO_EMBEDDED_INDEX", "tv.p2160.extra.AUDIO_EXTERNAL_INDEX", "tv.p2160.extra.TEXT_OFF",
+        )
+        val r = Player2160.parseExtras(
+            mapOf(
+                "position" to 5_000, "end_by" to "user", "tv.p2160.extra.POSITION" to 5_000L,
+                "tv.p2160.extra.AUDIO_ID" to "embedded:1", "tv.p2160.extra.AUDIO_NAME" to "HDrezka Studio",
+                "tv.p2160.extra.AUDIO_EXTERNAL" to false, "tv.p2160.extra.AUDIO_EMBEDDED_INDEX" to 1,
+                "tv.p2160.extra.AUDIO_EXTERNAL_INDEX" to -1, "tv.p2160.extra.TEXT_OFF" to false,
+            ),
+            "http://srv/1.mkv",
+            keys,
+        )
+        assertEquals(1, r.extras["tv.p2160.extra.AUDIO_EMBEDDED_INDEX"])
+        assertEquals(-1, r.extras["tv.p2160.extra.AUDIO_EXTERNAL_INDEX"])
+        assertEquals(false, r.extras["tv.p2160.extra.AUDIO_EXTERNAL"])
+        assertEquals(false, r.extras["tv.p2160.extra.TEXT_OFF"])
+        assertEquals(6, r.extras.size)
+    }
+
+    @Test
+    fun longPositionWinsOverAZeroIntAndWatchedWithoutAPositionStaysPositionless() {
+        val moved = Player2160.parseExtras(
+            mapOf(
+                "position" to 0,
+                "duration" to 0,
+                "end_by" to "user",
+                "tv.p2160.extra.POSITION" to 1_441_000L,
+                "tv.p2160.extra.DURATION" to 1_441_000L,
+                "tv.p2160.extra.WATCHED" to false,
+            ),
+            "http://srv/e.mkv",
+        )
+        assertTrue(moved.returned)
+        assertFalse(moved.ended)
+        assertEquals(1_441_000L, moved.positionMs)
+        assertEquals(1_441_000L, moved.durationMs)
+        val bare = Player2160.parseExtras(
+            mapOf("tv.p2160.extra.WATCHED" to true, "tv.p2160.extra.DURATION" to 1_441_000L),
+            null,
+        )
+        assertTrue(bare.returned)
+        assertTrue(bare.ended)
+        assertNull(bare.positionMs)
+        assertEquals(1_441_000L, bare.durationMs)
+    }
 }

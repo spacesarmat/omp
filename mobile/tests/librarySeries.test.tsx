@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
 import { Series } from '../src/screens/Series';
 import { currentRoute, navigate, resetTo } from '../src/nav';
-import { reloadTvs } from '../src/tv/tvStore';
+import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { groupLibrary, findGroup, seriesKey, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
@@ -325,32 +325,39 @@ describe('Series screen', () => {
     return (groupLibrary(ALL).find((x) => x.kind === 'series') as SeriesGroup).key;
   }
 
-  it('season chips; the newest season is chosen; a chip shows its torrents; a row opens the torrent', async () => {
+  it('season chips; the newest season is chosen; a chip shows its release and episodes on the same screen', async () => {
     navigate({ name: 'series', key: key() });
     mount(<Series seriesKey={key()} />);
     const chips = Array.from(el.querySelectorAll('.m-chip')).map((c) => c.textContent);
     expect(chips).toEqual(['Сезон 1', 'Сезон 2']);
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 2');
-    expect(Array.from(el.querySelectorAll('.m-series-row')).map((r) => r.getAttribute('data-hash'))).toEqual(['s2']);
+    expect(el.querySelector('[data-release-switch]')!.getAttribute('data-hash')).toBe('s2');
     expect(el.querySelector('.m-series-title')!.textContent).toBe('Тёмная материя');
     expect(el.textContent).toContain('2 сезона');
     act(() => (el.querySelectorAll('.m-chip')[0] as HTMLElement).click());
-    const rows = Array.from(el.querySelectorAll('.m-series-row'));
-    expect(rows.map((r) => r.getAttribute('data-hash'))).toEqual(['s1']);
-    expect(rows[0].textContent).toContain('4,0 ГБ');
-    act(() => (rows[0].querySelector('.m-hrow-main') as HTMLElement).click());
-    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 's1' });
+    const line = el.querySelector('[data-release-switch]')!;
+    expect(line.getAttribute('data-hash')).toBe('s1');
+    expect(line.textContent).toContain('4,0 ГБ');
+    // its episodes right here, no extra screen
+    expect(el.querySelectorAll('.m-ep').length).toBeGreaterThan(0);
+    expect(currentRoute.value.name).toBe('series');
   });
 
-  it('opens on the season watched last and offers «Продолжить на ТВ» there', async () => {
+  it('opens on the season watched last and offers to continue there: on the TV with one, else on the phone', async () => {
     saveProgress('s1', 2, 300, 1200);
     navigate({ name: 'series', key: key() });
     mount(<Series seriesKey={key()} />);
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 1');
+    const main = el.querySelector('[data-code="P26.5"]')!;
+    expect(main.getAttribute('data-main')).toBe('phone');
+    expect(main.textContent).toContain('Продолжить на телефоне');
+    expect(el.querySelector('[data-code="P26.6"]')!.textContent).toBe('На ТВ');
+    expect(el.querySelector('.m-ep .m-bar-fill')).toBeTruthy();
+    act(() => render(null, el));
+    saveTv({ ip: '192.168.1.5', name: 'LG' });
+    mount(<Series seriesKey={key()} />);
     expect(btn('Продолжить на ТВ')).toBeTruthy();
-    const row = el.querySelector('.m-series-row')!;
-    expect(row.textContent).toContain('Продолжить');
-    expect(row.querySelector('.m-bar-fill')).toBeTruthy();
+    expect(el.querySelector('[data-code="P26.6"]')).toBeNull();
   });
 
   it('a series gone from the library says so', () => {
@@ -383,13 +390,17 @@ describe('Series screen', () => {
       expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
     });
 
-    it('«по умолчанию» when nothing is remembered; «Сменить» offers only the reset', async () => {
+    it('«по умолчанию» when nothing is remembered; «Сменить» explains how a dub is remembered and turns into «Скрыть»', async () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('по умолчанию');
       act(() => btn('Сменить')!.click());
-      expect(choices()).toEqual(['По умолчанию (сбросить)']);
+      // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
+      expect(choices()).toEqual([]);
       expect(el.textContent).toContain('общая для ТВ и телефона');
+      act(() => btn('Скрыть')!.click());
+      expect(btn('Сменить')).toBeTruthy();
+      expect(el.textContent).not.toContain('общая для ТВ и телефона');
     });
 
     it('shows the dub picked on the TV for any season, switches to another seen one and resets', async () => {

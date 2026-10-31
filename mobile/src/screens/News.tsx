@@ -535,13 +535,27 @@ export function News({ seg, finding, watch }: { seg?: Seg; finding?: string; wat
         <HeadButton d={ICONS.monitor} label={t('news.monitorSettings')} data={{ 'data-monitor-gear': '' }} onClick={() => navigate({ name: 'monitor' })} />
       </ScreenHeader>
       <div class="m-seg" role="tablist" aria-label={t('news.title')}>
-        <button type="button" role="tab" aria-selected={current === 'feed'} class={current === 'feed' ? 'on' : ''} onClick={() => pick('feed')}>
+        <button type="button" role="tab" aria-selected={current === 'feed'} class={(current === 'feed' ? 'on' : '') + ' tm'} data-code="P03.1" onClick={() => pick('feed')}>
           {t('news.feed')}
         </button>
-        <button type="button" role="tab" aria-selected={current === 'subs'} class={current === 'subs' ? 'on' : ''} onClick={() => pick('subs')}>
-          {fresh > 0 ? t('news.subsFresh', { fresh: freshText(fresh) }) : t('news.subs')}
+        {/* «Подписки · 2 новых» did not fit a third of a phone and wrapped: the count is a small pill, the full text is the label */}
+        <button
+          type="button"
+          role="tab"
+          aria-selected={current === 'subs'}
+          aria-label={fresh > 0 ? t('news.subsFresh', { fresh: freshText(fresh) }) : undefined}
+          class={(current === 'subs' ? 'on' : '') + ' tm'}
+          data-code="P03.2"
+          onClick={() => pick('subs')}
+        >
+          {t('news.subs')}
+          {fresh > 0 && (
+            <span class="m-seg-count" aria-hidden="true">
+              {fresh > 99 ? '99+' : fresh}
+            </span>
+          )}
         </button>
-        <button type="button" role="tab" aria-selected={current === 'calendar'} class={current === 'calendar' ? 'on' : ''} onClick={() => pick('calendar')}>
+        <button type="button" role="tab" aria-selected={current === 'calendar'} class={(current === 'calendar' ? 'on' : '') + ' tm'} data-code="P03.3" onClick={() => pick('calendar')}>
           {t('news.calendar')}
         </button>
       </div>

@@ -81,9 +81,10 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       {!p.url && (
         <div class="row">
           <TextInput focusKey="pl-url" value={url} onChange={setUrl} placeholder={t('playlist.urlPlaceholder')} type="url" onSubmit={() => load(url)} />
-          <Button label={t('playlist.open')} onPress={() => load(url)} />
+          <Button focusKey="pl-open" label={t('playlist.open')} onPress={() => load(url)} />
           {c && (
             <Button
+              focusKey="pl-all"
               label={t('playlist.allTorrents')}
               onPress={() => {
                 const u = c.allPlaylistUrl();
@@ -109,9 +110,10 @@ export function PlaylistScreen(p: { url?: string; title?: string }) {
       {error && <div class="banner-error">{error}</div>}
       {entries && entries.length > 0 && (
         <FocusGroup focusKey="PLAYLIST-ENTRIES">
-          {queue.length > 0 && <Button icon="play" label={t('playlist.playAll', { n: queue.length })} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
+          {queue.length > 0 && <Button focusKey="pl-play" icon="play" label={t('playlist.playAll', { n: queue.length })} onPress={() => navigate({ name: 'player', queue, index: 0 })} />}
           {loadedUrl && (
             <Button
+              focusKey="pl-fav"
               icon="star"
               label={isFavorite(loadedUrl) ? t('playlist.unfavorite') : t('playlist.favorite')}
               onPress={() => {

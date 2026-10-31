@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
+import { SearchMine } from '../src/screens/SearchMine';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { setCatalogClientForTests, setCatalogMode } from '../src/catalog/phoneCatalog';
@@ -213,13 +214,12 @@ describe('ads in «Мои»', () => {
     act(() => render(null, el));
 
     libraryTab.value = 'all';
-    libraryQuery.value = 'Фильм';
-    mount(<Library />);
+    // Search left «Мои» for the Поиск tab. That list is the same cards, and it must not carry ads.
+    mount(<SearchMine query="Фильм" onCatalog={() => undefined} onSources={() => undefined} />);
     await flush();
-    expect(el.querySelectorAll('.m-grid .m-card').length).toBeGreaterThan(10);
+    expect(el.querySelectorAll('[data-mine-item]').length).toBeGreaterThan(10);
     expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
     act(() => render(null, el));
-    libraryQuery.value = '';
 
     saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 10 * DAY } as never);
     saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY });

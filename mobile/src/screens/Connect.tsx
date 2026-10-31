@@ -10,9 +10,9 @@ import { attachIfOmpForeground } from '../tv/playerLink';
 import { scanPairQr } from '../platform/qr';
 import { RenameSheet } from '../ui/RenameSheet';
 import { AddressInput } from '../ui/AddressInput';
-import { servers, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
+import { servers, serverShown, setActiveServer, updateServer, type SavedServer } from '../../../src/store/servers';
 import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
-import { addressErrorText, addressForField, checkServerAddress } from '../../../src/api/serverAddress';
+import { addressErrorText, checkServerAddress, fieldAddress } from '../../../src/api/serverAddress';
 import { errorMessage } from '../../../src/api/http';
 import {
   discover,
@@ -237,8 +237,9 @@ export function Connect() {
       return;
     }
     // the field shows the cleaned address (a pasted NBSP or a full-width colon is gone)
-    setAddr(addressForField(checked.url));
-    void enter({ url: checked.url, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
+    setAddr(fieldAddress(addr));
+    // as typed: without a scheme connectServer tries http and https
+    void enter({ url: addr, user: auth && user.trim() ? user.trim() : undefined, password: auth && pass ? pass : undefined });
   }
 
   async function startStopped() {
@@ -369,7 +370,7 @@ export function Connect() {
               <div class="m-local-title">{t('connect.installTitle')}</div>
             </div>
             <div class="m-local-text">{t('connect.installText')}</div>
-            <button type="button" class="m-btn m-btn-primary" onClick={() => navigate({ name: 'localServer' })}>
+            <button type="button" class="m-btn m-btn-primary tm" data-code="P01.1" onClick={() => navigate({ name: 'localServer' })}>
               {t('connect.installBtn')}
             </button>
           </div>
@@ -378,7 +379,8 @@ export function Connect() {
       )}
       <button
         type="button"
-        class="m-btn m-btn-secondary"
+        class="m-btn m-btn-secondary tm"
+        data-code="P01.4"
         disabled={scanState === 'scanning'}
         onClick={() => setScanRun(scanRun + 1)}
       >
@@ -392,7 +394,7 @@ export function Connect() {
         <label for="addr">{t('connect.serverAddress')}</label>
         <AddressInput
           id="addr"
-          placeholder="192.168.1.10:8090"
+          placeholder="192.168.1.10:8090, https://host:8443"
           value={addr}
           onChange={setAddr}
           submitLabel={busy ? t('connect.connectingMe') : t('connect.connect')}
@@ -404,7 +406,7 @@ export function Connect() {
           </div>
         )}
       </div>
-      <button type="button" class="m-link" aria-expanded={auth} onClick={() => setAuth(!auth)}>
+      <button type="button" class="m-link tm" data-code="P01.2" aria-expanded={auth} onClick={() => setAuth(!auth)}>
         <Icon d={auth ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'} size={18} />
         {t('connect.loginPassword')}
       </button>
@@ -435,7 +437,7 @@ export function Connect() {
           </div>
         </div>
       )}
-      <button type="submit" class="m-btn m-btn-primary" disabled={busy}>
+      <button type="submit" class="m-btn m-btn-primary tm" data-code="P01.3" disabled={busy}>
         {busy ? t('connect.connectingMe') : t('connect.connect')}
       </button>
       <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={() => void scan()}>
@@ -458,7 +460,7 @@ export function Connect() {
                   <span class="m-server-text">
                     <span class="m-server-name">{s.name}</span>
                     <span class="m-muted m-small">
-                      {s.url.replace(/^https?:\/\//, '')} · {statusText(st)}
+                      {serverShown(s.url)} · {statusText(st)}
                     </span>
                   </span>
                   <Icon d="M9 5l7 7-7 7" size={18} />

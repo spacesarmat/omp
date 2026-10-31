@@ -57,8 +57,8 @@ export const AD_SECTION_LABEL: Record<AdSection, string> = {
 
 export const AD_PLATFORM_LABEL: Record<AdPlatform, string> = {
   phone: 'Телефон',
-  androidTv: 'Android TV (следующий этап)',
-  webos: 'webOS (следующий этап)',
+  androidTv: 'Android TV',
+  webos: 'webOS',
 };
 
 /** CTR in percent with one decimal, «-» without impressions. */

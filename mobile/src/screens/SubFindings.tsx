@@ -46,7 +46,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   return (
     <div class="m-screen" data-route="subFindings">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P04.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title m-grow">{sub ? sub.query : t('monitor.sub.title')}</h1>

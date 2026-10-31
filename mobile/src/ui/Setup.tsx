@@ -103,7 +103,8 @@ export function Setup() {
     }
     setError('');
     setBusy(true);
-    show(await connectServer({ url: checked.url }));
+    // as typed: without a scheme connectServer tries http and https
+    show(await connectServer({ url: raw }));
   }
 
   async function find(): Promise<void> {
@@ -147,7 +148,7 @@ export function Setup() {
   const ok = outcome && outcome.ok ? outcome : noticed ? { server: { name: noticed.name }, version: noticed.version } : null;
 
   return (
-    <div class="m-onb m-setup" role="dialog" aria-modal="true" aria-label={t('setup.whereTitle')} data-onboarding="setup" data-setup={step}>
+    <div class="m-onb m-setup" role="dialog" aria-modal="true" aria-label={t('setup.whereTitle')} data-onboarding="setup" data-setup={step} data-code="PD44">
       <div class="m-onb-step">{t('setup.step', { n: stepNo, total: 3 })}</div>
       {step === 'where' && (
         <div class="m-onb-main">
@@ -174,7 +175,7 @@ export function Setup() {
           <input
             class="m-input"
             data-setup-address=""
-            placeholder="192.168.1.10:8090"
+            placeholder="192.168.1.10:8090, https://host:8443"
             value={addr}
             onInput={(e) => setAddr((e.target as HTMLInputElement).value)}
           />

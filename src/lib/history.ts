@@ -2,6 +2,10 @@
 // torrents without a journal from the older sources (local progress, TorrServer /viewed) shown as «Телевизор».
 import type { Torrent } from '../api/types';
 import { journalOf, type JournalSrc } from './journal';
+import { seriesKey } from './seriesGroups';
+import { parseEpisode } from './episodes';
+import { displayTitle, torrentFiles } from './torrentName';
+import { parseEpisodeRange } from '../monitor/episodes';
 import { t } from '../i18n';
 import { ru } from '../i18n/ru';
 import { en } from '../i18n/en';
@@ -63,24 +67,29 @@ export function buildHistory(
   list.forEach((t) => {
     const journal = journalOf(t.data);
     if (!journal.length) return;
-    // journalOf is newest first: the first match is the latest watch for this filter
-    const e = journal.filter((x) => filter === 'all' || x.src === filter)[0];
-    if (!e) return;
-    withJournal[t.hash] = true;
-    const source: HistorySource = { src: e.src, at: e.at };
-    if (e.name) source.name = e.name;
-    let progress: HistoryProgress = { time: e.t, duration: e.d, updated: e.at };
-    const own = local(t.hash, e.f);
-    if (own && own.updated > e.at) {
-      progress = { time: own.time, duration: own.duration > 0 ? own.duration : e.d, updated: own.updated };
-      source.at = own.updated;
-      if (self) {
-        source.src = self.src;
-        if (self.name) source.name = self.name;
-        else delete source.name;
+    // journalOf is newest first: the first match with a real position is the latest watch for this filter.
+    // A start entry at 0:00 with nothing after it is a start that never played (no network, wrong file):
+    // it is not a watch, so it neither shows as «0:00» nor hides an older real position of the torrent.
+    for (const e of journal) {
+      if (filter !== 'all' && e.src !== filter) continue;
+      const source: HistorySource = { src: e.src, at: e.at };
+      if (e.name) source.name = e.name;
+      let progress: HistoryProgress = { time: e.t, duration: e.d, updated: e.at };
+      const own = local(t.hash, e.f);
+      if (own && own.updated > e.at) {
+        progress = { time: own.time, duration: own.duration > 0 ? own.duration : e.d, updated: own.updated };
+        source.at = own.updated;
+        if (self) {
+          source.src = self.src;
+          if (self.name) source.name = self.name;
+          else delete source.name;
+        }
       }
+      if (!(progress.time >= 1)) continue;
+      withJournal[t.hash] = true;
+      items.push({ torrent: t, fileIndex: e.f, progress, source });
+      return;
     }
-    items.push({ torrent: t, fileIndex: e.f, progress, source });
   });
   if (filter !== 'phone') {
     fallback.forEach((f) => {
@@ -96,7 +105,39 @@ export function buildHistory(
   // stable: equal times keep their order (fallback entries without a time stay at the end)
   const order = items.map((it, i) => ({ it, i }));
   order.sort((a, b) => b.it.source.at - a.it.source.at || a.i - b.i);
-  return order.slice(0, limit).map((x) => x.it);
+  // one row per episode: the same episode of the same show in two torrents (an old and a replacement
+  // release) shows once, the newest
+  const seen: { [k: string]: boolean } = {};
+  const out: HistoryItem[] = [];
+  for (const x of order) {
+    const k = episodeKey(x.it);
+    if (k) {
+      if (seen[k]) continue;
+      seen[k] = true;
+    }
+    out.push(x.it);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** «show|season|episode» of a series item, '' when the show or the episode is not known. */
+function episodeKey(it: HistoryItem): string {
+  let show = '';
+  try {
+    show = seriesKey(it.torrent);
+  } catch {
+    show = '';
+  }
+  if (!show) return '';
+  const file = torrentFiles(it.torrent).find((f) => f.id === it.fileIndex);
+  if (!file) return '';
+  const ep = parseEpisode(file.path);
+  if (ep.episode === null) return '';
+  // «Show.E01.mkv» names no season: take the torrent's («Show S02»); unknown either way, no dedupe
+  const season = ep.season !== null ? ep.season : parseEpisodeRange(displayTitle(it.torrent)).season;
+  if (season === null || season === undefined) return '';
+  return show + '|' + season + '|' + ep.episode;
 }
 
 function pad(n: number): string {

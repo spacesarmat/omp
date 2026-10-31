@@ -1,5 +1,5 @@
-# JacRed (jacred-fdb) — first-boot template only.
-# Put the real apikey in billing admin → Сервисы (and on the VPS Data/), never in the APK.
+# JacRed (jacred-fdb) - first-boot template only.
+# Put the real apikey in billing admin -> Сервисы (and on the VPS Data/), never in the APK.
 # synctrackers is a 16-tracker subset of the jacred-fdb defaults, trimmed for a 2 GB VPS.
 # tracks is off to save RAM on that box. See ops/vps/README.md.
 listenport: 9117
@@ -19,6 +19,12 @@ logFdbMaxSizeMb: 500
 logFdbMaxFiles: 3
 
 syncapi: https://sync.jacred.stream
+# sync.jacred.stream through WARP: from the home NUC the direct path to Cloudflare stalls after about 20 KB,
+# so /sync/fdb/torrents timed out and the base stopped growing (2026-10-21). JacRed reloads this file without a restart.
+globalproxy:
+  - pattern: "sync\\.jacred\\.stream"
+    list:
+      - http://warp:1080
 synctrackers:
   - rutracker
   - rutor

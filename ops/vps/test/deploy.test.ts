@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -128,6 +128,14 @@ case "$cmd" in
     n=\$((n + 1))
     printf '%s' "$n" > "$count"
     printf 'sha256:%064x' "$n" > "\$(idfile "$tag")"
+    exit 0
+    ;;
+  run)
+    # node --check in a container (hosts without node, the NUC)
+    if [[ -n "\${DEPLOY_TEST_DOCKER_RUN_FAIL_ON:-}" && "$*" == *"\${DEPLOY_TEST_DOCKER_RUN_FAIL_ON}"* ]]; then
+      printf 'SyntaxError\\n' >&2
+      exit 1
+    fi
     exit 0
     ;;
   *)
@@ -666,6 +674,92 @@ describe('ops/vps deploy', () => {
     const restoredId = imageId(box.env);
     expect(restoredId).not.toBe(built);
     expect(readFileSync(path.join(box.parent, 'docker-state', 'running-billing'), 'utf8').trim()).toBe(restoredId);
+  });
+
+  it('on the NUC: compose with both files, health over http :80, node --check in a container', () => {
+    const box = world(release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' }), { OMP_NODE_CHECK: 'docker' });
+    writeFileSync(path.join(box.root, 'docker-compose.nuc.yml'), 'services: {}\n');
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('compose files: docker-compose.yml docker-compose.nuc.yml');
+    const files = `-f ${box.root}/docker-compose.yml -f ${box.root}/docker-compose.nuc.yml`;
+    const composeLines = linesStarting(box.dockerLog, 'compose').filter((l) => !l.includes('version'));
+    expect(composeLines.length).toBeGreaterThan(0);
+    for (const line of composeLines) expect(line).toContain(files);
+    expect(composeLines.some((l) => l.includes(`${files} up -d billing`))).toBe(true);
+    const curl = log(box.curlLog);
+    expect(curl).toContain('http://billing.omp-player.online/health');
+    expect(curl).toContain('http://omp-player.online/');
+    expect(curl).toContain('billing.omp-player.online:80:127.0.0.1');
+    expect(curl).not.toContain('https://billing.omp-player.online');
+    // no host node: the check ran in the billing image, without network, source read-only
+    expect(log(box.nodeLog)).toBe('');
+    const runs = linesStarting(box.dockerLog, 'run');
+    expect(runs.length).toBeGreaterThanOrEqual(2);
+    for (const line of runs) {
+      expect(line).toContain('--rm --network none');
+      expect(line).toMatch(/:\/src:ro /);
+      expect(line).toContain(IMAGE);
+      expect(line).toContain('node --check');
+    }
+  });
+
+  it('with no node on PATH and OMP_NODE_CHECK unset, the check runs in docker by itself', () => {
+    const box = world(release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' }));
+    // PATH without any node: the fakes (minus node) plus links to every other system tool.
+    const bin = path.join(box.parent, 'bin');
+    rmSync(path.join(bin, 'node'));
+    const sys = path.join(box.parent, 'sys');
+    mkdirSync(sys);
+    for (const dir of (process.env.PATH ?? '').split(':')) {
+      if (!dir || dir === bin || !existsSync(dir)) continue;
+      for (const name of readdirSync(dir)) {
+        if (name === 'node' || existsSync(path.join(sys, name)) || existsSync(path.join(bin, name))) continue;
+        try {
+          symlinkSync(path.join(dir, name), path.join(sys, name));
+        } catch {
+          /* duplicate or unreadable entry */
+        }
+      }
+    }
+    const env = { ...box.env, PATH: `${bin}:${sys}` };
+    delete env.OMP_NODE_CHECK;
+    expect(spawnSync('bash', ['-c', 'command -v node'], { env }).status).not.toBe(0);
+    const result = runDeploy(env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('node --check: docker');
+    expect(linesStarting(box.dockerLog, 'run').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('without node on the host a failing check in the container stops the deploy', () => {
+    const box = world(release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' }), {
+      OMP_NODE_CHECK: 'docker',
+      DEPLOY_TEST_DOCKER_RUN_FAIL_ON: 'billing-src',
+    });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toContain('node --check failed (in ' + IMAGE + ')');
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+  });
+
+  it('OMP_COMPOSE_FILES and OMP_HEALTH_* override the defaults; bad values are refused', () => {
+    const box = world(release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' }), {
+      OMP_COMPOSE_FILES: 'docker-compose.yml',
+      OMP_HEALTH_SCHEME: 'https',
+    });
+    writeFileSync(path.join(box.root, 'docker-compose.nuc.yml'), 'services: {}\n');
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(linesStarting(box.dockerLog, 'compose').filter((l) => l.includes(' up ')).every((l) => l.includes(`-f ${box.root}/docker-compose.yml up`))).toBe(true);
+    expect(log(box.curlLog)).toContain('https://billing.omp-player.online/health');
+    const bad = runDeploy({ ...box.env, OMP_COMPOSE_FILES: '../etc/passwd' }, ['--dry-run', 'main']);
+    expect(bad.status).not.toBe(0);
+    expect(bad.stderr).toContain('bad compose file name');
+    const missing = runDeploy({ ...box.env, OMP_COMPOSE_FILES: 'nope.yml' }, ['--dry-run', 'main']);
+    expect(missing.stderr).toContain('compose file not found');
+    const mode = runDeploy({ ...box.env, OMP_NODE_CHECK: 'maybe' }, ['--dry-run', 'main']);
+    expect(mode.stderr).toContain('bad OMP_NODE_CHECK');
   });
 
   it('rolls back a sync when node --check fails before the image is rebuilt', () => {

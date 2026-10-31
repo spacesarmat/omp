@@ -62,6 +62,7 @@ export function Onboarding() {
       aria-modal="true"
       aria-label={t(slide.title)}
       data-onboarding="phone"
+      data-code="PD43"
       data-slide={slide.id}
       data-step={i}
     >

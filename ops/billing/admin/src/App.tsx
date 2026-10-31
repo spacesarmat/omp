@@ -12,6 +12,7 @@ import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AdsPanel } from '@/panels/AdsPanel';
 import { ChangelogPanel } from '@/panels/ChangelogPanel';
+import { MonitorPanel } from '@/panels/MonitorPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import type { HomeData, UserData } from '@/lib/types';
 
@@ -178,6 +179,7 @@ export function App() {
           <TabsTrigger value="audit">Журнал</TabsTrigger>
           <TabsTrigger value="ads">Реклама</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
+          <TabsTrigger value="monitor">Мониторинг</TabsTrigger>
           <TabsTrigger value="changes">Изменения</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
@@ -268,6 +270,9 @@ export function App() {
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
+        </TabsContent>
+        <TabsContent value="monitor">
+          <MonitorPanel csrf={d.csrf || ''} />
         </TabsContent>
         <TabsContent value="security">
           <SecurityCard run={run} sessions={d.sessions || []} sessionId={d.sessionId || ''} />

@@ -47,6 +47,10 @@ class EngineSwitcherTest {
             messages.add(text)
         }
 
+        var refuse = false
+
+        override fun vlcRefused(r: PlayRequest): Boolean = refuse
+
         fun engine(i: Int) = created[i].second
     }
 
@@ -183,6 +187,21 @@ class EngineSwitcherTest {
         assertEquals(listOf("VLC недоступен на этом устройстве"), rig.host.messages)
         assertTrue(rig.host.created.all { it.first == EngineKind.MEDIA3 })
         assertEquals(1, rig.host.created.size)
+    }
+
+    @Test
+    fun aSelfSignedTorrServerStaysOnTheBuiltInEngine() {
+        val host = Host().apply { refuse = true }
+        val rig = Rig(host = host).start(request(engine = EngineMode.VLC, ass = setOf(0, 1)))
+        assertEquals(EngineKind.MEDIA3, rig.sw.kind)
+        assertTrue(rig.sw.vlcRefused)
+        rig.sw.assSubsKnown(0)
+        rig.host.engine(0).listener?.onError(ErrorKind.UNSUPPORTED_FORMAT, "x")
+        assertTrue(rig.host.posted.isEmpty())
+        assertEquals("Плеер: Встроенный · VLC не открывает сервер с самоподписанным сертификатом - играет встроенный", rig.sw.menuRow())
+        rig.sw.menuPressed()
+        assertEquals(listOf("VLC не открывает сервер с самоподписанным сертификатом - играет встроенный"), rig.host.messages)
+        assertTrue(rig.host.created.all { it.first == EngineKind.MEDIA3 })
     }
 
     @Test

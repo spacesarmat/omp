@@ -21,20 +21,22 @@ import {
 } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
-import { lang, t, fmtNumber } from '../i18n';
-import { findGroup, groupLabel, NO_SEASON, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
+import { lang, t, tp, fmtNumber } from '../i18n';
+import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
+import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
 import { cachedSeriesMatch, matchSeries } from '../lib/seriesMatch';
 import { airDateText, isoDay, seriesPill, upcomingSeasons, type Upcoming } from '../lib/seriesStatus';
 import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } from '../lib/episodeNames';
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
+import { externalNoteText } from '../lib/externalNote';
 import { formatBytes } from '../lib/format';
 import { libraryTitle } from '../lib/libraryView';
 import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
-import { restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
-import { choose } from '../ui/dialog';
+import { arrowUpToAbove, restoreFocus, scrollScreenToTop, scrollToShow } from '../ui/focus';
+import { choose, chooseOrDelete, confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { useKeys } from '../ui/keys';
 import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
@@ -335,7 +337,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
   const dub = useSeriesDub(group.members, c);
   const openDub = () => {
     const options = dub.choices.map((o) => ({ label: tvGlyphs(o.label), value: o.value }));
-    choose(t('series.dubTitle'), options, dub.value).then((v) => {
+    choose(t('series.dubTitle'), options, dub.value, 'series-dub').then((v) => {
       if (v === null) return;
       dub.pick(v).catch((e) => toast(errorMessage(e), 'error'));
     });
@@ -354,7 +356,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       return;
     }
     const options = upgradable.map((m) => ({ label: [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), formatBytes(m.torrent_size || 0)].join(' · '), value: m.hash }));
-    choose(t('tv.better.which'), options).then((hash) => {
+    choose(t('tv.better.which'), options, undefined, 'series-better').then((hash) => {
       const m = upgradable.filter((x) => x.hash === hash)[0];
       if (m) setBetter(m);
     });
@@ -371,16 +373,83 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
     if (index >= 0) navigate({ name: 'player', queue, index });
   };
 
+  const releaseLabel = (m: Torrent) =>
+    [tvGlyphs(libraryTitle(m).title), qualityOrUnknown(displayTitle(m)), externalNoteText(c.files(m)), formatBytes(m.torrent_size || 0)].filter(Boolean).join(' · ');
+  // «Раздачи · N»: OK opens a release, red deletes it (a release of this season only: a pack of several seasons stays)
   const openReleases = () => {
     if (releases.length === 1) {
       navigate({ name: 'torrent', hash: releases[0].hash });
       return;
     }
-    const options = releases.map((m) => ({ label: tvGlyphs(libraryTitle(m).title) + ' · ' + formatBytes(m.torrent_size || 0), value: m.hash }));
-    choose(t('series.releasesTitle'), options).then((hash) => {
-      if (hash) navigate({ name: 'torrent', hash });
+    const options = releases.map((m) => ({ label: releaseLabel(m), value: m.hash }));
+    const canRed = (hash: string) => {
+      const m = members.filter((x) => x.hash === hash)[0];
+      if (!m || members.length < 2) return false;
+      if (!onlyThisSeason(group, season, m)) {
+        toast(t('series.releaseDeletePack'));
+        return false;
+      }
+      return true;
+    };
+    chooseOrDelete(t('series.releasesTitle'), options, canRed, t('series.releasesHintDelete'), 'series-releases').then((r) => {
+      if (!r) return;
+      if (!r.red) {
+        navigate({ name: 'torrent', hash: r.value });
+        return;
+      }
+      const m = members.filter((x) => x.hash === r.value)[0];
+      if (m) void removeRelease(m);
     });
   };
+
+  // the red key in «Раздачи»: what was watched in it moves to the release that stays, then it goes; with two or more
+  // left the list opens again for the next one
+  // one delete at a time, from the confirm to the remove: a list opened again meanwhile must not delete the keeper
+  const deleting = useRef(false);
+  const removeRelease = async (m: Torrent) => {
+    if (deleting.current) return;
+    deleting.current = true;
+    try {
+      await removeReleaseNow(m);
+    } finally {
+      deleting.current = false;
+    }
+  };
+  const removeReleaseNow = async (m: Torrent) => {
+    // the release the season goes on in: the one of the next episode
+    const current = target ? target.tor : null;
+    const isCurrent = !!current && current.hash === m.hash;
+    const keeper = isCurrent || !current ? pickKeeper(members, m) : current;
+    if (!keeper) return;
+    const vars = { name: releaseLabel(m), keeper: releaseLabel(keeper) };
+    const ask = isCurrent ? t('series.releaseDeleteCurrentAsk', vars) : t('series.releaseDeleteAsk', vars);
+    if (!(await confirmDialog(ask, t('common.delete'), 'series-release-delete'))) return;
+    let carried = await carryWatch(c, m, keeper, season);
+    if (!carried.ok && carried.lost) {
+      if (!(await confirmDialog(tp('series.releaseDeleteLossAsk', carried.lost, { keeper: vars.keeper }), t('common.delete'), 'series-release-delete'))) return;
+      carried = await carryWatch(c, m, keeper, season, { allowLoss: true });
+    }
+    if (!carried.ok || !torrents.value.some((x) => x.hash === keeper.hash)) {
+      toast(t('series.releaseCarryFailed'), 'error');
+      return;
+    }
+    try {
+      await c.remove(m.hash);
+    } catch (e) {
+      toast(errorMessage(e), 'error');
+      return;
+    }
+    torrents.value = torrents.value.filter((x) => x.hash !== m.hash);
+    forgetRemoved(m.hash);
+    toast(t('series.releaseDeleted'));
+    if (members.filter((x) => x.hash !== m.hash).length > 1) setReopen((n) => n + 1);
+    else restoreFocus('SERIES-ACTIONS');
+  };
+  // the list again after a delete, built from the releases left (this render's `members`)
+  const [reopen, setReopen] = useState(0);
+  useEffect(() => {
+    if (reopen && releases.length > 1) openReleases();
+  }, [reopen]);
 
   // red on an episode row: mark it watched
   const rowByKey = useRef<{ [k: string]: FileRow }>({});
@@ -495,6 +564,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
                 onFocused={() => { pick(n); showChip(n); }}
+                onArrow={arrowUpToAbove('season-' + n)}
                 onPress={() => pick(n)}
               >
                 <div class="chip-name">
@@ -546,7 +616,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
           const ep = r.episode !== null ? eps[r.episode] : undefined;
           const name = ep && ep.title ? ep.title : cleanFileName(stripExt(baseName(r.file.path)));
           return (
-            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
+            <Focusable key={rowKey(r)} focusKey={rowKey(r)} className="list-item file-row ep-row" onPress={() => play(r)} onArrow={arrowUpToAbove(rowKey(r))} onFocused={i === rows.length - 1 && coming.length ? () => revealComing() : undefined}>
               <span class="ep">{r.code}</span>
               <span class="name">{tvGlyphs(name)}</span>
               {!watched && ratio > 0 && (

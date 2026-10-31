@@ -1,0 +1,10 @@
+[Unit]
+Description=Copy the running JacRed config (omp-jacred:/app/init.yaml) back to /opt/omp-vps/jacred/init.yaml
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/omp-vps/jacred-config-sync/jacred-config-sync.sh
+TimeoutStartSec=60
+Nice=10

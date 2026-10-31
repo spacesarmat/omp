@@ -38,7 +38,7 @@ function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () 
 
 export function DiscoverSortSheet({ value, onPick, onClose }: { value: DiscoverSort; onPick: (s: DiscoverSort) => void; onClose: () => void }) {
   return (
-    <Sheet label={t('discover.sort')} onClose={onClose}>
+    <Sheet label={t('discover.sort')} testId="PD16" onClose={onClose}>
       <div class="m-sheet-title">{t('discover.sort')}</div>
       {DISCOVER_SORTS.map((s) => (
         <button
@@ -83,7 +83,7 @@ export function DiscoverFiltersSheet({
   const toggle = (g: string) => set({ genres: q.genres.indexOf(g) >= 0 ? q.genres.filter((x) => x !== g) : q.genres.concat(g) });
   const years: [DiscoverYear, Key][] = [['any', 'discover.yearAny'], ['this', 'discover.yearThis'], ['last', 'discover.yearLast'], ['range', 'discover.yearRange']];
   return (
-    <Sheet label={t('filters.title')} onClose={done}>
+    <Sheet label={t('filters.title')} testId="PD17" onClose={done}>
       <div class="m-sheet-head">
         <div class="m-sheet-title">{t('filters.title')}</div>
         <button

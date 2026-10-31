@@ -69,7 +69,7 @@ android {
     packaging {
         jniLibs {
             excludes += ['lib/x86/**', 'lib/x86_64/**']
-            // nextlib-media3ext and nextlib-mediainfo (player-core) both ship the FFmpeg shared libraries
+            // nextlib-media3ext and nextlib-mediainfo (both in player-core) ship the same FFmpeg shared libraries
             pickFirsts += ['**/libavcodec.so', '**/libavutil.so', '**/libswscale.so', '**/libswresample.so']
         }
     }
@@ -125,14 +125,14 @@ dependencies {
     // MediaSession / notification actions for the phone's foreground PlaybackService. player-core depends on
     // media3-session as implementation, so the app module does not see it unless it is declared here too.
     implementation 'androidx.media3:media3-session:1.11.1'
-    // FFmpeg audio decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder; enabled in
-    // v0.15 Task 3. nextlib (GPL-3.0, compatible with OMP's GPL-3.0), the same build player-core uses; it must be a
-    // direct dependency because player-core has it as implementation. Its version follows Media3 (1.11.1-x).
-    implementation 'io.github.anilbeesetti:nextlib-media3ext:1.11.1-0.16.0'
+    // FFmpeg decoders for Media3 (DTS, AC3/E-AC3, TrueHD…) when the box has no hardware decoder (v0.15 Task 3):
+    // nextlib-media3ext 1.11.1-0.16.0 (GPL-3.0, compatible with OMP's GPL-3.0). Since 2160 Player v0.2.16 player-core
+    // bundles it (its classes and JNI libraries, with its own FfmpegLibrary), so it is not a direct dependency here:
+    // a second copy would duplicate those classes and native libraries.
     // 2160 Player engine (experimental, exp/2160-engine): built from the submodule through includeBuild in
     // settings.gradle, which substitutes this coordinate with project(':player-core'). The version matches
-    // player-core's default (v0.2.8); the substitution does not depend on it.
-    implementation 'tv.p2160:player-core:0.2.8'
+    // player-core's default (v0.2.17); the substitution does not depend on it.
+    implementation 'tv.p2160:player-core:0.2.17'
     // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4
     implementation 'org.videolan.android:libvlc-all:3.7.7'
     // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/

@@ -1,7 +1,8 @@
-import { request, apiError, isApiError, HttpOptions } from './http';
+import { request, apiError, isApiError, HttpOptions, HttpTransport, transportFetch, toBase64, FetchLike } from './http';
 import { isStashedFile, takeStashedFile } from './torrentFiles';
 import type { Torrent, CacheState, ViewedEntry, SearchResult, FfprobeResult, ServerSettings, TmdbConfig } from './types';
 import type { TorrentFile } from '../lib/episodes';
+import { knownFiles, rememberFiles } from '../lib/knownFiles';
 import { t } from '../i18n';
 import { checkServerAddress, cleanAddressText } from './serverAddress';
 
@@ -38,6 +39,13 @@ export function parseTorrentData(data?: string): TorrentFile[] {
   }
 }
 
+/** Android: every https TorrServer request goes through the native trust (system CAs, then the user's pins). */
+let httpsTransport: HttpTransport | null = null;
+
+export function setTorrServerTransport(t: HttpTransport | null): void {
+  httpsTransport = t;
+}
+
 export class TorrServerClient {
   readonly baseUrl: string;
   private readonly auth?: string;
@@ -50,7 +58,12 @@ export class TorrServerClient {
   }
 
   private call<T>(path: string, opts: HttpOptions = {}): Promise<T> {
-    return request<T>(this.baseUrl + path, { ...opts, auth: this.auth });
+    return request<T>(this.baseUrl + path, { ...opts, auth: this.auth, transport: this.via(this.baseUrl) });
+  }
+
+  /** The native transport for an https URL of this server (Android), undefined for the page's fetch(). */
+  private via(url: string): HttpTransport | undefined {
+    return httpsTransport && /^https:\/\//i.test(url) && this.isOwnUrl(url) ? httpsTransport : undefined;
   }
 
   private isOwnUrl(url: string): boolean {
@@ -70,7 +83,12 @@ export class TorrServerClient {
   }
 
   get(hash: string): Promise<Torrent> {
-    return this.call<Torrent>('/torrents', { body: { action: 'get', hash } });
+    return this.call<Torrent>('/torrents', { body: { action: 'get', hash } }).then((t) => {
+      // kept on this device like loadInfo's: the list copy of a release just added (the add answer, before its
+      // metadata) has no files, and the release screen gets them only from here (2160 Player's external tracks)
+      if (t && t.file_stats && t.file_stats.length) rememberFiles(hash, t.file_stats);
+      return t;
+    });
   }
 
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
@@ -94,7 +112,19 @@ export class TorrServerClient {
     form.append('file', new Blob([bytes.slice().buffer as ArrayBuffer], { type: 'application/x-bittorrent' }), 'release.torrent');
     const headers: { [k: string]: string } = {};
     if (this.auth) headers['Authorization'] = 'Basic ' + this.auth;
-    return fetch(this.baseUrl + '/torrent/upload', { method: 'POST', headers, body: form }).then(
+    const url = this.baseUrl + '/torrent/upload';
+    const tr = this.via(url);
+    // through the transport the multipart body goes as bytes with its boundary in the type
+    const sent: Promise<FetchLike> = tr
+      ? (() => {
+          const packed = new Response(form);
+          const type = packed.headers.get('Content-Type') || undefined;
+          return packed.arrayBuffer().then((buf) =>
+            transportFetch(tr, url, { method: 'POST', headers, bodyBase64: toBase64(new Uint8Array(buf)), contentType: type, timeoutMs: 30000 }),
+          );
+        })()
+      : fetch(url, { method: 'POST', headers, body: form });
+    return sent.then(
       (res) => {
         if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
         return res.text().then((text) => {
@@ -105,8 +135,8 @@ export class TorrServerClient {
           }
         });
       },
-      () => {
-        throw apiError('network', 'Network error');
+      (e) => {
+        throw isApiError(e) ? e : apiError('network', 'Network error');
       },
     );
   }
@@ -177,11 +207,30 @@ export class TorrServerClient {
 
   /** Activates the torrent and waits for metadata (file list). */
   loadInfo(hash: string): Promise<Torrent> {
-    return this.call<Torrent>('/stream?link=' + hash + '&stat', { timeoutMs: 60000 });
+    return this.call<Torrent>('/stream?link=' + hash + '&stat', { timeoutMs: 60000 }).then((info) => {
+      // kept on this device: the episodes stay listed when the release stops answering
+      if (info && info.file_stats) rememberFiles(hash, info.file_stats);
+      return info;
+    });
   }
 
+  /** TorrServer's file list, else the one kept in `data`, else the one this device saw last (knownFiles). */
   files(t: Torrent): TorrentFile[] {
-    return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+    if (t.file_stats && t.file_stats.length) return t.file_stats;
+    const own = parseTorrentData(t.data);
+    return own.length ? own : knownFiles(t.hash);
+  }
+
+  /**
+   * Asks TorrServer to fill its cache with the start of one file (`&preload`, its own «Предзагрузка» size), so a file
+   * the player opens beside the video (an external dub or subtitles) starts without waiting. Never rejects.
+   */
+  preload(hash: string, fileIndex: number, name = 'file'): Promise<void> {
+    const path = '/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + fileIndex + '&preload';
+    return this.call<string>(path, { method: 'GET', responseType: 'text', timeoutMs: 120000, quiet: true }).then(
+      () => undefined,
+      () => undefined,
+    );
   }
 
   streamUrl(hash: string, fileIndex: number, name = 'file'): string {
@@ -204,11 +253,11 @@ export class TorrServerClient {
   }
 
   fetchText(url: string, timeoutMs = 15000): Promise<string> {
-    return request<string>(url, { responseType: 'text', timeoutMs, auth: this.ownAuth(url) });
+    return request<string>(url, { responseType: 'text', timeoutMs, auth: this.ownAuth(url), transport: this.via(url) });
   }
 
   fetchBytes(url: string, timeoutMs = 30000): Promise<ArrayBuffer> {
-    return request<ArrayBuffer>(url, { responseType: 'arraybuffer', timeoutMs, auth: this.ownAuth(url) });
+    return request<ArrayBuffer>(url, { responseType: 'arraybuffer', timeoutMs, auth: this.ownAuth(url), transport: this.via(url) });
   }
 
   ffprobeAvailable(): Promise<boolean> {

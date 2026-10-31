@@ -150,15 +150,81 @@ describe('Torrent', () => {
     await flush();
     const fills = Array.from(el.querySelectorAll('.m-ep .m-bar-fill')).map((n) => (n as HTMLElement).style.width);
     expect(fills).toEqual(['0%', '100%', '39%', '0%']);
-    expect((el.querySelector('.m-btn-primary') as HTMLElement).textContent).toContain('Продолжить на ТВ · S02E03 с 23:14');
+    expect((el.querySelector('.m-btn-primary') as HTMLElement).textContent).toContain('Продолжить на телефоне · S02E03 с 23:14');
     // nothing is written for this release
     expect(localStorage.getItem('tsp.progress')).not.toContain('abc:');
   });
 
-  it('main button says «Смотреть на ТВ» with no history', async () => {
+  it('a film with two releases: «Раздачи (2)» under the watch buttons lists both, a tap shows the other release', async () => {
+    const f1: T = { hash: 'abc', title: 'Полуночный архив / Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3, torrent_size: 8 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.mkv', length: 1 }] };
+    const f2: T = { hash: 'f2', title: 'Полуночный архив / Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3, torrent_size: 20 * 1024 ** 3, file_stats: [{ id: 1, path: 'Midnight.Archive.2026.2160p.mkv', length: 1 }] };
+    torrents.value = [f1, f2];
+    mount();
+    await flush();
+    const block = el.querySelector('[data-code="P06.2"]')!;
+    expect(block.getAttribute('data-block')).toBe('releases');
+    expect(block.querySelector('.m-section')!.textContent).toBe('Раздачи (2)');
+    // no small «Раздача: ... · Сменить» line and no sheet any more
+    expect(el.querySelector('[data-release-switch]')).toBeNull();
+    const rows = Array.from(block.querySelectorAll('[data-release]'));
+    expect(rows.map((r) => r.getAttribute('data-release'))).toEqual(['abc', 'f2']);
+    expect(rows[0].getAttribute('aria-checked')).toBe('true');
+    expect(rows[1].getAttribute('aria-checked')).toBe('false');
+    expect(rows[0].querySelector('.m-opt-name')!.textContent).toBe('1080p WEB-DL · 8,0 ГБ');
+    expect(rows[1].querySelector('.m-opt-name')!.textContent).toContain('20,0 ГБ');
+    // the seeds are shown, the same film name is not repeated on every row
+    expect(rows[1].querySelector('.m-opt-sub')!.textContent).toBe('подключено: 0 сидов · 0 пиров');
+    // the block comes after the watch buttons and before the files of the shown release
+    const order = Array.from(el.querySelectorAll('[data-code="P06.3"], [data-block="releases"], .m-section')).map((n) => n.getAttribute('data-block') || n.getAttribute('data-code') || n.textContent);
+    expect(order.indexOf('P06.3')).toBeLessThan(order.indexOf('releases'));
+    expect(order.indexOf('releases')).toBeLessThan(order.indexOf('Файлы'));
+    click('[data-release="abc"]');
+    expect(currentRoute.value).not.toEqual({ name: 'torrent', hash: 'f2' });
+    click('[data-release="f2"]');
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f2' });
+  });
+
+  it('another release picked in place does not show the files loaded for the previous one', async () => {
+    const f1: T = { hash: 'abc', title: 'Midnight Archive (2026) WEB-DL 1080p', category: 'movie', stat: 3 };
+    const f2: T = { hash: 'f2', title: 'Midnight Archive (2026) BDRip 2160p', category: 'movie', stat: 3 };
+    torrents.value = [f1, f2];
+    vi.spyOn(TorrServerClient.prototype, 'loadInfo').mockImplementation((h: string) =>
+      h === 'abc' ? Promise.resolve({ ...f1, file_stats: [{ id: 1, path: 'Midnight.Archive.1080p.mkv', length: 1 }] }) : new Promise<T>(() => {}),
+    );
+    mount();
+    await flush();
+    expect(el.textContent).toContain('Midnight.Archive.1080p');
+    act(() => render(<Torrent hash="f2" />, el));
+    await flush();
+    expect(el.textContent).not.toContain('Midnight.Archive.1080p');
+  });
+
+  it('a lone film has no releases block', async () => {
+    torrents.value = [{ hash: 'abc', title: 'Neon Rivers (2025) 1080p', category: 'movie', stat: 3, file_stats: [{ id: 1, path: 'Neon.mkv', length: 1 }] }];
+    mount();
+    await flush();
+    expect(el.querySelector('[data-code="P06.2"]')).toBeNull();
+  });
+
+  it('main button says «Смотреть на ТВ» with no history and a TV', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
     await flush();
     expect(el.querySelector('.m-btn-primary')!.textContent).toContain('Смотреть на ТВ');
+  });
+
+  it('without a TV the main button plays on the phone; «На ТВ» sits next to it', async () => {
+    mount();
+    await flush();
+    const main = el.querySelector('[data-main="phone"]') as HTMLElement;
+    expect(main.classList.contains('m-btn-primary')).toBe(true);
+    expect(main.textContent).toContain('Смотреть на телефоне · S02E01');
+    click(main);
+    await flush();
+    expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E01.mkv?link=abc&index=1&play', 'video/*');
+    expect(launch).not.toHaveBeenCalled();
+    click(el.querySelector('[data-code="P06.4"]')!);
+    expect(currentRoute.value.name).toBe('tv');
   });
 
   it('tapping an episode opens the sheet with three options', async () => {
@@ -205,11 +271,12 @@ describe('Torrent', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
-  it('without a TV the first option leads to the TV screen', async () => {
+  it('without a TV the phone comes first and the TV option leads to the TV screen', async () => {
     mount();
     await flush();
     click(el.querySelectorAll('.m-ep')[0]);
-    click(el.querySelectorAll('.m-opt')[0]);
+    expect(el.querySelectorAll('.m-opt')[0].getAttribute('data-where')).toBe('phone');
+    click(el.querySelectorAll('.m-opt')[1]);
     expect(launch).not.toHaveBeenCalled();
     expect(currentRoute.value.name).toBe('tv');
   });
@@ -218,13 +285,12 @@ describe('Torrent', () => {
     mount();
     await flush();
     click(el.querySelectorAll('.m-ep')[1]);
-    click(el.querySelectorAll('.m-opt')[1]);
+    click(el.querySelectorAll('.m-opt')[0]);
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E02.mkv?link=abc&index=2&play', 'video/*');
-    // watch journal: started on this phone
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(record.mock.calls[0][1]).toBe('abc');
-    expect(record.mock.calls[0][2]).toEqual({ f: 2, t: 0, d: 0, src: 'phone', name: 'Телефон' });
+    // watch journal: nothing. This used to write a start entry at 0:00, but an outside player never reports
+    // back whether it played, so a failed start (no network) showed in «История» as watched at 0:00 (QA B12)
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('copy option writes the stream URL to the clipboard and toasts', async () => {
@@ -243,8 +309,8 @@ describe('Torrent', () => {
     click(byText('Смотреть на телефоне'));
     await flush();
     expect(open).toHaveBeenCalledWith('http://srv:8090/stream/Show.S02E01.mkv?link=abc&index=1&play', 'video/*');
-    expect(record).toHaveBeenCalledTimes(1);
-    expect(record.mock.calls[0][2]).toMatchObject({ f: 1, src: 'phone' });
+    // no 0:00 journal entry for an outside player (QA B12)
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('no journal entry when the external player fails to open', async () => {
@@ -396,14 +462,105 @@ describe('Torrent', () => {
   });
 });
 
-describe('Torrent poster button', () => {
-  const btn = () => el.querySelector('button[aria-label="Найти обложку"]') as HTMLButtonElement | null;
+describe('Torrent «Сменить постер»', () => {
+  const btn = () => el.querySelector('button[aria-label="Сменить постер"]') as HTMLButtonElement | null;
+  const film = (hash: string, title: string, poster = ''): T => ({ hash, title, category: 'movie', stat: 3, poster, file_stats: [{ id: 1, path: 'movie.mkv', length: 1e9 }] });
+  const item = (id: number, kind: 'movie' | 'tv', year: number) => ({ id, kind, title: 'Супергёрл ' + id, original: 'Supergirl', year, poster: 'https://imagetmdb.com/t/p/w342/p' + id + '.jpg', rating: 7 });
+  afterEach(() => setCatalogClientForTests(null));
 
-  it('finds a poster on demand and the button goes away', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
-    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+  it('is shown even when the torrent has a poster, and the search starts with the title proper', async () => {
+    torrents.value = [{ ...tor, poster: 'https://p/x.jpg' }];
+    const search = vi.fn(async () => ({ items: [], pages: 1 }));
+    setCatalogClientForTests({ search } as any);
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    expect(search).toHaveBeenCalledWith('Starbound Frontier', 1);
+    expect((document.querySelector('.m-pp-search input') as HTMLInputElement).value).toBe('Starbound Frontier');
+    expect(document.body.textContent).toContain('Постеры не найдены');
+  });
+
+  it('a film: films of its year first; a result opens its variants and the pick goes to every release of the film', async () => {
+    const a = film('f1', 'Супергерл / Supergirl / 2026 / ДБ / 4K Remux');
+    const b = film('f2', 'Супергерл / Supergirl (2026) WEB-DL 1080p', 'https://old/p.jpg');
+    torrents.value = [a, b];
+    const search = vi.fn(async () => ({ items: [item(1, 'tv', 2015), item(2, 'movie', 1984), item(3, 'movie', 2026)], pages: 1 }));
+    const posters = vi.fn(async () => ['https://imagetmdb.com/t/p/w500/p3.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    setCatalogClientForTests({ search, posters } as any);
+    const get = vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async (h: string) => ({ ...(h === 'f1' ? a : b), title: h === 'f1' ? 'Свежее имя' : b.title }));
     const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/s.jpg' }] }))));
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Torrent hash="f1" />, el));
+    await flush();
+    click(btn());
+    await flush();
+    expect(search).toHaveBeenCalledWith('Супергерл', 1);
+    expect(document.body.textContent).toContain('Для всех раздач фильма (2)');
+    const caps = Array.from(document.querySelectorAll('.m-pp-cap')).map((n) => n.textContent);
+    // films only (the 2015 series is dropped), the 2026 one first
+    expect(caps).toEqual(['Супергёрл 3', 'Супергёрл 2']);
+    // the year has its own line under the title (a long title is cut, the year stays)
+    const years = Array.from(document.querySelectorAll('.m-pp-item')).map((n) => n.querySelector('.m-pp-year')!.textContent);
+    expect(years).toEqual(['2026', '1984']);
+    act(() => (document.querySelectorAll('.m-pp-item')[0] as HTMLElement).click());
+    await flush();
+    expect(posters).toHaveBeenCalledWith('movie', 3);
+    // the search poster and TMDB's copy of it at another size are one variant
+    const picks = Array.from(document.querySelectorAll('.m-art-pick img')).map((n) => n.getAttribute('src'));
+    expect(picks).toEqual(['https://imagetmdb.com/t/p/w342/p3.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    act(() => (document.querySelectorAll('.m-art-pick')[1] as HTMLElement).click());
+    await flush();
+    expect(get).toHaveBeenCalledWith('f1');
+    expect(get).toHaveBeenCalledWith('f2');
+    expect(setPoster).toHaveBeenCalledTimes(2);
+    // read again before the write: the title on the server goes back, not the listed one
+    expect(setPoster.mock.calls[0][0]).toEqual(expect.objectContaining({ hash: 'f1', title: 'Свежее имя', category: 'movie' }));
+    expect(setPoster.mock.calls[0][1]).toBe('https://imagetmdb.com/t/p/w500/v2.jpg');
+    expect(setPoster.mock.calls[1][0]).toEqual(expect.objectContaining({ hash: 'f2' }));
+    expect(torrents.value.map((x) => x.poster)).toEqual(['https://imagetmdb.com/t/p/w500/v2.jpg', 'https://imagetmdb.com/t/p/w500/v2.jpg']);
+    expect(toast.value).toBe('Постер сохранён');
+  });
+
+  it('«Вставить ссылку» refuses plain http to the internet and saves an https link', async () => {
+    setCatalogClientForTests({ search: vi.fn(async () => ({ items: [], pages: 1 })) } as any);
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockResolvedValue(undefined);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
+    mount();
+    await flush();
+    click(btn());
+    await flush();
+    act(() => (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Вставить ссылку') as HTMLElement).click());
+    const input = document.getElementById('poster-link') as HTMLInputElement;
+    const typeLink = (v: string) =>
+      act(() => {
+        input.value = v;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    const saveBtn = () => Array.from(document.querySelectorAll('.m-pp-link button')).find((b) => b.textContent === 'Сохранить') as HTMLElement;
+    typeLink('http://example.com/p.jpg');
+    act(() => saveBtn().click());
+    expect(document.querySelector('.m-pp-link [role=alert]')!.textContent).toBe('Ссылка http:// работает только в домашней сети, нужна https://');
+    expect(setPoster).not.toHaveBeenCalled();
+    typeLink('https://example.com/p.jpg');
+    act(() => saveBtn().click());
+    await flush();
+    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://example.com/p.jpg');
+    expect(torrents.value[0].poster).toBe('https://example.com/p.jpg');
+  });
+
+  it('«Сбросить» clears the poster and looks one up again', async () => {
+    torrents.value = [{ ...tor, poster: 'https://old/p.jpg' }];
+    setCatalogClientForTests({ search: vi.fn(async () => ({ items: [], pages: 1 })) } as any);
+    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: 'k' });
+    let stored = 'https://old/p.jpg';
+    vi.spyOn(TorrServerClient.prototype, 'get').mockImplementation(async () => ({ ...tor, poster: stored }));
+    const setPoster = vi.spyOn(TorrServerClient.prototype, 'setPoster').mockImplementation(async (_t, p) => {
+      stored = p;
+    });
+    vi.spyOn(TorrServerClient.prototype, 'list').mockImplementation(async () => [{ ...tor, poster: stored }]);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ results: [{ poster_path: '/s.jpg', first_air_date: '2024-01-01' }] }))));
     onTestFinished(() => {
       vi.unstubAllGlobals();
     });
@@ -411,26 +568,11 @@ describe('Torrent poster button', () => {
     await flush();
     click(btn());
     await flush();
-    await flush();
-    expect(setPoster).toHaveBeenCalledWith(expect.objectContaining({ hash: 'abc' }), 'https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg');
-    expect(toast.value).toBe('Обложка найдена');
-    expect(btn()).toBeNull();
-  });
-
-  it('asks for the TMDB key when the server has none', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
-    mount();
-    await flush();
-    click(btn());
-    await flush();
-    expect(toast.value).toBe('Задайте ключ TMDB в «Настройках сервера»');
-  });
-
-  it('is hidden when the torrent has a poster', async () => {
-    torrents.value = [{ ...tor, poster: 'http://p/x.jpg' }];
-    mount();
-    await flush();
-    expect(btn()).toBeNull();
+    act(() => (Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Сбросить (найти автоматически)') as HTMLElement).click());
+    for (let i = 0; i < 4; i++) await flush();
+    expect(setPoster.mock.calls.map((c) => c[1])).toEqual(['', 'https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg']);
+    expect(toast.value).toBe('Постер найден заново');
+    expect(torrents.value[0].poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/s.jpg');
   });
 });
 
@@ -612,7 +754,7 @@ describe('Torrent in English', () => {
     for (const w of ['Skip the intro', 'Skip the credits', 'Intro and credits', 'Episodes']) {
       expect(text, w).toContain(w);
     }
-    for (const l of ['Back', 'Find a poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {
+    for (const l of ['Back', 'Change poster', 'Rename', 'Delete the torrent', 'Skip the intro', 'Skip the credits']) {
       expect(labels(), l).toContain(l);
     }
     noCyrillic();
@@ -693,12 +835,17 @@ describe('Torrent in English', () => {
   });
 
   it('poster toasts, the delete question and not found', async () => {
-    vi.spyOn(TorrServerClient.prototype, 'tmdbSettings').mockResolvedValue({ APIKey: '' });
+    setCatalogClientForTests({ search: vi.fn(async () => Promise.reject(Object.assign(new Error('catalog:nokey'), { code: 'nokey' }))) } as any);
+    onTestFinished(() => setCatalogClientForTests(null));
     mount();
     await flush();
-    click('button[aria-label="Find a poster"]');
+    click('button[aria-label="Change poster"]');
     await flush();
-    expect(toast.value).toBe('Set a TMDB key in “Server settings”');
+    expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Change poster');
+    expect(document.body.textContent).toContain('Searching needs a TMDB key in “Server settings”. A link works without one.');
+    expect(document.body.textContent).toContain('Reset (find automatically)');
+    expect(document.body.textContent).not.toMatch(/[А-Яа-яЁё]/);
+    act(() => (document.querySelector('.m-sheet-backdrop, .m-sheet-bg') as HTMLElement | null)?.click());
     click('button[aria-label="Delete the torrent"]');
     expect(confirmText()).toBe('Delete the torrent “Starbound Frontier”?');
     expect(document.querySelector('[data-confirm-cancel]')!.textContent).toBe('Cancel');

@@ -5,6 +5,7 @@
 import { createSecretStore, createSourceHttp } from '../sources/http';
 import type { NativeHttpRequest } from '../sources/http';
 import type { SecretStore, SourceHttp } from '../sources/types';
+import type { Inspection, NativeTls } from '../api/torrServerTls';
 import type { UpdateInfo } from '../lib/updateInfo';
 import type { CloudflareVisibleRequest } from '../sources/cloudflareCheck';
 import type { BrowserCheck, BrowserLoginRequest } from '../sources/browserLogin';
@@ -36,6 +37,11 @@ export interface OmpNativeTvPlugin {
   tvName(): Promise<{ name: string }>;
   /** Phone remote Back that no screen took: the app closes like with the box remote's Back (older APKs lack it). */
   appBack?(): Promise<unknown>;
+  /** TorrServer over https through the native trust (APKs with self-signed TorrServer support). */
+  torrServerHttp?(o: object): Promise<{ status?: number; base64?: string }>;
+  torrServerInspect?(o: { url: string }): Promise<Inspection>;
+  torrServerTrust?(o: { hostPort: string; fingerprint: string }): Promise<unknown>;
+  torrServerForget?(o: { hostPort: string }): Promise<unknown>;
   /** Search sources: HTTP without CORS, cookies per site, body decoded by charset. */
   http(o: NativeHttpRequest): Promise<{ status: number; url: string; text: string }>;
   /** Tracker scrape on this device: HTTP body (Latin-1) or UDP seeders/leechers. Missing on an older APK. */
@@ -94,12 +100,27 @@ export interface OmpNativeTvPlugin {
   /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
   player2160?(): Promise<{ package: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
-  open2160?(o: { items: { url: string; title: string }[]; start: number; positionMs: number; fromStart: boolean; segments: string }): Promise<unknown>;
+  open2160?(o: Open2160Request): Promise<unknown>;
   /** OMP's traffic goes through a VPN (the active network has TRANSPORT_VPN); missing in an older APK. */
   vpnState?(): Promise<{ active?: unknown; lockdown?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
 }
 
+
+/**
+ * What open2160 / playEmbedded2160 get. `extras`: more Intent extras for 2160 Player (String or String[], keys under
+ * «tv.p2160.extra.»: the external tracks, src/player/externalTracks.ts); `resultKeys`: the player's result extras to
+ * hand back in `extras` of the answer. Both are ignored by an older APK.
+ */
+export interface Open2160Request {
+  items: { url: string; title: string }[];
+  start: number;
+  positionMs: number;
+  fromStart: boolean;
+  segments: string;
+  extras?: { [key: string]: string | string[] };
+  resultKeys?: string[];
+}
 
 export interface OpenOnStartupState {
   enabled?: boolean;
@@ -162,6 +183,10 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     player2160: () => np.call(cap, NAME, 'player2160', {}),
     open2160: (o) => np.call(cap, NAME, 'open2160', o),
     vpnState: () => np.call(cap, NAME, 'vpnState', {}),
+    torrServerHttp: (o) => np.call(cap, NAME, 'torrServerHttp', o),
+    torrServerInspect: (o) => np.call(cap, NAME, 'torrServerInspect', o),
+    torrServerTrust: (o) => np.call(cap, NAME, 'torrServerTrust', o),
+    torrServerForget: (o) => np.call(cap, NAME, 'torrServerForget', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
 }
@@ -188,6 +213,22 @@ export function nativePlugin(): OmpNativeTvPlugin | null {
     /* unavailable */
   }
   return null;
+}
+
+/** The native https path for TorrServer (TorrServerTrust); null outside the APK or in an APK without it. */
+export function nativeTorrServerTls(): NativeTls | null {
+  const p = nativePlugin();
+  if (!p || typeof p.torrServerHttp !== 'function' || typeof p.torrServerInspect !== 'function' || typeof p.torrServerTrust !== 'function') return null;
+  const http = p.torrServerHttp.bind(p);
+  const inspect = p.torrServerInspect.bind(p);
+  const trust = p.torrServerTrust.bind(p);
+  const forget = typeof p.torrServerForget === 'function' ? p.torrServerForget.bind(p) : null;
+  return {
+    forget: forget ? (hostPort) => forget({ hostPort }) : undefined,
+    http: (o) => http(o),
+    inspect: (url) => inspect({ url }),
+    trust: (hostPort, fingerprint) => trust({ hostPort, fingerprint }),
+  };
 }
 
 /** Wi-Fi/Ethernet IPv4 of the device; null when unknown or the plugin is missing. */

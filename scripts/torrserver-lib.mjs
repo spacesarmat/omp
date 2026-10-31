@@ -49,6 +49,38 @@ export function insertChangelog(text, version, tag, note) {
   return text.slice(0, idx) + entry + text.slice(idx);
 }
 
+const UNRELEASED_HEADING = /^## (Не выпущено|Unreleased)[ \t]*\r?$/im;
+const TORRSERVER_LINE = /^- (Встроенный TorrServer обновлён до|The built-in TorrServer is updated to) [^\r\n]*\r?\n/m;
+
+/**
+ * Puts the TorrServer line into the unreleased section («## Не выпущено» / «## Unreleased»), creating the section
+ * above the latest version when missing. An older TorrServer line in that section is replaced, so two bumps before
+ * a release leave one line. The OMP version is not touched: the release PR moves the section under its version.
+ */
+export function insertUnreleased(text, note, english = false) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const bullet = `- ${note}${eol}`;
+  const m = UNRELEASED_HEADING.exec(text);
+  if (m) {
+    const bodyStart = m.index + m[0].length + (text[m.index + m[0].length] === '\n' ? 1 : 0);
+    const next = text.slice(bodyStart).search(/^## /m);
+    const bodyEnd = next < 0 ? text.length : bodyStart + next;
+    let body = text.slice(bodyStart, bodyEnd);
+    if (TORRSERVER_LINE.test(body)) body = body.replace(TORRSERVER_LINE, bullet);
+    else {
+      const lead = /^(\r?\n)*/.exec(body)[0];
+      body = (lead || eol) + bullet + body.slice(lead.length);
+      if (!/\r?\n\r?\n$/.test(body) && next >= 0) body = body.replace(/(\r?\n)*$/, eol + eol);
+    }
+    return text.slice(0, bodyStart) + body + text.slice(bodyEnd);
+  }
+  const heading = english ? 'Unreleased' : 'Не выпущено';
+  const entry = `## ${heading}${eol}${eol}${bullet}${eol}`;
+  const idx = text.search(/^## /m);
+  if (idx < 0) return text.replace(/\s*$/, '') + eol + eol + entry.replace(/\s+$/, '') + eol;
+  return text.slice(0, idx) + entry + text.slice(idx);
+}
+
 // Replaces the first "version" field, and with lock=true also the one inside packages[""].
 // Dependency versions are never touched.
 export function setRootVersion(text, version, lock = false) {

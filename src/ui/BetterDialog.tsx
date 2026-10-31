@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doesFocusableExist, getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { focusAfterClose } from './focus';
+import { DialogBadge, visibleDialogCode } from '../testmode/badge';
 import { FocusGroup, Focusable, Button, Spinner } from './components';
 import { useKeys } from './keys';
 import { choose } from './dialog';
@@ -243,7 +244,8 @@ export function BetterDialog(p: {
         close();
       }}
     >
-      <FocusGroup focusKey="BETTER-DIALOG" className="dialog better-dialog" boundary>
+      <FocusGroup focusKey="BETTER-DIALOG" className={'dialog better-dialog' + (visibleDialogCode('better') ? ' test-anchor' : '')} boundary>
+        <DialogBadge id="better" />
         <div class="dialog-title better-title">{t('tv.better.title')}</div>
         <div class="better-current">
           {tvGlyphs(shortTitle(title)) + ' · ' + t('tv.better.current') + ' '}

@@ -6,6 +6,188 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Mine and Discover can show our own ads: a card the same size as its neighbours, with the Ad label, the advertiser and the erid. On the phone that is every Mine and Discover view, and between the rails on the Discover home. On a TV it is every Mine view and the Discover grid, and OK opens a QR code instead of the link. No ads in History or search, for subscribers, or on a TV linked to a subscribed phone. None in the first days after install, then one every few cards. With no banners configured, nothing is shown
+- The support card, the FAQ and the site now say "OMP is free, ad-free with a subscription". The only paid part is still the OMP subscription (Jackett and JacRed). Boosty support does not turn it on
+- [tech] Catalog ads: `settings.ads`, migration `003_ads` (`ad_images`, `ad_stats`, after the already shipped `002_monitor`), `GET /v1/ads-config`, `POST /v1/ads/event` with no device ids, and the Ads admin tab. The Android TV and webOS switches stay off until an admin turns them on
+- [phone] Catalog season page: a large poster on a backdrop, the series title and the season beside it, and room between the poster, the button and Episodes. An episode is two lines: a clear number, a title of up to two lines, then the length and the status (not in the library, or the air date)
+
+## 0.20.7
+
+- External dubs and subtitles that a release ships as separate files show in the release lists («+3 dubs, subtitles») and go to 2160 Player 0.2.17 or newer by themselves: every episode its own, the chosen dub is remembered for the series
+- [phone] The built-in player is updated to 2160 Player 0.2.17: external dubs and subtitles, subtitles from «Load from file…» and MKV chapters on 32-bit devices work again
+- [atv] An episode is no longer marked watched when 2160 Player closes before playback has started
+- [tv] On a release card, D-pad Up from the cast row reaches Watch again
+- External subtitles with no name (one .ass next to an episode, say) are remembered for the series
+- Dubs and subtitles reach 2160 Player for a release just added from the search and started right away, too (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode). TorrServer preloads the chosen dub
+- [phone] An unsupported external dub no longer stops the video: the embedded track plays and a warning shows; Back in the player closes the side panels
+- [atv] The saved progress is not replaced with the duration when the player returns no position. Finishing the episode, or leaving near the end, still marks it watched
+- [tv] On a catalog title card Up from the cast row reaches Find torrents; Up from the season row, the intro-skip row and the episode list also moves to the row above
+- [phone] On a catalog season page a long title no longer slides under the status bar
+- [lg] The release screen says honestly that separate dub files do not play on webOS: you hear the video track
+- [atv] With the OMP player chosen, a release screen with separate dubs suggests switching to 2160 Player
+- A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
+- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, ISO 639-2 language, forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track. `src/player/externalTracks.ts` hands them to 2160 Player by Intent API §3.7 (2160 Player 0.2.17): every key in one object P2160_TRACKS, the native side only passes `tv.p2160.extra.*` extras and returns the asked result keys. `charset` goes with subtitles only; OMP sends no `delayMs` or `select`: AUDIO_SELECT / TEXT_SELECT set the start. The android/vendor/2160player submodule is bumped to v0.2.17 (f292a8b), player-core coordinate 0.2.17
+- [tech] `TorrServerClient.get` keeps `file_stats` in knownFiles like `loadInfo`: the library copy of a release just added is the `add` answer without metadata, so `filesOfHash` returned []. `play2160` asks TorrServer for the files of queue releases this device has none of before the launch (`ensureQueueFiles`, at most 5 s; a screen left meanwhile opens no player). The series record keeps the external track id of subtitles with no name and language (`s.i`, «s:und:» or «s:und:#2»), `pickExternalSubtitle` finds them by it
+- [tech] `saveP2160Result` marks watched only when the player reported a position of at least 90% of the duration. `ended` without that position no longer fills in the known duration. `Player2160.parseExtras` reads `tv.p2160.extra.POSITION`, `DURATION` and `WATCHED` (API 3.4)
+
+## 0.20.7-beta.2
+
+- 2160 Player gets the external dubs and subtitles again for a release added from the search and started right away: nothing went to the player before, since the new release's file list was not known yet
+- External subtitles with no name and no language (one .ass next to an episode, say) are now remembered for the series when picked in 2160 Player, and come on in the next episodes
+- [tech] `TorrServerClient.get` keeps `file_stats` in knownFiles like `loadInfo`: the library copy of a release just added is the `add` answer without metadata, so `filesOfHash` returned []. `play2160` asks TorrServer for the files of queue releases this device has none of before the launch (`ensureQueueFiles`, at most 5 s; a screen left meanwhile opens no player). The series record keeps the external track id of subtitles with no name and language (`s.i`, «s:und:» or «s:und:#2»), `pickExternalSubtitle` finds them by it
+
+## 0.20.7-beta.1
+
+- External dubs and subtitles that a release ships as separate files (folders like «Rus Sound/LostFilm», «Rus Subs», or files next to an episode) now show in the release lists: «+3 dubs, subtitles». On the phone in «Another release», «Releases (N)», the «Release» line and the release header; on the TV in «Torrents · N» and on the release screen. These files still never show as episodes
+- 2160 Player gets those dubs and subtitles by itself: every episode its own files, at start the dub chosen for the series or the language from the settings, and a dub picked in the player is remembered for the whole series. TorrServer preloads the chosen dub. It needs 2160 Player 0.2.17 or newer; the phone's built-in player gets them the same way
+- [phone] The built-in player is updated to 2160 Player 0.2.17: a release's external dubs and subtitles, an unsupported external dub no longer stops the video (the embedded track plays and a warning shows), subtitles from «Load from file…» work again, MKV chapters on 32-bit devices, Back closes the side panels
+- [lg] The release screen says honestly that separate dub files do not play on webOS: you hear the video track
+- [atv] With the OMP player chosen, a release screen with separate dubs suggests switching to 2160 Player
+- A film with heavy external tracks next to it (several DTS dubs, say) is no longer taken for a set of episodes
+- [tech] `src/lib/externalTracks.ts`: the external tracks and subtitles of a release are matched to their episodes (SxxEyy, 1x02, E02, « - 02 », the same file name, season folders), the studio comes from the folder or the name suffix, ISO 639-2 language, forced/SDH flags, stable ids («a:rus:lostfilm»). `src/lib/externalTrackPick.ts` picks the start track. `src/player/externalTracks.ts` hands them to 2160 Player by Intent API §3.7 (2160 Player 0.2.17): every key in one object P2160_TRACKS, the native side only passes `tv.p2160.extra.*` extras and returns the asked result keys. `charset` goes with subtitles only; OMP sends no `delayMs` or `select`: AUDIO_SELECT / TEXT_SELECT set the start. The android/vendor/2160player submodule is bumped to v0.2.17 (f292a8b), player-core coordinate 0.2.17
+
+## 0.20.6
+
+- «Change poster» on the phone and the TV: search TMDB by title, pick a poster variant, paste your own link or reset; a film with several releases gets the poster on all of them
+- The automatic poster lookup is more accurate: a film is looked up among films of its year, found even when the release spells a Russian name without the letter yo, and by the English title from the release name; releases with no poster are tried again
+- [phone] A film or series on one screen: seasons, episodes and releases (quality, size, seeds), one tap plays the next episode; several releases of one film are one card in «Mine»
+- [phone] The «Search» tab replaces «Add»: «Mine», «Catalog» and «Sources» in one row, paste a link or magnet right there; «Continue watching» on top of «Mine»
+- TorrServer over https: on a custom port, behind a proxy with a path, and with a self-signed certificate after you confirm its fingerprint
+- The built-in TorrServer is updated to MatriX.147.2
+- [phone] The built-in player is updated to 2160 Player 0.2.16: wider audio and subtitle panels, a buffering spinner, the elapsed time is no longer cut, and on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only
+- [phone] Offline you get one clear «No internet», and the TV search does not run without Wi-Fi
+- [phone] «History» skips plays that never started (0:00), one episode is one line; in landscape screens no longer go under the system bar
+- [phone] The catalog on its side: a whole card shows, from the poster down to its caption, and a row holds as many cards as fit across. At the biggest size that is 5-6 instead of 2, more at the smaller sizes; «Mine» does the same for large and small tiles. Portrait is unchanged
+- [phone] «OMP account» shows «Subscription until ...» right away; different films with similar titles no longer merge in «Mine»
+- Help: a detailed guide to installing on Android over ADB without losing data
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
+- [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
+- [phone] Series episodes stay listed when a release is not answering: the phone shows the files it has already seen, and for a release never opened the season's episodes from TMDB (not playable). Releases added through OMP now keep their file list on TorrServer
+- [phone] «Find better quality» shows the season and episodes of each series release: «S01 · 8 episodes»
+- [tech] Android: https to TorrServer goes through OkHttp with TorrServerTrust (system CAs, then a pin per host:port)
+- [tech] The poster is written with TorrServer `set` to every release of the film; tsp.posterTried keeps the try time, a TMDB key fingerprint and the search version
+- [tech] The Telegram release post is a photo, a caption and buttons only; one bot @OMPBILLINGBOT for billing and posts, the admin bot and the parser monitor are removed
+- [tech] Billing panel: a «Monitoring» tab (trackers, sites, Postgres, backup, containers) with Telegram alerts
+- [tech] JacRed on the NUC: sync goes through WARP, the working config is kept on the host; ops/vps/deploy.sh runs on the NUC
+- [tech] Release files are cached on the device (omp.knownFiles, up to 150 releases); a journal write adds TorrServer.Files to data when TorrServer did not save it (data already held omp.ts)
+
+## 0.20.6-beta.11
+
+- [phone] The built-in player is updated to 2160 Player 0.2.16: on films with chapters the remaining time is right-aligned again; AVI files (XviD/DivX with MP3 audio) play and seek with the right duration, and when a video codec can not be decoded the player names it instead of playing sound only
+- Extra releases of a season can be deleted right from the releases list: on the phone a trash button on each release in «Another release» (and in «Releases (N)» of a film), on the TV the red key in «Torrents · N». Before a release goes, its watch marks, progress and intro skip move to the release that stays; the release playing on the TV can not be deleted; a pack holding other seasons is not deleted from the list
+- [tv] «Torrents · N» shows the quality of each release, not only its size
+- [phone] «Now on TV»: the title no longer repeats over the seek bar, the «Episodes» hint no longer covers the buttons, the bottom row no longer goes under the system bar, and the chapter list scrolls again; the bottom row of the remote pulled down from there also stays above the system bar
+- [phone] Series episodes stay listed when a release is not answering: the phone shows the files it has already seen, and for a release never opened the season's episodes from TMDB (not playable). Releases added through OMP now keep their file list on TorrServer
+- [phone] «Find better quality» shows the season and episodes of each series release: «S01 · 8 episodes»
+- [phone] «Change poster»: the year in a result tile now has its own line under the title (as on the TV); a long title is cut, the year always shows
+- Torrents without a poster that the automatic lookup found nothing for are searched once more with the new search (yo variants and the English title) without waiting a week
+- [tech] Release files are cached on the device (omp.knownFiles, up to 150 releases); a journal write adds TorrServer.Files to data when TorrServer did not save it (data already held omp.ts)
+- [tech] `tsp.posterTried` stores the search version (`POSTER_SEARCH_VERSION`, now 2); marks of another version are dropped
+
+## 0.20.6-beta.10
+
+- [phone] «Change poster»: search result tiles no longer run over each other, the title and year captions show
+- The poster search finds a film even when the release title spells a Russian name without the letter yo (as many trackers do), and when nothing is found in Russian it searches by the English title from the release name (Supergirl.2026... - «Supergirl», 2026); in the automatic lookup and in «Change poster» on the phone and the TV
+- [tech] Search order: the title, its variants with yo, the English title; all the typed searches (a film with its year, a series) first, then the multi search; titles are compared with yo read as ye
+
+## 0.20.6-beta.9
+
+- The built-in TorrServer is updated to MatriX.147.1
+- [phone] «Change poster»: the picture button on the release screen is now always there, not only without a poster, and the long-press menu in «Mine» has the same item. Search TMDB by title (films or series of the same year first), pick one of the poster variants, «Paste a link» or «Reset (find automatically)»; a film with several releases gets the poster on all of them
+- [tv] «Change poster» replaces «Another poster»: a poster grid with title search, the poster variants of the picked film or series, a link field and reset; all with the remote, and the poster shows on the phone too
+- The automatic poster lookup is more accurate: a film is looked up among films of its year and a series among series, so a 2026 film no longer gets the poster of a series with the same name. Releases with no poster found are tried again after a week and after the TMDB key changes
+- [tech] The poster is written with TorrServer `set` to every release of the film, each read again right before the write so the title and category are kept; an http:// link is accepted for the home network only; tsp.posterTried keeps the try time and a fingerprint of the TMDB key (FNV, never the key)
+
+## 0.20.6-beta.8
+
+- [phone] «Mine»: different films no longer merge into one card because of a year, quality or tags in the title (Supergirl, Signal One and Minions are separate again); releases of different TMDB films are never grouped, and the «Already in the library» hint is more accurate too
+- [phone] Film screen with several releases: the «Release: ... · Change» line is replaced by a «Releases (N)» block - each release shows its quality, size and seeds, the current one is checked, a tap switches; «Files» below belong to the picked release
+- TorrServer over https on a non-standard port (for example, https://ts.example.com:8443) and behind a reverse proxy with a path: an address without https:// is tried over both http and https (https first on ports 443, 8443 and 8091) and the one that answers is saved; errors and the server list show https://, and a refused certificate is named as such (#193)
+- [atv] Android TV: TorrServer over https with a self-signed certificate - the first connect shows the certificate fingerprint and connects only after "Trust"; a changed certificate shows a warning. VLC cannot open such a server, the built-in player plays it (#193)
+- [phone] Phone: TorrServer over https with a self-signed certificate connects after you confirm the certificate fingerprint; a changed certificate shows a warning, and the background subscription check uses the certificates already accepted (#193)
+- [tech] Android: https requests to TorrServer go through native OkHttp with TorrServerTrust (system CAs, then a pin per host:port); the same trust is the HttpsURLConnection default, so Media3 and 2160 Player work without submodule changes; webOS still needs a trusted certificate
+
+## 0.20.6-beta.7
+
+- [phone] The built-in player is now 2160 Player 0.2.14: the elapsed time no longer clips while the file length is still unknown (buffering in portrait showed "3:2" instead of "3:29")
+
+## 0.20.6-beta.6
+
+- [phone] Test mode in landscape: row and poster labels no longer cover the filter chips and the bottom tab bar; a row label moves to a free spot, and labels of elements under the tab bar are not drawn
+- [phone] Settings, "OMP account": with an active subscription the row shows "Subscribed until ..." right away instead of "Sign in"; a phone linked through Telegram sees "Checking sign-in…" instead of "Sign in" while the account is checked
+
+## 0.20.6-beta.5
+
+- [phone] With no TV chosen the main button is "Watch on the phone"; on a series page one tap starts the next unwatched episode, with "On the TV" next to it
+- [phone] The "Add" tab is now "Search": one field with the "Mine", "Catalog" and "Sources" tabs; a link or magnet is pasted there too
+- [phone] A series and its release on one screen: seasons, episodes and a "Release: 1080p · Change" line that opens "Another release"
+- [phone] "Mine": a "Continue watching" row on top; "History" left the filters and opens from the header button or "All history"
+- [phone] The "Remote" tab shows only when a TV is chosen
+- [phone] Several releases of one movie in "Mine" are one card, and the release is picked inside with the "Release: ... · Change" line
+- [phone] Sort and view are one sheet, and the button shows the current choice
+- [phone] Settings: "Server on the phone" sits next to "Watch from"
+- [phone] The built-in player is now 2160 Player 0.2.13: the "Audio track" and "Subtitles" panels are wider and labels no longer break mid-word; in landscape the time is aligned to the right
+- [phone] 2160 Player: "LIVE" shows only for real live streams; while buffering a spinner replaces the play button
+- [phone] 2160 Player: the error dialog closes the open panel and draws on an opaque backdrop; intro detection starts only after the stream has opened
+
+## 0.20.6-beta.4
+
+- [phone] Offline shows one honest "No internet" instead of "TMDB does not answer" and "Nothing found"; the source search does not offer a subscription when no source answered
+- [phone] The TV search does not run without Wi-Fi, and on "Catalog" it runs without the "Searching..." line, so the poster grid no longer jumps; the "TV" screen says "No TVs found" and what to check after a search with no result
+- [phone] "History": a start that never played (0:00) is no longer saved as a watch, and one episode of a show is shown as one row
+- [phone] Landscape: screens keep off the side system bar, the bottom tab bar is lower
+- [phone] "Mine": the sort button shows which order is on, a toast names the new sort or view after a change
+- [phone] "Mine": a large clear button in search, an empty search field closes when you leave, "Nothing found" offers a tracker search; a poster without an image shows a letter instead of the name twice
+- [phone] "News": the "Subscriptions" tab with its counter fits one line
+- [phone] Release and series: no dangling "-" when seeds are unknown; the buttons over the backdrop are on a dark plate again
+- [phone] "Another release" and "Find in better quality": sizes in one format ("11.2 GB"), the picked release is outlined
+- [phone] Series, "Dub": "Change" turns into "Hide", and with no remembered dub there is no pointless "Default (reset)" item
+- [phone] "Remote" without a TV: the search is a line in the "Connect a TV" card, not a separate line above it
+- [phone] "Install OMP on the TV": a top gap, an aligned title, a normal "Enter IP manually" button
+- [phone] Beta: test-mode labels sit on the edge of the element, see-through and smaller, and no longer cover switches and values; "Label size" shows only with test mode on; "Dub" and "Change" have codes
+- [phone] "Another release": long release titles no longer run over the next row and the size and seeds line; each row grows to fit its title and the list scrolls
+- [tv] "In better quality": all text in the dialog is at least 24px
+- [phone] Help: a new answer "Install on Android with ADB" for the phone and TV boxes - developer mode, platform-tools, adb devices and adb connect, picking the APK by architecture, adb install -r without losing data, and the common errors
+- [phone] Help: "App not installed" no longer says that 32 or 64 bits never block an install, and warns that uninstalling OMP erases its data; a new question "OMP subscription: Jackett and JacRed"
+- [atv] Help: a full answer "Install on Android with ADB" (adb connect, picking the APK, errors); the built-in player is named 2160 Player
+- [tech] Site: the FAQ has the ADB install steps (a #adb link opens the answer) and an "Is OMP free?" question about the OMP subscription
+- [tech] Billing panel: a Monitoring tab with a table of checks (green or red status, time, 7-day history) and a "Check now" button
+- [tech] Checks every 15 minutes (the interval is set in the tab): every Jackett and JacRed tracker directly and through WARP, search through Jackett, Cloudflare trace through WARP, Postgres, backup, bot polling, disk, the 4 public sites, Jackett, JacRed and TorrServer on the internal network
+- [tech] Containers, restarts and memory through a read-only Docker proxy (new omp-docker-proxy container); the panel cannot restart anything
+- [tech] Telegram alert through @OMPBILLINGBOT only after a second check 30 s later, once per problem, plus a «fixed» message
+- [tech] Monitoring: site checks (public sites and trackers) pass on the response status and headers without downloading the whole page, so a slow body no longer reads as a timeout
+- [tech] Monitoring: red first, fully green groups fold into one line ("Containers 12/12"); filter "All / Errors only / No alert", search by name, sorting by status, name, response time and check time; the choice is kept in the browser
+- [tech] Monitoring: a "Recheck all errors" button runs only the red checks again
+- [tech] ops/vps/deploy.sh works on the NUC: docker compose with docker-compose.nuc.yml, health checks over http on port 80, node --check in a container when the host has no node
+- [tech] JacRed: the base syncs from sync.jacred.stream through WARP (globalproxy in jacred/init.yaml): the direct path from the NUC stalled and the base had not grown for 15 hours
+- [tech] Monitoring: a "Recheck" button on a red row (that check only), run progress «N of M» with the start time, a state per row (checking, waiting for the retry, done) and a summary at the end
+- [tech] JacRed on the NUC: the full running config is pinned in the host jacred/init.yaml (with globalproxy through WARP); the README explains that /app/init.yaml is the real config and that a JacRed admin save must be copied to the host
+- [tech] JacRed on the NUC: a systemd timer copies the running config from the container to the host every minute (validated, with a backup, last 20 kept), so a JacRed admin save survives a restart
+- [tech] Monitoring: a yellow "asks for a code" status for tracker sites that answer with a captcha or anti-bot page: no alert, not counted as an error, its own filter, group summary "12/12, 1 yellow"; a red tracker turning yellow closes its alert with an «asks for a code» note
+- [tech] Monitoring: when a tracker site leaves out its intermediate certificate, the check fetches it through AIA like a browser and still verifies the full chain ("certificate fetched"); torrent.by is no longer red with a TLS error
+
+## 0.20.6-beta.3
+
+- Beta: "Label size" is now a px slider, labels are smaller by default
+- [phone] Beta: labels from 8 to 24 px, default 12
+- [tv] Beta: labels from 16 to 36 px in steps of 2, default 20; left and right change it, the row shows the value
+- [atv] Beta: the Android TV player uses the same px size
+- [tech] An old Small or Large choice moves to the nearest size, Medium becomes the new default
+
+## 0.20.6-beta.2
+
+- Beta: codes on posters, cards, rows, list rows, tabs and buttons (for example S01.R2.P#4 is the 4th poster in the 2nd row), an open window shows only its own
+- Beta: "Label size" next to "Test mode": Small, Medium or Large
+- Beta: the label size also applies in the Android TV player and the Cloudflare check window
+- [tech] Element type table (R, P, C, L, T, B, I, G) in docs/screen-codes.md; npm run tv:install finds a beta IPK
+
+## 0.20.6-beta.1
+
+- [tv] Beta: "Test mode" in Settings shows codes for screens, dialogs and items (for example S05.3), the screen code in the corner can be copied
+- [phone] Beta: "Test mode" on the phone too (item P11.19 in Settings), codes P and PD
+- [atv] Beta: codes in the Android TV player too (A01, AD01-AD06)
+- [tech] Screen code table in docs/screen-codes.md, a test keeps it in sync with the code
 - [tech] Telegram release post without files: only photo, caption and buttons (builds and release page via buttons); the file replies, the file repost (telegram-fix: files) and the «forward it manually» log are removed
 - [tech] Telegram release post without text links: the caption holds only the change bullets, the files and the GitHub release page are buttons only (new universal APK button), no separate message linking the big files
 - [tech] One Telegram bot, @OMPBILLINGBOT, for billing and channel posts: billing requests its update types explicitly and deletes the «pinned a message» line itself; the release script no longer polls the bot

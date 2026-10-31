@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { sizeText as resultSizeText } from './ResultCard';
 import { Sheet } from './Sheet';
 import { Icon } from './Icon';
 import { showToast } from './toast';
@@ -135,7 +136,7 @@ export function ReplaceSheet({
   if (choosing) {
     const list = [finding.result].concat((others || []).filter((r) => resultKey(r) !== resultKey(finding.result)));
     return (
-      <Sheet label={t('monitor.replaceSheet.other')} onClose={() => setChoosing(false)}>
+      <Sheet label={t('monitor.replaceSheet.other')} testId="PD29" onClose={() => setChoosing(false)}>
         <div class="m-sheet-title">{t('monitor.replaceSheet.other')}</div>
         <div class="m-sheet-scroll m-sub-pick" role="radiogroup" aria-label={t('monitor.replaceSheet.other')}>
           {list.map((r) => {
@@ -154,7 +155,7 @@ export function ReplaceSheet({
               >
                 <span class="m-opt-text m-grow">
                   <span class="m-opt-name">{r.Title}</span>
-                  <span class="m-opt-sub">{[sourceName(r.source), r.Size, seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
+                  <span class="m-opt-sub">{[sourceName(r.source), resultSizeText(r), seedsText(r.Seed || 0)].filter(Boolean).join(' · ')}</span>
                 </span>
                 {on && <Icon d={CHECK} size={20} />}
               </button>
@@ -167,7 +168,7 @@ export function ReplaceSheet({
 
   const more = others === null ? t('monitor.replaceSheet.searching') : others.length ? tp('monitor.replaceSheet.moreN', others.length) + ' ›' : t('monitor.replaceSheet.noOthers');
   return (
-    <Sheet label={t('monitor.replaceSheet.title')} onClose={() => !busy && onClose()}>
+    <Sheet label={t('monitor.replaceSheet.title')} testId="PD30" onClose={() => !busy && onClose()}>
       <div class="m-sheet-title">{thenWatch ? t('monitor.replaceSheet.titleWatch') : t('monitor.replaceSheet.title')}</div>
       {thenWatch && <div class="m-muted m-small">{t('monitor.replaceSheet.watchNote')}</div>}
       <div class="m-muted m-small">{e ? name + ' · ' + t('library.season', { n: e.season }) : name}</div>
@@ -180,7 +181,7 @@ export function ReplaceSheet({
       </div>
       <div class="m-rep-box new">
         <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
-        <div class="m-rep-line">{releaseLine(picked.Title, picked.Size)}</div>
+        <div class="m-rep-line">{releaseLine(picked.Title, resultSizeText(picked))}</div>
       </div>
       <div class="m-rep-moves">
         <div>✓ {t('monitor.replaceSheet.keepsHistory')}</div>

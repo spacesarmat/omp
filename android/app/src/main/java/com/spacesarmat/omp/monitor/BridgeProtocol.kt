@@ -38,6 +38,8 @@ sealed class BridgeRequest {
     data class Cleartext(val id: Int, val hosts: List<String>) : BridgeRequest()
     /** A new access token of the OMP subscription (SourceServices.billing): the page cannot see the refresh token. */
     data class BillingRefresh(val id: Int, val deviceId: String, val stale: String) : BridgeRequest()
+    /** A TorrServer request over https (TorrServerHttp: the certificates the user trusted in the app). */
+    data class TsHttp(val id: Int, val request: JSONObject) : BridgeRequest()
     /** A malformed request; answered with [error] when it has an id. */
     data class Invalid(val id: Int?, val error: String) : BridgeRequest()
 }
@@ -74,6 +76,7 @@ object BridgeProtocol {
             "notify" -> notify(o.optJSONObject("notification"))?.let { BridgeRequest.Notify(id, it) }
                 ?: BridgeRequest.Invalid(id, BAD_MESSAGE)
             "cleartext" -> BridgeRequest.Cleartext(id, hostList(o.optJSONArray("hosts")))
+            "tsHttp" -> o.optJSONObject("request")?.let { BridgeRequest.TsHttp(id, it) } ?: BridgeRequest.Invalid(id, BAD_MESSAGE)
             "billingRefresh" -> {
                 val device = o.opt("deviceId") as? String
                 val stale = (o.opt("stale") as? String) ?: ""

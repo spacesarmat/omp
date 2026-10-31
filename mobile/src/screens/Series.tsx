@@ -1,13 +1,13 @@
-// «Мои» → a series card: season chips (like the «Обзор» title card) and the torrents of the chosen season as rows,
-// each opening the torrent screen; «Смотреть на ТВ» / «Продолжить на ТВ» for the chosen season.
+// «Мои» → a series card, one screen: season chips (like the «Обзор» title card), the chosen season's release as a line
+// «Раздача: 1080p WEB-DL · Сменить» (the sheet «Другая раздача» picks another one of the season) and its episodes.
+// The main button starts the next unwatched episode: on the TV when one is chosen, else on this phone.
 // With the TMDB show found: a hero (backdrop, poster, years · rating · genres, overview), every season TMDB knows (the
 // ones missing from «Мои» dimmed, with «Найти раздачи»), and the chosen season's TMDB name and overview. Without TMDB
 // (no key, offline, no match) the simple layout stays, with no error shown. The hero has the series' status pill; a
 // season still to come is a chip «Сезон 5 · с 3 мая» with «Напомнить» (a monitoring subscription for that season).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { fmtSize, lang, t, tp } from '../../../src/i18n';
+import { lang, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
-import { useLongPress } from '../ui/longPress';
 import { SeriesPill } from '../ui/SeriesPill';
 import { showToast } from '../ui/toast';
 import { askNotifyOnce, monitorVersion, reloadMonitor } from '../monitor/ui';
@@ -15,28 +15,24 @@ import { addSubscription, loadSubs, sameQuery } from '../../../src/monitor/subs'
 import { subsLimitReached } from '../../../src/monitor/limit';
 import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/seriesStatus';
-import { Poster, qualityBadge } from '../ui/Poster';
+import { Poster } from '../ui/Poster';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
-import { routeForTorrent } from '../audiobooks/route';
 import { filesOf, useTvLaunch } from '../watch';
-import { deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
+import { deleteRelease, deleteTorrents, reportDeleted, watchTarget } from '../lib/torrentActions';
 import { askConfirm } from '../ui/confirm';
 import { TorrentMenu, type TorrentMenuItem } from '../ui/TorrentMenu';
 import { client } from '../../../src/store/servers';
-import { sharedProgress, sharedResume } from '../lib/sharedProgress';
+import { sharedResume } from '../lib/sharedProgress';
 import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
 import { continueWatching, getLocalProgress, progressVersion, serverViewed } from '../../../src/store/progress';
-import { libraryTitle, positionLabel } from '../../../src/lib/libraryView';
+import { libraryTitle } from '../../../src/lib/libraryView';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
-import { displayTitle } from '../../../src/lib/torrentName';
 import type { Torrent } from '../../../src/api/types';
-import { findGroup, groupLabel, NO_SEASON, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
-import { releaseLine, releaseName } from '../lib/duplicates';
-import { contentsText } from '../lib/releaseContents';
-import { swarmText } from '../../../src/lib/torrentStatus';
+import { releaseName } from '../lib/duplicates';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
 import { BetterSheet } from '../ui/BetterSheet';
@@ -47,11 +43,19 @@ import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from 
 import { ratingText } from './catalog/CatalogSearch';
 import { useSeriesDub } from '../../../src/ui/seriesDub';
 import { errorMessage } from '../../../src/api/http';
+import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
+import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
+import { EpisodeRows, TmdbEpisodeRows, WatchSheet } from './Torrent';
+import { seasonEpisodeList } from '../../../src/lib/episodeNames';
+import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
+import { phoneLabel, playOnPhone } from '../watchHere';
 
 const BACK = 'M15 5l-7 7l7 7';
 const KEEP = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
 // the chosen season of each open series screen (its route entry): kept through «Назад» from the torrent screen
 const chosenSeason = new WeakMap<MRoute, number>();
+// the release picked in «Другая раздача» for a season of a series («key:season» → hash), for this run of the app
+const pickedRelease = new Map<string, string>();
 
 /** The season shown first: the one watched last, else the newest. */
 function firstSeason(g: SeriesGroup): number {
@@ -155,7 +159,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
     <>
       <div class="m-tc-backdrop m-sh-backdrop">
         {card.backdrop && <img src={card.backdrop} alt="" />}
-        <button type="button" class="m-icon-btn m-tc-back" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn m-tc-back" data-code="P26.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
       </div>
@@ -239,81 +243,6 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   );
 }
 
-function Row({ tor, poster, onWatch, onMenu, onFind }: { tor: Torrent; poster: string; onWatch: (tor: Torrent) => void; onMenu: (tor: Torrent) => void; onFind: (tor: Torrent) => void }) {
-  const press = useLongPress(
-    () => onMenu(tor),
-    () => navigate(routeForTorrent(tor)),
-  );
-  const s = libraryTitle(tor);
-  const files = playableFiles(filesOf(tor));
-  const target = watchTarget(tor.hash, files);
-  // the episode's progress, also from the same episode in another release of the series
-  const shared = target ? sharedProgress(tor.hash, target.id) : null;
-  const at = shared ? shared.position : 0;
-  const duration = target && shared ? getLocalProgress(tor.hash, target.id)?.duration || shared.duration : 0;
-  const q = qualityBadge(displayTitle(tor));
-  const contents = contentsText(tor);
-  const swarm = swarmText(tor);
-  const dead = isDeadRelease(tor.hash);
-  const find = dead && canUpgrade(tor, files);
-  return (
-    <div>
-    <div class="m-hrow m-series-row" data-hash={tor.hash}>
-      <button type="button" class="m-hrow-main" {...press}>
-        <Poster torrent={tor.poster || !poster ? tor : { ...tor, poster }} class="m-poster-mini" />
-        <span class="m-hrow-text">
-          <span class="m-hrow-title">
-            {s.title}
-            {s.meta && <span class="m-title-meta">{' · ' + s.meta}</span>}
-          </span>
-          <span class="m-muted m-small m-vrow-meta">
-            <span>{fmtSize(tor.torrent_size || 0)}</span>
-            {q && <span class="m-badge-inline">{q}</span>}
-            {contents && <span>{contents}</span>}
-            {swarm && <span>{swarm}</span>}
-          </span>
-          {at > 0 && (
-            <>
-              <span class="m-hrow-pos">
-                <span>{[target ? episodeLabel(target.path) : '', positionLabel(at, duration)].filter(Boolean).join(' · ')}</span>
-                <span class="m-muted">{t('series.continue')}</span>
-              </span>
-              {duration > 0 && (
-                <span class="m-bar-track thin">
-                  <span class="m-bar-fill" style={{ width: Math.min(100, (at / duration) * 100) + '%' }} />
-                </span>
-              )}
-            </>
-          )}
-        </span>
-      </button>
-      {target && (
-        <button
-          type="button"
-          class="m-play"
-          aria-label={at > 0 ? t('library.continueOnTv') : t('news.watchOnTv')}
-          onClick={() => onWatch(tor)}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M8 5l11 7-11 7z" />
-          </svg>
-        </button>
-      )}
-    </div>
-      {dead && (
-        <div class="m-dead">
-          <div class="m-hint-warn">{t('torrent.deadRelease')}</div>
-          {find && (
-            <button type="button" class="m-btn m-btn-secondary" onClick={() => onFind(tor)}>
-              {t('torrent.better.find')}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /**
  * «Озвучка: LostFilm» of the whole series (every season, shared with the TV through TorrServer): remembered when a
  * track is picked in a player; «Сменить» lists the dubs seen in the series' files and «По умолчанию (сбросить)».
@@ -325,33 +254,38 @@ function DubRow({ group }: { group: SeriesGroup }) {
     setOpen(false);
     dub.pick(value).catch((e) => showToast(errorMessage(e)));
   };
+  // nothing remembered and no dubs seen yet: the only choice would be «По умолчанию (сбросить)», which is
+  // already the state, so the open row shows just how a dub gets remembered
+  const onlyReset = !dub.rec && dub.choices.length <= 1;
   return (
-    <div class="m-series-dub" data-series-dub>
+    <div class="m-series-dub tm" data-series-dub data-code="P26.2">
       <div class="m-series-dub-line">
         <span class="m-small">
           {t('series.dub') + ': '}
           <b data-dub-value>{dub.text}</b>
         </span>
-        <button type="button" class="m-btn-text" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {t('series.dubChange')}
+        <button type="button" class="m-btn-text tm" data-code="P26.3" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? t('common.hide') : t('series.dubChange')}
         </button>
       </div>
       {open && (
         <>
-          <div class="m-chips m-series-dub-chips">
-            {dub.choices.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                class={'m-chip' + (o.value === dub.value ? ' on' : '')}
-                aria-pressed={o.value === dub.value}
-                data-dub-choice={o.value}
-                onClick={() => pick(o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+          {!onlyReset && (
+            <div class="m-chips m-series-dub-chips">
+              {dub.choices.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  class={'m-chip' + (o.value === dub.value ? ' on' : '')}
+                  aria-pressed={o.value === dub.value}
+                  data-dub-choice={o.value}
+                  onClick={() => pick(o.value)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          )}
           <span class="m-small m-muted">{t('series.dubNote')}</span>
         </>
       )}
@@ -397,8 +331,9 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const info = season !== NO_SEASON ? tmdbOf(season) : undefined;
   const caption = info ? seasonCaption(info) : '';
 
-  const watch = (tor: Torrent) => {
-    const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
+  // `files`: the episodes shown for the season (a pack's own list may hold other seasons, or come later from the server)
+  const watch = (tor: Torrent, files?: TorrentFile[]) => {
+    const target = watchTarget(tor.hash, files || playableFiles(filesOf(tor)));
     if (!target) return;
     if (!activeTv.value) {
       navigate({ name: 'tv' });
@@ -431,7 +366,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             season === NO_SEASON
               ? tp('series.keepOnlyAskNoSeason', others.length)
               : tp('series.keepOnlyAsk', others.length, { season: String(season) });
-          if (!(await askConfirm(ask, t('series.keepOnly'), { destructive: true }))) return false;
+          if (!(await askConfirm(ask, t('series.keepOnly'), { destructive: true, testId: 'PD52' }))) return false;
           reportDeleted(await deleteTorrents(c, others.map((m) => m.hash)));
           return true;
         },
@@ -439,9 +374,70 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     ];
   };
 
-  const main = rows.length ? seasonTarget(rows) : null;
-  const mainFile = main ? watchTarget(main.hash, playableFiles(filesOf(main))) : undefined;
+  // one screen: the season's release (the one picked in «Другая раздача», else the one watched last or the newest)
+  // and its episodes; «Смотреть» starts the next unwatched episode of it
+  const pickKey = group.key + ':' + season;
+  const pickedHash = pickedRelease.get(pickKey);
+  const main = rows.filter((r) => r.hash === pickedHash)[0] || (rows.length ? seasonTarget(rows) : null);
+  const [loadedFiles, setLoadedFiles] = useState<{ hash: string; files: TorrentFile[] } | null>(null);
+  const ownFiles = main ? playableFiles(filesOf(main)) : [];
+  const allFiles = ownFiles.length || !main ? ownFiles : loadedFiles && loadedFiles.hash === main.hash ? playableFiles(loadedFiles.files) : [];
+  // a pack holds other seasons too: only the chosen season's episodes (files without a season number stay)
+  const inSeason = season === NO_SEASON ? allFiles : allFiles.filter((f) => {
+    const n = parseEpisode(f.path).season;
+    return n === null || n === season;
+  });
+  const files = inSeason.length ? inSeason : allFiles;
+  useEffect(() => {
+    const c = client.peek();
+    if (!c || !main || ownFiles.length) return;
+    let live = true;
+    c.loadInfo(main.hash).then(
+      (info) => live && setLoadedFiles({ hash: main.hash, files: filesOf(info) }),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [main ? main.hash : '', ownFiles.length]);
+  const fileSeasons = files.map((f) => parseEpisode(f.path).season).filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
+  // no files known (the release does not answer and was never seen here): the season's episodes from TMDB instead
+  const noFiles = !!main && !files.length && season !== NO_SEASON;
+  const epSeasons = fileSeasons.length ? fileSeasons : noFiles ? [season] : [];
+  const tmdb = useTmdbEpisodes(main, epSeasons, !!main && epSeasons.length > 0);
+  const tmdbOnly = noFiles ? seasonEpisodeList(tmdb.eps, season) : [];
+  const [releasesOpen, setReleasesOpen] = useState(false);
+  const [episode, setEpisode] = useState<TorrentFile | null>(null);
+  const mainFile = main ? watchTarget(main.hash, files) : undefined;
   const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
+  const tvMain = !!activeTv.value;
+  const watchHere = () => {
+    if (!main || !mainFile) return;
+    setError('');
+    playOnPhone(main, mainFile, mainAt).catch((e) => setError(errorMessage(e)));
+  };
+  const dead = !!main && isDeadRelease(main.hash);
+  const canFind = !!main && canUpgrade(main, files);
+  // the trash in «Другая раздача»: the shown one going hands the season over to the one that stays
+  const removeRelease = async (x: Torrent) => {
+    const c = client.value;
+    if (!c || !main) return;
+    const count = rows.length;
+    const keeper = await deleteRelease(c, {
+      tor: x,
+      rows,
+      current: main.hash,
+      season,
+      name: (r) => releaseName(r, card && card.title ? card.title : lead.title),
+    });
+    if (!keeper) return;
+    if (x.hash === main.hash) {
+      pickedRelease.set(pickKey, keeper.hash);
+      setLoadedFiles(null);
+      setEpisode(null);
+    }
+    if (count - 1 < 2) setReleasesOpen(false);
+  };
 
   return (
     <>
@@ -517,32 +513,50 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       ) : (
         <>
           {card && season !== NO_SEASON && <SeasonAbout key={season} id={card.id} number={season} />}
+          {main && <ReleaseSwitch tor={main} code="P26.4" onChange={() => setReleasesOpen(true)} onMore={() => setMenuFor(main)} />}
+          {main && dead && (
+            <div class="m-dead">
+              <div class="m-hint-warn">{t('torrent.deadRelease')}</div>
+              {canFind && (
+                <button type="button" class="m-btn m-btn-secondary" onClick={() => setBetter(main)}>
+                  {t('torrent.better.find')}
+                </button>
+              )}
+            </div>
+          )}
           {main && mainFile && (
             <div class="m-tc-season-actions">
-              <button type="button" class="m-btn m-btn-primary" onClick={() => watch(main)}>
-                {mainAt > 0 ? t('library.continueOnTv') : t('news.watchOnTv')}
-              </button>
+              {tvMain ? (
+                <button type="button" class="m-btn m-btn-primary tm" data-code="P26.5" data-main="tv" onClick={() => watch(main, files)}>
+                  {mainAt > 0 ? t('library.continueOnTv') : t('news.watchOnTv')}
+                </button>
+              ) : (
+                <>
+                  {/* no TV chosen: one tap plays the next episode on this phone; «На ТВ» connects one first */}
+                  <button type="button" class="m-btn m-btn-primary tm" data-code="P26.5" data-main="phone" onClick={watchHere}>
+                    {phoneLabel(mainFile, mainAt)}
+                  </button>
+                  <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P26.6" onClick={() => watch(main, files)}>
+                    {t('nav.onTv')}
+                  </button>
+                </>
+              )}
             </div>
           )}
           {error && <LaunchError message={error} class="m-hint-warn" />}
-          {card && <CastStrip cast={card.cast} />}
-          {rows.length > 1 && (
-            <div class="m-dup-hint m-small" data-dup-info>
-              <span>
-                {tp('series.seasonReleases', rows.length)}
-                {rows.map((tor) => (
-                  <button key={tor.hash} type="button" class="m-btn-text m-dup-line" data-dup-line onClick={() => setMenuFor(tor)}>
-                    {releaseLine(tor)}
-                  </button>
-                ))}
-              </span>
-            </div>
+          {main && files.length > 0 && (
+            <>
+              <div class="m-section">{files.length > 1 ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>
+              <EpisodeRows hash={main.hash} files={files} eps={tmdb.eps} coming={[]} onPick={setEpisode} />
+            </>
           )}
-          <div class="m-list m-series-rows">
-            {rows.map((tor) => (
-              <Row key={tor.hash} tor={tor} poster={(info && info.poster) || (card && card.poster) || ''} onWatch={watch} onMenu={setMenuFor} onFind={setBetter} />
-            ))}
-          </div>
+          {tmdbOnly.length > 0 && (
+            <>
+              <div class="m-section">{t('torrent.screen.episodesHead')}</div>
+              <TmdbEpisodeRows episodes={tmdbOnly} />
+            </>
+          )}
+          {card && <CastStrip cast={card.cast} />}
         </>
       )}
       {menuFor && (
@@ -555,6 +569,22 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           extra={keepOnly(menuFor)}
         />
       )}
+      {releasesOpen && main && (
+        <ReleasesSheet
+          releases={rows}
+          current={main.hash}
+          onPick={(x) => {
+            pickedRelease.set(pickKey, x.hash);
+            setLoadedFiles(null);
+            setEpisode(null);
+          }}
+          onFind={canFind ? () => setBetter(main) : undefined}
+          onClose={() => setReleasesOpen(false)}
+          onDelete={(x) => void removeRelease(x)}
+          canDelete={(x) => rows.length > 1 && onlyThisSeason(group, season, x)}
+        />
+      )}
+      {episode && main && <WatchSheet torrent={main} file={episode} onClose={() => setEpisode(null)} />}
       {better && <BetterSheet torrent={better} files={filesOf(better)} onClose={() => setBetter(null)} />}
       {launch.sheet}
     </>
@@ -578,7 +608,7 @@ export function Series({ seriesKey }: { seriesKey: string }) {
     <div class={'m-screen m-series' + (hero ? ' m-series-hero' : '')} data-route="series">
       {!hero && (
         <div class="m-bar">
-          <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+          <button type="button" class="m-icon-btn tm" data-code="P26.1" aria-label={t('common.back')} onClick={() => goBack()}>
             <Icon d={BACK} />
           </button>
         </div>

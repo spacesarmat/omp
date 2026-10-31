@@ -22,11 +22,23 @@ import com.spacesarmat.omp.sources.SiteHttp
 import com.spacesarmat.omp.sources.SiteHttpException
 import com.spacesarmat.omp.sources.SourceServices
 import com.spacesarmat.omp.sources.TrackerScrape
+import com.spacesarmat.omp.player.PlayerTestHud
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
 /** Site HTTP, secrets, Cloudflare and browser login. Bodies for [OmpNativePlugin]. */
+
+/** Beta labels: the page asked, and this build's version is `x.y.z-beta.N` (a debug `-test` suffix does not count). */
+private fun testLabelsOn(ctx: android.content.Context, call: PluginCall): Boolean {
+    val version = try {
+        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+    PlayerTestHud.textDp = PlayerTestHud.sizeDp(call.getInt("testPx"))
+    return PlayerTestHud.enabled(version, call.getBoolean("testMode") == true)
+}
 
 internal fun OmpNativePlugin.httpOp(call: PluginCall) {
     val once = CallOnce(call)
@@ -198,9 +210,10 @@ internal fun OmpNativePlugin.cloudflareVisibleOp(call: PluginCall) {
     } else {
         CheckTarget.Local { pairs, until -> sources.importClearance(root, pairs, null, until) }
     }
+    val labelsOn = testLabelsOn(act, call)
     act.runOnUiThread {
         try {
-            val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
+            val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null, testLabels = labelsOn)
             val check = VisibleCheck(
                 // a host with a browser session passes with that session's User-Agent (the clearance must match it)
                 root, site, texts, { WebViewCloudflareBrowser(act, visible = true) }, MainScheduler(), { sources.baseAgentFor(root.host) },
@@ -284,9 +297,10 @@ internal fun OmpNativePlugin.siteBrowserLoginOp(call: PluginCall) {
     } else {
         LoginTarget.Local { root, pairs, ua -> sources.importSession(root, pairs, ua) }
     }
+    val labelsOn = testLabelsOn(act, call)
     act.runOnUiThread {
         try {
-            val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null)
+            val dialog = CloudflareCheckDialog(act, tvMode, texts, phoneButton = relay != null, testLabels = labelsOn)
             val login = BrowserLogin(
                 start, hosts, check, site, source, texts,
                 {

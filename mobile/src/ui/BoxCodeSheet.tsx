@@ -37,7 +37,7 @@ export function BoxCodeSheet({ onSubmit, onCancel }: { onSubmit: (code: string) 
   }
 
   return (
-    <Sheet onClose={onCancel} label={title}>
+    <Sheet onClose={onCancel} testId="PD22" label={title}>
       <form class="m-field m-code-form" onSubmit={submit} data-box-code>
         <div class="m-sheet-title">{title}</div>
         <p class="m-muted m-note">{t('remote.box.codeNote')}</p>

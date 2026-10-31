@@ -7,7 +7,9 @@ import { TvChip } from '../ui/TvChip';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
-import { navigate } from '../nav';
+import { navigate, type SearchScope } from '../nav';
+import { SearchMine } from './SearchMine';
+import { CatalogResults } from './catalog/CatalogSearch';
 import { activeTv } from '../tv/tvStore';
 import { useTvLaunch, watchAddedOnPhone } from '../watch';
 import { client } from '../../../src/store/servers';
@@ -19,6 +21,7 @@ import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
 import { getSource } from '../../../src/sources/registry';
+import { online } from '../lib/online';
 import { isTlsMessage, tlsText } from '../../../src/sources/tls';
 import {
   ipBanNote,
@@ -167,7 +170,35 @@ function progOf(h: SearchHandle): Prog {
 /** Route entries whose ready query was taken (and searched) already: back to one keeps the person's own query. */
 const takenEntries = new WeakSet<object>();
 
-export function Add({ link, query: initialQuery, run, entry }: { link?: string; query?: string; run?: boolean; entry?: object }) {
+// the «Поиск» tab used last («Мои / Каталог / Источники»), for this run of the app
+let lastScope: SearchScope = 'sources';
+// the tab of each route entry: back from a title opened in «Каталог» comes back to «Каталог»
+const entryScopes = new WeakMap<object, SearchScope>();
+
+/** Tests: the next «Поиск» without a scope opens «Источники». */
+export function resetSearchScope(): void {
+  lastScope = 'sources';
+}
+
+const SCOPES: { id: SearchScope; code: string; label: () => string }[] = [
+  { id: 'mine', code: 'P07.3', label: () => t('nav.searchMine') },
+  { id: 'catalog', code: 'P07.4', label: () => t('nav.searchCatalog') },
+  { id: 'sources', code: 'P07.5', label: () => t('nav.searchSources') },
+];
+
+export function Add({
+  link,
+  query: initialQuery,
+  run,
+  entry,
+  scope: askedScope,
+}: {
+  link?: string;
+  query?: string;
+  run?: boolean;
+  entry?: object;
+  scope?: SearchScope;
+}) {
   // the ready query of «Обзор» counts once per route entry (back from another screen remounts the same entry)
   const fresh = useRef<boolean | null>(null);
   if (fresh.current === null) fresh.current = !(entry && takenEntries.has(entry));
@@ -193,6 +224,20 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
+  // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
+  // the route's fields choose only the first tab of the entry
+  const [scope, setScopeState] = useState<SearchScope>(
+    () => (entry && entryScopes.get(entry)) || (link || run || initialQuery ? 'sources' : askedScope || lastScope),
+  );
+  const setScope = (v: SearchScope) => {
+    lastScope = v;
+    if (entry) entryScopes.set(entry, v);
+    setScopeState(v);
+  };
+  useEffect(() => {
+    lastScope = scope;
+    if (entry) entryScopes.set(entry, scope);
+  }, []);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
@@ -249,6 +294,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     if (link) {
       changeValue(link);
       setMagnetOpen(true);
+      setScope('sources');
     }
   }, [link]);
 
@@ -318,7 +364,13 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
     // the keyboard goes away: the results are what to look at now
     const focused = document.activeElement as HTMLElement | null;
     if (focused && focused.tagName === 'INPUT') focused.blur();
-    runSearch(q, {});
+    // «Мои» and «Каталог» follow the field as it is typed: Enter only hides the keyboard
+    if (scope === 'sources') runSearch(q, {});
+  };
+  // «Мои» / «Каталог» → «Источники» with the same words
+  const toSources = (q: string) => {
+    setScope('sources');
+    if (q.trim()) runSearch(q.trim(), {});
   };
 
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
@@ -428,6 +480,8 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
   const filtered = filterByKind(matching, kindF);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
+  // the search settled and not one source answered (no network, or every site down)
+  const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
@@ -444,25 +498,44 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
 
   return (
     <div class="m-screen" data-route="add">
-      <ScreenHeader title={t('common.add')}>
+      <ScreenHeader title={t('nav.search')}>
         <TvChip />
       </ScreenHeader>
-      {/* search first: it is what this tab is for; the magnet row comes below it */}
-      <h2 class="m-add-title">{t('add.searchBySources')}</h2>
+      {/* one search: the field is shared by the three tabs */}
+      <div class="m-seg m-search-scopes" role="tablist" aria-label={t('nav.searchScopes')}>
+        {SCOPES.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="tab"
+            aria-selected={scope === o.id}
+            class={'m-seg-btn tm' + (scope === o.id ? ' on' : '')}
+            data-code={o.code}
+            data-scope={o.id}
+            onClick={() => setScope(o.id)}
+          >
+            {o.label()}
+          </button>
+        ))}
+      </div>
       <form class="m-add-row" onSubmit={onSearch}>
         <input
           class="m-input m-lib-search"
           type="search"
-          aria-label={t('add.searchBySources')}
-          placeholder={t('common.name')}
+          aria-label={scope === 'sources' ? t('add.searchBySources') : scope === 'catalog' ? t('discover.searchLabel') : t('catalog.searchPlaceholder')}
+          placeholder={t('nav.searchPlaceholder')}
           enterkeyhint="search"
           value={query}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
-        <button type="submit" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.go')}>
+        <button type="submit" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P07.1" aria-label={t('add.go')}>
           <Icon d={SEARCH} size={18} />
         </button>
       </form>
+      {scope === 'mine' && <SearchMine query={query} onCatalog={() => setScope('catalog')} onSources={() => toSources(query)} />}
+      {scope === 'catalog' && <CatalogResults text={query} onTrackers={toSources} />}
+      {scope === 'sources' && (
+      <>
       <div class="m-chips m-add-chips">
         <button type="button" class={'m-chip' + (allChosen ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('sources')}>
           {sourcesLabel}
@@ -515,11 +588,11 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
+        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
           {t('add.byMagnet')}
         </button>
       )}
-      {memo.handle && memo.searched && (
+      {memo.handle && memo.searched && online.value && !noSourceAnswered && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}
       {prog && prog.total === 0 && <div class="m-muted">{t('add.noneSelected')}</div>}
@@ -575,8 +648,15 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         </div>
       )}
       {!searching && prog && prog.total > 0 && visible.length === 0 && (
-        <div class="m-muted" data-empty={kindEmpty ? 'kind' : 'all'}>
-          {kindEmpty ? t('search.kind.none') : t('catalog.nothingFound')}
+        <div class="m-muted" data-empty={noSourceAnswered ? 'noanswer' : kindEmpty ? 'kind' : 'all'}>
+          {/* no source answered: not «Ничего не найдено», which reads as an empty result */}
+          {noSourceAnswered
+            ? online.value
+              ? t('torrent.better.noAnswer')
+              : t('common.offlineTitle') + '. ' + t('common.offlineText')
+            : kindEmpty
+              ? t('search.kind.none')
+              : t('catalog.nothingFound')}
         </div>
       )}
       <div class="m-results">
@@ -596,8 +676,10 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
           );
         })}
       </div>
+      </>
+      )}
       {sheet === 'sources' && (
-        <Sheet label={t('add.sourcesSheet')} onClose={() => setSheet(null)}>
+        <Sheet label={t('add.sourcesSheet')} testId="PD33" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sourcesSheet')}</div>
           {all.map((s) => {
             const on = selected.indexOf(s.id) >= 0;
@@ -624,7 +706,7 @@ export function Add({ link, query: initialQuery, run, entry }: { link?: string; 
         <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
-        <Sheet label={t('add.sort')} onClose={() => setSheet(null)}>
+        <Sheet label={t('add.sort')} testId="PD34" onClose={() => setSheet(null)}>
           <div class="m-sheet-title">{t('add.sort')}</div>
           {sortLabels().map((s) => (
             <button

@@ -10,6 +10,8 @@ export interface PhoneLink {
   name: string;
   /** Unix ms of the last launch that carried it. */
   at: number;
+  /** The phone had an OMP subscription at the last launch or RPC answer. Absent: not known. */
+  sub?: boolean;
 }
 
 export const PHONE_KEY = 'tsp.phoneLink';
@@ -58,7 +60,9 @@ export function sanitizePhoneLink(v: unknown, now?: number): PhoneLink | null {
   if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
   const name = typeof v.name === 'string' ? v.name.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 60) : '';
   const at = typeof v.at === 'number' && isFinite(v.at) && v.at >= 0 ? v.at : now !== undefined ? now : Date.now();
-  return { url: url, token: token, name: name, at: at };
+  const link: PhoneLink = { url: url, token: token, name: name, at: at };
+  if (v.sub === true || v.sub === false) link.sub = v.sub;
+  return link;
 }
 
 function load(): PhoneLink | null {
@@ -68,12 +72,21 @@ function load(): PhoneLink | null {
 export const phoneLink = signal<PhoneLink | null>(load());
 
 /** Stores the address from a launch; an unchanged one only refreshes `at` in storage (no signal update). */
-export function savePhoneLink(p: { url: string; token: string; name: string }): void {
-  const next = sanitizePhoneLink({ url: p.url, token: p.token, name: p.name });
+export function savePhoneLink(p: { url: string; token: string; name: string; sub?: boolean }): void {
+  const next = sanitizePhoneLink({ url: p.url, token: p.token, name: p.name, sub: p.sub });
   if (!next) return;
   const cur = phoneLink.value;
   saveJson(PHONE_KEY, next);
-  if (cur && cur.url === next.url && cur.token === next.token && cur.name === next.name) return;
+  if (cur && cur.url === next.url && cur.token === next.token && cur.name === next.name && cur.sub === next.sub) return;
+  phoneLink.value = next;
+}
+
+/** The linked phone's subscription, from a launch param or `ompSubscribed` on the phone. */
+export function setPhoneSubscribed(sub: boolean): void {
+  const cur = phoneLink.value;
+  if (!cur || cur.sub === sub) return;
+  const next: PhoneLink = { url: cur.url, token: cur.token, name: cur.name, at: cur.at, sub: sub };
+  saveJson(PHONE_KEY, next);
   phoneLink.value = next;
 }
 

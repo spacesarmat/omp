@@ -1,8 +1,9 @@
 import type { Torrent, TmdbConfig } from '../api/types';
 import type { TmdbSettingsRead } from '../api/torrserver';
 import { request } from '../api/http';
-import { posterQuery, tmdbSearchRequest, firstPoster } from './posterSearch';
-import { localTmdbSource, type TmdbSource } from '../catalog/localTmdb';
+import { posterQueries, sourcesYear, tmdbSearchRequest, tmdbTypedSearchRequest, firstPoster, yearPoster } from './posterSearch';
+import type { TmdbSource } from '../catalog/localTmdb';
+import { isSeries } from './seriesGroups';
 import { resolveTmdbKey } from '../catalog/resolveTmdb';
 import { TMDB_FALLBACK_KEY } from '../catalog/fallbackKey';
 
@@ -49,9 +50,67 @@ function sourceOf(c: PosterClient): TmdbSource {
 }
 
 /** The key this poster lookup will use: this server, else the phone's TorrServer, else the built-in key. */
-function posterConfig(c: PosterClient, preset: TmdbConfig | null | undefined): Promise<TmdbConfig | null> {
+export function posterConfig(c: PosterClient, preset: TmdbConfig | null | undefined): Promise<TmdbConfig | null> {
   if (preset !== undefined) return Promise.resolve(preset);
   return resolveTmdbKey({ active: sourceOf(c), fallbackKey: TMDB_FALLBACK_KEY }).then((r) => (r.status === 'ok' ? r.config : null));
+}
+
+/** What to search TMDB for: a film, a series, or null (music, audiobooks, unknown: the multi search only). */
+export function posterKind(t: Torrent | null | undefined): 'movie' | 'tv' | null {
+  if (!t) return null;
+  if (t.category === 'music' || t.category === 'audiobook') return null;
+  if (isSeries(t)) return 'tv';
+  return t.category === 'movie' ? 'movie' : null;
+}
+
+/**
+ * Other names of a torrent to search by: its title and its name (the release name, «Supergirl.2026.BDRemux...», often
+ * carries the English title). File names are not used: «movie.mkv» would search for «movie».
+ */
+export function posterSources(t: Torrent | null | undefined): string[] {
+  if (!t) return [];
+  return [t.title || '', t.name || ''].filter(Boolean);
+}
+
+/**
+ * The poster for a torrent title. The searches (posterQueries) are the title proper, its «ё» variants («Супергерл»
+ * finds «Супергёрл»), then the English title from `alt` (the torrent's other names: «Supergirl / 2026»,
+ * «Supergirl.2026.BDRemux...»). A film is looked up among films with each of them in turn and matched to the year
+ * (the same year, else one off), a series among series (the year only breaks ties); then the multi search with each,
+ * which takes its first result with a poster. A failed typed search goes straight to the multi ones; a failed multi
+ * search rejects. '' when nothing is found.
+ */
+export function findPoster(
+  cfg: TmdbConfig,
+  fetchJson: (url: string, headers?: { [name: string]: string }) => Promise<unknown>,
+  name: string,
+  kind: 'movie' | 'tv' | null,
+  alt: string[] = [],
+): Promise<string> {
+  const queries = posterQueries(name, alt);
+  if (!queries.length) return Promise.resolve('');
+  const year = sourcesYear([name].concat(alt));
+  const resultsOf = (r: unknown) => r && (r as { results?: unknown }).results;
+  const multi = (i: number): Promise<string> => {
+    if (i >= queries.length) return Promise.resolve('');
+    const req = tmdbSearchRequest(cfg, queries[i]);
+    return fetchJson(req.url, req.headers).then((r) => firstPoster(cfg, resultsOf(r)) || multi(i + 1));
+  };
+  if (!kind) return multi(0);
+  const typed = (i: number): Promise<string> => {
+    if (i >= queries.length) return multi(0);
+    const q = queries[i];
+    const req = tmdbTypedSearchRequest(cfg, kind, q);
+    return fetchJson(req.url, req.headers).then(
+      (r) => {
+        const list = resultsOf(r);
+        const found = kind === 'movie' ? yearPoster(cfg, list, year, q) : yearPoster(cfg, list, year, q) || firstPoster(cfg, list);
+        return found || typed(i + 1);
+      },
+      () => multi(0),
+    );
+  };
+  return typed(0);
 }
 
 /**
@@ -68,19 +127,17 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
   return settings
     .then((cfg) => {
       if (!cfg || !cfg.APIKey) return '';
-      const named = (left: number): Promise<string> =>
+      // the title (the hint, else the server's once it has read the metadata) and the torrent as last read
+      const named = (left: number): Promise<{ name: string; t: Torrent | null } | null> =>
         getOrNull(c, hash).then((t) => {
-          if (t && t.poster) return '';
+          if (t && t.poster) return null;
           const name = hint || (t && (t.title || t.name)) || '';
-          if (name || left <= 1) return name;
+          if (name || left <= 1) return { name: name, t: t };
           return wait(2000).then(() => named(left - 1));
         });
-      return named(tries).then((name) => {
-        const q = posterQuery(name);
-        if (!q) return '';
-        const req = tmdbSearchRequest(cfg, q);
-        return fetchJson(req.url, req.headers).then((r) => {
-          const poster = firstPoster(cfg, r && (r as { results?: unknown }).results);
+      return named(tries).then((got) => {
+        if (!got || !got.name) return '';
+        return findPoster(cfg, fetchJson, got.name, posterKind(got.t), posterSources(got.t)).then((poster) => {
           if (!poster) return '';
           // re-read: the title may have arrived and the user may have set a poster meanwhile
           return getOrNull(c, hash).then((t) => {

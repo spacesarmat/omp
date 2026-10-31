@@ -26,7 +26,7 @@ export function TracksSheet({
   onClose: () => void;
 }) {
   return (
-    <Sheet onClose={onClose} label={t('remote.tracks.label')}>
+    <Sheet onClose={onClose} testId="PD10" label={t('remote.tracks.label')}>
       <div class="m-sheet-title">{t('remote.tracks.audio')}</div>
       {state.audio.list.length === 0 && <div class="m-track-none">{t('remote.tracks.none')}</div>}
       {state.audio.list.map((name, i) => (

@@ -110,7 +110,7 @@ function LocalServerSection() {
     <section class="m-set-group" data-section="local-server">
       <div class="m-set-label">{t('settings.phoneServer')}</div>
       <div class="m-set-card">
-        <div class="m-set-row">
+        <div class="m-set-row tm" data-code="P13.2">
           <span class={'m-status-dot' + (st.running ? ' on' : '')} />
           <div class="m-set-text" style="flex-grow: 1">
             <span style="font-weight: 700">{starting ? t('settings.localStarting') : st.running ? t('sources.flare.works') : missing ? t('settings.localNotDownloaded') : t('settings.localStopped')}</span>
@@ -138,7 +138,7 @@ function LocalServerSection() {
           </>
         )}
         <div class="m-set-sep" />
-        <div class="m-set-row">
+        <div class="m-set-row tm" data-code="P13.3">
           <div class="m-set-text" style="flex-grow: 1">
             <span>{t('settings.autostart')}</span>
             <span class="m-muted m-small">{t('settings.autostartSub')}</span>
@@ -146,7 +146,7 @@ function LocalServerSection() {
           <Switch on={localAutostart.value} label={t('settings.autostart')} onToggle={() => setAutostart(!localAutostart.value)} />
         </div>
         <div class="m-set-sep" />
-        <div class="m-set-row">
+        <div class="m-set-row tm" data-code="P13.4">
           <div class="m-set-text" style="flex-grow: 1">
             <span>{t('settings.cacheTitle')}</span>
             <span class="m-muted m-small">{t('settings.cacheHint')}</span>
@@ -176,7 +176,8 @@ function ServerSettingsRow() {
     <section class="m-set-group" data-section="server-settings">
       <button
         type="button"
-        class="m-set-row m-set-pick"
+        class="m-set-row m-set-pick tm"
+        data-code="P13.5"
         data-row="server-settings"
         onClick={() => navigate(server ? { name: 'serverSettings' } : { name: 'serverSettings', url: LOCAL_URL })}
       >
@@ -196,7 +197,7 @@ export function Advanced() {
   return (
     <div class="m-screen" data-route="advanced">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P13.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title">{t('settings.advanced')}</h1>
@@ -206,11 +207,11 @@ export function Advanced() {
       <ServerSettingsRow />
 
       <section class="m-set-group" data-section="updates">
-        <div class="m-set-row">
+        <div class="m-set-row tm" data-code="P13.6">
           <span>{t('tvSettings.updateOnStart')}</span>
           <Switch on={on} label={t('tvSettings.updateOnStart')} onToggle={() => updateSettings({ updateCheck: !on })} />
         </div>
-        <div class="m-set-row" data-row="beta">
+        <div class="m-set-row tm" data-code="P13.7" data-row="beta">
           <div class="m-set-text">
             <span>{t('settings.betaTitle')}</span>
             <span class="m-small m-muted">{t('settings.betaHint')}</span>
@@ -224,15 +225,15 @@ export function Advanced() {
       </section>
 
       <section class="m-set-group">
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'backup' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P13.8" onClick={() => navigate({ name: 'backup' })}>
           <span>{t('backup.title')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-set-row m-set-pick" onClick={() => navigate({ name: 'log' })}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P13.9" onClick={() => navigate({ name: 'log' })}>
           <span>{t('log.screenTitle')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(PROJECT_URL, '_system')}>
+        <button type="button" class="m-btn m-btn-secondary tm" data-code="P13.10" onClick={() => window.open(PROJECT_URL, '_system')}>
           {t('settings.projectPage')}
         </button>
         <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>

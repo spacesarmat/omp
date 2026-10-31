@@ -59,7 +59,7 @@ export function Monitor() {
   return (
     <div class="m-screen" data-route="monitor">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P05.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title">{t('monitor.title')}</h1>
@@ -73,7 +73,7 @@ export function Monitor() {
           <Switch on={s.enabled} label={t('monitor.settings.background')} onToggle={() => change({ enabled: !s.enabled })} />
         </div>
         <div class="m-set-sep" />
-        <button type="button" class="m-set-row m-set-pick" aria-haspopup="dialog" disabled={!s.enabled} onClick={() => setHoursOpen(true)}>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P05.2" aria-haspopup="dialog" disabled={!s.enabled} onClick={() => setHoursOpen(true)}>
           <span>{t('monitor.settings.howOften')}</span>
           <span class="m-muted">{hoursText(s.hours)} ›</span>
         </button>
@@ -127,7 +127,7 @@ export function Monitor() {
       )}
       <div class="m-hint-warn">{t('monitor.settings.batteryNote')}</div>
       {hoursOpen && (
-        <Sheet label={t('monitor.settings.howOften')} onClose={() => setHoursOpen(false)}>
+        <Sheet label={t('monitor.settings.howOften')} testId="PD36" onClose={() => setHoursOpen(false)}>
           <div class="m-sheet-title">{t('monitor.settings.howOften')}</div>
           <div class="m-sub-pick" role="radiogroup" aria-label={t('monitor.settings.howOften')}>
             {MONITOR_HOURS.map((h) => (

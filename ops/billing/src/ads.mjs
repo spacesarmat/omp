@@ -51,7 +51,7 @@ export function adsDefaults() {
     /** «Обзор» home: an ad block after every N rails (the first after the second rail). */
     railsEvery: 3,
     sections: { mine: true, discoverGrid: true, discoverRails: true },
-    /** TV is a later phase: off until its UI ships. */
+    /** TV switches start off. The QR cells ship; an admin turns a platform on when banners should show there. */
     platforms: { phone: true, androidTv: false, webos: false },
     hideForSubscribers: true,
     /** TV: no ads when a phone with an active subscription is linked to that TV. */

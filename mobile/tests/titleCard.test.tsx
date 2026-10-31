@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// @ts-ignore node builtins, no @types/node in this project
+import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { TitleCard, wantQuery, defaultSeason, seriesDates } from '../src/screens/catalog/TitleCard';
-import { SeasonCard, episodeHead } from '../src/screens/catalog/SeasonCard';
+import { SeasonCard, episodeSub } from '../src/screens/catalog/SeasonCard';
 import { App } from '../src/app';
 import { setCatalogClientForTests, OFFLINE_TITLE } from '../src/catalog/phoneCatalog';
 import { currentRoute, resetTo, navigate, routeStack, goBack } from '../src/nav';
@@ -273,7 +275,7 @@ describe('TitleCard: series', () => {
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
     expect(button('Найти раздачи')).toBeTruthy();
-    expect(button('Смотреть на ТВ')).toBeUndefined();
+    expect(button('Смотреть на телефоне')).toBeUndefined();
     act(() => render(null, el));
     torrents.value = [{
       hash: 'h-s1',
@@ -283,7 +285,7 @@ describe('TitleCard: series', () => {
     serve(SHOW);
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
-    expect(button('Смотреть на ТВ')).toBeTruthy();
+    expect(button('Смотреть на телефоне')).toBeTruthy();
     expect(button('Найти раздачи')).toBeUndefined();
   });
 
@@ -313,8 +315,33 @@ describe('TitleCard: series', () => {
 });
 
 describe('SeasonCard', () => {
-  it('episode line: number, title and runtime, then the file size', async () => {
-    expect(episodeHead(3, 'Название', 52)).toBe('3 · Название - 52 мин');
+  it('keeps a long title whole, below the status bar', async () => {
+    const title = 'Я стал сильнейшим в мире с провальным навыком призывателем';
+    serve({ ...SHOW, title });
+    mount(<SeasonCard id={21} season={1} />);
+    await flush();
+    const h = el.querySelector('.m-season-title') as HTMLElement;
+    expect(h.textContent).toBe(title);
+    expect(h.closest('[data-route="season"]')!.classList.contains('m-tc')).toBe(false);
+    const back = el.querySelector('[data-code="P25.1"]')!;
+    expect(back.closest('.m-season-backdrop')).toBeNull();
+    // .tm forces position:relative in test mode and would pull this absolute button into the flow
+    expect(back.classList.contains('tm')).toBe(false);
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const hero = /\.m-season-hero \{[^}]+\}/.exec(css)![0];
+    expect(hero).toContain('env(safe-area-inset-top)');
+    expect(css).toMatch(/\.m-tc \{ padding-top: 0; \}/);
+    expect(css).toMatch(/\.m-tc-title \{[^}]*overflow-wrap: anywhere/);
+    expect(/\.m-tc-title \{[^}]*line-clamp/.test(css)).toBe(false);
+    const titleRule = /\.m-season-title \{[^}]+\}/.exec(css)![0];
+    expect(titleRule).toContain('overflow-wrap: anywhere');
+    expect(titleRule).not.toContain('line-clamp');
+    expect(css).toMatch(/\.m-season-ep-title \{[^}]*-webkit-line-clamp: 2/);
+  });
+
+  it('episode line: number, title on the first line, duration and status on the second', async () => {
+    expect(episodeSub(52, 'нет в медиатеке')).toBe('52 мин · нет в медиатеке');
+    expect(episodeSub(0, '1.4 GB')).toBe('1.4 GB');
     torrents.value = [{
       hash: 'h-s3',
       title: 'Ледяной перевал S03 WEB-DL',
@@ -324,11 +351,14 @@ describe('SeasonCard', () => {
     mount(<SeasonCard id={21} season={3} />);
     await flush();
     const e = episodes();
-    expect(e[0].querySelector('.m-tc-ep-title')!.textContent).toBe('1 · Эпизод 3.1 - 48 мин');
-    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('1.4 GB');
-    expect(e[2].querySelector('.m-tc-ep-title')!.textContent).toBe('3 · Серия 3 - 50 мин');
-    expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('нет в медиатеке');
-    expect(button('Смотреть на ТВ')).toBeTruthy();
+    expect(e[0].classList.contains('in')).toBe(true);
+    expect(e[0].querySelector('.m-season-ep-num')!.textContent).toBe('1');
+    expect(e[0].querySelector('.m-season-ep-title')!.textContent).toBe('Эпизод 3.1');
+    expect(e[0].querySelector('.m-tc-ep-sub')!.textContent).toBe('48 мин · 1.4 GB');
+    expect(e[2].classList.contains('in')).toBe(false);
+    expect(e[2].querySelector('.m-season-ep-title')!.textContent).toBe('Серия 3');
+    expect(e[2].querySelector('.m-tc-ep-sub')!.textContent).toBe('50 мин · нет в медиатеке');
+    expect(button('Смотреть на телефоне')).toBeTruthy();
   });
 
   it('an unreleased season has no find button; a future episode shows its date', async () => {
@@ -472,7 +502,7 @@ describe('TitleCard in English', () => {
       act(() => render(null, el));
       mount(<TitleCard kind="tv" id={21} />);
       await flush();
-      expect(button('Watch on TV')).toBeTruthy();
+      expect(button('Watch on the phone')).toBeTruthy();
     } finally {
       restore();
       applyLanguageSetting('ru');

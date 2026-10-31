@@ -21,7 +21,7 @@ data class QueueItem(
 
 /**
  * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
- * audioPick?, subPick?, alwaysFfmpeg? }) — the picks: [{ l?, g?, off? }].
+ * audioPick?, subPick?, alwaysFfmpeg?, testMode? }) — the picks: [{ l?, g?, off? }].
  */
 data class PlayRequest(
     val queue: List<QueueItem>,
@@ -50,6 +50,10 @@ data class PlayRequest(
      * Off: hardware first, FFmpeg only when the box cannot.
      */
     val alwaysFfmpeg: Boolean = false,
+    /** Beta test mode on the page. The activity also checks that the installed version is `x.y.z-beta.N`. */
+    val testMode: Boolean = false,
+    /** Test-mode label size in px (the page's «Размер меток» slider); 0 when the page sent none. */
+    val testPx: Int = 0,
 ) {
     companion object {
         const val LABEL_MAX = 200
@@ -97,6 +101,8 @@ data class PlayRequest(
                 audioPick = TrackPick.parseList(o.optJSONArray("audioPick")),
                 subPick = TrackPick.parseList(o.optJSONArray("subPick")),
                 alwaysFfmpeg = o.optBoolean("alwaysFfmpeg", false),
+                testMode = o.optBoolean("testMode", false),
+                testPx = o.optInt("testPx", 0),
             )
         }
     }

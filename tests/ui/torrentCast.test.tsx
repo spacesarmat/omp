@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { getCurrentFocusKey, init, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { TorrentScreen } from '../../src/screens/Torrent';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
@@ -117,6 +117,50 @@ describe('TV torrent screen · «В ролях»', () => {
     expect(!!(host.querySelector('.torrent-head')!.compareDocumentPosition(host.querySelector('.tc-cast-row')!) & 4)).toBe(true);
     expect(host.querySelector('.skip-block')).not.toBeNull();
   });
+  function place(el: Element | null, x: number, y: number, w: number, h: number) {
+    const node = el as HTMLElement;
+    node.getBoundingClientRect = () => ({
+      x: x, y: y, left: x, top: y, right: x + w, bottom: y + h, width: w, height: h, toJSON: () => ({}),
+    }) as DOMRect;
+  }
+  const pressUp = async () => {
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+    });
+  };
+
+  it('Up from the first cast item reaches Watch, and from one under the next button reaches that button', async () => {
+    search.mockResolvedValue({ items: [{ kind: 'movie', id: 3, title: 'x', original: 'x', year: 2023, poster: '', rating: 0 }], pages: 1 });
+    card.mockResolvedValue({ kind: 'movie', id: 3, cast });
+    await mount(film('film5'));
+    place(host.querySelector('[data-fk="torrent-play"]'), 400, 200, 220, 64);
+    place(host.querySelector('[data-fk="torrent-playlist"]'), 640, 200, 220, 64);
+    place(host.querySelector('[data-fk="torrent-cast-0"]'), 80, 560, 180, 220);
+    place(host.querySelector('[data-fk="torrent-cast-1"]'), 660, 560, 180, 220);
+    await act(async () => { setFocus('torrent-cast-0'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('torrent-play');
+    await act(async () => { setFocus('torrent-cast-1'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('torrent-playlist');
+  });
+
+  it('Up from the intro-skip row reaches the cast, and Up from a file reaches the skip row', async () => {
+    search.mockResolvedValue(tvHit);
+    card.mockResolvedValue({ kind: 'tv', id: 5, title: 'Тёмная материя', cast });
+    await mount(series);
+    place(host.querySelector('[data-fk="torrent-cast-0"]'), 80, 560, 180, 220);
+    place(host.querySelector('[data-fk="torrent-cast-1"]'), 700, 560, 180, 220);
+    place(host.querySelector('[data-fk="skip-intro"]'), 80, 820, 1600, 62);
+    place(host.querySelector('[data-fk="file-1"]'), 80, 920, 1600, 64);
+    await act(async () => { setFocus('file-1'); });
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('skip-intro');
+    await pressUp();
+    expect(getCurrentFocusKey()).toBe('torrent-cast-1');
+  });
+
   it('a series with no TMDB match shows no cast block and no placeholder', async () => {
     search.mockResolvedValue({ items: [], pages: 1 });
     await mount(series);

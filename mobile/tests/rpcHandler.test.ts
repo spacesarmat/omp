@@ -19,6 +19,10 @@ function fakeSearch(rows: unknown[]) {
 const deps = (over = {}) => ({ sources: () => [src('nnmclub'), src('rutracker', { needsLogin: true }), ts], ctx: () => ({}) as never, now: () => 0, ...over });
 
 describe('rpc handler', () => {
+  it('ompSubscribed reports the phone subscription and nothing else', async () => {
+    const r = (await createRpcHandler(deps()).dispatch('ompSubscribed', {})) as { subscribed: boolean };
+    expect(r).toEqual({ subscribed: false });
+  });
   it('sources skips TorrServer ones and reports off/login', async () => {
     const r = (await createRpcHandler(deps()).dispatch('sources', {})) as { sources: { id: string; state: string }[] };
     expect(r.sources.map((s) => s.id)).toEqual(['nnmclub', 'rutracker']);

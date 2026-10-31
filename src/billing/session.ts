@@ -4,6 +4,7 @@ const DEVICE_KEY = 'tsp.billingDevice';
 export const SESSION_KEY = 'tsp.billingSession';
 const PENDING_CODE_KEY = 'tsp.billingPendingCode';
 const NOTICE_KEY = 'tsp.billingNotice';
+const ACCOUNT_KEY = 'tsp.billingAccountSeen';
 
 /**
  * This phone's binding to a subscription code. Since PR-5 it holds the short-lived access token; the
@@ -97,6 +98,22 @@ export function saveBillingSession(row: BillingSession | null): void {
     return;
   }
   saveJson(SESSION_KEY, row);
+}
+
+/**
+ * The last /v1/me answer in short: this install is linked to an OMP account (a code or Telegram) and its paid-until
+ * date. Only for the Settings row, so it does not flash «Войти» while the account is checked again.
+ */
+export interface SeenAccount {
+  paidUntil: number;
+}
+
+export function seenAccount(): SeenAccount | null {
+  return loadJson<SeenAccount | null>(ACCOUNT_KEY, null, (v) => !!v && typeof v === 'object' && typeof (v as SeenAccount).paidUntil === 'number');
+}
+
+export function saveSeenAccount(row: SeenAccount | null): void {
+  saveJson(ACCOUNT_KEY, row ? { paidUntil: Number(row.paidUntil) || 0 } : null);
 }
 
 type Listener = () => void;

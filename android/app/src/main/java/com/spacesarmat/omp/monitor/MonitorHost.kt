@@ -24,6 +24,8 @@ import com.spacesarmat.omp.sources.SourceServices
 import java.io.ByteArrayInputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import com.spacesarmat.omp.tls.TorrServerHttp
+import com.spacesarmat.omp.tls.TorrServerTrust
 import org.json.JSONObject
 
 /**
@@ -48,6 +50,7 @@ class MonitorHost(
     private var finished = false
     private val services by lazy { SourceServices.get(ctx) }
     private val journal by lazy { MonitorJournalFile(ctx) }
+    private val torrServerHttp by lazy { TorrServerHttp() }
 
     @SuppressLint("SetJavaScriptEnabled")
     fun start() {
@@ -147,6 +150,15 @@ class MonitorHost(
                     BridgeProtocol.ok(r.id, null)
                 } catch (e: Exception) {
                     BridgeProtocol.error(r.id, JOURNAL_FAILED)
+                }
+            }
+            // no question in the background: a certificate the user has not accepted stays refused
+            is BridgeRequest.TsHttp -> background(reply, r.id) {
+                try {
+                    TorrServerTrust.install(ctx)
+                    BridgeProtocol.ok(r.id, TorrServerHttp.reply(torrServerHttp.request(TorrServerHttp.parse(r.request))))
+                } catch (f: TorrServerHttp.Failure) {
+                    BridgeProtocol.error(r.id, f.code)
                 }
             }
             is BridgeRequest.Finish -> finish(r.summary)

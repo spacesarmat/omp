@@ -114,6 +114,22 @@ describe('who sees ads', () => {
     expect(adsFor(cfg, ctx({ subscribed: true }))).toEqual([]);
     expect(adsFor(sanitizeAdsConfig(server({ hideForSubscribers: false })), ctx({ subscribed: true }))).toHaveLength(1);
   });
+  it('a TV linked to a subscribed phone shows nothing, other TVs do', () => {
+    const tv = sanitizeAdsConfig(server({
+      platforms: { phone: true, androidTv: true, webos: true },
+      banners: [{ ...BANNER, platforms: ['phone', 'androidTv', 'webos'] }],
+    }));
+    const onTv = ctx({ platform: 'androidTv' });
+    expect(adsFor(tv, onTv)).toHaveLength(1);
+    expect(adsFor(tv, { ...onTv, linkedSubscriber: true })).toEqual([]);
+    expect(adsFor(tv, { ...onTv, subscribed: true })).toEqual([]);
+    const show = sanitizeAdsConfig(server({
+      platforms: { phone: true, androidTv: true, webos: false },
+      tvHideIfLinkedSubscriber: false,
+      banners: [{ ...BANNER, platforms: ['androidTv'] }],
+    }));
+    expect(adsFor(show, { ...onTv, linkedSubscriber: true })).toHaveLength(1);
+  });
   it('not on a disabled section or platform, an old app, or another provider', () => {
     expect(adsFor(sanitizeAdsConfig(server({ sections: { mine: false, discoverGrid: true, discoverRails: true } })), ctx())).toEqual([]);
     expect(adsFor(cfg, ctx({ platform: 'androidTv' }))).toEqual([]);

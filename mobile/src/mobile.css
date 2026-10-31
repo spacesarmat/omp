@@ -2,6 +2,8 @@
   --m-nav-h: 78px;
   --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
+  /* read by the landscape poster grids (landscapeCols.ts) */
+  --m-safe-top: env(safe-area-inset-top, 0px);
   --bg: #0F1115;
   --panel: #181B22;
   --panel-2: #252A35;
@@ -502,6 +504,66 @@ button, .m-btn {
 .m-srch-lib { color: #8FE39A; font-weight: 700; }
 .m-srch-trackers { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--panel); }
 .m-tc { padding-top: 0; }
+/* Catalog season page. Not .m-tc: that class zeroes the top inset, and a bar title then started
+   under the status bar. The backdrop may run under the clock (body::before covers it). The series
+   title lives in .m-season-hero, which starts below the inset and the back button. */
+.m-screen[data-route='season'] { padding-top: 0; display: flex; flex-direction: column; }
+.m-season-hero { position: relative; margin: 0 -16px; padding: calc(env(safe-area-inset-top) + 72px) 16px 0; }
+.m-season-backdrop {
+  position: absolute; z-index: 0; top: 0; left: 0; right: 0; overflow: hidden; pointer-events: none;
+  height: calc(300px + env(safe-area-inset-top));
+  background: linear-gradient(160deg, #2A2F3D, #14161C);
+}
+.m-season-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; transform: scale(1.08); }
+.m-season-backdrop.is-poster img { filter: blur(18px); transform: scale(1.28); }
+.m-season-backdrop::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(15, 17, 21, 0.15) 0%, rgba(15, 17, 21, 0.5) 46%, var(--bg, #0F1115) 100%);
+}
+/* The back control stays out of the backdrop (that box clips overflow). Its test chip (P25.1)
+   hangs above the right of the button and grows to the right, so a 24px label stays on screen. */
+.m-season-back {
+  position: absolute; z-index: 2;
+  top: calc(env(safe-area-inset-top) + 20px); left: 16px;
+  background: rgba(15, 17, 21, 0.7);
+}
+body.test-labels .m-screen[data-route='season'] .m-season-back[data-code]::after {
+  right: auto; left: calc(100% + 6px); transform: translateY(-55%);
+}
+.m-season-head { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 14px; }
+.m-season-poster {
+  flex: none; display: block; width: 128px; height: 192px; border-radius: 14px;
+  background: var(--panel); object-fit: cover; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.m-season-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding-top: 2px; }
+.m-season-title { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; }
+.m-season-kicker { margin: 0; font-family: 'Manrope', sans-serif; font-size: 17px; font-weight: 700; line-height: 1.3; }
+.m-season-sub { overflow-wrap: anywhere; }
+.m-tc-skel .m-season-poster, .m-tc-skel .m-season-info .m-disc-skel-line { animation: m-disc-pulse 1.2s ease-in-out infinite; }
+.m-season-actions { margin-top: 20px; }
+.m-season-actions .m-btn { width: 100%; }
+.m-screen[data-route='season'] > .m-disc-error { margin-top: 20px; }
+.m-screen[data-route='season'] .m-tc-section { margin-top: 24px; }
+.m-screen[data-route='season'] .m-tc-section > h2 { margin: 0 0 12px; }
+.m-screen[data-route='season'] .m-tc-episodes { gap: 8px; }
+.m-screen[data-route='season'] .m-tc-ep {
+  flex-direction: row; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 14px;
+}
+.m-screen[data-route='season'] .m-tc-ep.in { background: #1C2028; box-shadow: inset 3px 0 0 var(--accent); }
+.m-season-ep-num {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 12px; background: var(--panel-2); color: var(--muted);
+  font-family: 'Unbounded', 'Manrope', sans-serif; font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.m-screen[data-route='season'] .m-tc-ep.in .m-season-ep-num { background: rgba(245, 183, 0, 0.16); color: var(--accent); }
+.m-season-ep-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 1px; }
+.m-season-ep-title {
+  font-size: 15px; font-weight: 700; line-height: 20px; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.m-screen[data-route='season'] .m-tc-ep-sub { line-height: 18px; overflow-wrap: anywhere; }
+.m-screen[data-route='season'] .m-season-ep-main .m-bar-track { margin-top: 4px; }
 .m-tc-backdrop { position: relative; height: calc(190px + env(safe-area-inset-top)); margin: 0 -16px; overflow: hidden; background: linear-gradient(160deg, #2A2F3D, #14161C); }
 .m-tc-backdrop img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .m-tc-backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15, 17, 21, 0) 45%, var(--bg, #0F1115)); pointer-events: none; }
@@ -628,6 +690,9 @@ button, .m-btn {
 .m-sheet,
 .m-sheet > .m-sheet-scroll { overscroll-behavior: contain; }
 .m-sheet > .m-sheet-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+/* Rows inside a scrolling part never shrink: buttons carry min-height: 44px, so a flex column (a long
+   «Другая раздача» list) squeezed them to 44px and the titles ran over the next row. The part scrolls instead. */
+.m-sheet > .m-sheet-scroll > * { flex-shrink: 0; }
 /* The bar stays 40×4; ::before is the tap target. A downward pull on it drags the sheet. */
 .m-sheet-grip {
   align-self: center;
@@ -655,9 +720,12 @@ button, .m-btn {
 .m-opt { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: none; border-radius: 14px; background: var(--panel-2); text-align: left; }
 .m-opt.primary { background: var(--accent); color: var(--bg); }
 .m-opt:disabled { opacity: 0.6; }
-.m-opt-text { display: flex; flex-direction: column; gap: 2px; }
-.m-opt-name { font-size: 16px; font-weight: 700; }
-.m-opt-sub { font-size: 13px; color: var(--muted); }
+.m-opt-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* a long release title wraps (even a long word); the row grows to fit it and the line under it */
+.m-opt-name { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.m-opt-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+/* the check of the picked row keeps its size next to a long title */
+.m-opt > svg { flex-shrink: 0; }
 .m-opt.primary .m-opt-sub { color: var(--bg); }
 .m-status-ok { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #1E2A1F; color: #8FE39A; font-size: 14px; }
 .m-status-err { padding: 12px 14px; border-radius: 12px; background: #3A2024; color: #FF9EA2; font-size: 14px; line-height: 1.4; }
@@ -960,6 +1028,7 @@ button, .m-btn {
 .m-dialog { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 22px 20px 18px; border-radius: 22px; background: var(--panel); }
 .m-dialog-icon { width: 48px; height: 48px; border-radius: 24px; background: #3A3320; color: var(--accent); display: flex; align-items: center; justify-content: center; }
 .m-dialog-text { font-size: 15px; line-height: 1.45; color: #C9CEDA; }
+.m-dialog-text.m-pre { white-space: pre-line; overflow-wrap: anywhere; }
 
 /* ---- now playing ---- */
 .m-now-deck { position: relative; height: 100vh; height: 100dvh; overflow: hidden; }
@@ -1000,6 +1069,10 @@ button, .m-btn {
 .m-now-deck[data-peek='remote'] .m-now-track,
 .m-now-deck[data-peek='episodes'] .m-now-track { filter: brightness(0.78); }
 .m-now-deck .m-now-pane > .m-screen { min-height: 100%; height: 100%; box-sizing: border-box; }
+/* «Сейчас на ТВ» grows with its chapter list so the pane scrolls (and a swipe pulls «Серии» only at the end) */
+.m-now-deck .m-now-pane > .m-now-bleed { height: auto; }
+/* the remote pulled down over «Сейчас на ТВ» fills the pane (no tab bar here): its last row ends above the system bar */
+.m-now-deck .m-now-pane > .m-remote { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .m-now-eps { display: flex; flex-direction: column; gap: 8px; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; }
 .m-now-eps h2 { margin: 0 0 4px; font-size: 20px; }
 .m-now-ep-hint { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--accent); }
@@ -1038,11 +1111,16 @@ button, .m-btn {
   padding: 0;
 }
 .m-now-hero { position: relative; width: 100%; flex: 0 0 auto; }
+/* first screen: the poster takes what the controls leave, the controls end above the «Серии» chip and the system bar */
+.m-now-fold { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; }
+.m-now-fold .m-now-hero { flex: 1 1 0; min-height: 200px; }
 .m-now-body {
   position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
   margin-top: -72px;
-  padding: 0 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 0 16px calc(var(--m-now-chip-room, 12px) + env(safe-area-inset-bottom));
 }
+.m-now-bleed { --m-now-chip-room: 64px; }
+.m-now-bleed > .m-now-chlist { padding: 0 16px calc(var(--m-now-chip-room) + env(safe-area-inset-bottom)); }
 .m-now-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .m-now-bleed .m-now-head {
   position: absolute; top: 0; left: 0; right: 0; z-index: 6;
@@ -1066,6 +1144,15 @@ button, .m-btn {
   flex: 0 0 auto; align-self: stretch; width: 100%; max-width: none;
   min-height: 240px; max-height: min(72dvh, 720px);
   border-radius: 0;
+}
+.m-now-fold .m-now-stage {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  width: auto; height: auto; min-height: 0; max-height: none; aspect-ratio: auto;
+}
+/* the plain cover (no art) fades into the page like the art does, so its edge never cuts through the titles */
+.m-now-fold .m-now-poster:not(.has-art) {
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 .m-now-poster {
   position: relative; width: 100%; height: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box;
@@ -1520,7 +1607,12 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-install-dev-icon.ok { color: #8FE39A; }
 .m-install-dev-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .m-install-dev-name { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
-.m-install-manual { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
+/* «Установить OMP на телевизор» (QA B16): the same top gap and spacing as «Телевизор», the title a line lower than the
+   status bar, the back arrow on its first line, «Ввести IP вручную» a normal secondary button like on «Телевизор» */
+.m-install { display: flex; flex-direction: column; gap: 14px; padding-top: calc(env(safe-area-inset-top) + 16px); }
+.m-install > .m-bar { align-items: flex-start; }
+.m-install > .m-bar .m-bar-title { font-size: 20px; line-height: 26px; padding-top: 9px; }
+.m-install > .m-note { margin: 0; }
 .m-install-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .m-install-step { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); }
 .m-install-step.current { background: #3A3320; }
@@ -1861,11 +1953,204 @@ html.m-hint-hold .m-hint { display: none; }
   padding: 0;
 }
 
+/* Landscape (QA B7): the system navigation bar sits on a side, so the screens keep off the side insets,
+   and the tab bar gets short (icon and caption in one line) so a series page shows its watch buttons. */
+.m-screen {
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+}
+.m-torrent {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+.m-nav {
+  padding-left: calc(8px + env(safe-area-inset-left));
+  padding-right: calc(8px + env(safe-area-inset-right));
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --m-nav-h: 48px; }
+  /* the poster grids get narrow tiles on their side (landscapeCols.ts): a poster without an image keeps its title small */
+  .m-disc-grid .m-disc-ph { padding: 8px; font-size: 12px; }
+  .m-disc-grid.m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
+  .m-nav { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
+  .m-nav-item { flex-direction: row; justify-content: center; gap: 6px; padding-top: 0; min-height: 40px; }
+  .m-nav-pill { width: 40px; height: 28px; }
+}
+/* «Новое» → «Подписки 2»: the count pill keeps the tab on one line (QA B10) */
+.m-seg button { white-space: nowrap; }
+.m-seg-count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 20px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+/* «Мои» → the sort button names the order that is on (QA B13): a small tag at its bottom edge */
+.m-icon-btn.m-sort { position: relative; }
+.m-icon-tag {
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 10px;
+  line-height: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* «Мои» search: our own 44px clear button, not the tiny system one (QA B14) */
+.m-lib-search::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.m-lib-search-row .m-btn-secondary { align-self: center; }
+
+/* «Мои» grid (QA B15): a poster without an image shows the first letter (the name is under it), and a card without a
+   meta line keeps its height, so the captions of a row line up */
+.m-poster-initial { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 44px; line-height: 1; color: rgba(255, 255, 255, 0.5); }
+.m-card-meta-pad { display: block; height: 16px; }
+.m-view-small .m-card-meta-pad { height: 14px; }
+
+/* Buttons on a backdrop (QA N4): the later plain .m-icon-btn rule wiped the glass, so on a bright poster the grey
+   back, edit and delete icons were hard to see. Two classes win over it. */
+.m-icon-btn.m-glass { background: rgba(15, 17, 21, 0.6); color: #fff; }
+.m-icon-btn.m-glass.m-danger { color: #FF9EA2; }
+/* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
+.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
+/* phone navigation: search scopes, continue row, release line */
+.m-search-scopes { margin: 4px 0 8px; }
+.m-search-none { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.m-resume { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.m-resume-head { display: flex; align-items: center; justify-content: space-between; }
+.m-resume-title { font-size: 16px; font-weight: 700; font-family: 'Manrope', sans-serif; }
+.m-resume-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.m-resume-row::-webkit-scrollbar { display: none; }
+.m-resume-card {
+  display: flex; gap: 10px; align-items: center; flex: 0 0 auto; width: 260px; max-width: 80vw;
+  padding: 8px; border: none; border-radius: 14px; background: var(--panel); color: inherit; text-align: left;
+}
+.m-resume-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.m-resume-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-resume-card .m-bar-track { margin-top: 4px; }
+.m-release-switch { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 2px 0 2px 12px; border-radius: 12px; background: var(--panel); }
+.m-release-switch-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--muted); }
+.m-release-switch-text b { color: var(--text); }
+.m-release-switch .m-btn-text { color: var(--accent); min-height: 40px; }
+.m-release-more { flex-shrink: 0; }
+.m-releases .m-opt-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* «Раздачи (3)» on the film screen: the heading over the release rows, the rows full width */
+.m-film-releases { display: flex; flex-direction: column; gap: 8px; }
+.m-film-releases .m-section { margin: 0; }
+.m-film-releases .m-opt { width: 100%; color: inherit; font: inherit; }
+/* the trash beside a release row («Другая раздача», «Раздачи (N)») */
+.m-rel-line { display: flex; align-items: center; gap: 4px; }
+.m-rel-line > .m-opt { flex: 1; min-width: 0; }
+.m-rel-line > .m-rel-del { color: #FF9EA2; }
+
+
+/* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
+   The badge is out of flow and ignores touches, so rows and remote focus stay put.
+   .tm is only for controls that are not already positioned: forcing position on an
+   absolute back button would pull it back into the row. */
+body.test-labels .tm { position: relative; }
+/* The badge sits on the top edge of the control, shifted up out of it, see-through and small
+   (phone labels may be under 24px): it names the control without covering a switch, a value or
+   a back arrow. White text with a dark outline stays readable on a light or a dark row. */
+body.test-labels [data-code]::after {
+  content: attr(data-code);
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translateY(-55%);
+  z-index: 2;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 3px;
+  color: #fff;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+.test-screen-badge {
+  position: fixed;
+  z-index: 35;
+  top: calc(8px + env(safe-area-inset-top));
+  left: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+}
+.test-screen-badge .test-badge {
+  font-size: 24px;
+  line-height: 28px;
+  padding: 0 6px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 6px;
+}
+/* «Размер меток» (8-24px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
+/* Element codes (posters, cards, rows): one fixed overlay, takes no space, ignores touches */
+.test-el-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 41;
+  pointer-events: none;
+}
+.test-el {
+  position: absolute;
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgba(20, 70, 170, 0.5);
+  text-shadow: 0 0 2px #000;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.m-test-size { flex-wrap: wrap; }
+.m-test-size-value { margin-left: auto; }
+.m-test-size-range { flex: 1 1 100%; width: 100%; margin: 8px 0 4px; accent-color: var(--accent); }
+
+
+/* «Сменить постер» (PosterPickSheet) */
+.m-pp-sub { margin: 4px 0 0; }
+.m-pp-search { display: flex; margin-top: 12px; }
+.m-pp-search .m-input { flex: 1 1 auto; min-width: 0; margin-right: 8px; }
+/* max-content rows: in a max-height scroll grid auto rows shrank to the button min-height and the posters ran over the next row */
+.m-pp-grid { margin-top: 12px; max-height: 52vh; overflow-y: auto; grid-auto-rows: max-content; }
+.m-pp-item { display: flex; flex-direction: column; text-align: left; color: inherit; }
+.m-pp-cap { display: block; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-pp-year { display: block; white-space: nowrap; }
+.m-pp-link { margin-top: 12px; }
+.m-pp-actions { margin-top: 12px; flex-wrap: wrap; }
+
 /* Ad cells (ads/AdCell.tsx): the size of the cards around them in every view; «Реклама», the advertiser and the erid stay visible */
 .m-ad { cursor: pointer; }
 .m-ad-poster { position: relative; display: block; overflow: hidden; background: var(--panel); }
 .m-ad-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.m-ad-poster-lib { width: 100%; aspect-ratio: 173 / 240; border-radius: 14px; }
+.m-ad-poster-lib { position: relative; width: 100%; height: 0; padding: 0 0 138.7% 0; border-radius: 14px; }
+.m-ad-poster-lib img { position: absolute; top: 0; left: 0; }
 .m-view-small .m-ad-poster-lib { border-radius: 10px; }
 .m-vrow .m-ad-poster { border-radius: 8px; }
 .m-ad-badge { position: absolute; top: 8px; left: 8px; padding: 1px 6px; border-radius: 6px; background: rgba(15, 17, 21, .82); color: var(--accent); font-size: 11px; font-weight: 700; line-height: 16px; }
@@ -1876,7 +2161,10 @@ html.m-hint-hold .m-hint { display: none; }
 .m-ad-who { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-ad-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .m-cols-4 .m-ad-erid { font-size: 9px; line-height: 12px; }
-.m-ad-rail-row { display: flex; gap: 12px; align-items: flex-start; padding: 0 2px 6px; }
-.m-ad-rail-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.m-ad-rail-row { display: flex; align-items: flex-start; padding: 0 2px 6px; }
+.m-ad-rail-row > .m-disc-tile { margin-right: 12px; }
+.m-ad-rail-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.m-ad-rail-text > * { margin-bottom: 4px; }
+.m-ad-rail-text > *:last-child { margin-bottom: 0; }
 .m-ad-rail-text .m-card-title { min-height: 0; margin-top: 0; }
 .m-ad-more { align-self: flex-start; margin-top: 4px; }

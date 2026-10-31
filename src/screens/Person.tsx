@@ -115,7 +115,7 @@ function Body({ card }: { card: PersonCard }) {
             </div>
           ) : null}
           {bioMore && (
-            <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => textDialog(tvGlyphs(card.name), tvGlyphs(card.bio), t('common.close'))} onFocused={leaveTile}>
+            <Focusable focusKey="person-bio-more" className="person-more" role="button" onPress={() => textDialog(tvGlyphs(card.name), tvGlyphs(card.bio), t('common.close'), 'person-bio')} onFocused={leaveTile}>
               {tvGlyphs(t('person.more'))}
             </Focusable>
           )}
@@ -134,6 +134,7 @@ function Body({ card }: { card: PersonCard }) {
         </div>
         <Focusable
           focusKey="person-sort"
+          testValue={sort}
           className="disc-kind person-sort"
           role="button"
           onPress={() => setSort(sort === 'popular' ? 'year' : 'popular')}

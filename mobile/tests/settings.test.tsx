@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Settings, setUpdateChecker } from '../src/screens/Settings';
+import { Settings, setAccountFetcher, setUpdateChecker } from '../src/screens/Settings';
+import { saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
+import { dropDeviceTokens } from '../../src/billing/tokens';
 import { Advanced } from '../src/screens/Advanced';
 import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
@@ -40,6 +42,7 @@ beforeEach(() => {
   updateSettings({ updateCheck: true });
   toast.value = '';
   setUpdateChecker(null);
+  setAccountFetcher(async () => null);
   view = 'settings';
   resetTo({ name: 'settings' });
   reloadLocalServerSettings();
@@ -48,6 +51,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setLocalServerDeps(null);
+  setAccountFetcher(null);
   vi.restoreAllMocks();
   tvState.value = 'idle';
   localStorage.clear();
@@ -196,6 +200,31 @@ describe('Settings', () => {
     expect(open).toHaveBeenCalledWith('https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION, '_system');
     expect(TORRSERVER_VERSION).toMatch(/^MatriX\./);
     open.mockRestore();
+  });
+});
+
+describe('Settings: «Сервер на телефоне» next to «Откуда смотреть»', () => {
+  it('sits right after «Откуда смотреть», says its state and opens the phone server screen', () => {
+    localServer.value = { supported: true, running: true };
+    const el = mount();
+    const watch = el.querySelector('[data-section="watch"]')!;
+    const rows = Array.from(watch.querySelectorAll('[data-code]')).map((r) => r.getAttribute('data-code'));
+    expect(rows.indexOf('P11.21')).toBe(rows.indexOf('P11.5') + 1);
+    const row = watch.querySelector('[data-row="phone-server"]') as HTMLElement;
+    expect(row.textContent).toContain('Сервер на телефоне');
+    expect(row.textContent).toContain('Работает');
+    act(() => row.click());
+    expect(currentRoute.value.name).toBe('localServer');
+  });
+
+  it('a stopped server says so; a phone without one shows no row', () => {
+    localServer.value = { supported: true, running: false };
+    let el = mount();
+    expect(el.querySelector('[data-row="phone-server"]')!.textContent).toContain('Остановлен');
+    act(() => render(null, el));
+    localServer.value = { supported: false, running: false };
+    el = mount();
+    expect(el.querySelector('[data-row="phone-server"]')).toBeNull();
   });
 });
 
@@ -512,6 +541,95 @@ describe('Advanced: TMDB attribution', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('Settings: the OMP account row', () => {
+  const row = (el: HTMLElement) => el.querySelector('[data-row="account"]') as HTMLElement;
+  const flush = () =>
+    act(async () => {
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  const day = (ms: number) => {
+    const d = new Date(ms);
+    const p = (n: number) => (n < 10 ? '0' : '') + n;
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
+  };
+  const paid = Date.UTC(2026, 11, 15, 12);
+
+  it('a phone with the token pair (empty legacy token) shows the subscription, never «Войти»', async () => {
+    const fetcher = vi.fn(async () => null);
+    setAccountFetcher(fetcher);
+    saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
+    const el = mount();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    await flush();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('a legacy token still shows the subscription', () => {
+    saveBillingSession({ token: 'old', paidUntil: paid });
+    expect(row(mount()).textContent).toBe('Подписка до ' + day(paid));
+  });
+
+  it('without a session: «Проверяю вход…» while /v1/me answers, then the account linked by Telegram', async () => {
+    let answer: (v: any) => void = () => {};
+    setAccountFetcher(() => new Promise((r) => (answer = r)));
+    const el = mount();
+    expect(row(el).textContent).toBe('Проверяю вход…');
+    expect(row(el).getAttribute('data-account')).toBe('checking');
+    expect(row(el).textContent).not.toContain('Войти');
+    await act(async () => answer({ telegramId: '1', paidUntil: paid, active: true, deviceLimit: 2 }));
+    await flush();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+  });
+
+  it('without a session and no account: «Войти» after the check', async () => {
+    const el = mount();
+    await flush();
+    expect(row(el).textContent).toBe('Войти');
+    expect(row(el).getAttribute('data-account')).toBe('out');
+  });
+
+  it('the last known account is shown at once and kept when the server does not answer', async () => {
+    saveSeenAccount({ paidUntil: paid });
+    setAccountFetcher(async () => {
+      throw new Error('down');
+    });
+    const el = mount();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    await flush();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+  });
+
+  it('a revoked binding forgets the last known account, so the server being down then shows «Войти»', async () => {
+    saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
+    saveSeenAccount({ paidUntil: paid });
+    setAccountFetcher(async () => {
+      throw new Error('down');
+    });
+    const el = mount();
+    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    await act(async () => dropDeviceTokens(null, 'revoked'));
+    await flush();
+    expect(seenAccount()).toBeNull();
+    expect(row(el).textContent).toBe('Войти');
+  });
+
+  it('a linked account without a paid date shows «Вход выполнен»; the server down with nothing known shows «Войти»', async () => {
+    setAccountFetcher(async () => ({ telegramId: '1', paidUntil: 0, active: false, deviceLimit: 2 }));
+    let el = mount();
+    await flush();
+    expect(row(el).textContent).toBe('Вход выполнен');
+    localStorage.clear();
+    setAccountFetcher(async () => {
+      throw new Error('down');
+    });
+    el = mount();
+    await flush();
+    expect(row(el).textContent).toBe('Войти');
   });
 });
 

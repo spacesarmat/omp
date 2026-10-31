@@ -49,7 +49,7 @@ describe('phoneRpc', () => {
     initPhoneRpc();
     await Promise.resolve();
     expect(set).toHaveBeenLastCalledWith(true);
-    expect(phoneParam()).toEqual({ url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel' });
+    expect(phoneParam()).toEqual({ url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel', sub: false });
     await setTvSearch(false);
     expect(set).toHaveBeenLastCalledWith(false);
     expect(phoneParam()).toBeNull();
@@ -69,7 +69,7 @@ describe('phoneRpc', () => {
     await flush();
     expect(ask).toHaveBeenCalledTimes(1);
     expect(set.mock.calls).toEqual([[true], [true]]);
-    expect(phoneParam()).toEqual({ url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel' });
+    expect(phoneParam()).toEqual({ url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel', sub: false });
   });
 
   it('does not ask again when notifications are already allowed', async () => {

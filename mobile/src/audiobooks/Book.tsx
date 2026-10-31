@@ -161,7 +161,7 @@ export function Book({ hash }: { hash: string }) {
     const loading = !!c && fetched === undefined;
     return (
       <div class="m-screen" data-route="audiobook">
-        <AudiobookBar title={t('audiobooks.title')} />
+        <AudiobookBar title={t('audiobooks.title')} code="P31.1" />
         <p class="m-muted m-note">{loading ? t('audiobooks.loading') : t('audiobooks.notFound')}</p>
       </div>
     );
@@ -182,7 +182,7 @@ export function Book({ hash }: { hash: string }) {
 
   return (
     <div class="m-screen" data-route="audiobook">
-      <AudiobookBar title={name.title} />
+      <AudiobookBar title={name.title} code="P31.1" />
       {name.meta && <p class="m-muted m-small">{name.meta}</p>}
       {error && <div class="m-error">{error}</div>}
       {filePhase === 'wait' || (m4b && probe === undefined) ? (

@@ -2,15 +2,15 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { t } from '../../../../src/i18n';
 import { Icon, ICONS } from '../../ui/Icon';
-import { CatalogSearch } from './CatalogSearch';
-import { navigate, scrollToTop } from '../../nav';
+import { navigate, scrollToTop, switchTab } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, type DiscoverCols } from './discoverCols';
+import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
+import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 import { usePinchStep } from '../../ui/usePinchStep';
 import {
   discoverQueryKey,
@@ -24,10 +24,10 @@ import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverShe
 import { DiscoverHome } from './DiscoverHome';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 import { cancelTileCards } from '../../catalog/tileCards';
+import type { TrendingWindow } from '../../../../src/catalog/tmdb';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
 import { PER_SCREEN, useAdSlots } from '../../ads/useAdSlots';
-import type { CatalogTitle, TrendingWindow } from '../../../../src/catalog/tmdb';
 
 export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 
@@ -60,7 +60,6 @@ export function Discover() {
   const [moreBusy, setMoreBusy] = useState(false);
   const [moreFailed, setMoreFailed] = useState(false);
   const [reload, setReload] = useState(0);
-  const [searching, setSearching] = useState(!!(kept && kept.search));
   // a kept feed is shown as is: the first run of the load effect skips the fetch
   const restored = useRef(!!(kept && kept.feed && !home));
   // the current request: answers of an older one (another chip, a retry) are dropped
@@ -77,7 +76,7 @@ export function Discover() {
   colsRef.current = cols;
   const rootRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
-    enabled: !searching && !home,
+    enabled: !home,
     levels: COLS_BY_SIZE.length,
     level: () => Math.max(0, COLS_BY_SIZE.indexOf(colsRef.current)),
     apply: (i) => {
@@ -88,13 +87,18 @@ export function Discover() {
     },
     anchorAttr: 'data-anchor',
   });
-  const gridClass = 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
-  // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears
+  const gridClass = discoverGridClass(cols);
+  // landscape: as many posters per row as it takes for a whole tile to fit the screen height
+  const box = useLandscapeBox(rootRef);
+  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height) : 0;
+  const gridStyle = colsStyle(landCols || null);
+  // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
+  // Search lives on its own tab now, so this grid is never a search result.
   const ads = useAdSlots({
     section: 'discoverGrid',
     count: feed ? feed.items.length : 0,
-    perScreen: cols === 4 ? PER_SCREEN.cols4 : cols === 3 ? PER_SCREEN.cols3 : PER_SCREEN.cols2,
-    active: !home && !searching && !error && !!feed && feed.items.length > 0,
+    perScreen: landCols || (cols === 4 ? PER_SCREEN.cols4 : cols === 3 ? PER_SCREEN.cols3 : PER_SCREEN.cols2),
+    active: !home && !error && !!feed && feed.items.length > 0,
     listKey: filter + '|' + qkey,
     itemEl: (i) => (rootRef.current ? rootRef.current.querySelectorAll('.m-disc-grid [data-anchor]')[i] || null : null),
   });
@@ -185,15 +189,6 @@ export function Discover() {
   }, [hasMore, moreFailed, feed]);
 
   const current = filter;
-  if (searching)
-    return (
-      <CatalogSearch
-        onClose={() => {
-          saveDiscover({ search: null });
-          setSearching(false);
-        }}
-      />
-    );
   return (
     <div class="m-discover" ref={rootRef}>
       <div class="m-disc-head">
@@ -201,17 +196,15 @@ export function Discover() {
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
         <button
           type="button"
-          class="m-icon-btn m-sort"
+          class="m-icon-btn m-sort tm"
+          data-code="P34.3"
           aria-label={home ? t('discover.homeBrowseLists') : t('discover.sortAria', { name: sortName(query.sort) })}
           aria-haspopup="dialog"
           onClick={() => setSheet('sort')}
         >
           <Icon d={ICONS.sort} size={20} />
         </button>
-        <button type="button" class="m-btn m-btn-secondary m-btn-sm" aria-label={t('add.search')} onClick={() => {
-            saveDiscover({ search: { text: '', items: null } });
-            setSearching(true);
-          }}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P34.4" aria-label={t('add.search')} onClick={() => switchTab({ name: 'add', scope: 'catalog' })}>
           <Icon d={SEARCH} size={18} />
         </button>
       </div>
@@ -220,14 +213,15 @@ export function Discover() {
           <button
             key={c.id}
             type="button"
-            class={'m-hfilter' + (current === c.id ? ' on' : '')}
+            class={'m-hfilter tm' + (current === c.id ? ' on' : '')}
+            data-code={c.id === 'all' ? 'P34.5' : c.id === 'movie' ? 'P34.6' : 'P34.7'}
             aria-pressed={current === c.id}
             onClick={() => setFilter(c.id)}
           >
             {c.label}
           </button>
         ))}
-        <button type="button" class={'m-hfilter m-disc-filters' + (nFilters ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('filters')}>
+        <button type="button" class={'m-hfilter m-disc-filters tm' + (nFilters ? ' on' : '')} data-code="P34.8" aria-haspopup="dialog" onClick={() => setSheet('filters')}>
           {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
         </button>
       </div>
@@ -255,7 +249,7 @@ export function Discover() {
           }}
         />
       ) : !feed ? (
-        <div class={gridClass} aria-busy="true">
+        <div class={gridClass} style={gridStyle} aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (
             <div key={i} class="m-disc-tile m-disc-skel" aria-hidden="true">
               <span class="m-disc-poster" />
@@ -267,7 +261,7 @@ export function Discover() {
         <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>
       ) : (
         <>
-          <div class={gridClass}>
+          <div class={gridClass} style={gridStyle}>
             {withAds(feed.items, ads.admitted).map((e) => {
               if (e.item === undefined) {
                 const b = ads.banner(e.ad);

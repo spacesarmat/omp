@@ -90,6 +90,10 @@ export interface Open2160Options {
   positionMs: number;
   fromStart: boolean;
   segments: string;
+  /** More Intent extras for 2160 Player (the external tracks, src/player/externalTracks.ts); an older APK ignores them. */
+  extras?: { [key: string]: string | string[] };
+  /** The player's result extras to hand back in `extras` of the answer. */
+  resultKeys?: string[];
   /** playEmbedded2160 only: «Звук в фоне» (the phone's media service and sound with the screen off). */
   background?: boolean;
 }

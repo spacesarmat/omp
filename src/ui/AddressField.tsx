@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useFocusable, setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
 import { t } from '../i18n';
+import { TestBadge, visibleCode } from '../testmode/badge';
 import { Focusable, FocusGroup, TextInput, URL_KEYBOARD } from './components';
 import { Icon } from './icons';
 import { useKeys } from './keys';
@@ -142,11 +143,12 @@ function KeypadField(p: AddressFieldProps & { open: boolean; setOpen: (v: boolea
     return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
+  const fieldCode = visibleCode(fk);
   return (
     <div class="address-field">
       <div
         ref={ref}
-        class={'focusable text-input address-input' + (focused ? ' focused' : '') + (open ? ' open' : '')}
+        class={'focusable text-input address-input' + (focused ? ' focused' : '') + (open ? ' open' : '') + (fieldCode ? ' test-anchor' : '')}
         data-fk={fk}
         onMouseEnter={() => focusSelf()}
         // the pointer opens the keypad, never the system keyboard
@@ -162,6 +164,7 @@ function KeypadField(p: AddressFieldProps & { open: boolean; setOpen: (v: boolea
           placeholder={p.placeholder}
           onInput={(e) => p.onChange((e.target as HTMLInputElement).value)}
         />
+        {fieldCode ? <TestBadge code={fieldCode} /> : null}
       </div>
       {open && (
         <FocusGroup focusKey={fk + '-KEYPAD'} className="keypad" boundary>

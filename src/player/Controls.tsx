@@ -1,5 +1,7 @@
+import type { ComponentChildren } from 'preact';
 import { t } from '../i18n';
 import { formatDuration } from '../lib/format';
+import { TestBadge, visibleCode } from '../testmode/badge';
 import { Icon, KeyDot } from '../ui/icons';
 import type { Chapter } from './chapters';
 
@@ -39,6 +41,16 @@ export function PlayerHints(p: { chapters: boolean }) {
   );
 }
 
+function PlayerBtn(p: { anchor: string; onClick: () => void; children: ComponentChildren }) {
+  const code = visibleCode(p.anchor);
+  return (
+    <span class={'player-btn' + (code ? ' test-anchor' : '')} onClick={p.onClick}>
+      {p.children}
+      {code ? <TestBadge code={code} /> : null}
+    </span>
+  );
+}
+
 /** Bottom bar. Keys are handled by the player; mouse handlers serve Magic Remote / ThinQ pointer. */
 export function Controls(p: ControlsProps) {
   const shown = p.seekTarget !== null ? p.seekTarget : p.time;
@@ -58,12 +70,12 @@ export function Controls(p: ControlsProps) {
         {p.seekTarget !== null && <div class="player-bar-target" style={{ left: pct + '%' }} />}
       </div>
       <div class="player-row">
-        {p.hasPrev && <span class="player-btn" onClick={p.onPrev}><Icon name="prev" size={32} /></span>}
-        <span class="player-btn" onClick={p.onToggle}><Icon name={p.paused ? 'play' : 'pause'} size={32} /></span>
-        {p.hasNext && <span class="player-btn" onClick={p.onNext}><Icon name="next" size={32} /></span>}
+        {p.hasPrev && <PlayerBtn anchor="player-prev" onClick={p.onPrev}><Icon name="prev" size={32} /></PlayerBtn>}
+        <PlayerBtn anchor="player-play" onClick={p.onToggle}><Icon name={p.paused ? 'play' : 'pause'} size={32} /></PlayerBtn>
+        {p.hasNext && <PlayerBtn anchor="player-next" onClick={p.onNext}><Icon name="next" size={32} /></PlayerBtn>}
         <span>{formatDuration(shown)} / {formatDuration(p.duration)}</span>
-        <span class="player-btn" onClick={p.onTracks}><Icon name="tracks" size={28} /> {t('player.menu')}</span>
-        {p.chapters.length > 0 && <span class="player-btn" onClick={p.onChapters}>{t('player.chapters')}</span>}
+        <PlayerBtn anchor="player-menu" onClick={p.onTracks}><Icon name="tracks" size={28} /> {t('player.menu')}</PlayerBtn>
+        {p.chapters.length > 0 && <PlayerBtn anchor="player-chapters" onClick={p.onChapters}>{t('player.chapters')}</PlayerBtn>}
         <div class="spacer" />
         <PlayerHints chapters={p.chapters.length > 0} />
       </div>

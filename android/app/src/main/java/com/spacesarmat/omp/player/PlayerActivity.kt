@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.player
 
+import com.spacesarmat.omp.tls.TorrServerTrust
 import com.spacesarmat.omp.I18n
 
 import android.app.Instrumentation
@@ -151,6 +152,10 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     private val seeker = SeekAccumulator({ SystemClock.uptimeMillis() })
     private var ticks = 0
     private var dialog: AlertDialog? = null
+    /** Beta test-mode codes. Off on a stable build even when the page sends testMode. */
+    private var testOn = false
+    private var testSizeDp = 0f
+    private val testHud = PlayerTestHud.Session()
 
     /** The colour key whose window [dialog] is (audio list, subtitles list, menu); null for another list. */
     private var dialogKey: ColorAction? = null
@@ -213,6 +218,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         I18n.load(this)
+        // the player can be recreated without the page's activity: the trusted TorrServer certificates first
+        TorrServerTrust.install(this)
         val r = NativePlayerBridge.request
         if (r == null) {
             // process restarted without a request from the page
@@ -282,7 +289,40 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         session = PlayerSession(switcher.firstEngine(r), this)
         switcher.session = session
         NativePlayerBridge.player = this
+        applyTestLabels(r)
         load(r, choose = false)
+    }
+
+    private fun versionLabel(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+
+    /** Corner codes. A second call with the same flag does nothing, so a new queue does not stack badges. */
+    private fun applyTestLabels(r: PlayRequest) {
+        val on = PlayerTestHud.enabled(versionLabel(), r.testMode)
+        val size = PlayerTestHud.sizeDp(r.testPx)
+        if (on == testOn && size == testSizeDp) return
+        testHud.clear()
+        testOn = on
+        testSizeDp = size
+        PlayerTestHud.textDp = size
+        if (!on) return
+        val content = findViewById<View>(android.R.id.content)
+        if (content is android.widget.FrameLayout) PlayerTestHud.copyChip(this, content, "A01", testHud)
+        PlayerTestHud.pin(btnPause, "A01.1", testHud)
+        PlayerTestHud.pin(btnAudio, "A01.2", testHud)
+        PlayerTestHud.pin(btnSubs, "A01.3", testHud)
+        PlayerTestHud.pin(btnNext, "A01.4", testHud)
+        PlayerTestHud.pin(btnSkip, "A01.5", testHud)
+        PlayerTestHud.pin(nextBox, "A01.6", testHud)
+        PlayerTestHud.pin(errPrimary, "A01.7", testHud)
+        PlayerTestHud.pin(errRetry, "A01.8", testHud)
+        PlayerTestHud.pin(errBack, "A01.9", testHud)
+        PlayerTestHud.pin(toastUndo, "A01.10", testHud)
+        PlayerTestHud.pin(donateBox, "A01.11", testHud)
+        PlayerTestHud.pin(infoView, "A01.12", testHud)
     }
 
     override fun onStart() {
@@ -303,6 +343,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         // the page launched another queue while the player is open: the previous run ends as «replaced»
         emitClosed(replaced = true)
         req = r
+        applyTestLabels(r)
         load(r)
     }
 
@@ -396,6 +437,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             handler.post(block)
         }
 
+        override fun vlcRefused(r: PlayRequest): Boolean = r.queue.any { TorrServerTrust.isPinnedUrl(it.url) }
+
         override fun assSubs(r: PlayRequest, index: Int): Boolean =
             r.queue.getOrNull(index)?.assSubs == true || NativePlayerBridge.assSubs(index)
 
@@ -444,6 +487,11 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             .show()
         // OK on the remote goes back to the built-in player: it is the one that plays
         prompt.getButton(DialogInterface.BUTTON_POSITIVE)?.requestFocus()
+        if (testOn) {
+            PlayerTestHud.dialog(prompt, "AD05")
+            prompt.getButton(DialogInterface.BUTTON_POSITIVE)?.let { PlayerTestHud.pin(it, "AD05.1", testHud) }
+            prompt.getButton(DialogInterface.BUTTON_NEGATIVE)?.let { PlayerTestHud.pin(it, "AD05.2", testHud) }
+        }
         dialog = prompt
         vlcPrompt = prompt
     }
@@ -630,28 +678,37 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val subs = session.subOptions()
         val sSel = TrackOptions.selectedSub(subs)
         val chapters = skips.chapters(i)
-        val rows = ArrayList<Pair<String, () -> Unit>>()
-        rows.add(switcher.menuRow() to { switcher.menuPressed() })
-        rows.add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)) to { openAudioList() })
-        rows.add(I18n.s("player.subsRow", "v" to sSel.label) to { openSubsList() })
+        val rows = ArrayList<MenuRow>()
+        fun add(label: String, code: String, run: () -> Unit) {
+            rows.add(MenuRow(label, code, run))
+        }
+        add(switcher.menuRow(), "AD01.1") { switcher.menuPressed() }
+        add(I18n.s("player.audioRow", "v" to selectedAudioLabel(audio)), "AD01.2") { openAudioList() }
+        add(I18n.s("player.subsRow", "v" to sSel.label), "AD01.3") { openSubsList() }
         engine.nightMode?.let { on ->
-            rows.add(ColorKeys.nightLabel(on) to { engine.setNightMode(!on) })
+            add(ColorKeys.nightLabel(on), "AD01.4") { engine.setNightMode(!on) }
         }
         // «Инфо» also from the menu: many box remotes have no Info key, and yellow is night sound with this engine
-        rows.add(I18n.s("player.infoRow") to { if (!infoShown) toggleInfo() })
-        if (chapters.isNotEmpty()) rows.add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()) to { openChapters(i, now) })
+        add(I18n.s("player.infoRow"), "AD01.5") { if (!infoShown) toggleInfo() }
+        if (chapters.isNotEmpty()) add(I18n.s("player.chaptersRow", "n" to chapters.size.toString()), "AD01.6") { openChapters(i, now) }
         val marks = markRows(skips.info(i), now, dur)
+        val markCodes = arrayOf("AD01.7", "AD01.8", "AD01.9")
         listOf("intro-start", "intro-end", "credits").forEachIndexed { n, kind ->
-            rows.add(marks[n] to { emitMark(i, kind, now, dur) })
+            add(marks[n], markCodes[n]) { emitMark(i, kind, now, dur) }
         }
-        val menu = withColorKeys(
-            AlertDialog.Builder(this, R.style.OmpPlayerDialog)
-                .setTitle(I18n.s("player.menu"))
-                .setItems(rows.map { it.first }.toTypedArray()) { _, which -> rows.getOrNull(which)?.second?.invoke() }
-                .create(),
-            ColorAction.MENU,
-        )
+        val builder = AlertDialog.Builder(this, R.style.OmpPlayerDialog).setTitle(I18n.s("player.menu"))
+        if (testOn) {
+            builder.setAdapter(CodedMenu(this, rows.map { it.label to it.code })) { _, which ->
+                rows.getOrNull(which)?.run?.invoke()
+            }
+        } else {
+            builder.setItems(rows.map { it.label }.toTypedArray()) { _, which ->
+                rows.getOrNull(which)?.run?.invoke()
+            }
+        }
+        val menu = withColorKeys(builder.create(), ColorAction.MENU)
         menu.show()
+        if (testOn) PlayerTestHud.dialog(menu, "AD01")
         dialog = menu
         dialogKey = ColorAction.MENU
     }
@@ -695,6 +752,15 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             .create()
         withColorKeys(d, key)
         d.show()
+        if (testOn) {
+            val code = when (key) {
+                ColorAction.AUDIO -> "AD02"
+                ColorAction.SUBS -> "AD03"
+                null -> "AD04"
+                else -> null
+            }
+            if (code != null) PlayerTestHud.dialog(d, code)
+        }
         val pick = ListPick(labels.size, { d.dismiss() }, onPick)
         d.listView?.setOnItemClickListener { _, _, n, _ -> pick.click(n) }
         dialog = d
@@ -1546,3 +1612,6 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         fun clock(ms: Long): String = formatClock(ms)
     }
 }
+
+/** One row of the player menu. `code` is shown only while test mode is on. */
+private data class MenuRow(val label: String, val code: String, val run: () -> Unit)

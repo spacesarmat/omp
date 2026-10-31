@@ -139,7 +139,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
   return (
     <div class="m-screen" data-route="serverSettings">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P15.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <div class="m-ss-head">
@@ -219,7 +219,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         </>
       )}
       {srv && row && (
-        <Sheet onClose={() => setOpen(null)} label={row.label}>
+        <Sheet onClose={() => setOpen(null)} testId="PD38" label={row.label}>
           <div class="m-sheet-title">{row.label}</div>
           {(typeof srv[row.field] === 'number' ? withCurrent(row.options, srv[row.field] as number) : row.options).map((o) => (
             <button type="button" role="radio" aria-checked={o.value === srv[row.field]} class="m-opt" onClick={() => pick(row.field, o.value)}>
@@ -230,7 +230,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         </Sheet>
       )}
       {tmdbOpen && (
-        <Sheet onClose={() => setTmdbOpen(false)} label={t('serverSettings.tmdbTitle')}>
+        <Sheet onClose={() => setTmdbOpen(false)} testId="PD39" label={t('serverSettings.tmdbTitle')}>
           <div class="m-sheet-title">{t('serverSettings.tmdbTitle')}</div>
           <div class="m-muted">
             {t('serverSettings.tmdbText')}
@@ -267,7 +267,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         </Sheet>
       )}
       {confirmClearKey && (
-        <Sheet onClose={() => setConfirmClearKey(false)} label={t('serverSettings.clearKeyTitle')}>
+        <Sheet onClose={() => setConfirmClearKey(false)} testId="PD40" label={t('serverSettings.clearKeyTitle')}>
           <div class="m-sheet-title">{t('serverSettings.clearKeyTitle')}</div>
           <div class="m-muted">{t('serverSettings.clearKeyText')}</div>
           <div class="m-sheet-row">
@@ -281,7 +281,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
         </Sheet>
       )}
       {confirmReset && (
-        <Sheet onClose={() => setConfirmReset(false)} label={t('serverSettings.resetLabel')}>
+        <Sheet onClose={() => setConfirmReset(false)} testId="PD41" label={t('serverSettings.resetLabel')}>
           <div class="m-sheet-title">{t('serverSettings.resetTitle')}</div>
           <div class="m-muted">{t('serverSettings.resetText')}</div>
           <div class="m-sheet-row">

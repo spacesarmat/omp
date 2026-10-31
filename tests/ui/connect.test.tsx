@@ -176,4 +176,21 @@ describe('ConnectScreen: a typed address with look-alikes, the VPN hint', () => 
     await type(host, '192.168.1.124:8090');
     expect(host.querySelector('.connect-net-hint')).toBeNull();
   });
+
+  it('no scheme on 8443 (issue #193): https first, saved with https; the field keeps what was typed', async () => {
+    const seen: string[] = [];
+    mockFetch((u: string) => { seen.push(u); return { body: 'MatriX.145.1' }; });
+    const host = mount();
+    await type(host, 'ts.example.com:8443');
+    expect(seen[0]).toBe('https://ts.example.com:8443/echo');
+    expect(servers.value.map((s) => s.url)).toEqual(['https://ts.example.com:8443']);
+  });
+
+  it('an https server without an answer on LG: the error keeps https:// and says what a certificate needs', async () => {
+    mockFetch(() => Promise.reject(new TypeError('Failed to fetch')));
+    const host = mount();
+    await type(host, 'https://ts.example.com:8443/ts/');
+    expect(host.querySelector('.connect-error')!.textContent).toContain('https://ts.example.com:8443/ts');
+    expect(host.querySelector('.connect-error')!.textContent).toContain('Самоподписанный сертификат');
+  });
 });

@@ -23,14 +23,14 @@ export function SeriesMenu({ group, onClose, onSelect }: { group: SeriesGroup; o
   const remove = async () => {
     const c = client.value;
     if (!c || busy) return;
-    if (!(await askConfirm(tp('library.deleteAsk', n), t('common.delete'), { destructive: true }))) return;
+    if (!(await askConfirm(tp('library.deleteAsk', n), t('common.delete'), { destructive: true, testId: 'PD46' }))) return;
     setBusy(true);
     reportDeleted(await deleteTorrents(c, hashes));
     onClose();
   };
 
   return (
-    <Sheet label={title} onClose={onClose}>
+    <Sheet label={title} testId="PD02" onClose={onClose}>
       <div class="m-sheet-title">{title}</div>
       <button
         type="button"

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
+import { sizeText as resultSizeText } from './ResultCard';
 import { Sheet } from './Sheet';
+import { online } from '../lib/online';
 import { showToast } from './toast';
 import { fmtSize, t } from '../../../src/i18n';
 import { navigate } from '../nav';
@@ -25,7 +27,7 @@ import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import type { LibraryTorrent } from '../../../src/monitor/newEpisodes';
-import { coverageNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
+import { coverageNote, episodesNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
 import type { Torrent } from '../../../src/api/types';
 
 export { failureOf };
@@ -38,9 +40,9 @@ function sameHash(a: string, b: string): boolean {
   return (a || '').toLowerCase() === (b || '').toLowerCase();
 }
 
-/** «18,2 ГБ · 940 сидов · rutor · сезоны 1-3». */
+/** «18,2 ГБ · 940 сидов · rutor · сезоны 1-3», «15,3 ГБ · 10 сидов · JacRed · S01 · 8 серий». */
 function rowMeta(lib: LibraryTorrent, r: SourceResult): string {
-  return [r.Size, seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r)].filter(Boolean).join(' · ');
+  return [resultSizeText(r), seedsText(r.Seed || 0), sourceName(r.source), coverageNote(lib, r) || episodesNote(lib, r)].filter(Boolean).join(' · ');
 }
 
 /** The cards of the monitoring findings about the replaced torrent go with it. */
@@ -164,7 +166,7 @@ export function BetterSheet({
     const oldSize = torrent.torrent_size ? fmtSize(torrent.torrent_size) : '';
     const covered = coverageNote(lib, picked);
     return (
-      <Sheet label={t('monitor.replaceSheet.title')} onClose={cancel}>
+      <Sheet label={t('monitor.replaceSheet.title')} testId="PD20" onClose={cancel}>
         <div class="m-sheet-title">{t('monitor.replaceSheet.title')}</div>
         <div class="m-accent" data-block="better-change">
           {have + ' → ' + qualityOrUnknown(picked.Title)}
@@ -183,7 +185,7 @@ export function BetterSheet({
         </div>
         <div class="m-rep-box new">
           <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
-          <div class="m-rep-line">{[shortTitle(picked.Title), picked.Size, covered].filter(Boolean).join(' · ')}</div>
+          <div class="m-rep-line">{[shortTitle(picked.Title), resultSizeText(picked), covered].filter(Boolean).join(' · ')}</div>
         </div>
         <div class="m-rep-moves">
           <div>✓ {t('monitor.replaceSheet.keepsHistory')}</div>
@@ -208,7 +210,7 @@ export function BetterSheet({
   }
 
   return (
-    <Sheet label={t('torrent.better.find')} onClose={onClose}>
+    <Sheet label={t('torrent.better.find')} testId="PD21" onClose={onClose}>
       <div class="m-sheet-title">{t('torrent.better.find')}</div>
       <div class="m-muted m-small">{[shortTitle(title), t('torrent.better.have', { quality: have })].join(' · ')}</div>
       {failure && (
@@ -240,7 +242,7 @@ export function BetterSheet({
       )}
       {outcome && !outcome.candidates.length && (
         <div class="m-better-empty" data-block="better-empty">
-          <div class="m-muted">{outcome.answered ? t('torrent.better.none') : t('torrent.better.noAnswer')}</div>
+          <div class="m-muted">{outcome.answered ? t('torrent.better.none') : !online.value ? t('common.offlineTitle') : t('torrent.better.noAnswer')}</div>
           <button type="button" class="m-btn m-btn-secondary" onClick={searchAll}>
             {t('torrent.better.searchAll')}
           </button>

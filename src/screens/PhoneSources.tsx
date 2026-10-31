@@ -204,7 +204,7 @@ export function PhoneSourcesScreen() {
 
   const forget = () => {
     const name = link ? link.name : '';
-    confirmDialog(named('phoneSources.forgetAsk', name), t('phoneSources.forget')).then((ok) => {
+    confirmDialog(named('phoneSources.forgetAsk', name), t('phoneSources.forget'), 'psrc-forget').then((ok) => {
       if (!ok) return;
       cached = null;
       forgetPhoneLink();

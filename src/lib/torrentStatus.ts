@@ -57,3 +57,9 @@ export function swarmText(tor: { stat?: number; connected_seeders?: number; acti
   if (saved) return tp('sources.seeds', saved.s) + ' ' + t('torrent.trackerMark');
   return t('torrent.seedsUnknown');
 }
+
+/** The phone's seeds line: '' instead of the bare «-» placeholder, so a meta line does not end in a dangling «· -». */
+export function knownSwarmText(tor: { stat?: number; connected_seeders?: number; active_peers?: number; data?: string }): string {
+  const s = swarmText(tor);
+  return s === t('torrent.seedsUnknown') ? '' : s;
+}

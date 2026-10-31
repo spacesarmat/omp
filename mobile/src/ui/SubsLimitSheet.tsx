@@ -11,7 +11,7 @@ export function SubsLimitSheet({ onClose }: { onClose: () => void }) {
     navigate({ name: 'account' });
   };
   return (
-    <Sheet label={t('monitor.limit.title', { n: FREE_SUBS_MAX })} onClose={onClose}>
+    <Sheet label={t('monitor.limit.title', { n: FREE_SUBS_MAX })} testId="PD05" onClose={onClose}>
       <div class="m-sheet-title">{t('monitor.limit.title', { n: FREE_SUBS_MAX })}</div>
       <p class="m-want-text" data-subs-limit>
         {t('monitor.limit.text', { n: FREE_SUBS_MAX })}

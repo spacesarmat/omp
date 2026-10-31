@@ -81,7 +81,7 @@ export function CodeSheet({
   }
 
   return (
-    <Sheet onClose={onCancel} label={title}>
+    <Sheet onClose={onCancel} testId="PD24" label={title}>
       <form class="m-field m-code-form" onSubmit={submit}>
         <div class="m-sheet-title">{title}</div>
         <p class="m-muted m-note">{t('remote.code.note')}</p>

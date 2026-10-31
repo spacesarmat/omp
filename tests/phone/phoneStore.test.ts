@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sanitizePhoneLink, savePhoneLink, forgetPhoneLink, phoneLink, PHONE_KEY } from '../../src/phone/phoneStore';
+import { sanitizePhoneLink, savePhoneLink, setPhoneSubscribed, forgetPhoneLink, phoneLink, PHONE_KEY } from '../../src/phone/phoneStore';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Samsung SM-G998B' };
 
@@ -18,6 +18,13 @@ describe('phoneStore', () => {
     });
     expect(sanitizePhoneLink({ url: 'ftp://x', token: 'b'.repeat(32), name: '' })).toBeNull();
     expect(sanitizePhoneLink('garbage')).toBeNull();
+
+    expect(sanitizePhoneLink({ ...PH, sub: true }, 3)).toMatchObject({ sub: true, at: 3 });
+    expect(sanitizePhoneLink({ ...PH, sub: 'yes' }, 3)!.sub).toBeUndefined();
+    savePhoneLink({ ...PH, sub: false });
+    expect(phoneLink.value && phoneLink.value.sub).toBe(false);
+    setPhoneSubscribed(true);
+    expect(phoneLink.value && phoneLink.value.sub).toBe(true);
 
     savePhoneLink(PH);
     vi.resetModules();

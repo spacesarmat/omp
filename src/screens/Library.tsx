@@ -105,7 +105,7 @@ export function LibraryScreen() {
 
   const removeTorrent = (hash: string) => {
     const tor = torrents.value.find((x) => x.hash === hash);
-    confirmDialog(t('catalog.deleteAsk', { title: tor ? displayTitle(tor) : hash }), t('common.delete')).then((ok) => {
+    confirmDialog(t('catalog.deleteAsk', { title: tor ? displayTitle(tor) : hash }), t('common.delete'), 'lib-delete').then((ok) => {
       if (!ok || !c) return;
       c.remove(hash).then(
         () => { torrents.value = torrents.value.filter((x) => x.hash !== hash); setSel(null); toast(t('catalog.torrentDeleted')); },
@@ -115,7 +115,7 @@ export function LibraryScreen() {
   };
 
   const removeSeries = (g: SeriesGroup) => {
-    confirmDialog(tp('series.deleteSeries', g.members.length), t('common.delete')).then((ok) => {
+    confirmDialog(tp('series.deleteSeries', g.members.length), t('common.delete'), 'lib-delete-series').then((ok) => {
       if (!ok || !c) return;
       const hashes = g.members.map((m) => m.hash);
       Promise.all(hashes.map((h) => c.remove(h))).then(
@@ -126,7 +126,7 @@ export function LibraryScreen() {
   };
 
   const removeHistory = (hash: string, fileIndex: number) => {
-    confirmDialog(t('catalog.removeFromHistoryAsk'), t('catalog.removeFromHistory')).then((ok) => {
+    confirmDialog(t('catalog.removeFromHistoryAsk'), t('catalog.removeFromHistory'), 'lib-history').then((ok) => {
       if (!ok || !c) return;
       clearProgress(hash, fileIndex);
       // drop the server mark too, otherwise the entry comes back from /viewed
@@ -190,8 +190,8 @@ export function LibraryScreen() {
           <div class="catalog-off-title">{t('catalog.unavailable')}</div>
           <div class="catalog-off-reason">{catalogReason(activeServer.value!.name, online)}</div>
           <FocusGroup focusKey="ERROR-ACTIONS" className="actions" autoFocus>
-            <Button label={t('common.retry')} onPress={() => load()} />
-            <Button label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
+            <Button focusKey="lib-retry" label={t('common.retry')} onPress={() => load()} />
+            <Button focusKey="lib-change-server" label={t('catalog.changeServer')} onPress={() => navigate({ name: 'connect' })} />
           </FocusGroup>
           <div class="catalog-off-hint">{catalogHint()}</div>
         </div>
@@ -233,7 +233,7 @@ export function LibraryScreen() {
       {error && !isDiscover && (
         <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
           <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
-          <Button label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
+          <Button focusKey="lib-banner-retry" label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
         </FocusGroup>
       )}
       {!loaded && !isDiscover && <Spinner text={t('catalog.loading')} />}
@@ -268,6 +268,7 @@ export function LibraryScreen() {
         <TorrentViews
           view={s.libraryView}
           list={list}
+          ads={!searching}
           group={tab === 'all' || tab === 'tv'}
           onOpenSeries={(g) => navigate({ name: 'series', key: g.key })}
           onOpen={(t) => navigate({ name: 'torrent', hash: t.hash })}

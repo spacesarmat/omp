@@ -182,6 +182,33 @@ describe('FAQ v0.15 content', () => {
     expect(viewText('no-sound', 'phone')).not.toContain('VLC');
   });
 
+  it('the ADB guide covers phones and TV boxes, the ABI choice and the common errors', () => {
+    const it = FAQ.find((i) => i.id === 'atv-adb')!;
+    expect(it.devices).toEqual(['atv', 'phone']);
+    expect(it.section).toBe('install');
+    for (const d of ['atv', 'phone'] as const) {
+      const t = viewText('atv-adb', d);
+      for (const f of [
+        'Установка на Android через ADB', 'Отладку по USB', 'Отладку по сети', 'adb devices', 'adb connect <IP>:5555', 'adb install -r',
+        'ro.product.cpu.abi', 'arm64-v8a', 'armeabi-v7a', 'armv7.apk', 'unauthorized', 'offline', 'INSTALL_FAILED_UPDATE_INCOMPATIBLE',
+        'INSUFFICIENT_STORAGE', 'adb pair', 'Windows', 'macOS', 'Linux',
+      ]) expect(t, f).toContain(f);
+      expect(urls([...it.short, ...(it.more ?? [])])).toContain('https://developer.android.com/tools/releases/platform-tools');
+      expect(urls([...it.short, ...(it.more ?? [])])).toContain(RELEASES_URL);
+    }
+    // the old line said the bitness never blocks an install - it does (arm64 on a 32-bit system)
+    expect(viewText('apk-fail', 'atv')).not.toContain('не мешает');
+    expect(viewText('apk-fail', 'atv')).toContain('armv7');
+    expect(viewText('apk-fail', 'phone')).toContain('резервн');
+  });
+
+  it('tells the free app from the paid OMP subscription', () => {
+    expect(viewText('support', 'phone')).not.toContain('все функции доступны всем');
+    const s = viewText('omp-subscription', 'phone');
+    for (const f of ['Jackett', 'JacRed', '@OMPBILLINGBOT', '«Аккаунт OMP»', '«Код подписки»']) expect(s, f).toContain(f);
+    expect(viewText('subscriptions', 'phone')).toContain('«Подписка OMP»');
+  });
+
   it('explains audiobooks on the phone', () => {
     for (const id of ['audiobooks', 'audiobook-player', 'audiobook-seeds']) {
       const it = FAQ.find((i) => i.id === id)!;
@@ -301,7 +328,7 @@ describe('Faq screen', () => {
     await act(async () => chip(el, 'Android TV').click());
     expect(on(el)).toBe('Android TV');
     expect(chip(el, 'Android TV').getAttribute('aria-pressed')).toBe('true');
-    expect(q(el, 'Установить через adb')).toBeDefined();
+    expect(q(el, 'Установка на Android через ADB')).toBeDefined();
     expect(q(el, 'Нужен ли root')).toBeUndefined();
     expect(localStorage.getItem('tsp.faqDevice')).toBe('"atv"');
     el = mount(<Faq />);

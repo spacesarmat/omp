@@ -9,7 +9,7 @@ import { subSizeOptions } from '../player/subtitleOffset';
 import { goBack, navigate } from '../ui/nav';
 import { askText } from '../ui/TextDialog';
 import type { TmdbConfig } from '../api/types';
-import { FocusGroup, ChoiceRow, onOff, Button, Focusable } from '../ui/components';
+import { FocusGroup, ChoiceRow, onOff, Button, Focusable, StepperRow } from '../ui/components';
 import { playerEngineOptions, vlcUnavailable, vlcAvailable } from '../player/nativeEngine';
 import { nativeOpenOnStartupState, nativePlugin, nativeRequestOpenOnStartupOverlay, nativeSetOpenOnStartup } from '../platform/androidNative';
 import { p2160Package, P2160_RELEASES_URL } from '../player/player2160';
@@ -27,6 +27,7 @@ import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptio
 import { t, type LanguageSetting } from '../i18n';
 import { openOnboarding } from '../onboarding/gate';
 import { LANGUAGE_NAMES } from '../i18n/languageNames';
+import { clampLabelPx, isBetaBuild, TV_LABEL_PX } from '../testmode/active';
 
 const seekOptions = () => [5, 10, 15, 30, 60].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }));
 const subColorOptions = (): { value: 'white' | 'yellow'; label: string }[] => [
@@ -140,7 +141,7 @@ function LogBrief() {
         <Button
           focusKey="set-log-clear"
           label={t('tvSettings.clearLog')}
-          onPress={() => confirmDialog(t('tvSettings.clearLogAsk'), t('tvSettings.clear')).then((ok) => { if (ok) clearLog(); })}
+          onPress={() => confirmDialog(t('tvSettings.clearLogAsk'), t('tvSettings.clear'), 'clear-log').then((ok) => { if (ok) clearLog(); })}
         />
       </div>
     </div>
@@ -174,7 +175,7 @@ function OpenOnStartupSection() {
     nativeSetOpenOnStartup(v).then((s) => {
       applyBlocked(s);
       if (!v || !s || s.needsOverlay !== true) return;
-      confirmDialog(t('tvSettings.openOnStartupOverlayAsk'), t('tvSettings.openOnStartupAllow')).then((ok) => {
+      confirmDialog(t('tvSettings.openOnStartupOverlayAsk'), t('tvSettings.openOnStartupAllow'), 'startup-overlay').then((ok) => {
         if (!ok) return;
         nativeRequestOpenOnStartupOverlay().then((opened) => {
           if (opened === false) toast(t('tvSettings.openOnStartupNoScreen'), 'error');
@@ -249,6 +250,7 @@ export function SettingsScreen() {
     ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
     ['set-onboarding'],
   ];
+  if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
   const nav = (key: string) => rowArrow(tail, key);
 
   return (
@@ -326,6 +328,30 @@ export function SettingsScreen() {
       <div class="row">
         <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} onArrow={nav('set-onboarding')} />
       </div>
+      {isBetaBuild() && (
+        <div>
+          <ChoiceRow
+            focusKey="set-test-mode"
+            label={t('settings.testModeTitle')}
+            value={s.testMode}
+            options={onOff()}
+            onChange={(v) => updateSettings({ testMode: v })}
+            onArrow={nav('set-test-mode')}
+          />
+          <StepperRow
+            focusKey="set-test-size"
+            label={t('settings.testLabelSize')}
+            value={clampLabelPx(s.testLabelPx, TV_LABEL_PX)}
+            min={TV_LABEL_PX.min}
+            max={TV_LABEL_PX.max}
+            step={TV_LABEL_PX.step}
+            unit="px"
+            onChange={(v) => updateSettings({ testLabelPx: v })}
+            onArrow={nav('set-test-size')}
+          />
+          <div class="muted">{t('settings.testModeHint')}</div>
+        </div>
+      )}
     </FocusGroup>
   );
 }
@@ -369,7 +395,7 @@ export function AdvancedSettingsScreen() {
   };
 
   const resetServer = () => {
-    confirmDialog(t('tvSettings.resetServerAsk'), t('tv.marks.reset')).then((ok) => {
+    confirmDialog(t('tvSettings.resetServerAsk'), t('tv.marks.reset'), 'reset-server').then((ok) => {
       if (ok && c) {
         setSaving(true);
         c.resetSettings().then(
@@ -383,7 +409,7 @@ export function AdvancedSettingsScreen() {
   const tmdb = srv && srv.TMDBSettings && typeof srv.TMDBSettings === 'object' ? (srv.TMDBSettings as TmdbConfig) : null;
   const editTmdb = () => {
     if (!tmdb) return;
-    askText(t('serverSettings.tmdbTitle'), tmdb.APIKey || '').then((key) => {
+    askText(t('serverSettings.tmdbTitle'), tmdb.APIKey || '', undefined, 'tmdb-key').then((key) => {
       if (key === null) return;
       const next = key.trim();
       if ((tmdb.APIKey || '') !== next) patch({ TMDBSettings: { ...tmdb, APIKey: next } });
@@ -444,7 +470,7 @@ export function AdvancedSettingsScreen() {
         <Button
           focusKey="set-resetApp"
           label={t('tvSettings.resetApp')}
-          onPress={() => confirmDialog(t('tvSettings.resetAppAsk'), t('tv.marks.reset')).then((ok) => { if (ok) resetSettings(); })}
+          onPress={() => confirmDialog(t('tvSettings.resetAppAsk'), t('tv.marks.reset'), 'reset-app').then((ok) => { if (ok) resetSettings(); })}
         />
       </div>
       <div class="muted">{t('settings.tmdbData')}</div>

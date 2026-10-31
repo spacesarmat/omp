@@ -1,5 +1,6 @@
 package com.spacesarmat.omp.audio
 
+import com.spacesarmat.omp.tls.TorrServerTrust
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -121,6 +122,7 @@ class AudioPlayerService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         I18n.load(this)
+        TorrServerTrust.install(this)
         ensureChannel()
         val notifications = DefaultMediaNotificationProvider.Builder(this)
             .setChannelId(AudioSession.CHANNEL_ID)

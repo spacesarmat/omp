@@ -1,5 +1,5 @@
 /**
- * Ad tables (schema migration 002_ads): uploaded banner images and the daily counters. Plain SQL on the
+ * Ad tables (schema migration 003_ads): uploaded banner images and the daily counters. Plain SQL on the
  * store's pool, outside the state snapshot: an impression must not rewrite the billing state.
  */
 

@@ -24,6 +24,7 @@ import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
 import { isAudiobookTorrent } from '../../src/lib/audiobookRoute';
 import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
+import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
 import { launchLabel } from './lib/playingNames';
@@ -189,12 +190,17 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
       fileIndex: f.id,
     }));
     const skip = await loadSkip(c, w.hash).catch(() => null);
-    void recordPhoneWatch(c, w.hash, w.file.id, at, w.duration);
-    await play2160({ open2160: open }, c, queue, start, at, skip, w.duration);
+    const saved = await play2160({ open2160: open }, c, queue, start, at, skip, w.duration);
+    // the journal gets where the player stopped, not a start at 0:00: a start that never played (no network,
+    // a dead source) is not a watch and must not show in «История» as «0:00»
+    // an end with no known length comes back at 0: nothing to write then, so an older real position stays
+    if (saved && saved.item.fileIndex !== undefined && saved.time >= 1) {
+      void recordPhoneWatch(c, w.hash, saved.item.fileIndex, saved.time, saved.duration);
+    }
     return;
   }
+  // an outside player tells us nothing back (did it play, where did it stop), so no journal entry at 0:00
   await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');
-  void recordPhoneWatch(c, w.hash, w.file.id, 0, w.duration);
 }
 
 /**
@@ -231,8 +237,11 @@ export async function watchAddedOnPhone(c: TorrServerClient, hash: string): Prom
   return 'played';
 }
 
+/** TorrServer's file list, else the one kept in `data`, else the one this device saw last (a release not answering). */
 export function filesOf(t: Torrent): TorrentFile[] {
-  return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+  if (t.file_stats && t.file_stats.length) return t.file_stats;
+  const own = parseTorrentData(t.data);
+  return own.length ? own : knownFiles(t.hash);
 }
 
 const sameRoute = (a: MRoute, b: MRoute) =>
