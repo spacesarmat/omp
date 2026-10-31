@@ -32,7 +32,14 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
   const subscribe = () => {
     if (subsLimitReached()) return setLimited(true);
     const first = loadSubs().length === 0;
-    const saved = addSubscription({ query: torrentQuery(card), quality, sources: null, notify: true, better });
+    const saved = addSubscription({
+      query: torrentQuery(card),
+      quality,
+      sources: null,
+      notify: true,
+      better,
+      catalog: { kind: card.kind, id: card.id, title: card.title, year: card.year || 0, poster: card.poster || '' },
+    });
     if (saved) {
       if (first) void askNotifyOnce().catch(() => {});
       reloadMonitor();

@@ -6,7 +6,7 @@ Hostnames (Cloudflare A → VPS IP, orange cloud):
 
 | Host | Upstream |
 |------|----------|
-| `omp-player.online` | static `site/` (landing); unknown paths are a real 404 with `site/404.html` |
+| `omp-player.online` | static `site/` (landing). `/t/movie|tv/<id>` and `/t/tv/<id>/s/<n>` rewrite to `site/t/index.html`. Other unknown paths are a real 404 with `site/404.html`. `/.well-known/assetlinks.json` is the Android App Links statement |
 | `www.omp-player.online` | 301 to `https://omp-player.online{uri}` (path and query kept) |
 | `billing.omp-player.online` | `billing:8787` |
 | `jackett.omp-player.online` | `jackett:9117` (+ basic auth) |
@@ -64,6 +64,8 @@ On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy
 ## Landing SEO
 
 Both pages carry a title and description, `meta keywords`, `canonical`, hreflang ru/en/x-default, Open Graph and Twitter tags with `assets/og-image.jpg` (1200×630, the hero scene), and one JSON-LD `SoftwareApplication` block. JSON-LD is a data block, so CSP `script-src` does not apply and the Metrika hash is unchanged. `site/robots.txt` points at `site/sitemap.xml`; update `lastmod` there when page copy changes. `test/seo.test.ts` checks the tags, the image size, the JSON-LD and the sitemap. They ship with `site/`, so no Caddy change is needed.
+
+Shared title links need a deploy of `site/` and both Caddyfiles (`/t/...` rewrite, `site/t/index.html`, `site/title-link.js`, `site/.well-known/assetlinks.json`). `assetlinks.json` lists the public debug certificate for `com.spacesarmat.omp`. Release APKs are signed with another key that is not in git, so that fingerprint does not verify them. Until the release certificate SHA-256 is added to that statement and the site is deployed, Android will not open https links in the release app on its own. The page button "Open in OMP" uses an intent link and still starts the installed release (`com.spacesarmat.omp`). Links have no magnets, torrent hashes or tracking parameters.
 
 ## Emergency admin login
 

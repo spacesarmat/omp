@@ -16,6 +16,7 @@ import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
 import { Overview } from './TitleCard';
+import { PosterButton } from '../../share/PosterButton';
 import { readDiscoverCols, discoverGridClass, discoverLandscapeCols } from './discoverCols';
 import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 
@@ -143,13 +144,13 @@ function Body({ card }: { card: PersonCard }) {
           {items.map((x) => {
             const c = x.credit;
             return (
-              <button
+              <PosterButton
                 key={c.kind + ':' + c.id}
-                data-anchor={c.kind + ':' + c.id}
-                type="button"
-                class={'m-disc-tile' + (x.owned ? ' m-person-owned' : '')}
-                aria-label={c.year ? c.title + ' ' + c.year : c.title}
-                onClick={() => navigate(routeOf(list, c))}
+                item={c}
+                anchor={c.kind + ':' + c.id}
+                className={'m-disc-tile' + (x.owned ? ' m-person-owned' : '')}
+                label={c.year ? c.title + ' ' + c.year : c.title}
+                onOpen={() => navigate(routeOf(list, c))}
               >
                 <span class="m-disc-poster">
                   {c.poster ? <LazyImg src={c.poster} /> : <span class={'m-disc-ph m-disc-ph-' + (c.id % 4)}>{c.title}</span>}
@@ -161,7 +162,7 @@ function Body({ card }: { card: PersonCard }) {
                 </span>
                 <span class="m-muted m-small m-disc-meta m-person-roles">{c.roles.join(', ')}</span>
                 <TileWhen kind={c.kind} id={c.id} />
-              </button>
+              </PosterButton>
             );
           })}
         </div>

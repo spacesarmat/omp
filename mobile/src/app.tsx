@@ -2,6 +2,7 @@ import { useEffect } from 'preact/hooks';
 import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { parseBillingDeepLink } from '../../src/billing/deepLink';
+import { flushTitleLink, queueTitleLink } from './share/open';
 import { setPendingBillingCode } from '../../src/billing/session';
 import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
@@ -272,10 +273,21 @@ export function App() {
     try {
       trackOnboardingBoot(
         CapApp.getLaunchUrl().then((res) => {
-          if (res && res.url) intakeBilling(res.url);
+          if (!res || !res.url) return;
+          if (queueTitleLink(res.url)) {
+            flushTitleLink();
+            return;
+          }
+          intakeBilling(res.url);
         }),
       ).catch(() => {});
-      CapApp.addListener('appUrlOpen', (ev) => intakeBilling(ev.url))
+      CapApp.addListener('appUrlOpen', (ev) => {
+        if (queueTitleLink(ev.url)) {
+          flushTitleLink();
+          return;
+        }
+        intakeBilling(ev.url);
+      })
         .then((h) => {
           if (cancelled) void h.remove();
           else remove = () => void h.remove();
@@ -356,6 +368,10 @@ export function App() {
   );
 
   const route = currentRoute.value;
+  // a title link that arrived before a server was connected opens once Connect is left
+  useEffect(() => {
+    flushTitleLink();
+  });
   const showTour = onboardingVisible('phone', route.name);
   const showSetup = !showTour && setupVisible(route.name, !!activeServer.value);
   // The phone TorrServer installer is the existing screen. When it connects, the wizard continues at the result.

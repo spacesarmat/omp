@@ -20,6 +20,10 @@ import { LaunchError } from '../../ui/LaunchError';
 import { CatalogError } from './CatalogError';
 import { PosterSheet } from './PosterSheet';
 import { episodeRatio, episodeSizes, seriesLibraryHash, seriesWatchSpot } from './seriesWatch';
+import { seasonShare } from '../../share/text';
+import { sendShare } from '../../share/send';
+
+const SHARE = 'M12 3v12M8 7l4-4 4 4M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -170,6 +174,16 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
         <button type="button" class="m-icon-btn m-season-back" data-code="P25.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
+        {view && (
+          <button
+            type="button"
+            class="m-icon-btn m-season-share"
+            aria-label={t('share.action')}
+            onClick={() => void sendShare(seasonShare(view.card, season, view.meta))}
+          >
+            <Icon d={SHARE} />
+          </button>
+        )}
         {error || view ? null : (
           <div class="m-season-head m-tc-skel" aria-busy="true">
             <span class="m-season-poster" />

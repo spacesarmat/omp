@@ -9,6 +9,7 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import type { CatalogTitle } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
+import { PosterButton } from '../../share/PosterButton';
 
 const DEBOUNCE_MS = 400;
 const MIN_CHARS = 2;
@@ -90,11 +91,12 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
         items && (
           <div class="m-srch-list">
             {items.map((x) => (
-              <button
+              <PosterButton
                 key={x.kind + ':' + x.id}
-                type="button"
-                class="m-srch-row"
-                onClick={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
+                item={x}
+                className="m-srch-row"
+                label={x.year ? x.title + ' ' + x.year : x.title}
+                onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               >
                 {x.poster ? (
                   <img class="m-srch-poster" src={x.poster} alt="" width={64} height={92} loading="lazy" />
@@ -109,7 +111,7 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
                   {x.rating > 0 && <span class="m-small m-srch-rating">{ratingText(x.rating)}</span>}
                   {inLibrary(index, x) && <span class="m-small m-srch-lib">{t('discover.inLibrary')}</span>}
                 </span>
-              </button>
+              </PosterButton>
             ))}
           </div>
         )

@@ -23,6 +23,7 @@ import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
 import { DiscoverHome } from './DiscoverHome';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { PosterButton } from '../../share/PosterButton';
 import { cancelTileCards } from '../../catalog/tileCards';
 import type { TrendingWindow } from '../../../../src/catalog/tmdb';
 import { withAds } from '../../../../src/ads/ads';
@@ -270,13 +271,13 @@ export function Discover() {
               }
               const x = e.item;
               return (
-              <button
+              <PosterButton
                 key={x.kind + ':' + x.id}
-                data-anchor={x.kind + ':' + x.id}
-                type="button"
-                class="m-disc-tile"
-                aria-label={x.year ? x.title + ' ' + x.year : x.title}
-                onClick={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
+                item={x}
+                anchor={x.kind + ':' + x.id}
+                className="m-disc-tile"
+                label={x.year ? x.title + ' ' + x.year : x.title}
+                onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               >
                 <DiscPoster x={x} owned={inLibrary(index, x)} />
                 <span class="m-card-title m-disc-title">
@@ -284,7 +285,7 @@ export function Discover() {
                 </span>
                 <TileMeta x={x} />
                 <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
-              </button>
+              </PosterButton>
               );
             })}
           </div>

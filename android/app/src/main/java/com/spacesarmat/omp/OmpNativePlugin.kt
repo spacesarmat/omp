@@ -542,6 +542,10 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun shareText(call: PluginCall) = shareTextOp(call)
 
+    /** Share sheet for a title or the site: plain text, not a file. Refuses a magnet. */
+    @PluginMethod
+    fun shareMessage(call: PluginCall) = shareMessageOp(call)
+
     // ---- native player (Android TV) ----
 
     /** Opens [PlayerActivity] with the queue (an open player takes the new queue over); resolves once launched. */

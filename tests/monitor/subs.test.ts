@@ -334,6 +334,14 @@ describe('«Лучшее качество»', () => {
     expect(sanitizeSubscription({ id: 'a', query: 'q', better: true })!.better).toBe(true);
     expect(sanitizeSubscription({ id: 'a', query: 'q', better: 'yes' })).not.toHaveProperty('better');
     expect(sanitizeSubscription({ id: 'a', query: 'q', better: false })).not.toHaveProperty('better');
+    expect(sanitizeSubscription({
+      id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 1,
+      catalog: { kind: 'tv', id: 12.8, title: '  Институт ', year: 2026, poster: 'https://img.test/p.jpg' },
+    })!.catalog).toEqual({ kind: 'tv', id: 12, title: 'Институт', year: 2026, poster: 'https://img.test/p.jpg' });
+    expect(sanitizeSubscription({
+      id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 1,
+      catalog: { kind: 'movie', id: 0, title: 'x', poster: 'http://insecure/p.jpg' },
+    })).not.toHaveProperty('catalog');
     const s = addSubscription({ query: 'Северный ветер', quality: '', sources: null, notify: true, better: true }, 1)!;
     expect(s.better).toBe(true);
     expect(updateSubscription(s.id, { better: false })).not.toHaveProperty('better');

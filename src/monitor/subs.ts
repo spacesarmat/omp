@@ -71,7 +71,27 @@ export function sanitizeSubscription(v: unknown): Subscription | null {
   if (v.better === true) out.better = true;
   const lastFindAt = finite(v.lastFindAt);
   if (lastFindAt !== null && lastFindAt > 0) out.lastFindAt = lastFindAt;
+  const catalog = catalogOf(v.catalog);
+  if (catalog) out.catalog = catalog;
   return out;
+}
+
+/** A stored catalog title, or null when the kind, id or title is missing. Poster is https only. */
+function catalogOf(v: unknown): Subscription['catalog'] | null {
+  if (!isObject(v)) return null;
+  if (v.kind !== 'movie' && v.kind !== 'tv') return null;
+  const id = finite(v.id);
+  const title = str(v.title).replace(/\s+/g, ' ').trim().slice(0, 180);
+  if (id === null || id < 1 || id > 1000000000 || !title) return null;
+  const year = finite(v.year);
+  const poster = str(v.poster);
+  return {
+    kind: v.kind,
+    id: Math.floor(id),
+    title: title,
+    year: year !== null && year > 0 && year < 3000 ? Math.floor(year) : 0,
+    poster: /^https:\/\/\S+$/.test(poster) ? poster.slice(0, 500) : '',
+  };
 }
 
 export function sanitizeSubs(v: unknown): Subscription[] {

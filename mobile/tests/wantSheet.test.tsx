@@ -82,7 +82,14 @@ describe('WantSheet', () => {
     act(() => button('Subscribe')!.click());
     const subs = loadSubs();
     expect(subs).toHaveLength(1);
-    expect(subs[0]).toMatchObject({ query: wantQuery(FILM), quality: '2160', sources: null, notify: true, better: true });
+    expect(subs[0]).toMatchObject({
+      query: wantQuery(FILM),
+      quality: '2160',
+      sources: null,
+      notify: true,
+      better: true,
+      catalog: { kind: 'movie', id: FILM.id, title: FILM.title, year: FILM.year, poster: FILM.poster },
+    });
     expect(toast.value).toBe('Subscribed - see "New"');
     expect(closed).toBe(1);
   });

@@ -5,6 +5,15 @@ import type { SourceResult } from '../sources/types';
 /** Quality of a subscription: '' any, '720' 720p and better, '1080' 1080p and better, '2160' 2160p. */
 export type SubQuality = '' | '720' | '1080' | '2160';
 
+/** A catalog title a «Хочу посмотреть» subscription was created from. Absent for a typed query. */
+export interface SubCatalog {
+  kind: 'movie' | 'tv';
+  id: number;
+  title: string;
+  year: number;
+  poster: string;
+}
+
 export interface Subscription {
   id: string;
   /** Search query. */
@@ -27,11 +36,13 @@ export interface Subscription {
    * Kept on the subscription so a find that aged out of the capped findings list still sorts.
    */
   lastFindAt?: number;
+  /** Title card this subscription came from. Sharing and the poster use it. Never a torrent hash. */
+  catalog?: SubCatalog;
 }
 
 /** The fields a new subscription is created from. */
 export type SubscriptionInput = Pick<Subscription, 'query' | 'quality' | 'sources' | 'notify'> &
-  Partial<Pick<Subscription, 'minSeeds' | 'maxSizeGb' | 'better'>>;
+  Partial<Pick<Subscription, 'minSeeds' | 'maxSizeGb' | 'better' | 'catalog'>>;
 
 /** subId of the findings of new episodes (not a subscription). */
 export const EPISODES_ID = 'episodes';

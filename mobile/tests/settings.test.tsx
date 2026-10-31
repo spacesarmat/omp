@@ -22,6 +22,7 @@ import * as tvUpdate from '../src/tv/tvUpdate';
 import { tvState } from '../src/tv/tvClient';
 import { saveTv, reloadTvs } from '../src/tv/tvStore';
 import { native } from '../src/platform/native';
+import { setShareSender } from '../src/share/send';
 import { tvSearchOn } from '../src/tv/phoneRpc';
 import { monitorNative } from '../src/monitor/native';
 
@@ -200,6 +201,21 @@ describe('Settings', () => {
     expect(open).toHaveBeenCalledWith('https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION, '_system');
     expect(TORRSERVER_VERSION).toMatch(/^MatriX\./);
     open.mockRestore();
+  });
+});
+
+describe('Settings: tell friends', () => {
+  it('shares the site and nothing else', async () => {
+    applyLanguageSetting('ru');
+    const sent: string[] = [];
+    setShareSender(async (o) => {
+      sent.push(o.text);
+      return 'sheet';
+    });
+    const el = mount();
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-row="tell-friends"]')!.click());
+    expect(sent).toEqual(['OMP - плеер для фильмов и сериалов\nhttps://omp-player.online']);
+    setShareSender(null);
   });
 });
 

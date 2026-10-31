@@ -82,6 +82,22 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
+            <!-- Title links. autoVerify needs assetlinks.json on the site with the release
+                 certificate. Until that matches, Android opens the site and the page button
+                 still starts this activity by an intent link. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="omp-player.online" android:pathPrefix="/t/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="omp" android:host="t" />
+            </intent-filter>
+
         </activity>
 
         <!-- native Media3 player on Android TV (OmpNativePlugin.playNative) -->

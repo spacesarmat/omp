@@ -5,6 +5,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { TitleCard, wantQuery, defaultSeason, seriesDates } from '../src/screens/catalog/TitleCard';
+import { setShareSender } from '../src/share/send';
 import { SeasonCard, episodeSub } from '../src/screens/catalog/SeasonCard';
 import { App } from '../src/app';
 import { setCatalogClientForTests, OFFLINE_TITLE } from '../src/catalog/phoneCatalog';
@@ -134,9 +135,25 @@ beforeEach(() => {
 afterEach(() => {
   act(() => render(null, el));
   setCatalogClientForTests(null);
+  setShareSender(null);
 });
 
 describe('TitleCard: film', () => {
+  it('shares the film from the header: title, year, a short line and the link', async () => {
+    serve(FILM);
+    mount(<TitleCard kind="movie" id={11} />);
+    await flush();
+    const sent: string[] = [];
+    setShareSender(async (o) => {
+      sent.push(o.text);
+      return 'sheet';
+    });
+    const share = el.querySelector('.m-tc-share') as HTMLButtonElement;
+    expect(share.getAttribute('aria-label')).toBe('Поделиться');
+    act(() => share.click());
+    expect(sent[0]).toBe('Полуночный архив\n2026\nдрама · 1 ч 58 мин\nhttps://omp-player.online/t/movie/11');
+  });
+
   it('asks the card of its kind and id and shows the fields', async () => {
     const card = serve(FILM);
     mount(<TitleCard kind="movie" id={11} />);
@@ -330,6 +347,11 @@ describe('SeasonCard', () => {
     const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
     const hero = /\.m-season-hero \{[^}]+\}/.exec(css)![0];
     expect(hero).toContain('env(safe-area-inset-top)');
+    expect(hero).toContain('min-height');
+    expect(hero).toContain('16px');
+    const backdrop = /\.m-season-backdrop \{[^}]+\}/.exec(css)![0];
+    expect(backdrop).toContain('bottom: 0');
+    expect(backdrop).not.toContain('height: calc(300px');
     expect(css).toMatch(/\.m-tc \{ padding-top: 0; \}/);
     expect(css).toMatch(/\.m-tc-title \{[^}]*overflow-wrap: anywhere/);
     expect(/\.m-tc-title \{[^}]*line-clamp/.test(css)).toBe(false);
@@ -374,6 +396,17 @@ describe('SeasonCard', () => {
     await flush();
     expect(button('Найти раздачи на сезон')).toBeUndefined();
     expect(episodes()[0].querySelector('.m-tc-ep-sub')!.textContent).not.toBe('нет в медиатеке');
+    const share = el.querySelector('.m-season-share') as HTMLButtonElement;
+    expect(share).toBeTruthy();
+    const sent: string[] = [];
+    setShareSender(async (o) => {
+      sent.push(o.text);
+      return 'sheet';
+    });
+    act(() => share.click());
+    expect(sent[0]).toContain('Сезон 4 выходит');
+    expect(sent[0]).toContain('https://omp-player.online/t/tv/21/s/4');
+    expect(sent[0]).not.toMatch(/magnet:|xt=urn:btih/i);
   });
 
   it('«Серий пока нет» for an empty season', async () => {

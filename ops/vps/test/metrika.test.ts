@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const COUNTER = '113673968';
-const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html'];
+const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html', 'ops/vps/site/t/index.html'];
 const CADDYFILES = ['ops/vps/Caddyfile', 'ops/vps/Caddyfile.nuc'];
 const NOSCRIPT =
   '<noscript><div><img src="https://mc.yandex.ru/watch/113673968" style="position:absolute; left:-9999px;" alt="" /></div></noscript>\n<!-- /Yandex.Metrika counter -->';
@@ -78,8 +78,10 @@ describe('Yandex.Metrika on the public site', () => {
 
   it('allows exactly that inline script, and Metrika hosts, in both Caddy CSPs', () => {
     const hashes = PAGES.map((p) => inlineScripts(read(p)).map(sha256));
-    for (const h of hashes) expect(h).toHaveLength(1);
-    expect(hashes[1]).toEqual(hashes[0]);
+    for (const h of hashes) {
+      expect(h).toHaveLength(1);
+      expect(h).toEqual(hashes[0]);
+    }
     const policies = CADDYFILES.map((f) => landingCsp(read(f)));
     expect(policies[1]).toEqual(policies[0]);
     const csp = policies[0];
