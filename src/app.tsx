@@ -89,7 +89,7 @@ function renderRoute(r: Route) {
     case 'update':
       return <UpdateScreen />;
     case 'title':
-      return <TitleCardScreen kind={r.kind} id={r.id} />;
+      return <TitleCardScreen kind={r.kind} id={r.id} season={r.season} />;
     case 'person':
       return <PersonScreen id={r.id} name={r.label} />;
     case 'sources':

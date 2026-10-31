@@ -1432,6 +1432,7 @@ export const en: EnDict<typeof ru> = {
       hintOk: 'OK - select',
       hintDown: 'Down - seasons and cast',
       hintBack: 'Back - to "Discover"',
+      seasonMissing: 'Season {n} is not on this card. Showing the series.',
     },
     // «В лучшем качестве» on the torrent and series screens
     better: {

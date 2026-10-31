@@ -1461,6 +1461,7 @@ export const ru = {
       hintOk: 'ОК - выбрать',
       hintDown: 'Вниз - сезоны и актёры',
       hintBack: 'Назад - к «Обзору»',
+      seasonMissing: 'Сезона {n} в карточке нет. Открыт сериал.',
     },
     // «В лучшем качестве» on the torrent and series screens
     better: {

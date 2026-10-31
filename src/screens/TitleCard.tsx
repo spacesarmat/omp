@@ -18,6 +18,7 @@ import { airDateText, seriesPill } from '../lib/seriesStatus';
 import { FocusGroup, Focusable, Button, Spinner } from '../ui/components';
 import { arrowUpToAbove, restoreFocus } from '../ui/focus';
 import { navigate, type Route } from '../ui/nav';
+import { toast } from '../ui/toast';
 import { tvGlyphs } from '../ui/tvText';
 import { CastRow, initials, showInRow } from '../ui/CastRow';
 import { seasonPlan } from './Series';
@@ -36,6 +37,19 @@ export function titleMeta(card: CatalogCard): string[] {
     card.kind === 'tv' ? (seasons ? tp('series.seasons', seasons) : '') : card.runtime > 0 ? fmtDuration(card.runtime) : '',
     genres,
   ].filter(Boolean);
+}
+
+/**
+ * Where a shared season lands. The chip when the card lists that season, otherwise the series actions
+ * (the series card stays open).
+ */
+export function seasonFocusKey(season: number | undefined, numbers: number[]): string {
+  if (typeof season === 'number') {
+    for (let i = 0; i < numbers.length; i++) {
+      if (numbers[i] === season) return 'title-season-' + season;
+    }
+  }
+  return 'title-find';
 }
 
 /** The route of a library target. */
@@ -89,7 +103,7 @@ export interface TitleWantProps {
   onWant?: (card: CatalogCard) => void;
 }
 
-function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
+function Body({ card, want, season }: { card: CatalogCard; want: TitleWantProps; season?: number }) {
   const list = torrents.value;
   const now = Date.now();
   const target = useMemo(() => {
@@ -102,7 +116,9 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    restoreFocus('title-find');
+    const key = seasonFocusKey(season, chips.map((c) => c.n));
+    restoreFocus(key);
+    if (card.kind === 'tv' && typeof season === 'number' && key === 'title-find') toast(t('tv.title.seasonMissing', { n: season }));
   }, []);
 
   const find = (season?: number) => navigate({ name: 'add', query: torrentQuery(card, season), run: true });
@@ -182,7 +198,7 @@ function Body({ card, want }: { card: CatalogCard; want: TitleWantProps }) {
   );
 }
 
-export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) {
+export function TitleCardScreen(p: { kind: Kind; id: number; season?: number } & TitleWantProps) {
   const [card, setCard] = useState<CatalogCard | null>(null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const [reload, setReload] = useState(0);
@@ -226,7 +242,7 @@ export function TitleCardScreen(p: { kind: Kind; id: number } & TitleWantProps) 
       ) : !card ? (
         <Spinner text={t('catalog.loading')} />
       ) : (
-        <Body card={card} want={{ wanted: p.wanted, onWant: p.onWant }} />
+        <Body card={card} season={p.season} want={{ wanted: p.wanted, onWant: p.onWant }} />
       )}
       <div class="hints">
         {t('tv.title.hintOk')} · {t('tv.title.hintDown')} · {t('tv.title.hintBack')}

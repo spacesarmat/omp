@@ -1,9 +1,15 @@
 // Android TV: a shared https://omp-player.online/t/... link opens the title card.
-// The TV card lists every season, so a season link opens that series card.
-// webOS never calls this. Chromium 53 safe.
+// A season link opens that series card on the season. webOS never calls this. Chromium 53 safe.
 import { parseTitleUrl, type TitleRef } from './lib/shareLink';
 import { activeServer } from './store/servers';
-import { currentRoute, navigate, resetTo } from './ui/nav';
+import { currentRoute, navigate, resetTo, type Route } from './ui/nav';
+
+/** The TV route for a shared link. A season is kept so the card can select it. */
+export function tvTitleRoute(ref: TitleRef): Route {
+  const route: Route = { name: 'title', kind: ref.kind, id: ref.id };
+  if (ref.kind === 'tv' && typeof ref.season === 'number') route.season = ref.season;
+  return route;
+}
 
 let pending: TitleRef | null = null;
 
@@ -22,7 +28,7 @@ export function flushTvTitleLink(): void {
   const ref = pending;
   pending = null;
   resetTo({ name: 'library' });
-  navigate({ name: 'title', kind: ref.kind, id: ref.id });
+  navigate(tvTitleRoute(ref));
 }
 
 /** Tests: drop a link that was not opened. */
