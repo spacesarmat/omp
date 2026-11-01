@@ -69,7 +69,9 @@ describe('libraryTitle', () => {
   });
   it('a placeholder title: the name derived from the files', () => {
     const files = JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'Show.S01E01.mkv', length: 1 }, { id: 2, path: 'Show.S01E02.mkv', length: 1 }] } });
-    expect(libraryTitle({ hash: 'a'.repeat(40), title: 'a'.repeat(40), data: files })).toEqual({ title: 'Show · Сезон 1', meta: '' });
+    expect(libraryTitle({ hash: 'a'.repeat(40), title: 'a'.repeat(40), data: files })).toEqual({ title: 'Show · Сезон 1', meta: '1 сезон' });
+    const anime = [1, 2, 3].map((n) => ({ id: n, path: 'Show Name - 0' + n + ' [1080p].mkv', length: 1 }));
+    expect(libraryTitle({ hash: 'b'.repeat(40), title: 'infohash:' + 'b'.repeat(40), file_stats: anime }).meta).toBe('1 сезон');
   });
   it('English meta', () => {
     applyLanguageSetting('en');

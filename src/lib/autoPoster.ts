@@ -4,6 +4,7 @@ import { request } from '../api/http';
 import { posterQueries, sourcesYear, tmdbSearchRequest, tmdbTypedSearchRequest, firstPoster, yearPoster } from './posterSearch';
 import type { TmdbSource } from '../catalog/localTmdb';
 import { isSeries } from './seriesGroups';
+import { deriveName, isPlaceholderTitle, torrentFiles } from './torrentName';
 import { resolveTmdbKey } from '../catalog/resolveTmdb';
 import { TMDB_FALLBACK_KEY } from '../catalog/fallbackKey';
 
@@ -69,7 +70,17 @@ export function posterKind(t: Torrent | null | undefined): 'movie' | 'tv' | null
  */
 export function posterSources(t: Torrent | null | undefined): string[] {
   if (!t) return [];
-  return [t.title || '', t.name || ''].filter(Boolean);
+  return [t.title || '', t.name || ''].filter((s) => !!s && !isPlaceholderTitle(s, t.hash));
+}
+
+/** A name worth searching: a hint or a server title, never the hash TorrServer invents for a magnet without dn. */
+function posterName(hash: string, hint: string, t: Torrent | null): string {
+  const hinted = (hint || '').trim();
+  if (hinted && !isPlaceholderTitle(hinted, hash)) return hinted;
+  if (!t) return '';
+  const own = (t.title || t.name || '').trim();
+  if (own && !isPlaceholderTitle(own, hash)) return own;
+  return deriveName(torrentFiles(t), '');
 }
 
 /**
@@ -131,7 +142,7 @@ export function attachPoster(c: PosterClient, hash: string, hint: string, deps: 
       const named = (left: number): Promise<{ name: string; t: Torrent | null } | null> =>
         getOrNull(c, hash).then((t) => {
           if (t && t.poster) return null;
-          const name = hint || (t && (t.title || t.name)) || '';
+          const name = posterName(hash, hint, t);
           if (name || left <= 1) return { name: name, t: t };
           return wait(2000).then(() => named(left - 1));
         });

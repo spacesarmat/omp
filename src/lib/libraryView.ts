@@ -2,7 +2,7 @@ import { categoryTabs, Category } from './category';
 import { parseEpisode, baseName, stripExt, type TorrentFile } from './episodes';
 import { formatDuration } from './format';
 import { t, fmtDuration } from '../i18n';
-import { displayTitle, yearOf } from './torrentName';
+import { deriveName, displayTitle, fileSeasons, isPlaceholderTitle, torrentFiles, yearOf } from './torrentName';
 import { parseEpisodeRange, SEASON_WORDS } from '../monitor/episodes';
 
 export type LibraryView = 'large' | 'small' | 'list' | 'compact';
@@ -98,6 +98,16 @@ export interface LibraryTitle {
 export function libraryTitle(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): LibraryTitle {
   const own = (tor.title || '').trim();
   const shown = displayTitle(tor);
+  const files = torrentFiles(tor);
+  const derived = files.length ? deriveName(files, '') : '';
+  // a magnet without dn is stored as the hash until the files are known. The derived name leaves meta empty,
+  // so a large tile prints the file size. The season goes on the meta line; the title keeps the derived name.
+  if (derived && (isPlaceholderTitle(own, tor.hash) || shown === derived || own === derived)) {
+    const seasons = fileSeasons(files);
+    if (seasons.length === 1) return { title: derived, meta: t('filters.season', { n: seasons[0] }) };
+    if (seasons.length > 1) return { title: derived, meta: t('library.metaSeasons', { a: seasons[0], b: seasons[seasons.length - 1] }) };
+    if (isPlaceholderTitle(own, tor.hash)) return { title: derived, meta: '' };
+  }
   // a plain name with the year in brackets («Название (2026)») reads like the others: «Название · 2026»
   const plainYear = shown === own ? /^(.+?)\s*\((19\d\d|20\d\d)\)$/.exec(own) : null;
   if (plainYear && !looksRaw(plainYear[1])) return { title: plainYear[1], meta: plainYear[2] };

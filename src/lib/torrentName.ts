@@ -1,4 +1,5 @@
 import { parseEpisode, playableFiles, baseName, stripExt, type TorrentFile } from './episodes';
+import { knownFiles } from './knownFiles';
 import { titleCore } from './posterSearch';
 import { ru } from '../i18n/ru';
 
@@ -83,17 +84,44 @@ interface NamedTorrent {
   file_stats?: TorrentFile[];
 }
 
-/** The files TorrServer knows for a torrent (live stats, else the stored `data`). */
+// anime «Name - 01 [1080p].mkv» and «Name [01]»: parseEpisode leaves these without an episode number
+const DASH_EP = /\s-\s(\d{1,3})(?!\.\d)(?:v\d)?(?=[\s.\[(]|$)/;
+const BRACKET_EP = /\[(\d{1,3})\]/;
+
+/**
+ * Live stats, then the stored `data`, then the list this device already saw (knownFiles): a library row
+ * often has none of the first two, because OMP writes the journal before TorrServer has the metadata.
+ */
 export function torrentFiles(t: NamedTorrent): TorrentFile[] {
   if (t.file_stats && t.file_stats.length) return t.file_stats;
-  if (!t.data) return [];
-  try {
-    const d = JSON.parse(t.data);
-    const files = d && d.TorrServer && d.TorrServer.Files;
-    return Array.isArray(files) ? files : [];
-  } catch (e) {
-    return [];
+  if (t.data) {
+    try {
+      const d = JSON.parse(t.data);
+      const files = d && d.TorrServer && d.TorrServer.Files;
+      if (Array.isArray(files) && files.length) return files;
+    } catch (e) {
+      /* the device copy below */
+    }
   }
+  return t.hash ? knownFiles(t.hash) : [];
+}
+
+/** Seasons the files name. Two or more episodes with no season (anime «Name - 01») count as season 1. */
+export function fileSeasons(files: TorrentFile[]): number[] {
+  const seasons: number[] = [];
+  let bare = 0;
+  playableFiles(files).forEach((f) => {
+    const e = parseEpisode(f.path);
+    if (e.season !== null) {
+      if (seasons.indexOf(e.season) < 0) seasons.push(e.season);
+      return;
+    }
+    const name = baseName(f.path);
+    if (e.episode !== null || DASH_EP.test(name) || BRACKET_EP.test(name)) bare++;
+  });
+  if (!seasons.length && bare >= 2) seasons.push(1);
+  seasons.sort((a, b) => a - b);
+  return seasons;
 }
 
 /** The title to show for a torrent: its own, unless it is a placeholder; then one derived from the files. */
