@@ -64,6 +64,15 @@ describe('attachPoster', () => {
     expect(String(fetchJson.mock.calls[0][0])).not.toContain('infohash');
   });
 
+  it('searches the release name when the title is still a hash', async () => {
+    const hash = 'c'.repeat(40);
+    const c = client({ APIKey: 'k' }, [{ title: 'infohash:' + hash, name: 'Severance.S01.1080p' }]);
+    const fetchJson = found('/s.jpg');
+    await attachPoster(c, hash, '', { fetchJson, wait: noWait, tries: 1 });
+    expect(String(fetchJson.mock.calls[0][0])).toContain('query=Severance');
+    expect(c.setPoster).toHaveBeenCalled();
+  });
+
   it('gives up when the title never arrives', async () => {
     const c = client({ APIKey: 'k' }, [{}]);
     const fetchJson = found('/s.jpg');

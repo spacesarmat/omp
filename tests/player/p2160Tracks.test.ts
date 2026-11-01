@@ -166,6 +166,9 @@ describe('reading the result', () => {
     expect(seriesPatchFromResult(bare, { fileIndex: 0, audioId: null, audioName: 'HDrezka Studio', audioLang: 'ru', subtitleId: 'off' }, null, bare[0])).toBeNull();
     // the player's own embedded subtitles (a resume that never opened the panel) are not a choice
     expect(seriesPatchFromResult(bare, { fileIndex: 0, subtitleId: null, subtitleName: 'Crunchyroll', subtitleLang: 'ru' }, null, bare[0])).toBeNull();
+    const off = externalTracksForQueue({ streamUrl }, H, list(['a.mkv']), [0], { at: 1, s: 'off' }, S);
+    expect(off[0].startSubtitle).toBe('off');
+    expect(seriesPatchFromResult(off, { fileIndex: 0, subtitleId: null, subtitleName: 'Crunchyroll', subtitleLang: 'ru' }, { at: 1, s: 'off' }, off[0])).toEqual({ s: { l: 'Crunchyroll', g: 'ru' } });
     // subtitles turned off by hand after OMP asked for external ones; unchanged parts dropped
     const subs = externalTracksForQueue({ streamUrl }, H, FILES, [0, 1], null, { ...S, subtitlesOn: true });
     expect(seriesPatchFromResult(subs, { fileIndex: 0, audioId: other.id, subtitleId: 'off' }, { at: 1, l: other.name, g: 'ru' }, subs[0])).toEqual({ s: 'off' });

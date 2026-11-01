@@ -78,8 +78,10 @@ function posterName(hash: string, hint: string, t: Torrent | null): string {
   const hinted = (hint || '').trim();
   if (hinted && !isPlaceholderTitle(hinted, hash)) return hinted;
   if (!t) return '';
-  const own = (t.title || t.name || '').trim();
-  if (own && !isPlaceholderTitle(own, hash)) return own;
+  const title = (t.title || '').trim();
+  const name = (t.name || '').trim();
+  if (title && !isPlaceholderTitle(title, hash)) return title;
+  if (name && !isPlaceholderTitle(name, hash)) return name;
   return deriveName(torrentFiles(t), '');
 }
 
