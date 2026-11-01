@@ -253,11 +253,11 @@ describe('TV screens in English', () => {
     expect(host.textContent || '').toContain('+ Season 1');
     expect(host.textContent || '').toContain('not in the library');
     expect(host.textContent || '').toContain('soon');
-    await act(async () => { setFocus('season-1'); });
+    await act(async () => { (host.querySelector('[data-fk="season-1"]') as HTMLElement).click(); });
     await flush();
     expect(host.textContent || '').toContain('This season is not in the library');
     expect(buttons(host)).toContain('Find torrents');
-    await act(async () => { setFocus('season-3'); });
+    await act(async () => { (host.querySelector('[data-fk="season-3"]') as HTMLElement).click(); });
     await flush();
     expect(host.textContent || '').toContain('The release date is not known yet');
     expect(noRussian(host)).not.toMatch(CYR);
