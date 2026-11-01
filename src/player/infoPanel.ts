@@ -36,6 +36,8 @@ export interface InfoInput {
   cache: CacheState | null;
   /** Seconds the <video> has buffered ahead; null when unknown. */
   bufferedSec: number | null;
+  /** Replaces the probe line when the sound is an external file (no probe stream). */
+  soundText?: string;
 }
 
 /** The bar fills with the player's seconds ahead against this. */
@@ -167,7 +169,7 @@ export function infoPanel(p: InfoInput): InfoPanel {
       { label: t('player.info.download'), value: down[0], unit: down[1] },
       { label: t('player.info.bitrate'), value: rate[0], unit: rate[1] },
     ],
-    sound: sound || DASH,
+    sound: p.soundText || sound || DASH,
     bufferFill: Math.max(0, Math.min(1, fill)),
     buffer: parts.length ? parts.join(' · ') : DASH,
   };

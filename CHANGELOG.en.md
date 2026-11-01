@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [lg] Separate dub files in a release (for example Rus Sound/LostFilm/Show.S01E01.mka) show up in the webOS player next to the built-in audio tracks. While one plays, the video stays muted and the file plays as its own audio in step with the picture. If the TV cannot open the file, the video track comes back on
+
 ## 0.20.8-beta.2
 
 - [phone] On the season page the backdrop no longer covers Find torrents for the season or the Episodes heading. The gap stays with and without the button, with the yellow air date and with a long title

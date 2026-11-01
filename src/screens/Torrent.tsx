@@ -9,6 +9,7 @@ import { errorMessage } from '../api/http';
 import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
 import { externalNoteText } from '../lib/externalNote';
 import { externalSummary } from '../lib/externalTracks';
+import { webosExternalBlocked } from '../player/webosExternalAudio';
 import { settings } from '../store/settings';
 import { platformKind } from '../platform/env';
 import { formatDuration } from '../lib/format';
@@ -140,9 +141,10 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
   // «+3 озвучки, субтитры»: the release's external dubs and subtitles (never episodes themselves)
   const extras = useMemo(() => externalNoteText(files), [files]);
-  // honest about where those dubs play: never on webOS (LG's player takes one file), on Android TV only in 2160 Player
+  // where those dubs play: on webOS, in the player, unless every file is a container the TV cannot open.
+  // On Android TV, only in 2160 Player.
   const extDubs = useMemo(() => externalSummary(files).dubs > 0, [files]);
-  const extNote = !extDubs ? '' : platformKind() === 'webos' ? t('torrent.extDubsWebos') : settings.value.videoPlayer !== 'p2160' ? t('torrent.extDubsBuiltin') : '';
+  const extNote = !extDubs ? '' : platformKind() === 'webos' ? (webosExternalBlocked(files) ? t('torrent.extDubsWebos') : '') : settings.value.videoPlayer !== 'p2160' ? t('torrent.extDubsBuiltin') : '';
   // a series matched to TMDB: the episodes announced after the last one here, as dashed rows the focus skips (as on the
   // phone's torrent screen and the TV series screen)
   const playable = groups.reduce((acc: TorrentFile[], g) => acc.concat(g.files), []);

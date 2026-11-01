@@ -1795,8 +1795,8 @@ export const ru = {
     seedsUnknown: '-',
     /** Active ~60s with 0 seeders and 0 downloaded bytes. */
     deadRelease: 'Раздача не отвечает - попробуйте другую',
-    /** Torrent screen, a release with external dub files, on webOS: LG's player cannot add them. */
-    extDubsWebos: 'Отдельные озвучки на webOS не подключаются: звучит дорожка из видео. Их подключает 2160 Player на Android TV',
+    /** Torrent screen, webOS, only when every external dub is a container the TV media element will not open. */
+    extDubsWebos: 'Отдельные озвучки этого релиза телевизор не откроет (DTS, FLAC и похожие). Звучит дорожка из видео',
     /** Torrent screen, a release with external dub files, Android TV with OMP's own player chosen. */
     extDubsBuiltin: 'Отдельные озвучки подключает 2160 Player: «Настройки» → «Плеер для видео»',
     deleteAsk: 'Удалить торрент с сервера?',
@@ -2186,6 +2186,8 @@ export const ru = {
     markCreditsRow: 'Отметить начало титров: {v}',
     menuTitle: 'Меню плеера',
     noOtherAudio: 'Других аудиодорожек нет',
+    /** The external file failed (codec, network, or the TV refused a second media element). */
+    extDubFailed: 'Эта озвучка на телевизоре не играет. Включена дорожка из видео',
     audio: 'Аудио',
     subSize: 'Размер субтитров',
     offset: 'Сдвиг субтитров',

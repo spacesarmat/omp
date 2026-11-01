@@ -1754,8 +1754,8 @@ export const en: EnDict<typeof ru> = {
     seedsUnknown: '-',
     /** Active ~60s with 0 seeders and 0 downloaded bytes. */
     deadRelease: 'This release is not responding - try another one',
-    /** Torrent screen, a release with external dub files, on webOS: LG's player cannot add them. */
-    extDubsWebos: 'Separate dub files do not play on webOS: you hear the video track. 2160 Player on Android TV plays them',
+    /** Torrent screen, webOS, only when every external dub is a container the TV media element will not open. */
+    extDubsWebos: 'The separate dub files in this release do not play on the TV (DTS, FLAC and similar). You hear the video track',
     /** Torrent screen, a release with external dub files, Android TV with OMP's own player chosen. */
     extDubsBuiltin: 'Separate dub files play in 2160 Player: Settings → Video player',
     deleteAsk: 'Delete the torrent from the server?',
@@ -2141,6 +2141,8 @@ export const en: EnDict<typeof ru> = {
     markCreditsRow: 'Mark credits start: {v}',
     menuTitle: 'Player menu',
     noOtherAudio: 'No other audio tracks',
+    /** The external file failed (codec, network, or the TV refused a second media element). */
+    extDubFailed: 'This dub does not play on the TV. The video track is on',
     audio: 'Audio',
     subSize: 'Subtitle size',
     offset: 'Subtitle offset',
