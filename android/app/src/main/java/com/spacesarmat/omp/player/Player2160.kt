@@ -51,6 +51,8 @@ object Player2160 {
         val url: String? = null,
         /** The asked result extras the player handed back (String, Boolean, Int or Long). */
         val extras: Map<String, Any> = emptyMap(),
+        /** tv.p2160.extra.WATCHED when the player sent it. null: an older player, the page uses the ratio. */
+        val watched: Boolean? = null,
     ) {
         fun toJson(): JSONObject {
             val o = JSONObject().put("returned", returned)
@@ -63,6 +65,7 @@ object Player2160 {
                 for ((k, v) in extras) e.put(k, v)
                 o.put("extras", e)
             }
+            watched?.let { o.put("watched", it) }
             return o.put("ended", ended)
         }
     }
@@ -162,7 +165,8 @@ object Player2160 {
         if (extras == null) return Result(false)
         val position = bestMillis(extras, POSITION_KEYS)
         val duration = bestMillis(extras, DURATION_KEYS)
-        val ended = extras["tv.p2160.extra.WATCHED"] == true || extras["end_by"] == END_COMPLETED
+        val watched = extras["tv.p2160.extra.WATCHED"] as? Boolean
+        val ended = watched == true || extras["end_by"] == END_COMPLETED
         if (position == null && !ended) return Result(false)
         val more = LinkedHashMap<String, Any>()
         for (k in asked) {
@@ -173,7 +177,7 @@ object Player2160 {
                 is Long -> more[k] = v
             }
         }
-        return Result(true, position, duration, ended, dataUrl, more)
+        return Result(true, position, duration, ended, dataUrl, more, watched)
     }
 
     fun parse(resultCode: Int, data: Intent?, asked: List<String> = emptyList()): Result {
@@ -184,7 +188,18 @@ object Player2160 {
             @Suppress("DEPRECATION")
             if (b.containsKey(k)) map[k] = b.get(k)
         }
-        return parseExtras(map, data.dataString, asked)
+        return parseExtras(map, resultUrl(data), asked)
+    }
+
+    /** file:// in data throws FileUriExposedException on setResult. 0.2.18 omits it; an older result must not crash the read. */
+    private fun resultUrl(data: Intent?): String? {
+        val raw = try {
+            data?.dataString
+        } catch (_: RuntimeException) {
+            null
+        } ?: return null
+        if (raw.startsWith("file:", ignoreCase = true)) return null
+        return raw
     }
 
     private val KEYS = listOf(

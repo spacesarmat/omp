@@ -168,13 +168,13 @@ export function findUpgrades(ctx: SourceContext, t: LibraryTorrent, opts?: Check
 export function carryProgress(oldHash: string, oldFiles: TorrentFile[], newHash: string, newFiles: TorrentFile[]): number {
   if (!oldHash || !newHash || oldHash === newHash || !oldFiles.length || !newFiles.length) return 0;
   const map = mapFiles(oldFiles, newFiles);
-  const moves: { to: number; time: number; duration: number; updated: number }[] = [];
+  const moves: { to: number; time: number; duration: number; updated: number; open: boolean }[] = [];
   oldFiles.forEach((f) => {
     const p = getLocalProgress(oldHash, f.id);
     const to = map[f.id];
     if (!p || to === null || to === undefined) return;
     if (getLocalProgress(newHash, to)) return;
-    moves.push({ to, time: p.time, duration: p.duration, updated: p.updated });
+    moves.push({ to, time: p.time, duration: p.duration, updated: p.updated, open: !!p.open });
   });
   // two old files on one new slot: the newer position wins
   moves.sort((a, b) => b.updated - a.updated);
@@ -184,7 +184,7 @@ export function carryProgress(oldHash: string, oldFiles: TorrentFile[], newHash:
     taken[m.to] = true;
     return true;
   });
-  keep.reverse().forEach((m) => saveProgress(newHash, m.to, m.time, m.duration));
+  keep.reverse().forEach((m) => saveProgress(newHash, m.to, m.time, m.duration, m.open));
   clearProgress(oldHash);
   return keep.length;
 }

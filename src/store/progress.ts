@@ -7,6 +7,8 @@ export interface Progress {
   time: number;
   duration: number;
   updated: number;
+  /** The player said this stop is not a finish, even when the position is near the end. */
+  open?: boolean;
 }
 
 const KEY = 'tsp.progress';
@@ -20,7 +22,9 @@ export function sanitizeProgress(v: unknown): { [k: string]: Progress } {
     const p = v[k];
     if (isObject(p) && typeof p.time === 'number' && typeof p.duration === 'number' && typeof p.updated === 'number'
       && isFinite(p.time) && isFinite(p.duration) && isFinite(p.updated)) {
-      out[k] = { time: p.time, duration: p.duration, updated: p.updated };
+      const row: Progress = { time: p.time, duration: p.duration, updated: p.updated };
+      if (p.open === true) row.open = true;
+      out[k] = row;
     }
   });
   return out;
@@ -80,6 +84,7 @@ function ratio(p: Progress): number {
 
 export function isWatched(hash: string, idx: number): boolean {
   const p = getLocalProgress(hash, idx);
+  if (p && p.open) return false;
   if (p && p.duration > 0) return ratio(p) >= WATCHED_RATIO;
   const s = serverEntry(hash, idx);
   return !!s && !(s.timecode && s.timecode >= MIN_RESUME);
@@ -87,6 +92,7 @@ export function isWatched(hash: string, idx: number): boolean {
 
 export function resumePosition(hash: string, idx: number): number {
   const p = getLocalProgress(hash, idx);
+  if (p && p.open && p.time >= MIN_RESUME) return p.time;
   if (p && p.duration > 0) return ratio(p) < WATCHED_RATIO && p.time >= MIN_RESUME ? p.time : 0;
   const s = serverEntry(hash, idx);
   return s && s.timecode && s.timecode >= MIN_RESUME ? s.timecode : 0;
@@ -97,8 +103,10 @@ export function progressRatio(hash: string, idx: number): number {
   return p ? Math.min(1, ratio(p)) : 0;
 }
 
-export function saveProgress(hash: string, idx: number, time: number, duration: number): void {
-  local[key(hash, idx)] = { time, duration, updated: stamp() };
+export function saveProgress(hash: string, idx: number, time: number, duration: number, open = false): void {
+  const row: Progress = { time, duration, updated: stamp() };
+  if (open) row.open = true;
+  local[key(hash, idx)] = row;
   persist();
 }
 
@@ -127,7 +135,9 @@ export function carryProgress(fromHash: string, toHash: string, map: { [fromId: 
     const src = local[key(fromHash, id)];
     const dst = local[key(toHash, to)];
     if (dst && (dst.updated || 0) >= (src.updated || 0)) return;
-    local[key(toHash, to)] = { time: src.time, duration: src.duration, updated: src.updated };
+    const row: Progress = { time: src.time, duration: src.duration, updated: src.updated };
+    if (src.open) row.open = true;
+    local[key(toHash, to)] = row;
     n++;
   });
   if (n) persist();
@@ -171,7 +181,7 @@ export function continueWatching(list: Torrent[], limit = 10): { torrent: Torren
       const sep = k.lastIndexOf(':');
       return { hash: k.slice(0, sep), fileIndex: +k.slice(sep + 1), progress: local[k] };
     })
-    .filter((e) => byHash[e.hash] && e.progress.time >= MIN_RESUME && ratio(e.progress) < WATCHED_RATIO)
+    .filter((e) => byHash[e.hash] && e.progress.time >= MIN_RESUME && (e.progress.open || ratio(e.progress) < WATCHED_RATIO))
     .sort((a, b) => b.progress.updated - a.progress.updated);
   const server = serverViewed.value
     .filter((e) => byHash[e.hash] && typeof e.timecode === 'number' && e.timecode >= MIN_RESUME && !local[key(e.hash, e.file_index)])

@@ -331,8 +331,9 @@ export function focusBelowKey(from: Element | null): string | null {
 }
 
 /**
- * Up from the cast found nothing by rectangles (a wrapped button row whose box the WebView reports on top of the
- * cast). The first action button still takes the focus, so Up is never a dead end on a release card.
+ * Up from the cast found nothing by rectangles. On Chromium 53 a wrapped button row is reported on top of the
+ * cast, and a cast item inside the sideways scroller can report an empty box once the page is scrolled (a
+ * posterless card, two button rows). The last action button is the wrapped row, the one nearest the cast.
  */
 function actionButtonFallback(from: Element): string | null {
   const node = from as HTMLElement;
@@ -343,11 +344,14 @@ function actionButtonFallback(from: Element): string | null {
   const cur = boxOf(from);
   let bestKey = '';
   let bestTop = -Infinity;
+  let last = '';
   for (let i = 0; i < nodes.length; i++) {
     const el = nodes[i] as HTMLElement;
     if (el.classList.contains('disabled')) continue;
     const key = el.getAttribute('data-fk');
-    if (!key || !cur) continue;
+    if (!key) continue;
+    last = key;
+    if (!cur) continue;
     const b = boxOf(el);
     if (!b) continue;
     if ((b.top + b.bottom) / 2 >= cur.top - 1) continue;
@@ -356,14 +360,41 @@ function actionButtonFallback(from: Element): string | null {
       bestKey = key;
     }
   }
-  if (bestKey) return bestKey;
-  for (let i = 0; i < nodes.length; i++) {
-    const el = nodes[i] as HTMLElement;
-    if (el.classList.contains('disabled')) continue;
-    const key = el.getAttribute('data-fk');
-    if (key) return key;
+  return bestKey || last || null;
+}
+
+/** The key Up or Down should move to, or null when this row cannot tell. */
+export function verticalTarget(el: Element, dir: 'up' | 'down'): string | null {
+  const r = el.getBoundingClientRect();
+  const measurable = !!(r && r.bottom > r.top && r.right > r.left);
+  const next = measurable ? (dir === 'up' ? focusAboveKey(el) : focusBelowKey(el)) : null;
+  return next || (dir === 'up' ? actionButtonFallback(el) : null);
+}
+
+/**
+ * Scrolls `key` into the screen when its viewport box is missing or off screen.
+ * offsetTop still works on Chromium 53 when getBoundingClientRect of a scrolled flex item comes back empty.
+ */
+function revealKey(key: string): void {
+  const el = document.querySelector('[data-fk="' + key + '"]') as HTMLElement | null;
+  if (!el) return;
+  const screen = screenOf(el);
+  if (!screen) return;
+  const view = screen.getBoundingClientRect();
+  const b = boxOf(el);
+  if (b && b.top >= view.top && b.bottom <= view.bottom - HINTS_HEIGHT) return;
+  let top = 0;
+  let node: HTMLElement | null = el;
+  let n = 0;
+  while (node && node !== screen && n < 12) {
+    top += node.offsetTop;
+    const next = node.offsetParent as HTMLElement | null;
+    if (!next) break;
+    node = next;
+    n++;
   }
-  return null;
+  if (node === screen) screen.scrollTop = Math.max(0, top - 48);
+  else if (typeof el.closest === 'function' && el.closest('.torrent-actions, .series-actions')) screen.scrollTop = 0;
 }
 
 /**
@@ -375,11 +406,15 @@ export function arrowVertical(key: string): (dir: string) => boolean {
     if (dir !== 'up' && dir !== 'down') return true;
     const el = document.querySelector('[data-fk="' + key + '"]');
     if (!el) return true;
+    const go = verticalTarget(el, dir);
+    if (go && doesFocusableExist(go)) {
+      setFocus(go);
+      revealKey(go);
+      return false;
+    }
     const r = el.getBoundingClientRect();
-    if (!(r.bottom > r.top)) return true;
-    const next = dir === 'up' ? focusAboveKey(el) : focusBelowKey(el);
-    const go = next || (dir === 'up' ? actionButtonFallback(el) : null);
-    if (go && doesFocusableExist(go)) setFocus(go);
+    // an empty box used to fall through to the library, which cannot leave this row: Up did nothing
+    if (!(r.bottom > r.top)) return !go;
     return false;
   };
 }

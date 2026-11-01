@@ -348,9 +348,18 @@ describe('TV series screen', () => {
       expect(text(chips[3].querySelector('.chip-sub'))).toBe('скоро');
     });
 
+    it('focus on a season chip does not switch the season', async () => {
+      const host = await mount();
+      expect(host.querySelector('.season-chip.on')!.getAttribute('data-fk')).toBe('season-2');
+      act(() => setFocus('season-1'));
+      await flush();
+      expect(host.querySelector('.season-chip.on')!.getAttribute('data-fk')).toBe('season-2');
+      expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
+    });
+
     it('a missing season offers «Найти раздачи», which searches for that season', async () => {
       const host = await mount();
-      act(() => setFocus('season-1'));
+      act(() => { (host.querySelector('[data-fk="season-1"]') as HTMLElement).click(); });
       await flush();
       expect(host.querySelectorAll('.ep-row')).toHaveLength(0);
       expect(text(host.querySelector('.series-missing .muted'))).toBe('Этого сезона нет в медиатеке');
@@ -369,11 +378,11 @@ describe('TV series screen', () => {
 
     it('a season to come shows its date or «unknown» and no search button', async () => {
       const host = await mount();
-      act(() => setFocus('season-3'));
+      act(() => { (host.querySelector('[data-fk="season-3"]') as HTMLElement).click(); });
       await flush();
       expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
       expect(text(host.querySelector('.empty'))).toContain('Сезон выйдет');
-      act(() => setFocus('season-4'));
+      act(() => { (host.querySelector('[data-fk="season-4"]') as HTMLElement).click(); });
       await flush();
       expect(host.querySelector('[data-fk="series-find"]')).toBeNull();
       expect(text(host.querySelector('.empty'))).toBe('Дата выхода пока неизвестна');
@@ -417,7 +426,7 @@ describe('TV series screen', () => {
       const chip = host.querySelector('[data-fk="season-1"]')!;
       expect(text(chip.querySelector('.chip-name'))).toBe('+ Сезоны 1-8');
       expect(text(chip.querySelector('.chip-sub'))).toBe('нет в медиатеке');
-      act(() => setFocus('season-1'));
+      act(() => { (host.querySelector('[data-fk="season-1"]') as HTMLElement).click(); });
       await flush();
       expect(text(host.querySelector('.series-missing .muted'))).toBe('Этих сезонов нет в медиатеке');
       act(() => { (host.querySelector('[data-fk="series-find"]') as HTMLElement).click(); });

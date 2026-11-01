@@ -101,6 +101,8 @@ export interface OmpNativeTvPlugin {
   player2160?(): Promise<{ package: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
   open2160?(o: Open2160Request): Promise<unknown>;
+  /** One diagnostic line in logcat. Release WebView logging is off. tag must be omp.tracks. */
+  logDiag?(o: { tag: string; message: string }): Promise<unknown>;
   /** OMP's traffic goes through a VPN (the active network has TRANSPORT_VPN); missing in an older APK. */
   vpnState?(): Promise<{ active?: unknown; lockdown?: unknown }>;
   addListener(event: string, cb: (data: any) => void): Promise<ListenerHandle>;
@@ -182,6 +184,7 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     requestOpenOnStartupOverlay: () => np.call(cap, NAME, 'requestOpenOnStartupOverlay', {}),
     player2160: () => np.call(cap, NAME, 'player2160', {}),
     open2160: (o) => np.call(cap, NAME, 'open2160', o),
+    logDiag: (o) => np.call(cap, NAME, 'logDiag', o),
     vpnState: () => np.call(cap, NAME, 'vpnState', {}),
     torrServerHttp: (o) => np.call(cap, NAME, 'torrServerHttp', o),
     torrServerInspect: (o) => np.call(cap, NAME, 'torrServerInspect', o),
@@ -189,6 +192,19 @@ function fromBridge(cap: CapacitorBridge): OmpNativeTvPlugin | null {
     torrServerForget: (o) => np.call(cap, NAME, 'torrServerForget', o),
     addListener: (event, cb) => Promise.resolve(al.call(cap, NAME, event, cb)),
   };
+}
+
+/**
+ * One omp.tracks line in logcat. Release builds set Capacitor loggingBehavior to none, so console.warn never
+ * arrives. The line is track names and a torrent hash, cut short, with no secrets. Missing on an older APK.
+ */
+export function logTrackDiag(message: string): void {
+  const line = String(message || '').replace(/[\r\n]+/g, ' ').slice(0, 400);
+  if (!line) return;
+  const p = nativePlugin();
+  const fn = p && p.logDiag;
+  if (typeof fn !== 'function') return;
+  Promise.resolve(fn.call(p, { tag: 'omp.tracks', message: line })).catch(() => undefined);
 }
 
 /** The native plugin, or null outside the Android APK (webOS, tests, browser). */

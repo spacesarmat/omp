@@ -52,6 +52,27 @@ describe('attachPoster', () => {
     expect(c.setPoster).toHaveBeenCalled();
   });
 
+  it('does not search a hash, and uses the name derived from the files', async () => {
+    const hash = 'b'.repeat(40);
+    const files = [1, 2].map((n) => ({ id: n, path: 'Moon.Garden.S02E0' + n + '.mkv', length: 1 }));
+    const c = client({ APIKey: 'k' }, [{ title: 'infohash:' + hash }, { title: 'infohash:' + hash, file_stats: files }]);
+    const fetchJson = found('/s.jpg');
+    const wait = vi.fn(noWait);
+    await attachPoster(c, hash, 'infohash:' + hash, { fetchJson, wait });
+    expect(wait).toHaveBeenCalled();
+    expect(String(fetchJson.mock.calls[0][0])).toContain('query=Moon');
+    expect(String(fetchJson.mock.calls[0][0])).not.toContain('infohash');
+  });
+
+  it('searches the release name when the title is still a hash', async () => {
+    const hash = 'c'.repeat(40);
+    const c = client({ APIKey: 'k' }, [{ title: 'infohash:' + hash, name: 'Severance.S01.1080p' }]);
+    const fetchJson = found('/s.jpg');
+    await attachPoster(c, hash, '', { fetchJson, wait: noWait, tries: 1 });
+    expect(String(fetchJson.mock.calls[0][0])).toContain('query=Severance');
+    expect(c.setPoster).toHaveBeenCalled();
+  });
+
   it('gives up when the title never arrives', async () => {
     const c = client({ APIKey: 'k' }, [{}]);
     const fetchJson = found('/s.jpg');

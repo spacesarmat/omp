@@ -77,6 +77,16 @@ describe('saveP2160Result', () => {
     expect(isWatched(H, 1)).toBe(true);
     expect(getLocalProgress(H, 1)!.time).toBe(1300);
   });
+  it('an explicit not-watched flag keeps a near-end position and does not mark the file', () => {
+    const saved = saveP2160Result(null, queue, 0, { returned: true, watched: false, positionMs: 1300000, durationMs: 1441000 }, 0);
+    expect(isWatched(H, 1)).toBe(false);
+    expect(getLocalProgress(H, 1)!.time).toBe(1300);
+    expect(saved && saved.ended).toBe(false);
+  });
+  it('a file url is ignored and the start item keeps the position', () => {
+    saveP2160Result(null, queue, 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: 'file:///tmp/a.mkv' }, 0);
+    expect(getLocalProgress(H, 1)!.time).toBe(300);
+  });
   it('an ended flag with a mid position keeps that position', () => {
     saveP2160Result(null, queue, 0, { returned: true, ended: true, positionMs: 100000, durationMs: 1441000 }, 1441);
     expect(isWatched(H, 1)).toBe(false);

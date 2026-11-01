@@ -200,6 +200,7 @@ class Player2160Test {
         )
         assertTrue(moved.returned)
         assertFalse(moved.ended)
+        assertEquals(false, moved.watched)
         assertEquals(1_441_000L, moved.positionMs)
         assertEquals(1_441_000L, moved.durationMs)
         val bare = Player2160.parseExtras(

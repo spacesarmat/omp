@@ -16,6 +16,8 @@ export interface StoredProgress {
   time: number;
   duration: number;
   updated: number;
+  /** The player said this stop is not a finish, even near the end. */
+  open?: boolean;
 }
 
 /** Where the progress of one file comes from: the local record, else the server's viewed mark. */
@@ -158,7 +160,7 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
   const p = r.local(c.hash, c.fileIndex);
   if (p && p.duration > 0) {
     const ratio = p.time / p.duration;
-    const watched = ratio >= WATCHED_RATIO;
+    const watched = !p.open && ratio >= WATCHED_RATIO;
     return {
       watched: watched,
       position: !watched && p.time >= MIN_RESUME ? p.time : 0,
