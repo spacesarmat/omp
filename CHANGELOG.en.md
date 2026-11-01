@@ -11,10 +11,10 @@ The English translation covers the latest versions only; the full history (in Ru
 - The player title of a release added by a magnet link with no display name is the name from the files, from the first episode
 - In the library that release shows the season under the title, not the file size, and the poster is looked up by the name from the files
 - A series remembers a dub and subtitles only after a choice in the player. A track 2160 Player turned on by itself is not saved
-- [phone] The built-in player is updated to 2160 Player 0.2.18: a broken stream is retried three times, then "The stream stopped", the file is not marked watched, and the position stays the last good one. A tail under 30 seconds counts as watched only for a file of 10 minutes or more
+- [phone] The built-in player is updated to 2160 Player 0.2.19: a broken stream is retried three times, then "The stream stopped", the file is not marked watched, and the position stays the last good one. A tail under 30 seconds counts as watched only for a file of 10 minutes or more. While buffering, D-pad focus no longer jumps to the centre button
 - [atv] A 2160 Player result with no address still saves the position. An explicit not-watched flag does not mark the episode from the position alone
 - [tech] The omp.tracks line is written to logcat through native logDiag. loggingBehavior stays none, and the line has no secrets
-- [tech] The android/vendor/2160player submodule is updated to v0.2.18 (1683805), player-core coordinate 0.2.18. Embedded subtitles from the player result are not written to omp.a unless OMP had asked for a different external subtitle
+- [tech] The android/vendor/2160player submodule is updated to v0.2.19 (5fde56f), player-core coordinate 0.2.19. The result contract is unchanged since 0.2.18. Embedded subtitles from the player result are not written to omp.a unless OMP had asked for a different external subtitle
 
 ## 0.20.8-beta.2
 
