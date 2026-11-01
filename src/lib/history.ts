@@ -26,6 +26,8 @@ export interface HistoryProgress {
   time: number;
   duration: number;
   updated: number;
+  /** The player said this stop is not a finish, even near the end. */
+  open?: boolean;
 }
 
 export interface HistorySource {
@@ -78,6 +80,7 @@ export function buildHistory(
       const own = local(t.hash, e.f);
       if (own && own.updated > e.at) {
         progress = { time: own.time, duration: own.duration > 0 ? own.duration : e.d, updated: own.updated };
+        if (own.open) progress.open = true;
         source.at = own.updated;
         if (self) {
           source.src = self.src;
@@ -176,9 +179,10 @@ export function sourceLine(s: HistorySource, now: number): string {
   return deviceLabel(s.src, s.name) + (when ? ' · ' + when : '');
 }
 
-/** Where «Продолжить» starts: the saved position unless it is too early or (nearly) the end. */
+/** Where «Продолжить» starts: the saved position unless it is too early or (nearly) the end. `open` keeps a near-end stop the player said was not a finish. */
 export function resumeFrom(p: HistoryProgress, minResume: number, watchedRatio: number): number {
   if (!(p.time >= minResume)) return 0;
+  if (p.open) return p.time;
   if (p.duration > 0 && p.time / p.duration >= watchedRatio) return 0;
   return p.time;
 }

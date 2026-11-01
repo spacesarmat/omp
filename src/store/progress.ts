@@ -135,7 +135,9 @@ export function carryProgress(fromHash: string, toHash: string, map: { [fromId: 
     const src = local[key(fromHash, id)];
     const dst = local[key(toHash, to)];
     if (dst && (dst.updated || 0) >= (src.updated || 0)) return;
-    local[key(toHash, to)] = { time: src.time, duration: src.duration, updated: src.updated };
+    const row: Progress = { time: src.time, duration: src.duration, updated: src.updated };
+    if (src.open) row.open = true;
+    local[key(toHash, to)] = row;
     n++;
   });
   if (n) persist();
@@ -179,7 +181,7 @@ export function continueWatching(list: Torrent[], limit = 10): { torrent: Torren
       const sep = k.lastIndexOf(':');
       return { hash: k.slice(0, sep), fileIndex: +k.slice(sep + 1), progress: local[k] };
     })
-    .filter((e) => byHash[e.hash] && e.progress.time >= MIN_RESUME && ratio(e.progress) < WATCHED_RATIO)
+    .filter((e) => byHash[e.hash] && e.progress.time >= MIN_RESUME && (e.progress.open || ratio(e.progress) < WATCHED_RATIO))
     .sort((a, b) => b.progress.updated - a.progress.updated);
   const server = serverViewed.value
     .filter((e) => byHash[e.hash] && typeof e.timecode === 'number' && e.timecode >= MIN_RESUME && !local[key(e.hash, e.file_index)])

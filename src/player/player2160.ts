@@ -185,7 +185,8 @@ function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefi
     if (!isExtraFile(q.title || '')) main++;
   }
   // logcat: what 2160 Player handed back, what OMP kept, and how many files this release had in the queue
-  const line = 'omp.tracks extras=' + JSON.stringify(r.extras || null) + ' patch=' + JSON.stringify(patch) + ' hash=' + item.hash + ' files=' + n;
+  // hash and patch first: logcat keeps 400 characters, and a long extras object must not push them off
+  const line = 'omp.tracks hash=' + item.hash + ' files=' + n + ' patch=' + JSON.stringify(patch) + ' extras=' + JSON.stringify(r.extras || null);
   console.warn(line);
   logTrackDiag(line);
   if (patch) rememberSeriesTracks(c, item.hash, patch, main > 1);

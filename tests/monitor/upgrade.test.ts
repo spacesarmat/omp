@@ -183,6 +183,10 @@ describe('carryProgress', () => {
     expect(carryProgress(H, oldFiles, NEW, newFiles)).toBe(2);
     expect(getLocalProgress(NEW, 2)!.time).toBe(1);
     expect(getLocalProgress(NEW, 3)!.time).toBe(600);
+    saveProgress(H, 3, 950, 1000, true);
+    expect(carryProgress(H, oldFiles, NEW, newFiles)).toBe(1);
+    expect(getLocalProgress(NEW, 4)!.open).toBe(true);
+    expect(getLocalProgress(NEW, 4)!.time).toBe(950);
     expect(getLocalProgress(NEW, 3)!.updated).toBeGreaterThan(getLocalProgress(NEW, 2)!.updated);
     expect(getLocalProgress(NEW, 1)).toBe(null);
     expect(getLocalProgress(H, 2)).toBe(null);

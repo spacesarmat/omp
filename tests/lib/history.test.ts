@@ -122,6 +122,7 @@ describe('resumeFrom', () => {
     expect(resumeFrom({ time: 600, duration: 0, updated: 1 }, 10, 0.9)).toBe(600);
     expect(resumeFrom({ time: 5, duration: 2900, updated: 1 }, 10, 0.9)).toBe(0);
     expect(resumeFrom({ time: 2800, duration: 2900, updated: 1 }, 10, 0.9)).toBe(0);
+    expect(resumeFrom({ time: 2800, duration: 2900, updated: 1, open: true }, 10, 0.9)).toBe(2800);
   });
 });
 
@@ -140,6 +141,14 @@ describe('buildHistory: failed starts and duplicates (QA B12)', () => {
     const t = torrent('y', [{ f: 2, t: 0, d: 0, at: at(9, 2, 22, 0), src: 'phone', name: 'S21' }]);
     const local = (): HistoryProgress => ({ time: 300, duration: 2900, updated: at(9, 2, 22, 30) });
     expect(buildHistory([t], 'all', [], local).map((x) => x.progress.time)).toEqual([300]);
+  });
+
+  it('a newer local stop the player did not call finished stays open', () => {
+    const t = torrent('w', [{ f: 1, t: 100, d: 1000, at: at(9, 1, 20, 0), src: 'tv' }]);
+    const local = (): HistoryProgress => ({ time: 950, duration: 1000, updated: at(9, 2, 20, 0), open: true });
+    const h = buildHistory([t], 'all', [], local);
+    expect(h[0].progress.open).toBe(true);
+    expect(resumeFrom(h[0].progress, 10, 0.9)).toBe(950);
   });
 
   it('the same episode of the same show in two torrents shows once, the newest', () => {
