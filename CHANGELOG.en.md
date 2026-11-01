@@ -13,6 +13,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - A series remembers a dub and subtitles only after a choice in the player. A track 2160 Player turned on by itself is not saved
 - [phone] The built-in player is updated to 2160 Player 0.2.19: a broken stream is retried three times, then "The stream stopped", the file is not marked watched, and the position stays the last good one. A tail under 30 seconds counts as watched only for a file of 10 minutes or more. While buffering, D-pad focus no longer jumps to the centre button
 - [atv] A 2160 Player result with no address still saves the position. An explicit not-watched flag does not mark the episode from the position alone
+- [lg] Separate dub files in a release (for example Rus Sound/LostFilm/Show.S01E01.mka) show up in the webOS player next to the built-in audio tracks. While one plays, the video stays muted and the file plays as its own audio in step with the picture. If the TV cannot open the file, the video track comes back on
 - [tech] The omp.tracks line is written to logcat through native logDiag. loggingBehavior stays none, and the line has no secrets
 - [tech] The android/vendor/2160player submodule is updated to v0.2.19 (5fde56f), player-core coordinate 0.2.19. The result contract is unchanged since 0.2.18. Embedded subtitles from the player result are not written to omp.a unless OMP had asked for a different external subtitle
 

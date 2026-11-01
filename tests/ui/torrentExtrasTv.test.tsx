@@ -80,10 +80,23 @@ describe('TV torrent screen · external dubs and subtitles', () => {
     expect(note && note.textContent).toBe('+2 озвучки, субтитры');
   });
 
-  it('webOS says honestly that the separate dubs do not play there', async () => {
+  it('webOS stays quiet when a dub can be tried, and warns only when none can', async () => {
     await mount(dubbed);
+    expect(host.querySelector('[data-extras-note]')).toBeNull();
+    act(() => render(null, host));
+    host.remove();
+    const dts: Torrent = {
+      ...dubbed,
+      hash: 'ext3',
+      file_stats: [
+        { id: 1, path: 'Show.S01E01.mkv', length: 2e9 },
+        { id: 2, path: 'DTS/Show.S01E01.dts', length: 2e8 },
+        { id: 3, path: 'DTS/Show.S01E01.flac', length: 2e8 },
+      ],
+    };
+    await mount(dts);
     const note = host.querySelector('[data-extras-note]');
-    expect(note && note.textContent).toContain('webOS');
+    expect(note && note.textContent).toContain('DTS');
     expect(note && note.className).toContain('torrent-extras');
   });
 
