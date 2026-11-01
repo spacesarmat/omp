@@ -2,7 +2,7 @@
 // resume position and the «Пропуск» marks; where the user stopped (maybe on another item of the playlist) is saved
 // like the built-in players' progress (local + TorrServer /viewed).
 import type { TorrServerClient } from '../api/torrserver';
-import type { OmpNativeTvPlugin, Open2160Request } from '../platform/androidNative';
+import { logTrackDiag, type OmpNativeTvPlugin, type Open2160Request } from '../platform/androidNative';
 import type { SkipPrefs } from '../lib/journal';
 import { MIN_RESUME, WATCHED_RATIO } from '../store/progress';
 import { saveItemProgress } from './progressSave';
@@ -33,6 +33,11 @@ export interface P2160Result {
   positionMs?: number;
   durationMs?: number;
   ended?: boolean;
+  /**
+   * `tv.p2160.extra.WATCHED` when the player sent it. false: a stream break or a short file, not a finish.
+   * Absent on an older player: the position ratio decides.
+   */
+  watched?: boolean;
   /** The item the user stopped at. */
   url?: string;
   /** The result extras asked for by `resultKeys` (the chosen tracks), as the player handed them back. */
@@ -70,6 +75,7 @@ export function sanitizeP2160(r: unknown): P2160Result {
   const o = (r && typeof r === 'object' ? r : {}) as { [k: string]: unknown };
   if (o.returned !== true) return { returned: false };
   const out: P2160Result = { returned: true, ended: o.ended === true };
+  if (o.watched === true || o.watched === false) out.watched = o.watched;
   const pos = nonNegative(o.positionMs);
   const dur = nonNegative(o.durationMs);
   if (pos !== undefined) out.positionMs = pos;
@@ -179,8 +185,16 @@ function rememberP2160Tracks(c: TorrServerClient | null, item: PlayItem | undefi
     if (!isExtraFile(q.title || '')) main++;
   }
   // logcat: what 2160 Player handed back, what OMP kept, and how many files this release had in the queue
-  console.warn('omp.tracks extras=' + JSON.stringify(r.extras || null) + ' patch=' + JSON.stringify(patch) + ' hash=' + item.hash + ' files=' + n);
+  const line = 'omp.tracks extras=' + JSON.stringify(r.extras || null) + ' patch=' + JSON.stringify(patch) + ' hash=' + item.hash + ' files=' + n;
+  console.warn(line);
+  logTrackDiag(line);
   if (patch) rememberSeriesTracks(c, item.hash, patch, main > 1);
+}
+
+/** A result url that names a queue item. `file:` is dropped: 2160 Player 0.2.18 omits it, and an older one must not abort the save. */
+function playableResultUrl(url: string | undefined): string {
+  if (!url || url.indexOf('file:') === 0) return '';
+  return url;
 }
 
 /** `link` (hash) and `index` (file) of a TorrServer stream URL, null when it is not one. */
@@ -234,8 +248,9 @@ export function saveP2160Result(
 ): P2160Saved | null {
   if (!r.returned) return null;
   let item: PlayItem | undefined = queue[startIndex];
-  if (r.url) {
-    const hit = itemOfUrl(c, queue, r.url);
+  const url = playableResultUrl(r.url);
+  if (url) {
+    const hit = itemOfUrl(c, queue, url);
     if (hit) item = hit;
     else if (queue.length > 1) return null;
   }
@@ -249,14 +264,17 @@ export function saveP2160Result(
   const hasPos = typeof rawPos === 'number';
   const pos = hasPos ? rawPos / 1000 : -1;
   // the length we already knew is only the denominator. It is never written as the position.
-  const nearEnd = pos >= 0 && dur > 0 && pos / dur >= WATCHED_RATIO;
+  // watched false: the player says this is not a finish (a stream break near the end, or a short file). The ratio
+  // must not mark it watched. An older player omits the flag and the ratio still decides.
+  const explicitOpen = r.watched === false;
+  const nearEnd = !explicitOpen && pos >= 0 && dur > 0 && pos / dur >= WATCHED_RATIO;
   if (nearEnd) {
     const time = pos > dur ? dur : pos;
     saveItemProgress(c, item, time, dur, true);
     return { item, time: time, duration: dur, ended: true };
   }
   if (!hasPos || pos < MIN_RESUME) return { item, time: 0, duration: dur, ended: false };
-  if (dur > 0) saveItemProgress(c, item, pos, dur, true);
+  if (dur > 0) saveItemProgress(c, item, pos, dur, true, explicitOpen);
   // no duration anywhere: only the server's resume point can be kept
   else if (c) c.setViewed(hash, idx, Math.floor(pos)).catch(() => undefined);
   return { item, time: pos, duration: dur, ended: false };

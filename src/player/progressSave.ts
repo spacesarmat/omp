@@ -9,16 +9,18 @@ export function saveItemProgress(
   time: number,
   duration: number,
   remote: boolean,
+  /** The player said this is not a finish. Keep the position and do not send the watched timecode. */
+  open = false,
 ): void {
   if (!item) return;
   const hash = item.hash;
   const idx = item.fileIndex;
   if (!hash || idx === undefined) return;
   if (!(duration > 0) || !(time >= 1)) return;
-  saveProgress(hash, idx, time, duration);
+  saveProgress(hash, idx, time, duration, open);
   if (remote && c && time >= MIN_RESUME) {
     // server: timecode < MIN_RESUME means watched, so send 0 once the file is (nearly) finished
-    const tc = time / duration >= WATCHED_RATIO ? 0 : Math.floor(time);
+    const tc = !open && time / duration >= WATCHED_RATIO ? 0 : Math.floor(time);
     c.setViewed(hash, idx, tc).catch(() => undefined);
   }
 }
