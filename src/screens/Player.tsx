@@ -7,7 +7,7 @@ import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
-import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesAudioFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
+import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
 import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
@@ -17,7 +17,12 @@ import { tapZone, TapDetector, SeekStreak } from '../player/pointerTaps';
 import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex, type TrackOption } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { ExternalDubLink } from '../player/externalDubSync';
+import {
+  dubStreamUrl, episodeExternalAudio, filesForHash, mergeWebosAudio, webosAudioIndex, webosSeriesAudioPatch,
+  type WebosAudioOption,
+} from '../player/webosExternalAudio';
 import { chapterList, chapterLabel, chapterIndexAt, chapterTarget, skipSegments, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS } from '../player/chapters';
 import type { MarkKind } from '../player/chapters';
 import type { SkipPrefs } from '../lib/journal';
@@ -61,6 +66,11 @@ interface Props {
 export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props) {
   const c = client.value;
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const dubRef = useRef<ExternalDubLink | null>(null);
+  if (!dubRef.current) dubRef.current = new ExternalDubLink();
+  const failedDub = useRef<{ [id: string]: true }>({});
+  const failRef = useRef<() => void>(() => undefined);
   const [index, setIndex] = useState(startIndex);
   const item = queue[index];
   // the title bar: the series name, the episode code and its TMDB name; a film's name
@@ -75,6 +85,11 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const [infoOn, setInfoOn] = useState(settings.value.showStats);
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
   const [audioIdx, setAudioIdx] = useState(-1);
+  const audioIdxRef = useRef(-1);
+  audioIdxRef.current = audioIdx;
+  /** The external dub is buffering (or has not opened yet): the spinner, and the picture may be held. */
+  const [dubBuffering, setDubBuffering] = useState(false);
+  const [fileTick, setFileTick] = useState(0);
   const [subChoice, setSubChoice] = useState('off');
   const [cues, setCues] = useState<Cue[] | null>(null);
   const [skippedIntro, setSkippedIntro] = useState<number | null>(null);
@@ -95,6 +110,26 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const probeRef = useRef<FfprobeResult | null>(null);
   probeRef.current = probe;
   const startUsed = useRef(false);
+
+  const dubFiles = useMemo(
+    () => (item && item.hash ? filesForHash(c, item.hash) : []),
+    [item ? item.hash : '', fileTick, c ? c.baseUrl : ''],
+  );
+  const extTracks = useMemo(
+    () => episodeExternalAudio(dubFiles, item ? item.fileIndex : undefined),
+    [dubFiles, item ? item.fileIndex : -1],
+  );
+  const listAudio = (v: HTMLVideoElement | null, p: FfprobeResult | null): WebosAudioOption[] => {
+    const builtin = audioOptions(p, v);
+    if (!item || !item.hash) return builtin;
+    return mergeWebosAudio(builtin, extTracks, (t) => dubStreamUrl(c, item.hash || '', t));
+  };
+  const startExternal = (opt: WebosAudioOption) => {
+    const link = dubRef.current;
+    if (!link || !opt.externalUrl) return;
+    if (c && item && item.hash && opt.externalFile !== undefined) c.preload(item.hash, opt.externalFile, opt.externalName || 'audio');
+    link.playUrl(opt.externalUrl);
+  };
 
   const src = ready ? (c ? c.videoSrc(item.url) : item.url) : '';
   const vs = useVideoState(videoRef, index + ':' + reloadKey + ':' + src);
@@ -269,6 +304,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     setSubChoice('off');
     setAudioIdx(-1);
     userTracks.current = false;
+    failedDub.current = {};
+    setDubBuffering(false);
     metaLoaded.current = false;
     showControls();
     let cancelled = false;
@@ -296,6 +333,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     return () => { cancelled = true; };
   }, [index]);
 
+  // a release opened before its file list arrived: one fetch, then the dub rows can show
+  useEffect(() => {
+    if (!c || !item || !item.hash || item.fileIndex === undefined) return;
+    if (filesForHash(c, item.hash).length) return;
+    let dead = false;
+    c.get(item.hash).then(() => { if (!dead) setFileTick((n) => n + 1); }, () => undefined);
+    return () => { dead = true; };
+  }, [item ? item.hash : '', c ? c.baseUrl : '']);
+
   // release the media pipeline when the <video> is re-keyed (episode change / retry) or removed
   useEffect(() => {
     const v = videoRef.current;
@@ -306,6 +352,19 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
       v.load();
     };
   }, [index + ':' + reloadKey]);
+
+  // the dub element follows this <video>. dispose stops it: a new episode, a retry, or leaving the player
+  useEffect(() => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    const link = dubRef.current;
+    if (!v || !a || !link) return;
+    link.bind(v, a, {
+      onFail: () => failRef.current(),
+      onBuffering: (on) => setDubBuffering(on),
+    });
+    return () => link.dispose();
+  }, [index, reloadKey]);
 
   useEffect(() => () => hider.cancel(), []);
 
@@ -368,6 +427,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const togglePause = () => {
     const v = videoRef.current;
     if (!v) return;
+    if (dubRef.current && dubRef.current.userToggle()) {
+      showControls();
+      return;
+    }
     if (v.paused) {
       const p = v.play() as Promise<void> | undefined;
       if (p && p.catch) p.catch(() => undefined);
@@ -403,13 +466,18 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   };
 
   // a choice by hand: for this torrent (locally) and for the whole series («Озвучка», the journal on TorrServer)
-  const chooseAudio = (v: HTMLVideoElement, audio: TrackOption[], i: number) => {
+  const chooseAudio = (v: HTMLVideoElement, audio: WebosAudioOption[], i: number) => {
     userTracks.current = true;
     setAudioIdx(i);
-    selectAudioTrack(v, i);
-    if (!item.hash) return;
-    saveTrackPref(item.hash, { audioLang: audio[i].language, audioLabel: audio[i].label });
-    void rememberSeriesTracks(c, item.hash, seriesAudioFromChoice(audio, i));
+    const opt = audio[i];
+    if (opt && opt.externalId && opt.externalUrl) startExternal(opt);
+    else {
+      if (dubRef.current) dubRef.current.stop();
+      if (i >= 0) selectAudioTrack(v, i);
+    }
+    if (!item.hash || !opt) return;
+    saveTrackPref(item.hash, { audioLang: opt.language, audioLabel: opt.label });
+    void rememberSeriesTracks(c, item.hash, webosSeriesAudioPatch(audio, i));
   };
 
   const chooseSubs = (v: HTMLVideoElement, choice: string) => {
@@ -427,19 +495,55 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     const s = settings.value;
     const pref = item.hash ? getTrackPref(item.hash) : null;
     const series = seriesTracksFor(item.hash);
-    const audio = audioOptions(probeRef.current, v);
-    const ai = pickAudioFor(audio, series, pref, s.audioLang);
-    if (ai >= 0) {
+    const builtin = audioOptions(probeRef.current, v);
+    const list = listAudio(v, probeRef.current);
+    let ai = webosAudioIndex(builtin, extTracks, series, pref, s.audioLang);
+    const picked = ai >= 0 ? list[ai] : undefined;
+    // ffprobe (or the file list) may still be on the way: do not start a dub over a built-in track we have not seen yet
+    if (!probed && picked && picked.externalId) ai = builtin.length ? pickAudioFor(builtin, series, pref, s.audioLang) : -1;
+    const pickedId = ai >= 0 && list[ai] ? list[ai].externalId : '';
+    if (pickedId && failedDub.current[pickedId]) ai = pickAudioFor(builtin, series, pref, s.audioLang);
+    const opt = ai >= 0 ? list[ai] : undefined;
+    const useExternal = !!(opt && opt.externalId && opt.externalUrl && !failedDub.current[opt.externalId]);
+    if (useExternal) {
       setAudioIdx(ai);
-      if (ai !== defaultAudioIndex(audio)) selectAudioTrack(v, ai);
+      startExternal(opt as WebosAudioOption);
+    } else if (dubRef.current) {
+      dubRef.current.stop();
+      let bi = ai;
+      if (!(bi >= 0 && bi < builtin.length)) bi = pickAudioFor(builtin, series, pref, s.audioLang);
+      if (bi >= 0 && bi < builtin.length) {
+        setAudioIdx(bi);
+        if (bi !== defaultAudioIndex(builtin)) selectAudioTrack(v, bi);
+      }
     }
     applySubChoice(pickSubFor(embeddedSubOptions(probeRef.current, v), item.subtitles || [], series, pref, s));
   };
 
-  // ffprobe often arrives after metadata: re-apply language defaults
+  // ffprobe, or the file list, often arrives after metadata: re-apply language defaults
   useEffect(() => {
-    if (probe && metaLoaded.current) applyDefaultTracks();
-  }, [probe]);
+    if (metaLoaded.current && probed) applyDefaultTracks();
+  }, [probe, fileTick, probed]);
+
+  failRef.current = () => {
+    const v = videoRef.current;
+    const list = listAudio(v, probeRef.current);
+    const cur = list[audioIdxRef.current];
+    if (cur && cur.externalId) failedDub.current[cur.externalId] = true;
+    const builtin = audioOptions(probeRef.current, v);
+    const series = seriesTracksFor(item && item.hash);
+    const pref = item && item.hash ? getTrackPref(item.hash) : null;
+    let ai = pickAudioFor(builtin, series, pref, settings.value.audioLang);
+    if (ai < 0 && builtin.length) ai = 0;
+    setAudioIdx(builtin.length && ai >= 0 ? ai : -1);
+    if (v && ai >= 0 && builtin.length) selectAudioTrack(v, ai);
+    if (v && v.paused && !v.ended) {
+      const p = v.play();
+      if (p && p.catch) p.catch(() => undefined);
+    }
+    setDubBuffering(false);
+    toast(t('tvPlayer.extDubFailed'));
+  };
 
   const onMeta = () => {
     const v = videoRef.current;
@@ -465,7 +569,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const openAudioList = () => {
     const v = videoRef.current;
     if (!v) return;
-    const audio = audioOptions(probeRef.current, v);
+    const audio = listAudio(v, probeRef.current);
     if (audio.length < 2) {
       toast(t('tvPlayer.noOtherAudio'));
       return;
@@ -490,7 +594,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const openTrackMenu = () => {
     const v = videoRef.current;
     if (!v) return;
-    const audio = audioOptions(probe, v);
+    const audio = listAudio(v, probe);
     const menu = subtitleMenu(embeddedSubOptions(probe, v), item.subtitles || []);
     const current = menu.find((o) => o.value === subChoice) || menu[0];
     const audioLabel = audio[audioIdx] ? audio[audioIdx].label : t('tvPlayer.byDefault');
@@ -530,7 +634,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   bridgeImpl.current = {
     snapshot: () => {
       const v = videoRef.current;
-      const audio = audioOptions(probe, v);
+      const audio = listAudio(v, probe);
       const live = liveTiming(v, { time: vs.time, paused: vs.paused });
       return buildSnapshot({
         queue, index,
@@ -547,7 +651,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
         phoneToasted.current = true;
         toast(t('tvPlayer.phoneControl'));
       }
-      const audio = audioOptions(probeRef.current, v);
+      const audio = listAudio(v, probeRef.current);
       const menu = subtitleMenu(embeddedSubOptions(probeRef.current, v), item.subtitles || []);
       runCmd(cmd, {
         paused: v.paused, time: v.currentTime, duration: vs.duration,
@@ -575,6 +679,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const retry = () => {
     startPos.current = posRef.current.time;
     userTracks.current = false;
+    failedDub.current = {};
     setReloadKey((k) => k + 1);
   };
   const retryRef = useRef(retry);
@@ -699,17 +804,19 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   });
 
   if (!item) return null;
+  const playingAudio = listAudio(videoRef.current, probe)[audioIdx];
 
   return (
     <div class="player" onMouseMove={(e) => { const m = e as MouseEvent; if (pointerMoveCounts(controls, lastPtr.current, m.clientX, m.clientY)) { lastPtr.current = { x: m.clientX, y: m.clientY }; showControls(); } }} onClick={(e) => { if (Date.now() - lastKeyAt.current < 250) return; const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); taps.tap(tapZone((e as MouseEvent).clientX - r.left, r.width)); }}>
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
+      <audio ref={audioRef} preload="auto" />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
-      {ready && !blocked && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null) && (
+      {ready && !blocked && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null || dubBuffering) && (
         <BufferingOverlay cache={cache} waiting={!vs.played || vs.errorCode !== null} />
       )}
       {infoOn && (
-        <InfoOverlay panel={infoPanel({ title: heading, probe, audioIndex: audioIdx, cache, bufferedSec: bufferedAhead(videoRef.current) })} />
+        <InfoOverlay panel={infoPanel({ title: heading, probe, audioIndex: playingAudio && playingAudio.externalId ? -1 : audioIdx, soundText: playingAudio && playingAudio.externalId ? playingAudio.label : '', cache, bufferedSec: bufferedAhead(videoRef.current) })} />
       )}
       <DonateCard mode={donate} raised={donate === 'credits' && controls} />
       {next.countdown !== null && hasNext && (
