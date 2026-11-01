@@ -333,8 +333,14 @@ export function seriesPatchFromResult(
       patch.g = normalizeLang(res.audioLang);
     }
   }
-  if (patch.s === undefined && res.subtitleId === null && (res.subtitleName || res.subtitleLang)) {
-    patch.s = { l: dubOf({ title: res.subtitleName }), g: normalizeLang(res.subtitleLang) };
+  // An embedded subtitle here is whatever was on screen, including the player's own default. 2160 Player 0.2.18
+  // does not say the user picked it (docs/API.md has no such flag). Remember it only when OMP had asked for a
+  // different external subtitle: the user switched away from that one. A plain resume must not write the default
+  // (MHA E01 wrote s: Crunchyroll after exit with no choice).
+  const askedExternalSub = [item ? item.startSubtitle : null, start ? start.startSubtitle : null].some((s) => !!s && s !== 'off');
+  if (patch.s === undefined && askedExternalSub && res.subtitleId === null && (res.subtitleName || res.subtitleLang)) {
+    const l = dubOf({ title: res.subtitleName });
+    if (l) patch.s = { l, g: normalizeLang(res.subtitleLang) };
   }
   const rec = current && !isReset(current) ? current : null;
   const hadE = rec && typeof rec.e === 'number' ? rec.e : -1;
