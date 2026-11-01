@@ -231,8 +231,8 @@ export class ExternalDubLink {
       play: () => this.onVideoPlay(),
       seeking: () => { this.step(); },
       seeked: () => { this.step(); },
+      // waiting: playback has stopped for data. stalled is only a slow download and must not pause the dub.
       waiting: () => { this.videoWaiting = true; this.step(); },
-      stalled: () => { this.videoWaiting = true; this.step(); },
       playing: () => { this.videoWaiting = false; this.step(); },
       canplay: () => { this.videoWaiting = false; this.step(); },
       ratechange: () => { this.nudging = false; this.step(); },
@@ -245,7 +245,6 @@ export class ExternalDubLink {
       canplay: () => { this.audioWaiting = false; this.audioHasMeta = true; this.step(); },
       playing: () => { this.audioStarted = true; this.audioWaiting = false; this.audioHasMeta = true; this.step(); },
       waiting: () => { if (this.audioStarted) this.audioWaiting = true; this.step(); },
-      stalled: () => { if (this.audioStarted) this.audioWaiting = true; this.step(); },
       ended: () => { this.step(); },
       error: () => { if (this.active && this.url) this.fail('decode'); },
     });
@@ -262,6 +261,8 @@ export class ExternalDubLink {
   playUrl(url: string): void {
     if (!url) return;
     if (this.active && this.url === url) return;
+    // a pause we made for a stall is not the user's pause: the next file should keep the picture moving
+    const held = this.holding && !this.userPaused;
     this.generation++;
     this.active = true;
     this.url = url;
@@ -273,7 +274,7 @@ export class ExternalDubLink {
     this.sawAudioPlay = false;
     this.pipelineWatch = false;
     this.openedAt = Date.now();
-    this.userPaused = !!(this.video && this.video.paused);
+    this.userPaused = !!(this.video && this.video.paused) && !held;
     this.ignorePause = true;
     if (this.video) {
       this.video.muted = true;
@@ -297,6 +298,7 @@ export class ExternalDubLink {
       this.clearTimer();
       return;
     }
+    const resume = this.holding && !this.userPaused;
     this.generation++;
     this.active = false;
     this.url = '';
@@ -320,6 +322,10 @@ export class ExternalDubLink {
     if (video) {
       this.restore(video);
       video.muted = false;
+      if (resume && video.paused && !video.ended) {
+        const p = video.play();
+        if (p && typeof p.catch === 'function') p.catch(() => undefined);
+      }
     }
     this.reportBuffer();
   }
@@ -447,13 +453,19 @@ export class ExternalDubLink {
     try {
       const p = audio.play();
       if (p && typeof p.catch === 'function') {
-        p.catch(() => {
-          if (this.active && this.generation === gen) this.fail('decode');
-        });
+        p.catch((err: { name?: string }) => this.onPlayRejected(err, gen));
       }
     } catch (e) {
-      if (this.active && this.generation === gen) this.fail('decode');
+      this.onPlayRejected(e as { name?: string }, gen);
     }
+  }
+
+  /** pause() and a seek abort the pending play(). That is not a codec failure. */
+  private onPlayRejected(err: { name?: string } | null, gen: number): void {
+    if (!this.active || this.generation !== gen) return;
+    const name = err && typeof err.name === 'string' ? err.name : '';
+    if (name === 'AbortError') return;
+    this.fail('decode');
   }
 
   private kick(): void {

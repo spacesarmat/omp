@@ -235,6 +235,55 @@ describe('ExternalDubLink', () => {
     pipe.link.dispose();
   });
 
+  it('does not drop the dub when play() is aborted by a pause', async () => {
+    const { video, audio, link, fails } = pair();
+    const abort = new Error('aborted');
+    abort.name = 'AbortError';
+    audio.playResult = Promise.reject(abort);
+    link.playUrl('http://srv/a.mka');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fails).toEqual([]);
+    expect(video.muted).toBe(true);
+    link.dispose();
+  });
+
+  it('a slow download does not pause the dub while the picture is still playing', () => {
+    const { video, audio, link } = pair();
+    audio.readyState = 3;
+    audio.currentTime = 10;
+    video.currentTime = 10;
+    link.playUrl('http://srv/a.mka');
+    audio.dispatch('playing');
+    video.dispatch('stalled');
+    audio.dispatch('stalled');
+    expect(video.paused).toBe(false);
+    expect(audio.paused).toBe(false);
+    link.dispose();
+  });
+
+  it('leaving a dub that had paused the picture resumes playback', () => {
+    const { video, audio, link } = pair();
+    audio.readyState = 3;
+    audio.currentTime = 10;
+    video.currentTime = 10;
+    link.playUrl('http://srv/a.mka');
+    audio.dispatch('playing');
+    audio.dispatch('waiting');
+    expect(video.paused).toBe(true);
+    link.playUrl('http://srv/b.mka');
+    expect(video.paused).toBe(false);
+    expect(video.muted).toBe(true);
+    expect(audio.src).toBe('http://srv/b.mka');
+    audio.dispatch('playing');
+    audio.dispatch('waiting');
+    expect(video.paused).toBe(true);
+    link.stop();
+    expect(video.paused).toBe(false);
+    expect(video.muted).toBe(false);
+    link.dispose();
+  });
+
   it('gives up when the dub never opens and the video is already playing', () => {
     const { video, link, fails } = pair();
     const t0 = 1_700_000_000_000;
