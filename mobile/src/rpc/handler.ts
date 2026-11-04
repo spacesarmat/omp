@@ -22,6 +22,12 @@ export interface RpcDeps {
   resolve?: typeof resolveLink;
   /** Checks one subscription now over `from` (`subCheck`); absent: `subCheck` fails. */
   checkSubscription?: (sub: Subscription, from: Source[]) => Promise<unknown>;
+  /**
+   * Hidden TV-search page: apply the saved paid sources, and start a /v1/me if that answer is stale.
+   * Must not wait on the network. The phone drops the RPC after 4.5s, and /v1/me may take 12s.
+   * Absent in tests that pass their own source list.
+   */
+  prepareSources?: () => Promise<void>;
 }
 
 export type RpcErrorCode = 'bad_request' | 'unknown_method' | 'expired' | 'failed';
@@ -285,8 +291,20 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
     return { pending: true };
   };
 
+  // Run the synchronous part of prepareSources (the saved paid flags) and do not wait if it keeps going.
+  function beginPrepare(): void {
+    if (!deps.prepareSources) return;
+    try {
+      const p = deps.prepareSources();
+      if (p && typeof p.then === 'function') p.then(() => undefined, () => undefined);
+    } catch (e) {
+      // a thrown prepare must not fail the TV search
+    }
+  }
+
   const methods: { [name: string]: (p: Params) => Promise<unknown> | unknown } = {
     async sources() {
+      beginPrepare();
       reloadSourcePrefs();
       const ctx = deps.ctx();
       const list = deps.sources().filter(searchable);
@@ -296,7 +314,8 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       return { sources };
     },
 
-    search(p) {
+    async search(p) {
+      beginPrepare();
       const query = typeof p.query === 'string' ? p.query.trim() : '';
       if (!query || query.length > MAX_QUERY) throw bad('query');
       let wanted: string[] | null = null;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ACCESS_KEY, DEFAULT_GRACE_MS, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
+import { ACCESS_KEY, MONITOR_FREE_MAX, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { saveBillingSession } from '../../src/billing/session';
 import { activeSubs, canAddSub, checkedSubs, FREE_SUBS_MAX, isSubPaused, PAUSED_KEY, pausedSubIds, subsLimitReached, subsQuota, syncPaused } from '../../src/monitor/limit';
 import { addSubscription, loadSubs, rememberSeen, removeSubscription, saveSubs, seenKeys } from '../../src/monitor/subs';
@@ -19,6 +19,8 @@ function many(n: number): Subscription[] {
 }
 
 const subscribe = (paidUntil = NOW + 10 * DAY) => saveBillingSession({ token: 'tok', paidUntil });
+/** A server-confirmed premium answer (accessUntil, no monitoring cap). */
+const confirm = (accessUntil = NOW + 10 * DAY) => saveBillingAccess({ active: true, accessUntil, monitorMax: 0, checkedAt: NOW });
 
 beforeEach(() => localStorage.clear());
 
@@ -26,30 +28,30 @@ describe('the cap without the OMP subscription', () => {
   it('pauses all but the FREE_SUBS_MAX oldest, by createdAt and not by the stored order', () => {
     expect(FREE_SUBS_MAX).toBe(10);
     const list = many(12).reverse(); // newest stored first
-    expect(Object.keys(pausedSubIds(list, false)).sort()).toEqual(['s11', 's12']);
-    expect(activeSubs(list, false).map((s) => s.id)).toEqual(['s10', 's9', 's8', 's7', 's6', 's5', 's4', 's3', 's2', 's1']);
-    expect(pausedSubIds(many(10), false)).toEqual({});
+    expect(Object.keys(pausedSubIds(list, FREE_SUBS_MAX)).sort()).toEqual(['s11', 's12']);
+    expect(activeSubs(list, FREE_SUBS_MAX).map((s) => s.id)).toEqual(['s10', 's9', 's8', 's7', 's6', 's5', 's4', 's3', 's2', 's1']);
+    expect(pausedSubIds(many(10), FREE_SUBS_MAX)).toEqual({});
   });
 
   it('equal stamps keep the stored order', () => {
     const list = many(11).map((s) => ({ ...s, createdAt: 5 }));
-    expect(Object.keys(pausedSubIds(list, false))).toEqual(['s11']);
+    expect(Object.keys(pausedSubIds(list, FREE_SUBS_MAX))).toEqual(['s11']);
   });
 
   it('with the subscription nothing is paused and there is no limit', () => {
     const list = many(25);
-    expect(pausedSubIds(list, true)).toEqual({});
-    expect(activeSubs(list, true)).toHaveLength(25);
-    expect(canAddSub(list, true)).toBe(true);
-    expect(subsQuota(list, true)).toBeNull();
+    expect(pausedSubIds(list, 0)).toEqual({});
+    expect(activeSubs(list, 0)).toHaveLength(25);
+    expect(canAddSub(list, 0)).toBe(true);
+    expect(subsQuota(list, 0)).toBeNull();
   });
 
   it('allows the 10th, refuses the 11th; the quota reads «N из 10»', () => {
-    expect(canAddSub(many(9), false)).toBe(true);
-    expect(canAddSub(many(10), false)).toBe(false);
-    expect(canAddSub(many(14), false)).toBe(false);
-    expect(subsQuota(many(7), false)).toEqual({ used: 7, max: 10 });
-    expect(subsQuota(many(12), false)).toEqual({ used: 12, max: 10 });
+    expect(canAddSub(many(9), FREE_SUBS_MAX)).toBe(true);
+    expect(canAddSub(many(10), FREE_SUBS_MAX)).toBe(false);
+    expect(canAddSub(many(14), FREE_SUBS_MAX)).toBe(false);
+    expect(subsQuota(many(7), FREE_SUBS_MAX)).toEqual({ used: 7, max: 10 });
+    expect(subsQuota(many(12), FREE_SUBS_MAX)).toEqual({ used: 12, max: 10 });
   });
 
   it('addSubscription refuses the 11th without the subscription and accepts it with one', () => {
@@ -58,6 +60,7 @@ describe('the cap without the OMP subscription', () => {
     expect(addSubscription({ query: 'Одиннадцатая', quality: '', sources: null, notify: true }, NOW + 20)).toBeNull();
     expect(loadSubs()).toHaveLength(10);
     subscribe();
+    confirm();
     expect(subsLimitReached(NOW)).toBe(false);
     expect(addSubscription({ query: 'Одиннадцатая', quality: '', sources: null, notify: true }, NOW + 20)).not.toBeNull();
     expect(loadSubs()).toHaveLength(11);
@@ -77,6 +80,7 @@ describe('entitlement switching', () => {
     saveSubs(many(12));
     expect(checkedSubs(NOW)).toHaveLength(10);
     subscribe();
+    confirm();
     expect(checkedSubs(NOW)).toHaveLength(12);
     expect(isSubPaused('s12', NOW)).toBe(false);
     clearBilling();
@@ -89,12 +93,23 @@ describe('entitlement switching', () => {
     expect(ompSubscribed(NOW)).toBe(false);
   });
 
-  it('without /v1/me: paidUntil plus the default 3-day grace', () => {
+  it('without /v1/me there is no subscription and no 3-day grace', () => {
+    subscribe(NOW + 10 * DAY);
+    expect(ompSubscribed(NOW)).toBe(false);
     subscribe(NOW - DAY);
-    expect(DEFAULT_GRACE_MS).toBe(3 * DAY);
-    expect(ompSubscribed(NOW)).toBe(true); // in grace
-    expect(ompSubscribed(NOW + 2 * DAY - 1)).toBe(true);
-    expect(ompSubscribed(NOW + 2 * DAY)).toBe(false);
+    expect(ompSubscribed(NOW)).toBe(false);
+    expect(ompSubscribed(NOW - DAY + 1000)).toBe(false);
+    expect(MONITOR_FREE_MAX).toBe(10);
+  });
+
+  it('active with no accessUntil lasts only until paidUntil, with no added days', () => {
+    subscribe(NOW + DAY);
+    saveBillingAccess({ active: true, accessUntil: 0, checkedAt: NOW });
+    expect(ompSubscribed(NOW)).toBe(true);
+    expect(ompSubscribed(NOW + DAY)).toBe(false);
+    subscribe(NOW - DAY);
+    saveBillingAccess({ active: true, accessUntil: 0, checkedAt: NOW });
+    expect(ompSubscribed(NOW)).toBe(false);
   });
 
   it('/v1/me answer: active until accessUntil (grace counts), inactive (over the device limit) is off', () => {
@@ -118,6 +133,8 @@ describe('entitlement switching', () => {
     saveBillingAccess({ active: false, accessUntil: 0 });
     expect(ompSubscribed(NOW)).toBe(false);
     saveBillingSession({ token: 'new', paidUntil: NOW + 30 * DAY });
+    expect(ompSubscribed(NOW)).toBe(false);
+    saveBillingAccess({ active: true, accessUntil: NOW + 30 * DAY, checkedAt: NOW });
     expect(ompSubscribed(NOW)).toBe(true);
     clearBilling();
     expect(localStorage.getItem(ACCESS_KEY)).toBe('null');
@@ -134,6 +151,7 @@ describe('leaving the pause: a quiet first check', () => {
     expect(JSON.parse(localStorage.getItem(PAUSED_KEY)!)).toEqual({ s11: true });
     expect(seenKeys('s11')).toEqual(['b']);
     subscribe();
+    confirm();
     expect(isSubPaused('s11', NOW)).toBe(false);
     expect(seenKeys('s11')).toBeNull(); // the next check is silent, like the very first
     expect(seenKeys('s1')).toEqual(['a']);
@@ -144,6 +162,7 @@ describe('leaving the pause: a quiet first check', () => {
     saveSubs(many(11));
     rememberSeen('s11', ['b'], ['rutor']);
     subscribe();
+    confirm();
     expect(checkedSubs(NOW)).toHaveLength(11);
     expect(seenKeys('s11')).toEqual(['b']);
   });
@@ -151,7 +170,7 @@ describe('leaving the pause: a quiet first check', () => {
   it('deleting an older one unpauses the next quietly too; a deleted paused one is just dropped', () => {
     saveSubs(many(12));
     rememberSeen('s11', ['b'], ['rutor']);
-    syncPaused(loadSubs(), false);
+    syncPaused(loadSubs(), FREE_SUBS_MAX);
     removeSubscription('s12');
     removeSubscription('s1');
     expect(isSubPaused('s11', NOW)).toBe(false);

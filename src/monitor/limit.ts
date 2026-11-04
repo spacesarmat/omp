@@ -1,7 +1,8 @@
-// Monitoring without the OMP subscription: at most FREE_SUBS_MAX subscriptions. Adding one more is refused; the ones
-// already saved above the cap stay, but only the FREE_SUBS_MAX oldest (by createdAt) are checked, the rest are paused
-// until the subscription is on again. Shared by the app and the background page; Chromium 53 safe.
-import { ompSubscribed } from '../billing/entitlement';
+// Monitoring without a confirmed OMP subscription: at most FREE_SUBS_MAX subscriptions (or the cap from the last
+// /v1/me, monitorMax). Adding one more is refused; the ones already saved above the cap stay, but only the oldest
+// `cap` (by createdAt) are checked, the rest are paused until the cap lifts. cap <= 0 means no limit. Shared by
+// the app and the background page; Chromium 53 safe.
+import { monitorMax } from '../billing/entitlement';
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { forgetSeen, FREE_SUBS_MAX, loadSubs } from './subs';
 import type { Subscription } from './types';
@@ -16,30 +17,33 @@ function oldestFirst(list: Subscription[]): Subscription[] {
     .map((x) => x.s);
 }
 
-/** Ids of the paused subscriptions of `list` (none with the subscription on). */
-export function pausedSubIds(list: Subscription[], subscribed: boolean): { [id: string]: true } {
+/**
+ * Ids of the paused subscriptions of `list`.
+ * `cap` <= 0: no cap (premium). Otherwise only the `cap` oldest stay active.
+ */
+export function pausedSubIds(list: Subscription[], cap: number): { [id: string]: true } {
   const out: { [id: string]: true } = {};
-  if (subscribed) return out;
+  if (cap <= 0) return out;
   oldestFirst(list)
-    .slice(FREE_SUBS_MAX)
+    .slice(cap)
     .forEach((s) => (out[s.id] = true));
   return out;
 }
 
 /** The subscriptions that are checked, in the order of `list`. */
-export function activeSubs(list: Subscription[], subscribed: boolean): Subscription[] {
-  const paused = pausedSubIds(list, subscribed);
+export function activeSubs(list: Subscription[], cap: number): Subscription[] {
+  const paused = pausedSubIds(list, cap);
   return list.filter((s) => !paused[s.id]);
 }
 
-/** One more subscription may be added. */
-export function canAddSub(list: Subscription[], subscribed: boolean): boolean {
-  return subscribed || list.length < FREE_SUBS_MAX;
+/** One more subscription may be added. `cap` <= 0: always. */
+export function canAddSub(list: Subscription[], cap: number): boolean {
+  return cap <= 0 || list.length < cap;
 }
 
-/** «7 из 10» without the subscription; null with it (no limit). */
-export function subsQuota(list: Subscription[], subscribed: boolean): { used: number; max: number } | null {
-  return subscribed ? null : { used: list.length, max: FREE_SUBS_MAX };
+/** «7 из 10» under a cap; null when there is no cap. */
+export function subsQuota(list: Subscription[], cap: number): { used: number; max: number } | null {
+  return cap <= 0 ? null : { used: list.length, max: cap };
 }
 
 // --- the same against the saved list and the cached billing state
@@ -52,8 +56,8 @@ export const PAUSED_KEY = 'tsp.subsPaused';
  * next check only records what is there (like the very first one) instead of reporting everything that came out
  * during the pause. Called by every check gate (isSubPaused, checkedSubs) before a check can run.
  */
-export function syncPaused(list: Subscription[], subscribed: boolean): { [id: string]: true } {
-  const now = pausedSubIds(list, subscribed);
+export function syncPaused(list: Subscription[], cap: number): { [id: string]: true } {
+  const now = pausedSubIds(list, cap);
   const before = loadJson<{ [id: string]: true }>(PAUSED_KEY, {}, isObject);
   let changed = false;
   Object.keys(before).forEach((id) => {
@@ -69,16 +73,16 @@ export function syncPaused(list: Subscription[], subscribed: boolean): { [id: st
 }
 
 export function subsLimitReached(now?: number): boolean {
-  return !canAddSub(loadSubs(), ompSubscribed(now));
+  return !canAddSub(loadSubs(), monitorMax(now));
 }
 
 export function isSubPaused(id: string, now?: number): boolean {
-  return syncPaused(loadSubs(), ompSubscribed(now))[id] === true;
+  return syncPaused(loadSubs(), monitorMax(now))[id] === true;
 }
 
-/** The saved subscriptions the checks may run (all with the subscription on). */
+/** The saved subscriptions the checks may run (all when monitorMax is 0). */
 export function checkedSubs(now?: number): Subscription[] {
   const list = loadSubs();
-  const paused = syncPaused(list, ompSubscribed(now));
+  const paused = syncPaused(list, monitorMax(now));
   return list.filter((s) => !paused[s.id]);
 }

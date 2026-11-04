@@ -754,11 +754,11 @@ describe('billing HTTP: grace and over-limit phones', () => {
     const app = createApp(file, noFetch, { env: {} });
     const me = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token } });
     expect(me.status).toBe(200);
-    expect(me.data).toMatchObject({ active: true, inGrace: true, overLimit: false });
+    expect(me.data).toMatchObject({ active: true, inGrace: true, overLimit: false, monitorMax: 0 });
     await writeState(file, realTime(a.state, NOW + 34 * DAY));
     const after = await call(app, 'GET', '/v1/me', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token } });
     expect(after.status).toBe(200);
-    expect(after.data).toMatchObject({ active: false, inGrace: false });
+    expect(after.data).toMatchObject({ active: false, inGrace: false, monitorMax: 10 });
     const search = await call(app, 'POST', '/v1/search', { headers: { 'x-device-id': DEV_A, authorization: 'Bearer ' + a.result.token }, body: { q: 'x' } });
     expect(search.status).toBe(403);
     expect(search.data && search.data.error).toBe('expired');

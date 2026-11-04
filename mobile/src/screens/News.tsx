@@ -41,9 +41,9 @@ import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding } from '../../../src/monitor/types';
 import { FREE_SUBS_MAX, subsLimitReached, subsQuota, syncPaused } from '../../../src/monitor/limit';
-import { ompSubscribed } from '../../../src/billing/entitlement';
+import { monitorMax } from '../../../src/billing/entitlement';
 import { billingSession, onBillingChange } from '../../../src/billing/session';
-import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { recheckPremium } from '../../../src/billing/recheck';
 import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { Calendar } from './Calendar';
 import { checkSubNow, checkingSubs, filterSubs, FINDINGS_CAP, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
@@ -350,17 +350,17 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   useEffect(() => {
     // over the cap: ask /v1/me once per visit, so a renewal paid in the bot lifts the pause without opening «Аккаунт»
     if (!billingSession() || loadSubs().length <= FREE_SUBS_MAX) return;
-    fetchBillingAccount(phoneSourceContext()).then(
+    recheckPremium(phoneSourceContext(), 'resume', Date.now(), { force: true }).then(
       () => setBillingTick((n) => n + 1),
       () => undefined,
     );
   }, []);
   const [limitOpen, setLimitOpen] = useState(false);
   const subs = loadSubs();
-  const subscribed = ompSubscribed();
+  const cap = monitorMax();
   // also records the pause, so a subscription that leaves it gets a quiet first check (limit.ts)
-  const paused = syncPaused(subs, subscribed);
-  const quota = subsQuota(subs, subscribed);
+  const paused = syncPaused(subs, cap);
+  const quota = subsQuota(subs, cap);
   const searching = !!query.trim();
   const shownSubs = filterSubs(sortSubs(subs, sort), query);
   const found = matchFindings(query, loadFound(), FINDINGS_CAP, sort, subs);

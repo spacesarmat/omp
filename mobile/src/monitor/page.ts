@@ -29,7 +29,7 @@ import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type Monito
 import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { checkedSubs, FREE_SUBS_MAX } from '../../../src/monitor/limit';
 import { billingSession } from '../../../src/billing/session';
-import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { recheckPremium } from '../../../src/billing/recheck';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
 import { feedAll, type FeedAllOptions } from '../../../src/sources/feed';
 import { SOURCE_TIMEOUT_MS } from '../../../src/sources/search';
@@ -232,9 +232,10 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
       },
     );
 
-  // subscriptions, two at a time; without the OMP subscription only the FREE_SUBS_MAX oldest (limit.ts). Over the cap
-  // the cached billing state is refreshed first: a renewal paid in the bot unpauses the rest in this very run.
-  if (billingSession() && loadSubs().length > FREE_SUBS_MAX) await fetchBillingAccount(ctx).catch(() => null);
+  // subscriptions, two at a time; without a confirmed OMP subscription only the free cap's oldest (limit.ts).
+  // Over the cap, /v1/me is asked even inside the 6 hour window, so a renewal paid in the bot unpauses this run.
+  // Otherwise the account is rechecked only when the cached answer is older than that window. A failure keeps it.
+  if (billingSession()) await recheckPremium(ctx, 'interval', now(), { force: loadSubs().length > FREE_SUBS_MAX });
   const subs = checkedSubs(now());
   const answered: { [id: string]: boolean } = {};
   const asked: { [id: string]: boolean } = {};

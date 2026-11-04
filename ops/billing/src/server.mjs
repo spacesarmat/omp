@@ -45,6 +45,7 @@ import {
   startAdminPanelLogin,
   startDeviceLink,
   subscriptionView,
+  monitorMaxFor,
   supportThread,
   closeSupportThread,
   SUPPORT_CLOSED_TEXT,
@@ -118,6 +119,7 @@ import { loginPage } from './panel.mjs';
 import {
   activateLimitConfig,
   tokenLimitConfig,
+  adsConfigLimitConfig,
   clientIp,
   createActivateLimiter,
   createRateLimit,
@@ -729,6 +731,10 @@ export function createApp(file, fetchImpl, opts) {
   const strictLinkClear = linkClearRequiresToken(env);
   // Refresh and upgrade are cheap to call but should not be hammered from one address.
   const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
+  // Public banner list. Not a secret: released apps call it with no token and must still get ads.
+  // A tight loop from one IP is refused. 0 turns the limit off.
+  const adsLimit = adsConfigLimitConfig(env);
+  const adsConfigRate = adsLimit.ipMax > 0 ? createRateLimit(adsLimit.ipMax, adsLimit.windowMs) : null;
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
@@ -843,6 +849,14 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'GET' && path === '/v1/ads-config') {
         // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
+        // Rate-limited per IP. No device token: apps already released (0.20.8) call this with none, and must still get ads.
+        if (adsConfigRate && !adsConfigRate.allow(clientIp(req))) {
+          const wait = String(adsConfigRate.retryAfter(clientIp(req)) || Math.ceil(adsLimit.windowMs / 1000));
+          return send(res, 429, JSON.stringify({ error: 'rate' }), adsCors({
+            'content-type': 'application/json; charset=utf-8',
+            'retry-after': wait,
+          }));
+        }
         const body = JSON.stringify(publicAdsConfig((await store.read()).settings, Date.now()));
         const etag = etagOf(body);
         const headers = adsCors({
@@ -1793,6 +1807,9 @@ export function createApp(file, fetchImpl, opts) {
             jackett: isActive && sourceEnabled(state.settings, 'jackett') && !!state.settings.jackettUrl && !!state.settings.jackettApiKey,
             jacred: isActive && sourceEnabled(state.settings, 'jacred') && !!state.settings.jacredUrl && !!state.settings.jacredApiKey,
           },
+          // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
+          // Apps already released ignore the field and keep their own check.
+          monitorMax: monitorMaxFor(isActive),
         });
       }
       if (req.method === 'POST' && path === '/v1/search') {

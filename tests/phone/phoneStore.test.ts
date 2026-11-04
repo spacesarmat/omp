@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sanitizePhoneLink, savePhoneLink, setPhoneSubscribed, forgetPhoneLink, phoneLink, PHONE_KEY } from '../../src/phone/phoneStore';
+import { sanitizePhoneLink, savePhoneLink, setPhoneSubscribed, expirePhoneSub, forgetPhoneLink, phoneLink, phoneLinkSubscribed, PHONE_KEY, PHONE_SUB_TTL_MS } from '../../src/phone/phoneStore';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Samsung SM-G998B' };
 
@@ -89,5 +89,27 @@ describe('phoneStore', () => {
     forgetPhoneLink();
     expect(phoneLink.value).toBeNull();
     expect(localStorage.getItem(PHONE_KEY)).toBeNull();
+  });
+
+  it('hides ads for a linked subscriber only inside the TTL, then falls back to free', () => {
+    expect(PHONE_SUB_TTL_MS).toBe(6 * 60 * 60 * 1000);
+    const fresh = sanitizePhoneLink({ ...PH, sub: true, at: 1_000, subAt: 5_000 });
+    expect(phoneLinkSubscribed(fresh, 5_000 + PHONE_SUB_TTL_MS)).toBe(true);
+    expect(phoneLinkSubscribed(fresh, 5_000 + PHONE_SUB_TTL_MS + 1)).toBe(false);
+    // an old save has no subAt: the launch time is the stamp
+    const legacy = sanitizePhoneLink({ ...PH, sub: true, at: 5_000 });
+    expect(legacy && legacy.subAt).toBe(5_000);
+    expect(phoneLinkSubscribed(legacy, 5_000 + 60_000)).toBe(true);
+    expect(phoneLinkSubscribed(legacy, 5_000 + PHONE_SUB_TTL_MS + 1)).toBe(false);
+    expect(phoneLinkSubscribed(sanitizePhoneLink({ ...PH, sub: false, at: 5_000 }), 5_000)).toBe(false);
+
+    savePhoneLink({ ...PH, sub: true });
+    const stamp = phoneLink.value && phoneLink.value.subAt;
+    expect(typeof stamp).toBe('number');
+    setPhoneSubscribed(true, (stamp || 0) + 1000);
+    expect(phoneLink.value && phoneLink.value.subAt).toBe((stamp || 0) + 1000);
+    expirePhoneSub((stamp || 0) + 1000 + PHONE_SUB_TTL_MS + 1);
+    expect(phoneLink.value && phoneLink.value.sub).toBe(false);
+    expect(phoneLinkSubscribed(phoneLink.value)).toBe(false);
   });
 });

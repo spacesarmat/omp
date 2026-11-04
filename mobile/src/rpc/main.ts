@@ -5,6 +5,7 @@ import '../../../src/store/settings';
 import { t } from '../../../src/i18n';
 import { checkSubscription } from '../../../src/monitor/check';
 import { registerBuiltinSources } from '../../../src/sources/builtin';
+import { ensureOmpJackettSources } from '../../../src/sources/ompJackett';
 import { createSecretStore, createSourceHttp } from '../../../src/sources/http';
 import { reloadIndexers } from '../../../src/sources/indexerStore';
 import { allSources } from '../../../src/sources/registry';
@@ -38,6 +39,7 @@ if (port) {
       reloadIndexers();
       return allSources();
     },
+    prepareSources: () => ensureOmpJackettSources(ctx),
     ctx: () => ctx,
     now: () => Date.now(),
     checkSubscription: (sub, from) => checkSubscription(ctx, sub, { from }),

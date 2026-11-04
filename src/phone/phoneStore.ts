@@ -12,7 +12,12 @@ export interface PhoneLink {
   at: number;
   /** The phone had an OMP subscription at the last launch or RPC answer. Absent: not known. */
   sub?: boolean;
+  /** Unix ms when `sub` was last set. A `sub: true` older than PHONE_SUB_TTL_MS does not hide ads. */
+  subAt?: number;
 }
+
+/** How long a linked phone's subscription hides TV ads after the last answer. A silent phone falls back to free. */
+export const PHONE_SUB_TTL_MS = 6 * 60 * 60 * 1000;
 
 export const PHONE_KEY = 'tsp.phoneLink';
 
@@ -61,33 +66,69 @@ export function sanitizePhoneLink(v: unknown, now?: number): PhoneLink | null {
   const name = typeof v.name === 'string' ? v.name.replace(/[\x00-\x1f\x7f]+/g, ' ').trim().slice(0, 60) : '';
   const at = typeof v.at === 'number' && isFinite(v.at) && v.at >= 0 ? v.at : now !== undefined ? now : Date.now();
   const link: PhoneLink = { url: url, token: token, name: name, at: at };
-  if (v.sub === true || v.sub === false) link.sub = v.sub;
+  if (v.sub === true || v.sub === false) {
+    link.sub = v.sub;
+    const stamp = typeof v.subAt === 'number' && isFinite(v.subAt) && v.subAt >= 0 ? v.subAt : at;
+    link.subAt = stamp;
+  }
   return link;
 }
 
+/** True only while `sub` is true and the stamp is inside PHONE_SUB_TTL_MS. A missing stamp uses `at`. */
+export function phoneLinkSubscribed(link: PhoneLink | null, now?: number): boolean {
+  if (!link || link.sub !== true) return false;
+  const at = now === undefined ? Date.now() : now;
+  const stamp = typeof link.subAt === 'number' ? link.subAt : link.at;
+  if (!stamp || stamp > at + 60000) return false;
+  return at - stamp <= PHONE_SUB_TTL_MS;
+}
+
 function load(): PhoneLink | null {
-  return sanitizePhoneLink(loadJson<unknown>(PHONE_KEY, null), 0);
+  const link = sanitizePhoneLink(loadJson<unknown>(PHONE_KEY, null), 0);
+  if (!link || link.sub !== true || phoneLinkSubscribed(link)) return link;
+  const next: PhoneLink = { url: link.url, token: link.token, name: link.name, at: link.at, sub: false, subAt: link.subAt || link.at };
+  saveJson(PHONE_KEY, next);
+  return next;
 }
 
 export const phoneLink = signal<PhoneLink | null>(load());
 
 /** Stores the address from a launch; an unchanged one only refreshes `at` in storage (no signal update). */
 export function savePhoneLink(p: { url: string; token: string; name: string; sub?: boolean }): void {
-  const next = sanitizePhoneLink({ url: p.url, token: p.token, name: p.name, sub: p.sub });
+  const now = Date.now();
+  const raw: { url: string; token: string; name: string; sub?: boolean; at: number; subAt?: number } = {
+    url: p.url,
+    token: p.token,
+    name: p.name,
+    sub: p.sub,
+    at: now,
+  };
+  if (p.sub === true || p.sub === false) raw.subAt = now;
+  const next = sanitizePhoneLink(raw);
   if (!next) return;
   const cur = phoneLink.value;
   saveJson(PHONE_KEY, next);
-  if (cur && cur.url === next.url && cur.token === next.token && cur.name === next.name && cur.sub === next.sub) return;
+  if (cur && cur.url === next.url && cur.token === next.token && cur.name === next.name && cur.sub === next.sub && cur.subAt === next.subAt) return;
   phoneLink.value = next;
 }
 
-/** The linked phone's subscription, from a launch param or `ompSubscribed` on the phone. */
-export function setPhoneSubscribed(sub: boolean): void {
+/** The linked phone's subscription, from a launch param or `ompSubscribed` on the phone. Repeating `true` refreshes the TTL. */
+export function setPhoneSubscribed(sub: boolean, now?: number): void {
   const cur = phoneLink.value;
-  if (!cur || cur.sub === sub) return;
-  const next: PhoneLink = { url: cur.url, token: cur.token, name: cur.name, at: cur.at, sub: sub };
+  if (!cur) return;
+  const at = now === undefined ? Date.now() : now;
+  if (cur.sub === sub && sub === false) return;
+  if (cur.sub === sub && cur.subAt === at) return;
+  const next: PhoneLink = { url: cur.url, token: cur.token, name: cur.name, at: cur.at, sub: sub, subAt: at };
   saveJson(PHONE_KEY, next);
   phoneLink.value = next;
+}
+
+/** A `sub: true` past PHONE_SUB_TTL_MS becomes false, so ads are not hidden by a silent phone. */
+export function expirePhoneSub(now?: number): void {
+  const cur = phoneLink.value;
+  if (!cur || cur.sub !== true || phoneLinkSubscribed(cur, now)) return;
+  setPhoneSubscribed(false, now);
 }
 
 export function forgetPhoneLink(): void {
