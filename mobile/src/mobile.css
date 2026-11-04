@@ -527,8 +527,7 @@ button, .m-btn {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(15, 17, 21, 0.15) 0%, rgba(15, 17, 21, 0.5) 46%, var(--bg, #0F1115) 100%);
 }
-/* The back control stays out of the backdrop (that box clips overflow). Its test chip (P25.1)
-   hangs above the right of the button and grows to the right, so a 24px label stays on screen. */
+/* The back control stays out of the backdrop (that box clips overflow). Its test chip sits inside the button. */
 .m-season-back {
   position: absolute; z-index: 2;
   top: calc(env(safe-area-inset-top) + 20px); left: 16px;
@@ -537,9 +536,6 @@ button, .m-btn {
 .m-season-share {
   position: absolute; z-index: 2;
   top: calc(env(safe-area-inset-top) + 20px); right: 16px;
-}
-body.test-labels .m-screen[data-route='season'] .m-season-back[data-code]::after {
-  right: auto; left: calc(100% + 6px); transform: translateY(-55%);
 }
 .m-season-head { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 14px; }
 .m-season-poster {
@@ -2079,16 +2075,18 @@ html.m-hint-hold .m-hint { display: none; }
    .tm is only for controls that are not already positioned: forcing position on an
    absolute back button would pull it back into the row. */
 body.test-labels .tm { position: relative; }
-/* The badge sits on the top edge of the control, shifted up out of it, see-through and small
-   (phone labels may be under 24px): it names the control without covering a switch, a value or
-   a back arrow. White text with a dark outline stays readable on a light or a dark row. */
+/* The badge sits in the bottom-right corner of the control, inside it, so an overflow:hidden
+   parent (a backdrop, a poster) does not clip it. Phone labels may be under 24px.
+   White text with a dark outline stays readable on a light or a dark row. */
 body.test-labels [data-code]::after {
   content: attr(data-code);
   position: absolute;
-  top: 0;
+  top: auto;
+  left: auto;
+  bottom: 0;
   right: 0;
-  transform: translateY(-55%);
-  z-index: 2;
+  transform: none;
+  z-index: 6;
   pointer-events: none;
   font-size: 12px;
   line-height: 16px;
@@ -2103,9 +2101,11 @@ body.test-labels [data-code]::after {
 }
 .test-screen-badge {
   position: fixed;
-  z-index: 35;
-  top: calc(8px + env(safe-area-inset-top));
-  left: 8px;
+  z-index: 50;
+  top: auto;
+  left: auto;
+  right: 8px;
+  bottom: calc(var(--m-nav-h) + var(--m-mini-h) + 16px + env(safe-area-inset-bottom));
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -2120,7 +2120,7 @@ body.test-labels [data-code]::after {
   background: rgba(0, 0, 0, 0.55);
   border-radius: 6px;
 }
-/* «Размер меток» (8-24px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
+/* «Размер меток» (8-24 px slider, 8 px is 6 pt) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
 /* Element codes (posters, cards, rows): one fixed overlay, takes no space, ignores touches */
 .test-el-layer {
   position: fixed;

@@ -75,7 +75,7 @@ export interface AppSettings {
    * A stable build ignores this flag (the switch is not rendered).
    */
   testMode: boolean;
-  /** Test-mode label size in px on the TV and in the native Android TV player (16..36, step 2). Beta only. */
+  /** Test-mode label size in px on the TV and in the native Android TV player (8..36, step 2). Beta only. */
   testLabelPx: number;
   /** Test-mode label size in px on the phone (8..24). Beta only. */
   testLabelPhonePx: number;

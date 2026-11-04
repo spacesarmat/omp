@@ -227,7 +227,7 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .error-view .actions > * { margin: 0 12px; }
 
 .dialog-backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, .6); display: flex; align-items: center; justify-content: center; z-index: 50; }
-.dialog { min-width: 720px; max-width: 1200px; max-height: 900px; overflow-y: auto; background: var(--panel); border-radius: 18px; padding: 40px; }
+.dialog { position: relative; min-width: 720px; max-width: 1200px; max-height: 900px; overflow-y: auto; background: var(--panel); border-radius: 18px; padding: 40px; }
 .dialog-title { font-size: 34px; margin-bottom: 24px; }
 .dialog-body { white-space: pre-line; max-height: 560px; overflow-y: auto; margin-bottom: 24px; font-size: 26px; line-height: 1.45; color: #c9cdd8; }
 .dialog-option { padding: 18px 24px; border-radius: 10px; margin-bottom: 8px; }
@@ -914,9 +914,11 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .faq-body.test-anchor { position: absolute; }
 .test-badge {
   position: absolute;
-  top: 0;
+  top: auto;
+  bottom: 0;
   right: 0;
-  z-index: 5;
+  left: auto;
+  z-index: 6;
   pointer-events: none;
   font-size: 24px;
   line-height: 28px;
@@ -929,14 +931,15 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 }
 .test-screen-badge {
   position: absolute;
-  top: 24px;
-  left: 24px;
+  top: auto;
+  left: auto;
+  bottom: 24px;
+  right: 24px;
   z-index: 80;
-  right: auto;
   pointer-events: auto;
 }
 .test-screen-badge .test-badge { position: static; }
-/* «Размер меток» (16-36px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
+/* «Размер меток» (8-36px slider) is written at runtime by src/testmode/elements.tsx syncSizeStyle */
 /* Element codes (posters, cards, rows): one overlay layer over the screen, takes no space, ignores the remote */
 .test-el-layer {
   position: absolute;

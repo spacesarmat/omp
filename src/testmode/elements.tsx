@@ -295,30 +295,45 @@ export function paintElementLabels(layer: HTMLElement, phone: boolean): void {
   }
   const viewW = root ? ((root as HTMLElement).offsetWidth || 1920) : 1920;
   const viewH = root ? ((root as HTMLElement).offsetHeight || 1080) : 1080;
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const widths: number[] = [];
+  const eb: Box[] = [];
   for (let i = 0; i < shown.length; i++) {
     const span = layer.children[i] as HTMLElement;
     const b = shown[i].b;
     const w = span.offsetWidth || 0;
-    let x = (b.left - ox) / scale;
-    const top = (b.top - oy) / scale;
+    widths.push(w);
+    const right = (b.right - ox) / scale;
     const bottom = (b.bottom - oy) / scale;
-    let y = top;
-    if (shown[i].place === 'bottom') y = bottom - h;
-    else if (shown[i].place === 'above') y = top - h >= 0 ? top - h : top;
-    // a chip wider than the space left at the screen edge used to be cut off by the layer
+    // Bottom-right corner of the element, in 1920 space. A code wider than the
+    // space left at the screen edge is pulled back so the layer does not clip it.
+    let x = right - w;
+    let y = bottom - h;
     if (w > 0 && x + w > viewW) x = Math.max(0, viewW - w);
     if (x < 0) x = 0;
     if (h > 0 && y + h > viewH) y = Math.max(0, viewH - h);
     if (y < 0) y = 0;
-    span.style.left = Math.round(x) + 'px';
-    span.style.top = Math.round(y) + 'px';
+    xs.push(x);
+    ys.push(y);
+    eb.push({
+      left: (b.left - ox) / scale,
+      top: (b.top - oy) / scale,
+      right: (b.right - ox) / scale,
+      bottom: (b.bottom - oy) / scale,
+    });
+  }
+  const tvView: Box = { left: 0, top: 0, right: viewW, bottom: viewH };
+  const moved = separateNestedLabels(eb, xs, ys, widths, h, tvView, []);
+  for (let i = 0; i < shown.length; i++) {
+    const span = layer.children[i] as HTMLElement;
+    span.style.left = Math.round(moved[i].x) + 'px';
+    span.style.top = Math.round(moved[i].y) + 'px';
   }
 }
 
 /** Phone chrome that stays on screen over the scrolled page: the tab bar, the mini player, the keypad. */
 export const PHONE_CHROME = '.m-nav, .m-mini, .m-keypad';
-/** Phone controls a row label must not cover. A `[data-code]` control also has its own badge above its top edge. */
-export const PHONE_CONTROLS = 'button, a[href], input, select, textarea, [role="button"], [role="tab"], [data-code]';
 
 export interface PhoneLabelInput {
   /** The element's box (viewport px). */
@@ -330,43 +345,117 @@ export interface PhoneLabelInput {
   inChrome: number;
 }
 
+function holds(outer: Box, inner: Box): boolean {
+  return outer.left <= inner.left + 1 && outer.top <= inner.top + 1 && outer.right + 1 >= inner.right && outer.bottom + 1 >= inner.bottom;
+}
+
+function area(b: Box): number {
+  return Math.max(0, b.right - b.left) * Math.max(0, b.bottom - b.top);
+}
+
 /**
- * Phone label positions, null for a label that is not painted. Landscape leaves little room, so:
- * - a label is never painted over the tab bar, the mini player or the keypad unless its element is in it
- *   (an element scrolled under the tab bar keeps its label hidden);
- * - a row label (`R#`) goes above the row's left end, else above its right end, else inside the row's top or
- *   bottom right corner; the first spot that covers no control (and no control's own badge) wins. With no free
- *   spot the row label is not painted: its posters and chips still carry their codes.
- * Other labels stay on their own element (pulled into the screen at an edge). Pure: the tests call it with plain boxes.
+ * Bottom-right labels of a grid and of the card in that corner land on the same pixels.
+ * The outer code moves to the next corner of its own box (bottom-left, then top-right, then
+ * top-left) so both stay readable. A spot on `blocked` (the phone tab bar) is skipped.
+ */
+export function separateNestedLabels(boxes: Box[], xs: number[], ys: number[], widths: number[], h: number, view: Box, blocked: Box[]): { x: number; y: number }[] {
+  const n = boxes.length;
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < n; i++) out.push({ x: xs[i], y: ys[i] });
+  const labelAt = (i: number, x: number, y: number): Box => ({ left: x, top: y, right: x + widths[i], bottom: y + h });
+  const blockedBy = (i: number, x: number, y: number): boolean => {
+    const lb = labelAt(i, x, y);
+    if (lb.left < view.left - 0.5 || lb.top < view.top - 0.5 || lb.right > view.right + 0.5 || lb.bottom > view.bottom + 0.5) return true;
+    for (let c = 0; c < blocked.length; c++) if (overlaps(lb, blocked[c])) return true;
+    for (let j = 0; j < n; j++) {
+      if (j === i) continue;
+      if (overlaps(lb, labelAt(j, out[j].x, out[j].y))) return true;
+    }
+    return false;
+  };
+  for (let i = 0; i < n; i++) {
+    let cover = false;
+    for (let j = 0; j < n; j++) {
+      if (i === j || !holds(boxes[i], boxes[j])) continue;
+      const bigger = area(boxes[i]) > area(boxes[j]) + 1;
+      const same = Math.abs(area(boxes[i]) - area(boxes[j])) <= 1 && i < j;
+      if (!bigger && !same) continue;
+      if (overlaps(labelAt(i, out[i].x, out[i].y), labelAt(j, out[j].x, out[j].y))) cover = true;
+    }
+    if (!cover) continue;
+    const b = boxes[i];
+    const w = widths[i];
+    const raw = [
+      { x: b.left, y: b.bottom - h },
+      { x: b.right - w, y: b.top },
+      { x: b.left, y: b.top },
+    ];
+    for (let s = 0; s < raw.length; s++) {
+      let x = raw[s].x;
+      let y = raw[s].y;
+      if (x + w > view.right) x = view.right - w;
+      if (y + h > view.bottom) y = view.bottom - h;
+      if (x < view.left) x = view.left;
+      if (y < view.top) y = view.top;
+      if (!blockedBy(i, x, y)) {
+        out[i] = { x: x, y: y };
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Phone label positions, null for a label that is not painted.
+ * Every label sits in the bottom-right corner of its element (pulled into the screen when the
+ * element is cut by an edge). A label is not painted over the tab bar, the mini player or the
+ * keypad unless its element is in that chrome. A grid code that would cover a card in that
+ * corner moves to another corner of the grid. `controls` is unused: a fixed-code badge sits
+ * inside its control. Pure: the tests call it with plain boxes.
  */
 export function placePhoneLabels(items: PhoneLabelInput[], h: number, view: Box, chrome: Box[], controls: Box[]): ({ x: number; y: number } | null)[] {
+  void controls;
   const out: ({ x: number; y: number } | null)[] = [];
-  const free = (lb: Box, item: PhoneLabelInput, row: boolean): boolean => {
-    if (lb.left < view.left || lb.top < view.top || lb.right > view.right || lb.bottom > view.bottom) return false;
-    for (let c = 0; c < chrome.length; c++) if (c !== item.inChrome && overlaps(lb, chrome[c])) return false;
-    if (row) for (let c = 0; c < controls.length; c++) if (overlaps(lb, controls[c])) return false;
-    return true;
-  };
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const b = it.b;
     const w = Math.max(0, it.w);
-    const spots: { x: number; y: number }[] = [];
-    if (it.place === 'above') {
-      const right = Math.max(b.left, b.right - w);
-      spots.push({ x: b.left, y: b.top - h }, { x: right, y: b.top - h }, { x: right, y: b.top }, { x: right, y: b.bottom - h });
-    } else {
-      // on its own element, pulled into the screen when the element is cut by an edge (a rail scrolled sideways)
-      const y = it.place === 'bottom' ? b.bottom - h : b.top;
-      spots.push({ x: Math.max(view.left, Math.min(b.left, view.right - w)), y: Math.max(view.top, Math.min(y, view.bottom - h)) });
+    let x = b.right - w;
+    let y = b.bottom - h;
+    if (x + w > view.right) x = view.right - w;
+    if (y + h > view.bottom) y = view.bottom - h;
+    if (x < view.left) x = view.left;
+    if (y < view.top) y = view.top;
+    const lb: Box = { left: x, top: y, right: x + w, bottom: y + h };
+    if (w <= 0 || h <= 0 || lb.right > view.right || lb.bottom > view.bottom || lb.left < view.left || lb.top < view.top) {
+      out.push(null);
+      continue;
     }
-    let pick: { x: number; y: number } | null = null;
-    for (let s = 0; s < spots.length && !pick; s++) {
-      const p = spots[s];
-      if (free({ left: p.x, top: p.y, right: p.x + w, bottom: p.y + h }, it, it.place === 'above')) pick = p;
+    if (!overlaps(lb, b)) {
+      out.push(null);
+      continue;
     }
-    out.push(pick);
+    let hidden = false;
+    for (let c = 0; c < chrome.length; c++) if (c !== it.inChrome && overlaps(lb, chrome[c])) hidden = true;
+    out.push(hidden ? null : { x: x, y: y });
   }
+  const boxes: Box[] = [];
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const widths: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i < out.length; i++) {
+    const p = out[i];
+    if (!p) continue;
+    boxes.push(items[i].b);
+    xs.push(p.x);
+    ys.push(p.y);
+    widths.push(Math.max(0, items[i].w));
+    idx.push(i);
+  }
+  const moved = separateNestedLabels(boxes, xs, ys, widths, h, view, chrome);
+  for (let k = 0; k < idx.length; k++) out[idx[k]] = { x: moved[k].x, y: moved[k].y };
   return out;
 }
 
@@ -390,22 +479,8 @@ function paintPhonePositions(layer: HTMLElement, shown: { code: string; place: s
       chromeOf.push(chromeEls[i]);
     }
   }
+  // Fixed-code badges sit inside their controls, so element labels are not pushed off them.
   const controls: Box[] = [];
-  const ctrlEls = toArray((win || document).querySelectorAll(PHONE_CONTROLS));
-  // the fixed-code badge hangs above its control by about half a label (translateY(-55%) in mobile.css)
-  const badge = Math.ceil(h * 0.6);
-  if (win && win.hasAttribute('data-code')) {
-    // the sheet's own code (PD21) sits on its top edge: keep that strip free, not the whole sheet
-    const wb = visibleBox(win, view);
-    if (wb) controls.push({ left: wb.left, top: wb.top - badge, right: wb.right, bottom: wb.top + h - badge });
-  }
-  for (let i = 0; i < ctrlEls.length; i++) {
-    if (layer.contains(ctrlEls[i])) continue;
-    const b = visibleBox(ctrlEls[i], view);
-    if (!b) continue;
-    if (ctrlEls[i].hasAttribute('data-code')) b.top -= badge;
-    controls.push(b);
-  }
   const byCode: { [code: string]: Element } = {};
   for (let i = 0; i < labels.length; i++) byCode[labels[i].code] = labels[i].el;
   const items: PhoneLabelInput[] = [];
@@ -510,7 +585,7 @@ export function elementTypesDoc(): string[] {
     'Besides the fixed codes above, test mode labels the elements of a screen: posters, cards, list rows, tabs, buttons without their own code, fields and rows. They are counted on the page in screen order, so they follow the library and are meant for a report about what is on screen now.',
     '',
     '- `S03.P#4` - the fourth poster on screen S03 (outside any row).',
-    '- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits just above it.',
+    '- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits in the bottom-right corner of the row.',
     '- `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.',
     '- Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.',
     '- The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.',

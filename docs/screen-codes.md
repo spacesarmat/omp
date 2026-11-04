@@ -12,7 +12,7 @@ Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src
 
 Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.
 
-Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 16-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.
+Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 8-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). 8 px is 6 pt at 96 dpi. On a TV the px is in the 1920x1080 layout, so the same number looks the same at 1080p and at 4K. Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.
 
 | Code | Where (ru) | Where (en) | Item (ru) | Item (en) |
 | --- | --- | --- | --- | --- |
@@ -78,6 +78,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S04.4 | Сериал | Series | Следить за сериями | Follow episodes |
 | S04.5 | Сериал | Series | Озвучка | Dub |
 | S04.6 | Сериал | Series | Найти раздачи | Find releases |
+| S04.7 | Сериал | Series | Найти другую | Find another |
 | S05 | Настройки | Settings |  |  |
 | S05.1 | Настройки | Settings | Язык | Language |
 | S05.1.1 | Настройки | Settings | Язык - Как в системе | Language - Follow the system |
@@ -671,6 +672,8 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D51 | Убрать из «Хочу посмотреть» | Remove from Want to watch |  |  |
 | D51.1 | Убрать из «Хочу посмотреть» | Remove from Want to watch | Убрать и отписаться | Remove and unsubscribe |
 | D51.2 | Убрать из «Хочу посмотреть» | Remove from Want to watch | Отмена | Cancel |
+| D52 | QR рекламы | Ad QR |  |  |
+| D52.1 | QR рекламы | Ad QR | Закрыть | Close |
 | P01 | Подключение | Connect |  |  |
 | P01.1 | Подключение | Connect | TorrServer на телефоне | TorrServer on the phone |
 | P01.2 | Подключение | Connect | Логин и пароль | Login and password |
@@ -750,6 +753,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P11.19.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
 | P11.20 | Настройки | Settings | Размер меток (ползунок, px) | Label size (slider, px) |
 | P11.21 | Настройки | Settings | Сервер на телефоне | Server on the phone |
+| P11.22 | Настройки | Settings | Рассказать друзьям | Tell friends |
 | P12 | Аккаунт | Account |  |  |
 | P12.1 | Аккаунт | Account | Назад | Back |
 | P13 | Расширенные | Advanced |  |  |
@@ -780,6 +784,12 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P18.1 | Установка на телевизор | Install on the TV | Назад | Back |
 | P19 | Журнал | Log |  |  |
 | P19.1 | Журнал | Log | Назад | Back |
+| P19.2 | Журнал | Log | Сообщить об ошибке | Report a bug |
+| P19.3 | Журнал | Log | Поделиться журналом | Share the log |
+| P19.4 | Журнал | Log | Очистить | Clear |
+| P19.5 | Журнал | Log | Все | All |
+| P19.6 | Журнал | Log | Ошибки | Errors |
+| P19.7 | Журнал | Log | Мониторинг | Monitoring |
 | P20 | Резервная копия | Backup |  |  |
 | P20.1 | Резервная копия | Backup | Назад | Back |
 | P21 | Источники поиска | Search sources |  |  |
@@ -792,8 +802,10 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P23.1 | Сайт | Site | Назад | Back |
 | P24 | Карточка | Title |  |  |
 | P24.1 | Карточка | Title | Назад | Back |
+| P24.2 | Карточка | Title | Поделиться | Share |
 | P25 | Сезон | Season |  |  |
 | P25.1 | Сезон | Season | Назад | Back |
+| P25.2 | Сезон | Season | Поделиться | Share |
 | P26 | Сериал | Series |  |  |
 | P26.1 | Сериал | Series | Назад | Back |
 | P26.2 | Сериал | Series | Озвучка | Dub |
@@ -912,6 +924,8 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD57 | Удалить раздачу из списка | Delete a release from the list |  |  |
 | PD57.1 | Удалить раздачу из списка | Delete a release from the list | Удалить | Delete |
 | PD57.2 | Удалить раздачу из списка | Delete a release from the list | Отмена | Cancel |
+| PD58 | Поделиться | Share |  |  |
+| PD58.1 | Поделиться | Share | Поделиться | Share |
 | A01 | Нативный плеер | Native player |  |  |
 | A01.1 | Нативный плеер | Native player | Пауза | Pause |
 | A01.2 | Нативный плеер | Native player | Аудио | Audio |
@@ -952,7 +966,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 Besides the fixed codes above, test mode labels the elements of a screen: posters, cards, list rows, tabs, buttons without their own code, fields and rows. They are counted on the page in screen order, so they follow the library and are meant for a report about what is on screen now.
 
 - `S03.P#4` - the fourth poster on screen S03 (outside any row).
-- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits just above it.
+- `S03.R#2` - the second row (shelf, grid or list) on S03. Its label sits in the bottom-right corner of the row.
 - `S03.R2.P#4` - the fourth poster in that row. `S03.R2.C#4` is the fourth card in it.
 - Inside an open dialog or sheet the dialog code replaces the screen: `D12.L#3`, `PD07.B#1`. While it is open, only its elements are labelled.
 - The element labels are blue, fixed codes stay dark. A control with a fixed code (`S05.3`, `P11.19`) gets no element label.

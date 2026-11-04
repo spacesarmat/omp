@@ -35,8 +35,8 @@ object PlayerTestHud {
     private val BETA = Regex("-beta\\.[0-9]+$")
 
     /**
-     * Label text size in dp from the page's slider. The TV sends 16..36 (default 20), the phone 8..24
-     * (default 12, for the Cloudflare dialog). Test-mode labels are the one text allowed under 24 on a TV.
+     * Label text size in dp from the page's slider. The TV sends 8..36, step 2 (default 20), the phone 8..24
+     * (default 12, for the Cloudflare dialog). 8 px is 6 pt at 96 dpi. Test-mode labels are the one text allowed under 24 on a TV.
      * Missing or out of range: clamped to 8..36, nothing at all is 20.
      */
     fun sizeDp(px: Int?): Float {
@@ -66,7 +66,7 @@ object PlayerTestHud {
         }
     }
 
-    /** A code in the view's top-end corner. Touches pass through to the view. */
+    /** A code in the view's bottom-end corner. Touches pass through to the view. */
     fun pin(view: View, code: String, session: Session) {
         val d = CodeDrawable(view.context, code)
         val listener = View.OnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
@@ -79,7 +79,7 @@ object PlayerTestHud {
         session.pins.add(Pin(view, d, listener))
     }
 
-    /** The screen code, top start. A tap copies it. Not focusable, so the remote skips it. */
+    /** The screen code, bottom end. A tap copies it. Not focusable, so the remote skips it. */
     fun copyChip(ctx: Context, parent: FrameLayout, code: String, session: Session) {
         val chip = TextView(ctx)
         chip.text = code
@@ -96,10 +96,10 @@ object PlayerTestHud {
         // After the click listener: a clickable view is focusable in AUTO mode, and that would steal the D-pad.
         chip.isFocusable = false
         chip.isFocusableInTouchMode = false
-        val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
+        val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END)
         val m = dip(ctx, 16f).toInt()
-        lp.topMargin = m
-        lp.marginStart = m
+        lp.bottomMargin = m
+        lp.marginEnd = m
         parent.addView(chip, lp)
         session.copy = chip
     }
@@ -161,9 +161,9 @@ private class CodeDrawable(ctx: Context, private val text: String) : Drawable() 
         val w = paint.measureText(text)
         val h = paint.textSize
         val right = bounds.right.toFloat()
-        val top = bounds.top.toFloat()
-        canvas.drawRect(right - w - pad * 2, top, right, top + h + pad, bg)
-        canvas.drawText(text, right - w - pad, top + h, paint)
+        val bottom = bounds.bottom.toFloat()
+        canvas.drawRect(right - w - pad * 2, bottom - h - pad, right, bottom, bg)
+        canvas.drawText(text, right - w - pad, bottom - pad, paint)
     }
 
     override fun setAlpha(alpha: Int) {}

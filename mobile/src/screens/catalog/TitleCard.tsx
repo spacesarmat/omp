@@ -357,7 +357,7 @@ export function TitleCard({ kind, id }: { kind: Kind; id: number }) {
           <Icon d={BACK} />
         </button>
         {card && (
-          <button type="button" class="m-icon-btn m-glass m-tc-share" aria-label={t('share.action')} onClick={() => void sendShare(cardShare(card))}>
+          <button type="button" class="m-icon-btn m-glass m-tc-share" data-code="P24.2" aria-label={t('share.action')} onClick={() => void sendShare(cardShare(card))}>
             <Icon d={SHARE} />
           </button>
         )}

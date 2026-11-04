@@ -127,7 +127,7 @@ export function renderScreenCodesDoc(): string {
     '',
     'Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.',
     '',
-    'Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 16-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.',
+    'Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 8-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). 8 px is 6 pt at 96 dpi. On a TV the px is in the 1920x1080 layout, so the same number looks the same at 1080p and at 4K. Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.',
     '',
     '| Code | Where (ru) | Where (en) | Item (ru) | Item (en) |',
     '| --- | --- | --- | --- | --- |',

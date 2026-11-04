@@ -498,7 +498,7 @@ export function Settings() {
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-set-row m-set-row-btn tm" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
+        <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
           <span>{t('settings.tellFriends')}</span>
         </button>
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>

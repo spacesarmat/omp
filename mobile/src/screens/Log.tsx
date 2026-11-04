@@ -109,21 +109,21 @@ export function Log() {
         <h1 class="m-bar-title">{t('log.screenTitle')}</h1>
       </div>
       <p class="m-muted m-small">{t('log.keepNote')}</p>
-      <button type="button" class="m-btn m-btn-primary" onClick={() => void reportToGithub()}>
+      <button type="button" class="m-btn m-btn-primary tm" data-code="P19.2" onClick={() => void reportToGithub()}>
         {t('log.report')}
       </button>
       <p class="m-muted m-small">{t('log.reportNote')}</p>
       <div class="m-log-actions">
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => void shareLog()}>
+        <button type="button" class="m-btn m-btn-secondary tm" data-code="P19.3" onClick={() => void shareLog()}>
           {t('log.share')}
         </button>
-        <button type="button" class="m-btn m-btn-secondary" onClick={() => void clearWithConfirm()}>
+        <button type="button" class="m-btn m-btn-secondary tm" data-code="P19.4" onClick={() => void clearWithConfirm()}>
           {t('tvSettings.clear')}
         </button>
       </div>
       <div class="m-chips" role="tablist">
         {filters().map((f) => (
-          <button type="button" role="tab" aria-selected={filter === f.id} class={'m-chip' + (filter === f.id ? ' on' : '')} key={f.id} onClick={() => setFilter(f.id)}>
+          <button type="button" role="tab" aria-selected={filter === f.id} class={'m-chip tm' + (filter === f.id ? ' on' : '')} data-code={f.id === 'all' ? 'P19.5' : f.id === 'errors' ? 'P19.6' : 'P19.7'} key={f.id} onClick={() => setFilter(f.id)}>
             {f.label}
           </button>
         ))}
