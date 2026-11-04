@@ -5,6 +5,8 @@ import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
 import { t } from '../i18n';
 import { toast } from '../ui/toast';
+import { confirmDialog } from '../ui/dialog';
+import { tvGlyphs } from '../ui/tvText';
 import { torrentQuery, type CatalogTitle, type Kind } from '../catalog/tmdb';
 import { phoneLink } from '../phone/phoneStore';
 import { phoneSubRemoveQuery, phoneWantAdd } from '../phone/monitor';
@@ -81,28 +83,14 @@ export function removeWantByQuery(query: string): void {
   saveJson(WANT_KEY, wantList.value);
 }
 
-/**
- * Toggle with a toast. Adding hands the title to the phone (the same query as «Найти раздачи», plus the card so the
- * subscription keeps its poster). Removing deletes that subscription on the phone too: otherwise it stays in
- * «Подписки» and comes back on the next refresh. If the phone refuses, the title stays on this list.
- */
-export function wantAction(x: CatalogTitle): boolean {
+/** The search the phone was given for this row: the year stored with it, not the year a later card happens to show. */
+function savedQuery(saved: WantItem, x: CatalogTitle): string {
+  return wantQuery(saved) || torrentQuery(x);
+}
+
+function addWant(x: CatalogTitle): boolean {
   const on = toggleWant(x);
   const query = torrentQuery(x);
-  if (!on) {
-    if (!phoneLink.value) {
-      toast(t('tv.want.removed'));
-      return on;
-    }
-    phoneSubRemoveQuery(query).then(
-      () => toast(t('tv.want.removedPhone')),
-      () => {
-        if (!isWanted(x.kind, x.id)) toggleWant(x);
-        toast(t('tv.want.removeFailed'));
-      },
-    );
-    return on;
-  }
   const local = () => toast(t('tv.want.added') + ' ' + t('tv.want.connectPhone'));
   if (!phoneLink.value) {
     local();
@@ -123,4 +111,42 @@ export function wantAction(x: CatalogTitle): boolean {
     },
   );
   return on;
+}
+
+/**
+ * Drop the row and its phone subscription. The query is the one stored when the title was added: a film from
+ * «Скоро в цифре» has no year, and the full card later does, so the card's query would miss the subscription.
+ * Nothing changes until the phone agrees, so a failed call leaves both lists as they were.
+ */
+function dropWant(saved: WantItem, x: CatalogTitle): void {
+  const query = savedQuery(saved, x);
+  phoneSubRemoveQuery(query).then(
+    () => {
+      if (isWanted(x.kind, x.id)) toggleWant(saved);
+      toast(t('tv.want.removedPhone'));
+    },
+    () => toast(t('tv.want.removeFailed')),
+  );
+}
+
+/**
+ * Toggle with a toast. Adding hands the title to the phone (the same query as «Найти раздачи», plus the card so the
+ * subscription keeps its poster). Removing a linked phone's subscription also deletes its saved findings, so that
+ * asks first and leaves both lists alone until the answer is yes. With no phone, only this TV list changes.
+ * True when the title is on the list when this returns (a removal that is still asking counts as on the list).
+ */
+export function wantAction(x: CatalogTitle): boolean {
+  const saved = wantList.value.filter((w) => w.kind === x.kind && w.id === x.id)[0];
+  if (!saved) return addWant(x);
+  if (!phoneLink.value) {
+    toggleWant(x);
+    toast(t('tv.want.removed'));
+    return false;
+  }
+  const name = tvGlyphs(saved.title || x.title || x.original);
+  confirmDialog(t('tv.want.removeAsk', { name: name }), t('tv.want.removeConfirm'), 'want-remove').then((ok) => {
+    if (!ok || !isWanted(x.kind, x.id)) return;
+    dropWant(saved, x);
+  });
+  return true;
 }

@@ -1421,6 +1421,8 @@ export const en: EnDict<typeof ru> = {
       addedPhone: 'Added to Want to watch - OMP on the phone will report releases',
       connectPhone: 'Connect a phone to get reports about releases',
       removed: 'Removed from Want to watch.',
+      removeAsk: 'Remove "{name}" from Want to watch? The phone subscription and its saved findings will be deleted too.',
+      removeConfirm: 'Remove and unsubscribe',
       removedPhone: 'Removed from Want to watch and from subscriptions on the phone.',
       removeFailed: 'Could not remove the subscription on the phone. The title stays in Want to watch.',
     },

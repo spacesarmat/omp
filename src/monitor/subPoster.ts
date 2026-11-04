@@ -11,6 +11,7 @@ import {
   getSubscription,
   loadSubs,
   needsSubPoster,
+  sameQuery,
   setSubscriptionAddedHook,
   setSubscriptionPoster,
   subscriptionPoster,
@@ -118,6 +119,16 @@ export function lookupSubPoster(sub: Subscription): Promise<{ poster: string } |
   );
 }
 
+/** The lookup was for this title. An edit (a new query, or another card) must not keep this answer. */
+function samePosterSubject(a: Subscription, b: Subscription): boolean {
+  if (!sameQuery(a.query, b.query)) return false;
+  const ac = a.catalog;
+  const bc = b.catalog;
+  if (!ac && !bc) return true;
+  if (!ac || !bc) return false;
+  return ac.kind === bc.kind && ac.id === bc.id;
+}
+
 function pump(): void {
   if (!lookup) return;
   while (active < MAX_RUNNING && waiting.length) {
@@ -128,21 +139,28 @@ function pump(): void {
     running[current.id] = true;
     active++;
     const id = current.id;
+    const subject = current;
     const ask = lookup;
     let p: Promise<{ poster: string } | null>;
     try {
-      p = ask(current);
+      p = ask(subject);
     } catch (e) {
       p = Promise.reject(e);
     }
     const finish = (hit: { poster: string } | null) => {
       delete running[id];
       active--;
-      if (hit) {
-        const prev = getSubscription(id);
+      const now = getSubscription(id);
+      // the person edited the subscription while TMDB was answering: drop that answer and look up the new title
+      if (now && !samePosterSubject(subject, now)) {
+        if (needsSubPoster(now)) queueSubPoster(now);
+        else pump();
+        return;
+      }
+      if (hit && now) {
         const saved = setSubscriptionPoster(id, hit.poster);
-        if (prev && saved && onChanged) {
-          const changed = subscriptionPoster(saved) !== subscriptionPoster(prev) || saved.noPoster !== prev.noPoster;
+        if (saved && onChanged) {
+          const changed = subscriptionPoster(saved) !== subscriptionPoster(now) || saved.noPoster !== now.noPoster;
           if (changed) onChanged();
         }
       }

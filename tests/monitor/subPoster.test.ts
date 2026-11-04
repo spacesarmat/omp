@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { addSubscription, loadSubs, removeSubscription, saveSubs } from '../../src/monitor/subs';
+import { addSubscription, loadSubs, removeSubscription, saveSubs, updateSubscription } from '../../src/monitor/subs';
 import { backfillSubPosters, installSubPosters, lookupSubPosterWith, queueSubPoster } from '../../src/monitor/subPoster';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
 import type { Subscription } from '../../src/monitor/types';
@@ -125,6 +125,43 @@ describe('poster backfill', () => {
     expect(ask).not.toHaveBeenCalled();
     expect(loadSubs()[0].catalog!.poster).toBe('https://img.test/card.jpg');
     expect(loadSubs()[0].poster).toBeUndefined();
+  });
+
+  it('a lookup that finishes after the query changes does not keep the old poster', async () => {
+    let go: (v: { poster: string }) => void = () => undefined;
+    const seen: string[] = [];
+    installSubPosters((s) => {
+      seen.push(s.query);
+      if (s.query === 'Другой') return Promise.resolve({ poster: 'https://img.test/new.jpg' });
+      return new Promise((resolve) => {
+        go = resolve;
+      });
+    });
+    const s = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true }, 1)!;
+    updateSubscription(s.id, { query: 'Другой' });
+    go({ poster: 'https://img.test/old.jpg' });
+    await flush();
+    const stored = loadSubs()[0];
+    expect(stored.query).toBe('Другой');
+    expect(stored.poster).toBe('https://img.test/new.jpg');
+    expect(stored.noPoster).toBeUndefined();
+    expect(seen).toContain('Другой');
+  });
+
+  it('an empty answer for the old query does not mark the edited title as having no poster', async () => {
+    let go: (v: { poster: string }) => void = () => undefined;
+    installSubPosters((s) => {
+      if (s.query === 'Другой') return Promise.resolve({ poster: 'https://img.test/new.jpg' });
+      return new Promise((resolve) => {
+        go = resolve;
+      });
+    });
+    const s = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true }, 1)!;
+    updateSubscription(s.id, { query: 'Другой' });
+    go({ poster: '' });
+    await flush();
+    expect(loadSubs()[0].poster).toBe('https://img.test/new.jpg');
+    expect(loadSubs()[0].noPoster).toBeUndefined();
   });
 
   it('a subscription removed while the lookup runs is not written back', async () => {
