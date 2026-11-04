@@ -165,6 +165,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P11.19', 'Режим тестирования', 'Test mode', onOff('P11.19')),
       it('P11.20', 'Размер меток (ползунок, px)', 'Label size (slider, px)'),
       it('P11.21', 'Сервер на телефоне', 'Server on the phone'),
+      it('P11.22', 'Рассказать друзьям', 'Tell friends'),
     ],
   },
   { key: 'phone:account', code: 'P12', ru: 'Аккаунт', en: 'Account', items: [it('P12.1', 'Назад', 'Back')] },
@@ -204,7 +205,21 @@ export const PHONE_SCREENS: ExtraScreen[] = [
   { key: 'phone:localServer', code: 'P16', ru: 'TorrServer на телефоне', en: 'TorrServer on the phone', items: [it('P16.1', 'Назад', 'Back')] },
   { key: 'phone:faq', code: 'P17', ru: 'Помощь', en: 'Help', items: [it('P17.1', 'Назад', 'Back')] },
   { key: 'phone:install', code: 'P18', ru: 'Установка на телевизор', en: 'Install on the TV', items: [it('P18.1', 'Назад', 'Back')] },
-  { key: 'phone:log', code: 'P19', ru: 'Журнал', en: 'Log', items: [it('P19.1', 'Назад', 'Back')] },
+  {
+    key: 'phone:log',
+    code: 'P19',
+    ru: 'Журнал',
+    en: 'Log',
+    items: [
+      it('P19.1', 'Назад', 'Back'),
+      it('P19.2', 'Сообщить об ошибке', 'Report a bug'),
+      it('P19.3', 'Поделиться журналом', 'Share the log'),
+      it('P19.4', 'Очистить', 'Clear'),
+      it('P19.5', 'Все', 'All'),
+      it('P19.6', 'Ошибки', 'Errors'),
+      it('P19.7', 'Мониторинг', 'Monitoring'),
+    ],
+  },
   { key: 'phone:backup', code: 'P20', ru: 'Резервная копия', en: 'Backup', items: [it('P20.1', 'Назад', 'Back')] },
   {
     key: 'phone:sources',
@@ -219,8 +234,8 @@ export const PHONE_SCREENS: ExtraScreen[] = [
   },
   { key: 'phone:flaresolverr', code: 'P22', ru: 'FlareSolverr', en: 'FlareSolverr', items: [it('P22.1', 'Назад', 'Back')] },
   { key: 'phone:sourceSite', code: 'P23', ru: 'Сайт', en: 'Site', items: [it('P23.1', 'Назад', 'Back')] },
-  { key: 'phone:title', code: 'P24', ru: 'Карточка', en: 'Title', items: [it('P24.1', 'Назад', 'Back')] },
-  { key: 'phone:seasonCard', code: 'P25', ru: 'Сезон', en: 'Season', items: [it('P25.1', 'Назад', 'Back')] },
+  { key: 'phone:title', code: 'P24', ru: 'Карточка', en: 'Title', items: [it('P24.1', 'Назад', 'Back'), it('P24.2', 'Поделиться', 'Share')] },
+  { key: 'phone:seasonCard', code: 'P25', ru: 'Сезон', en: 'Season', items: [it('P25.1', 'Назад', 'Back'), it('P25.2', 'Поделиться', 'Share')] },
   {
     key: 'phone:series',
     code: 'P26',
@@ -359,6 +374,7 @@ export const PHONE_DIALOGS: ExtraDialog[] = [
   { code: 'PD55', id: 'p-releases', ru: 'Другая раздача', en: 'Another release', items: [it('PD55.1', 'Найти другую раздачу', 'Find another release'), it('PD55.2', 'Удалить раздачу', 'Delete the release')] },
   { code: 'PD56', id: 'p-poster-change', ru: 'Сменить постер', en: 'Change poster', items: [] },
   confirm('PD57', 'p-confirm-release-delete', 'Удалить раздачу из списка', 'Delete a release from the list', 'Удалить', 'Delete'),
+  { code: 'PD58', id: 'p-share', ru: 'Поделиться', en: 'Share', items: [it('PD58.1', 'Поделиться', 'Share')] },
 ];
 
 /** Native Android TV player (PlayerActivity). The shared web UI on the box stays on S / D. */

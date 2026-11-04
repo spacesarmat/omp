@@ -91,8 +91,8 @@ describe('element codes', () => {
     expect(layer.children.length).toBe(1);
     const label = layer.children[0] as HTMLElement;
     expect(label.textContent).toBe('S01.P#1');
-    expect(label.style.left).toBe('100px');
-    expect(label.style.top).toBe('200px');
+    expect(label.style.left).toBe('250px');
+    expect(label.style.top).toBe('425px');
     expect(label.className).toBe('test-el');
   });
 
@@ -126,7 +126,8 @@ describe('element codes', () => {
       paintElementLabels(layer, false);
       const label = layer.querySelector('.test-el') as HTMLElement;
       expect(label.textContent).toBe('S03.C#1');
-      expect(label.style.left).toBe('1420px');
+      expect(label.style.left).toBe('1380px');
+      expect(label.style.top).toBe('428px');
       const left = parseInt(label.style.left, 10);
       const top = parseInt(label.style.top, 10);
       expect(left).toBeGreaterThanOrEqual(0);
@@ -177,10 +178,10 @@ describe('element codes', () => {
   });
 
   it('clamps the px to the TV and phone ranges and steps', () => {
-    expect(TV_LABEL_PX).toEqual({ min: 16, max: 36, step: 2, def: 20 });
+    expect(TV_LABEL_PX).toEqual({ min: 8, max: 36, step: 2, def: 20 });
     expect(PHONE_LABEL_PX).toEqual({ min: 8, max: 24, step: 1, def: 12 });
     expect(clampLabelPx(21, TV_LABEL_PX)).toBe(22);
-    expect(clampLabelPx(4, TV_LABEL_PX)).toBe(16);
+    expect(clampLabelPx(4, TV_LABEL_PX)).toBe(8);
     expect(clampLabelPx(99, TV_LABEL_PX)).toBe(36);
     expect(clampLabelPx('big', TV_LABEL_PX)).toBe(20);
     expect(clampLabelPx(7, PHONE_LABEL_PX)).toBe(8);
@@ -204,7 +205,7 @@ describe('label size slider on a beta build', () => {
     expect(settings.value.testLabelPx).toBe(22);
     act(() => { updateSettings({ testLabelPx: 36 }); });
     act(() => { (host.querySelector('[data-fk="set-test-size"]') as HTMLElement).click(); });
-    expect(settings.value.testLabelPx).toBe(16);
+    expect(settings.value.testLabelPx).toBe(8);
     act(() => { updateSettings({ testMode: true }); });
     const badge = host.querySelector('[data-fk="set-test-size"] .test-badge');
     expect(badge && badge.textContent).toBe('S05.30');
@@ -228,9 +229,11 @@ describe('label size slider on a beta build', () => {
     await press('ArrowLeft');
     expect(settings.value.testLabelPx).toBe(18);
     expect(getCurrentFocusKey()).toBe('set-test-size');
-    act(() => { updateSettings({ testLabelPx: 16 }); });
+    act(() => { updateSettings({ testLabelPx: 10 }); });
     await press('ArrowLeft');
-    expect(settings.value.testLabelPx).toBe(16);
+    expect(settings.value.testLabelPx).toBe(8);
+    await press('ArrowLeft');
+    expect(settings.value.testLabelPx).toBe(8);
     act(() => { updateSettings({ testLabelPx: 36 }); });
     await press('ArrowRight');
     expect(settings.value.testLabelPx).toBe(36);
@@ -309,11 +312,10 @@ describe('phone labels in landscape (S21, 1024x461)', () => {
         const span = Array.from(layer.children).find((c) => c.textContent === code) as HTMLElement | undefined;
         return span ? span.style.left + ',' + span.style.top : 'none';
       };
-      // above the chips' left end sits the «Все» badge: the row label moves above the row's right end
-      expect(at('P02.R#1')).toBe('882px,111px');
-      // free space above the shelf: the label stays above its left end, the poster label on the poster
-      expect(at('P02.R#2')).toBe('52px,234px');
-      expect(at('P02.R2.P#1')).toBe('60px,258px');
+      // bottom-right of the chips row, of the shelf, and of the poster
+      expect(at('P02.R#1')).toBe('882px,151px');
+      expect(at('P02.R#2')).toBe('882px,354px');
+      expect(at('P02.R2.P#1')).toBe('60px,332px');
       // the third row and its poster are under the tab bar: no label over «Каталог»
       expect(at('P02.R#3')).toBe('none');
       expect(at('P02.R3.P#1')).toBe('none');
@@ -349,31 +351,30 @@ describe('phone labels in landscape (S21, 1024x461)', () => {
         const span = Array.from(layer.children).find((c) => c.textContent === code) as HTMLElement | undefined;
         return span ? span.style.left + ',' + span.style.top : 'none';
       };
-      expect(at('PD21.R#1')).toBe('16px,184px');
-      expect(at('PD21.R1.L#1')).toBe('16px,200px');
+      expect(at('PD21.R#1')).toBe('946px,424px');
+      expect(at('PD21.R1.L#1')).toBe('946px,244px');
     } finally {
       hh.mockRestore();
       ww.mockRestore();
     }
   });
 
-  it('places a row label in the first free spot and drops it with none', () => {
+  it('puts a row label in the bottom-right corner even when controls sit on the row', () => {
     const row = { b: box(50, 100, 950, 140), place: 'above', w: 60, inChrome: -1 };
-    expect(placePhoneLabels([row], 16, view, [], [])).toEqual([{ x: 50, y: 84 }]);
-    // a control above the left end, then above the right end too: inside the row's top right corner
+    expect(placePhoneLabels([row], 16, view, [], [])).toEqual([{ x: 890, y: 124 }]);
     const leftBadge = box(50, 90, 110, 140);
     const rightBtn = box(880, 70, 950, 99);
-    expect(placePhoneLabels([row], 16, view, [], [leftBadge])).toEqual([{ x: 890, y: 84 }]);
-    expect(placePhoneLabels([row], 16, view, [], [leftBadge, box(880, 70, 950, 90)])).toEqual([{ x: 890, y: 100 }]);
-    expect(placePhoneLabels([row], 16, view, [], [leftBadge, rightBtn, box(50, 100, 950, 140)])).toEqual([null]);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge])).toEqual([{ x: 890, y: 124 }]);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge, box(880, 70, 950, 90)])).toEqual([{ x: 890, y: 124 }]);
+    expect(placePhoneLabels([row], 16, view, [], [leftBadge, rightBtn, box(50, 100, 950, 140)])).toEqual([{ x: 890, y: 124 }]);
   });
 
   it('never paints over the chrome unless the element is in it; edge posters are pulled into the screen', () => {
     const nav = box(0, 404, 1024, 461);
     const poster = { b: box(60, 400, 120, 490), place: 'top', w: 70, inChrome: -1 };
     expect(placePhoneLabels([poster], 16, view, [nav], [])).toEqual([null]);
-    expect(placePhoneLabels([{ ...poster, inChrome: 0 }], 16, view, [nav], [])).toEqual([{ x: 60, y: 400 }]);
+    expect(placePhoneLabels([{ ...poster, inChrome: 0 }], 16, view, [nav], [])).toEqual([{ x: 50, y: 445 }]);
     const cut = { b: box(-30, 200, 30, 290), place: 'top', w: 70, inChrome: -1 };
-    expect(placePhoneLabels([cut], 16, view, [nav], [])).toEqual([{ x: 0, y: 200 }]);
+    expect(placePhoneLabels([cut], 16, view, [nav], [])).toEqual([{ x: 0, y: 274 }]);
   });
 });

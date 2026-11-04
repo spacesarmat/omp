@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Test-mode labels sit in the bottom-right corner of the control, so a card edge no longer clips them. On the TV and in the native player the size slider is 8-36 px, step 2, default 20. 8 px is 6 pt. On the phone it stays 8-24 px, step 1, default 12: that minimum was already 6 pt. On a TV the number is in the 1920x1080 layout, so 1080p and 4K show the same size
+- After a paid search is refused (the subscription has ended, or the device is over the limit), ads and the monitoring cap turn on at once, without waiting for the account screen to open again. A source that is switched off does not clear the subscription
 - [tv] On a release card with no poster, Up from the cast row reaches the buttons when they wrap onto two rows and the page is scrolled down
 - [tv] On the season page, moving focus onto a season chip does not switch the season. OK switches it
 - The player title of a release added by a magnet link with no display name is the name from the files, from the first episode

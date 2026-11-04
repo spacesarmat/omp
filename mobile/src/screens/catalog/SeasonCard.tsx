@@ -178,6 +178,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
           <button
             type="button"
             class="m-icon-btn m-glass m-season-share"
+            data-code="P25.2"
             aria-label={t('share.action')}
             onClick={() => void sendShare(seasonShare(view.card, season, view.meta))}
           >

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
+import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { billingSession, deviceId, saveBillingSession, seenAccount } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
@@ -296,6 +297,44 @@ describe('omp Jackett source', () => {
     await refreshOmpJackettSources(down.ctx);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
     await expect(fetchBillingAccount(offline.ctx)).rejects.toThrow('Сервер подписки не отвечает');
+  });
+
+  it('a denied search clears the cached subscription and the paid sources', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const expired = fakeSite((c) => page(JSON.stringify({ error: 'expired' }), c.url, 403));
+    await expect(ompJackettSource().search('q', expired.ctx)).rejects.toThrow('Подписка закончилась');
+    expect(ompSubscribed(1e12)).toBe(false);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const limit = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 403));
+    await expect(ompJacredSource().search('q', limit.ctx)).rejects.toThrow('Доп. устройство не продлено');
+    expect(ompSubscribed(1e12)).toBe(false);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('an indexer that is switched off does not clear the subscription', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: false });
+    const site = fakeSite((c) => page(JSON.stringify({ error: 'disabled' }), c.url, 403));
+    await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Этот источник временно выключен');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('logout drops the cached subscription flag', () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    expect(ompSubscribed(1e12)).toBe(true);
+    clearBilling();
+    expect(ompSubscribed(1e12)).toBe(false);
+    expect(billingSession()).toBeNull();
   });
 
   it('turns paid sources off only after the account says so', async () => {

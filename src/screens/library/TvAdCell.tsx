@@ -7,6 +7,7 @@ import type { ComponentChildren } from 'preact';
 import { t } from '../../i18n';
 import type { AdBanner } from '../../ads/ads';
 import { Focusable, Button, FocusGroup } from '../../ui/components';
+import { DialogBadge } from '../../testmode/badge';
 import { Qr } from '../../ui/Qr';
 import { useKeys } from '../../ui/keys';
 
@@ -42,6 +43,7 @@ export function AdQrHost() {
   return (
     <div class="dialog-backdrop ad-qr-back">
       <FocusGroup focusKey="AD-QR" className="dialog ad-qr-card" boundary autoFocus preferredChildFocusKey="ad-qr-close">
+        <DialogBadge id="ad-qr" />
         <Qr text={b.url} size={280} />
         <div class="ad-qr-copy">
           <div class="ad-label">{t('ads.label')}</div>

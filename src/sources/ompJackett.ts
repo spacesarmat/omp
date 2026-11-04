@@ -236,6 +236,20 @@ function magnetOf(text: string): string {
   }
 }
 
+/**
+ * A 403 that means this device has no subscription access. Ads and the monitoring cap read the cached
+ * flag, so the denial has to clear it now instead of waiting for the next /v1/me. `disabled` is an
+ * indexer switch, not an ended subscription, and a 502 is the indexer, not the account.
+ */
+function noteAccessDenied(status: number, text: string): void {
+  if (status !== 403 || !billingSession()) return;
+  const code = errorOf(text);
+  if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
+  saveBillingAccess({ active: false, accessUntil: 0 });
+  syncOmpJackett({ jackett: false, jacred: false });
+  emitBillingChange();
+}
+
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
   const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
   if (cat) body.cat = cat;
@@ -243,6 +257,7 @@ function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, qu
     (res) => {
       const type = (res.text || '').trim();
       if (res.status === 429) throw billingError(res.status, res.text);
+      if (res.status === 403) noteAccessDenied(res.status, res.text);
       if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       if (type.charAt(0) === '{') throw billingError(res.status, res.text);
@@ -278,6 +293,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
           if (res.status === 502 && upstream.error === 'upstream') {
             throw new Error(t('torrent.better.failLink', { site: name }));
           }
+          if (res.status === 403) noteAccessDenied(res.status, res.text);
           if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
             throw billingError(res.status, res.text);
           }

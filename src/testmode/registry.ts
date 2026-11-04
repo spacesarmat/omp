@@ -363,6 +363,7 @@ addScreen('S04', ['series'], 'Сериал', 'Series', [
   item('S04.4', ['series-follow'], 'Следить за сериями', 'Follow episodes'),
   item('S04.5', ['series-dub'], 'Озвучка', 'Dub'),
   item('S04.6', ['series-find'], 'Найти раздачи', 'Find releases'),
+  item('S04.7', ['series-dead-find'], 'Найти другую', 'Find another'),
 ]);
 
 addScreen('S05', ['settings'], 'Настройки', 'Settings', [
@@ -712,6 +713,9 @@ addDialog('D47', 'server-history', 'История серверов', 'Server hi
 addDialog('D48', 'poster-query', 'Поиск постера', 'Poster search', textItems('D48', 'Найти', 'Search'));
 addDialog('D49', 'poster-url', 'Ссылка на постер', 'Poster link', textItems('D49', 'Сохранить', 'Save'));
 addDialog('D50', 'series-release-delete', 'Удалить раздачу сезона', 'Delete a release of the season', confirmItems('D50', 'Удалить', 'Delete'));
+addDialog('D51', 'ad-qr', 'QR рекламы', 'Ad QR', [
+  item('D51.1', ['ad-qr-close'], 'Закрыть', 'Close'),
+]);
 
 export function dialogs(): DialogDef[] {
   return DIALOGS;
