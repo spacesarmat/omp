@@ -459,7 +459,7 @@ function timeLeft(until) {
 /**
  * Search each configured Jackett indexer on its own and drop the ones that fail or time out.
  * The configured list comes from `/api/v2.0/indexers?configured=true`, then the Torznab catalog.
- * @returns {Promise<{ ok: boolean, xml: string, timedOut: string[] }>}
+ * @returns {Promise<{ ok: boolean, xml: string, timedOut: string[], indexers: { ok: number, failed: number, timedOut: number } }>}
  */
 export async function searchJackett(opts) {
   const o = opts || {};
@@ -475,7 +475,7 @@ export async function searchJackett(opts) {
     positiveInt(o.deadlineMs, jackettSearchDeadlineMs()),
     positiveInt(o.indexerTimeoutMs, jackettIndexerTimeoutMs()),
   );
-  if (!origin || !apiKey) return { ok: false, xml: '', timedOut: [] };
+  if (!origin || !apiKey) return { ok: false, xml: '', timedOut: [], indexers: emptyIndexerCounts() };
 
   const started = Date.now();
   const deadlineAt = started + limits.deadlineMs;
@@ -523,8 +523,8 @@ export async function searchJackett(opts) {
   } catch (e) {
     ids = null;
   }
-  if (!ids) return { ok: false, xml: '', timedOut: [] };
-  if (!ids.length) return { ok: true, xml: EMPTY_TORZNAB, timedOut: [] };
+  if (!ids) return { ok: false, xml: '', timedOut: [], indexers: emptyIndexerCounts() };
+  if (!ids.length) return { ok: true, xml: EMPTY_TORZNAB, timedOut: [], indexers: emptyIndexerCounts() };
 
   const rows = await Promise.all(
     ids.map(async (id) => {
@@ -549,8 +549,25 @@ export async function searchJackett(opts) {
     else if (rows[i].feed) feeds.push(rows[i].feed);
   }
   const logged = report(timedOut);
-  if (!feeds.length) return { ok: false, xml: '', timedOut: logged };
-  return { ok: true, xml: mergeTorznabFeeds(feeds), timedOut: logged };
+  const indexers = countIndexers(rows);
+  if (!feeds.length) return { ok: false, xml: '', timedOut: logged, indexers };
+  return { ok: true, xml: mergeTorznabFeeds(feeds), timedOut: logged, indexers };
+}
+
+function emptyIndexerCounts() {
+  return { ok: 0, failed: 0, timedOut: 0 };
+}
+
+/** Per-indexer outcome of one Jackett search. A bad feed is failed, not timed out. */
+function countIndexers(rows) {
+  const indexers = emptyIndexerCounts();
+  const list = rows || [];
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].timedOut) indexers.timedOut += 1;
+    else if (list[i].feed) indexers.ok += 1;
+    else indexers.failed += 1;
+  }
+  return indexers;
 }
 
 /**

@@ -86,7 +86,7 @@ import {
 } from './botPoll.mjs';
 import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
-import { codeHash, normalizeCode, randomId } from './crypto.mjs';
+import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { goPage } from './go.mjs';
 import {
   confirmPendingPayment,
@@ -337,6 +337,124 @@ function send(res, status, body, headers) {
 
 function json(res, status, value) {
   send(res, status, JSON.stringify(value), { 'content-type': 'application/json; charset=utf-8' });
+}
+
+/** First 8 hex chars of sha256(device id). Empty id stays "-". The id itself is never logged. */
+export function deviceLogId(deviceId) {
+  const id = String(deviceId == null ? '' : deviceId);
+  if (!id) return '-';
+  return sha256(id).slice(0, 8);
+}
+
+function searchCount(value, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return '0';
+  return String(Math.min(max, Math.floor(n)));
+}
+
+function indexerLogCount(indexers, key) {
+  if (!indexers) return '-';
+  const n = Number(indexers[key]);
+  if (!Number.isFinite(n) || n < 0) return '-';
+  return String(Math.min(1000, Math.floor(n)));
+}
+
+/**
+ * One stderr line for a finished POST /v1/search.
+ * Only numbers and fixed tokens: no query text, device id, token, key, or address.
+ */
+export function formatSearchLog(row) {
+  const r = row || {};
+  const at =
+    typeof r.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ? r.at : new Date().toISOString();
+  const source = r.source === 'jacred' || r.source === 'jackett' ? r.source : '-';
+  const device = typeof r.device === 'string' && /^[0-9a-f]{8}$/.test(r.device) ? r.device : '-';
+  return (
+    'search route=/v1/search' +
+    ' at=' +
+    at +
+    ' source=' +
+    source +
+    ' status=' +
+    searchCount(r.status, 599) +
+    ' ms=' +
+    searchCount(r.ms, 86400000) +
+    ' results=' +
+    searchCount(r.results, 1000000) +
+    ' indexers_ok=' +
+    indexerLogCount(r.indexers, 'ok') +
+    ' indexers_fail=' +
+    indexerLogCount(r.indexers, 'failed') +
+    ' indexers_timeout=' +
+    indexerLogCount(r.indexers, 'timedOut') +
+    ' abort=' +
+    (r.abort ? '1' : '0') +
+    ' device=' +
+    device +
+    ' qlen=' +
+    searchCount(r.qlen, 1000000) +
+    '\n'
+  );
+}
+
+function torznabItemCount(xml) {
+  const found = String(xml || '').match(/<item\b/gi);
+  return found ? found.length : 0;
+}
+
+/**
+ * One search log, on `res` 'finish' or 'close', whichever comes first.
+ * `close` before 'finish' is abort=1 (the body can still be buffered after end()).
+ * A test double with no events is logged when the handler arms the line.
+ * `req` 'close' after a finished body is not a drop: the socket is still open.
+ */
+function attachSearchLog(req, res) {
+  const hasResEvents = !!(res && typeof res.on === 'function');
+  let armed = false;
+  let wrote = false;
+  let seenFinish = false;
+  let closedBeforeFinish = false;
+  let reqDropped = false;
+  let emit = null;
+  const noteReq = () => {
+    if (req && req.aborted) reqDropped = true;
+    const socket = req && req.socket;
+    if (socket && socket.destroyed && res && !res.writableFinished && !seenFinish) reqDropped = true;
+  };
+  const flush = () => {
+    if (wrote || !armed || !emit) return;
+    if (!hasResEvents) {
+      wrote = true;
+      emit(reqDropped);
+      return;
+    }
+    if (!seenFinish && !closedBeforeFinish) return;
+    wrote = true;
+    emit(closedBeforeFinish || reqDropped);
+  };
+  if (req && typeof req.on === 'function') {
+    req.on('aborted', () => {
+      reqDropped = true;
+    });
+    req.on('close', noteReq);
+  }
+  if (hasResEvents) {
+    res.on('finish', () => {
+      seenFinish = true;
+      flush();
+    });
+    res.on('close', () => {
+      if (!seenFinish) closedBeforeFinish = true;
+      flush();
+    });
+  }
+  return {
+    arm(fn) {
+      emit = fn;
+      armed = true;
+      flush();
+    },
+  };
 }
 
 function headerValue(res, name) {
@@ -1678,62 +1796,97 @@ export function createApp(file, fetchImpl, opts) {
         });
       }
       if (req.method === 'POST' && path === '/v1/search') {
-        const body = await readBody(req);
-        const deviceId = req.headers['x-device-id'] || body.deviceId;
-        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = (await store.read());
-        const now = Date.now();
-        const caller = await deviceCaller(state, token, deviceId, now);
-        if (caller && caller.error) return json(res, 401, { error: caller.error });
-        const session = caller ? codeAccess(state, caller.code, now) : null;
-        if (!session) return json(res, 403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
-        await noteSeen(caller.rowId, clientIp(req), false);
-        const source = body.source === 'jacred' ? 'jacred' : 'jackett';
-        if (!sourceEnabled(state.settings, source)) return json(res, 403, { error: 'disabled' });
-        const rateKey = String(deviceId || token || '').slice(0, 64);
-        if (!searchRate.allow(rateKey)) return json(res, 429, { error: 'rate' });
-        const indexer = indexerOf(state.settings, source);
-        if (!indexer.url || !indexer.key) return json(res, 403, { error: 'disabled' });
-        const q = String(body.q || '');
-        const cat = safeTorznabCat(body.cat);
-        const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
-        const cached = searchCache.get(cacheKey);
-        if (cached !== null) {
-          return send(res, 200, cached, { 'content-type': 'application/xml; charset=utf-8' });
-        }
-        const headers = {};
-        const auth = basicAuthHeader(state.settings);
-        if (auth) headers.Authorization = auth;
-        // One slow indexer on /indexers/all/results used to run past the phone's 25s limit.
-        // Jackett is queried per configured indexer; JacRed stays on the aggregate route.
-        if (source === 'jackett') {
-          const found = await searchJackett({
+        const started = Date.now();
+        const searchLog = attachSearchLog(req, res);
+        const row = { source: '-', status: 0, results: 0, indexers: null, device: '-', qlen: 0 };
+        const replyJson = (status, value) => {
+          row.status = status;
+          return json(res, status, value);
+        };
+        const replyXml = (xml) => {
+          row.status = 200;
+          row.results = torznabItemCount(xml);
+          return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
+        };
+        try {
+          const body = await readBody(req);
+          const deviceId = req.headers['x-device-id'] || (body && body.deviceId);
+          const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+          row.device = deviceLogId(deviceId);
+          row.qlen = String((body && body.q) || '').length;
+          row.source = body && body.source === 'jacred' ? 'jacred' : 'jackett';
+          const state = (await store.read());
+          const now = Date.now();
+          const caller = await deviceCaller(state, token, deviceId, now);
+          if (caller && caller.error) return replyJson(401, { error: caller.error });
+          const session = caller ? codeAccess(state, caller.code, now) : null;
+          if (!session) return replyJson(403, { error: caller ? denyReason(state, caller.code, now, caller.legacy) : 'expired' });
+          await noteSeen(caller.rowId, clientIp(req), false);
+          const source = row.source;
+          if (!sourceEnabled(state.settings, source)) return replyJson(403, { error: 'disabled' });
+          const rateKey = String(deviceId || token || '').slice(0, 64);
+          if (!searchRate.allow(rateKey)) return replyJson(429, { error: 'rate' });
+          const indexer = indexerOf(state.settings, source);
+          if (!indexer.url || !indexer.key) return replyJson(403, { error: 'disabled' });
+          const q = String((body && body.q) || '');
+          const cat = safeTorznabCat(body && body.cat);
+          const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
+          const cached = searchCache.get(cacheKey);
+          if (cached !== null) return replyXml(cached);
+          const headers = {};
+          const auth = basicAuthHeader(state.settings);
+          if (auth) headers.Authorization = auth;
+          // One slow indexer on /indexers/all/results used to run past the phone's 25s limit.
+          // Jackett is queried per configured indexer; JacRed stays on the aggregate route.
+          if (source === 'jackett') {
+            const found = await searchJackett({
+              origin: indexer.url,
+              apiKey: indexer.key,
+              query: q,
+              cat,
+              headers,
+              fetchImpl: net,
+              indexerTimeoutMs: jackettIndexerTimeoutMs(),
+              deadlineMs: jackettSearchDeadlineMs(),
+            });
+            row.indexers = found.indexers || null;
+            if (!found.ok) return replyJson(502, { error: 'down' });
+            const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
+            searchCache.set(cacheKey, xml);
+            return replyXml(xml);
+          }
+          const found = await searchJacRed({
             origin: indexer.url,
             apiKey: indexer.key,
             query: q,
             cat,
             headers,
             fetchImpl: net,
-            indexerTimeoutMs: jackettIndexerTimeoutMs(),
-            deadlineMs: jackettSearchDeadlineMs(),
           });
-          if (!found.ok) return json(res, 502, { error: 'down' });
+          if (!found.ok) return replyJson(502, { error: 'down' });
           const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
           searchCache.set(cacheKey, xml);
-          return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
+          return replyXml(xml);
+        } catch (e) {
+          if (!row.status) row.status = 500;
+          throw e;
+        } finally {
+          searchLog.arm((abort) => {
+            process.stderr.write(
+              formatSearchLog({
+                at: new Date().toISOString(),
+                source: row.source,
+                status: row.status,
+                ms: Date.now() - started,
+                results: row.results,
+                indexers: row.indexers,
+                abort,
+                device: row.device,
+                qlen: row.qlen,
+              }),
+            );
+          });
         }
-        const found = await searchJacRed({
-          origin: indexer.url,
-          apiKey: indexer.key,
-          query: q,
-          cat,
-          headers,
-          fetchImpl: net,
-        });
-        if (!found.ok) return json(res, 502, { error: 'down' });
-        const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
-        searchCache.set(cacheKey, xml);
-        return send(res, 200, xml, { 'content-type': 'application/xml; charset=utf-8' });
       }
       if (req.method === 'POST' && path === '/v1/torrent') {
         const body = await readBody(req);
