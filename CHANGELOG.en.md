@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.4
 
 - The built-in TorrServer is updated to MatriX.148
 - [phone] On New, Subscriptions, the card and Delete are one card. A swipe right checks that subscription now, with progress and a result. A swipe left deletes it after confirmation. Delete inside the card asks too. A short swipe snaps the card back, and a vertical move still scrolls the list
