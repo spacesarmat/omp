@@ -403,34 +403,56 @@ function torznabItemCount(xml) {
 }
 
 /**
- * Client gone before the response was finished.
- * `req` 'close' also fires when the body has been read and the socket is still
- * open, so that event counts only with `aborted` or a dead socket.
- * A phone that sent the body and then gave up is `res` 'close' before 'finish'.
+ * One search log, on `res` 'finish' or 'close', whichever comes first.
+ * `close` before 'finish' is abort=1 (the body can still be buffered after end()).
+ * A test double with no events is logged when the handler arms the line.
+ * `req` 'close' after a finished body is not a drop: the socket is still open.
  */
-function watchSearchClient(req, res) {
-  let dropped = false;
-  const onAborted = () => {
-    dropped = true;
-  };
-  const onReqClose = () => {
-    if (req && req.aborted) dropped = true;
+function attachSearchLog(req, res) {
+  const hasResEvents = !!(res && typeof res.on === 'function');
+  let armed = false;
+  let wrote = false;
+  let seenFinish = false;
+  let closedBeforeFinish = false;
+  let reqDropped = false;
+  let emit = null;
+  const noteReq = () => {
+    if (req && req.aborted) reqDropped = true;
     const socket = req && req.socket;
-    if (socket && socket.destroyed && res && !res.writableFinished) dropped = true;
+    if (socket && socket.destroyed && res && !res.writableFinished && !seenFinish) reqDropped = true;
   };
-  const onResClose = () => {
-    if (res && !res.writableFinished) dropped = true;
+  const flush = () => {
+    if (wrote || !armed || !emit) return;
+    if (!hasResEvents) {
+      wrote = true;
+      emit(reqDropped);
+      return;
+    }
+    if (!seenFinish && !closedBeforeFinish) return;
+    wrote = true;
+    emit(closedBeforeFinish || reqDropped);
   };
   if (req && typeof req.on === 'function') {
-    req.on('aborted', onAborted);
-    req.on('close', onReqClose);
+    req.on('aborted', () => {
+      reqDropped = true;
+    });
+    req.on('close', noteReq);
   }
-  if (res && typeof res.on === 'function') {
-    res.on('close', onResClose);
+  if (hasResEvents) {
+    res.on('finish', () => {
+      seenFinish = true;
+      flush();
+    });
+    res.on('close', () => {
+      if (!seenFinish) closedBeforeFinish = true;
+      flush();
+    });
   }
   return {
-    dropped() {
-      return dropped;
+    arm(fn) {
+      emit = fn;
+      armed = true;
+      flush();
     },
   };
 }
@@ -1775,7 +1797,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();
-        const client = watchSearchClient(req, res);
+        const searchLog = attachSearchLog(req, res);
         const row = { source: '-', status: 0, results: 0, indexers: null, device: '-', qlen: 0 };
         const replyJson = (status, value) => {
           row.status = status;
@@ -1849,19 +1871,21 @@ export function createApp(file, fetchImpl, opts) {
           if (!row.status) row.status = 500;
           throw e;
         } finally {
-          process.stderr.write(
-            formatSearchLog({
-              at: new Date().toISOString(),
-              source: row.source,
-              status: row.status,
-              ms: Date.now() - started,
-              results: row.results,
-              indexers: row.indexers,
-              abort: client.dropped(),
-              device: row.device,
-              qlen: row.qlen,
-            }),
-          );
+          searchLog.arm((abort) => {
+            process.stderr.write(
+              formatSearchLog({
+                at: new Date().toISOString(),
+                source: row.source,
+                status: row.status,
+                ms: Date.now() - started,
+                results: row.results,
+                indexers: row.indexers,
+                abort,
+                device: row.device,
+                qlen: row.qlen,
+              }),
+            );
+          });
         }
       }
       if (req.method === 'POST' && path === '/v1/torrent') {

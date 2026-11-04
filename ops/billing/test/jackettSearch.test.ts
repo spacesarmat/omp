@@ -914,6 +914,71 @@ describe('POST /v1/search log', () => {
     }
   });
 
+  it('logs abort=1 once when the response closes before finish', async () => {
+    const device = 'a0'.repeat(16);
+    const { file, token } = await subscriber({ device });
+    const fetchImpl = (url: string) => {
+      if (isJsonList(url)) {
+        return Promise.resolve({ status: 200, text: async () => JSON.stringify([{ id: 'rutor', configured: true }]) });
+      }
+      return Promise.resolve({ status: 200, text: async () => rss('Buffered') });
+    };
+    const app = createApp(file, fetchImpl);
+    const payload = JSON.stringify({ q: 'buffered-drop-query', deviceId: device });
+    const req = new EventEmitter() as EventEmitter & {
+      method: string;
+      url: string;
+      headers: { [key: string]: string };
+      aborted: boolean;
+    };
+    req.method = 'POST';
+    req.url = '/v1/search';
+    req.aborted = false;
+    req.headers = {
+      authorization: 'Bearer ' + token,
+      'x-device-id': device,
+      'content-type': 'application/json',
+    };
+    req[Symbol.asyncIterator] = async function* () {
+      yield Buffer.from(payload);
+    };
+    const res = new EventEmitter() as EventEmitter & {
+      status: number;
+      headers: { [key: string]: string | number };
+      writableFinished: boolean;
+      writeHead: (status: number, headers?: { [key: string]: string | number }) => void;
+      end: (buf?: Buffer | string) => void;
+    };
+    res.status = 0;
+    res.headers = {};
+    res.writableFinished = false;
+    res.writeHead = (status: number, headers?: { [key: string]: string | number }) => {
+      res.status = status;
+      if (headers) Object.assign(res.headers, headers);
+    };
+    // end() only buffers. 'finish' is not emitted until the socket drains.
+    res.end = () => {};
+    const before = await captureStderr(async () => {
+      await app(req, res);
+    });
+    expect(res.status).toBe(200);
+    expect(searchLogLines(before)).toEqual([]);
+    const onClose = await captureStderr(async () => {
+      res.emit('close');
+    });
+    const lines = searchLogLines(onClose);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('status=200');
+    expect(lines[0]).toContain('abort=1');
+    expect(lines[0]).toContain('source=jackett');
+    assertNoSecrets(lines[0], { device, token, query: 'buffered-drop-query' });
+    const onFinish = await captureStderr(async () => {
+      res.writableFinished = true;
+      res.emit('finish');
+    });
+    expect(searchLogLines(onFinish)).toEqual([]);
+  });
+
   it('logs a JacRed search with indexer counts left unset', async () => {
     const device = 'ff'.repeat(16);
     const { file, token } = await subscriber({ device });
