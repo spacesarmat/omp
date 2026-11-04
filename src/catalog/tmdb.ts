@@ -602,9 +602,14 @@ export function sanitizeSeason(raw: unknown, season: number): SeasonDetails | nu
   return { number: num, name: text(o.name, 100), airDate: date(o.air_date), overview: text(o.overview, 1500), episodes: episodes, episodeCount: episodeCount };
 }
 
-// The season word is a search query for Russian trackers, not UI copy: it stays Russian even in the English UI.
+// The season and episode words are a search query for Russian trackers, not UI copy: they stay Russian even in the English UI.
 export function torrentQuery(t: { title: string; original: string; year: number; kind: Kind }, season?: number): string {
   const name = t.title || t.original;
   if (t.kind === 'tv') return season ? name + ' ' + ru.catalog.querySeason.replace('{n}', String(season)) : name;
   return t.year ? name + ' ' + t.year : name;
+}
+
+/** «Title 11 сезон 7 серия»: the same season query plus this episode. */
+export function episodeTorrentQuery(t: { title: string; original: string; year: number; kind: Kind }, season: number, episode: number): string {
+  return torrentQuery(t, season) + ' ' + ru.catalog.queryEpisode.replace('{n}', String(episode));
 }

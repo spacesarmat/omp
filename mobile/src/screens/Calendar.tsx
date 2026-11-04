@@ -14,11 +14,12 @@ import { Icon } from '../ui/Icon';
 import { CatalogError } from './catalog/CatalogError';
 import { dayHeader } from '../lib/releaseDates';
 import {
-  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodesCode, listGroups, loadCalendar,
+  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, episodesCode, listGroups, loadCalendar,
   loadCalView, monthBounds, monthCells, monthRev, monthSwipe, monthTitle, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly,
-  weekdayHeads, STALE_MS, type CalRow, type CalView,
+  weekdayHeads, STALE_MS, type CalGo, type CalRow, type CalView,
 } from '../lib/calendar';
 import { usePullRefresh, PullArea } from '../ui/PullRefresh';
+import { Sheet } from '../ui/Sheet';
 
 const CHEV_L = 'M15 6l-6 6 6 6';
 const CHEV_R = 'M9 6l6 6-6 6';
@@ -35,7 +36,12 @@ function openFinding(f: Finding): void {
   else navigate({ name: 'subFindings', id: f.subId, finding: f.key });
 }
 
-function Row({ e, findings }: { e: CalRow; findings: Finding[] }) {
+function goEpisode(action: CalGo): void {
+  if (action.name === 'seasonCard') navigate({ name: 'seasonCard', id: action.id, season: action.season });
+  else navigate(action);
+}
+
+function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: (e: CalRow) => void }) {
   const card = e.show.card;
   const out = e.status !== 'future';
   const found = out ? rowFinding(e, findings) : null;
@@ -43,7 +49,7 @@ function Row({ e, findings }: { e: CalRow; findings: Finding[] }) {
   const chip = chipText(e);
   return (
     <div class="m-cal-row" data-cal-row={card.id + ':' + e.season + ':' + e.episodes.join(',')}>
-      <button type="button" class="m-cal-open" onClick={() => navigate({ name: 'title', kind: 'tv', id: card.id })}>
+      <button type="button" class="m-cal-open" onClick={() => onOpen(e)}>
         {card.poster ? (
           <img class="m-cal-poster" src={card.poster} alt="" width={40} height={60} loading="lazy" />
         ) : (
@@ -106,7 +112,7 @@ function Tools(p: { view: CalView; subsOnly: boolean; onView: (v: CalView) => vo
   );
 }
 
-function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number }) {
+function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpen: (e: CalRow) => void }) {
   void monthRev.value;
   const now = new Date();
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
@@ -184,10 +190,49 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number }) {
       </div>
       <div class="m-cal-picked" data-cal-picked={picked}>
         {rows.length ? rows.map((r) => (
-          <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} />
+          <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} onOpen={p.onOpen} />
         )) : picked ? <div class="m-muted m-small">{t('news.calDayEmpty')}</div> : null}
       </div>
     </div>
+  );
+}
+
+function Ask({ e, onClose }: { e: CalRow; onClose: () => void }) {
+  const card = e.show.card;
+  const plan = episodeActions({ show: e.show, season: e.season, episode: e.episodes[0] });
+  const code = episodesCode(e.season, e.episodes);
+  const episode = plan.episode;
+  const run = (action: CalGo) => {
+    onClose();
+    goEpisode(action);
+  };
+  return (
+    <Sheet label={t('news.calSheet')} onClose={onClose}>
+      <div class="m-cal-ask" data-cal-ask="">
+        <div class="m-cal-ask-head">
+          {card.poster ? (
+            <img class="m-cal-poster" src={card.poster} alt="" width={40} height={60} />
+          ) : (
+            <span class={'m-cal-poster m-disc-ph m-disc-ph-' + (card.id % 4)} aria-hidden="true" />
+          )}
+          <span class="m-cal-text">
+            <span class="m-cal-title">{card.title}</span>
+            <span class="m-small m-muted">{code}</span>
+          </span>
+        </div>
+        <button type="button" class="m-btn m-btn-primary tm" data-code={plan.inCatalog ? 'P03.15' : 'P03.16'} onClick={() => run(plan.primary)}>
+          {plan.inCatalog ? t('news.calOpenCatalog') : t('news.calSearchTorrents')}
+        </button>
+        {episode && (
+          <button type="button" class="m-btn m-btn-secondary tm" data-code="P03.17" onClick={() => run(episode)}>
+            {t('news.calFindEpisode')}
+          </button>
+        )}
+        <button type="button" class="m-btn m-btn-secondary tm" data-code="P03.18" onClick={onClose}>
+          {t('common.cancel')}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -197,6 +242,7 @@ export function Calendar() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<CalView>(loadCalView);
   const [subsOnly, setSubsOnly] = useState(false);
+  const [ask, setAsk] = useState<CalRow | null>(null);
   const reload = (fresh?: boolean) => loadCalendar(torrents.peek(), loadSubs(), fresh);
   useEffect(() => {
     const s = calendarState.peek();
@@ -225,7 +271,7 @@ export function Calendar() {
   else if (view === 'month') {
     body = (
       <>
-        {filteredOut ? empty : <Month subsOnly={subsOnly} findings={findings} stamp={state.at} />}
+        {filteredOut ? empty : <Month subsOnly={subsOnly} findings={findings} stamp={state.at} onOpen={setAsk} />}
         {state.loading && <div class="m-muted m-small">{t('news.calLoading')}</div>}
       </>
     );
@@ -237,7 +283,7 @@ export function Calendar() {
           <section key={g.id} class="m-cal-group" data-cal-group={g.id}>
             <div class="m-set-label">{g.label}</div>
             {g.rows.map((r) => (
-              <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} />
+              <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} onOpen={setAsk} />
             ))}
           </section>
         ))}
@@ -251,6 +297,7 @@ export function Calendar() {
       <PullArea state={pull} label={t('news.calRefreshing')}>
         {body}
       </PullArea>
+      {ask && <Ask e={ask} onClose={() => setAsk(null)} />}
     </div>
   );
 }

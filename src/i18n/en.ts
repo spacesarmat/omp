@@ -1694,6 +1694,7 @@ export const en: EnDict<typeof ru> = {
   },
   catalog: {
     querySeason: 'season {n}',
+    queryEpisode: 'episode {n}',
     deleteAsk: 'Delete "{title}"?',
     torrentDeleted: 'Torrent deleted',
     removeFromHistoryAsk: 'Remove from history?',
@@ -2531,6 +2532,10 @@ export const en: EnDict<typeof ru> = {
     calDayEmpty: 'No episodes on this day',
     calEmptySubs: 'No subscription episodes on these days',
     calDayAria: '{date}, episodes: {n}',
+    calSheet: 'Episode',
+    calOpenCatalog: 'Open in the catalog',
+    calSearchTorrents: 'Search releases',
+    calFindEpisode: 'Find the new episode',
   },
   now: {
     collapse: 'Collapse',

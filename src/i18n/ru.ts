@@ -1735,6 +1735,7 @@ export const ru = {
   },
   catalog: {
     querySeason: '{n} сезон',
+    queryEpisode: '{n} серия',
     deleteAsk: 'Удалить «{title}»?',
     torrentDeleted: 'Торрент удалён',
     removeFromHistoryAsk: 'Убрать из истории?',
@@ -2581,6 +2582,10 @@ export const ru = {
     calDayEmpty: 'В этот день серий нет',
     calEmptySubs: 'В подписках на эти дни серий нет',
     calDayAria: '{date}, серий: {n}',
+    calSheet: 'Серия',
+    calOpenCatalog: 'Открыть в каталоге',
+    calSearchTorrents: 'Искать раздачи',
+    calFindEpisode: 'Найти новую серию',
   },
   now: {
     collapse: 'Свернуть',

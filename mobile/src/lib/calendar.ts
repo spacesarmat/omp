@@ -7,7 +7,7 @@ import { signal } from '@preact/signals';
 import { lang, t } from '../../../src/i18n';
 import { addDays } from '../../../src/catalog/discoverQuery';
 import { catalogErrorCode, type CatalogClient, type CatalogErrorCode } from '../../../src/catalog/client';
-import type { CatalogCard, CatalogTitle, SeasonDetails } from '../../../src/catalog/tmdb';
+import { episodeTorrentQuery, torrentQuery, type CatalogCard, type CatalogTitle, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import { seriesNames, seriesQuery, yearOf } from '../../../src/monitor/newEpisodes';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
@@ -71,6 +71,34 @@ export function calendarSeasons(card: CatalogCard, now: number = Date.now()): nu
     if (u.airDate && u.airDate <= last) add(u.number);
   });
   return out;
+}
+
+/** Where a tapped episode goes after the person confirms. Nothing is opened before that. */
+export type CalGo =
+  | { name: 'seasonCard'; id: number; season: number }
+  | { name: 'add'; query: string; run: true };
+
+export interface CalEpisodeActions {
+  inCatalog: boolean;
+  subscribed: boolean;
+  /** «Открыть в каталоге» when the show has a catalog card, otherwise «Искать раздачи» for the season. */
+  primary: CalGo;
+  /** «Найти новую серию» when the show is in the catalog and the person follows it. */
+  episode: CalGo | null;
+}
+
+export function episodeActions(row: { show: CalShow; season: number; episode: number }): CalEpisodeActions {
+  const card = row.show.card;
+  const inCatalog = card.kind === 'tv' && card.id > 0;
+  const subscribed = inCatalog && row.show.subIds.length > 0;
+  return {
+    inCatalog: inCatalog,
+    subscribed: subscribed,
+    primary: inCatalog
+      ? { name: 'seasonCard', id: card.id, season: row.season }
+      : { name: 'add', query: torrentQuery(card, row.season), run: true },
+    episode: subscribed ? { name: 'add', query: episodeTorrentQuery(card, row.season, row.episode), run: true } : null,
+  };
 }
 
 function statusOf(airDate: string, today: string): CalStatus {
@@ -428,7 +456,7 @@ let listNow = 0;
  * Episodes of one show in one calendar month (`id|YYYY-MM`). List and Month both read this.
  * `failed` is retried; it does not drop the other shows. A month is settled only when every show is `ok`.
  */
-interface ShowMonth { status: 'ok' | 'failed'; entries: CalEntry[]; }
+interface ShowMonth { status: 'ok' | 'failed' | 'partial'; entries: CalEntry[]; }
 let slots: { [key: string]: ShowMonth } = {};
 /** One read at a time per show, so a second ask waits and then skips what already succeeded. */
 let inflight: { [id: string]: Promise<void> } = {};
@@ -505,8 +533,10 @@ function monthSettled(ym: string): boolean {
 }
 
 /**
- * Reads `ranges` for one show (full months). A show already `ok` for a month is skipped. A failed season marks
- * only this show `failed` and keeps the episodes that did arrive. `gen` drops the write when a newer gather started.
+ * Reads `ranges` for one show. List passes `calendarSeasons` (a season on air lately counts even with no air date)
+ * and stores a partial month, so Month can show those episodes and still finish the month. Month passes the seasons
+ * that cover the month plus the list's seasons when the month overlaps the list window. A failed season marks only
+ * this show and keeps episodes already stored.
  */
 function loadShowMonths(
   c: CatalogClient,
@@ -515,7 +545,9 @@ function loadShowMonths(
   now: number,
   gen: number,
   fresh: boolean | undefined,
-  onError?: (e: unknown) => void,
+  onError: ((e: unknown) => void) | undefined,
+  pick: (r: { from: string; to: string }) => number[],
+  settle: 'ok' | 'partial',
 ): Promise<void> {
   const prev = inflight[show.card.id] || Promise.resolve();
   const run = prev.then(() => {
@@ -527,8 +559,8 @@ function loadShowMonths(
     if (!pending.length) return;
     const numbers: number[] = [];
     pending.forEach((r) => {
-      seasonsInRange(show.card, r.from, r.to).forEach((n) => {
-        if (numbers.indexOf(n) < 0) numbers.push(n);
+      pick(r).forEach((n) => {
+        if (n > 0 && numbers.indexOf(n) < 0) numbers.push(n);
       });
     });
     const seasons: SeasonDetails[] = [];
@@ -548,9 +580,12 @@ function loadShowMonths(
     return chain.then(() => {
       if (gen !== generation) return;
       pending.forEach((r) => {
-        slots[slotKey(show.card.id, ymOf(r.from))] = {
-          status: failed ? 'failed' : 'ok',
-          entries: calendarEntries(show, seasons, now, r),
+        const key = slotKey(show.card.id, ymOf(r.from));
+        const prevSlot = slots[key];
+        const next = calendarEntries(show, seasons, now, r);
+        slots[key] = {
+          status: failed ? 'failed' : settle,
+          entries: failed && prevSlot ? keepEntries(prevSlot.entries, next) : next,
         };
       });
       publishWindow();
@@ -558,6 +593,37 @@ function loadShowMonths(
   });
   inflight[show.card.id] = run.then(() => {}, () => {});
   return run;
+}
+
+/** Previous episodes stay when a later read fails; a newer copy of the same episode replaces the old one. */
+function keepEntries(prev: CalEntry[], next: CalEntry[]): CalEntry[] {
+  const by: { [k: string]: CalEntry } = {};
+  const order: string[] = [];
+  const put = (e: CalEntry) => {
+    const k = e.show.card.id + ':' + e.season + ':' + e.episode;
+    if (!by[k]) order.push(k);
+    by[k] = e;
+  };
+  prev.forEach(put);
+  next.forEach(put);
+  const out: CalEntry[] = [];
+  order.forEach((k) => out.push(by[k]));
+  return out;
+}
+
+/** Seasons for an open month: the range, plus the list's seasons when this month overlaps the list window. */
+function seasonsForOpenMonth(show: CalShow, r: { from: string; to: string }): number[] {
+  const out = seasonsInRange(show.card, r.from, r.to);
+  const add = (n: number) => {
+    if (n > 0 && out.indexOf(n) < 0) out.push(n);
+  };
+  if (listNow) {
+    const w = listWindow(listNow);
+    if (r.from <= w.to && r.to >= w.from) calendarSeasons(show.card, listNow).forEach(add);
+  }
+  const slot = slots[slotKey(show.card.id, ymOf(r.from))];
+  if (slot) slot.entries.forEach((e) => add(e.season));
+  return out;
 }
 
 /** Episodes stored for that month, from every show that has answered (a failed show does not hide the others). */
@@ -751,7 +817,7 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
         knownShows = order.map((id) => shows[id]);
         return pool(knownShows, MAX_LOOKUPS, (show) => {
           if (my !== generation) return Promise.resolve();
-          return loadShowMonths(c, show, ranges, now, my, fresh, fail);
+          return loadShowMonths(c, show, ranges, now, my, fresh, fail, () => calendarSeasons(show.card, now), 'partial');
         });
       });
     },
@@ -777,7 +843,7 @@ export function ensureCalendarSpan(from: string, to: string, now: number = Date.
   return phoneCatalog(false).then(
     (c) => pool(shows, MAX_LOOKUPS, (show) => {
       if (gen !== generation) return Promise.resolve();
-      return loadShowMonths(c, show, [{ from: from, to: to }], now, gen, false);
+      return loadShowMonths(c, show, [{ from: from, to: to }], now, gen, false, undefined, (r) => seasonsForOpenMonth(show, r), 'ok');
     }),
     () => {},
   );
