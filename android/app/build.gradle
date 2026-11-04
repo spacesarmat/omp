@@ -131,8 +131,8 @@ dependencies {
     // a second copy would duplicate those classes and native libraries.
     // 2160 Player engine (experimental, exp/2160-engine): built from the submodule through includeBuild in
     // settings.gradle, which substitutes this coordinate with project(':player-core'). The version matches
-    // player-core's default (v0.2.17); the substitution does not depend on it.
-    implementation 'tv.p2160:player-core:0.2.17'
+    // player-core's default (v0.2.19); the substitution does not depend on it.
+    implementation 'tv.p2160:player-core:0.2.19'
     // second player engine on Android TV (LGPL-2.1), used from v0.15 Task 4
     implementation 'org.videolan.android:libvlc-all:3.7.7'
     // install assistant: LG Developer Mode over SSH (BSD-3-Clause) and Android TV over adb (Apache-2.0), see install/

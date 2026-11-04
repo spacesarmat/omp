@@ -13,6 +13,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.util.Log
 import android.provider.Settings
 import androidx.activity.result.ActivityResult
 import androidx.core.app.NotificationCompat
@@ -206,6 +207,21 @@ class OmpNativePlugin : Plugin() {
         // blocking socket I/O ignores interrupts: close the install's sockets so it ends now
         installCancel?.cancel()
         io.shutdownNow()
+    }
+
+    /**
+     * { tag, message }: one logcat line. Only omp.tracks is accepted, cut to 400 characters, so a release build
+     * can show track-memory diagnostics while Capacitor logging stays off. No secrets belong in message.
+     */
+    @PluginMethod
+    fun logDiag(call: PluginCall) {
+        val tag = call.getString("tag") ?: ""
+        val message = call.getString("message") ?: ""
+        if (tag == "omp.tracks") {
+            val line = message.replace(Regex("[\\r\\n]+"), " ").take(400)
+            if (line.isNotEmpty()) Log.i("omp.tracks", line)
+        }
+        call.resolve()
     }
 
     @PluginMethod

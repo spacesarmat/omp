@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { isPlaceholderTitle, deriveName, displayTitle, torrentFiles } from '../../src/lib/torrentName';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { isPlaceholderTitle, deriveName, displayTitle, torrentFiles, fileSeasons } from '../../src/lib/torrentName';
+import { rememberFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
 
 const HEX = '8bae2398df95c853c6329816fc828f79dd947c1f';
 const f = (path: string, id = 1) => ({ id, path, length: 1000 });
@@ -57,7 +58,17 @@ describe('deriveName', () => {
   });
 });
 
+describe('fileSeasons', () => {
+  it('reads SxxEyy and treats two dash-numbered episodes as season 1', () => {
+    expect(fileSeasons([f('A.S02E01.mkv', 1), f('A.S02E02.mkv', 2)])).toEqual([2]);
+    expect(fileSeasons([1, 2, 3].map((n) => f('Show - 0' + n + ' [1080p].mkv', n)))).toEqual([1]);
+    expect(fileSeasons([f('Movie.mkv')])).toEqual([]);
+  });
+});
+
 describe('displayTitle', () => {
+  beforeEach(() => resetKnownFilesForTests());
+  afterEach(() => resetKnownFilesForTests());
   const data = JSON.stringify({ TorrServer: { Files: [1, 2].map((n) => f('Moon.Garden.S02E0' + n + '.1080p.mkv', n)) } });
   it('derives the name for a placeholder from stored data', () => {
     expect(displayTitle({ hash: HEX, title: 'infohash:' + HEX, data })).toBe('Moon Garden · Сезон 2');
@@ -73,5 +84,10 @@ describe('displayTitle', () => {
   it('reads files from data safely', () => {
     expect(torrentFiles({ hash: 'h', data: 'garbage' })).toEqual([]);
     expect(torrentFiles({ hash: 'h', data: '{}' })).toEqual([]);
+  });
+  it('uses the files this device already saw when the row has none', () => {
+    rememberFiles(HEX, [1, 2].map((n) => f('Moon.Garden.S02E0' + n + '.1080p.mkv', n)));
+    expect(displayTitle({ hash: HEX, title: 'infohash:' + HEX })).toBe('Moon Garden · Сезон 2');
+    expect(torrentFiles({ hash: HEX, title: 'infohash:' + HEX }).length).toBe(2);
   });
 });
