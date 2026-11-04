@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Subscriptions in New each show a poster. When the title had none at the moment it was added (a search, a season, a typed query, Want from the TV), OMP looks one up and fills it in, including subscriptions saved earlier. A letter tile shows only when no poster exists. Delete stops monitoring that title, and a refresh does not bring it back
+- [tv] Want to watch sends the poster to the phone. With a phone linked, removing a title asks first, because the subscription and its saved findings are deleted too. The subscription that was saved is the one removed, even when a film from Soon digitally had no year then. Subscription rows show the poster
 - [tv] On a release card with no poster, Up from the cast row reaches the buttons when they wrap onto two rows and the page is scrolled down
 - [tv] On the season page, moving focus onto a season chip does not switch the season. OK switches it
 - The player title of a release added by a magnet link with no display name is the name from the files, from the first episode

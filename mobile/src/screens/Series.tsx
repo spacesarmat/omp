@@ -220,7 +220,15 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
   const remind = () => {
     if (subsLimitReached()) return setLimited(true);
     const first = loadSubs().length === 0;
-    const saved = addSubscription({ query: query, quality: '', sources: null, notify: true });
+    const seasonRow = card.seasons.filter((s) => s.number === season.number)[0];
+    const poster = (seasonRow && seasonRow.poster) || card.poster || '';
+    const saved = addSubscription({
+      query: query,
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'tv', id: card.id, title: card.title, year: card.year || 0, poster: poster },
+    });
     if (!saved) return;
     if (first) void askNotifyOnce().catch(() => {});
     reloadMonitor();

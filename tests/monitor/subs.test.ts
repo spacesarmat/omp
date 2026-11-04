@@ -11,6 +11,8 @@ import {
   addSubscription,
   updateSubscription,
   removeSubscription,
+  setSubscriptionPoster,
+  subscriptionPoster,
   pruneEpisodeFindings,
   sanitizeSubscription,
   sanitizeResult,
@@ -352,9 +354,27 @@ describe('«Лучшее качество»', () => {
     const s = addSubscription({ query: 'Институт 2026', quality: '', sources: null, notify: true, catalog: card }, 3000)!;
     expect(updateSubscription(s.id, { quality: '1080' })!.catalog).toEqual(card);
     expect(updateSubscription(s.id, { query: '  институт   2026 ' })!.catalog).toEqual(card);
-    expect(updateSubscription(s.id, { query: 'Другой фильм' })!.catalog).toBeUndefined();
+    const changed = updateSubscription(s.id, { query: 'Другой фильм' })!;
+    expect(changed.catalog).toBeUndefined();
+    expect(changed.poster).toBeUndefined();
+    expect(changed.noPoster).toBeUndefined();
     const next = { kind: 'movie' as const, id: 7, title: 'Яга', year: 2026, poster: '' };
     expect(updateSubscription(s.id, { query: 'Яга 2026', catalog: next })!.catalog).toEqual(next);
+  });
+
+  it('a looked-up poster fills an empty card and is dropped when the query changes', () => {
+    const s = addSubscription({ query: 'Дюна 2021', quality: '', sources: null, notify: true, catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: '' } }, 1)!;
+    expect(setSubscriptionPoster(s.id, 'http://insecure/p.jpg')!.noPoster).toBe(true);
+    expect(subscriptionPoster(loadSubs()[0])).toBe('');
+    expect(setSubscriptionPoster(s.id, 'https://img.test/d.jpg')!.catalog!.poster).toBe('https://img.test/d.jpg');
+    expect(subscriptionPoster(loadSubs()[0])).toBe('https://img.test/d.jpg');
+    // already stored: a later lookup must not replace it
+    expect(setSubscriptionPoster(s.id, 'https://img.test/other.jpg')!.catalog!.poster).toBe('https://img.test/d.jpg');
+    const changed = updateSubscription(s.id, { query: 'Другой фильм' })!;
+    expect(changed.catalog).toBeUndefined();
+    expect(changed.poster).toBeUndefined();
+    expect(changed.noPoster).toBeUndefined();
+    expect(setSubscriptionPoster('missing', 'https://img.test/d.jpg')).toBeNull();
   });
 
   it('the best rank lives in the seen record: kept by rememberSeen, only raised, forgotten with it', () => {

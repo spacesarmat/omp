@@ -316,21 +316,31 @@ export function DiscoverGrid(p: DiscoverGridProps) {
     });
   };
 
+  // a «Хочу» removal that is still asking (a linked phone): the neighbour to focus once the row is actually gone
+  const pendingDrop = useRef<{ at: number; kind: string; id: number } | null>(null);
+  const focusAfterDrop = (at: number) => {
+    focused.current = null;
+    setTimeout(() => {
+      const cur = wantTitles();
+      const k = cur.length ? tileKey(cur[Math.min(Math.max(0, at), cur.length - 1)]) : 'disc-kind-want';
+      if (doesFocusableExist(k)) setFocus(k);
+    }, 0);
+  };
+
   useKeys((a) => {
     if (a === 'yellow') {
       const x = focused.current;
       if (x) {
         // a tile of the «Хочу» list leaves with the key: the focus goes to its neighbour
         const at = isWant ? wantTitles().findIndex((y) => y.kind === x.kind && y.id === x.id) : -1;
+        const was = isWanted(x.kind, x.id);
         if (p.onWant) p.onWant(x);
         else wantAction(x);
-        if (isWant) {
-          focused.current = null;
-          setTimeout(() => {
-            const cur = wantTitles();
-            const k = cur.length ? tileKey(cur[Math.min(Math.max(0, at), cur.length - 1)]) : 'disc-kind-want';
-            if (doesFocusableExist(k)) setFocus(k);
-          }, 0);
+        if (isWant && was && !isWanted(x.kind, x.id)) {
+          pendingDrop.current = null;
+          focusAfterDrop(at);
+        } else if (isWant && was && isWanted(x.kind, x.id)) {
+          pendingDrop.current = { at: at, kind: x.kind, id: x.id };
         }
       }
       return true;
@@ -393,6 +403,11 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       cur = '';
     }
     setRow(focusedRow(shownKeys, cur, DISCOVER_COLS));
+    const drop = pendingDrop.current;
+    if (drop && !isWanted(drop.kind, drop.id)) {
+      pendingDrop.current = null;
+      focusAfterDrop(drop.at);
+    }
   }, [shownId]);
 
   return (

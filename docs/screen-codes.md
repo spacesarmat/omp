@@ -668,6 +668,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D50 | Удалить раздачу сезона | Delete a release of the season |  |  |
 | D50.1 | Удалить раздачу сезона | Delete a release of the season | Удалить | Delete |
 | D50.2 | Удалить раздачу сезона | Delete a release of the season | Отмена | Cancel |
+| D51 | Убрать из «Хочу посмотреть» | Remove from Want to watch |  |  |
+| D51.1 | Убрать из «Хочу посмотреть» | Remove from Want to watch | Убрать и отписаться | Remove and unsubscribe |
+| D51.2 | Убрать из «Хочу посмотреть» | Remove from Want to watch | Отмена | Cancel |
 | P01 | Подключение | Connect |  |  |
 | P01.1 | Подключение | Connect | TorrServer на телефоне | TorrServer on the phone |
 | P01.2 | Подключение | Connect | Логин и пароль | Login and password |
@@ -699,6 +702,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P03.1 | Новое | News | Находки | Findings |
 | P03.2 | Новое | News | Подписки | Subscriptions |
 | P03.3 | Новое | News | Календарь | Calendar |
+| P03.4 | Новое | News | Удалить подписку | Delete a subscription |
 | P04 | Находки подписки | Subscription findings |  |  |
 | P04.1 | Находки подписки | Subscription findings | Назад | Back |
 | P05 | Следить за новыми | Follow new episodes |  |  |

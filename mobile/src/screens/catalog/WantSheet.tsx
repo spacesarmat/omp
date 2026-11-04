@@ -18,7 +18,7 @@ function defaultQuality(): SubQuality {
   return q === '' ? '' : q === '2160' ? '2160' : '1080';
 }
 
-export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () => void }) {
+export function WantSheet({ card, poster, onClose }: { card: CatalogCard; poster?: string; onClose: () => void }) {
   const [quality, setQuality] = useState<SubQuality>(defaultQuality);
   // «Только лучшее качество»: on here, since a title is wanted once, in the best quality that comes out
   const [better, setBetter] = useState(true);
@@ -38,7 +38,7 @@ export function WantSheet({ card, onClose }: { card: CatalogCard; onClose: () =>
       sources: null,
       notify: true,
       better,
-      catalog: { kind: card.kind, id: card.id, title: card.title, year: card.year || 0, poster: card.poster || '' },
+      catalog: { kind: card.kind, id: card.id, title: card.title, year: card.year || 0, poster: poster || card.poster || '' },
     });
     if (saved) {
       if (first) void askNotifyOnce().catch(() => {});

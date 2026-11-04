@@ -43,6 +43,9 @@ import { isHotChip, releaseChips, releaseTitle } from '../../sources/releaseRow'
 import { resultSizeText } from '../../sources/resultSize';
 import { TvSearchSize } from '../../ui/LiveSeeds';
 import { sourceBadge } from '../../sources/view';
+import { sharpPosterUrl } from '../../catalog/tmdb';
+import { posterInitials } from './Poster';
+import { removeWantByQuery } from '../../store/wantList';
 
 export type NewsSeg = 'feed' | 'subs';
 
@@ -708,6 +711,8 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
           const near = at >= 0 ? vis[at + 1] || vis[at - 1] : undefined;
           focusNext.current = near ? subKey(near.id, 'notify') : SEG_KEYS.subs;
           put((list.current || []).filter((x) => x.id !== s.id));
+          // the TV «Хочу» row is the same title: leave it and the next refresh would still look monitored
+          removeWantByQuery(s.query);
           toast(t('tv.subs.removed', { name: name }));
         },
         (e) => toast(newsError(e), 'error'),
@@ -768,8 +773,19 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
       </FocusGroup>
       {!shown.length && <div class="empty">{t('tv.subs.noMatch', { q: tvGlyphs(filter) })}</div>}
       <FocusGroup focusKey="NEWS-SUBS" className="news-subs-list">
-        {shown.map((s) => (
+        {shown.map((s) => {
+          const poster = s.poster && /^https:\/\/\S+$/.test(s.poster) ? s.poster : '';
+          let hue = 0;
+          for (let i = 0; i < s.id.length; i++) hue = (hue + s.id.charCodeAt(i)) % 4;
+          return (
           <div key={s.id} class={'news-sub' + (s.paused ? ' news-sub-paused' : '')} data-sub={s.id} data-paused={s.paused ? '' : undefined}>
+            <div class="news-sub-art">
+              {poster ? (
+                <img src={sharpPosterUrl(poster)} alt="" />
+              ) : s.noPoster ? (
+                <div class={'disc-ph disc-ph-' + hue}>{tvGlyphs(posterInitials(s.query))}</div>
+              ) : null}
+            </div>
             <div class="news-sub-info">
               <div class="news-sub-line1">
                 <span class="title">{tvGlyphs(s.query)}</span>
@@ -792,7 +808,8 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
               <Button focusKey={subKey(s.id, 'remove')} className="danger" label={t('tv.subs.remove')} onPress={() => remove(s)} onFocused={p.onFocused} />
             </FocusGroup>
           </div>
-        ))}
+          );
+        })}
       </FocusGroup>
     </div>
   );

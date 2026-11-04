@@ -1,19 +1,34 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { init } from '@noriginmedia/norigin-spatial-navigation';
 
 vi.mock('../../src/ui/toast', () => ({ toast: vi.fn() }));
 
 import { wantList, toggleWant, isWanted, reloadWant, sanitizeWant, wantAction, WANT_KEY, WANT_MAX } from '../../src/store/wantList';
 import { toast } from '../../src/ui/toast';
+import { DialogHost } from '../../src/ui/dialog';
 import { setRpcTransport } from '../../src/phone/rpc';
 import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 
 const item = (id: number, kind: 'movie' | 'tv' = 'movie') => ({ kind, id, title: 'T' + id, year: 2020, poster: '' });
 
+beforeAll(() => {
+  init({ debug: false, visualDebug: false });
+  Element.prototype.scrollIntoView = function () { /* jsdom */ };
+});
 beforeEach(() => {
   localStorage.clear();
   wantList.value = [];
   forgetPhoneLink();
   vi.mocked(toast).mockClear();
+  if (!dialogRoot) {
+    dialogRoot = document.createElement('div');
+    document.body.appendChild(dialogRoot);
+  }
+  act(() => {
+    render(h(DialogHost, {}), dialogRoot!);
+  });
 });
 afterEach(() => {
   setRpcTransport(null);
@@ -23,6 +38,13 @@ afterEach(() => {
 const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
+
+let dialogRoot: HTMLElement | null = null;
+function clickDialog(label: string) {
+  const b = Array.from(document.querySelectorAll('.dialog-option')).find((el) => (el.textContent || '').trim() === label) as HTMLElement | undefined;
+  if (!b) throw new Error('no dialog option ' + label + ' :: ' + (document.body.textContent || '').slice(0, 300));
+  act(() => b.click());
+}
 const title = { kind: 'movie' as const, id: 7, title: 'Дюна', original: 'Dune', year: 2021, poster: '', rating: 8 };
 
 describe('wantList', () => {
@@ -67,7 +89,10 @@ describe('wantAction', () => {
     expect(wantAction(title)).toBe(true);
     await flush();
     expect(isWanted('movie', 7)).toBe(true);
-    expect(calls).toEqual([{ method: 'wantAdd', params: { query: 'Дюна 2021' } }]);
+    expect(calls).toEqual([{
+      method: 'wantAdd',
+      params: { query: 'Дюна 2021', catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: '' } },
+    }]);
     expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть» - OMP на телефоне сообщит о раздачах']]);
   });
 
@@ -97,14 +122,64 @@ describe('wantAction', () => {
     expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть». ' + why]]);
   });
 
-  it('removing from the TV list does not touch the phone', async () => {
+  it('removing asks first, then deletes the phone subscription and the local row', async () => {
     toggleWant(title, 1);
     savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
-    const send = vi.fn(() => Promise.resolve(JSON.stringify({ ok: true, result: {} })));
-    setRpcTransport(send);
-    expect(wantAction(title)).toBe(false);
+    const calls: unknown[] = [];
+    setRpcTransport((_url, body) => {
+      calls.push(JSON.parse(body));
+      return Promise.resolve(JSON.stringify({ ok: true, result: { removed: true } }));
+    });
+    expect(wantAction(title)).toBe(true);
     await flush();
+    expect(isWanted('movie', 7)).toBe(true);
+    expect(calls).toEqual([]);
+    expect(document.querySelector('.dialog-title')!.textContent).toContain('найденные раздачи тоже удалятся');
+    clickDialog('Убрать и отписаться');
+    await flush();
+    expect(isWanted('movie', 7)).toBe(false);
+    expect(calls).toEqual([{ method: 'subRemove', params: { query: 'Дюна 2021' } }]);
+    expect(vi.mocked(toast).mock.calls).toEqual([['Убрано из «Хочу посмотреть» и из подписок на телефоне.']]);
+  });
+
+  it('cancel leaves the title and does not call the phone', async () => {
+    toggleWant(title, 1);
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    const send = vi.fn(() => Promise.resolve(JSON.stringify({ ok: true, result: { removed: true } })));
+    setRpcTransport(send);
+    expect(wantAction(title)).toBe(true);
+    await flush();
+    clickDialog('Отмена');
+    await flush();
+    expect(isWanted('movie', 7)).toBe(true);
     expect(send).not.toHaveBeenCalled();
-    expect(vi.mocked(toast).mock.calls).toEqual([['Убрано из «Хочу посмотреть».']]);
+  });
+
+  it('a film saved with no year is removed by that title, even from a card that now has a year', async () => {
+    toggleWant({ ...title, year: 0 }, 1);
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    const calls: { method: string; params: { query?: string } }[] = [];
+    setRpcTransport((_url, body) => {
+      calls.push(JSON.parse(body));
+      return Promise.resolve(JSON.stringify({ ok: true, result: { removed: true } }));
+    });
+    expect(wantAction({ ...title, year: 2021 })).toBe(true);
+    await flush();
+    clickDialog('Убрать и отписаться');
+    await flush();
+    expect(calls.map((c) => c.params.query)).toEqual(['Дюна']);
+    expect(isWanted('movie', 7)).toBe(false);
+  });
+
+  it('a phone that fails to remove leaves the title on the list', async () => {
+    toggleWant(title, 1);
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    setRpcTransport(() => Promise.reject(new Error('network')));
+    expect(wantAction(title)).toBe(true);
+    await flush();
+    clickDialog('Убрать и отписаться');
+    await flush();
+    expect(isWanted('movie', 7)).toBe(true);
+    expect(vi.mocked(toast).mock.calls[0][0]).toBe('Не удалось убрать подписку на телефоне. Название осталось в «Хочу посмотреть».');
   });
 });

@@ -22,6 +22,7 @@ import { dispatchKey } from '../../src/ui/keys';
 import { setRpcTransport, phoneStatus, PhoneRpcError } from '../../src/phone/rpc';
 import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
 import { newsUnseen } from '../../src/phone/monitor';
+import { isWanted, reloadWant, toggleWant } from '../../src/store/wantList';
 import { replaceWithLink } from '../../src/monitor/replaceTv';
 import { mockFetch } from '../helpers/fetchMock';
 import type { RpcFinding, RpcResult, RpcSub } from '../../src/phone/rpcTypes';
@@ -488,6 +489,9 @@ describe('TV «Подписки» segment', () => {
   });
 
   it('«Удалить» asks, removes on the phone and moves the focus to the next row', async () => {
+    reloadWant();
+    toggleWant({ kind: 'tv', id: 3, title: 'Дюна', year: 2021, poster: '' }, 1);
+    toggleWant({ kind: 'movie', id: 9, title: 'Другое', year: 2020, poster: '' }, 2);
     useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: SUBS }], subRemove: [{ removed: true }] });
     const host = await mountSubs();
     act(() => setFocus('news-sub-s1-remove'));
@@ -498,6 +502,24 @@ describe('TV «Подписки» segment', () => {
     expect(calls.filter((c) => c.method === 'subRemove').map((c) => c.params)).toEqual([{ id: 's1' }]);
     expect(subRows(host).map((r) => text(r.querySelector('.title')))).toEqual(['Ёлки', 'Основание']);
     expect(getCurrentFocusKey()).toBe('news-sub-s2-notify');
+    expect(isWanted('tv', 3)).toBe(false);
+    expect(isWanted('movie', 9)).toBe(true);
+  });
+
+  it('a poster is shown, and letters only after the phone says there is none', async () => {
+    const rows = [
+      { ...SUBS[0], poster: 'https://img.test/d.jpg' },
+      { ...SUBS[1], noPoster: true },
+      SUBS[2],
+    ];
+    useScript({ feed: [{ findings: [], lastRun: 1 }], subs: [{ subs: rows }] });
+    const host = await mountSubs();
+    const arts = host.querySelectorAll('.news-sub-art');
+    expect(arts[0].querySelector('img')!.getAttribute('src')).toBe('https://img.test/d.jpg');
+    expect(arts[1].querySelector('.disc-ph')).not.toBeNull();
+    expect(arts[1].querySelector('.disc-ph')!.textContent).toBeTruthy();
+    expect(arts[2].querySelector('img')).toBeNull();
+    expect(arts[2].querySelector('.disc-ph')).toBeNull();
   });
 
   it('«Отмена» keeps the subscription and the focus', async () => {

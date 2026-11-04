@@ -11,15 +11,22 @@ import { allSources } from '../../../src/sources/registry';
 import type { SourceContext } from '../../../src/sources/types';
 import { createRpcHandler } from './handler';
 import { createRpcBridge, windowRpcPort } from './host';
+import { installRpcCatalog } from './catalog';
+import { installSubPosters, lookupSubPoster } from '../../../src/monitor/subPoster';
 
 const port = windowRpcPort();
 if (port) {
   registerBuiltinSources();
   const bridge = createRpcBridge(port);
   const readOnly = () => Promise.reject(new Error(t('notify.readOnly')));
+  // the bridge, not OmpNative: this WebView has no Capacitor plugin, and TMDB is fetched the same way as a TV search
+  const http = createSourceHttp((req) => bridge.http(req));
+  installRpcCatalog(http);
+  // a card poster is stored at once; one the TV did not have is looked up here
+  installSubPosters(lookupSubPoster);
   // interactive (no `background`): the TV's search is a person's search, like the app's own
   const ctx: SourceContext = {
-    http: createSourceHttp((req) => bridge.http(req)),
+    http: http,
     client: null,
     secrets: createSecretStore({ get: (key) => bridge.secretGet(key), set: readOnly, delete: readOnly }),
     // TV search keeps working when the phone app was not opened for days: the app renews the access token
