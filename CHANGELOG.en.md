@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.5
 
 - [phone] New, Calendar has List and Month, and the choice is kept. List puts episodes that are already out on top (the out badge and Find), then This week, Next week and Later, with the date on the row. Month is a grid with today highlighted, arrows and a swipe to change month, a marker and a count like +3 on days with episodes, and that day's episodes under the grid. List and Month read the same episodes: List keeps the nearest 30 days, and Month shows the open month. A season with no premiere date still stays in List when an episode aired recently. A show that failed is asked again and does not hide the shows that answered. The filter All / My subscriptions only is there because the calendar includes series from Mine and subscriptions. Tapping an episode opens a sheet with the poster, title and code: Open in the catalog goes to that season, Search releases looks up the title and season, and Cancel opens nothing. When the show is in the catalog and followed, Find the new episode searches that episode
 - [phone] The seed check in search is a dark chip labeled Check seeds, with a loading state and the answer, instead of an empty gray box. On a result card the chip is on its own line, so a narrow screen still fits the add, phone and TV buttons. The tracker's seed count is replaced after a check
