@@ -20,6 +20,7 @@ function assignRef(ref: Props['ref'], el: HTMLInputElement | null) {
 export function TextField(p: Props) {
   const { testCode, clearAttrs, clearLabel, ref, onInput, class: cls, className, ...rest } = p;
   const inner = useRef<HTMLInputElement>(null);
+  const hooked = useRef(false);
   const controlled = p.value != null;
   const [local, setLocal] = useState(controlled ? String(p.value) : '');
   useEffect(() => {
@@ -37,6 +38,25 @@ export function TextField(p: Props) {
         ref={(el) => {
           inner.current = el;
           assignRef(ref, el);
+          // An uncontrolled field can be cleared through the ref (the password after a failed login).
+          // The assignment does not fire input, so the clear button follows the value setter itself.
+          if (!el || controlled || hooked.current) return;
+          const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+          if (!desc || !desc.get || !desc.set) return;
+          hooked.current = true;
+          const get = desc.get;
+          const set = desc.set;
+          Object.defineProperty(el, 'value', {
+            configurable: true,
+            enumerable: true,
+            get() {
+              return get.call(this);
+            },
+            set(v: string) {
+              set.call(this, v);
+              setLocal(String(get.call(this)));
+            },
+          });
         }}
         onInput={(e) => {
           if (!controlled) setLocal((e.target as HTMLInputElement).value);

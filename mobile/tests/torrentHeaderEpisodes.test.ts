@@ -29,6 +29,12 @@ describe('torrent header episodes', () => {
     expect(torrentHeaderEpisodes(files, 2, 8)).toBe('3 файла');
   });
 
+  it('an episode that names no season is counted with the season on screen', () => {
+    const files = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.E03.mkv'].map(f);
+    expect(torrentHeaderEpisodes(files, 2, 8)).toBe('3 из 8 серий');
+    expect(torrentHeaderEpisodes(files, null, 8)).toBe('3 серии');
+  });
+
   it('a single file stays blank, as the header does for a film', () => {
     expect(torrentHeaderEpisodes([f('Show.S02E01.mkv')], 2, 8)).toBe('');
   });

@@ -626,7 +626,7 @@ export function Torrent({ hash }: { hash: string }) {
   };
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
-  const coming = shownFiles.length > 1 ? comingEpisodes(lastEpisodes(shownFiles), epsNow || {}, isoDay(Date.now())) : [];
+  const coming = comingEpisodes(lastEpisodes(shownFiles), epsNow || {}, isoDay(Date.now()));
   const seasonArt = showNow && typeof selectedSeason === 'number' ? showNow.seasonPosters[selectedSeason] || showNow.poster : '';
   const art = tor.poster || !seasonArt ? tor : { ...tor, poster: seasonArt };
   // «Сезон 2 · 5 из 8 серий»: the total is this season's TMDB episode_count, already remembered when the chip changes

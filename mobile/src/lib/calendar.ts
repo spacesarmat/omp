@@ -435,24 +435,21 @@ function spanCovers(from: string, to: string): boolean {
   return false;
 }
 
-function entryKey(e: CalEntry): string {
-  return e.show.card.id + ':' + e.season + ':' + e.episode;
+/** Episodes of one calendar month, keyed YYYY-MM. The list view does not read this. */
+let monthCache: { [ym: string]: CalEntry[] } = {};
+/** Bumps when a month's episodes arrive, so the grid renders them. */
+export const monthRev = signal(0);
+
+function monthKey(from: string): string {
+  return from.slice(0, 7);
 }
 
-/** Entries of `extra` that are not already in `base`, base order kept. */
-export function mergeEntries(base: CalEntry[], extra: CalEntry[]): CalEntry[] {
-  const seen: { [k: string]: boolean } = {};
-  const out = base.slice();
-  out.forEach((e) => {
-    seen[entryKey(e)] = true;
-  });
-  extra.forEach((e) => {
-    const k = entryKey(e);
-    if (seen[k]) return;
-    seen[k] = true;
-    out.push(e);
-  });
-  return out;
+const NO_MONTH: CalEntry[] = [];
+
+/** Episodes stored for that month. Empty until a successful read (the list window is not consulted). */
+export function entriesForMonth(year: number, month: number): CalEntry[] {
+  const hit = monthCache[monthKey(monthBounds(year, month).from)];
+  return hit || NO_MONTH;
 }
 
 /** Runs `run` over the items, at most `limit` at a time; resolves when all are done (failures included). */
@@ -593,6 +590,8 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
   spanGen++;
   knownShows = [];
   covered = [];
+  monthCache = {};
+  monthRev.value = monthRev.value + 1;
   const l = lang.peek();
   const prev = calendarState.peek();
   let resolved: CalShow[] = [];
@@ -669,13 +668,14 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
 }
 
 /**
- * Episodes of an open month that sit outside the default window (3 days back, 30 ahead). Merges them into the
- * calendar already on screen. A newer month cancels the previous read. No-op until the first gather has shows.
+ * Episodes of one open month, kept apart from the list window. A season that fails is not remembered, so the next
+ * visit asks again. A newer month cancels the previous read. No-op until the first gather has shows.
  */
 export function ensureCalendarSpan(from: string, to: string, now: number = Date.now()): Promise<void> {
   if (!from || !to || from > to || !knownShows.length || spanCovers(from, to)) return Promise.resolve();
   const my = ++spanGen;
   const shows = knownShows.slice();
+  const box = { failed: false };
   return phoneCatalog(false).then(
     (c) => {
       const extra: CalEntry[] = [];
@@ -685,19 +685,24 @@ export function ensureCalendarSpan(from: string, to: string, now: number = Date.
         const seasons: SeasonDetails[] = [];
         let chain: Promise<unknown> = Promise.resolve();
         numbers.forEach((n) => {
-          chain = chain.then(() => c.season(show.card.id, n).then((s) => {
-            seasons.push(s);
-          }, () => {}));
+          chain = chain.then(() => {
+            if (my !== spanGen) return;
+            return c.season(show.card.id, n).then((s) => {
+              seasons.push(s);
+            }, () => {
+              box.failed = true;
+            });
+          });
         });
         return chain.then(() => {
-          if (my !== spanGen) return;
+          if (my !== spanGen || box.failed) return;
           calendarEntries(show, seasons, now, { from: from, to: to }).forEach((e) => extra.push(e));
         });
       }).then(() => {
-        if (my !== spanGen) return;
+        if (my !== spanGen || box.failed) return;
+        monthCache[monthKey(from)] = extra;
         covered.push({ from: from, to: to });
-        const prev = calendarState.peek();
-        calendarState.value = { loading: prev.loading, entries: mergeEntries(prev.entries, extra), error: prev.error, at: prev.at, lang: prev.lang };
+        monthRev.value = monthRev.value + 1;
       });
     },
     () => {},
@@ -710,6 +715,8 @@ export function resetCalendar(): void {
   spanGen++;
   knownShows = [];
   covered = [];
+  monthCache = {};
+  monthRev.value = monthRev.value + 1;
   subShows.clear();
   calendarState.value = EMPTY;
 }
