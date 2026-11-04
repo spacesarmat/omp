@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.3
 
 - Test-mode labels sit in the bottom-right corner of the control, so a card edge no longer clips them. A grid code moves when it would cover the card in that same corner. On the TV and in the native player the size slider is 8-36 px, step 2, default 20. 8 px is 6 pt. On the phone it stays 8-24 px, step 1, default 12: that minimum was already 6 pt. On a TV the number is in the 1920x1080 layout, so 1080p and 4K show the same size
 - After a paid search is refused (the subscription has ended, or the device is over the limit), ads and the monitoring cap turn on at once, without waiting for the account screen to open again. A source that is switched off does not clear the subscription. A refusal for a request that started on an older code does not clear a subscription entered while it was running. A new /v1/me answer turns paid search back on. A phone linked through Telegram without a code still remembers that sign-in, so Settings offline does not say Sign in
