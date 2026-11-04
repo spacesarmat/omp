@@ -20,6 +20,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [lg] Separate dub files in a release (for example Rus Sound/LostFilm/Show.S01E01.mka) show up in the webOS player next to the built-in audio tracks. While one plays, the video stays muted and the file plays as its own audio in step with the picture. If the TV cannot open the file, the video track comes back on
 - [tech] The omp.tracks line is written to logcat through native logDiag. loggingBehavior stays none, and the line has no secrets
 - [tech] The android/vendor/2160player submodule is updated to v0.2.19 (5fde56f), player-core coordinate 0.2.19. The result contract is unchanged since 0.2.18. Embedded subtitles from the player result are not written to omp.a unless OMP had asked for a different external subtitle
+- [tech] Billing: one log line per finished or aborted POST /v1/search (time, source, HTTP status, duration, result count, Jackett indexer ok/fail/timeout counts, client disconnect). The device is the first 8 hex characters of sha256, with no token, query text, or keys
 
 ## 0.20.8-beta.2
 
