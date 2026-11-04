@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   MONITOR_FREE_MAX,
   PREMIUM_FRESH_MS,
@@ -8,10 +8,11 @@ import {
   ompSubscribed,
   saveBillingAccess,
 } from '../../src/billing/entitlement';
-import { premiumRecheckDue, recheckPremium, startPremiumRecheck } from '../../src/billing/recheck';
+import { nextRecheckDelay, premiumRecheckDue, recheckPremium, startPremiumRecheck } from '../../src/billing/recheck';
 import { saveBillingSession } from '../../src/billing/session';
 import { OMP_JACRED_ID, OMP_JACKETT_ID, syncOmpJackett } from '../../src/sources/ompJackett';
 import { getSource, unregisterSource } from '../../src/sources/registry';
+import type { HttpResponse } from '../../src/sources/types';
 import { fakeSite, page } from '../sources/fakeSite';
 
 const HOUR = 60 * 60 * 1000;
@@ -104,6 +105,41 @@ describe('premium confirmation', () => {
     expect(monitorMax(now)).toBe(10);
     expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('the next interval is 6 hours after the answer, even when that answer lands after the wait began', async () => {
+    vi.useFakeTimers();
+    try {
+      const start = Date.now();
+      saveBillingSession({ token: 'tok', paidUntil: start + 30 * 24 * HOUR });
+      let release: (r: HttpResponse) => void = () => undefined;
+      const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+      const site = fakeSite(() => gate);
+      const stop = startPremiumRecheck(() => site.ctx);
+      for (let i = 0; i < 30 && site.calls.length === 0; i++) await Promise.resolve();
+      expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
+
+      // The startup answer is 30s late. A timer started at open would fire 30s before this answer is 6h old and skip it.
+      await vi.advanceTimersByTimeAsync(30_000);
+      release(page(JSON.stringify({
+        active: true,
+        paidUntil: start + 30 * 24 * HOUR,
+        accessUntil: start + 30 * 24 * HOUR,
+        monitorMax: 0,
+        sources: { jackett: true, jacred: true },
+      }), 'http://billing'));
+      for (let i = 0; i < 40; i++) await Promise.resolve();
+      expect(nextRecheckDelay(Date.now())).toBe(PREMIUM_FRESH_MS);
+
+      await vi.advanceTimersByTimeAsync(PREMIUM_FRESH_MS - 1);
+      expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      for (let i = 0; i < 40 && site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0).length < 2; i++) await Promise.resolve();
+      expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(2);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('startPremiumRecheck asks once at startup when the cache is stale, and stops', async () => {

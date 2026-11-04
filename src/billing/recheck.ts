@@ -14,6 +14,18 @@ export function premiumRecheckDue(now: number, reason: 'resume' | 'interval'): b
   return age >= PREMIUM_FRESH_MS;
 }
 
+/**
+ * Wait until the next interval check. Measured from the last /v1/me, not from when the timer was created.
+ * A startup request that finishes after the wait began would otherwise look a few seconds short of 6 hours
+ * on the first tick, get skipped, and not run again until about 12 hours.
+ */
+export function nextRecheckDelay(now: number): number {
+  const at = premiumCheckedAt();
+  if (!at || at > now + 60000) return PREMIUM_FRESH_MS;
+  const remain = at + PREMIUM_FRESH_MS - now;
+  return remain > 0 ? remain : PREMIUM_FRESH_MS;
+}
+
 let inflight: Promise<void> | null = null;
 
 /** One /v1/me when it is due. `force` asks even inside the resume gap (a list already over the free cap). */
@@ -42,21 +54,31 @@ export function recheckPremium(
 }
 
 /**
- * Foreground page: check at start, when the app comes back, and on a 6 hour timer.
+ * Foreground page: check at start, when the app comes back, and again 6 hours after the last answer.
+ * The wait is armed when a check settles, so a slow startup /v1/me does not push the next one to 12 hours.
  * Returns a stopper (tests).
  */
 export function startPremiumRecheck(ctxOf: () => SourceContext): () => void {
-  const tick = (reason: 'resume' | 'interval') => {
-    void recheckPremium(ctxOf(), reason);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
+  const arm = () => {
+    if (stopped) return;
+    if (timer !== null) clearTimeout(timer);
+    const wait = nextRecheckDelay(Date.now());
+    timer = setTimeout(() => {
+      timer = null;
+      void recheckPremium(ctxOf(), 'interval').then(arm, arm);
+    }, wait);
   };
-  tick('resume');
-  const timer = setInterval(() => tick('interval'), PREMIUM_FRESH_MS);
+  void recheckPremium(ctxOf(), 'resume').then(arm, arm);
   const onVisible = () => {
-    if (document.visibilityState === 'visible') tick('resume');
+    if (document.visibilityState !== 'visible') return;
+    void recheckPremium(ctxOf(), 'resume').then(arm, arm);
   };
   document.addEventListener('visibilitychange', onVisible);
   return () => {
-    clearInterval(timer);
+    stopped = true;
+    if (timer !== null) clearTimeout(timer);
     document.removeEventListener('visibilitychange', onVisible);
   };
 }
