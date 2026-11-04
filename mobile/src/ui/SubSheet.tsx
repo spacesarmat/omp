@@ -12,6 +12,7 @@ import { allSources } from '../../../src/sources/registry';
 import { enabledSources } from '../../../src/sources/store';
 import { subsLimitReached } from '../../../src/monitor/limit';
 import { SubsLimitSheet } from './SubsLimitSheet';
+import { TextField } from './TextField';
 
 const CHECK = 'M5 12l5 5l9-10';
 const CHEVRON = 'M9 6l6 6-6 6';
@@ -151,7 +152,7 @@ export function SubSheet(p: {
       <div class="m-sheet-scroll m-sub-form">
         <div class="m-field">
           <label for="m-sub-query">{t('monitor.sub.query')}</label>
-          <input id="m-sub-query" class="m-input" type="text" value={query} onInput={(e) => setQuery((e.target as HTMLInputElement).value)} />
+          <TextField id="m-sub-query" class="m-input" type="text" value={query} onInput={(e) => setQuery((e.target as HTMLInputElement).value)} />
         </div>
         <div class="m-muted m-small">{t('monitor.sub.quality')}</div>
         <div class="m-chips" style={{ flexWrap: 'wrap' }}>
@@ -170,11 +171,11 @@ export function SubSheet(p: {
         <div class="m-marks-pair">
           <div class="m-field">
             <label for="m-sub-seeds">{t('monitor.sub.seeds')}</label>
-            <input id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
+            <TextField id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
           </div>
           <div class="m-field">
             <label for="m-sub-size">{t('monitor.sub.size')}</label>
-            <input
+            <TextField
               id="m-sub-size"
               class="m-input"
               type="text"

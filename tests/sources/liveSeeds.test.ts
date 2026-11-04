@@ -270,4 +270,34 @@ describe('queue', () => {
     await Promise.resolve();
     expect(f.pending).toHaveLength(3);
   });
+
+  it('a manual check keeps running after the row scrolls away', async () => {
+    const f = fake();
+    const h = hash(7);
+    const targets = httpTracker(h, 'a.example');
+    const stop = f.queue.watch({ hash: h, trackers: targets, seed: 1, peer: 0 });
+    const checked = f.queue.check({ hash: h, trackers: targets, seed: 1, peer: 0 });
+    await Promise.resolve();
+    const cancelled = f.cancelled.length;
+    stop();
+    expect(f.cancelled).toHaveLength(cancelled);
+    const url = f.pending[f.pending.length - 1].key;
+    f.pending[f.pending.length - 1].resolve(scrapeBody(4, 2, h));
+    await expect(checked).resolves.toMatchObject({ seeders: 4, leechers: 2, live: true });
+    expect(url).toContain('a.example');
+  });
+
+  it('two checks of one hash both finish', async () => {
+    const f = fake();
+    const h = hash(8);
+    const targets = httpTracker(h, 'b.example');
+    const first = f.queue.check({ hash: h, trackers: targets, seed: 1, peer: 0 });
+    const second = f.queue.check({ hash: h, trackers: targets, seed: 1, peer: 0 });
+    await Promise.resolve();
+    const last = f.pending[f.pending.length - 1];
+    last.resolve(scrapeBody(3, 1, h));
+    const [a, b] = await Promise.all([first, second]);
+    expect(a).toMatchObject({ seeders: 3, leechers: 1, live: true });
+    expect(b).toMatchObject({ seeders: 3, leechers: 1, live: true });
+  });
 });

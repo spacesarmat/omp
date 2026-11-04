@@ -1,10 +1,11 @@
 import { t } from '../i18n';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import { useFocusable, FocusContext, pause, resume } from '@noriginmedia/norigin-spatial-navigation';
+import { useFocusable, FocusContext, pause, resume, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { badgeFor, TestBadge } from '../testmode/badge';
 import { scrollIntoViewSafe } from './focus';
 import { Icon, IconName } from './icons';
+import { ClearMark, fieldHasText } from './clearField';
 
 interface FocusableProps {
   focusKey?: string;
@@ -24,6 +25,8 @@ interface FocusableProps {
   testValue?: unknown;
   /** Badge text already resolved (dialog rows). Empty hides it. */
   testCode?: string;
+  /** A pointer click stays on this control and does not reach a parent row. */
+  isolateClick?: boolean;
   children?: ComponentChildren | ((focused: boolean) => ComponentChildren);
 }
 
@@ -49,7 +52,13 @@ export function Focusable(p: FocusableProps) {
       aria-label={p.ariaLabel}
       aria-checked={p.ariaChecked}
       onMouseEnter={() => { if (!p.disabled) focusSelf(); }}
-      onClick={() => { if (!p.disabled && p.onPress) p.onPress(); }}
+      onClick={(e) => {
+        if (p.isolateClick) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (!p.disabled && p.onPress) p.onPress();
+      }}
     >
       {typeof p.children === 'function' ? (p.children as (f: boolean) => ComponentChildren)(focused) : p.children}
       {code ? <TestBadge code={code} /> : null}
@@ -175,6 +184,31 @@ export function TextInput(p: TextInputProps) {
           }
         }}
       />
+      {fieldHasText(p.value) && (
+        <Focusable
+          focusKey={(p.focusKey || focusKey) + '-clear'}
+          className="field-clear"
+          role="button"
+          ariaLabel={t('common.clearField')}
+          onPress={() => {
+            p.onChange('');
+            setFocus(p.focusKey || focusKey);
+            if (inputRef.current) inputRef.current.focus();
+          }}
+        >
+          <span
+            class="field-clear-hit"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              p.onChange('');
+              if (inputRef.current) inputRef.current.focus();
+            }}
+          >
+            <ClearMark />
+          </span>
+        </Focusable>
+      )}
       {code ? <TestBadge code={code} /> : null}
     </div>
   );

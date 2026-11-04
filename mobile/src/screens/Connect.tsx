@@ -27,6 +27,7 @@ import {
 import { connectServer } from '../connect/connectServer';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
+import { TextField } from '../ui/TextField';
 
 type ServerScanner = (isCancelled: () => boolean, onFound?: (s: FoundServer) => void) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
@@ -414,7 +415,7 @@ export function Connect() {
         <div class="m-field-group">
           <div class="m-field">
             <label for="user">{t('common.login')}</label>
-            <input
+            <TextField
               id="user"
               class="m-input"
               type="text"
@@ -426,7 +427,7 @@ export function Connect() {
           </div>
           <div class="m-field">
             <label for="pass">{t('common.password')}</label>
-            <input
+            <TextField
               id="pass"
               class="m-input"
               type="password"

@@ -6,6 +6,7 @@ import {
 import { Icon } from './Icon';
 import { useLongPress } from './longPress';
 import { vibrate } from './vibrate';
+import { TextField } from './TextField';
 
 const BACKSPACE = 'M9 5h11v14H9l-6-7zM12 9l6 6M18 9l-6 6';
 const KEYBOARD = 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8';
@@ -130,7 +131,7 @@ export function AddressInput(p: Props) {
   return (
     <div class="m-addr" ref={wrap}>
       <div class="m-addr-row">
-        <input
+        <TextField
           ref={input}
           id={p.id}
           class={'m-input m-addr-input' + (open ? ' m-addr-input--open' : '')}

@@ -124,4 +124,26 @@ describe('TV torrent screen · announced episodes', () => {
     expect(coming()).toHaveLength(0);
     expect(host.querySelectorAll('.file-row')).toHaveLength(6);
   });
+
+  it('a pack keeps files with no season behind Дополнительно', async () => {
+    await mount({
+      hash: 'ahs',
+      title: 'AHS',
+      category: 'tv',
+      stat: 3,
+      file_stats: [
+        { id: 1, path: 'Show.S01E01.mkv', length: 1 },
+        { id: 2, path: 'Show.S02E01.mkv', length: 1 },
+        { id: 3, path: 'Extras/Interview.mkv', length: 1 },
+      ],
+    });
+    expect(text(host.querySelector('[data-fk="torrent-season-other"]'))).toBe('Дополнительно');
+    const names = () => Array.prototype.slice.call(host.querySelectorAll('.file-row .name')).map((n: Element) => n.textContent || '');
+    expect(names().join(' ')).toContain('S01E01');
+    expect(names().join(' ')).not.toContain('Interview');
+    act(() => { (host.querySelector('[data-fk="torrent-season-other"]') as HTMLElement).click(); });
+    expect(names().join(' ')).toContain('Interview');
+    expect(names().join(' ')).not.toContain('S01E01');
+    expect(text(host.querySelector('h2'))).toBe('Дополнительно');
+  });
 });

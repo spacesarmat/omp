@@ -44,6 +44,7 @@ import { errorMessage } from '../../../src/api/http';
 import { vibrate } from '../ui/vibrate';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { BoxCodeSheet } from '../ui/BoxCodeSheet';
+import { TextField } from '../ui/TextField';
 import {
   boxActive,
   boxError,
@@ -471,7 +472,7 @@ function TvKeyboard({ typing, onClose }: { typing?: Typing; onClose: () => void 
     <div class="m-remote-type-host" role="dialog" aria-label={t('remote.typeLabel')}>
       <button type="button" class="m-remote-type-scrim" aria-label={t('common.close')} onClick={onClose} />
       <div class="m-remote-type-bar">
-        <input
+        <TextField
           ref={field}
           class="m-input m-remote-type"
           aria-label={t('remote.typeLabel')}

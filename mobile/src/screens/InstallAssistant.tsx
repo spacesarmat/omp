@@ -24,6 +24,7 @@ import { deviceFacts } from '../install/facts';
 import { createTakeover, otherConnection, takeoverQuestion, type OtherTv } from '../install/session';
 import { Sheet } from '../ui/Sheet';
 import { InstallBox } from '../install/InstallBox';
+import { TextField } from '../ui/TextField';
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const BACK = 'M15 5l-7 7 7 7';
@@ -148,7 +149,7 @@ function Find() {
       {manual ? (
         <form class="m-field" onSubmit={submit}>
           <label for="install-ip">{t('install.assistant.ipLabel')}</label>
-          <input
+          <TextField
             id="install-ip"
             class="m-input"
             type="text"

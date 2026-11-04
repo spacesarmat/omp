@@ -430,6 +430,7 @@ addScreen('S07', ['add'], 'Поиск', 'Search', [
   item('S07.7', ['search-kind-series'], 'Сериалы', 'Series'),
   item('S07.8', ['search-kind-audiobook'], 'Аудиокниги', 'Audiobooks'),
   item('S07.9', ['search-sort'], 'Сортировка', 'Sort'),
+  item('S07.10', ['search-seed-check'], 'Проверить сиды', 'Check seeds'),
 ]);
 
 addScreen('S08', ['playlist'], 'Плейлисты', 'Playlists', [
@@ -537,6 +538,7 @@ addScreen('S18', ['library:news'], 'Новое', 'News', [
   item('S18.4', ['news-retry'], 'Повторить', 'Retry'),
   item('S18.5', ['news-subs-retry'], 'Повторить подписки', 'Retry subscriptions'),
   item('S18.6', ['news-subs-find'], 'Найти подписку', 'Find a subscription'),
+  item('S18.7', ['news-seed-check'], 'Проверить сиды', 'Check seeds'),
 ]);
 
 export function screens(): ScreenDef[] {
@@ -683,6 +685,7 @@ addDialog('D43', 'better', 'В лучшем качестве', 'Better quality',
   item('D43.1', ['better-cancel'], 'Отмена', 'Cancel'),
   item('D43.2', ['better-search-all'], 'Искать везде', 'Search everywhere'),
   item('D43.3', ['better-follow'], 'Следить за лучшим качеством', 'Follow better quality'),
+  item('D43.4', ['better-seed-check'], 'Проверить сиды', 'Check seeds'),
 ]);
 addDialog('D44', 'marks', 'Заставка и титры', 'Intro and credits', [
   item('D44.1', ['marks-from'], 'Заставка с', 'Intro from'),

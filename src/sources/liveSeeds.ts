@@ -311,6 +311,15 @@ export class LiveSeedCache {
     if (entry.live) this.persist();
   }
 
+  /** Drops one hash so a manual check asks the tracker again. A saved success is dropped from disk too. */
+  forget(hash: string): void {
+    this.load();
+    const prev = this.mem[hash];
+    if (!prev) return;
+    delete this.mem[hash];
+    if (prev.live) this.persist();
+  }
+
   private trim(): void {
     const keys = Object.keys(this.mem);
     if (keys.length <= MEM_MAX) return;
@@ -430,6 +439,8 @@ interface Flight {
 
 export interface ScrapeQueue {
   watch(job: ScrapeJob): () => void;
+  /** Asks the trackers now, even when a cached count exists and even when the setting is off. */
+  check(job: ScrapeJob): Promise<LiveSeedEntry>;
   subscribe(hash: string, fn: () => void): () => void;
   get(hash: string): LiveSeedEntry | null;
 }
@@ -462,6 +473,8 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
   const jobs: { [hash: string]: JobState } = {};
   const refs: { [hash: string]: number } = {};
   const listeners: { [hash: string]: Array<() => void> } = {};
+  /** Manual check() callers. Separate from subscribe listeners so emit can snapshot them. */
+  const waiters: { [hash: string]: Array<(e: LiveSeedEntry) => void> } = {};
   const order: string[] = [];
   const flights: Flight[] = [];
   const stamps: number[] = [];
@@ -469,8 +482,15 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
 
   function emit(hash: string): void {
     const list = listeners[hash];
-    if (!list) return;
-    for (let i = 0; i < list.length; i++) list[i]();
+    if (list) {
+      const snap = list.slice();
+      for (let i = 0; i < snap.length; i++) snap[i]();
+    }
+    const entry = o.cache.get(hash);
+    const pending = waiters[hash];
+    if (!entry || !pending || !pending.length) return;
+    delete waiters[hash];
+    for (let i = 0; i < pending.length; i++) pending[i](entry);
   }
 
   function startsAllowed(): boolean {
@@ -577,6 +597,35 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
 
   return {
     get: (hash) => o.cache.get(hash),
+    check(job) {
+      const hash = job.hash;
+      o.cache.forget(hash);
+      const prev = jobs[hash];
+      if (prev && prev.wanted && !prev.done) cancelJob(prev);
+      const trackers = job.trackers.slice(0, maxTrackers);
+      const j: JobState = {
+        hash: hash,
+        trackers: trackers,
+        seed: job.seed,
+        peer: job.peer,
+        next: 0,
+        answers: [],
+        gen: prev ? prev.gen + 1 : 1,
+        wanted: true,
+        done: false,
+      };
+      jobs[hash] = j;
+      return new Promise((resolve) => {
+        if (!waiters[hash]) waiters[hash] = [];
+        waiters[hash].push(resolve);
+        if (!trackers.length) {
+          finish(j);
+          return;
+        }
+        order.push(hash);
+        pump();
+      });
+    },
     subscribe(hash, fn) {
       if (!listeners[hash]) listeners[hash] = [];
       listeners[hash].push(fn);
@@ -620,6 +669,8 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
         delete refs[hash];
         const j = jobs[hash];
         if (!j || j.done) return;
+        // a manual check shares this job: scrolling the row away must not drop it
+        if (waiters[hash] && waiters[hash].length) return;
         cancelJob(j);
       };
     },

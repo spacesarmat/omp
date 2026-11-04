@@ -436,7 +436,7 @@ export function NewsTv(p: NewsTvProps) {
                 {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
               </div>
               <div class="search-side">
-                <TvSearchSize r={x.r} size={resultSizeText(x.r)} />
+                <TvSearchSize r={x.r} size={resultSizeText(x.r)} seedCode="S18.7" />
                 <div class="search-src">
                   <span class="src-badge">{tvGlyphs(sourceBadge(x.r))}</span>
                 </div>
@@ -805,7 +805,7 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
                 onPress={() => check(s)}
                 onFocused={p.onFocused}
               />
-              <Button focusKey={subKey(s.id, 'remove')} className="danger" label={t('tv.subs.remove')} onPress={() => remove(s)} onFocused={p.onFocused} />
+              <Button focusKey={subKey(s.id, 'remove')} className="danger news-sub-remove" icon="trash" label={t('tv.subs.remove')} onPress={() => remove(s)} onFocused={p.onFocused} />
             </FocusGroup>
           </div>
           );

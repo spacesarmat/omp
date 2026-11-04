@@ -565,7 +565,7 @@ export function AddScreen() {
                   {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
                 </div>
                 <div class="search-side">
-                  <TvSearchSize r={r} size={resultSizeText(r)} />
+                  <TvSearchSize r={r} size={resultSizeText(r)} seedCode="S07.10" />
                   <div class="search-src">
                     <span class="src-badge">{tvGlyphs(sourceBadge(r))}</span>
                     {also && <span class="search-also">{also}</span>}

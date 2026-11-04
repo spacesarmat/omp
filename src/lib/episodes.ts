@@ -89,6 +89,57 @@ export interface Season {
   files: TorrentFile[];
 }
 
+/** Season numbers the playable files name, lowest first. A file with no season is left out. */
+export function seasonsInFiles(files: TorrentFile[]): number[] {
+  const out: number[] = [];
+  files.forEach((file) => {
+    const s = parseEpisode(file.path).season;
+    if (s !== null && out.indexOf(s) < 0) out.push(s);
+  });
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+/** Playable files of one season. Numbering inside the list is that season's own episode numbers. */
+export function filesOfSeason(files: TorrentFile[], season: number): TorrentFile[] {
+  return files.filter((file) => parseEpisode(file.path).season === season);
+}
+
+/**
+ * The season a multi-season release shows. `picked` wins when it is one of `seasons`; otherwise the first.
+ * A release with fewer than two seasons has nothing to switch.
+ */
+export function pickedSeason(seasons: number[], picked: number | null): number | null {
+  if (seasons.length < 2) return seasons.length === 1 ? seasons[0] : null;
+  if (picked !== null && seasons.indexOf(picked) >= 0) return picked;
+  return seasons[0];
+}
+
+export type PackPick = number | 'other';
+
+/** True when a playable file names no season (an interview, a menu, a loose extra). */
+export function hasLooseFiles(files: TorrentFile[]): boolean {
+  for (let i = 0; i < files.length; i++) if (parseEpisode(files[i].path).season === null) return true;
+  return false;
+}
+
+/**
+ * Which chip a multi-season pack shows. `'other'` is the files with no season.
+ * A release with one season does not switch.
+ */
+export function activePackPick(seasons: number[], loose: boolean, picked: PackPick | null): PackPick | null {
+  if (seasons.length < 2) return seasons.length === 1 ? seasons[0] : null;
+  if (picked === 'other' && loose) return 'other';
+  if (typeof picked === 'number' && seasons.indexOf(picked) >= 0) return picked;
+  return seasons[0];
+}
+
+/** Files of the picked chip: one numbered season, or the files that name no season. */
+export function filesForPack(files: TorrentFile[], pick: PackPick): TorrentFile[] {
+  if (pick === 'other') return files.filter((file) => parseEpisode(file.path).season === null);
+  return filesOfSeason(files, pick);
+}
+
 export function groupBySeason(files: TorrentFile[]): Season[] {
   const map: { [k: string]: Season } = {};
   const keys: string[] = [];

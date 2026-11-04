@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
 import { t } from '../../../src/i18n';
+import { TextField } from './TextField';
 
 const LEN = 6;
 
@@ -41,7 +42,7 @@ export function BoxCodeSheet({ onSubmit, onCancel }: { onSubmit: (code: string) 
       <form class="m-field m-code-form" onSubmit={submit} data-box-code>
         <div class="m-sheet-title">{title}</div>
         <p class="m-muted m-note">{t('remote.box.codeNote')}</p>
-        <input
+        <TextField
           ref={field}
           class="m-input m-box-code"
           type="text"

@@ -3,7 +3,6 @@ import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
 import { t } from '../../../src/i18n';
 import { compareVersions } from '../../../src/lib/version';
-
 /** First Android TV build that shows a 6-digit pairing code. Older builds still show 4. */
 export const CODE_LEN_6 = '0.20.1-beta.11';
 

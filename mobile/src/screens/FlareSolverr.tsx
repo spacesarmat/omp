@@ -26,6 +26,7 @@ import {
 import type { LanScan } from '../../../src/sources/indexerDiscovery';
 import type { SourceContext } from '../../../src/sources/types';
 import { log } from '../../../src/lib/log';
+import { TextField } from '../ui/TextField';
 
 export const addressRemoved = () => t('sources.flare.addressRemoved');
 
@@ -122,7 +123,7 @@ export function FlareSolverr({ ctx = phoneSourceContext, scan = phoneScan }: { c
         <div class="m-flare-intro">{flareIntro()}</div>
         <div class="m-field">
           <label for="flare-url">{t('connect.addressShort')}</label>
-          <input
+          <TextField
             id="flare-url"
             class="m-input"
             type="url"

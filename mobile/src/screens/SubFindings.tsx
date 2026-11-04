@@ -23,7 +23,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   const [fresh, setFresh] = useState<string[]>(() => list.filter((f) => !f.seen).map((f) => f.key));
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState(!!watch);
-  const rows = useResultRows();
+  const rows = useResultRows({ seedCode: 'P04.2' });
   const busy = checkingSubs.value.indexOf(id) >= 0;
   const paused = !!sub && isSubPaused(id);
 

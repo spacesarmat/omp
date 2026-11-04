@@ -4,7 +4,7 @@
 import type { Torrent } from '../../../src/api/types';
 import { tp } from '../../../src/i18n';
 import { episodesOutOf } from '../../../src/lib/episodesOutOf';
-import { baseName, playableFiles, type TorrentFile } from '../../../src/lib/episodes';
+import { baseName, filesOfSeason, playableFiles, type TorrentFile } from '../../../src/lib/episodes';
 import { fileEpisodes } from '../../../src/lib/categoryCheck';
 import { externalNoteText } from '../../../src/lib/externalNote';
 import { filesOf } from '../watch';
@@ -49,26 +49,21 @@ export function extrasText(tor: Torrent): string {
   return externalNoteText(filesOf(tor));
 }
 
-/** Every content file's episodes belong to `season` (a file with no season number counts as this season). */
-function oneSeason(files: TorrentFile[], season: number): boolean {
-  const list = contentFiles(files);
-  for (let i = 0; i < list.length; i++) {
-    const e = fileEpisodes(list[i].path);
-    if (!e) return false;
-    if (e.season !== null && e.season !== season) return false;
-  }
-  return list.length > 0;
-}
-
 /**
- * The episode part of the torrent header. «5 из 8 серий» when the files are that one season and its TMDB total is
- * known; a pack of several seasons stays «18 серий» (one season's total would not match the count). Unknown total,
- * or files that are not episodes, stays «5 серий» / «16 файлов».
+ * The episode part of the torrent header. «5 из 8 серий» when that season's total is known.
+ * A pack is counted for the season on screen, not for every episode in the torrent.
+ * Unknown total, or files that are not episodes, stays «5 серий» / «16 файлов».
  */
 export function torrentHeaderEpisodes(files: TorrentFile[], season: number | null, total: number): string {
-  const plain = contentsTextOf(files);
+  // a pack: the header follows the season on screen, not every episode in the torrent
+  const scoped = season === null ? files : filesOfSeason(files, season);
+  const counting = scoped.length ? scoped : files;
+  // one episode of a pack is still «1 серия»; a torrent that is a single file stays blank
+  const oneOfPack = season !== null && files.length > 1 && counting.length === 1;
+  const nOne = oneOfPack ? episodeCountOf(counting) : null;
+  const plain = nOne ? tp('library.episodes', nOne) : contentsTextOf(counting);
   if (!plain || season === null || !(total > 0)) return plain;
-  const n = episodeCountOf(files);
-  if (n === null || !oneSeason(files, season)) return plain;
+  const n = episodeCountOf(counting);
+  if (n === null) return plain;
   return episodesOutOf(n, total);
 }
