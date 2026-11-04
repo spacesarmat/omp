@@ -91,6 +91,25 @@ describe('monitor RPC', () => {
     expect(d.checkSubscription).toHaveBeenCalledWith(expect.objectContaining({ id: s.id }), [builtin]);
     reload.mockRestore();
   });
+  it('wantAdd keeps the card poster and subRemove by query deletes only that title', async () => {
+    const rpc = createRpcHandler(deps() as never);
+    const bare = await rpc.dispatch('wantAdd', {
+      query: 'Дюна 2021',
+      catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: 'http://insecure/p.jpg' },
+    }) as { sub: { poster?: string } };
+    expect(loadSubs()[0].catalog).toEqual({ kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: '' });
+    expect(bare.sub.poster).toBeUndefined();
+    const posted = await rpc.dispatch('wantAdd', {
+      query: 'Другой 2020',
+      catalog: { kind: 'movie', id: 8, title: 'Другой', year: 2020, poster: 'https://img.test/d.jpg' },
+    }) as { created: boolean; sub: { poster?: string } };
+    expect(posted.created).toBe(true);
+    expect(posted.sub.poster).toBe('https://img.test/d.jpg');
+    expect(await rpc.dispatch('subRemove', { query: 'другой 2020' })).toEqual({ removed: true });
+    expect(loadSubs().map((s) => s.query)).toEqual(['Дюна 2021']);
+    await rpc.dispatch('subs', {});
+    expect(loadSubs().map((s) => s.query)).toEqual(['Дюна 2021']);
+  });
   it('subRemove leaves the reserved episodes / better findings alone', async () => {
     addFindings([{ subId: EPISODES_ID, key: 'h:2:5', result: row('S02E05') as never, at: 5, episodes: { torrentHash: 'h', torrentTitle: 'X', season: 2, haveTo: 4, to: 5 } }]);
     addFindings([{ subId: BETTER_ID, key: 'h2:3', result: row('4K') as never, at: 9, better: { torrentHash: 'h2', torrentTitle: 'Y', have: '1080p', got: '4K' } }]);

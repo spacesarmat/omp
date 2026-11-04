@@ -246,7 +246,13 @@ describe('series screen', () => {
     act(() => button('Напомнить')!.click());
     const subs = loadSubs();
     expect(subs.length).toBe(1);
-    expect(subs[0]).toMatchObject({ query: torrentQuery(NEXT_SEASON, 3), quality: '', sources: null, notify: true });
+    expect(subs[0]).toMatchObject({
+      query: torrentQuery(NEXT_SEASON, 3),
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'tv', id: NEXT_SEASON.id, title: NEXT_SEASON.title, year: NEXT_SEASON.year, poster: '' },
+    });
     expect(toast.value).toBe('Подписка добавлена - смотрите «Новое»');
     await flush();
     expect(button('Напомнить')).toBeUndefined();

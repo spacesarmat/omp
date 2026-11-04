@@ -29,7 +29,9 @@ import { monitorFinished, reloadMonitor } from '../src/monitor/ui';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { reloadSourcePrefs, resetHealth, setSourceOn } from '../../src/sources/store';
 import { saveFeed, loadFeed } from '../../src/monitor/feedCache';
-import { addFindings, addSubscription, findingsOf, loadFound, unseenCount } from '../../src/monitor/subs';
+import { addFindings, addSubscription, findingsOf, loadFound, loadSubs, setSubscriptionPoster, unseenCount } from '../../src/monitor/subs';
+import { installSubPosters } from '../../src/monitor/subPoster';
+import { acceptConfirm, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 import { saveLastRun } from '../../src/monitor/settings';
 import type { FeedCategory, Source, SourceResult } from '../../src/sources/types';
 import type { Finding } from '../../src/monitor/types';
@@ -110,6 +112,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  installSubPosters(null);
+  unmountConfirmHost();
   setShareSender(null);
   vi.useRealTimers();
   act(() => render(null, el));
@@ -282,6 +286,67 @@ describe('«Новое» · Подписки', () => {
     await mount({ seg: 'subs' });
     click(el.querySelector('.m-sub-row')!);
     expect(currentRoute.value).toEqual({ name: 'subFindings', id: s.id });
+  });
+
+  it('shows a stored poster and a letter tile only when none exists', async () => {
+    addSubscription({
+      query: 'Дюна',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: 'https://img.test/d.jpg' },
+    }, 2);
+    const empty = addSubscription({
+      query: 'Пусто',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'movie', id: 8, title: 'Пусто', year: 2020, poster: '' },
+    }, 1)!;
+    setSubscriptionPoster(empty.id, '');
+    await mount({ seg: 'subs' });
+    const imgs = el.querySelectorAll('img.m-sub-poster');
+    expect(imgs.length).toBe(1);
+    expect(imgs[0].getAttribute('src')).toBe('https://img.test/d.jpg');
+    const ph = el.querySelector('.m-sub-ph');
+    expect(ph).toBeTruthy();
+    expect(ph!.textContent).toBeTruthy();
+    // still waiting on a lookup: a blank slot, not letters
+    addSubscription({ query: 'Жду', quality: '', sources: null, notify: true }, 3);
+    await mount({ seg: 'subs' });
+    const waiting = Array.from(el.querySelectorAll('.m-sub-row')).find((r) => (r.textContent || '').indexOf('Жду') >= 0)!;
+    expect(waiting.querySelector('img.m-sub-poster')).toBeNull();
+    expect(waiting.querySelector('.m-sub-ph')).toBeNull();
+    expect(waiting.querySelector('.m-sub-poster')).toBeTruthy();
+  });
+
+  it('Delete asks, removes that subscription, and a refresh does not bring it back', async () => {
+    const keep = addSubscription({ query: 'Оставить', quality: '', sources: null, notify: true }, 1)!;
+    const gone = addSubscription({ query: 'Убрать', quality: '', sources: null, notify: true }, 2)!;
+    await mount({ seg: 'subs' });
+    mountConfirmHost();
+    const button = el.querySelector('[data-sub-remove="' + gone.id + '"]') as HTMLButtonElement;
+    expect(button.getAttribute('data-code')).toBe('P03.4');
+    click(button);
+    expect(document.getElementById('m-confirm-msg')!.textContent).toBe('Удалить подписку «Убрать»?');
+    await declineConfirm();
+    expect(loadSubs().map((s) => s.id).sort()).toEqual([keep.id, gone.id].sort());
+    click(el.querySelector('[data-sub-remove="' + gone.id + '"]')!);
+    await acceptConfirm();
+    expect(loadSubs().map((s) => s.query)).toEqual(['Оставить']);
+    reloadMonitor();
+    await flush();
+    expect(loadSubs().map((s) => s.query)).toEqual(['Оставить']);
+    expect(el.textContent).not.toContain('Убрать');
+  });
+
+  it('a poster looked up after the subscription was added stays on the row', async () => {
+    installSubPosters(async () => ({ poster: 'https://img.test/found.jpg' }));
+    addSubscription({ query: 'Дюна 2021', quality: '', sources: null, notify: true }, 1);
+    await flush();
+    await mount({ seg: 'subs' });
+    expect(loadSubs()[0].poster).toBe('https://img.test/found.jpg');
+    expect(el.querySelector('img.m-sub-poster')!.getAttribute('src')).toBe('https://img.test/found.jpg');
   });
 
   it('«+ Новая подписка» opens the sheet and creates one', async () => {

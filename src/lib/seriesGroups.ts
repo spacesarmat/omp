@@ -4,15 +4,14 @@ import type { Torrent } from '../api/types';
 import { seriesNameVariants } from '../monitor/newEpisodes';
 import { parseEpisodeRange } from '../monitor/episodes';
 import { guessCategory } from './categoryGuess';
-import { displayTitle } from './torrentName';
+import { displayTitle, torrentFiles } from './torrentName';
 import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
 import { lang, tp } from '../i18n';
-import { parseTorrentData } from '../api/torrserver';
 import { fileEpisodes, filesHaveEpisodes, hasMainVideo, titleHasEpisodes } from './categoryCheck';
 
 function filesOf(t: Torrent) {
-  return t.file_stats && t.file_stats.length ? t.file_stats : parseTorrentData(t.data);
+  return torrentFiles(t);
 }
 
 /** Season 0: the torrent says nothing about its season. */

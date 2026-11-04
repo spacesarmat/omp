@@ -569,7 +569,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 focusKey={'season-' + n}
                 className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
-                onFocused={() => { pick(n); showChip(n); }}
+                onFocused={() => showChip(n)}
                 onArrow={arrowUpToAbove('season-' + n)}
                 onPress={() => pick(n)}
               >
