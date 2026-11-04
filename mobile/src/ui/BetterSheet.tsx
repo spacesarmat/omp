@@ -25,6 +25,7 @@ import {
 } from '../../../src/monitor/upgrade';
 import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
+import { SeedCheck } from '../../../src/ui/SeedCheck';
 import type { SourceResult } from '../../../src/sources/types';
 import type { LibraryTorrent } from '../../../src/monitor/newEpisodes';
 import { coverageNote, episodesNote, failureOf, qualityOrUnknown, type Failure } from '../../../src/monitor/upgradeText';
@@ -184,7 +185,11 @@ export function BetterSheet({
           ↓
         </div>
         <div class="m-rep-box new">
-          <div class="m-accent m-small">{[t('monitor.replaceSheet.fresh'), sourceName(picked.source), seedsText(picked.Seed || 0)].join(' · ')}</div>
+          <div class="m-accent m-small">
+            {[t('monitor.replaceSheet.fresh'), sourceName(picked.source)].join(' · ')}
+            {' · '}
+            <SeedCheck r={picked} fallback={seedsText(picked.Seed || 0)} testCode="PD20.1" />
+          </div>
           <div class="m-rep-line">{[shortTitle(picked.Title), resultSizeText(picked), covered].filter(Boolean).join(' · ')}</div>
         </div>
         <div class="m-rep-moves">
@@ -274,6 +279,8 @@ export function BetterSheet({
                 )}
                 <div class="m-result-meta m-small">
                   <span class="m-muted">{rowMeta(lib, r)}</span>
+                  {' '}
+                  <SeedCheck r={r} fallback={seedsText(r.Seed || 0)} testCode="PD21.1" />
                 </div>
                 <div class="m-result-actions">
                   <span class="m-grow" />

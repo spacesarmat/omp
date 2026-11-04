@@ -46,15 +46,15 @@ import { billingSession, onBillingChange } from '../../../src/billing/session';
 import { fetchBillingAccount } from '../../../src/sources/ompJackett';
 import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { Calendar } from './Calendar';
-import { filterSubs, FINDINGS_CAP, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
+import { checkSubNow, checkingSubs, filterSubs, FINDINGS_CAP, loadSubsSort, matchFindings, saveSubsSort, sortLabel, sortSubs, SUBS_SORTS, type SubsSort } from '../monitor/subsView';
+import { SubSwipeCard } from '../ui/SubSwipeCard';
+import { TextField } from '../ui/TextField';
 
 type Seg = 'feed' | 'subs' | 'calendar';
 
 /** «Checking…» ends after this even without monitorDone (the background run is capped at 3 minutes). */
 export const RUN_MAX_MS = 3 * 60 * 1000 + 15000;
 const POLL_MS = 5000;
-const CLEAR = 'M6 6l12 12M18 6L6 18';
-
 const catLabel = (c: FeedCategory): string => (c === 'movie' ? t('category.movie') : c === 'tv' ? t('category.tv') : t('news.anime'));
 
 /** The segment, category and filter outlive the screen (another tab and back keeps them). */
@@ -118,7 +118,7 @@ function Feed() {
   const [cat, setCatState] = useState<FeedCategory>(memo.cat);
   const [hd, setHdState] = useState(memo.hd);
   const [, setTick] = useState(0);
-  const rows = useResultRows({ category: feedCategoryOf(cat) });
+  const rows = useResultRows({ category: feedCategoryOf(cat), seedCode: 'P03.7' });
   void monitorVersion.value;
 
   useEffect(() => {
@@ -237,6 +237,7 @@ function SubPoster({ s }: { s: Subscription }) {
 }
 
 function SubBody(p: { s: Subscription; off: boolean; n: number }) {
+  const busy = checkingSubs.value.indexOf(p.s.id) >= 0;
   return (
     <>
       <SubPoster s={p.s} />
@@ -244,6 +245,7 @@ function SubBody(p: { s: Subscription; off: boolean; n: number }) {
         <span class="m-sub-q">{p.s.query}</span>
         <span class="m-muted m-small">{subRule(p.s)}</span>
         {p.off && <span class="m-small m-sub-paused-note">{t('monitor.limit.paused')}</span>}
+        {busy && <span class="m-small m-sub-checking" data-sub-checking>{t('news.checking')}</span>}
       </span>
       {p.n > 0 && <span class="m-fresh">{freshText(p.n)}</span>}
     </>
@@ -304,19 +306,22 @@ function removeSub(s: Subscription): void {
 
 function SubLine(p: { s: Subscription; off: boolean; n: number }) {
   return (
-    <div class="m-sub-line">
-      {p.s.catalog ? <WantSub s={p.s} off={p.off} n={p.n} /> : <PlainSub s={p.s} off={p.off} n={p.n} />}
-      <button
-        type="button"
-        class="m-btn m-btn-secondary m-btn-sm m-sub-remove tm"
-        data-code="P03.4"
-        data-sub-remove={p.s.id}
-        aria-label={t('monitor.sub.deleteOne', { query: p.s.query })}
-        onClick={() => removeSub(p.s)}
-      >
-        {t('common.delete')}
-      </button>
-    </div>
+    <SubSwipeCard id={p.s.id} onCheck={() => void checkSubNow(p.s.id)} onDelete={() => removeSub(p.s)}>
+      <div class="m-sub-card">
+        {p.s.catalog ? <WantSub s={p.s} off={p.off} n={p.n} /> : <PlainSub s={p.s} off={p.off} n={p.n} />}
+        <button
+          type="button"
+          class="m-sub-remove tm"
+          data-code="P03.4"
+          data-sub-remove={p.s.id}
+          aria-label={t('monitor.sub.deleteOne', { query: p.s.query })}
+          onClick={() => removeSub(p.s)}
+        >
+          <Icon d={ICONS.trash} size={18} />
+          <span>{t('common.delete')}</span>
+        </button>
+      </div>
+    </SubSwipeCard>
   );
 }
 
@@ -328,7 +333,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
   const [editing, setEditing] = useState(false);
   const [replace, setReplace] = useState<{ f: Finding; watch: boolean } | null>(null);
   const [prompt, setPrompt] = useState(!!watch);
-  const rows = useResultRows();
+  const rows = useResultRows({ seedCode: 'P03.7' });
   const [query, setQueryState] = useState(memo.q);
   const [sort, setSort] = useState<SubsSort>(loadSubsSort);
   const setQuery = (q: string) => {
@@ -440,20 +445,17 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
       {subs.length > 0 && (
         <div class="m-subs-search">
-          <input
+          <TextField
             class="m-input m-lib-search m-grow"
             type="search"
             data-subs-search
             aria-label={t('news.subsSearch')}
             placeholder={t('news.subsSearch')}
             value={query}
+            clearAttrs={{ 'data-subs-clear': '' }}
+            clearLabel={t('news.clearSearch')}
             onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
           />
-          {query && (
-            <button type="button" class="m-icon-btn" data-subs-clear aria-label={t('news.clearSearch')} onClick={() => setQuery('')}>
-              <Icon d={CLEAR} size={18} />
-            </button>
-          )}
         </div>
       )}
       {subs.length > 1 && (

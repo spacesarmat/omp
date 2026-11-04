@@ -6,7 +6,7 @@ import { torrents } from '../store/library';
 import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
 import type { Torrent } from '../api/types';
 import { errorMessage } from '../api/http';
-import { TorrentFile, baseName, groupBySeason, playableFiles, episodeLabel } from '../lib/episodes';
+import { TorrentFile, baseName, groupBySeason, pickedSeason, playableFiles, seasonsInFiles, episodeLabel } from '../lib/episodes';
 import { externalNoteText } from '../lib/externalNote';
 import { externalSummary } from '../lib/externalTracks';
 import { webosExternalBlocked } from '../player/webosExternalAudio';
@@ -81,6 +81,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const actionsRef = useRef<HTMLDivElement>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [seasonPick, setSeasonPick] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // subscribe to progress changes
   progressVersion.value;
@@ -137,8 +138,15 @@ export function TorrentScreen({ hash }: { hash: string }) {
     };
   }, [hash]);
 
+  useEffect(() => {
+    setSeasonPick(null);
+  }, [hash]);
+
   const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
+  const packSeasons = useMemo(() => seasonsInFiles(playableFiles(files)), [files]);
+  const selectedPack = pickedSeason(packSeasons, seasonPick);
+  const shownGroups = packSeasons.length > 1 && selectedPack !== null ? groups.filter((g) => g.season === selectedPack) : groups;
   // «+3 озвучки, субтитры»: the release's external dubs and subtitles (never episodes themselves)
   const extras = useMemo(() => externalNoteText(files), [files]);
   // where those dubs play: on webOS, in the player, unless every file is a container the TV cannot open.
@@ -392,8 +400,26 @@ export function TorrentScreen({ hash }: { hash: string }) {
       {error && <div class="banner-error">{error}</div>}
       {!loadingInfo && !error && loaded && files.length === 0 && <div class="empty">{t('torrent.noFiles')}</div>}
       {!loadingInfo && !error && files.length > 0 && queue.length === 0 && <div class="empty">{t('torrent.noMedia')}</div>}
+      {packSeasons.length > 1 && (
+        <FocusGroup focusKey="TORRENT-SEASONS" className="series-seasons">
+          <div class="series-seasons-row">
+            {packSeasons.map((n) => (
+              <Focusable
+                key={n}
+                focusKey={'torrent-season-' + n}
+                className={'season-chip' + (n === selectedPack ? ' on' : '')}
+                role="button"
+                ariaLabel={t('library.season', { n: n })}
+                onPress={() => setSeasonPick(n)}
+              >
+                <div class="chip-name">{t('library.season', { n: n })}</div>
+              </Focusable>
+            ))}
+          </div>
+        </FocusGroup>
+      )}
       <FocusGroup focusKey="TORRENT-FILES">
-        {groups.map((g) => (
+        {shownGroups.map((g) => (
           <section key={String(g.season)}>
             {(groups.length > 1 || g.season !== null) && <h2>{g.season !== null ? t('library.season', { n: g.season }) : t('torrent.other')}</h2>}
             {g.files.map((f, i) => {

@@ -311,6 +311,15 @@ export class LiveSeedCache {
     if (entry.live) this.persist();
   }
 
+  /** Drops one hash so a manual check asks the tracker again. A saved success is dropped from disk too. */
+  forget(hash: string): void {
+    this.load();
+    const prev = this.mem[hash];
+    if (!prev) return;
+    delete this.mem[hash];
+    if (prev.live) this.persist();
+  }
+
   private trim(): void {
     const keys = Object.keys(this.mem);
     if (keys.length <= MEM_MAX) return;
@@ -430,6 +439,8 @@ interface Flight {
 
 export interface ScrapeQueue {
   watch(job: ScrapeJob): () => void;
+  /** Asks the trackers now, even when a cached count exists and even when the setting is off. */
+  check(job: ScrapeJob): Promise<LiveSeedEntry>;
   subscribe(hash: string, fn: () => void): () => void;
   get(hash: string): LiveSeedEntry | null;
 }
@@ -577,6 +588,43 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
 
   return {
     get: (hash) => o.cache.get(hash),
+    check(job) {
+      const hash = job.hash;
+      o.cache.forget(hash);
+      const prev = jobs[hash];
+      if (prev && prev.wanted && !prev.done) cancelJob(prev);
+      const trackers = job.trackers.slice(0, maxTrackers);
+      const j: JobState = {
+        hash: hash,
+        trackers: trackers,
+        seed: job.seed,
+        peer: job.peer,
+        next: 0,
+        answers: [],
+        gen: prev ? prev.gen + 1 : 1,
+        wanted: true,
+        done: false,
+      };
+      jobs[hash] = j;
+      return new Promise((resolve) => {
+        const done = () => {
+          const list = listeners[hash];
+          if (list) {
+            const i = list.indexOf(done);
+            if (i >= 0) list.splice(i, 1);
+          }
+          resolve(o.cache.get(hash) || { seeders: job.seed, leechers: job.peer, live: false, at: now() });
+        };
+        if (!listeners[hash]) listeners[hash] = [];
+        listeners[hash].push(done);
+        if (!trackers.length) {
+          finish(j);
+          return;
+        }
+        order.push(hash);
+        pump();
+      });
+    },
     subscribe(hash, fn) {
       if (!listeners[hash]) listeners[hash] = [];
       listeners[hash].push(fn);

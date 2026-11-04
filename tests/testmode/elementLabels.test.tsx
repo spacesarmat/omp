@@ -178,13 +178,16 @@ describe('element codes', () => {
   });
 
   it('clamps the px to the TV and phone ranges and steps', () => {
-    expect(TV_LABEL_PX).toEqual({ min: 8, max: 36, step: 2, def: 20 });
-    expect(PHONE_LABEL_PX).toEqual({ min: 8, max: 24, step: 1, def: 12 });
+    expect(TV_LABEL_PX).toEqual({ min: 4, max: 36, step: 2, def: 20 });
+    expect(PHONE_LABEL_PX).toEqual({ min: 4, max: 24, step: 1, def: 12 });
     expect(clampLabelPx(21, TV_LABEL_PX)).toBe(22);
-    expect(clampLabelPx(4, TV_LABEL_PX)).toBe(8);
+    expect(clampLabelPx(4, TV_LABEL_PX)).toBe(4);
+    expect(clampLabelPx(3, TV_LABEL_PX)).toBe(4);
+    expect(clampLabelPx(5, TV_LABEL_PX)).toBe(6);
     expect(clampLabelPx(99, TV_LABEL_PX)).toBe(36);
     expect(clampLabelPx('big', TV_LABEL_PX)).toBe(20);
-    expect(clampLabelPx(7, PHONE_LABEL_PX)).toBe(8);
+    expect(clampLabelPx(3, PHONE_LABEL_PX)).toBe(4);
+    expect(clampLabelPx(7, PHONE_LABEL_PX)).toBe(7);
     expect(clampLabelPx(13.4, PHONE_LABEL_PX)).toBe(13);
     expect(labelSizeCss(20, false)).toContain('.test-el { font-size: 20px; line-height: 24px; }');
     expect(labelSizeCss(12, true)).toContain('body.test-labels [data-code]::after');
@@ -205,7 +208,7 @@ describe('label size slider on a beta build', () => {
     expect(settings.value.testLabelPx).toBe(22);
     act(() => { updateSettings({ testLabelPx: 36 }); });
     act(() => { (host.querySelector('[data-fk="set-test-size"]') as HTMLElement).click(); });
-    expect(settings.value.testLabelPx).toBe(8);
+    expect(settings.value.testLabelPx).toBe(4);
     act(() => { updateSettings({ testMode: true }); });
     const badge = host.querySelector('[data-fk="set-test-size"] .test-badge');
     expect(badge && badge.textContent).toBe('S05.30');
@@ -229,11 +232,11 @@ describe('label size slider on a beta build', () => {
     await press('ArrowLeft');
     expect(settings.value.testLabelPx).toBe(18);
     expect(getCurrentFocusKey()).toBe('set-test-size');
-    act(() => { updateSettings({ testLabelPx: 10 }); });
+    act(() => { updateSettings({ testLabelPx: 6 }); });
     await press('ArrowLeft');
-    expect(settings.value.testLabelPx).toBe(8);
+    expect(settings.value.testLabelPx).toBe(4);
     await press('ArrowLeft');
-    expect(settings.value.testLabelPx).toBe(8);
+    expect(settings.value.testLabelPx).toBe(4);
     act(() => { updateSettings({ testLabelPx: 36 }); });
     await press('ArrowRight');
     expect(settings.value.testLabelPx).toBe(36);
@@ -268,7 +271,9 @@ describe('label size slider on a beta build', () => {
     const both = sanitizeSettings({ testLabelSize: 'large', testLabelPx: 18, testLabelPhonePx: 10 });
     expect([both.testLabelPx, both.testLabelPhonePx]).toEqual([18, 10]);
     expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPx).toBe(36);
-    expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPhonePx).toBe(8);
+    expect(sanitizeSettings({ testLabelPx: 41, testLabelPhonePx: 2 }).testLabelPhonePx).toBe(4);
+    expect(sanitizeSettings({ testLabelPx: 8, testLabelPhonePx: 8 }).testLabelPx).toBe(8);
+    expect(sanitizeSettings({ testLabelPhonePx: 7 }).testLabelPhonePx).toBe(7);
   });
 });
 

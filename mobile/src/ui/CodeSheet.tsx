@@ -3,6 +3,7 @@ import { Sheet } from './Sheet';
 import { errorMessage } from '../../../src/api/http';
 import { t } from '../../../src/i18n';
 import { compareVersions } from '../../../src/lib/version';
+import { TextField } from './TextField';
 
 /** First Android TV build that shows a 6-digit pairing code. Older builds still show 4. */
 export const CODE_LEN_6 = '0.20.1-beta.11';
@@ -87,7 +88,7 @@ export function CodeSheet({
         <p class="m-muted m-note">{t('remote.code.note')}</p>
         <div class="m-code" role="group" aria-label={t('remote.code.group')}>
           {digits.map((d, i) => (
-            <input
+            <TextField
               key={i}
               ref={(n) => {
                 cells.current[i] = n;

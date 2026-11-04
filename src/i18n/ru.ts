@@ -46,6 +46,7 @@ export const ru = {
     cancel: 'Отмена',
     save: 'Сохранить',
     delete: 'Удалить',
+    clearField: 'Очистить',
     retry: 'Повторить',
     done: 'Готово',
     /** No network at all (navigator.onLine is false): one honest state instead of «TMDB не отвечает». */
@@ -820,6 +821,10 @@ export const ru = {
     tvFileOnly: 'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'по данным трекера',
+    checkSeeds: 'Проверить',
+    seedsNow: 'сейчас',
+    seedsTimeout: 'Трекер не ответил',
+    seedsNoTracker: 'Нет адреса трекера',
     defaultPhone: 'Телефон',
     today: 'сегодня',
     yesterday: 'вчера',
@@ -2531,6 +2536,7 @@ export const ru = {
     monitorSettings: 'Настройки мониторинга',
     runToast: 'Проверяю подписки и сериалы',
     checkNow: 'Проверить сейчас',
+    swipeCheck: 'Проверить',
     subNeverChecked: 'Подписка ещё не проверялась. Первая проверка только запомнит, что уже есть, - о новых раздачах OMP сообщит после неё.',
     subNoFindings: 'Новых раздач пока нет',
     subsSearch: 'Поиск по подпискам и найденным раздачам',

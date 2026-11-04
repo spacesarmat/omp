@@ -56,6 +56,7 @@ import {
   trackerTone,
 } from '../../../src/sources/indexerStatus';
 import type { SourceContext } from '../../../src/sources/types';
+import { TextField } from '../ui/TextField';
 
 /** What the indexer screens need besides the source context (tests pass fakes). */
 export interface IndexerEnv {
@@ -257,7 +258,7 @@ export function IndexerAddSheet({
         {scanned && !noWifi && !scanning && candidates.length === 0 && <div class="m-note m-muted">{t('sources.idx.nothingFound')}</div>}
         <div class="m-field">
           <label for="m-idx-url">{t('connect.addressShort')}</label>
-          <input
+          <TextField
             id="m-idx-url"
             class="m-input"
             type="url"
@@ -278,7 +279,7 @@ export function IndexerAddSheet({
         )}
         <div class="m-field">
           <label for="m-idx-key">{keyLabel(shownKind)}</label>
-          <input id="m-idx-key" class="m-input" type="password" autocomplete="off" autocapitalize="off" placeholder={placeholder} ref={keyField} />
+          <TextField id="m-idx-key" class="m-input" type="password" autocomplete="off" autocapitalize="off" placeholder={placeholder} ref={keyField} />
         </div>
         <div class="m-note m-muted">{keyNote()}</div>
         {error && (

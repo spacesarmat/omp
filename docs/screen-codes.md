@@ -12,7 +12,7 @@ Codes are assigned in `src/testmode/registry.ts` (phone and native lists in `src
 
 Posters, files, episodes, search hits, subscriptions, user servers and track lists have no fixed code: they change with the library. They get element codes instead (see «Element codes» below), counted on the page.
 
-Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 8-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 8-24 px, step 1, default 12 (`settings.testLabelPhonePx`). 8 px is 6 pt at 96 dpi. On a TV the px is in the 1920x1080 layout, so the same number looks the same at 1080p and at 4K. Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.
+Label size is a slider «Размер меток» / "Label size" next to the switch (beta only). TV web UI and the native Android TV player: 4-36 px, step 2, default 20 (`settings.testLabelPx`; on the TV left / right change it and the row shows the px). Phone: 4-24 px, step 1, default 12 (`settings.testLabelPhonePx`). 4 px is 3 pt at 96 dpi. On a TV the px is in the 1920x1080 layout, so the same number looks the same at 1080p and at 4K. Test-mode labels are the only TV text allowed under 24 px. A beta.2 choice small / large moves to the nearest px; medium takes the new default.
 
 | Code | Where (ru) | Where (en) | Item (ru) | Item (en) |
 | --- | --- | --- | --- | --- |
@@ -177,6 +177,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S07.7 | Поиск | Search | Сериалы | Series |
 | S07.8 | Поиск | Search | Аудиокниги | Audiobooks |
 | S07.9 | Поиск | Search | Сортировка | Sort |
+| S07.10 | Поиск | Search | Проверить сиды | Check seeds |
 | S08 | Плейлисты | Playlists |  |  |
 | S08.1 | Плейлисты | Playlists | Адрес плейлиста | Playlist URL |
 | S08.2 | Плейлисты | Playlists | Открыть | Open |
@@ -423,6 +424,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S18.4 | Новое | News | Повторить | Retry |
 | S18.5 | Новое | News | Повторить подписки | Retry subscriptions |
 | S18.6 | Новое | News | Найти подписку | Find a subscription |
+| S18.7 | Новое | News | Проверить сиды | Check seeds |
 | D01 | Выход | Exit |  |  |
 | D01.1 | Выход | Exit | Выйти | Exit |
 | D01.2 | Выход | Exit | Отмена | Cancel |
@@ -618,6 +620,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | D43.1 | В лучшем качестве | Better quality | Отмена | Cancel |
 | D43.2 | В лучшем качестве | Better quality | Искать везде | Search everywhere |
 | D43.3 | В лучшем качестве | Better quality | Следить за лучшим качеством | Follow better quality |
+| D43.4 | В лучшем качестве | Better quality | Проверить сиды | Check seeds |
 | D44 | Заставка и титры | Intro and credits |  |  |
 | D44.1 | Заставка и титры | Intro and credits | Заставка с | Intro from |
 | D44.2 | Заставка и титры | Intro and credits | Заставка до | Intro to |
@@ -706,8 +709,12 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P03.2 | Новое | News | Подписки | Subscriptions |
 | P03.3 | Новое | News | Календарь | Calendar |
 | P03.4 | Новое | News | Удалить подписку | Delete a subscription |
+| P03.5 | Новое | News | Проверить свайпом | Swipe to check |
+| P03.6 | Новое | News | Удалить свайпом | Swipe to delete |
+| P03.7 | Новое | News | Проверить сиды | Check seeds |
 | P04 | Находки подписки | Subscription findings |  |  |
 | P04.1 | Находки подписки | Subscription findings | Назад | Back |
+| P04.2 | Находки подписки | Subscription findings | Проверить сиды | Check seeds |
 | P05 | Следить за новыми | Follow new episodes |  |  |
 | P05.1 | Следить за новыми | Follow new episodes | Назад | Back |
 | P05.2 | Следить за новыми | Follow new episodes | Как часто | How often |
@@ -723,6 +730,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P07.3 | Поиск | Search | Мои | Mine |
 | P07.4 | Поиск | Search | Каталог | Catalog |
 | P07.5 | Поиск | Search | Источники | Sources |
+| P07.6 | Поиск | Search | Проверить сиды | Check seeds |
 | P08 | Пульт | Remote |  |  |
 | P08.1 | Пульт | Remote | Сменить телевизор | Switch TV |
 | P09 | Сейчас играет | Now playing |  |  |
@@ -821,6 +829,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P28.3 | Аудиокниги | Audiobooks | Мои книги | My books |
 | P29 | Поиск аудиокниг | Audiobook search |  |  |
 | P29.1 | Поиск аудиокниг | Audiobook search | Назад | Back |
+| P29.2 | Поиск аудиокниг | Audiobook search | Проверить сиды | Check seeds |
 | P30 | Мои книги | My books |  |  |
 | P30.1 | Мои книги | My books | Назад | Back |
 | P31 | Книга | Book |  |  |
@@ -865,7 +874,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD18 | Постер | Poster |  |  |
 | PD19 | Хочу посмотреть | Want to watch |  |  |
 | PD20 | Заменить на лучшее | Replace with better |  |  |
+| PD20.1 | Заменить на лучшее | Replace with better | Проверить сиды | Check seeds |
 | PD21 | В лучшем качестве | Better quality |  |  |
+| PD21.1 | В лучшем качестве | Better quality | Проверить сиды | Check seeds |
 | PD22 | Код приставки | Box code |  |  |
 | PD23 | Сертификат изменился | Certificate changed |  |  |
 | PD24 | Код | Code |  |  |
@@ -876,6 +887,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | PD29 | Другая замена | Another replacement |  |  |
 | PD30 | Замена | Replacement |  |  |
 | PD31 | Подробнее | Details |  |  |
+| PD31.1 | Подробнее | Details | Проверить сиды | Check seeds |
 | PD32 | Продолжить | Resume |  |  |
 | PD33 | Источники поиска | Search sources |  |  |
 | PD34 | Сортировка поиска | Search sort |  |  |

@@ -1,10 +1,11 @@
 import { t } from '../i18n';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import { useFocusable, FocusContext, pause, resume } from '@noriginmedia/norigin-spatial-navigation';
+import { useFocusable, FocusContext, pause, resume, setFocus } from '@noriginmedia/norigin-spatial-navigation';
 import { badgeFor, TestBadge } from '../testmode/badge';
 import { scrollIntoViewSafe } from './focus';
 import { Icon, IconName } from './icons';
+import { ClearMark, fieldHasText } from './clearField';
 
 interface FocusableProps {
   focusKey?: string;
@@ -175,6 +176,31 @@ export function TextInput(p: TextInputProps) {
           }
         }}
       />
+      {fieldHasText(p.value) && (
+        <Focusable
+          focusKey={(p.focusKey || focusKey) + '-clear'}
+          className="field-clear"
+          role="button"
+          ariaLabel={t('common.clearField')}
+          onPress={() => {
+            p.onChange('');
+            setFocus(p.focusKey || focusKey);
+            if (inputRef.current) inputRef.current.focus();
+          }}
+        >
+          <span
+            class="field-clear-hit"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              p.onChange('');
+              if (inputRef.current) inputRef.current.focus();
+            }}
+          >
+            <ClearMark />
+          </span>
+        </Focusable>
+      )}
       {code ? <TestBadge code={code} /> : null}
     </div>
   );

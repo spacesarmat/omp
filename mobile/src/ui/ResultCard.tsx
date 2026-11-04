@@ -3,6 +3,7 @@ import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
+import { SeedCheck } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
 import { t } from '../../../src/i18n';
 import { resultSizeText } from '../../../src/sources/resultSize';
@@ -55,6 +56,8 @@ export function ResultCard(p: {
   onWatch: () => void;
   /** «Смотреть на телефоне»: add, then play on this phone. No button without it. */
   onPhone?: () => void;
+  /** Fixed test-mode code of the row's «Проверить» (the sheet uses PD31.1). */
+  seedCode?: string;
 }) {
   const { r } = p;
   const live = useSeedRow(r);
@@ -85,7 +88,11 @@ export function ResultCard(p: {
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
-            <span class="m-rc-meta-text">{[sizeText(r), seeds.text].filter(Boolean).join(' · ')}{seeds.mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}</span>
+            <span class="m-rc-meta-text">
+              {sizeText(r)}
+              {seeds.text ? ' · ' : ''}
+              <SeedCheck r={r} fallback={seeds.text} testCode={p.seedCode} live={seeds.mode === 'live'} />
+            </span>
           </div>
           <div class="m-rc-bottom">
             {p.busy === 'link' ? (
@@ -140,7 +147,13 @@ export function ResultCard(p: {
             <div class="m-result-meta m-small">
               {p.flag && <span class="m-flag">{p.flag}</span>}
               <span class="m-src-badge">{sourceBadge(r)}</span>
-              <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>{[sizeText(r), seeds.text, resultDate(r), r.sources && r.sources.length ? t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''].filter(Boolean).join(' · ')}{seeds.mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}</span>
+              <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
+                {sizeText(r)}
+                {seeds.text ? ' · ' : ''}
+                <SeedCheck r={r} fallback={seeds.text} testCode="PD31.1" live={seeds.mode === 'live'} />
+                {date ? ' · ' + date : ''}
+                {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
+              </span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>
             <div class="m-chips" style={{ flexWrap: 'wrap' }} role="group" aria-label={t('add.category')}>

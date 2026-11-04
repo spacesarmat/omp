@@ -692,6 +692,20 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .news-sub-label { margin-right: 12px; font-size: 24px; color: var(--muted); white-space: nowrap; }
 .news-sub-switch.focused .news-sub-label { color: var(--text); }
 .news-sub-actions .button { padding: 12px 22px; font-size: 24px; }
+.news-sub-actions .button.news-sub-remove { background: transparent; color: #ff9ea2; }
+.news-sub-actions .button.news-sub-remove.focused { background: var(--danger); color: #fff; }
+.text-input { position: relative; }
+.text-input input { padding-right: 72px; }
+.text-input .field-clear {
+  position: absolute; top: 50%; right: 8px; width: 48px; height: 48px; margin-top: -24px;
+  padding: 0; background: transparent; border-radius: 10px; text-align: center; line-height: 48px; color: var(--muted);
+}
+.text-input .field-clear.focused { background: var(--panel2); box-shadow: inset 0 0 0 3px var(--focus); transform: none; }
+.text-input .field-clear-mark { vertical-align: middle; }
+.seed-check { display: inline-block; margin-left: 12px; padding: 4px 14px; font-size: 24px; line-height: 32px; vertical-align: middle; background: var(--panel2); border-radius: 10px; }
+.seed-check.focused { background: var(--accent); color: #0f1115; transform: none; }
+.seed-spin { display: inline-block; width: 22px; height: 22px; border-radius: 50%; border: 3px solid currentColor; border-top-color: transparent; vertical-align: middle; animation: seed-spin .8s linear infinite; }
+@keyframes seed-spin { to { transform: rotate(360deg); } }
 .news-sub-checking { color: var(--accent); }
 .news-sub-paused .news-sub-line1 { opacity: 0.5; }
 .news-sub-paused-note { margin-top: 6px; font-size: 24px; font-weight: 700; color: var(--accent); }

@@ -9,6 +9,7 @@ import { errorMessage } from '../../../src/api/http';
 import { catalogErrorCode, catalogErrorKey } from '../../../src/catalog/client';
 import type { CatalogTitle } from '../../../src/catalog/tmdb';
 import type { Torrent } from '../../../src/api/types';
+import { TextField } from './TextField';
 import {
   checkPosterUrl,
   posterSearchText,
@@ -158,7 +159,7 @@ export function PosterPickSheet({
           search(query);
         }}
       >
-        <input
+        <TextField
           class="m-input"
           type="search"
           aria-label={t('torrent.poster.searchLabel')}
@@ -191,7 +192,7 @@ export function PosterPickSheet({
       {linkOpen ? (
         <div class="m-field m-pp-link">
           <label for="poster-link">{t('torrent.poster.urlTitle')}</label>
-          <input
+          <TextField
             id="poster-link"
             class="m-input"
             type="url"

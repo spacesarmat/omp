@@ -2,6 +2,7 @@ import { Sheet } from './Sheet';
 import { t, tp } from '../../../src/i18n';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { NO_FILTERS, sanitizeFilters, type SearchFilters, type Res, type Source, type Voice } from '../../../src/sources/filters';
+import { TextField } from './TextField';
 
 const KEY = 'tsp.searchFilters';
 
@@ -85,11 +86,11 @@ export function FiltersSheet({
           <div class="m-filter-size">
             <label>
               {t('filters.from')}
-              <input inputMode="decimal" value={f.minGb ? String(f.minGb) : ''} placeholder="0" onInput={(e) => set({ minGb: gb((e.target as HTMLInputElement).value) })} />
+              <TextField inputMode="decimal" value={f.minGb ? String(f.minGb) : ''} placeholder="0" onInput={(e) => set({ minGb: gb((e.target as HTMLInputElement).value) })} />
             </label>
             <label>
               {t('filters.to')}
-              <input inputMode="decimal" value={f.maxGb ? String(f.maxGb) : ''} placeholder={t('filters.unlimited')} onInput={(e) => set({ maxGb: gb((e.target as HTMLInputElement).value) })} />
+              <TextField inputMode="decimal" value={f.maxGb ? String(f.maxGb) : ''} placeholder={t('filters.unlimited')} onInput={(e) => set({ maxGb: gb((e.target as HTMLInputElement).value) })} />
             </label>
           </div>
         </div>

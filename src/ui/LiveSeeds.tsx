@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../i18n';
 import { settings } from '../store/settings';
 import { infohashOf, phoneSeedBits, seedDisplay, trackerTargets, tvSeedLabel, type SeedDisplay } from '../sources/liveSeeds';
+import { SeedCheck } from './SeedCheck';
 import { liveSeeds } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
 
@@ -68,13 +69,17 @@ export function useSeedRow(r: SourceResult): { bind: (el: HTMLElement | null) =>
 }
 
 /** TV search / news size line. The seed text stays «↑N» until a tracker answers. */
-export function TvSearchSize(p: { r: SourceResult; size: string }) {
+export function TvSearchSize(p: { r: SourceResult; size: string; seedCode?: string }) {
   const live = useSeedRow(p.r);
   const mode = live.view.mode;
-  const cls = mode === 'approx' ? 'seed-approx' : mode === 'live' ? 'seed-fresh' : '';
   const label = tvSeedLabel(live.view);
+  const hash = infohashOf(p.r) || 'row';
   return (
-    <div class="search-size" ref={live.bind} data-seeds={mode}>{p.size ? p.size + ' · ' : ''}<span class={cls}>{label}</span>{mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}</div>
+    <div class="search-size" ref={live.bind} data-seeds={mode}>
+      {p.size ? p.size + (label ? ' · ' : '') : ''}
+      {label ? <SeedCheck r={p.r} fallback={label} tv testCode={p.seedCode || ''} focusKey={'seed-' + hash} live={mode === 'live'} /> : null}
+      {!label && mode === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+    </div>
   );
 }
 

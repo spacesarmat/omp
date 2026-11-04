@@ -3,6 +3,7 @@ import { useFocusable, setFocus, doesFocusableExist } from '@noriginmedia/norigi
 import { t } from '../i18n';
 import { TestBadge, visibleCode } from '../testmode/badge';
 import { Focusable, FocusGroup, TextInput, URL_KEYBOARD } from './components';
+import { ClearMark, fieldHasText } from './clearField';
 import { Icon } from './icons';
 import { useKeys } from './keys';
 import { scrollIntoViewSafe } from './focus';
@@ -164,6 +165,22 @@ function KeypadField(p: AddressFieldProps & { open: boolean; setOpen: (v: boolea
           placeholder={p.placeholder}
           onInput={(e) => p.onChange((e.target as HTMLInputElement).value)}
         />
+        {fieldHasText(p.value) && (
+          <Focusable
+            focusKey={fk + '-clear'}
+            className="field-clear"
+            role="button"
+            ariaLabel={t('common.clearField')}
+            onPress={() => {
+              p.onChange('');
+              setFocus(fk);
+            }}
+          >
+            <span class="field-clear-hit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); p.onChange(''); }}>
+              <ClearMark />
+            </span>
+          </Focusable>
+        )}
         {fieldCode ? <TestBadge code={fieldCode} /> : null}
       </div>
       {open && (

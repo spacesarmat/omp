@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { t } from '../../../src/i18n';
+import { TextField } from './TextField';
 
 /** Bottom sheet for renaming a saved TV or server; empty input means "restore the default". */
 export function RenameSheet({
@@ -28,7 +29,7 @@ export function RenameSheet({
         <label class="m-sheet-title" for="rename-input">
           {title}
         </label>
-        <input
+        <TextField
           id="rename-input"
           class="m-input"
           type="text"

@@ -35,13 +35,13 @@ object PlayerTestHud {
     private val BETA = Regex("-beta\\.[0-9]+$")
 
     /**
-     * Label text size in dp from the page's slider. The TV sends 8..36, step 2 (default 20), the phone 8..24
-     * (default 12, for the Cloudflare dialog). 8 px is 6 pt at 96 dpi. Test-mode labels are the one text allowed under 24 on a TV.
-     * Missing or out of range: clamped to 8..36, nothing at all is 20.
+     * Label text size in dp from the page's slider. The TV sends 4..36, step 2 (default 20), the phone 4..24
+     * (default 12, for the Cloudflare dialog). 4 px is 3 pt at 96 dpi. Test-mode labels are the one text allowed under 24 on a TV.
+     * Missing or out of range: clamped to 4..36, nothing at all is 20.
      */
     fun sizeDp(px: Int?): Float {
         if (px == null || px <= 0) return 20f
-        return px.coerceIn(8, 36).toFloat()
+        return px.coerceIn(4, 36).toFloat()
     }
 
     /** The size the next badges are drawn with. Set before pin(), copyChip(), dialog() and CodedMenu. */

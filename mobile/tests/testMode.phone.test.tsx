@@ -74,7 +74,7 @@ describe('phone test mode', () => {
     expect(row.textContent).toContain('Размер меток');
     expect(row.textContent).toContain('12 px');
     const range = row.querySelector('input[type="range"]') as HTMLInputElement;
-    expect([range.min, range.max, range.step, range.value]).toEqual(['8', '24', '1', '12']);
+    expect([range.min, range.max, range.step, range.value]).toEqual(['4', '24', '1', '12']);
     act(() => {
       range.value = '9';
       range.dispatchEvent(new Event('input', { bubbles: true }));

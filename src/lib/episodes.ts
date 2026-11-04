@@ -89,6 +89,32 @@ export interface Season {
   files: TorrentFile[];
 }
 
+/** Season numbers the playable files name, lowest first. A file with no season is left out. */
+export function seasonsInFiles(files: TorrentFile[]): number[] {
+  const out: number[] = [];
+  files.forEach((file) => {
+    const s = parseEpisode(file.path).season;
+    if (s !== null && out.indexOf(s) < 0) out.push(s);
+  });
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+/** Playable files of one season. Numbering inside the list is that season's own episode numbers. */
+export function filesOfSeason(files: TorrentFile[], season: number): TorrentFile[] {
+  return files.filter((file) => parseEpisode(file.path).season === season);
+}
+
+/**
+ * The season a multi-season release shows. `picked` wins when it is one of `seasons`; otherwise the first.
+ * A release with fewer than two seasons has nothing to switch.
+ */
+export function pickedSeason(seasons: number[], picked: number | null): number | null {
+  if (seasons.length < 2) return seasons.length === 1 ? seasons[0] : null;
+  if (picked !== null && seasons.indexOf(picked) >= 0) return picked;
+  return seasons[0];
+}
+
 export function groupBySeason(files: TorrentFile[]): Season[] {
   const map: { [k: string]: Season } = {};
   const keys: string[] = [];

@@ -20,6 +20,7 @@ import { activeTv, isAtv } from '../tv/tvStore';
 import { holdSignInScreen } from '../cloudflare';
 import { cloudflareNotSent, rutrackerNotStored, sendTransfer, sentText, sessionsNotSent, sessionsText, siteLoginsText, sitesNotSent } from './Sources';
 import { rutrackerSavedLogin } from '../../../src/sources/rutracker';
+import { TextField } from '../ui/TextField';
 
 export const siteLoginNote = (): string => t('sources.screen.loginNote');
 export const siteLoginNoteOptional = (): string => t('sources.screen.loginNoteOptional');
@@ -207,7 +208,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
             <>
               <div class="m-field">
                 <label for="m-site-user">{t('common.login')}</label>
-                <input
+                <TextField
                   id="m-site-user"
                   name="username"
                   class="m-input"
@@ -220,7 +221,7 @@ function SiteLogin({ source, ctx }: { source: Source; ctx: () => SourceContext }
               </div>
               <div class="m-field">
                 <label for="m-site-pass">{t('common.password')}</label>
-                <input id="m-site-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
+                <TextField id="m-site-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
               </div>
               {error && (
                 <div class="m-error" role="alert">

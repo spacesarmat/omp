@@ -4,6 +4,7 @@ import { Sheet } from './Sheet';
 import { showToast } from './toast';
 import { donateOpen, closeDonate, activeMethods, applySupportCode, activeSupportUntil, supportShared, supportThanks, type DonateMethod } from '../donate';
 import { t } from '../../../src/i18n';
+import { TextField } from './TextField';
 
 export interface DonateActions {
   openUrl(url: string): void;
@@ -66,7 +67,7 @@ function SupportCodeBox() {
       </div>
       <label class="m-support-label">
         {t('donate.codeLabel')}
-        <input
+        <TextField
           class="m-input m-support-input"
           type="text"
           value={code}

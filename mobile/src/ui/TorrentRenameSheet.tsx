@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Sheet } from './Sheet';
 import { checkTitle, TITLE_MAX } from '../../../src/lib/renameTorrent';
 import { t } from '../../../src/i18n';
+import { TextField } from './TextField';
 
 /** «Переименовать»: a text field with the current title; `onSave` writes it and resolves, errors are shown here. */
 export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: string; onSave: (title: string) => Promise<unknown>; onClose: () => void }) {
@@ -39,7 +40,7 @@ export function TorrentRenameSheet({ initial, onSave, onClose }: { initial: stri
       <div class="m-sheet-title">{t('torrent.rename.title')}</div>
       <div class="m-field">
         <label for="rename-title">{t('torrent.rename.name')}</label>
-        <input
+        <TextField
           id="rename-title"
           class="m-input"
           type="text"

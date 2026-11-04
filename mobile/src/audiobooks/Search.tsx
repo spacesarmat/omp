@@ -19,6 +19,7 @@ import { LaunchError } from '../ui/LaunchError';
 import { ResultCard } from '../ui/ResultCard';
 import { Icon } from '../ui/Icon';
 import { AudiobookBar } from './bar';
+import { TextField } from '../ui/TextField';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 
@@ -189,7 +190,7 @@ export function AudiobookSearch() {
     <div class="m-screen" data-route="audiobook-search">
       <AudiobookBar title={t('audiobooks.searchTitle')} code="P29.1" />
       <form class="m-add-row" onSubmit={onSearch}>
-        <input
+        <TextField
           class="m-input m-lib-search"
           type="search"
           aria-label={t('audiobooks.searchLabel')}
@@ -233,6 +234,7 @@ export function AudiobookSearch() {
               onAdd={() => void addResult(r, false)}
               onWatch={() => void addResult(r, 'tv')}
               onPhone={() => void addResult(r, 'phone')}
+              seedCode="P29.2"
             />
           );
         })}
