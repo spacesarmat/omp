@@ -33,7 +33,7 @@ import {
 import type { Torrent as TorrentT } from '../../../src/api/types';
 import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
-import { baseName, episodeLabel, filesOfSeason, parseEpisode, pickedSeason, playableFiles, seasonsInFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
+import { activePackPick, baseName, episodeLabel, filesForPack, hasLooseFiles, parseEpisode, playableFiles, seasonsInFiles, stripExt, type PackPick, type TorrentFile } from '../../../src/lib/episodes';
 import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
@@ -415,7 +415,7 @@ export function Torrent({ hash }: { hash: string }) {
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
   // a pack of several seasons: which chip's episodes are on screen
-  const [seasonPick, setSeasonPick] = useState<number | null>(null);
+  const [seasonPick, setSeasonPick] = useState<PackPick | null>(null);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   // «Watch the quality» (omp.q in the journal); null until read from the server
@@ -538,9 +538,10 @@ export function Torrent({ hash }: { hash: string }) {
 
   const files = playableFiles(allFiles);
   const packSeasons = seasonsInFiles(files);
+  const loose = hasLooseFiles(files);
   const multiPack = packSeasons.length > 1;
-  const selectedSeason = multiPack ? pickedSeason(packSeasons, seasonPick) : season;
-  const shownFiles = multiPack && selectedSeason !== null ? filesOfSeason(files, selectedSeason) : files;
+  const selectedSeason = multiPack ? activePackPick(packSeasons, loose, seasonPick) : season;
+  const shownFiles = multiPack && selectedSeason !== null ? filesForPack(files, selectedSeason) : files;
   const onOff = (v: boolean) => t(v ? 'tvSources.on' : 'tvSources.off');
   const toggleSkip = (key: 'i' | 'c') => {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
@@ -626,14 +627,14 @@ export function Torrent({ hash }: { hash: string }) {
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
   const coming = shownFiles.length > 1 ? comingEpisodes(lastEpisodes(shownFiles), epsNow || {}, isoDay(Date.now())) : [];
-  const seasonArt = showNow && selectedSeason !== null ? showNow.seasonPosters[selectedSeason] || showNow.poster : '';
+  const seasonArt = showNow && typeof selectedSeason === 'number' ? showNow.seasonPosters[selectedSeason] || showNow.poster : '';
   const art = tor.poster || !seasonArt ? tor : { ...tor, poster: seasonArt };
   // «Сезон 2 · 5 из 8 серий»: the total is this season's TMDB episode_count, already remembered when the chip changes
-  const headerSeason = multiPack ? selectedSeason : season;
+  const headerSeason = selectedSeason === 'other' ? null : multiPack ? selectedSeason : season;
   const seasonTotal = headerSeason === null ? 0 : Math.max(seasonEpisodeTotal(showNow, epsNow, headerSeason), gkey ? rememberedSeasonTotal(gkey, headerSeason) : 0);
   const meta = [
-    headerSeason !== null ? t('library.season', { n: headerSeason }) : '',
-    hasEpisodes ? torrentHeaderEpisodes(allFiles, headerSeason, seasonTotal) : '',
+    selectedSeason === 'other' ? t('torrent.bonus') : headerSeason !== null ? t('library.season', { n: headerSeason }) : '',
+    hasEpisodes ? torrentHeaderEpisodes(selectedSeason === 'other' ? shownFiles : allFiles, headerSeason, selectedSeason === 'other' ? 0 : seasonTotal) : '',
     externalNoteText(allFiles),
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     knownSwarmText(tor),
@@ -756,6 +757,16 @@ export function Torrent({ hash }: { hash: string }) {
                   </button>
                 );
               })}
+              {multiPack && loose && (
+                <button
+                  type="button"
+                  class={'m-chip' + (selectedSeason === 'other' ? ' on' : '')}
+                  aria-pressed={selectedSeason === 'other'}
+                  onClick={() => setSeasonPick('other')}
+                >
+                  {t('torrent.bonus')}
+                </button>
+              )}
             </div>
           )}
         </div>

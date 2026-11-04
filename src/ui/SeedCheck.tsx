@@ -44,6 +44,7 @@ export function SeedCheck(p: {
       role="button"
       ariaLabel={label}
       testCode={p.testCode || ''}
+      isolateClick
       onPress={run}
     >
       {phase === 'busy' ? <span class="seed-spin" /> : t('sources.checkSeeds')}

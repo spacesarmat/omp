@@ -25,6 +25,8 @@ interface FocusableProps {
   testValue?: unknown;
   /** Badge text already resolved (dialog rows). Empty hides it. */
   testCode?: string;
+  /** A pointer click stays on this control and does not reach a parent row. */
+  isolateClick?: boolean;
   children?: ComponentChildren | ((focused: boolean) => ComponentChildren);
 }
 
@@ -50,7 +52,13 @@ export function Focusable(p: FocusableProps) {
       aria-label={p.ariaLabel}
       aria-checked={p.ariaChecked}
       onMouseEnter={() => { if (!p.disabled) focusSelf(); }}
-      onClick={() => { if (!p.disabled && p.onPress) p.onPress(); }}
+      onClick={(e) => {
+        if (p.isolateClick) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (!p.disabled && p.onPress) p.onPress();
+      }}
     >
       {typeof p.children === 'function' ? (p.children as (f: boolean) => ComponentChildren)(focused) : p.children}
       {code ? <TestBadge code={code} /> : null}

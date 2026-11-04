@@ -1789,6 +1789,7 @@ export const en: EnDict<typeof ru> = {
     noFiles: 'No files found',
     noMedia: 'The torrent has no video or audio files',
     other: 'Other',
+    bonus: 'Other',
     hintOk: 'OK - watch',
     hintListen: 'OK - listen',
     hintSelect: 'OK - select',

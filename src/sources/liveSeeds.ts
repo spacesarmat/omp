@@ -473,6 +473,8 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
   const jobs: { [hash: string]: JobState } = {};
   const refs: { [hash: string]: number } = {};
   const listeners: { [hash: string]: Array<() => void> } = {};
+  /** Manual check() callers. Separate from subscribe listeners so emit can snapshot them. */
+  const waiters: { [hash: string]: Array<(e: LiveSeedEntry) => void> } = {};
   const order: string[] = [];
   const flights: Flight[] = [];
   const stamps: number[] = [];
@@ -480,8 +482,15 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
 
   function emit(hash: string): void {
     const list = listeners[hash];
-    if (!list) return;
-    for (let i = 0; i < list.length; i++) list[i]();
+    if (list) {
+      const snap = list.slice();
+      for (let i = 0; i < snap.length; i++) snap[i]();
+    }
+    const entry = o.cache.get(hash);
+    const pending = waiters[hash];
+    if (!entry || !pending || !pending.length) return;
+    delete waiters[hash];
+    for (let i = 0; i < pending.length; i++) pending[i](entry);
   }
 
   function startsAllowed(): boolean {
@@ -607,16 +616,8 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
       };
       jobs[hash] = j;
       return new Promise((resolve) => {
-        const done = () => {
-          const list = listeners[hash];
-          if (list) {
-            const i = list.indexOf(done);
-            if (i >= 0) list.splice(i, 1);
-          }
-          resolve(o.cache.get(hash) || { seeders: job.seed, leechers: job.peer, live: false, at: now() });
-        };
-        if (!listeners[hash]) listeners[hash] = [];
-        listeners[hash].push(done);
+        if (!waiters[hash]) waiters[hash] = [];
+        waiters[hash].push(resolve);
         if (!trackers.length) {
           finish(j);
           return;
@@ -668,6 +669,8 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
         delete refs[hash];
         const j = jobs[hash];
         if (!j || j.done) return;
+        // a manual check shares this job: scrolling the row away must not drop it
+        if (waiters[hash] && waiters[hash].length) return;
         cancelJob(j);
       };
     },

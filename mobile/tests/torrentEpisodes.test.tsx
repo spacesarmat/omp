@@ -246,6 +246,31 @@ describe('Torrent: one torrent, several seasons', () => {
     expect(el.querySelector('.m-thead-meta')!.textContent).toContain('3 серии');
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 2');
   });
+
+  it('files with no season stay under Дополнительно', () => {
+    const pack: T = {
+      ...mk('pack', 1, 2),
+      title: 'Американская история ужасов S01-S02',
+      file_stats: files(1, 2).concat(files(2, 2).map((file, i) => ({ ...file, id: i + 10 }))).concat([
+        { id: 20, path: 'Extras/Interview.mkv', length: 1900000000 },
+      ]),
+    };
+    torrents.value = [pack];
+    setCatalogClientForTests(null);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    resetTo({ name: 'library' });
+    navigate({ name: 'torrent', hash: 'pack' });
+    act(() => render(<Torrent hash="pack" />, el));
+    expect(rows().length).toBe(2);
+    const other = chips().filter((c) => c.textContent === 'Дополнительно')[0];
+    expect(other).toBeTruthy();
+    act(() => other.click());
+    expect(rows().length).toBe(1);
+    expect(rows()[0].textContent).toContain('Interview');
+    expect(el.querySelector('.m-thead-meta')!.textContent).toContain('Дополнительно');
+    expect(el.querySelector('.m-chip.on')!.textContent).toBe('Дополнительно');
+  });
 });
 
 describe('Torrent: season chips', () => {

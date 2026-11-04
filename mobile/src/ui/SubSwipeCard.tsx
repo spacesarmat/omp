@@ -18,6 +18,8 @@ export function SubSwipeCard(p: { id: string; onCheck: () => void; onDelete: () 
     if (!root) return;
     let state: SubSwipe | null = null;
     const start = (e: TouchEvent) => {
+      // the previous swipe may never have produced a click; do not swallow this tap
+      ignore.current = false;
       if (e.touches.length !== 1) {
         state = null;
         return;

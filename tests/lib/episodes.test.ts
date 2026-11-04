@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extOf, baseName, stripExt, fileKind, parseEpisode, episodeLabel, naturalCompare,
-  filesOfSeason, groupBySeason, pickedSeason, playableFiles, seasonsInFiles, matchSubtitles, subtitleLabel, isExtraFile, TorrentFile,
+  activePackPick, filesForPack, filesOfSeason, groupBySeason, hasLooseFiles, pickedSeason, playableFiles, seasonsInFiles, matchSubtitles, subtitleLabel, isExtraFile, TorrentFile,
 } from '../../src/lib/episodes';
 
 const f = (id: number, path: string): TorrentFile => ({ id, path, length: 100 });
@@ -59,6 +59,11 @@ describe('files of one season', () => {
     expect(pickedSeason([1, 2, 3], 2)).toBe(2);
     expect(pickedSeason([1, 2, 3], 9)).toBe(1);
     expect(pickedSeason([2], 1)).toBe(2);
+    const pack = files.concat([f(6, 'AHS/Extras/Interview.mkv')]);
+    expect(hasLooseFiles(pack)).toBe(true);
+    expect(activePackPick([1, 2, 3], true, 'other')).toBe('other');
+    expect(filesForPack(pack, 'other').map((x) => x.id)).toEqual([6]);
+    expect(activePackPick([1, 2, 3], true, null)).toBe(1);
   });
 });
 

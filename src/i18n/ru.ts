@@ -1830,6 +1830,7 @@ export const ru = {
     noFiles: 'Файлы не найдены',
     noMedia: 'В торренте нет видео- или аудиофайлов',
     other: 'Другое',
+    bonus: 'Дополнительно',
     hintOk: 'OK - смотреть',
     hintListen: 'OK - слушать',
     hintSelect: 'OK - выбрать',

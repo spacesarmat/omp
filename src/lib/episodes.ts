@@ -115,6 +115,31 @@ export function pickedSeason(seasons: number[], picked: number | null): number |
   return seasons[0];
 }
 
+export type PackPick = number | 'other';
+
+/** True when a playable file names no season (an interview, a menu, a loose extra). */
+export function hasLooseFiles(files: TorrentFile[]): boolean {
+  for (let i = 0; i < files.length; i++) if (parseEpisode(files[i].path).season === null) return true;
+  return false;
+}
+
+/**
+ * Which chip a multi-season pack shows. `'other'` is the files with no season.
+ * A release with one season does not switch.
+ */
+export function activePackPick(seasons: number[], loose: boolean, picked: PackPick | null): PackPick | null {
+  if (seasons.length < 2) return seasons.length === 1 ? seasons[0] : null;
+  if (picked === 'other' && loose) return 'other';
+  if (typeof picked === 'number' && seasons.indexOf(picked) >= 0) return picked;
+  return seasons[0];
+}
+
+/** Files of the picked chip: one numbered season, or the files that name no season. */
+export function filesForPack(files: TorrentFile[], pick: PackPick): TorrentFile[] {
+  if (pick === 'other') return files.filter((file) => parseEpisode(file.path).season === null);
+  return filesOfSeason(files, pick);
+}
+
 export function groupBySeason(files: TorrentFile[]): Season[] {
   const map: { [k: string]: Season } = {};
   const keys: string[] = [];
