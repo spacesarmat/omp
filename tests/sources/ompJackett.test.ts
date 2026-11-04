@@ -49,8 +49,9 @@ describe('omp Jackett source', () => {
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/activate');
     expect(site.calls[0].form).toEqual({ code: 'ABCD-EFGH', deviceId: deviceId(), tokens: 'pair' });
     startOmpJackett();
-    expect(getSource(OMP_JACKETT_ID)?.kind).toBe('billing');
-    expect(getSource(OMP_JACRED_ID)?.name).toBe('JacRed');
+    // A code alone is not a /v1/me. Paid sources stay off until the server confirms them.
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
   });
 
   it('refuses a code bound to another device', async () => {
@@ -258,6 +259,8 @@ describe('omp Jackett source', () => {
   it('forget clears the source', () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
     syncOmpJackett();
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    syncOmpJackett({ jackett: true, jacred: true });
     expect(getSource(OMP_JACKETT_ID)).toBeTruthy();
     clearBilling();
     syncOmpJackett();
@@ -335,6 +338,36 @@ describe('omp Jackett source', () => {
     clearBilling();
     expect(ompSubscribed(1e12)).toBe(false);
     expect(billingSession()).toBeNull();
+  });
+
+  it('a /v1/me that returns after a new code does not clear that code', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 1 });
+    const site = fakeSite((c) => {
+      saveBillingSession({ token: 'new', paidUntil: 5e12 });
+      saveBillingAccess({ active: true, accessUntil: 5e12, monitorMax: 0, jackett: true, jacred: true });
+      return page(JSON.stringify({ active: false, paidUntil: 1, accessUntil: 0, monitorMax: 10, sources: { jackett: false, jacred: false } }), c.url);
+    });
+    await refreshOmpJackettSources(site.ctx);
+    expect(billingSession()?.token).toBe('new');
+    expect(ompSubscribed()).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
+  });
+
+  it('a fresh /v1/me turns paid sources back on after a denial', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12, jackett: true, jacred: true });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const denied = fakeSite((c) => page(JSON.stringify({ error: 'expired' }), c.url, 403));
+    await expect(ompJackettSource().search('q', denied.ctx)).rejects.toThrow('Подписка закончилась');
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    const site = fakeSite((c) =>
+      page(JSON.stringify({ active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: true } }), c.url),
+    );
+    await refreshOmpJackettSources(site.ctx);
+    expect(ompSubscribed()).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
   });
 
   it('turns paid sources off only after the account says so', async () => {

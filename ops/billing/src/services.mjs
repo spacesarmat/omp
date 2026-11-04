@@ -311,6 +311,17 @@ export function tokenLimitConfig(env) {
   return { ipMax: envInt(env, 'BILLING_TOKEN_IP_MAX', 60), codeMax: 0, windowMs: 10 * 60 * 1000 };
 }
 
+/**
+ * GET /v1/ads-config per IP. The body is public (banners, no secrets). 120 requests / 10 minutes is far above
+ * an app that asks every 5 minutes, including several devices behind one address. 0 turns the limit off.
+ */
+export function adsConfigLimitConfig(env) {
+  return {
+    ipMax: envInt(env, 'BILLING_ADS_CONFIG_IP_MAX', 120),
+    windowMs: Math.max(1, envInt(env, 'BILLING_ADS_CONFIG_WINDOW_SEC', 600)) * 1000,
+  };
+}
+
 /** Per-IP and per-code limiters for /v1/activate. `check` returns 0 when allowed, else Retry-After seconds. */
 export function createActivateLimiter(config, opts) {
   const cfg = config || activateLimitConfig({});

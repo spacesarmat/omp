@@ -71,7 +71,13 @@ function start(): void {
 if (platformKind() === 'androidtv') {
   import('./sources/builtin')
     .then(
-      (m) => m.registerBuiltinSources(),
+      (m) => {
+        m.registerBuiltinSources();
+        // Ads and paid sources: /v1/me on resume and about every 6 hours. LG never reaches this import.
+        return import('./billing/recheck').then((r) =>
+          import('./sources/tvContext').then((t) => r.startPremiumRecheck(t.tvSourceContext)),
+        );
+      },
       () => log('warn', 'tv', t('log.sourcesLoadFailed')),
     )
     .then(undefined, () => log('warn', 'app', t('log.sourcesConnectFailed')))

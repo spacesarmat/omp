@@ -175,6 +175,27 @@ describe('ads over HTTP (Postgres)', () => {
     expect(opt.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('ads-config stays public and answers 429 after the per-IP limit', async () => {
+    const store = await testStore();
+    await writeState(store, emptyState());
+    const app = createApp(store, noFetch, { env: { BILLING_ADS_CONFIG_IP_MAX: '2', BILLING_ADS_CONFIG_WINDOW_SEC: '600' } });
+    const a = await call(app, 'GET', '/v1/ads-config');
+    const b = await call(app, 'GET', '/v1/ads-config');
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(a.headers.authorization).toBeUndefined();
+    expect(a.data).toEqual({ v: 1, enabled: false, ttlSec: 300 });
+    const blocked = await call(app, 'GET', '/v1/ads-config');
+    expect(blocked.status).toBe(429);
+    expect(blocked.data).toEqual({ error: 'rate' });
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    expect(blocked.headers['access-control-allow-origin']).toBe('*');
+    const off = createApp(store, noFetch, { env: { BILLING_ADS_CONFIG_IP_MAX: '0' } });
+    expect((await call(off, 'GET', '/v1/ads-config')).status).toBe(200);
+    expect((await call(off, 'GET', '/v1/ads-config')).status).toBe(200);
+    expect((await call(off, 'GET', '/v1/ads-config')).status).toBe(200);
+  });
+
   it('re-uploading an unused image renews the grace period', async () => {
     const store = await testStore();
     const id = '4'.repeat(24);

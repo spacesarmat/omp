@@ -3,7 +3,8 @@
  * The config lives in settings.ads (one jsonb row in Postgres); images and the daily counters are in their own
  * tables (db/pg/ads.mjs). Off by default with no banners.
  *
- * The app reads GET /v1/ads-config (public, no secrets, cached 5 minutes) and sends impressions and clicks to
+ * The app reads GET /v1/ads-config (public, no secrets, no device token, cached 5 minutes, rate-limited per IP)
+ * and sends impressions and clicks to
  * POST /v1/ads/event. The counters are per day, banner, section and platform: no device id, no IP. Kept 90 days.
  *
  * Every banner must carry the advertiser and its erid (the law on ad marking): the admin refuses to save one

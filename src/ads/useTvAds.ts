@@ -7,7 +7,7 @@ import { APP_VERSION } from '../version';
 import { ACCESS_KEY, ompSubscribed } from '../billing/entitlement';
 import { onBillingChange, SESSION_KEY } from '../billing/session';
 import { ensureFirstRun } from './firstRun';
-import { phoneLink, setPhoneSubscribed } from '../phone/phoneStore';
+import { expirePhoneSub, phoneLink, phoneLinkSubscribed, setPhoneSubscribed } from '../phone/phoneStore';
 import { phoneRpc } from '../phone/rpc';
 import { adPlatform, installTvAds, refreshTvAds, syncTvAdsFromCache, tvAdsConfig } from './tvAds';
 
@@ -80,10 +80,13 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
 
   useEffect(() => {
     syncTvAdsFromCache();
-    const hideLinked = () => cfgRef.current.tvHideIfLinkedSubscriber && phoneLink.peek() && phoneLink.peek()!.sub === true;
+    expirePhoneSub();
+    const hideLinked = () => cfgRef.current.tvHideIfLinkedSubscriber && phoneLinkSubscribed(phoneLink.peek());
     const syncSub = () => setSubscribed(ompSubscribed());
     const tick = () => {
       // An expiry while the screen stays open has no billing event. The timer is what notices it.
+      // A linked phone that has not answered inside PHONE_SUB_TTL_MS stops hiding ads.
+      expirePhoneSub();
       syncSub();
       if (ompSubscribed() || hideLinked()) return;
       void refreshTvAds();
@@ -134,7 +137,7 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
 
   const now = Date.now();
   const day = Math.floor(now / 86400000);
-  const linked = !!(link && link.sub);
+  const linked = phoneLinkSubscribed(link);
   const banners = useMemo(
     () =>
       o.active

@@ -14,7 +14,7 @@ import { fakeMonitor, type FakeMonitor } from './fakeMonitor';
 import { reloadSourcePrefs } from '../../src/sources/store';
 import { loadSubs, saveSubs } from '../../src/monitor/subs';
 import { saveBillingSession, emitBillingChange } from '../../src/billing/session';
-import { ompSubscribed } from '../../src/billing/entitlement';
+import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { clearBilling, fetchBillingAccount } from '../../src/sources/ompJackett';
 import { createRpcHandler } from '../src/rpc/handler';
 import { runMonitor, type PageDeps } from '../src/monitor/page';
@@ -34,6 +34,7 @@ const sub = (i: number): Subscription => ({ id: 's' + i, query: 'Сериал ' 
 const many = (n: number) => Array.from({ length: n }, (_, i) => sub(n - i));
 const subscribe = () => {
   saveBillingSession({ token: 'tok', paidUntil: Date.now() + 10 * DAY });
+  saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY, monitorMax: 0 });
   emitBillingChange();
 };
 
@@ -222,7 +223,7 @@ describe('the background check', () => {
     const s2 = await runMonitor(deps(host(calls2), q2));
     expect(q2).toHaveLength(12);
     expect(s2.subs).toBe(12);
-    // over the cap with a session: /v1/me is asked first (here it fails, the session date still counts)
+    // over the cap with a confirmed answer: /v1/me is asked first (here it fails, that answer still counts)
     expect(calls2.some((r) => /\/v1\/me$/.test(r.url))).toBe(true);
   });
 });

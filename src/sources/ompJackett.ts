@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { saveBillingAccess } from '../billing/entitlement';
+import { freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -40,6 +40,8 @@ interface MeBody {
   overLimit?: boolean;
   deviceLimit?: number;
   sources?: { jackett?: boolean; jacred?: boolean };
+  /** 0: no monitoring cap. Omitted by a server from before this field. */
+  monitorMax?: number;
 }
 
 interface ErrorBody {
@@ -182,20 +184,45 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
-      if (current) saveSeenAccount({ paidUntil });
-      // Admin/bot may extend paidUntil; keep local session date in sync with the server.
+      // An answer for a binding that is already gone must not rewrite the session that replaced it.
+      if (!current) {
+        return {
+          telegramId: body.telegramId || '',
+          paidUntil,
+          active: !!body.active,
+          inGrace: !!body.inGrace,
+          accessUntil: body.accessUntil || 0,
+          overLimit: !!body.overLimit,
+          deviceLimit: body.deviceLimit || 0,
+          sources: body.sources
+            ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred }
+            : { jackett: !!body.active, jacred: !!body.active },
+        };
+      }
+      saveSeenAccount({ paidUntil });
+      const named = !!body.sources;
+      const flags = named
+        ? { jackett: !!body.sources?.jackett, jacred: !!body.sources?.jacred }
+        : { jackett: !!body.active, jacred: !!body.active };
+      // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
+      let changed = false;
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
         saveBillingSession({ ...session, paidUntil });
-        emitBillingChange();
+        changed = true;
       }
-      const sources = {
-        jackett: !!body.sources?.jackett,
-        jacred: !!body.sources?.jacred,
-      };
-      // When /v1/me omits sources (old server), keep both on while the subscription is active.
-      const hasSources = !!body.sources;
-      // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
-      if (session) saveBillingAccess({ active: !!body.active, accessUntil: body.accessUntil || 0 });
+      if (session) {
+        let cap = body.active ? 0 : MONITOR_FREE_MAX;
+        if (typeof body.monitorMax === 'number' && isFinite(body.monitorMax) && body.monitorMax >= 0) cap = Math.floor(body.monitorMax);
+        saveBillingAccess({
+          active: !!body.active,
+          accessUntil: body.accessUntil || 0,
+          jackett: flags.jackett,
+          jacred: flags.jacred,
+          monitorMax: cap,
+        });
+        changed = true;
+      }
+      if (changed) emitBillingChange();
       return {
         telegramId: body.telegramId || '',
         paidUntil,
@@ -204,9 +231,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         accessUntil: body.accessUntil || 0,
         overLimit: !!body.overLimit,
         deviceLimit: body.deviceLimit || 0,
-        sources: hasSources
-          ? sources
-          : { jackett: !!body.active, jacred: !!body.active },
+        sources: flags,
       };
     },
     (e) => {
@@ -321,7 +346,11 @@ export function ompJacredSource(): Source {
 }
 
 let watching = false;
-/** Last known server flags; until /v1/me runs, register both when a session exists. */
+/**
+ * Flags already applied in this process. Null until a confirmation: a cold start does not turn both sources on.
+ * A /v1/me from the last PREMIUM_FRESH_MS (freshPremiumSources) fills it. While this process is open and the
+ * server date is still in the future, a failed recheck keeps these flags (the search itself needs the network).
+ */
 let lastSources: { jackett: boolean; jacred: boolean } | null = null;
 
 export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } | null): void {
@@ -332,7 +361,13 @@ export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } |
     return;
   }
   if (sources) lastSources = sources;
-  const flags = lastSources || { jackett: true, jacred: true };
+  else {
+    const cached = freshPremiumSources();
+    if (cached) lastSources = cached;
+    else if (!ompSubscribed()) lastSources = { jackett: false, jacred: false };
+  }
+  const flags = lastSources;
+  if (!flags) return;
   if (flags.jackett) registerSource(ompJackettSource());
   if (flags.jacred) registerSource(ompJacredSource());
 }
@@ -344,10 +379,16 @@ export function startOmpJackett(): void {
   onBillingChange(() => syncOmpJackett());
 }
 
-/** Refresh enabled sources from /v1/me (call when the Sources screen opens). */
+/** Refresh enabled sources from /v1/me (call when the Sources screen opens, and from the premium recheck). */
 export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
+  const started = bindingKey();
   return fetchBillingAccount(ctx).then(
     (acc) => {
+      // The code changed while this was in flight: follow the session that is current, not this answer.
+      if (bindingKey() !== started) {
+        syncOmpJackett();
+        return;
+      }
       if (!acc || !acc.active) {
         syncOmpJackett({ jackett: false, jacred: false });
         return;

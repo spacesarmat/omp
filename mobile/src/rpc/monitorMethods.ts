@@ -14,7 +14,7 @@ import {
 } from '../../../src/monitor/subs';
 import { reloadSourcePrefs } from '../../../src/sources/store';
 import { FREE_SUBS_MAX, isSubPaused, pausedSubIds, subsLimitReached } from '../../../src/monitor/limit';
-import { ompSubscribed } from '../../../src/billing/entitlement';
+import { monitorMax } from '../../../src/billing/entitlement';
 import { t } from '../../../src/i18n';
 import { loadLastRun } from '../../../src/monitor/settings';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
@@ -64,10 +64,13 @@ function toRpcSub(s: Subscription, found: Finding[], paused?: { [id: string]: tr
   return out;
 }
 
-const pausedNow = () => pausedSubIds(loadSubs(), ompSubscribed());
+const pausedNow = () => pausedSubIds(loadSubs(), monitorMax());
 
 /** A refusal the TV shows as it is (newsError / wantAction print the phone's message). */
-const limitError = (key: 'monitor.limit.pausedCheck' | 'monitor.limit.tvWant') => new RpcError('failed', t(key, { n: FREE_SUBS_MAX }));
+const limitError = (key: 'monitor.limit.pausedCheck' | 'monitor.limit.tvWant') => {
+  const cap = monitorMax();
+  return new RpcError('failed', t(key, { n: cap > 0 ? cap : FREE_SUBS_MAX }));
+};
 
 function subOf(id: string): RpcSub {
   const s = getSubscription(id);

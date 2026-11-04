@@ -18,6 +18,17 @@ const BONUS_ROWS_MAX = 50;
 /** Days of access after paidUntil while the user renews. `settings.graceDays` overrides it (0-30). */
 export const GRACE_DAYS_DEFAULT = 3;
 
+/**
+ * Monitoring subscriptions a phone may keep without premium. The rows live only on the phone, so the server
+ * cannot count them. GET /v1/me sends this cap as `monitorMax` (0 when access is on: no cap). Old apps ignore it.
+ */
+export const MONITOR_FREE_MAX = 10;
+
+/** `monitorMax` for /v1/me. 0: the subscription is on, no cap. MONITOR_FREE_MAX: it is not. */
+export function monitorMaxFor(active) {
+  return active ? 0 : MONITOR_FREE_MAX;
+}
+
 /** Moscow has no DST since 2014: calendar days and reminder hours use a fixed UTC+3. */
 const MSK_OFFSET = 3 * 60 * 60 * 1000;
 
