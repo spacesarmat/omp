@@ -41,6 +41,32 @@ describe('rpc handler', () => {
     await started;
   });
 
+  it('a slow billing confirm does not hold sources or search past the free list', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let ready = false;
+    const free = src('rutor');
+    const paid = src('omp-jackett', { kind: 'billing' });
+    const f = fakeSearch([]);
+    const h = createRpcHandler(deps({
+      sources: () => (ready ? [free, paid] : [free]),
+      prepareSources: () => gate.then(() => { ready = true; }),
+      search: f.search,
+    }));
+    const started = Date.now();
+    const listed = (await h.dispatch('sources', {})) as { sources: { id: string }[] };
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(listed.sources.map((s) => s.id)).toEqual(['rutor']);
+    const found = await h.dispatch('search', { query: 'Dune' });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(found).toMatchObject({ handle: expect.any(String) });
+    release();
+    await gate;
+    await Promise.resolve();
+    const next = (await h.dispatch('sources', {})) as { sources: { id: string }[] };
+    expect(next.sources.map((s) => s.id)).toEqual(['rutor', 'omp-jackett']);
+  });
+
   it('sources skips TorrServer ones and reports off/login', async () => {
     const r = (await createRpcHandler(deps()).dispatch('sources', {})) as { sources: { id: string; state: string }[] };
     expect(r.sources.map((s) => s.id)).toEqual(['nnmclub', 'rutracker']);

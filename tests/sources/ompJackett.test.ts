@@ -436,26 +436,41 @@ describe('omp Jackett source', () => {
     expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
   });
 
-  it('TV search asks /v1/me when the saved answer is old or has no checkedAt, and skips it when fresh', async () => {
+  it('TV search answers at once while /v1/me is slow, then the next call sees the new answer', async () => {
     saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
-    const key = sessionKey(billingSession()!);
-    localStorage.setItem(ACCESS_KEY, JSON.stringify({ token: key, active: true, accessUntil: 2e12 }));
-    syncOmpJackett();
-    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
-    const site = fakeSite((c) =>
-      page(JSON.stringify({ active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: true } }), c.url),
-    );
+    saveBillingAccess({ active: true, accessUntil: 2e12, jackett: true, jacred: false, monitorMax: 0, checkedAt: 1 });
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const started = Date.now();
     await ensureOmpJackettSources(site.ctx);
+    expect(Date.now() - started).toBeLessThan(500);
     expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    release(page(JSON.stringify({ active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: true } }), 'http://billing'));
+    for (let i = 0; i < 40 && !getSource(OMP_JACRED_ID); i++) await Promise.resolve();
     expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
-
-    unregisterSource(OMP_JACKETT_ID);
-    unregisterSource(OMP_JACRED_ID);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
     const again = fakeSite((c) => page('{}', c.url));
     await ensureOmpJackettSources(again.ctx);
     expect(again.calls).toEqual([]);
+  });
+
+  it('TV search with no saved source flags stays on the free set until the background /v1/me answers', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const key = sessionKey(billingSession()!);
+    localStorage.setItem(ACCESS_KEY, JSON.stringify({ token: key, active: true, accessUntil: 2e12 }));
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    await ensureOmpJackettSources(site.ctx);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
+    release(page(JSON.stringify({ active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: false } }), 'http://billing'));
+    for (let i = 0; i < 40 && !getSource(OMP_JACKETT_ID); i++) await Promise.resolve();
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
   });
 
   it('a fresh /v1/me puts paid search back after a denial', async () => {

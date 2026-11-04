@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { billingAccessMatches, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
+import { billingAccessMatches, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -387,18 +387,36 @@ export function startOmpJackett(): void {
   onBillingChange(() => syncOmpJackett());
 }
 
+/** One background /v1/me for the hidden TV-search page. The RPC must not wait for it. */
+let tvRefresh: Promise<void> | null = null;
+
 /**
  * The hidden TV-search page shares this phone's saved answer but does not open the account screen.
- * A fresh answer is applied with no request. An older one, or one saved before `checkedAt` existed, is
- * asked again so Jackett and JacRed are registered before the TV reads the source list.
+ * The phone drops an RPC after 4.5s, and /v1/me may take 12s, so this never waits on the network.
+ * Free sources stay listed. A fresh answer, or the last one whose date still counts, turns paid sources on now.
+ * Anything older is asked in the background; the next call sees it.
  */
 export function ensureOmpJackettSources(ctx: SourceContext): Promise<void> {
   if (!billingSession()) return Promise.resolve();
-  if (freshPremiumSources()) {
-    syncOmpJackett();
+  const fresh = freshPremiumSources();
+  if (fresh) {
+    syncOmpJackett(fresh);
     return Promise.resolve();
   }
-  return refreshOmpJackettSources(ctx);
+  const kept = confirmedPremiumSources();
+  if (kept) syncOmpJackett(kept);
+  else syncOmpJackett();
+  if (!tvRefresh) {
+    const run = refreshOmpJackettSources(ctx).then(
+      () => undefined,
+      () => undefined,
+    );
+    tvRefresh = run;
+    void run.then(() => {
+      if (tvRefresh === run) tvRefresh = null;
+    });
+  }
+  return Promise.resolve();
 }
 
 /** Refresh enabled sources from /v1/me (call when the Sources screen opens, and from the premium recheck). */

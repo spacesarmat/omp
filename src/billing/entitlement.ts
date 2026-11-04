@@ -160,6 +160,19 @@ export function freshPremiumSources(now?: number): { jackett: boolean; jacred: b
 }
 
 /**
+ * Source flags from the last /v1/me while the server date still counts, even when that check is older than
+ * PREMIUM_FRESH_MS. Null when the answer named no sources: do not guess both on.
+ */
+export function confirmedPremiumSources(now?: number): { jackett: boolean; jacred: boolean } | null {
+  const at = now === undefined ? Date.now() : now;
+  if (!ompSubscribed(at)) return null;
+  const row = accessForSession();
+  if (!row) return null;
+  if (row.rec.jackett !== true && row.rec.jackett !== false && row.rec.jacred !== true && row.rec.jacred !== false) return null;
+  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true };
+}
+
+/**
  * Monitoring cap from the last /v1/me for this session.
  * 0: no cap (premium, or a server that said so). MONITOR_FREE_MAX when premium is not confirmed.
  * A positive monitorMax is used even while premium is on, so a later server cap is honoured.
