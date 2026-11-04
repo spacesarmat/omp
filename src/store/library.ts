@@ -4,7 +4,7 @@ import type { Torrent } from '../api/types';
 import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, posterConfig, type FillResult, type PosterClient } from '../lib/autoPoster';
 import type { TmdbConfig } from '../api/types';
-import { displayTitle } from '../lib/torrentName';
+import { displayTitle, isPlaceholderTitle } from '../lib/torrentName';
 import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
 import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
 import { t } from '../i18n';
@@ -56,13 +56,14 @@ export function resetLibrary(): void {
 /**
  * «infohash:…» titles get the name from the files, once per torrent; the shown list is patched when the server took it.
  */
-export function repairTitles(c: TitleClient, list: Torrent[]): void {
+export function repairTitles(c: TitleClient, list: Torrent[], onNamed?: (hash: string, title: string) => void): void {
   const my = gen;
   void fixPlaceholderTitles(c, list).then((done) => {
     if (my !== gen || !done.length) return;
     const by: { [h: string]: string } = {};
     done.forEach((d) => { by[d.hash] = d.title; });
     torrents.value = torrents.value.map((x) => (by[x.hash] ? { ...x, title: by[x.hash] } : x));
+    if (onNamed) done.forEach((d) => onNamed(d.hash, d.title));
   });
 }
 
@@ -112,7 +113,15 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
           torrent_size: t.torrent_size, data: t.data, stat: t.stat, timestamp: t.timestamp,
         })),
       );
-      if (c.setTitle) repairTitles(c as TitleClient, sorted);
+      if (c.setTitle) {
+        repairTitles(c as TitleClient, sorted, (hash, title) => {
+          const posters = c as Partial<PosterClient>;
+          if (typeof posters.setPoster !== 'function' || typeof posters.get !== 'function' || typeof posters.tmdbSettings !== 'function') return;
+          void attachPoster(posters as PosterClient, hash, title).then((poster) => {
+            if (poster && gen === my) patchPoster(hash, poster);
+          });
+        });
+      }
       const w = categoryWriter;
       if (w && c.setData) {
         const wc = c as CategoryWriteClient;
@@ -164,9 +173,9 @@ const TRIED_MAX = 500;
 /**
  * The version of the poster search (findPoster). Raise it when the search finds more than before: the marks of the
  * older search are dropped, so every torrent without a poster is tried once more. 2: «ё» variants and the English
- * title from the release name (0.20.6-beta.10).
+ * title from the release name (0.20.6-beta.10). 3: a magnet without a display name is not searched as its hash.
  */
-export const POSTER_SEARCH_VERSION = 2;
+export const POSTER_SEARCH_VERSION = 3;
 let filling: Promise<FillResult | null> | null = null;
 
 /**
@@ -263,6 +272,9 @@ export function autoFillPosters(c: PosterClient, now: () => number = Date.now): 
         skip: (h) => triedRecently(tried, key, h, start),
         onEach: (h, poster) => {
           if (poster) patchPoster(h, poster);
+          const tor = torrents.value.filter((x) => x.hash === h)[0];
+          // a hash is not a failed search: the files may still be on their way, so the next pass tries again
+          if (!poster && tor && isPlaceholderTitle(displayTitle(tor), tor.hash)) return;
           tried.at[h] = now();
           savePosterTried(tried);
         },

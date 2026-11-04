@@ -46,9 +46,28 @@ export function ompSubscribed(now?: number): boolean {
   return at < Math.max(rec.accessUntil || fallback, session.paidUntil);
 }
 
+/** Legacy token just moved to a pair id. Same login, new key. */
+let movedFrom = '';
+let movedTo = '';
+
 /** Keeps the cached /v1/me answer when a session gets a new key (the one-time move off the legacy token). */
 export function rekeyBillingAccess(from: string, to: string): void {
+  if (from && to && from !== to) {
+    movedFrom = from;
+    movedTo = to;
+  }
   const rec = loadJson<AccessRecord | null>(ACCESS_KEY, null, (v) => v === null || isRecord(v));
   if (!rec || !from || rec.token !== from) return;
   saveJson(ACCESS_KEY, { token: to, active: rec.active, accessUntil: rec.accessUntil });
+}
+
+/**
+ * True when `now` is the login `started` captured, including the one-time move off the legacy token.
+ * No token on both sides is the same request (Telegram linked, no code). A code that appeared or
+ * went away while the request ran is a different login.
+ */
+export function sameLogin(started: string, now: string): boolean {
+  if (started === now) return true;
+  if (!started || !now) return false;
+  return started === movedFrom && now === movedTo;
 }

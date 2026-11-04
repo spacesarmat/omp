@@ -7,7 +7,24 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - The built-in TorrServer is updated to MatriX.148
+
+## 0.20.8-beta.3
+
+- Test-mode labels sit in the bottom-right corner of the control, so a card edge no longer clips them. A grid code moves when it would cover the card in that same corner. On the TV and in the native player the size slider is 8-36 px, step 2, default 20. 8 px is 6 pt. On the phone it stays 8-24 px, step 1, default 12: that minimum was already 6 pt. On a TV the number is in the 1920x1080 layout, so 1080p and 4K show the same size
+- After a paid search is refused (the subscription has ended, or the device is over the limit), ads and the monitoring cap turn on at once, without waiting for the account screen to open again. A source that is switched off does not clear the subscription. A refusal for a request that started on an older code does not clear a subscription entered while it was running. A new /v1/me answer turns paid search back on. A phone linked through Telegram without a code still remembers that sign-in, so Settings offline does not say Sign in
+- [phone] Subscriptions in New each show a poster. When the title had none at the moment it was added (a search, a season, a typed query, Want from the TV), OMP looks one up and fills it in, including subscriptions saved earlier. A letter tile shows only when no poster exists. Delete stops monitoring that title, and a refresh does not bring it back
+- [tv] Want to watch sends the poster to the phone. With a phone linked, removing a title asks first, because the subscription and its saved findings are deleted too. The subscription that was saved is the one removed, even when a film from Soon digitally had no year then. Subscription rows show the poster
+- [tv] On a release card with no poster, Up from the cast row reaches the buttons when they wrap onto two rows and the page is scrolled down
+- [tv] On the season page, moving focus onto a season chip does not switch the season. OK switches it
+- The player title of a release added by a magnet link with no display name is the name from the files, from the first episode
+- In the library that release shows the season under the title, not the file size, and the poster is looked up by the name from the files
+- A series remembers a dub and subtitles only after a choice in the player. A track 2160 Player turned on by itself is not saved
+- [phone] The built-in player is updated to 2160 Player 0.2.19: a broken stream is retried three times, then "The stream stopped", the file is not marked watched, and the position stays the last good one. A tail under 30 seconds counts as watched only for a file of 10 minutes or more. While buffering, D-pad focus no longer jumps to the centre button
+- [atv] A 2160 Player result with no address still saves the position. An explicit not-watched flag does not mark the episode from the position alone
 - [lg] Separate dub files in a release (for example Rus Sound/LostFilm/Show.S01E01.mka) show up in the webOS player next to the built-in audio tracks. While one plays, the video stays muted and the file plays as its own audio in step with the picture. If the TV cannot open the file, the video track comes back on
+- [tech] The omp.tracks line is written to logcat through native logDiag. loggingBehavior stays none, and the line has no secrets
+- [tech] The android/vendor/2160player submodule is updated to v0.2.19 (5fde56f), player-core coordinate 0.2.19. The result contract is unchanged since 0.2.18. Embedded subtitles from the player result are not written to omp.a unless OMP had asked for a different external subtitle
+- [tech] Billing: one log line per finished or aborted POST /v1/search (time, source, HTTP status, duration, result count, Jackett indexer ok/fail/timeout counts, client disconnect). The device is the first 8 hex characters of sha256, with no token, query text, or keys
 
 ## 0.20.8-beta.2
 

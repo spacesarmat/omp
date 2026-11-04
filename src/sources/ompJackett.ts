@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { saveBillingAccess } from '../billing/entitlement';
+import { sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -160,7 +160,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
     (res) => {
       const session = billingSession();
       // «Отключить» (or a new code) while this request was in flight: its answer must not bring the old account back
-      const current = bindingKey() === startedFor;
+      const current = sameLogin(startedFor, bindingKey());
       if (res.status === 401) {
         // revoked: withDeviceToken already forgot the binding; an expired token on a hidden page is not an answer
         const err = tokenError(errorOf(res.text));
@@ -183,8 +183,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
       if (current) saveSeenAccount({ paidUntil });
-      // Admin/bot may extend paidUntil; keep local session date in sync with the server.
-      if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
+      // An answer that started on another code must not rewrite the session that is current now.
+      if (current && session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
         saveBillingSession({ ...session, paidUntil });
         emitBillingChange();
       }
@@ -195,7 +195,12 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       // When /v1/me omits sources (old server), keep both on while the subscription is active.
       const hasSources = !!body.sources;
       // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
-      if (session) saveBillingAccess({ active: !!body.active, accessUntil: body.accessUntil || 0 });
+      if (current && session) {
+        saveBillingAccess({ active: !!body.active, accessUntil: body.accessUntil || 0 });
+        // A denial cleared both sources. This answer is the same binding, so put back what the server allows.
+        const flags = body.active ? (hasSources ? sources : { jackett: true, jacred: true }) : { jackett: false, jacred: false };
+        syncOmpJackett(flags);
+      }
       return {
         telegramId: body.telegramId || '',
         paidUntil,
@@ -236,13 +241,30 @@ function magnetOf(text: string): string {
   }
 }
 
+/**
+ * A 403 that means this device has no subscription access. Ads and the monitoring cap read the cached
+ * flag, so the denial has to clear it now instead of waiting for the next /v1/me. `disabled` is an
+ * indexer switch, not an ended subscription, and a 502 is the indexer, not the account.
+ */
+function noteAccessDenied(status: number, text: string, startedFor: string): void {
+  // The search started on another code (or after «Отключить»): do not clear the binding that is current now.
+  if (status !== 403 || !sameLogin(startedFor, bindingKey())) return;
+  const code = errorOf(text);
+  if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
+  saveBillingAccess({ active: false, accessUntil: 0 });
+  syncOmpJackett({ jackett: false, jacred: false });
+  emitBillingChange();
+}
+
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
+  const startedFor = bindingKey();
   const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
   if (cat) body.cat = cat;
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/search', body, { headers, timeoutMs: 25000 })).then(
     (res) => {
       const type = (res.text || '').trim();
       if (res.status === 429) throw billingError(res.status, res.text);
+      if (res.status === 403) noteAccessDenied(res.status, res.text, startedFor);
       if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       if (type.charAt(0) === '{') throw billingError(res.status, res.text);
@@ -269,6 +291,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
     resolve(r: SourceResult, ctx: SourceContext): Promise<string> {
       const link = r.torrentUrl || r.Link || '';
       if (!billingSession() || !isProxyLink(link)) return Promise.reject(new Error(t('sources.billing.down')));
+      const startedFor = bindingKey();
       return withDeviceToken(ctx, (headers) =>
         billingPost(ctx, '/v1/torrent', { link, deviceId: deviceId() }, { headers, timeoutMs: 30000, responseCharset: 'iso-8859-1' }),
       ).then(
@@ -278,6 +301,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
           if (res.status === 502 && upstream.error === 'upstream') {
             throw new Error(t('torrent.better.failLink', { site: name }));
           }
+          if (res.status === 403) noteAccessDenied(res.status, res.text, startedFor);
           if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
             throw billingError(res.status, res.text);
           }
@@ -330,8 +354,10 @@ export function startOmpJackett(): void {
 
 /** Refresh enabled sources from /v1/me (call when the Sources screen opens). */
 export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
+  const startedFor = bindingKey();
   return fetchBillingAccount(ctx).then(
     (acc) => {
+      if (!sameLogin(startedFor, bindingKey())) return;
       if (!acc || !acc.active) {
         syncOmpJackett({ jackett: false, jacred: false });
         return;

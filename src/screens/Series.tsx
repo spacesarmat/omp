@@ -569,7 +569,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
                 focusKey={'season-' + n}
                 className={'season-chip' + (soon ? ' chip-future' : '') + (gap ? ' chip-future chip-missing' : '') + (n === season ? ' on' : '')}
                 role="button"
-                onFocused={() => { pick(n); showChip(n); }}
+                onFocused={() => showChip(n)}
                 onArrow={arrowUpToAbove('season-' + n)}
                 onPress={() => pick(n)}
               >
@@ -606,7 +606,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             {dead && (
               <FocusGroup focusKey={'series-dead-' + m.hash} className="series-dead">
                 <div>{t('torrent.deadRelease')}</div>
-                {find && <Button focusKey={'series-dead-find-' + m.hash} label={t('torrent.better.find')} onPress={() => setBetter(m)} />}
+                {find && <Button focusKey={'series-dead-find-' + m.hash} testAnchor="series-dead-find" label={t('torrent.better.find')} onPress={() => setBetter(m)} />}
               </FocusGroup>
             )}
           </div>

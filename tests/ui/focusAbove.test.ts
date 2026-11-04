@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { arrowUpToAbove, focusAboveKey, focusBelowKey } from '../../src/ui/focus';
+import { arrowUpToAbove, focusAboveKey, focusBelowKey, verticalTarget } from '../../src/ui/focus';
 
 function place(parent: HTMLElement, key: string, x: number, y: number, w: number, h: number, cls?: string): HTMLElement {
   const el = document.createElement('div');
@@ -112,6 +112,40 @@ describe('focusAboveKey', () => {
     expect(focusBelowKey(play)).toBe('torrent-delete');
     expect(focusBelowKey(del)).toBe('torrent-cast-0');
     expect(focusBelowKey(cast)).toBe('file-1');
+  });
+
+  it('Up from a cast item whose box is empty still reaches the last action button', () => {
+    screen = document.createElement('div');
+    screen.className = 'screen';
+    document.body.appendChild(screen);
+    const actions = document.createElement('div');
+    actions.className = 'torrent-actions';
+    screen.appendChild(actions);
+    place(actions, 'torrent-play', 80, 40, 220, 64);
+    place(actions, 'torrent-delete', 320, 120, 180, 64);
+    const row = document.createElement('div');
+    row.className = 'tc-cast-row';
+    screen.appendChild(row);
+    const cast = place(row, 'torrent-cast-0', 0, 0, 0, 0);
+    // a scrolled posterless card: the WebView reports no box, so rectangles find nothing
+    expect(verticalTarget(cast, 'up')).toBe('torrent-delete');
+  });
+
+  it('Up from the cast reaches the last button when every wrapped row covers the cast', () => {
+    screen = document.createElement('div');
+    screen.className = 'screen';
+    document.body.appendChild(screen);
+    const actions = document.createElement('div');
+    actions.className = 'torrent-actions';
+    screen.appendChild(actions);
+    place(actions, 'torrent-play', 80, 360, 220, 200);
+    place(actions, 'torrent-poster', 320, 360, 180, 200);
+    const row = document.createElement('div');
+    row.className = 'tc-cast-row';
+    screen.appendChild(row);
+    const cast = place(row, 'torrent-cast-0', 80, 400, 180, 220);
+    expect(focusAboveKey(cast)).toBeNull();
+    expect(verticalTarget(cast, 'up')).toBe('torrent-poster');
   });
 
   it('leaves other directions to the library', () => {

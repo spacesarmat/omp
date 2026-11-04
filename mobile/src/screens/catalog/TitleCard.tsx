@@ -295,7 +295,7 @@ function Body({ card }: { card: CatalogCard }) {
         <WantButton card={card} following={following} onWant={() => setWanting(true)} />
       </div>
       {launchError && <LaunchError message={launchError} class="m-hint-warn" />}
-      {wanting && <WantSheet card={card} onClose={() => setWanting(false)} />}
+      {wanting && <WantSheet card={card} poster={poster} onClose={() => setWanting(false)} />}
       {card.overview && <Overview text={card.overview} />}
       {tv ? (
         <>
@@ -357,7 +357,7 @@ export function TitleCard({ kind, id }: { kind: Kind; id: number }) {
           <Icon d={BACK} />
         </button>
         {card && (
-          <button type="button" class="m-icon-btn m-glass m-tc-share" aria-label={t('share.action')} onClick={() => void sendShare(cardShare(card))}>
+          <button type="button" class="m-icon-btn m-glass m-tc-share" data-code="P24.2" aria-label={t('share.action')} onClick={() => void sendShare(cardShare(card))}>
             <Icon d={SHARE} />
           </button>
         )}

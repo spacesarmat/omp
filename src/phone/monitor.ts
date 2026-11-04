@@ -43,8 +43,31 @@ export function phoneSubRemove(id: string): Promise<void> {
   return phoneRpc<unknown>('subRemove', { id: id }).then(() => undefined);
 }
 
-export function phoneWantAdd(query: string): Promise<{ sub: RpcSub; created: boolean }> {
-  return phoneRpc<{ sub: RpcSub; created: boolean }>('wantAdd', { query: query });
+/** Removes every subscription with this search. The TV «Хочу» list knows the query, not the phone's id. */
+export function phoneSubRemoveQuery(query: string): Promise<void> {
+  return phoneRpc<unknown>('subRemove', { query: query }).then(() => undefined);
+}
+
+export interface WantCatalog {
+  kind: 'movie' | 'tv';
+  id: number;
+  title: string;
+  year: number;
+  poster: string;
+}
+
+export function phoneWantAdd(query: string, catalog?: WantCatalog | null): Promise<{ sub: RpcSub; created: boolean }> {
+  const params: { query: string; catalog?: WantCatalog } = { query: query };
+  if (catalog && catalog.id > 0 && catalog.title) {
+    params.catalog = {
+      kind: catalog.kind,
+      id: catalog.id,
+      title: catalog.title,
+      year: catalog.year || 0,
+      poster: catalog.poster || '',
+    };
+  }
+  return phoneRpc<{ sub: RpcSub; created: boolean }>('wantAdd', params);
 }
 
 /** Asks until the phone has the link (pending: wait 700 ms, at most 8 tries), like resolveTvResult. */

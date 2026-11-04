@@ -5,6 +5,7 @@ import type { Torrent } from '../api/types';
 import { findGroup, isSeries, seriesKey } from '../lib/seriesGroups';
 import { newestSeriesTracks, seriesTracksOf, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { saveSeriesTracks, type JournalClient } from './journal';
+import { logTrackDiag } from '../platform/androidNative';
 import { libraryGeneration, torrents } from './library';
 
 function sameHash(a: string | undefined, b: string | undefined): boolean {
@@ -57,6 +58,8 @@ export function seriesTracksFor(hash: string | undefined, list: Torrent[] = torr
 
 function warnTracks(msg: string): void {
   console.warn(msg);
+  // release WebView logging is off (loggingBehavior none); this is the line logcat can show
+  logTrackDiag(msg);
 }
 
 /**

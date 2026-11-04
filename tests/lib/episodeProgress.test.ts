@@ -102,6 +102,11 @@ describe('episodeProgress', () => {
     expect(episodeProgress(LIST, 'oth', 1, reader({ 'uhd:1': { time: 3500, duration: 3600, updated: 9 } })).watched).toBe(false);
   });
 
+  it('a near-end stop the player did not call finished stays resumable', () => {
+    const r = reader({ 'uhd:1': { time: 3500, duration: 3600, updated: 9, open: true } });
+    expect(episodeProgress(LIST, 'uhd', 1, r)).toMatchObject({ watched: false, position: 3500 });
+  });
+
   it('nothing recorded: not watched, no position; an unknown hash reads only itself', () => {
     expect(episodeProgress(LIST, 'uhd', 1, reader({}))).toMatchObject({ watched: false, position: 0, ratio: 0, updated: 0 });
     expect(episodeCopies(LIST, 'nope', 1)).toEqual([{ hash: 'nope', fileIndex: 1 }]);

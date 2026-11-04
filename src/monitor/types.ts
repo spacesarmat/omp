@@ -38,6 +38,13 @@ export interface Subscription {
   lastFindAt?: number;
   /** Title card this subscription came from. Sharing and the poster use it. Never a torrent hash. */
   catalog?: SubCatalog;
+  /**
+   * https poster filled in after the subscription was saved, when the card had none.
+   * A card poster (`catalog.poster`) wins when both exist.
+   */
+  poster?: string;
+  /** A lookup finished and nothing was found. Absent until then, so a failed lookup can run again. */
+  noPoster?: boolean;
 }
 
 /** The fields a new subscription is created from. */

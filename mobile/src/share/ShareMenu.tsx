@@ -7,11 +7,12 @@ import { Icon, ICONS } from '../ui/Icon';
 export function ShareMenu(p: { label: string; onClose: () => void; onShare: () => void }) {
   if (typeof document === 'undefined') return null;
   return createPortal(
-    <Sheet label={p.label} onClose={p.onClose}>
+    <Sheet label={p.label} testId="PD58" onClose={p.onClose}>
       <div class="m-sheet-title">{p.label}</div>
       <button
         type="button"
-        class="m-opt"
+        class="m-opt tm"
+        data-code="PD58.1"
         data-share="title"
         onClick={() => {
           p.onClose();

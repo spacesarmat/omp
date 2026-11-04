@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   reloadProgress, saveProgress, getLocalProgress, isWatched, resumePosition, progressRatio,
-  markWatched, clearProgress, serverViewed, continueWatching, refreshViewed, resetViewed,
+  markWatched, clearProgress, serverViewed, continueWatching, refreshViewed, resetViewed, carryProgress,
 } from '../../src/store/progress';
 import type { Torrent } from '../../src/api/types';
 
@@ -56,6 +56,17 @@ describe('progress store', () => {
     expect(r).toHaveLength(1);
     expect(r[0].torrent.hash).toBe(H);
     expect(r[0].fileIndex).toBe(2);
+    saveProgress(H2, 1, 960, 1000, true);
+    const again = continueWatching(list);
+    expect(again.some((e) => e.torrent.hash === H2 && e.fileIndex === 1)).toBe(true);
+  });
+  it('copies an unfinished near-end position with its open flag', () => {
+    saveProgress(H, 1, 950, 1000, true);
+    expect(carryProgress(H, H2, { 1: 4 })).toBe(1);
+    const copied = getLocalProgress(H2, 4);
+    expect(copied && copied.open).toBe(true);
+    expect(isWatched(H2, 4)).toBe(false);
+    expect(resumePosition(H2, 4)).toBe(950);
   });
   it('refreshViewed loads from client and ignores errors', async () => {
     await refreshViewed({ viewedList: () => Promise.resolve([{ hash: H, file_index: 1 }]) } as any);

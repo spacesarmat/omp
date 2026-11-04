@@ -83,6 +83,7 @@ import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
 import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
+import { installPhoneSubPosters } from './monitor/posters';
 import './mobile.css';
 
 // test-mode labels read the phone size (P11.20)
@@ -350,6 +351,11 @@ export function App() {
   // «Что нового» once after an update
   useEffect(() => {
     checkWhatsNew(phoneChangelog(), APP_VERSION);
+  }, []);
+
+  // posters for subscriptions that were saved without one (and any added while this page is open)
+  useEffect(() => {
+    installPhoneSubPosters();
   }, []);
 
   // Setup waits until magnet, notification and billing intakes have applied their route.
