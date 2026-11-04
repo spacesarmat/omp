@@ -7,8 +7,9 @@ import { t } from '../i18n';
 import { toast } from '../ui/toast';
 import { torrentQuery, type CatalogTitle, type Kind } from '../catalog/tmdb';
 import { phoneLink } from '../phone/phoneStore';
-import { phoneWantAdd } from '../phone/monitor';
+import { phoneSubRemoveQuery, phoneWantAdd } from '../phone/monitor';
 import { PhoneRpcError } from '../phone/rpc';
+import { sameQuery } from '../monitor/subs';
 
 export const WANT_KEY = 'tsp.tvWant';
 export const WANT_MAX = 500;
@@ -68,14 +69,38 @@ export function wantTitles(): CatalogTitle[] {
   return wantList.value.map((w) => ({ kind: w.kind, id: w.id, title: w.title, original: '', year: w.year, poster: w.poster, rating: 0 }));
 }
 
+function wantQuery(w: { kind: Kind; title: string; year: number }): string {
+  return torrentQuery({ title: w.title, original: '', year: w.year, kind: w.kind });
+}
+
+/** Drops TV list rows whose search is this subscription query (the phone subscription was deleted). */
+export function removeWantByQuery(query: string): void {
+  const next = wantList.value.filter((w) => !sameQuery(wantQuery(w), query));
+  if (next.length === wantList.value.length) return;
+  wantList.value = next;
+  saveJson(WANT_KEY, wantList.value);
+}
+
 /**
- * Toggle with a toast. Adding also hands the title to the phone (the same query as «Найти раздачи» of the card); the
- * toast waits for its answer. Removing touches only the TV list: the phone's subscription stays.
+ * Toggle with a toast. Adding hands the title to the phone (the same query as «Найти раздачи», plus the card so the
+ * subscription keeps its poster). Removing deletes that subscription on the phone too: otherwise it stays in
+ * «Подписки» and comes back on the next refresh. If the phone refuses, the title stays on this list.
  */
 export function wantAction(x: CatalogTitle): boolean {
   const on = toggleWant(x);
+  const query = torrentQuery(x);
   if (!on) {
-    toast(t('tv.want.removed'));
+    if (!phoneLink.value) {
+      toast(t('tv.want.removed'));
+      return on;
+    }
+    phoneSubRemoveQuery(query).then(
+      () => toast(t('tv.want.removedPhone')),
+      () => {
+        if (!isWanted(x.kind, x.id)) toggleWant(x);
+        toast(t('tv.want.removeFailed'));
+      },
+    );
     return on;
   }
   const local = () => toast(t('tv.want.added') + ' ' + t('tv.want.connectPhone'));
@@ -83,7 +108,13 @@ export function wantAction(x: CatalogTitle): boolean {
     local();
     return on;
   }
-  phoneWantAdd(torrentQuery(x)).then(
+  phoneWantAdd(query, {
+    kind: x.kind,
+    id: x.id,
+    title: x.title || x.original,
+    year: x.year || 0,
+    poster: x.poster || '',
+  }).then(
     () => toast(t('tv.want.addedPhone')),
     (e) => {
       // the phone refused with its own words (e.g. the subscription cap without OMP): say so instead of «connect a phone»

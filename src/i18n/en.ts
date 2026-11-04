@@ -1162,6 +1162,7 @@ export const en: EnDict<typeof ru> = {
       created: 'Subscription created',
       deleted: 'Subscription deleted',
       deleteAsk: 'Delete the subscription “{query}”?',
+      deleteOne: 'Delete the subscription "{query}"',
     },
     limit: {
       title: 'Up to {n} subscriptions without OMP',
@@ -1420,6 +1421,8 @@ export const en: EnDict<typeof ru> = {
       addedPhone: 'Added to Want to watch - OMP on the phone will report releases',
       connectPhone: 'Connect a phone to get reports about releases',
       removed: 'Removed from Want to watch.',
+      removedPhone: 'Removed from Want to watch and from subscriptions on the phone.',
+      removeFailed: 'Could not remove the subscription on the phone. The title stays in Want to watch.',
     },
     // the title card of a film or a series opened from "Discover"
     title: {

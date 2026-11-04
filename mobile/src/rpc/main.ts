@@ -11,9 +11,13 @@ import { allSources } from '../../../src/sources/registry';
 import type { SourceContext } from '../../../src/sources/types';
 import { createRpcHandler } from './handler';
 import { createRpcBridge, windowRpcPort } from './host';
+import '../catalog/phoneCatalog';
+import { installSubPosters, lookupSubPoster } from '../../../src/monitor/subPoster';
 
 const port = windowRpcPort();
 if (port) {
+  // the TV adds subscriptions here: a card poster is stored at once, the rest are looked up in this page
+  installSubPosters(lookupSubPoster);
   registerBuiltinSources();
   const bridge = createRpcBridge(port);
   const readOnly = () => Promise.reject(new Error(t('notify.readOnly')));

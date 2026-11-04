@@ -32,7 +32,10 @@ import { filterQuality, sortResults, sourceName } from '../../../src/sources/vie
 import type { SearchHandle } from '../../../src/sources/search';
 import { FEED_CATEGORIES, type FeedCategory, type SourceResult } from '../../../src/sources/types';
 import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../src/monitor/feedCache';
-import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, unseenCount } from '../../../src/monitor/subs';
+import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, removeSubscription, subscriptionPoster, unseenCount } from '../../../src/monitor/subs';
+import { backfillSubPosters } from '../../../src/monitor/subPoster';
+import { posterInitials } from '../../../src/screens/library/Poster';
+import { askConfirm } from '../ui/confirm';
 import type { Subscription } from '../../../src/monitor/types';
 import { libraryRange } from '../../../src/monitor/newEpisodes';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
@@ -211,11 +214,32 @@ function scrollToHighlight(): void {
   if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
 }
 
+function posterHue(id: string): number {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n + id.charCodeAt(i)) % 4;
+  return n;
+}
+
+/** The stored poster, or a letter tile only after a lookup found nothing. A blank slot means the lookup is still running. */
+function SubPoster({ s }: { s: Subscription }) {
+  const url = subscriptionPoster(s);
+  const [broken, setBroken] = useState(false);
+  if (url && !broken) {
+    return <img class="m-sub-poster" src={url} alt="" width={40} height={60} onError={() => setBroken(true)} />;
+  }
+  if (!s.noPoster && !broken) return <span class="m-sub-poster" />;
+  const label = (s.catalog && s.catalog.title) || s.query;
+  return (
+    <span class={'m-sub-poster m-sub-ph m-disc-ph-' + posterHue(s.id)} aria-hidden="true">
+      {posterInitials(label)}
+    </span>
+  );
+}
+
 function SubBody(p: { s: Subscription; off: boolean; n: number }) {
-  const cat = p.s.catalog;
   return (
     <>
-      {cat && (cat.poster ? <img class="m-sub-poster" src={cat.poster} alt="" width={40} height={60} /> : <span class="m-sub-poster" />)}
+      <SubPoster s={p.s} />
       <span class="m-sub-text">
         <span class="m-sub-q">{p.s.query}</span>
         <span class="m-muted m-small">{subRule(p.s)}</span>
@@ -266,6 +290,33 @@ function WantSub(p: { s: Subscription; off: boolean; n: number }) {
         />
       )}
     </>
+  );
+}
+
+function removeSub(s: Subscription): void {
+  void askConfirm(t('monitor.sub.deleteAsk', { query: s.query }), t('common.delete'), { destructive: true, testId: 'PD47' }).then((ok) => {
+    if (!ok) return;
+    removeSubscription(s.id);
+    reloadMonitor();
+    showToast(t('monitor.sub.deleted'));
+  });
+}
+
+function SubLine(p: { s: Subscription; off: boolean; n: number }) {
+  return (
+    <div class="m-sub-line">
+      {p.s.catalog ? <WantSub s={p.s} off={p.off} n={p.n} /> : <PlainSub s={p.s} off={p.off} n={p.n} />}
+      <button
+        type="button"
+        class="m-btn m-btn-secondary m-btn-sm m-sub-remove tm"
+        data-code="P03.4"
+        data-sub-remove={p.s.id}
+        aria-label={t('monitor.sub.deleteOne', { query: p.s.query })}
+        onClick={() => removeSub(p.s)}
+      >
+        {t('common.delete')}
+      </button>
+    </div>
   );
 }
 
@@ -324,6 +375,10 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
     if (finding) scrollToHighlight();
   }, [finding]);
   useEffect(() => setPrompt(!!watch), [finding, watch]);
+  // posters missing at add time (a search, a season reminder, an old row) are filled in here
+  useEffect(() => {
+    backfillSubPosters();
+  }, [monitorVersion.value]);
 
   const last = lastCheck(status);
   const checking = running || !!(status && status.running);
@@ -415,7 +470,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       {shownSubs.map((s) => {
         const n = unseenCount(s.id);
         const off = paused[s.id] === true;
-        return s.catalog ? <WantSub key={s.id} s={s} off={off} n={n} /> : <PlainSub key={s.id} s={s} off={off} n={n} />;
+        return <SubLine key={s.id} s={s} off={off} n={n} />;
       })}
       {searching && (
         <div data-found-releases>

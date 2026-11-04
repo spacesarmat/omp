@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setRpcTransport, phoneStatus } from '../../src/phone/rpc';
 import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
-import { phoneFeed, phoneSubs, phoneSubCheck, phoneSubSet, phoneSubRemove, phoneWantAdd, phoneFindingLink, phoneFindingsSeen } from '../../src/phone/monitor';
+import { phoneFeed, phoneSubs, phoneSubCheck, phoneSubSet, phoneSubRemove, phoneSubRemoveQuery, phoneWantAdd, phoneFindingLink, phoneFindingsSeen } from '../../src/phone/monitor';
 
 const PH = { url: 'http://192.168.1.20:8097', token: 'a'.repeat(32), name: 'Pixel' };
 beforeEach(() => savePhoneLink(PH));
@@ -27,11 +27,13 @@ describe('monitor wrappers', () => {
     reply({ started: true }, b);
     await phoneSubCheck('s1');
     await phoneSubRemove('s1');
+    await phoneSubRemoveQuery('Дюна 2021');
     await phoneFindingsSeen();
     await phoneFindingsSeen('s1', ['k']);
     expect(b).toEqual([
       { method: 'subCheck', params: { id: 's1' } },
       { method: 'subRemove', params: { id: 's1' } },
+      { method: 'subRemove', params: { query: 'Дюна 2021' } },
       { method: 'findingsSeen', params: {} },
       { method: 'findingsSeen', params: { subId: 's1', keys: ['k'] } },
     ]);

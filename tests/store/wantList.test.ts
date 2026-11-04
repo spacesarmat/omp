@@ -67,7 +67,10 @@ describe('wantAction', () => {
     expect(wantAction(title)).toBe(true);
     await flush();
     expect(isWanted('movie', 7)).toBe(true);
-    expect(calls).toEqual([{ method: 'wantAdd', params: { query: 'Дюна 2021' } }]);
+    expect(calls).toEqual([{
+      method: 'wantAdd',
+      params: { query: 'Дюна 2021', catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: '' } },
+    }]);
     expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть» - OMP на телефоне сообщит о раздачах']]);
   });
 
@@ -97,14 +100,28 @@ describe('wantAction', () => {
     expect(vi.mocked(toast).mock.calls).toEqual([['Добавлено в «Хочу посмотреть». ' + why]]);
   });
 
-  it('removing from the TV list does not touch the phone', async () => {
+  it('removing from the TV list deletes the phone subscription and does not put the title back', async () => {
     toggleWant(title, 1);
     savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
-    const send = vi.fn(() => Promise.resolve(JSON.stringify({ ok: true, result: {} })));
-    setRpcTransport(send);
+    const calls: unknown[] = [];
+    setRpcTransport((_url, body) => {
+      calls.push(JSON.parse(body));
+      return Promise.resolve(JSON.stringify({ ok: true, result: { removed: true } }));
+    });
     expect(wantAction(title)).toBe(false);
     await flush();
-    expect(send).not.toHaveBeenCalled();
-    expect(vi.mocked(toast).mock.calls).toEqual([['Убрано из «Хочу посмотреть».']]);
+    expect(isWanted('movie', 7)).toBe(false);
+    expect(calls).toEqual([{ method: 'subRemove', params: { query: 'Дюна 2021' } }]);
+    expect(vi.mocked(toast).mock.calls).toEqual([['Убрано из «Хочу посмотреть» и из подписок на телефоне.']]);
+  });
+
+  it('a phone that fails to remove puts the title back, so the lists stay together', async () => {
+    toggleWant(title, 1);
+    savePhoneLink({ url: 'http://192.168.1.20:8097', token: 'f'.repeat(32), name: 'Phone' });
+    setRpcTransport(() => Promise.reject(new Error('network')));
+    expect(wantAction(title)).toBe(false);
+    await flush();
+    expect(isWanted('movie', 7)).toBe(true);
+    expect(vi.mocked(toast).mock.calls[0][0]).toBe('Не удалось убрать подписку на телефоне. Название осталось в «Хочу посмотреть».');
   });
 });
