@@ -23,6 +23,24 @@ describe('rpc handler', () => {
     const r = (await createRpcHandler(deps()).dispatch('ompSubscribed', {})) as { subscribed: boolean };
     expect(r).toEqual({ subscribed: false });
   });
+  it('sources and search wait until prepareSources has registered paid sources', async () => {
+    let ready = false;
+    const paid = src('omp-jackett', { kind: 'billing' });
+    const h = createRpcHandler(deps({
+      sources: () => (ready ? [paid] : []),
+      prepareSources: async () => {
+        ready = true;
+      },
+    }));
+    const listed = (await h.dispatch('sources', {})) as { sources: { id: string }[] };
+    expect(listed.sources.map((s) => s.id)).toEqual(['omp-jackett']);
+    ready = false;
+    const started = h.dispatch('search', { query: 'Dune' });
+    await Promise.resolve();
+    expect(ready).toBe(true);
+    await started;
+  });
+
   it('sources skips TorrServer ones and reports off/login', async () => {
     const r = (await createRpcHandler(deps()).dispatch('sources', {})) as { sources: { id: string; state: string }[] };
     expect(r.sources.map((s) => s.id)).toEqual(['nnmclub', 'rutracker']);

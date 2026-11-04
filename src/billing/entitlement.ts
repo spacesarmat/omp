@@ -108,6 +108,22 @@ export function saveBillingAccess(acc: AccessInput | null): void {
 }
 
 /**
+ * True when this /v1/me answer would not change what ads, the cap or paid sources already use.
+ * `checkedAt` alone does not count: saving a newer stamp must not notify the account screen.
+ */
+export function billingAccessMatches(acc: AccessInput): boolean {
+  const row = accessForSession();
+  if (!row) return false;
+  const rec = row.rec;
+  const until = acc.accessUntil && acc.accessUntil > 0 ? acc.accessUntil : 0;
+  if (rec.active !== !!acc.active || rec.accessUntil !== until) return false;
+  if ((acc.jackett === true || acc.jackett === false) && rec.jackett !== acc.jackett) return false;
+  if ((acc.jacred === true || acc.jacred === false) && rec.jacred !== acc.jacred) return false;
+  if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && rec.monitorMax !== Math.floor(acc.monitorMax)) return false;
+  return true;
+}
+
+/**
  * True while this phone's OMP subscription is confirmed.
  * No answer for this session: false. No accessUntil: only until session.paidUntil, with no added grace days.
  */

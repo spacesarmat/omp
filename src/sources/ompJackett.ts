@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
+import { billingAccessMatches, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -214,14 +214,16 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       if (session) {
         let cap = body.active ? 0 : MONITOR_FREE_MAX;
         if (typeof body.monitorMax === 'number' && isFinite(body.monitorMax) && body.monitorMax >= 0) cap = Math.floor(body.monitorMax);
-        saveBillingAccess({
+        const next = {
           active: !!body.active,
           accessUntil: body.accessUntil || 0,
           jackett: flags.jackett,
           jacred: flags.jacred,
           monitorMax: cap,
-        });
-        changed = true;
+        };
+        // The account screen refetches on this event. An unchanged answer must not emit, or the two call each other.
+        if (!billingAccessMatches(next)) changed = true;
+        saveBillingAccess(next);
         // A denial cleared both sources. This answer is the same binding, so put back what the server allows.
         syncOmpJackett(body.active ? flags : { jackett: false, jacred: false });
       }
@@ -383,6 +385,20 @@ export function startOmpJackett(): void {
   if (watching) return;
   watching = true;
   onBillingChange(() => syncOmpJackett());
+}
+
+/**
+ * The hidden TV-search page shares this phone's saved answer but does not open the account screen.
+ * A fresh answer is applied with no request. An older one, or one saved before `checkedAt` existed, is
+ * asked again so Jackett and JacRed are registered before the TV reads the source list.
+ */
+export function ensureOmpJackettSources(ctx: SourceContext): Promise<void> {
+  if (!billingSession()) return Promise.resolve();
+  if (freshPremiumSources()) {
+    syncOmpJackett();
+    return Promise.resolve();
+  }
+  return refreshOmpJackettSources(ctx);
 }
 
 /** Refresh enabled sources from /v1/me (call when the Sources screen opens, and from the premium recheck). */

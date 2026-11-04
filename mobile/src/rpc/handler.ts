@@ -22,6 +22,11 @@ export interface RpcDeps {
   resolve?: typeof resolveLink;
   /** Checks one subscription now over `from` (`subCheck`); absent: `subCheck` fails. */
   checkSubscription?: (sub: Subscription, from: Source[]) => Promise<unknown>;
+  /**
+   * Hidden TV-search page: confirm paid sources before the list or a search is returned.
+   * Absent in tests that pass their own source list.
+   */
+  prepareSources?: () => Promise<void>;
 }
 
 export type RpcErrorCode = 'bad_request' | 'unknown_method' | 'expired' | 'failed';
@@ -287,6 +292,7 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
 
   const methods: { [name: string]: (p: Params) => Promise<unknown> | unknown } = {
     async sources() {
+      if (deps.prepareSources) await deps.prepareSources();
       reloadSourcePrefs();
       const ctx = deps.ctx();
       const list = deps.sources().filter(searchable);
@@ -296,7 +302,8 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       return { sources };
     },
 
-    search(p) {
+    async search(p) {
+      if (deps.prepareSources) await deps.prepareSources();
       const query = typeof p.query === 'string' ? p.query.trim() : '';
       if (!query || query.length > MAX_QUERY) throw bad('query');
       let wanted: string[] | null = null;

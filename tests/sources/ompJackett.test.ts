@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
-import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
+import { ACCESS_KEY, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
-import { billingSession, deviceId, saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
+import { billingSession, deviceId, onBillingChange, saveBillingSession, saveSeenAccount, seenAccount, sessionKey } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
 import type { SourceResult } from '../../src/sources/types';
 import {
   activateCode,
   clearBilling,
+  ensureOmpJackettSources,
   fetchBillingAccount,
   OMP_JACRED_ID,
   OMP_JACKETT_ID,
@@ -368,6 +369,93 @@ describe('omp Jackett source', () => {
     expect(ompSubscribed(1e12)).toBe(true);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
     expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
+  });
+
+  it('a download refusal that started on the old code does not clear the new subscription', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const row: SourceResult = {
+      Title: 'File',
+      Link: 'omp-fetch:/dl/file',
+      Categories: '',
+      Size: '',
+      CreateDate: '',
+      Tracker: '',
+      Magnet: '',
+      Hash: '',
+      Peer: 0,
+      Seed: 0,
+      source: OMP_JACKETT_ID,
+    };
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const pending = ompJackettSource().resolve!(row, site.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveBillingAccess({ active: true, accessUntil: 3e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    release(page(JSON.stringify({ error: 'device_limit' }), 'http://billing', 403));
+    await expect(pending).rejects.toThrow('Доп. устройство не продлено');
+    expect(billingSession()?.token).toBe('new-code');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('an unchanged /v1/me does not emit, so the account screen does not ask again', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12, jackett: true, jacred: false, monitorMax: 0 });
+    const body = { active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: false } };
+    const site = fakeSite((c) => page(JSON.stringify(body), c.url));
+    let emits = 0;
+    const off = onBillingChange(() => {
+      emits++;
+      void fetchBillingAccount(site.ctx);
+    });
+    await fetchBillingAccount(site.ctx);
+    await new Promise((r) => setTimeout(r, 30));
+    off();
+    expect(emits).toBe(0);
+    expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
+  });
+
+  it('a changed /v1/me emits once; the account screen refresh does not loop', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12, jackett: true, jacred: true, monitorMax: 0 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const body = { active: false, paidUntil: 2e12, accessUntil: 0, monitorMax: 10, sources: { jackett: false, jacred: false } };
+    const site = fakeSite((c) => page(JSON.stringify(body), c.url));
+    const off = onBillingChange(() => {
+      void fetchBillingAccount(site.ctx);
+    });
+    await fetchBillingAccount(site.ctx);
+    await new Promise((r) => setTimeout(r, 40));
+    off();
+    expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(2);
+    expect(ompSubscribed()).toBe(false);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+  });
+
+  it('TV search asks /v1/me when the saved answer is old or has no checkedAt, and skips it when fresh', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    const key = sessionKey(billingSession()!);
+    localStorage.setItem(ACCESS_KEY, JSON.stringify({ token: key, active: true, accessUntil: 2e12 }));
+    syncOmpJackett();
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    const site = fakeSite((c) =>
+      page(JSON.stringify({ active: true, paidUntil: 2e12, accessUntil: 2e12, monitorMax: 0, sources: { jackett: true, jacred: true } }), c.url),
+    );
+    await ensureOmpJackettSources(site.ctx);
+    expect(site.calls.filter((c) => c.url.indexOf('/v1/me') >= 0)).toHaveLength(1);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
+
+    unregisterSource(OMP_JACKETT_ID);
+    unregisterSource(OMP_JACRED_ID);
+    const again = fakeSite((c) => page('{}', c.url));
+    await ensureOmpJackettSources(again.ctx);
+    expect(again.calls).toEqual([]);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
   });
 
   it('a fresh /v1/me puts paid search back after a denial', async () => {
