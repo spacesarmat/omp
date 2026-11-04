@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { saveBillingAccess } from '../billing/entitlement';
+import { sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -160,7 +160,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
     (res) => {
       const session = billingSession();
       // «Отключить» (or a new code) while this request was in flight: its answer must not bring the old account back
-      const current = bindingKey() === startedFor;
+      const current = sameLogin(startedFor, bindingKey());
       if (res.status === 401) {
         // revoked: withDeviceToken already forgot the binding; an expired token on a hidden page is not an answer
         const err = tokenError(errorOf(res.text));
@@ -248,7 +248,7 @@ function magnetOf(text: string): string {
  */
 function noteAccessDenied(status: number, text: string, startedFor: string): void {
   // The search started on another code (or after «Отключить»): do not clear the binding that is current now.
-  if (status !== 403 || !startedFor || bindingKey() !== startedFor) return;
+  if (status !== 403 || !sameLogin(startedFor, bindingKey())) return;
   const code = errorOf(text);
   if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
   saveBillingAccess({ active: false, accessUntil: 0 });
@@ -357,7 +357,7 @@ export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
   const startedFor = bindingKey();
   return fetchBillingAccount(ctx).then(
     (acc) => {
-      if (bindingKey() !== startedFor) return;
+      if (!sameLogin(startedFor, bindingKey())) return;
       if (!acc || !acc.active) {
         syncOmpJackett({ jackett: false, jacred: false });
         return;

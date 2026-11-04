@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
+import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
 import { billingSession, deviceId, saveBillingSession, seenAccount } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
@@ -379,6 +380,40 @@ describe('omp Jackett source', () => {
     expect(billingSession()?.token).toBe('new-code');
     expect(ompSubscribed(1e12)).toBe(true);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('a legacy upgrade still applies a denial for that same login', async () => {
+    allowBillingRefresh(true);
+    resetBillingTokens();
+    saveBillingSession({ token: 'legacy-tok', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('/v1/token/upgrade') >= 0) {
+        return page(
+          JSON.stringify({
+            refreshToken: 'r1.up',
+            accessToken: 'a1.up',
+            accessExpiresAt: Date.now() + 864e5,
+            refreshExpiresAt: Date.now() + 864e5 * 180,
+            paidUntil: 2e12,
+          }),
+          c.url,
+        );
+      }
+      return page(JSON.stringify({ error: 'expired' }), c.url, 403);
+    }, {});
+    try {
+      await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Подписка закончилась');
+      expect(billingSession()?.access).toBe('a1.up');
+      expect(billingSession()?.token).toBe('');
+      expect(ompSubscribed(1e12)).toBe(false);
+      expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+      expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    } finally {
+      allowBillingRefresh(false);
+      resetBillingTokens();
+    }
   });
 
   it('logout drops the cached subscription flag', () => {
