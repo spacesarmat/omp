@@ -48,6 +48,21 @@ function cleanQuery(v: unknown): string {
   return str(v).replace(/\s+/g, ' ').trim().slice(0, QUERY_MAX);
 }
 
+const HTTPS_POSTER = /^https:\/\/\S+$/;
+
+/** The poster to draw: the catalog card's, else one looked up later. '' when neither is an https URL. */
+export function subscriptionPoster(s: Subscription): string {
+  const fromCard = s.catalog && s.catalog.poster;
+  if (fromCard && HTTPS_POSTER.test(fromCard)) return fromCard;
+  if (s.poster && HTTPS_POSTER.test(s.poster)) return s.poster;
+  return '';
+}
+
+/** True while no poster is stored and a lookup has not yet reported that none exists. */
+export function needsSubPoster(s: Subscription): boolean {
+  return !subscriptionPoster(s) && s.noPoster !== true;
+}
+
 /** A stored subscription, or null when it has no id or query; malformed options fall back to defaults. */
 export function sanitizeSubscription(v: unknown): Subscription | null {
   if (!isObject(v)) return null;
@@ -73,6 +88,10 @@ export function sanitizeSubscription(v: unknown): Subscription | null {
   if (lastFindAt !== null && lastFindAt > 0) out.lastFindAt = lastFindAt;
   const catalog = catalogOf(v.catalog);
   if (catalog) out.catalog = catalog;
+  const poster = str(v.poster);
+  if (HTTPS_POSTER.test(poster)) out.poster = poster.slice(0, 500);
+  // a finished empty lookup stays empty; a real poster clears that mark
+  if (v.noPoster === true && !subscriptionPoster(out)) out.noPoster = true;
   return out;
 }
 
@@ -174,6 +193,13 @@ export function getSubscription(id: string): Subscription | null {
   return loadSubs().filter((s) => s.id === id)[0] || null;
 }
 
+/** Called with a subscription just saved. The phone uses it to look up a missing poster. */
+let addedHook: ((s: Subscription) => void) | null = null;
+
+export function setSubscriptionAddedHook(fn: ((s: Subscription) => void) | null): void {
+  addedHook = fn;
+}
+
 function newId(now: number, taken: Subscription[]): string {
   let id = '';
   do {
@@ -194,6 +220,7 @@ export function addSubscription(input: SubscriptionInput, now?: number): Subscri
   const sub = sanitizeSubscription({ ...input, id: newId(at, list), createdAt: at });
   if (!sub) return null;
   saveSubs(list.concat([sub]));
+  if (addedHook) addedHook(sub);
   return sub;
 }
 
@@ -234,6 +261,8 @@ export function updateSubscription(id: string, patch: Partial<SubscriptionInput>
     // a new search is not the old card: drop its poster and share link unless the edit names another card
     if (patch.query !== undefined && !sameQuery(patch.query, list[i].query) && !Object.prototype.hasOwnProperty.call(patch, 'catalog')) {
       delete merged.catalog;
+      delete merged.poster;
+      delete merged.noPoster;
     }
     const next = sanitizeSubscription(merged);
     if (!next) return null;
@@ -245,6 +274,34 @@ export function updateSubscription(id: string, patch: Partial<SubscriptionInput>
     return next;
   }
   return null;
+}
+
+/**
+ * Stores a poster found after the subscription was created, or marks that none exists (`poster` '').
+ * Does nothing when a poster is already stored. Null when the subscription is gone.
+ */
+export function setSubscriptionPoster(id: string, poster: string): Subscription | null {
+  const list = loadSubs();
+  let found = -1;
+  for (let i = 0; i < list.length; i++) if (list[i].id === id) found = i;
+  if (found < 0) return null;
+  const cur = list[found];
+  if (subscriptionPoster(cur)) return cur;
+  const url = HTTPS_POSTER.test(poster) ? poster.slice(0, 500) : '';
+  const next: Subscription = { ...cur };
+  if (url) {
+    next.poster = url;
+    if (next.noPoster) delete next.noPoster;
+    if (next.catalog && !next.catalog.poster) next.catalog = { ...next.catalog, poster: url };
+  } else {
+    delete next.poster;
+    next.noPoster = true;
+  }
+  const clean = sanitizeSubscription(next);
+  if (!clean) return null;
+  list[found] = clean;
+  saveSubs(list);
+  return clean;
 }
 
 /** Deletes the subscription with its seen results and findings. */

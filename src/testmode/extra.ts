@@ -105,6 +105,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P03.1', 'Находки', 'Findings'),
       it('P03.2', 'Подписки', 'Subscriptions'),
       it('P03.3', 'Календарь', 'Calendar'),
+      it('P03.4', 'Удалить подписку', 'Delete a subscription'),
     ],
   },
   { key: 'phone:subFindings', code: 'P04', ru: 'Находки подписки', en: 'Subscription findings', items: [it('P04.1', 'Назад', 'Back')] },

@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, saveBillingAccess } from '../billing/entitlement';
+import { freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -162,7 +162,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
     (res) => {
       const session = billingSession();
       // «Отключить» (or a new code) while this request was in flight: its answer must not bring the old account back
-      const current = bindingKey() === startedFor;
+      const current = sameLogin(startedFor, bindingKey());
       if (res.status === 401) {
         // revoked: withDeviceToken already forgot the binding; an expired token on a hidden page is not an answer
         const err = tokenError(errorOf(res.text));
@@ -185,6 +185,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
       const body = parseBody<MeBody>(res.text);
       const paidUntil = body.paidUntil || 0;
       // An answer for a binding that is already gone must not rewrite the session that replaced it.
+      // sameLogin still counts the one-time move off a legacy token as this same request.
       if (!current) {
         return {
           telegramId: body.telegramId || '',
@@ -200,9 +201,9 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         };
       }
       saveSeenAccount({ paidUntil });
-      const named = !!body.sources;
-      const flags = named
-        ? { jackett: !!body.sources?.jackett, jacred: !!body.sources?.jacred }
+      const listed = body.sources;
+      const flags = listed
+        ? { jackett: !!listed.jackett, jacred: !!listed.jacred }
         : { jackett: !!body.active, jacred: !!body.active };
       // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
       let changed = false;
@@ -221,6 +222,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           monitorMax: cap,
         });
         changed = true;
+        // A denial cleared both sources. This answer is the same binding, so put back what the server allows.
+        syncOmpJackett(body.active ? flags : { jackett: false, jacred: false });
       }
       if (changed) emitBillingChange();
       return {
@@ -266,8 +269,9 @@ function magnetOf(text: string): string {
  * flag, so the denial has to clear it now instead of waiting for the next /v1/me. `disabled` is an
  * indexer switch, not an ended subscription, and a 502 is the indexer, not the account.
  */
-function noteAccessDenied(status: number, text: string): void {
-  if (status !== 403 || !billingSession()) return;
+function noteAccessDenied(status: number, text: string, startedFor: string): void {
+  // The search started on another code (or after «Отключить»): do not clear the binding that is current now.
+  if (status !== 403 || !sameLogin(startedFor, bindingKey())) return;
   const code = errorOf(text);
   if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
   saveBillingAccess({ active: false, accessUntil: 0 });
@@ -276,13 +280,14 @@ function noteAccessDenied(status: number, text: string): void {
 }
 
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
+  const startedFor = bindingKey();
   const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
   if (cat) body.cat = cat;
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/search', body, { headers, timeoutMs: 25000 })).then(
     (res) => {
       const type = (res.text || '').trim();
       if (res.status === 429) throw billingError(res.status, res.text);
-      if (res.status === 403) noteAccessDenied(res.status, res.text);
+      if (res.status === 403) noteAccessDenied(res.status, res.text, startedFor);
       if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       if (type.charAt(0) === '{') throw billingError(res.status, res.text);
@@ -309,6 +314,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
     resolve(r: SourceResult, ctx: SourceContext): Promise<string> {
       const link = r.torrentUrl || r.Link || '';
       if (!billingSession() || !isProxyLink(link)) return Promise.reject(new Error(t('sources.billing.down')));
+      const startedFor = bindingKey();
       return withDeviceToken(ctx, (headers) =>
         billingPost(ctx, '/v1/torrent', { link, deviceId: deviceId() }, { headers, timeoutMs: 30000, responseCharset: 'iso-8859-1' }),
       ).then(
@@ -318,7 +324,7 @@ function paidSource(id: string, name: string, source: OmpIndexerSource): Source 
           if (res.status === 502 && upstream.error === 'upstream') {
             throw new Error(t('torrent.better.failLink', { site: name }));
           }
-          if (res.status === 403) noteAccessDenied(res.status, res.text);
+          if (res.status === 403) noteAccessDenied(res.status, res.text, startedFor);
           if (res.status === 401 || res.status === 403 || res.status === 502 || res.status === 429) {
             throw billingError(res.status, res.text);
           }
@@ -381,11 +387,12 @@ export function startOmpJackett(): void {
 
 /** Refresh enabled sources from /v1/me (call when the Sources screen opens, and from the premium recheck). */
 export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
-  const started = bindingKey();
+  const startedFor = bindingKey();
   return fetchBillingAccount(ctx).then(
     (acc) => {
       // The code changed while this was in flight: follow the session that is current, not this answer.
-      if (bindingKey() !== started) {
+      // sameLogin still treats a legacy-token upgrade as the same login.
+      if (!sameLogin(startedFor, bindingKey())) {
         syncOmpJackett();
         return;
       }

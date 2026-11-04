@@ -159,8 +159,16 @@ export function monitorMax(now?: number): number {
   return MONITOR_FREE_MAX;
 }
 
+/** Legacy token just moved to a pair id. Same login, new key. */
+let movedFrom = '';
+let movedTo = '';
+
 /** Keeps the cached /v1/me answer when a session gets a new key (the one-time move off the legacy token). */
 export function rekeyBillingAccess(from: string, to: string): void {
+  if (from && to && from !== to) {
+    movedFrom = from;
+    movedTo = to;
+  }
   const rec = loadAccess();
   if (!rec || !from || rec.token !== from) return;
   const next: AccessRecord = {
@@ -173,4 +181,15 @@ export function rekeyBillingAccess(from: string, to: string): void {
   if (rec.jacred === true || rec.jacred === false) next.jacred = rec.jacred;
   if (typeof rec.monitorMax === 'number') next.monitorMax = rec.monitorMax;
   saveJson(ACCESS_KEY, next);
+}
+
+/**
+ * True when `now` is the login `started` captured, including the one-time move off the legacy token.
+ * No token on both sides is the same request (Telegram linked, no code). A code that appeared or
+ * went away while the request ran is a different login.
+ */
+export function sameLogin(started: string, now: string): boolean {
+  if (started === now) return true;
+  if (!started || !now) return false;
+  return started === movedFrom && now === movedTo;
 }

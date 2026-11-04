@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
-import { billingSession, deviceId, saveBillingSession, seenAccount } from '../../src/billing/session';
+import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
+import { billingSession, deviceId, saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
 import type { SourceResult } from '../../src/sources/types';
@@ -18,6 +19,7 @@ import {
   syncOmpJackett,
 } from '../../src/sources/ompJackett';
 import { getSource, unregisterSource } from '../../src/sources/registry';
+import type { HttpResponse } from '../../src/sources/types';
 import { fakeSite, page } from './fakeSite';
 
 const H = '0123456789abcdef0123456789abcdef01234567';
@@ -62,6 +64,24 @@ describe('omp Jackett source', () => {
   it('says the device slots are full on device_limit', async () => {
     const site = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 409));
     await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Все устройства подписки заняты');
+  });
+
+  it('a Telegram link without a token remembers the account, a code entered meanwhile does not lose it', async () => {
+    const linked = fakeSite((c) => page(JSON.stringify({ telegramId: '9', paidUntil: 2e12, active: true }), c.url));
+    await fetchBillingAccount(linked.ctx);
+    expect(billingSession()).toBeNull();
+    expect(seenAccount()).toEqual({ paidUntil: 2e12 });
+
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const late = fakeSite(() => gate);
+    const pending = fetchBillingAccount(late.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveSeenAccount({ paidUntil: 3e12 });
+    release(page(JSON.stringify({ telegramId: '9', paidUntil: 1, active: false }), 'http://billing'));
+    await pending;
+    expect(billingSession()?.token).toBe('new-code');
+    expect(seenAccount()).toEqual({ paidUntil: 3e12 });
   });
 
   it('caches the account for the Settings row, but not an answer that comes back after «Отключить»', async () => {
@@ -329,6 +349,92 @@ describe('omp Jackett source', () => {
     await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Этот источник временно выключен');
     expect(ompSubscribed(1e12)).toBe(true);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('a denial that started on the old code does not clear the new subscription', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const pending = ompJackettSource().search('q', site.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveBillingAccess({ active: true, accessUntil: 3e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    release(page(JSON.stringify({ error: 'expired' }), 'http://billing', 403));
+    await expect(pending).rejects.toThrow('Подписка закончилась');
+    expect(billingSession()?.token).toBe('new-code');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
+  });
+
+  it('a fresh /v1/me puts paid search back after a denial', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const denied = fakeSite((c) => page(JSON.stringify({ error: 'expired' }), c.url, 403));
+    await expect(ompJackettSource().search('q', denied.ctx)).rejects.toThrow('Подписка закончилась');
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    const renewed = fakeSite((c) =>
+      page(JSON.stringify({ active: true, paidUntil: 3e12, accessUntil: 3e12, sources: { jackett: true, jacred: false } }), c.url),
+    );
+    await fetchBillingAccount(renewed.ctx);
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('a late /v1/me for the old code does not turn the new subscription off', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const pending = fetchBillingAccount(site.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveBillingAccess({ active: true, accessUntil: 3e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    release(page(JSON.stringify({ active: false, paidUntil: 0, sources: { jackett: false, jacred: false } }), 'http://billing'));
+    await pending;
+    expect(billingSession()?.token).toBe('new-code');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('a legacy upgrade still applies a denial for that same login', async () => {
+    allowBillingRefresh(true);
+    resetBillingTokens();
+    saveBillingSession({ token: 'legacy-tok', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('/v1/token/upgrade') >= 0) {
+        return page(
+          JSON.stringify({
+            refreshToken: 'r1.up',
+            accessToken: 'a1.up',
+            accessExpiresAt: Date.now() + 864e5,
+            refreshExpiresAt: Date.now() + 864e5 * 180,
+            paidUntil: 2e12,
+          }),
+          c.url,
+        );
+      }
+      return page(JSON.stringify({ error: 'expired' }), c.url, 403);
+    }, {});
+    try {
+      await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Подписка закончилась');
+      expect(billingSession()?.access).toBe('a1.up');
+      expect(billingSession()?.token).toBe('');
+      expect(ompSubscribed(1e12)).toBe(false);
+      expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+      expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    } finally {
+      allowBillingRefresh(false);
+      resetBillingTokens();
+    }
   });
 
   it('logout drops the cached subscription flag', () => {
