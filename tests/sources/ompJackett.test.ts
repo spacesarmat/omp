@@ -18,6 +18,7 @@ import {
   syncOmpJackett,
 } from '../../src/sources/ompJackett';
 import { getSource, unregisterSource } from '../../src/sources/registry';
+import type { HttpResponse } from '../../src/sources/types';
 import { fakeSite, page } from './fakeSite';
 
 const H = '0123456789abcdef0123456789abcdef01234567';
@@ -324,6 +325,58 @@ describe('omp Jackett source', () => {
     syncOmpJackett({ jackett: true, jacred: false });
     const site = fakeSite((c) => page(JSON.stringify({ error: 'disabled' }), c.url, 403));
     await expect(ompJackettSource().search('q', site.ctx)).rejects.toThrow('Этот источник временно выключен');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+  });
+
+  it('a denial that started on the old code does not clear the new subscription', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const pending = ompJackettSource().search('q', site.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveBillingAccess({ active: true, accessUntil: 3e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    release(page(JSON.stringify({ error: 'expired' }), 'http://billing', 403));
+    await expect(pending).rejects.toThrow('Подписка закончилась');
+    expect(billingSession()?.token).toBe('new-code');
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)?.id).toBe(OMP_JACRED_ID);
+  });
+
+  it('a fresh /v1/me puts paid search back after a denial', async () => {
+    saveBillingSession({ token: 'tok-1', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    const denied = fakeSite((c) => page(JSON.stringify({ error: 'expired' }), c.url, 403));
+    await expect(ompJackettSource().search('q', denied.ctx)).rejects.toThrow('Подписка закончилась');
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    const renewed = fakeSite((c) =>
+      page(JSON.stringify({ active: true, paidUntil: 3e12, accessUntil: 3e12, sources: { jackett: true, jacred: false } }), c.url),
+    );
+    await fetchBillingAccount(renewed.ctx);
+    expect(ompSubscribed(1e12)).toBe(true);
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('a late /v1/me for the old code does not turn the new subscription off', async () => {
+    saveBillingSession({ token: 'old', paidUntil: 2e12 });
+    saveBillingAccess({ active: true, accessUntil: 2e12 });
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const site = fakeSite(() => gate);
+    const pending = fetchBillingAccount(site.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveBillingAccess({ active: true, accessUntil: 3e12 });
+    syncOmpJackett({ jackett: true, jacred: true });
+    release(page(JSON.stringify({ active: false, paidUntil: 0, sources: { jackett: false, jacred: false } }), 'http://billing'));
+    await pending;
+    expect(billingSession()?.token).toBe('new-code');
     expect(ompSubscribed(1e12)).toBe(true);
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
   });

@@ -359,6 +359,14 @@ describe('phone labels in landscape (S21, 1024x461)', () => {
     }
   });
 
+  it('moves a grid code off the card that shares its bottom-right corner', () => {
+    const grid = { b: box(10, 40, 410, 240), place: 'above', w: 70, inChrome: -1 };
+    const card = { b: box(300, 120, 410, 240), place: 'bottom', w: 70, inChrome: -1 };
+    const spots = placePhoneLabels([grid, card], 16, view, [], []);
+    expect(spots[1]).toEqual({ x: 340, y: 224 });
+    expect(spots[0]).toEqual({ x: 10, y: 224 });
+  });
+
   it('puts a row label in the bottom-right corner even when controls sit on the row', () => {
     const row = { b: box(50, 100, 950, 140), place: 'above', w: 60, inChrome: -1 };
     expect(placePhoneLabels([row], 16, view, [], [])).toEqual([{ x: 890, y: 124 }]);
