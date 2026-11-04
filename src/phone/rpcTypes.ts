@@ -80,6 +80,10 @@ export interface RpcSub {
   createdAt: number;
   /** Over the cap without the OMP subscription: kept, but not checked (absent on older phones). */
   paused?: boolean;
+  /** https poster. Absent on older phones and until a lookup finds one. */
+  poster?: string;
+  /** The phone looked and found no poster. Absent while a lookup can still run. */
+  noPoster?: boolean;
 }
 
 export interface RpcFeed {

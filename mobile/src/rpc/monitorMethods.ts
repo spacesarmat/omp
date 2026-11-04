@@ -10,6 +10,7 @@ import {
   markFindingsSeen,
   removeSubscription,
   sameQuery,
+  subscriptionPoster,
   updateSubscription,
 } from '../../../src/monitor/subs';
 import { reloadSourcePrefs } from '../../../src/sources/store';
@@ -61,6 +62,9 @@ function toRpcSub(s: Subscription, found: Finding[], paused?: { [id: string]: tr
   };
   // over the cap without the OMP subscription: not checked (limit.ts); absent on older phones
   if (paused && paused[s.id]) out.paused = true;
+  const poster = subscriptionPoster(s);
+  if (poster) out.poster = poster;
+  else if (s.noPoster) out.noPoster = true;
   return out;
 }
 
@@ -145,6 +149,14 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
     },
 
     subRemove(p) {
+      // by query: «Хочу» on the TV knows the search, not the phone's id. Every match goes, so a refresh cannot bring it back.
+      if (typeof p.query === 'string') {
+        const query = p.query.replace(/\s+/g, ' ').trim();
+        if (!query || query.length > MAX_QUERY) throw bad('query');
+        const doomed = loadSubs().filter((s) => sameQuery(s.query, query));
+        for (let i = 0; i < doomed.length; i++) removeSubscription(doomed[i].id);
+        return { removed: true };
+      }
       const id = idParam(p);
       // only a real subscription: the reserved ids (EPISODES_ID, BETTER_ID) would wipe those findings
       if (getSubscription(id)) removeSubscription(id);
@@ -159,7 +171,16 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
       const had = loadSubs().filter((s) => sameQuery(s.query, query))[0];
       if (had) return { sub: toRpcSub(had, found, pausedNow()), created: false };
       if (subsLimitReached()) throw limitError('monitor.limit.tvWant');
-      const sub = addSubscription({ query, quality: '', sources: null, notify: true, better: better !== false }, deps.now());
+      const input: { query: string; quality: ''; sources: null; notify: true; better: boolean; catalog?: Subscription['catalog'] } = {
+        query,
+        quality: '',
+        sources: null,
+        notify: true,
+        better: better !== false,
+      };
+      // the TV card, when the caller has one: kind, id, title, year, poster. A bad shape is dropped by sanitize.
+      if (p.catalog && typeof p.catalog === 'object') input.catalog = p.catalog as Subscription['catalog'];
+      const sub = addSubscription(input, deps.now());
       if (!sub) throw bad('query');
       return { sub: toRpcSub(sub, found), created: true };
     },

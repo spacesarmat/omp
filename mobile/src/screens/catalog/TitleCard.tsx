@@ -295,7 +295,7 @@ function Body({ card }: { card: CatalogCard }) {
         <WantButton card={card} following={following} onWant={() => setWanting(true)} />
       </div>
       {launchError && <LaunchError message={launchError} class="m-hint-warn" />}
-      {wanting && <WantSheet card={card} onClose={() => setWanting(false)} />}
+      {wanting && <WantSheet card={card} poster={poster} onClose={() => setWanting(false)} />}
       {card.overview && <Overview text={card.overview} />}
       {tv ? (
         <>
