@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.3
 
 - Paid Jackett and JacRed stay off until the server confirms the subscription. An answer from the last 6 hours is used when the app starts, so a subscriber does not wait on that request. Older than 6 hours, or never confirmed, the sources stay off until the server answers. TV search through the phone asks the server itself when the saved answer is older than 6 hours or has no check time. Ads and the monitoring cap are checked again when the app comes back, if the last answer is older than 15 minutes, and about every 6 hours. If the network fails, a date the server already sent still counts. If the server sent no end date, no extra days are added after the paid date
 - [tv] A linked phone hides ads on the TV for 6 hours after its last subscription answer. If the phone stays silent longer than that, ads come back
