@@ -45,6 +45,7 @@ import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
+import { TextField } from '../ui/TextField';
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 const CHECK = 'M5 12l5 5l9-10';
@@ -519,7 +520,7 @@ export function Add({
         ))}
       </div>
       <form class="m-add-row" onSubmit={onSearch}>
-        <input
+        <TextField
           class="m-input m-lib-search"
           type="search"
           aria-label={scope === 'sources' ? t('add.searchBySources') : scope === 'catalog' ? t('discover.searchLabel') : t('catalog.searchPlaceholder')}
@@ -556,7 +557,7 @@ export function Add({
       {magnetOpen ? (
         <div class="m-add-magnet" data-magnet-block>
           <div class="m-add-row" data-magnet-row>
-            <input
+            <TextField
               class="m-input m-lib-search"
               aria-label={t('add.magnetLabel')}
               placeholder={t('add.magnetLabel')}
@@ -672,6 +673,7 @@ export function Add({
               onAdd={() => void addResult(r, false)}
               onWatch={() => void addResult(r, 'tv')}
               onPhone={() => void addResult(r, 'phone')}
+              seedCode="P07.6"
             />
           );
         })}

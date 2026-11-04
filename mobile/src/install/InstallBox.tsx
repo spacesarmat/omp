@@ -9,6 +9,7 @@ import { abiNote, isArm64, FAQ_ATV_ADB, FAQ_LG_DEVMODE, type InstallPlan, type I
 import { monitorNative } from '../monitor/native';
 import { t as tr } from '../../../src/i18n';
 import { tvs } from '../tv/tvStore';
+import { TextField } from '../ui/TextField';
 import {
   createProgress,
   errorText,
@@ -149,7 +150,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
       {lg && (
         <div class="m-field m-install-form">
           <label for="install-pass">{tr('install.run.passLabel')}</label>
-          <input
+          <TextField
             id="install-pass"
             ref={passInput}
             class="m-input m-install-pass"

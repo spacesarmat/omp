@@ -20,6 +20,7 @@ import { phoneWifiNow } from '../tv/foundTvDiscovery';
 import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { tvs, activeTv, forgetTv, isTvRenamed, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
+import { TextField } from '../ui/TextField';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
@@ -307,7 +308,7 @@ export function Tv() {
       {manual ? (
         <form class="m-field" onSubmit={connectManual}>
           <label for="tv-ip">{t('install.assistant.ipLabel')}</label>
-          <input
+          <TextField
             id="tv-ip"
             class="m-input"
             type="text"

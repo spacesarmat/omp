@@ -31,6 +31,7 @@ import { replaceOnTv } from '../monitor/replaceTv';
 import { findUpgrades, isLowSeeds, upgradeKind, upgradeQuery, type UpgradeOutcome } from '../monitor/upgrade';
 import { coverageNote, failureOf, qualityOrUnknown } from '../monitor/upgradeText';
 import { resolveLink, resultKey, seedsText, sourceName } from '../sources/view';
+import { SeedCheck } from './SeedCheck';
 import { tvSourceContext } from '../sources/tvContext';
 import { loadQualityWatch, rememberTrackerSeeds, saveQualityWatch } from '../store/journal';
 import { watchesBetterQuality } from '../lib/journal';
@@ -291,7 +292,11 @@ export function BetterDialog(p: {
                     </div>
                     <div class="better-name">{tvGlyphs(r.Title)}</div>
                   </div>
-                  <div class="better-meta">{tvGlyphs(meta)}</div>
+                  <div class="better-meta">
+                    {tvGlyphs(meta)}
+                    {' '}
+                    <SeedCheck r={r} fallback={seedsText(r.Seed || 0)} tv testCode="D43.4" focusKey={'better-seed-' + i} />
+                  </div>
                 </Focusable>
               );
             })}

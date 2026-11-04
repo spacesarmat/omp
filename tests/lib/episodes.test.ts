@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   extOf, baseName, stripExt, fileKind, parseEpisode, episodeLabel, naturalCompare,
-  groupBySeason, playableFiles, matchSubtitles, subtitleLabel, isExtraFile, TorrentFile,
+  activePackPick, filesForPack, filesOfSeason, groupBySeason, hasLooseFiles, pickedSeason, playableFiles, seasonsInFiles, matchSubtitles, subtitleLabel, isExtraFile, TorrentFile,
 } from '../../src/lib/episodes';
 
 const f = (id: number, path: string): TorrentFile => ({ id, path, length: 100 });
@@ -29,7 +29,8 @@ describe('parseEpisode', () => {
   it('s1.e2 with separator', () => expect(parseEpisode('show.s01.e12.mkv')).toEqual({ season: 1, episode: 12 }));
   it('1x05', () => expect(parseEpisode('Show 1x05 Title.avi')).toEqual({ season: 1, episode: 5 }));
   it('season folder + leading number', () => expect(parseEpisode('Show/Season 2/03. Title.mkv')).toEqual({ season: 2, episode: 3 }));
-  it('russian folders', () => expect(parseEpisode('Сезон 3/Серия 7.avi')).toEqual({ season: 3, episode: 7 }));
+  it('S02 folder', () => expect(parseEpisode('Show/S02/04.mkv')).toEqual({ season: 2, episode: 4 }));
+  it('russian folders', () => expect(parseEpisode('Сезон 2/Серия 7.avi')).toEqual({ season: 2, episode: 7 }));
   it('movie has none', () => expect(parseEpisode('Movie.2021.1080p.mkv')).toEqual({ season: null, episode: null }));
   it('episodeLabel', () => {
     expect(episodeLabel('Show.S04E01.mkv')).toBe('S04E01');
@@ -40,6 +41,29 @@ describe('parseEpisode', () => {
 describe('naturalCompare', () => {
   it('orders numbers naturally', () => {
     expect(['ep10', 'ep2', 'ep1'].sort(naturalCompare)).toEqual(['ep1', 'ep2', 'ep10']);
+  });
+});
+
+describe('files of one season', () => {
+  it('groups Season 2, S02 and Сезон 2, and the list follows the picked chip', () => {
+    const files = [
+      f(1, 'AHS/Season 1/01.mkv'),
+      f(2, 'AHS/Season 1/02.mkv'),
+      f(3, 'AHS/S02/01.mkv'),
+      f(4, 'AHS/Сезон 2/02.mkv'),
+      f(5, 'AHS/Season 3/01.mkv'),
+    ];
+    expect(seasonsInFiles(files)).toEqual([1, 2, 3]);
+    expect(filesOfSeason(files, 2).map((x) => x.id)).toEqual([3, 4]);
+    expect(pickedSeason([1, 2, 3], null)).toBe(1);
+    expect(pickedSeason([1, 2, 3], 2)).toBe(2);
+    expect(pickedSeason([1, 2, 3], 9)).toBe(1);
+    expect(pickedSeason([2], 1)).toBe(2);
+    const pack = files.concat([f(6, 'AHS/Extras/Interview.mkv')]);
+    expect(hasLooseFiles(pack)).toBe(true);
+    expect(activePackPick([1, 2, 3], true, 'other')).toBe('other');
+    expect(filesForPack(pack, 'other').map((x) => x.id)).toEqual([6]);
+    expect(activePackPick([1, 2, 3], true, null)).toBe(1);
   });
 });
 

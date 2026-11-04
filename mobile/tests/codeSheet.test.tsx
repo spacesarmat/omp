@@ -78,6 +78,17 @@ describe('pairing code length', () => {
     expect((el.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('pairing cells are plain inputs, not a clearable field', () => {
+    const el = mount('0.20.1-beta.14', []);
+    const cells = Array.from(el.querySelectorAll('.m-code-cell'));
+    expect(cells).toHaveLength(6);
+    cells.forEach((cell) => {
+      expect(cell.tagName).toBe('INPUT');
+      expect(cell.closest('.clear-field')).toBeNull();
+    });
+    expect(el.querySelector('[data-clear]')).toBeNull();
+  });
+
   it('six cells fit the sheet from 320dp up, with a 44px touch target', () => {
     const css = readFileSync('mobile/src/mobile.css', 'utf8').replace(/\r\n/g, '\n');
     const row = css.slice(css.indexOf('.m-code {'), css.indexOf('.m-code-cell {'));

@@ -7,6 +7,7 @@ import {
   type DiscoverQuery, type DiscoverSort, type DiscoverYear,
 } from '../../../../src/catalog/discoverQuery';
 import type { Filter } from './discoverCache';
+import { TextField } from '../../ui/TextField';
 
 const SORT_KEYS: { [s: string]: Key } = {
   popular: 'discover.sortPopular',
@@ -115,11 +116,11 @@ export function DiscoverFiltersSheet({
               <div class="m-filter-size">
                 <label>
                   {t('filters.from')}
-                  <input inputMode="numeric" maxLength={4} value={from} placeholder="1990" onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
+                  <TextField inputMode="numeric" maxLength={4} value={from} placeholder="1990" onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
                 </label>
                 <label>
                   {t('filters.to')}
-                  <input inputMode="numeric" maxLength={4} value={to} placeholder={String(new Date().getFullYear())} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
+                  <TextField inputMode="numeric" maxLength={4} value={to} placeholder={String(new Date().getFullYear())} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
                 </label>
               </div>
           )}

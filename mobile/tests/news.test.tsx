@@ -32,6 +32,7 @@ import { saveFeed, loadFeed } from '../../src/monitor/feedCache';
 import { addFindings, addSubscription, findingsOf, loadFound, loadSubs, setSubscriptionPoster, unseenCount } from '../../src/monitor/subs';
 import { installSubPosters } from '../../src/monitor/subPoster';
 import { acceptConfirm, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { SUB_SWIPE_THRESHOLD } from '../src/ui/subSwipe';
 import { saveLastRun } from '../../src/monitor/settings';
 import type { FeedCategory, Source, SourceResult } from '../../src/sources/types';
 import type { Finding } from '../../src/monitor/types';
@@ -338,6 +339,38 @@ describe('«Новое» · Подписки', () => {
     await flush();
     expect(loadSubs().map((s) => s.query)).toEqual(['Оставить']);
     expect(el.textContent).not.toContain('Убрать');
+  });
+
+  it('a left swipe asks before delete and a short swipe leaves the subscription', async () => {
+    const s = addSubscription({ query: 'Свайп', quality: '', sources: null, notify: true }, 1)!;
+    await mount({ seg: 'subs' });
+    mountConfirmHost();
+    const card = el.querySelector('[data-sub-swipe="' + s.id + '"]')!;
+    const touch = (type: string, x: number, y: number) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      const point = { clientX: x, clientY: y, identifier: 1 };
+      Object.defineProperty(ev, 'touches', { value: type === 'touchend' ? [] : [point] });
+      Object.defineProperty(ev, 'changedTouches', { value: [point] });
+      act(() => {
+        card.dispatchEvent(ev);
+      });
+    };
+    touch('touchstart', 180, 40);
+    touch('touchmove', 180 - 30, 48);
+    touch('touchend', 150, 48);
+    expect(document.getElementById('m-confirm-msg')).toBeNull();
+    expect(loadSubs().map((x) => x.id)).toEqual([s.id]);
+    touch('touchstart', 200, 40);
+    touch('touchmove', 200 - SUB_SWIPE_THRESHOLD - 10, 44);
+    touch('touchend', 80, 44);
+    expect(document.getElementById('m-confirm-msg')!.textContent).toBe('Удалить подписку «Свайп»?');
+    await declineConfirm();
+    expect(loadSubs().map((x) => x.id)).toEqual([s.id]);
+    touch('touchstart', 200, 40);
+    touch('touchmove', 200 - SUB_SWIPE_THRESHOLD - 10, 44);
+    touch('touchend', 80, 44);
+    await acceptConfirm();
+    expect(loadSubs()).toEqual([]);
   });
 
   it('a poster looked up after the subscription was added stays on the row', async () => {

@@ -13,7 +13,6 @@ import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
 import { Remote } from './Remote';
 import { NowDeck } from './nowPager';
-
 const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
 

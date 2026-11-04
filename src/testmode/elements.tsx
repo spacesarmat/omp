@@ -66,8 +66,8 @@ export const ELEMENT_TYPES: ElementType[] = [
     type: 'B',
     ru: 'Кнопка без своего кода',
     en: 'Button without its own code',
-    tv: '.button, .icon-button, .player-btn, .disc-btn',
-    phone: '.m-btn, .m-icon-btn, .m-iconbtn, .m-head-btn, .m-link-btn, .m-mini-btn, .m-rc-btn',
+    tv: '.button, .icon-button, .player-btn, .disc-btn, .field-clear, .seed-check',
+    phone: '.m-btn, .m-icon-btn, .m-iconbtn, .m-head-btn, .m-link-btn, .m-mini-btn, .m-rc-btn, .field-clear, .seed-check',
     place: 'top',
   },
   {

@@ -5,6 +5,7 @@ import { goBack } from '../nav';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
 import { loadJson, saveJson } from '../../../src/store/storage';
+import { TextField } from '../ui/TextField';
 
 const DEVICE_KEY = 'tsp.faqDevice';
 const deviceLabel = (d: Device) => DEVICES.find((x) => x.id === d)!.label;
@@ -176,7 +177,7 @@ export function Faq(p: { q?: string } = {}) {
       </div>
       <label class="m-faq-search">
         <Icon d="M20 20l-3.5-3.5M18 11a7 7 0 11-14 0 7 7 0 0114 0z" size={18} />
-        <input
+        <TextField
           type="text"
           aria-label={t('faq.searchLabel')}
           placeholder={t('faq.searchPlaceholder')}

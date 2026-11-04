@@ -33,7 +33,7 @@ import {
 import type { Torrent as TorrentT } from '../../../src/api/types';
 import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
-import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../../src/lib/episodes';
+import { activePackPick, baseName, episodeLabel, filesForPack, hasLooseFiles, parseEpisode, playableFiles, seasonsInFiles, stripExt, type PackPick, type TorrentFile } from '../../../src/lib/episodes';
 import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
@@ -60,6 +60,7 @@ import { filmReleases } from '../lib/filmGroups';
 import { ReleasesBlock } from '../ui/ReleasesSheet';
 import { phoneLabel } from '../watchHere';
 import { isoDay } from '../../../src/lib/seriesStatus';
+import { TextField } from '../ui/TextField';
 
 const BACK = 'M15 5l-7 7 7 7';
 const IMAGE = 'M4 5h16v14H4zM4 16l4.5-4.5 4 4 3-3L20 17M15.5 9.5h.01';
@@ -270,17 +271,17 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
       <div class="m-marks-pair">
         <div class="m-field">
           <label for="m-mark-from">{t('torrent.screen.marksFrom')}</label>
-          <input id="m-mark-from" class="m-input" type="text" inputMode="numeric" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
+          <TextField id="m-mark-from" class="m-input" type="text" inputMode="numeric" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
         </div>
         <div class="m-field">
           <label for="m-mark-to">{t('torrent.screen.marksTo')}</label>
-          <input id="m-mark-to" class="m-input" type="text" inputMode="numeric" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
+          <TextField id="m-mark-to" class="m-input" type="text" inputMode="numeric" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
         </div>
       </div>
       <div class="m-section">{t('torrent.screen.marksCredits')}</div>
       <div class="m-field">
         <label for="m-mark-last">{t('torrent.screen.marksLast')}</label>
-        <input id="m-mark-last" class="m-input" type="text" inputMode="numeric" value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
+        <TextField id="m-mark-last" class="m-input" type="text" inputMode="numeric" value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
       </div>
       <div class="m-muted m-small">{t('torrent.screen.marksHint')}</div>
       {error && (
@@ -413,6 +414,8 @@ export function Torrent({ hash }: { hash: string }) {
   const [picking, setPicking] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
+  // a pack of several seasons: which chip's episodes are on screen
+  const [seasonPick, setSeasonPick] = useState<PackPick | null>(null);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
   const [watchNew, setWatchNew] = useState<boolean | null>(null);
   // «Watch the quality» (omp.q in the journal); null until read from the server
@@ -534,6 +537,11 @@ export function Torrent({ hash }: { hash: string }) {
   }
 
   const files = playableFiles(allFiles);
+  const packSeasons = seasonsInFiles(files);
+  const loose = hasLooseFiles(files);
+  const multiPack = packSeasons.length > 1;
+  const selectedSeason = multiPack ? activePackPick(packSeasons, loose, seasonPick) : season;
+  const shownFiles = multiPack && selectedSeason !== null ? filesForPack(files, selectedSeason) : files;
   const onOff = (v: boolean) => t(v ? 'tvSources.on' : 'tvSources.off');
   const toggleSkip = (key: 'i' | 'c') => {
     skip.save((p) => (key === 'i' ? { i: !p.i } : { c: !p.c }), true).then(undefined, (e) => showToast(errorMessage(e)));
@@ -600,8 +608,12 @@ export function Torrent({ hash }: { hash: string }) {
   const own0 = seasonsOf(tor);
   const mine = own0.length ? own0 : fileSeasons;
   const inLibrary = group ? group.seasons.filter((n) => n !== NO_SEASON) : [];
-  const chipSeasons = Array.from(new Set(inLibrary.concat(mine, showNow ? showNow.seasons : []))).sort((a, b) => a - b);
+  const chipSeasons = Array.from(new Set(inLibrary.concat(mine, packSeasons, showNow ? showNow.seasons : []))).sort((a, b) => a - b);
   const openSeason = (n: number) => {
+    if (multiPack && packSeasons.indexOf(n) >= 0) {
+      setSeasonPick(n);
+      return;
+    }
     if (mine.indexOf(n) >= 0) return;
     if (group && inLibrary.indexOf(n) >= 0) {
       const rows = seasonMembers(group, n);
@@ -614,14 +626,15 @@ export function Torrent({ hash }: { hash: string }) {
   };
   const hasEpisodes = files.length > 1;
   // the last episode of each season here, then what TMDB announces after it (the same season data as the names)
-  const coming = hasEpisodes ? comingEpisodes(lastEpisodes(files), epsNow || {}, isoDay(Date.now())) : [];
-  const seasonArt = showNow && season !== null ? showNow.seasonPosters[season] || showNow.poster : '';
+  const coming = shownFiles.length > 1 ? comingEpisodes(lastEpisodes(shownFiles), epsNow || {}, isoDay(Date.now())) : [];
+  const seasonArt = showNow && typeof selectedSeason === 'number' ? showNow.seasonPosters[selectedSeason] || showNow.poster : '';
   const art = tor.poster || !seasonArt ? tor : { ...tor, poster: seasonArt };
   // «Сезон 2 · 5 из 8 серий»: the total is this season's TMDB episode_count, already remembered when the chip changes
-  const seasonTotal = season === null ? 0 : Math.max(seasonEpisodeTotal(showNow, epsNow, season), gkey ? rememberedSeasonTotal(gkey, season) : 0);
+  const headerSeason = selectedSeason === 'other' ? null : multiPack ? selectedSeason : season;
+  const seasonTotal = headerSeason === null ? 0 : Math.max(seasonEpisodeTotal(showNow, epsNow, headerSeason), gkey ? rememberedSeasonTotal(gkey, headerSeason) : 0);
   const meta = [
-    season !== null ? t('library.season', { n: season }) : '',
-    hasEpisodes ? torrentHeaderEpisodes(allFiles, season, seasonTotal) : '',
+    selectedSeason === 'other' ? t('torrent.bonus') : headerSeason !== null ? t('library.season', { n: headerSeason }) : '',
+    hasEpisodes ? torrentHeaderEpisodes(selectedSeason === 'other' ? shownFiles : allFiles, headerSeason, selectedSeason === 'other' ? 0 : seasonTotal) : '',
     externalNoteText(allFiles),
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     knownSwarmText(tor),
@@ -736,14 +749,24 @@ export function Torrent({ hash }: { hash: string }) {
                   <button
                     key={n}
                     type="button"
-                    class={'m-chip' + (mine.indexOf(n) >= 0 ? ' on' : '') + (have ? '' : ' dim')}
-                    aria-pressed={mine.indexOf(n) >= 0}
+                    class={'m-chip' + ((multiPack ? n === selectedSeason : mine.indexOf(n) >= 0) ? ' on' : '') + (have ? '' : ' dim')}
+                    aria-pressed={multiPack ? n === selectedSeason : mine.indexOf(n) >= 0}
                     onClick={() => openSeason(n)}
                   >
                     {(have ? '' : '+ ') + t('library.season', { n })}
                   </button>
                 );
               })}
+              {multiPack && loose && (
+                <button
+                  type="button"
+                  class={'m-chip' + (selectedSeason === 'other' ? ' on' : '')}
+                  aria-pressed={selectedSeason === 'other'}
+                  onClick={() => setSeasonPick('other')}
+                >
+                  {t('torrent.bonus')}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -844,7 +867,7 @@ export function Torrent({ hash }: { hash: string }) {
           </div>
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
-        <EpisodeRows hash={hash} files={files} eps={tmdb.eps} coming={coming} onPick={setSheet} />
+        <EpisodeRows hash={hash} files={shownFiles} eps={tmdb.eps} coming={coming} onPick={setSheet} />
         {!book && !files.length && noFilesSeason !== null && epsNow && seasonEpisodeList(epsNow, noFilesSeason).length > 0 && (
           <>
             <div class="m-section">{t('torrent.screen.episodesHead')}</div>

@@ -18,6 +18,7 @@ import {
   startTelegramLink,
 } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
+import { TextField } from '../ui/TextField';
 
 function day(ms: number): string {
   if (!ms) return '';
@@ -208,7 +209,7 @@ export function OmpJackettCard() {
         ) : (
           <div class="m-field">
             <label for="omp-code">{t('sources.billing.code')}</label>
-            <input
+            <TextField
               id="omp-code"
               class="m-input"
               value={code}

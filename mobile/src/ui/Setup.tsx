@@ -19,6 +19,7 @@ import { scanPairQr } from '../platform/qr';
 import { localName, localServer, LOCAL_URL, startLocal } from '../server/localServer';
 import { afterConnectRoute, currentRoute, navigate, resetTo } from '../nav';
 import { useBackHandler } from './backStack';
+import { TextField } from './TextField';
 
 type Attempt = 'phone' | 'qr' | 'network';
 
@@ -172,7 +173,7 @@ export function Setup() {
         <div class="m-onb-main">
           <h1>{t('setup.networkTitle')}</h1>
           <p class="m-onb-text">{t('setup.networkBody')}</p>
-          <input
+          <TextField
             class="m-input"
             data-setup-address=""
             placeholder="192.168.1.10:8090, https://host:8443"

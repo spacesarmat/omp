@@ -9,6 +9,7 @@ import { browserSuggestion } from '../../../src/sources/browserLogin';
 import { BrowserLoginButton } from './BrowserLoginButton';
 import { NoAccount } from './NoAccount';
 import { t } from '../../../src/i18n';
+import { TextField } from './TextField';
 
 const LOCK = 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3';
 
@@ -90,7 +91,7 @@ export function TrackerLogin({
         <div class="m-sheet-title">{title}</div>
         <div class="m-field">
           <label for="m-login-user">{t('common.login')}</label>
-          <input
+          <TextField
             id="m-login-user"
             name="username"
             class="m-input"
@@ -104,7 +105,7 @@ export function TrackerLogin({
         </div>
         <div class="m-field">
           <label for="m-login-pass">{t('common.password')}</label>
-          <input id="m-login-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
+          <TextField id="m-login-pass" name="password" class="m-input" type="password" autocomplete="current-password" ref={pass} />
         </div>
         <div class="m-lock-note">
           <Icon d={LOCK} size={18} />

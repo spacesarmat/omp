@@ -350,14 +350,16 @@ describe('TV search: names, sizes and the reasons of the phone sites', () => {
     });
     mount();
     await searchDune();
-    expect(host.querySelector('.search-size')!.textContent).toBe('69,4 ГБ · 7 сидов · по данным трекера');
+    expect(host.querySelector('.search-size')!.textContent).toContain('69,4 ГБ · 7 сидов · по данным трекера');
+    expect(host.querySelector('.search-size')!.textContent).toContain('Проверить');
     act(() => render(null, host));
     lang.value = 'en';
     mount();
     typeQuery('Dune');
     act(() => (host.querySelector('[data-fk="add-go"]') as HTMLElement).click());
     await step(2000);
-    expect(host.querySelector('.search-size')!.textContent).toBe('69.4 GB · 7 seeds · from the tracker');
+    expect(host.querySelector('.search-size')!.textContent).toContain('69.4 GB · 7 seeds · from the tracker');
+    expect(host.querySelector('.search-size')!.textContent).toContain('Check');
   });
 
   it('a site that needs a sign-in, a code or a check on the phone says so instead of «не ответили»', async () => {

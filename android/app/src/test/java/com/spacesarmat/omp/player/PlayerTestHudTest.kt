@@ -25,7 +25,8 @@ class PlayerTestHudTest {
         assertEquals(36f, PlayerTestHud.sizeDp(36), 0f)
         assertEquals(12f, PlayerTestHud.sizeDp(12), 0f)
         assertEquals(36f, PlayerTestHud.sizeDp(80), 0f)
-        assertEquals(8f, PlayerTestHud.sizeDp(3), 0f)
+        assertEquals(4f, PlayerTestHud.sizeDp(3), 0f)
+        assertEquals(4f, PlayerTestHud.sizeDp(4), 0f)
         assertEquals(20f, PlayerTestHud.sizeDp(null), 0f)
         assertEquals(20f, PlayerTestHud.sizeDp(0), 0f)
     }

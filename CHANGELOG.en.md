@@ -6,6 +6,14 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The built-in TorrServer is updated to MatriX.148
+- [phone] On New, Subscriptions, the card and Delete are one card. A swipe right checks that subscription now, with progress and a result. A swipe left deletes it after confirmation. Delete inside the card asks too. A short swipe snaps the card back, and a vertical move still scrolls the list
+- [tv] On New, Subscriptions, Delete sits inside the same card, without a separate block
+- The Label size slider starts at 4 px on the phone and on the TV, including the native player. The TV steps by 2, the phone by 1. A saved size under 4 is raised to 4. A saved size already in range stays
+- Text fields have a clear button inside the field, on the right. It shows only when the field is not empty, clears the text and keeps focus. On a TV the D-pad can reach it
+- Next to a tracker seed count, Check asks the tracker for the current seeds and leechers, even when Live seeds is off. A spinner shows while it runs, then the line is the seed count, the leecher count and now, or a message that the tracker did not answer
+- [phone] On a release that holds several seasons, Episodes lists only the selected season. Another chip switches the list, episode numbers start again, and the header counts that season. Files with no season stay under Other
+- [tv] On a release that holds several seasons, season chips switch the episode list, and episode numbers start again. Files with no season stay under Other
 - Paid Jackett and JacRed stay off until the server confirms the subscription. An answer from the last 6 hours is used when the app starts, so a subscriber does not wait on that request. Older than 6 hours, or never confirmed, the sources stay off until the server answers. TV search through the phone answers at once with the free sources and the last confirmed paid state, and refreshes `/v1/me` in the background, so a slow server does not mark the phone offline. Ads and the monitoring cap are checked again when the app comes back, if the last answer is older than 15 minutes, and about every 6 hours. If the network fails, a date the server already sent still counts. If the server sent no end date, no extra days are added after the paid date
 - [tv] A linked phone hides ads on the TV for 6 hours after its last subscription answer. If the phone stays silent longer than that, ads come back
 - [tech] The next subscription check is 6 hours after the `/v1/me` answer, not 6 hours after the app opened. Otherwise the first tick sees an answer just under 6 hours old, skips it, and the next check is about 12 hours later

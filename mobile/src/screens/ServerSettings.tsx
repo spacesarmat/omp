@@ -11,6 +11,7 @@ import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import type { ServerSettings as Sets, TmdbConfig } from '../../../src/api/types';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
+import { TextField } from '../ui/TextField';
 
 type NumField = 'CacheSize' | 'PreloadCache' | 'ReaderReadAHead' | 'ConnectionsLimit' | 'DownloadRateLimit' | 'UploadRateLimit' | 'TorrentDisconnectTimeout';
 
@@ -240,7 +241,7 @@ export function ServerSettings({ url }: { url?: string } = {}) {
           </button>
           <div class="m-field">
             <label for="tmdb-key">{t('serverSettings.apiKey')}</label>
-            <input
+            <TextField
               id="tmdb-key"
               class="m-input"
               type="text"

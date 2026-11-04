@@ -17,9 +17,11 @@ describe('torrent header episodes', () => {
     expect(torrentHeaderEpisodes(files, null, 8)).toBe('5 серий');
   });
 
-  it('a pack of several seasons stays «N серий»', () => {
+  it('a pack counts the season on screen, not every episode', () => {
     const files = ['Show.S01E01.mkv', 'Show.S01E02.mkv', 'Show.S02E01.mkv'].map(f);
-    expect(torrentHeaderEpisodes(files, 1, 8)).toBe('3 серии');
+    expect(torrentHeaderEpisodes(files, 1, 8)).toBe('2 из 8 серий');
+    expect(torrentHeaderEpisodes(files, 2, 0)).toBe('1 серия');
+    expect(torrentHeaderEpisodes(files, null, 8)).toBe('3 серии');
   });
 
   it('files that are not episodes stay a file count', () => {

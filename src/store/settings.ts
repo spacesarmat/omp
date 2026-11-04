@@ -75,9 +75,9 @@ export interface AppSettings {
    * A stable build ignores this flag (the switch is not rendered).
    */
   testMode: boolean;
-  /** Test-mode label size in px on the TV and in the native Android TV player (8..36, step 2). Beta only. */
+  /** Test-mode label size in px on the TV and in the native Android TV player (4..36, step 2). Beta only. */
   testLabelPx: number;
-  /** Test-mode label size in px on the phone (8..24). Beta only. */
+  /** Test-mode label size in px on the phone (4..24). Beta only. */
   testLabelPhonePx: number;
 }
 
@@ -133,6 +133,8 @@ const SUB_COLORS = ['white', 'yellow'];
 /**
  * beta.2 kept «Размер меток» as small / medium / large. Small and large become the nearest px; medium was the
  * default and is in every saved blob, so it takes the new (smaller) default instead of the old big size.
+ * The floor later moved from 8 to 4. clampLabelPx is that migration: a saved size under 4 becomes 4,
+ * and a saved size still inside the range (including the old floor 8) stays.
  */
 function migrateLabelSize(v: Record<string, unknown>, out: AppSettings): void {
   const old = v.testLabelSize;
