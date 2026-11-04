@@ -16,7 +16,7 @@ async function flush() {
 }
 
 const Q = 'Американская история ужасов 11 сезон';
-const row = (Title: string, n: string): SourceResult => ({
+const row = (Title: string, n: string, Seed = 4): SourceResult => ({
   Title,
   Categories: '',
   Size: '10 GB',
@@ -26,7 +26,7 @@ const row = (Title: string, n: string): SourceResult => ({
   Magnet: '',
   Hash: '',
   Peer: 1,
-  Seed: 4,
+  Seed,
   source: 'fake-anidub',
 });
 
@@ -49,6 +49,8 @@ beforeEach(() => {
 afterEach(() => {
   if (el) act(() => render(null, el));
   unregisterSource('fake-anidub');
+  unregisterSource('fake-late');
+  unregisterSource('fake-hang');
   vi.restoreAllMocks();
 });
 
@@ -116,5 +118,48 @@ describe('search relevance on the phone', () => {
     expect(el.querySelector('[data-empty="all"]')!.textContent).toContain('Ничего не найдено');
     expect(el.querySelector('.m-results [data-title]')).toBeNull();
     expect(el.querySelector('[data-similar]')).toBeNull();
+  });
+
+  it('similar cards keep their places while a source is still answering, then sort when it ends', async () => {
+    let late: (rows: SourceResult[]) => void = () => {};
+    let hang: (rows: SourceResult[]) => void = () => {};
+    registerSource({
+      id: 'fake-anidub',
+      name: 'Anidub',
+      kind: 'builtin',
+      search: () => Promise.resolve([row('Ресторан Ужасов A', 'a', 1)]),
+    });
+    registerSource({
+      id: 'fake-late',
+      name: 'Late',
+      kind: 'builtin',
+      search: () => new Promise((r) => { late = r; }),
+    });
+    registerSource({
+      id: 'fake-hang',
+      name: 'Hang',
+      kind: 'builtin',
+      search: () => new Promise((r) => { hang = r; }),
+    });
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<Add />, el));
+    const input = el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement;
+    act(() => {
+      input.value = 'Американская история ужасов';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => {
+      el.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    await flush();
+    const titles = () => Array.from(el.querySelectorAll('[data-similar] [data-title]')).map((n) => n.getAttribute('data-title'));
+    expect(titles()).toEqual(['Ресторан Ужасов A']);
+    act(() => late([row('Ресторан Ужасов B', 'b', 50)]));
+    await flush();
+    expect(titles()).toEqual(['Ресторан Ужасов A', 'Ресторан Ужасов B']);
+    act(() => hang([]));
+    await flush();
+    expect(titles()).toEqual(['Ресторан Ужасов B', 'Ресторан Ужасов A']);
   });
 });

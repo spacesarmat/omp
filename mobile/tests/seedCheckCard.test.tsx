@@ -50,7 +50,14 @@ describe('seed check on a result card', () => {
     expect(css).toMatch(/appearance:\s*none/);
 
     act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
-    const btn = el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement;
+    // 320px phone: padding 16+16, card padding 10+10, poster 64, gap 10 leaves ~194px.
+    // Three 40px buttons and two 8px gaps take 136px, so the chip cannot share that row.
+    const textCol = 320 - 32 - 20 - 64 - 10;
+    const actions = 40 * 3 + 8 * 2;
+    expect(textCol).toBeGreaterThanOrEqual(actions);
+    expect(el.querySelector('.m-rc-bottom .seed-check')).toBeNull();
+    const btn = el.querySelector('.m-rc-seed .seed-check') as HTMLButtonElement;
+    expect(css).toMatch(/\.m-rc-seed\s*\{[^}]*display:\s*flex/);
     expect(btn.textContent).toBe('Проверить сиды');
     expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
     act(() => btn.click());

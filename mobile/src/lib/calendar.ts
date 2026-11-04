@@ -77,14 +77,45 @@ function statusOf(airDate: string, today: string): CalStatus {
   return airDate > today ? 'future' : airDate === today ? 'today' : 'aired';
 }
 
+/** First and last day of a month (`month` is 0-11), as YYYY-MM-DD. */
+export function monthBounds(year: number, month: number): { from: string; to: string } {
+  const pad = (n: number) => (n < 10 ? '0' : '') + n;
+  const dim = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let days = dim[month];
+  if (month === 1 && ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0)) days = 29;
+  return { from: year + '-' + pad(month + 1) + '-01', to: year + '-' + pad(month + 1) + '-' + pad(days) };
+}
+
 /**
- * The show's episodes within the window (BACK_DAYS ago .. AHEAD_DAYS ahead) from its seasons; the card's next
- * episode alone when no season tells it (not loaded or failed).
+ * Seasons that can hold an episode inside [from, to]: one whose own start is not after `to` and whose next season
+ * has not already started before `from`, plus the next episode's season when that date is inside the range.
  */
-export function calendarEntries(show: CalShow, seasons: SeasonDetails[], now: number = Date.now()): CalEntry[] {
+export function seasonsInRange(card: CatalogCard, from: string, to: string): number[] {
+  const out: number[] = [];
+  const add = (n: number) => {
+    if (n > 0 && out.indexOf(n) < 0) out.push(n);
+  };
+  const ne = card.nextEpisode;
+  if (ne && ne.airDate && ne.airDate >= from && ne.airDate <= to) add(ne.season);
+  const sorted = card.seasons.slice().sort((a, b) => a.number - b.number);
+  for (let i = 0; i < sorted.length; i++) {
+    const s = sorted[i];
+    if (!s.airDate || s.airDate > to) continue;
+    const next = sorted[i + 1];
+    if (next && next.airDate && next.airDate < from) continue;
+    add(s.number);
+  }
+  return out;
+}
+
+/**
+ * The show's episodes within the window (BACK_DAYS ago .. AHEAD_DAYS ahead, or `range` when a month is open) from
+ * its seasons; the card's next episode alone when no season tells it (not loaded or failed).
+ */
+export function calendarEntries(show: CalShow, seasons: SeasonDetails[], now: number = Date.now(), range?: { from: string; to: string }): CalEntry[] {
   const today = isoDay(now);
-  const from = addDays(today, -BACK_DAYS);
-  const to = addDays(today, AHEAD_DAYS);
+  const from = range ? range.from : addDays(today, -BACK_DAYS);
+  const to = range ? range.to : addDays(today, AHEAD_DAYS);
   const out: CalEntry[] = [];
   const seen: { [k: string]: boolean } = {};
   seasons.forEach((s) => {
@@ -389,8 +420,40 @@ const EMPTY: CalState = { loading: false, entries: [], error: null, at: 0, lang:
 export const calendarState = signal<CalState>(EMPTY);
 
 let generation = 0;
+/** Shows of the last full gather. A month outside the default window reads seasons from these. */
+let knownShows: CalShow[] = [];
+/** Inclusive ranges already merged into the entries. */
+let covered: { from: string; to: string }[] = [];
+let spanGen = 0;
 /** Subscription query → its show card (null: not a show); per language. */
 const subShows = new Map<string, CatalogCard | null>();
+
+function spanCovers(from: string, to: string): boolean {
+  for (let i = 0; i < covered.length; i++) {
+    if (covered[i].from <= from && covered[i].to >= to) return true;
+  }
+  return false;
+}
+
+function entryKey(e: CalEntry): string {
+  return e.show.card.id + ':' + e.season + ':' + e.episode;
+}
+
+/** Entries of `extra` that are not already in `base`, base order kept. */
+export function mergeEntries(base: CalEntry[], extra: CalEntry[]): CalEntry[] {
+  const seen: { [k: string]: boolean } = {};
+  const out = base.slice();
+  out.forEach((e) => {
+    seen[entryKey(e)] = true;
+  });
+  extra.forEach((e) => {
+    const k = entryKey(e);
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push(e);
+  });
+  return out;
+}
 
 /** Runs `run` over the items, at most `limit` at a time; resolves when all are done (failures included). */
 export function pool<T>(items: T[], limit: number, run: (x: T) => Promise<unknown>): Promise<void> {
@@ -527,8 +590,12 @@ type Source = { group: SeriesGroup } | { sub: Subscription };
  */
 export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: boolean, now: number = Date.now()): Promise<void> {
   const my = ++generation;
+  spanGen++;
+  knownShows = [];
+  covered = [];
   const l = lang.peek();
   const prev = calendarState.peek();
+  let resolved: CalShow[] = [];
   calendarState.value = { loading: true, entries: prev.lang === l ? prev.entries : [], error: null, at: prev.at, lang: l };
   let firstError: CatalogErrorCode | null = null;
   // this gathering's entries: they replace the previous ones as soon as the first show is read
@@ -583,6 +650,9 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
             calendarEntries(show, seasons, now).forEach((e) => entries.push(e));
             publish();
           });
+        }).then(() => {
+          if (my !== generation) return;
+          resolved = order.map((id) => shows[id]);
         });
       });
     },
@@ -591,13 +661,55 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
     if (my !== generation) return;
     const code: CatalogErrorCode | null = firstError;
     const blocking = !entries.length && (code === 'offline' || code === 'nokey' || code === 'badkey' || code === 'unreachable') ? code : null;
+    const today = isoDay(now);
+    knownShows = resolved;
+    covered = [{ from: addDays(today, -BACK_DAYS), to: addDays(today, AHEAD_DAYS) }];
     calendarState.value = { loading: false, entries: entries.slice(), error: blocking, at: Date.now(), lang: l };
   });
+}
+
+/**
+ * Episodes of an open month that sit outside the default window (3 days back, 30 ahead). Merges them into the
+ * calendar already on screen. A newer month cancels the previous read. No-op until the first gather has shows.
+ */
+export function ensureCalendarSpan(from: string, to: string, now: number = Date.now()): Promise<void> {
+  if (!from || !to || from > to || !knownShows.length || spanCovers(from, to)) return Promise.resolve();
+  const my = ++spanGen;
+  const shows = knownShows.slice();
+  return phoneCatalog(false).then(
+    (c) => {
+      const extra: CalEntry[] = [];
+      return pool(shows, MAX_LOOKUPS, (show) => {
+        if (my !== spanGen) return Promise.resolve();
+        const numbers = seasonsInRange(show.card, from, to);
+        const seasons: SeasonDetails[] = [];
+        let chain: Promise<unknown> = Promise.resolve();
+        numbers.forEach((n) => {
+          chain = chain.then(() => c.season(show.card.id, n).then((s) => {
+            seasons.push(s);
+          }, () => {}));
+        });
+        return chain.then(() => {
+          if (my !== spanGen) return;
+          calendarEntries(show, seasons, now, { from: from, to: to }).forEach((e) => extra.push(e));
+        });
+      }).then(() => {
+        if (my !== spanGen) return;
+        covered.push({ from: from, to: to });
+        const prev = calendarState.peek();
+        calendarState.value = { loading: prev.loading, entries: mergeEntries(prev.entries, extra), error: prev.error, at: prev.at, lang: prev.lang };
+      });
+    },
+    () => {},
+  );
 }
 
 /** Tests: forget the gathered calendar and the subscription matches. */
 export function resetCalendar(): void {
   generation++;
+  spanGen++;
+  knownShows = [];
+  covered = [];
   subShows.clear();
   calendarState.value = EMPTY;
 }

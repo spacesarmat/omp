@@ -14,8 +14,8 @@ import { Icon } from '../ui/Icon';
 import { CatalogError } from './catalog/CatalogError';
 import { dayHeader } from '../lib/releaseDates';
 import {
-  calendarState, dayCountLabel, dayRows, defaultMonthDay, episodesCode, listGroups, loadCalendar, loadCalView, monthCells,
-  monthSwipe, monthTitle, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly, weekdayHeads, STALE_MS,
+  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, episodesCode, listGroups, loadCalendar, loadCalView,
+  monthBounds, monthCells, monthSwipe, monthTitle, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly, weekdayHeads, STALE_MS,
   type CalEntry, type CalRow, type CalView,
 } from '../lib/calendar';
 import { usePullRefresh, PullArea } from '../ui/PullRefresh';
@@ -106,11 +106,20 @@ function Tools(p: { view: CalView; subsOnly: boolean; onView: (v: CalView) => vo
   );
 }
 
-function Month(p: { entries: CalEntry[]; findings: Finding[] }) {
+function Month(p: { entries: CalEntry[]; findings: Finding[]; stamp: number }) {
   const now = new Date();
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [picked, setPicked] = useState(() => isoDay(Date.now()));
   const swipe = useRef({ x: 0, y: 0 });
+  useEffect(() => {
+    const b = monthBounds(cursor.y, cursor.m);
+    void ensureCalendarSpan(b.from, b.to);
+  }, [cursor.y, cursor.m, p.stamp]);
+  useEffect(() => {
+    if (picked) return;
+    const day = defaultMonthDay(cursor.y, cursor.m, p.entries, Date.now());
+    if (day) setPicked(day);
+  }, [picked, cursor.y, cursor.m, p.entries]);
   const go = (delta: number) => {
     const next = shiftMonth(cursor.y, cursor.m, delta);
     setCursor({ y: next.year, m: next.month });
@@ -213,7 +222,7 @@ export function Calendar() {
   else if (view === 'month') {
     body = (
       <>
-        {filteredOut ? empty : <Month entries={shown} findings={findings} />}
+        {filteredOut ? empty : <Month entries={shown} findings={findings} stamp={state.at} />}
         {!shown.length && !filteredOut && empty}
         {state.loading && <div class="m-muted m-small">{t('news.calLoading')}</div>}
       </>

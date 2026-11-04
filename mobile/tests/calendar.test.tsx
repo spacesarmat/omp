@@ -5,7 +5,8 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { Calendar } from '../src/screens/Calendar';
 import {
   calendarEntries, calendarSeasons, calendarState, dayCountLabel, dayRows, defaultMonthDay, episodesCode, findingFor, followable, groupByDay,
-  listGroups, loadCalendar, loadCalView, monthCells, monthSwipe, monthTitle, pool, realEpisodeName, resetCalendar, rowFinding, rowLine,
+  ensureCalendarSpan, listGroups, loadCalendar, loadCalView, monthCells, monthSwipe, monthTitle, pool,
+  realEpisodeName, resetCalendar, rowFinding, rowLine, seasonsInRange,
   saveCalView, subscribedOnly, type CalEntry, type CalShow,
 } from '../src/lib/calendar';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
@@ -268,6 +269,21 @@ describe('gathering', () => {
     expect(peak).toBeLessThanOrEqual(2);
   });
 
+  it('another month merges episodes that sit outside the default window', async () => {
+    fake();
+    torrents.value = [TOR];
+    await loadCalendar(torrents.value, [], false, NOW);
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-11-20')).toBe(false);
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-09-13')).toBe(false);
+    await ensureCalendarSpan('2026-11-01', '2026-11-30', NOW);
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-11-20')).toBe(true);
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-10-08')).toBe(true);
+    await ensureCalendarSpan('2026-09-01', '2026-09-30', NOW);
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-09-13')).toBe(true);
+    const oct8 = calendarState.value.entries.filter((e) => e.airDate === '2026-10-08');
+    expect(oct8.length).toBe(1);
+  });
+
   it('offline with nothing known: the catalog error', async () => {
     fake({ fail: 'offline' });
     torrents.value = [TOR];
@@ -311,6 +327,16 @@ describe('list and month', () => {
     expect(monthSwipe(-80, 10)).toBe(1);
     expect(monthSwipe(80, 10)).toBe(-1);
     expect(monthSwipe(10, 40)).toBe(0);
+  });
+
+  it('a month outside the 30 day window still has its episodes', () => {
+    expect(seasonsInRange(FROST, '2026-11-01', '2026-11-30')).toEqual([3]);
+    expect(seasonsInRange(FROST, '2026-09-01', '2026-09-30')).toContain(3);
+    const nov = calendarEntries(show(FROST), [FROST_S3], NOW, { from: '2026-11-01', to: '2026-11-30' });
+    expect(nov.map((x) => [x.episode, x.airDate])).toEqual([[7, '2026-11-20']]);
+    expect(calendarEntries(show(FROST), [FROST_S3], NOW).some((x) => x.airDate === '2026-11-20')).toBe(false);
+    const sep = calendarEntries(show(FROST), [FROST_S3], NOW, { from: '2026-09-01', to: '2026-09-30' });
+    expect(sep.map((x) => x.airDate)).toEqual(['2026-09-13', '2026-09-20']);
   });
 
   it('the chosen view is remembered', () => {
@@ -419,7 +445,9 @@ describe('the «Календарь» tab', () => {
     act(() => (el.querySelector('[data-cal-cell="2026-10-04"]') as HTMLButtonElement).click());
     expect(el.querySelector('[data-cal-picked="2026-10-04"] .m-cal-title')!.textContent).toBe('Ледяной перевал');
     act(() => (el.querySelector('[data-code="P03.13"]') as HTMLButtonElement).click());
+    await flush();
     expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Ноябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-11-20"] .m-cal-dotimg, [data-cal-cell="2026-11-20"] .m-cal-dot')).toBeTruthy();
     act(() => (el.querySelector('[data-code="P03.12"]') as HTMLButtonElement).click());
     expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Октябрь 2026');
     expect(loadCalView()).toBe('month');

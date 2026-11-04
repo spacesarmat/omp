@@ -96,6 +96,11 @@ export function ResultCard(p: {
               {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
+          {showCheck && (
+            <div class="m-rc-seed">
+              <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode={p.seedCode} />
+            </div>
+          )}
           <div class="m-rc-bottom">
             {p.busy === 'link' ? (
               <span class="m-rc-date m-small m-muted" role="status">
@@ -104,7 +109,6 @@ export function ResultCard(p: {
             ) : (
               <span class="m-rc-date m-small m-muted">{date}</span>
             )}
-            {showCheck && <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode={p.seedCode} />}
             <button
               type="button"
               class="m-rc-btn"
