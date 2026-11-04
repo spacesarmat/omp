@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- The built-in TorrServer is updated to MatriX.148
+
 ## 0.20.8-beta.3
 
 - Test-mode labels sit in the bottom-right corner of the control, so a card edge no longer clips them. A grid code moves when it would cover the card in that same corner. On the TV and in the native player the size slider is 8-36 px, step 2, default 20. 8 px is 6 pt. On the phone it stays 8-24 px, step 1, default 12: that minimum was already 6 pt. On a TV the number is in the 1920x1080 layout, so 1080p and 4K show the same size
