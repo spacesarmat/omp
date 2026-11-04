@@ -61,9 +61,13 @@ export function rekeyBillingAccess(from: string, to: string): void {
   saveJson(ACCESS_KEY, { token: to, active: rec.active, accessUntil: rec.accessUntil });
 }
 
-/** True when `now` is the login `started` captured, including that one-time move. A different code is not. */
+/**
+ * True when `now` is the login `started` captured, including the one-time move off the legacy token.
+ * No token on both sides is the same request (Telegram linked, no code). A code that appeared or
+ * went away while the request ran is a different login.
+ */
 export function sameLogin(started: string, now: string): boolean {
-  if (!started || !now) return false;
   if (started === now) return true;
+  if (!started || !now) return false;
   return started === movedFrom && now === movedTo;
 }

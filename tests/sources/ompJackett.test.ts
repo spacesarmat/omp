@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
-import { billingSession, deviceId, saveBillingSession, seenAccount } from '../../src/billing/session';
+import { billingSession, deviceId, saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
 import type { SourceResult } from '../../src/sources/types';
@@ -63,6 +63,24 @@ describe('omp Jackett source', () => {
   it('says the device slots are full on device_limit', async () => {
     const site = fakeSite((c) => page(JSON.stringify({ error: 'device_limit' }), c.url, 409));
     await expect(activateCode(site.ctx, 'ABCD-EFGH')).rejects.toThrow('Все устройства подписки заняты');
+  });
+
+  it('a Telegram link without a token remembers the account, a code entered meanwhile does not lose it', async () => {
+    const linked = fakeSite((c) => page(JSON.stringify({ telegramId: '9', paidUntil: 2e12, active: true }), c.url));
+    await fetchBillingAccount(linked.ctx);
+    expect(billingSession()).toBeNull();
+    expect(seenAccount()).toEqual({ paidUntil: 2e12 });
+
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => { release = resolve; });
+    const late = fakeSite(() => gate);
+    const pending = fetchBillingAccount(late.ctx);
+    saveBillingSession({ token: 'new-code', paidUntil: 3e12 });
+    saveSeenAccount({ paidUntil: 3e12 });
+    release(page(JSON.stringify({ telegramId: '9', paidUntil: 1, active: false }), 'http://billing'));
+    await pending;
+    expect(billingSession()?.token).toBe('new-code');
+    expect(seenAccount()).toEqual({ paidUntil: 3e12 });
   });
 
   it('caches the account for the Settings row, but not an answer that comes back after «Отключить»', async () => {
