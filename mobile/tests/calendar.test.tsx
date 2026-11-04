@@ -269,7 +269,56 @@ describe('gathering', () => {
     expect(peak).toBeLessThanOrEqual(2);
   });
 
-  it('another month is stored on its own and does not change the list window', async () => {
+  it('episodes loaded for the list are already visible in that month', async () => {
+    const c = fake();
+    torrents.value = [TOR];
+    await loadCalendar(torrents.value, [], false, NOW);
+    const calls = c.season.mock.calls.length;
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBe(calls);
+  });
+
+  it('a failed show is asked again and does not hide a show that answered', async () => {
+    const c = fake();
+    const ok = c.season.getMockImplementation();
+    torrents.value = [TOR];
+    addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true });
+    c.season.mockImplementation((id: number, n: number) => (id === 31 ? Promise.reject(codeError('offline')) : ok!(id, n)));
+    await loadCalendar(torrents.value, loadSubs(), false, NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 21 && e.airDate === '2026-10-04')).toBe(true);
+    // the failed show has only the card's next episode, not the rest of the season
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(false);
+    const calls = c.season.mock.calls.length;
+    c.season.mockImplementation(ok!);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBeGreaterThan(calls);
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(true);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    expect(calendarState.value.entries.some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(true);
+  });
+
+  it('a failed read is not treated as loaded, so the next visit asks again', async () => {
+    const c = fake();
+    const ok = c.season.getMockImplementation();
+    torrents.value = [TOR];
+    c.season.mockRejectedValue(codeError('offline'));
+    await loadCalendar(torrents.value, [], false, NOW);
+    expect(entriesForMonth(2026, 9).map((e) => e.airDate)).toEqual(['2026-10-08']);
+    const afterFail = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBeGreaterThan(afterFail);
+    expect(entriesForMonth(2026, 9).map((e) => e.airDate)).toEqual(['2026-10-08']);
+    c.season.mockImplementation(ok!);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+    const settled = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBe(settled);
+  });
+
+  it('opening another month does not add its days to the list window', async () => {
     fake();
     torrents.value = [TOR];
     await loadCalendar(torrents.value, [], false, NOW);
@@ -278,17 +327,8 @@ describe('gathering', () => {
     expect(entriesForMonth(2026, 10).some((e) => e.airDate === '2026-11-20')).toBe(true);
     expect(calendarState.value.entries.map((e) => e.airDate)).toEqual(list);
     expect(list.indexOf('2026-11-20')).toBe(-1);
-  });
-
-  it('a failed month read is not remembered, so the next visit asks again', async () => {
-    const c = fake();
-    torrents.value = [TOR];
-    await loadCalendar(torrents.value, [], false, NOW);
-    c.season.mockRejectedValueOnce(codeError('offline'));
-    await ensureCalendarSpan('2026-11-01', '2026-11-30', NOW);
-    expect(entriesForMonth(2026, 10)).toEqual([]);
-    await ensureCalendarSpan('2026-11-01', '2026-11-30', NOW);
-    expect(entriesForMonth(2026, 10).some((e) => e.airDate === '2026-11-20')).toBe(true);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
   });
 
   it('offline with nothing known: the catalog error', async () => {
@@ -459,6 +499,10 @@ describe('the «Календарь» tab', () => {
     expect(calendarState.value.entries.some((e) => e.airDate === '2026-11-20')).toBe(false);
     act(() => (el.querySelector('[data-code="P03.12"]') as HTMLButtonElement).click());
     expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Октябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-10-06"] .m-cal-dotimg, [data-cal-cell="2026-10-06"] .m-cal-dot')).toBeTruthy();
+    act(() => (el.querySelector('[data-code="P03.13"]') as HTMLButtonElement).click());
+    expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Ноябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-11-20"] .m-cal-dotimg, [data-cal-cell="2026-11-20"] .m-cal-dot')).toBeTruthy();
     expect(loadCalView()).toBe('month');
     act(() => render(null, el));
     mount(<Calendar />);

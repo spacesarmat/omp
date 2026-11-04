@@ -420,36 +420,156 @@ const EMPTY: CalState = { loading: false, entries: [], error: null, at: 0, lang:
 export const calendarState = signal<CalState>(EMPTY);
 
 let generation = 0;
-/** Shows of the last full gather. A month outside the default window reads seasons from these. */
+/** Shows of the last full gather. Month reads ask seasons of these. */
 let knownShows: CalShow[] = [];
-/** Inclusive ranges already merged into the entries. */
-let covered: { from: string; to: string }[] = [];
-let spanGen = 0;
+/** When the list window was computed. Month reads must not move it. */
+let listNow = 0;
+/**
+ * Episodes of one show in one calendar month (`id|YYYY-MM`). List and Month both read this.
+ * `failed` is retried; it does not drop the other shows. A month is settled only when every show is `ok`.
+ */
+interface ShowMonth { status: 'ok' | 'failed'; entries: CalEntry[]; }
+let slots: { [key: string]: ShowMonth } = {};
+/** One read at a time per show, so a second ask waits and then skips what already succeeded. */
+let inflight: { [id: string]: Promise<void> } = {};
+/** Bumps when any show-month arrives, so the grid renders it. */
+export const monthRev = signal(0);
 /** Subscription query → its show card (null: not a show); per language. */
 const subShows = new Map<string, CatalogCard | null>();
 
-function spanCovers(from: string, to: string): boolean {
-  for (let i = 0; i < covered.length; i++) {
-    if (covered[i].from <= from && covered[i].to >= to) return true;
-  }
-  return false;
-}
+const NO_MONTH: CalEntry[] = [];
 
-/** Episodes of one calendar month, keyed YYYY-MM. The list view does not read this. */
-let monthCache: { [ym: string]: CalEntry[] } = {};
-/** Bumps when a month's episodes arrive, so the grid renders them. */
-export const monthRev = signal(0);
-
-function monthKey(from: string): string {
+function ymOf(from: string): string {
   return from.slice(0, 7);
 }
 
-const NO_MONTH: CalEntry[] = [];
+function slotKey(id: number, ym: string): string {
+  return id + '|' + ym;
+}
 
-/** Episodes stored for that month. Empty until a successful read (the list window is not consulted). */
+/** Whole months that overlap [from, to], each as its own first and last day. */
+function monthsCovering(from: string, to: string): { from: string; to: string }[] {
+  const out: { from: string; to: string }[] = [];
+  let y = +from.slice(0, 4);
+  let m = +from.slice(5, 7) - 1;
+  const endY = +to.slice(0, 4);
+  const endM = +to.slice(5, 7) - 1;
+  while (y < endY || (y === endY && m <= endM)) {
+    out.push(monthBounds(y, m));
+    m++;
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
+    if (out.length > 36) break;
+  }
+  return out;
+}
+
+function listWindow(now: number): { from: string; to: string } {
+  const today = isoDay(now);
+  return { from: addDays(today, -BACK_DAYS), to: addDays(today, AHEAD_DAYS) };
+}
+
+/** Every stored episode whose air date sits in the list window. Month-only days stay out. */
+function windowEntries(): CalEntry[] {
+  if (!listNow) return [];
+  const w = listWindow(listNow);
+  const out: CalEntry[] = [];
+  knownShows.forEach((show) => {
+    const prefix = show.card.id + '|';
+    Object.keys(slots).forEach((k) => {
+      if (k.indexOf(prefix) !== 0) return;
+      slots[k].entries.forEach((e) => {
+        if (e.airDate >= w.from && e.airDate <= w.to) out.push(e);
+      });
+    });
+  });
+  return out;
+}
+
+function publishWindow(): void {
+  const prev = calendarState.peek();
+  calendarState.value = { loading: prev.loading, entries: windowEntries(), error: prev.error, at: prev.at, lang: prev.lang };
+  monthRev.value = monthRev.value + 1;
+}
+
+/** True when every gathered show has a successful read of this month. */
+function monthSettled(ym: string): boolean {
+  if (!knownShows.length) return false;
+  for (let i = 0; i < knownShows.length; i++) {
+    const slot = slots[slotKey(knownShows[i].card.id, ym)];
+    if (!slot || slot.status !== 'ok') return false;
+  }
+  return true;
+}
+
+/**
+ * Reads `ranges` for one show (full months). A show already `ok` for a month is skipped. A failed season marks
+ * only this show `failed` and keeps the episodes that did arrive. `gen` drops the write when a newer gather started.
+ */
+function loadShowMonths(
+  c: CatalogClient,
+  show: CalShow,
+  ranges: { from: string; to: string }[],
+  now: number,
+  gen: number,
+  fresh: boolean | undefined,
+  onError?: (e: unknown) => void,
+): Promise<void> {
+  const prev = inflight[show.card.id] || Promise.resolve();
+  const run = prev.then(() => {
+    if (gen !== generation) return;
+    const pending = ranges.filter((r) => {
+      const slot = slots[slotKey(show.card.id, ymOf(r.from))];
+      return !slot || slot.status !== 'ok';
+    });
+    if (!pending.length) return;
+    const numbers: number[] = [];
+    pending.forEach((r) => {
+      seasonsInRange(show.card, r.from, r.to).forEach((n) => {
+        if (numbers.indexOf(n) < 0) numbers.push(n);
+      });
+    });
+    const seasons: SeasonDetails[] = [];
+    let failed = false;
+    let chain: Promise<unknown> = Promise.resolve();
+    numbers.forEach((n) => {
+      chain = chain.then(() => {
+        if (gen !== generation) return;
+        return c.season(show.card.id, n, fresh ? { force: true } : undefined).then((s) => {
+          seasons.push(s);
+        }, (e) => {
+          failed = true;
+          if (onError) onError(e);
+        });
+      });
+    });
+    return chain.then(() => {
+      if (gen !== generation) return;
+      pending.forEach((r) => {
+        slots[slotKey(show.card.id, ymOf(r.from))] = {
+          status: failed ? 'failed' : 'ok',
+          entries: calendarEntries(show, seasons, now, r),
+        };
+      });
+      publishWindow();
+    });
+  });
+  inflight[show.card.id] = run.then(() => {}, () => {});
+  return run;
+}
+
+/** Episodes stored for that month, from every show that has answered (a failed show does not hide the others). */
 export function entriesForMonth(year: number, month: number): CalEntry[] {
-  const hit = monthCache[monthKey(monthBounds(year, month).from)];
-  return hit || NO_MONTH;
+  const ym = ymOf(monthBounds(year, month).from);
+  const suffix = '|' + ym;
+  const out: CalEntry[] = [];
+  Object.keys(slots).forEach((k) => {
+    if (k.slice(-suffix.length) !== suffix) return;
+    slots[k].entries.forEach((e) => out.push(e));
+  });
+  return out.length ? out : NO_MONTH;
 }
 
 /** Runs `run` over the items, at most `limit` at a time; resolves when all are done (failures included). */
@@ -587,18 +707,17 @@ type Source = { group: SeriesGroup } | { sub: Subscription };
  */
 export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: boolean, now: number = Date.now()): Promise<void> {
   const my = ++generation;
-  spanGen++;
   knownShows = [];
-  covered = [];
-  monthCache = {};
+  slots = {};
+  inflight = {};
+  listNow = now;
   monthRev.value = monthRev.value + 1;
   const l = lang.peek();
   const prev = calendarState.peek();
-  let resolved: CalShow[] = [];
+  const win = listWindow(now);
+  const ranges = monthsCovering(win.from, win.to);
   calendarState.value = { loading: true, entries: prev.lang === l ? prev.entries : [], error: null, at: prev.at, lang: l };
   let firstError: CatalogErrorCode | null = null;
-  // this gathering's entries: they replace the previous ones as soon as the first show is read
-  const entries: CalEntry[] = [];
   const fail = (e: unknown) => {
     if (!firstError) firstError = catalogErrorCode(e);
   };
@@ -627,31 +746,12 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
           else show.subIds.push(src.sub.id);
         }, fail);
       };
-      const publish = () => {
-        if (my !== generation) return;
-        calendarState.value = { loading: true, entries: entries.slice(), error: null, at: calendarState.peek().at, lang: l };
-      };
       return pool(sources, MAX_LOOKUPS, resolve).then(() => {
         if (my !== generation) return;
-        return pool(order, MAX_LOOKUPS, (id) => {
+        knownShows = order.map((id) => shows[id]);
+        return pool(knownShows, MAX_LOOKUPS, (show) => {
           if (my !== generation) return Promise.resolve();
-          const show = shows[id];
-          const seasons: SeasonDetails[] = [];
-          const numbers = calendarSeasons(show.card, now);
-          let chain: Promise<unknown> = Promise.resolve();
-          numbers.forEach((n) => {
-            chain = chain.then(() => c.season(show.card.id, n, fresh ? { force: true } : undefined).then((s) => {
-              seasons.push(s);
-            }, fail));
-          });
-          return chain.then(() => {
-            if (my !== generation) return;
-            calendarEntries(show, seasons, now).forEach((e) => entries.push(e));
-            publish();
-          });
-        }).then(() => {
-          if (my !== generation) return;
-          resolved = order.map((id) => shows[id]);
+          return loadShowMonths(c, show, ranges, now, my, fresh, fail);
         });
       });
     },
@@ -659,52 +759,26 @@ export function loadCalendar(list: Torrent[], subs: Subscription[], fresh?: bool
   ).then(() => {
     if (my !== generation) return;
     const code: CatalogErrorCode | null = firstError;
+    const entries = windowEntries();
     const blocking = !entries.length && (code === 'offline' || code === 'nokey' || code === 'badkey' || code === 'unreachable') ? code : null;
-    const today = isoDay(now);
-    knownShows = resolved;
-    covered = [{ from: addDays(today, -BACK_DAYS), to: addDays(today, AHEAD_DAYS) }];
-    calendarState.value = { loading: false, entries: entries.slice(), error: blocking, at: Date.now(), lang: l };
+    calendarState.value = { loading: false, entries: entries, error: blocking, at: Date.now(), lang: l };
+    monthRev.value = monthRev.value + 1;
   });
 }
 
 /**
- * Episodes of one open month, kept apart from the list window. A season that fails is not remembered, so the next
- * visit asks again. A newer month cancels the previous read. No-op until the first gather has shows.
+ * Fills one month from the shared per-show store. Shows already `ok` are skipped. A show that fails is marked
+ * `failed` and asked again next time; the shows that succeeded stay on screen. No-op until the gather has shows.
  */
 export function ensureCalendarSpan(from: string, to: string, now: number = Date.now()): Promise<void> {
-  if (!from || !to || from > to || !knownShows.length || spanCovers(from, to)) return Promise.resolve();
-  const my = ++spanGen;
+  if (!from || !to || from > to || !knownShows.length || monthSettled(ymOf(from))) return Promise.resolve();
+  const gen = generation;
   const shows = knownShows.slice();
-  const box = { failed: false };
   return phoneCatalog(false).then(
-    (c) => {
-      const extra: CalEntry[] = [];
-      return pool(shows, MAX_LOOKUPS, (show) => {
-        if (my !== spanGen) return Promise.resolve();
-        const numbers = seasonsInRange(show.card, from, to);
-        const seasons: SeasonDetails[] = [];
-        let chain: Promise<unknown> = Promise.resolve();
-        numbers.forEach((n) => {
-          chain = chain.then(() => {
-            if (my !== spanGen) return;
-            return c.season(show.card.id, n).then((s) => {
-              seasons.push(s);
-            }, () => {
-              box.failed = true;
-            });
-          });
-        });
-        return chain.then(() => {
-          if (my !== spanGen || box.failed) return;
-          calendarEntries(show, seasons, now, { from: from, to: to }).forEach((e) => extra.push(e));
-        });
-      }).then(() => {
-        if (my !== spanGen || box.failed) return;
-        monthCache[monthKey(from)] = extra;
-        covered.push({ from: from, to: to });
-        monthRev.value = monthRev.value + 1;
-      });
-    },
+    (c) => pool(shows, MAX_LOOKUPS, (show) => {
+      if (gen !== generation) return Promise.resolve();
+      return loadShowMonths(c, show, [{ from: from, to: to }], now, gen, false);
+    }),
     () => {},
   );
 }
@@ -712,10 +786,10 @@ export function ensureCalendarSpan(from: string, to: string, now: number = Date.
 /** Tests: forget the gathered calendar and the subscription matches. */
 export function resetCalendar(): void {
   generation++;
-  spanGen++;
   knownShows = [];
-  covered = [];
-  monthCache = {};
+  slots = {};
+  inflight = {};
+  listNow = 0;
   monthRev.value = monthRev.value + 1;
   subShows.clear();
   calendarState.value = EMPTY;

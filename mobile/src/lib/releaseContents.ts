@@ -4,7 +4,7 @@
 import type { Torrent } from '../../../src/api/types';
 import { tp } from '../../../src/i18n';
 import { episodesOutOf } from '../../../src/lib/episodesOutOf';
-import { baseName, filesOfSeason, parseEpisode, playableFiles, type TorrentFile } from '../../../src/lib/episodes';
+import { baseName, filesOfSeason, playableFiles, type TorrentFile } from '../../../src/lib/episodes';
 import { fileEpisodes } from '../../../src/lib/categoryCheck';
 import { externalNoteText } from '../../../src/lib/externalNote';
 import { filesOf } from '../watch';
@@ -52,23 +52,12 @@ export function extrasText(tor: Torrent): string {
 /**
  * The episode part of the torrent header. «5 из 8 серий» when that season's total is known.
  * A pack is counted for the season on screen, not for every episode in the torrent.
+ * A file that names an episode but no season is counted once, in the total header (`season` null,
+ * «Дополнительно» or the whole torrent), not again in every season.
  * Unknown total, or files that are not episodes, stays «5 серий» / «16 файлов».
  */
-/** An episode file that names no season (E03, «серия 3»): the header of the season on screen still counts it. */
-function looseEpisodeFiles(files: TorrentFile[]): TorrentFile[] {
-  const out: TorrentFile[] = [];
-  files.forEach((file) => {
-    if (parseEpisode(file.path).season !== null) return;
-    const e = fileEpisodes(file.path);
-    if (e && e.episodes.length) out.push(file);
-  });
-  return out;
-}
-
 export function torrentHeaderEpisodes(files: TorrentFile[], season: number | null, total: number): string {
-  // a pack: the header follows the season on screen, not every episode in the torrent.
-  // A file that names an episode but no season is counted with that season.
-  const scoped = season === null ? files : filesOfSeason(files, season).concat(looseEpisodeFiles(files));
+  const scoped = season === null ? files : filesOfSeason(files, season);
   const counting = scoped.length ? scoped : files;
   // one episode of a pack is still «1 серия»; a torrent that is a single file stays blank
   const oneOfPack = season !== null && files.length > 1 && counting.length === 1;
