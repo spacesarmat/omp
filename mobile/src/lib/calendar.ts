@@ -4,7 +4,7 @@
 // seasons to read; the seasons' episodes give the days. At most 2 lookups run at a time; the answers come from the
 // catalog client's cache when fresh. The rows' «Смотреть» comes from the monitoring findings at render time.
 import { signal } from '@preact/signals';
-import { lang } from '../../../src/i18n';
+import { lang, t } from '../../../src/i18n';
 import { addDays } from '../../../src/catalog/discoverQuery';
 import { catalogErrorCode, type CatalogClient, type CatalogErrorCode } from '../../../src/catalog/client';
 import type { CatalogCard, CatalogTitle, SeasonDetails } from '../../../src/catalog/tmdb';
@@ -180,6 +180,158 @@ export function dayRows(entries: CalEntry[]): CalRow[] {
 /** The row's line: «S13E07 · name», «S13E07-E08». */
 export function rowLine(row: CalRow): string {
   return episodesCode(row.season, row.episodes) + (row.name ? ' · ' + row.name : '');
+}
+
+// --- list and month views
+
+const VIEW_KEY = 'tsp.calView';
+export type CalView = 'list' | 'month';
+
+/** The view chosen last time. Anything else is the list. */
+export function loadCalView(): CalView {
+  return loadJson<unknown>(VIEW_KEY, 'list', (v) => v === 'list' || v === 'month') === 'month' ? 'month' : 'list';
+}
+
+export function saveCalView(v: CalView): void {
+  saveJson(VIEW_KEY, v);
+}
+
+/** Episodes of shows that came from a subscription (a library-only show stays out). */
+export function subscribedOnly(entries: CalEntry[]): CalEntry[] {
+  return entries.filter((e) => e.show.subIds.length > 0);
+}
+
+export type CalListId = 'out' | 'week' | 'next' | 'later';
+
+export interface CalListGroup {
+  id: CalListId;
+  label: string;
+  rows: CalRow[];
+}
+
+function rowCmp(a: CalRow, b: CalRow): number {
+  if (a.airDate !== b.airDate) return a.airDate < b.airDate ? -1 : 1;
+  const ta = a.show.card.title.toLowerCase();
+  const tb = b.show.card.title.toLowerCase();
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  return a.season - b.season || a.episodes[0] - b.episodes[0];
+}
+
+/** Monday of the local week that holds `iso` (the week starts on Monday). */
+export function weekMonday(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const dow = new Date(+m[1], +m[2] - 1, +m[3]).getDay();
+  return addDays(iso, -((dow + 6) % 7));
+}
+
+/**
+ * List view: released episodes first (newest first), then upcoming in «Эта неделя», «Следующая», «Позже».
+ * A week is Monday through Sunday. Today counts as released.
+ */
+export function listGroups(entries: CalEntry[], now: number = Date.now()): CalListGroup[] {
+  const today = isoDay(now);
+  const start = weekMonday(today);
+  const nextStart = addDays(start, 7);
+  const laterStart = addDays(start, 14);
+  const buckets: { [k: string]: CalRow[] } = { out: [], week: [], next: [], later: [] };
+  dayRows(entries).sort(rowCmp).forEach((r) => {
+    if (r.status !== 'future') buckets.out.push(r);
+    else if (r.airDate < nextStart) buckets.week.push(r);
+    else if (r.airDate < laterStart) buckets.next.push(r);
+    else buckets.later.push(r);
+  });
+  buckets.out.sort((a, b) => (a.airDate === b.airDate ? rowCmp(a, b) : a.airDate < b.airDate ? 1 : -1));
+  const labels: { [k: string]: string } = {
+    out: t('news.calOut'),
+    week: t('news.calWeek'),
+    next: t('news.calNext'),
+    later: t('news.calLater'),
+  };
+  const order: CalListId[] = ['out', 'week', 'next', 'later'];
+  const out: CalListGroup[] = [];
+  order.forEach((id) => {
+    if (buckets[id].length) out.push({ id, label: labels[id], rows: buckets[id] });
+  });
+  return out;
+}
+
+export interface CalMonthCell {
+  iso: string;
+  inMonth: boolean;
+  today: boolean;
+  /** Episodes that day. */
+  count: number;
+  /** A poster for the marker; '' when none of that day's shows has one. */
+  poster: string;
+}
+
+/** Six Monday-first weeks covering `month` (0-11), including the leading and trailing days. */
+export function monthCells(year: number, month: number, entries: CalEntry[], now: number = Date.now()): CalMonthCell[] {
+  const first = new Date(year, month, 1);
+  const lead = (first.getDay() + 6) % 7;
+  const start = new Date(year, month, 1 - lead);
+  const today = isoDay(now);
+  const byDay: { [iso: string]: CalEntry[] } = {};
+  entries.forEach((e) => {
+    (byDay[e.airDate] || (byDay[e.airDate] = [])).push(e);
+  });
+  const cells: CalMonthCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    const iso = isoDay(d.getTime());
+    const list = byDay[iso] || [];
+    let poster = '';
+    for (let j = 0; j < list.length && !poster; j++) poster = list[j].show.card.poster || '';
+    cells.push({ iso, inMonth: d.getMonth() === month, today: iso === today, count: list.length, poster });
+  }
+  return cells;
+}
+
+/** «+3» when a day has several episodes; '' for one or none. */
+export function dayCountLabel(n: number): string {
+  return n > 1 ? '+' + n : '';
+}
+
+export function monthTitle(year: number, month: number): string {
+  const names = t('date.monthsNom').split(' ');
+  return (names[month] || '') + ' ' + year;
+}
+
+/** Short weekday names, Monday first. */
+export function weekdayHeads(): string[] {
+  const w = t('date.weekdays').split(' ');
+  return w.slice(1).concat(w[0] || '');
+}
+
+export function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  // Arithmetic, not `new Date(y, m, d)`: a faked Date clock can ignore the arguments.
+  let m = month + delta;
+  let y = year;
+  while (m < 0) {
+    m += 12;
+    y -= 1;
+  }
+  while (m > 11) {
+    m -= 12;
+    y += 1;
+  }
+  return { year: y, month: m };
+}
+
+/** The day a month opens on: today when it is in the month, else the first day that has episodes, else ''. */
+export function defaultMonthDay(year: number, month: number, entries: CalEntry[], now: number = Date.now()): string {
+  const cells = monthCells(year, month, entries, now);
+  for (let i = 0; i < cells.length; i++) if (cells[i].inMonth && cells[i].today) return cells[i].iso;
+  for (let i = 0; i < cells.length; i++) if (cells[i].inMonth && cells[i].count > 0) return cells[i].iso;
+  return '';
+}
+
+/** Horizontal month change: -1 previous, 1 next, 0 when the gesture is a scroll or too short. */
+export const MONTH_SWIPE_PX = 48;
+export function monthSwipe(dx: number, dy: number): -1 | 1 | 0 {
+  if (Math.abs(dx) < MONTH_SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return 0;
+  return dx < 0 ? 1 : -1;
 }
 
 /** The newest finding that has one of the row's episodes; null if none. */

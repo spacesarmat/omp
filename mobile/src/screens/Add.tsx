@@ -37,6 +37,7 @@ import {
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
 import { applyFilters, activeFilterCount, filterChips, parseRelease, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { SubSheet } from '../ui/SubSheet';
@@ -477,8 +478,10 @@ export function Add({
   // while sources still answer, rows on screen keep their places (no row moves under the finger);
   // the full sort comes when the search ends
   // a release of unknown kind shows only under «Все»
-  const matching = rows ? applyFilters(rows, filters) : [];
+  const parts = rows ? splitByRelevance(rows, memo.searched) : { hits: [] as SourceResult[], similar: [] as SourceResult[] };
+  const matching = applyFilters(parts.hits, filters);
   const filtered = filterByKind(matching, kindF);
+  const similarVisible = sinkUnknownSeasons(sortResults(filterByKind(applyFilters(parts.similar, filters), kindF), sort), filters.season);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
   // the search settled and not one source answered (no network, or every site down)
@@ -678,6 +681,29 @@ export function Add({
           );
         })}
       </div>
+      {similarVisible.length > 0 && (
+        <details class="m-similar" data-similar="">
+          <summary class="m-similar-sum tm" data-code="P07.7">{t('search.similar', { n: similarVisible.length })}</summary>
+          <div class="m-results">
+            {similarVisible.map((r) => {
+              const k = resultKey(r);
+              return (
+                <ResultCard
+                  key={k}
+                  r={r}
+                  category={categoryOfRow(r)}
+                  busy={pending[k]}
+                  onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
+                  onAdd={() => void addResult(r, false)}
+                  onWatch={() => void addResult(r, 'tv')}
+                  onPhone={() => void addResult(r, 'phone')}
+                  seedCode="P07.6"
+                />
+              );
+            })}
+          </div>
+        </details>
+      )}
       </>
       )}
       {sheet === 'sources' && (

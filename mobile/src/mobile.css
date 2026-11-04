@@ -1549,7 +1549,20 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
   border: none; border-radius: 8px; background: transparent; color: var(--muted);
   display: flex; align-items: center; justify-content: center; z-index: 2;
 }
-.seed-check { position: relative; z-index: 2; margin-left: 6px; min-height: 28px; padding: 2px 8px; font-size: 12px; }
+.seed-check {
+  position: relative; z-index: 2; pointer-events: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 6px; min-width: 0; min-height: 32px; height: 32px; padding: 0 10px;
+  border: none; border-radius: 16px;
+  background: var(--panel-2); color: var(--text);
+  font-family: inherit; font-size: 12px; font-weight: 700; line-height: 16px;
+  white-space: nowrap; vertical-align: middle;
+  -webkit-appearance: none; appearance: none;
+}
+.seed-check-line { display: inline; }
+.seed-check-err { color: #FF8A80; }
+.seed-fresh { color: var(--text); }
+.m-rc-bottom .seed-check { margin-left: 0; margin-right: 6px; flex-shrink: 0; }
 .seed-spin { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent; vertical-align: middle; animation: seed-spin .8s linear infinite; }
 @keyframes seed-spin { to { transform: rotate(360deg); } }
 .m-sub-poster { flex: none; width: 40px; height: 60px; border-radius: 6px; object-fit: cover; background: var(--panel-2); }
@@ -1840,6 +1853,33 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-cal-chip { padding: 2px 8px; border-radius: 10px; background: var(--panel-2); color: var(--muted); font-size: 12px; white-space: nowrap; }
 .m-cal-chip.m-cal-aired, .m-cal-chip.m-cal-today { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-cal-empty { display: flex; flex-direction: column; gap: 6px; }
+.m-cal-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.m-cal-when { display: block; }
+.m-cal-head { display: flex; align-items: center; margin-bottom: 8px; }
+.m-cal-head .m-icon-btn { flex: none; }
+.m-cal-month-name { flex: 1 1 auto; text-align: center; font-size: 16px; font-weight: 700; }
+.m-cal-wd { display: flex; }
+.m-cal-wd span { width: 14.28%; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); line-height: 24px; }
+.m-cal-grid { display: flex; flex-wrap: wrap; touch-action: pan-y; }
+.m-cal-cell {
+  position: relative; width: 14.28%; min-width: 0; min-height: 52px; margin: 0; padding: 4px 0 2px;
+  border: none; border-radius: 10px; background: none; color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 600;
+}
+.m-cal-cell.out { color: var(--muted); opacity: 0.4; }
+.m-cal-cell.is-today { background: #3A3320; color: var(--accent); }
+.m-cal-cell.is-on { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-cal-num { display: block; line-height: 18px; }
+.m-cal-dot, .m-cal-dotimg { display: block; width: 14px; height: 14px; margin: 2px auto 0; border-radius: 7px; background: var(--accent); object-fit: cover; }
+.m-cal-more { display: block; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--accent); }
+.m-cal-picked { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.m-similar { margin-top: 12px; }
+.m-similar-sum {
+  position: relative; display: flex; align-items: center; min-height: 44px; padding: 8px 12px;
+  border-radius: 12px; background: var(--panel); color: var(--muted); font-size: 14px; font-weight: 700;
+}
+.m-similar[open] .m-similar-sum { color: var(--text); }
+.m-similar .m-results { margin-top: 8px; }
 
 /* the releases of one season (information) */
 .m-dup-hint { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel); }

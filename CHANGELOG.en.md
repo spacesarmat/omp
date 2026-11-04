@@ -4,6 +4,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] New, Calendar has List and Month, and the choice is kept. List puts episodes that are already out on top (the out badge and Find), then This week, Next week and Later, with the date on the row. Month is a grid with today highlighted, arrows and a swipe to change month, a marker and a count like +3 on days with episodes, and that day's episodes under the grid. The filter All / My subscriptions only is there because the calendar includes series from Mine and subscriptions
+- [phone] The seed check in search is a dark chip labeled Check seeds, with a loading state and the answer, instead of an empty gray box. Each search result card has the same control, and the tracker's seed count is replaced after a check
+- [tv] The seed check is labeled Check seeds, the same as on the phone
+- [phone] Search keeps a release only when its title shares the query's significant words. Season and episode tokens such as a season number or S11 are ignored, and light stemming covers inflected titles. A series title plus a season number no longer lists unrelated releases. When nothing matches, the list is empty, and weak matches sit in a collapsed Similar results section
+- [tv] TV search drops releases that do not share the query's significant words, by the same rule
+
 ## 0.20.8-beta.4
 
 - The built-in TorrServer is updated to MatriX.148

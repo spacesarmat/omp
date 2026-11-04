@@ -712,6 +712,13 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P03.5 | Новое | News | Проверить свайпом | Swipe to check |
 | P03.6 | Новое | News | Удалить свайпом | Swipe to delete |
 | P03.7 | Новое | News | Проверить сиды | Check seeds |
+| P03.8 | Новое | News | Список | List |
+| P03.9 | Новое | News | Месяц | Month |
+| P03.10 | Новое | News | Всё | All |
+| P03.11 | Новое | News | Только мои подписки | My subscriptions only |
+| P03.12 | Новое | News | Предыдущий месяц | Previous month |
+| P03.13 | Новое | News | Следующий месяц | Next month |
+| P03.14 | Новое | News | День календаря | Calendar day |
 | P04 | Находки подписки | Subscription findings |  |  |
 | P04.1 | Находки подписки | Subscription findings | Назад | Back |
 | P04.2 | Находки подписки | Subscription findings | Проверить сиды | Check seeds |
@@ -731,6 +738,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P07.4 | Поиск | Search | Каталог | Catalog |
 | P07.5 | Поиск | Search | Источники | Sources |
 | P07.6 | Поиск | Search | Проверить сиды | Check seeds |
+| P07.7 | Поиск | Search | Похожие результаты | Similar results |
 | P08 | Пульт | Remote |  |  |
 | P08.1 | Пульт | Remote | Сменить телевизор | Switch TV |
 | P09 | Сейчас играет | Now playing |  |  |

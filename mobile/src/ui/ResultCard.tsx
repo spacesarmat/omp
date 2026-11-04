@@ -3,7 +3,7 @@ import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
-import { SeedCheck } from '../../../src/ui/SeedCheck';
+import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
 import { t } from '../../../src/i18n';
 import { resultSizeText } from '../../../src/sources/resultSize';
@@ -62,6 +62,9 @@ export function ResultCard(p: {
   const { r } = p;
   const live = useSeedRow(r);
   const seeds = phoneSeedBits(live.view);
+  const probe = useSeedProbe(r);
+  const seedText = probe.text(seeds.text);
+  const showCheck = !!seeds.text || probe.phase !== 'idle';
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
@@ -89,9 +92,8 @@ export function ResultCard(p: {
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
             <span class="m-rc-meta-text">
-              {sizeText(r)}
-              {seeds.text ? ' · ' : ''}
-              <SeedCheck r={r} fallback={seeds.text} testCode={p.seedCode} live={seeds.mode === 'live'} />
+              {[sizeText(r), seedText].filter(Boolean).join(' · ')}
+              {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
           <div class="m-rc-bottom">
@@ -102,6 +104,7 @@ export function ResultCard(p: {
             ) : (
               <span class="m-rc-date m-small m-muted">{date}</span>
             )}
+            {showCheck && <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode={p.seedCode} />}
             <button
               type="button"
               class="m-rc-btn"
@@ -149,8 +152,8 @@ export function ResultCard(p: {
               <span class="m-src-badge">{sourceBadge(r)}</span>
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
                 {sizeText(r)}
-                {seeds.text ? ' · ' : ''}
-                <SeedCheck r={r} fallback={seeds.text} testCode="PD31.1" live={seeds.mode === 'live'} />
+                {seedText || showCheck ? ' · ' : ''}
+                <SeedCheck r={r} fallback={seeds.text} probe={probe} testCode="PD31.1" live={seeds.mode === 'live'} />
                 {date ? ' · ' + date : ''}
                 {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
               </span>

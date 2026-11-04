@@ -84,7 +84,10 @@ describe('seeds on a card', () => {
     mount([res('Film A (2026) 1080p', 1), { ...res('Film B (2026) 1080p', 2), Seed: 0 }]);
     const metas = Array.from(el.querySelectorAll('.m-rc-meta-text')).map((n) => n.textContent);
     expect(metas[0]).toContain('10,0 ГБ · 5 сидов · по данным трекера');
-    expect(metas[0]).toContain('Проверить');
+    expect(metas[0]).not.toContain('Проверить');
+    const checks = el.querySelectorAll('.seed-check');
+    expect(checks.length).toBe(1);
+    expect(checks[0].textContent).toBe('Проверить сиды');
     expect(metas[1]).toBe('10,0 ГБ');
     expect(resultMeta({ ...res('Film B', 3), Seed: 0 })).not.toContain('сид');
   });

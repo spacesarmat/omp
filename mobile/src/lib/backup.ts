@@ -137,6 +137,7 @@ export const BACKUP_KEYS: BackupKey[] = [
 
 /** Known keys that a copy deliberately leaves out (documentation + tested: none of them is in BACKUP_KEYS). */
 export const NOT_BACKED_UP: string[] = [
+  'tsp.calView', // «Календарь»: list or month, per device
   'tsp.log', // error log: personal, per device
   'tsp.addressInput', // keypad or system keyboard for the server address: per device
   'tsp.newsFeed', // cache of the release feed

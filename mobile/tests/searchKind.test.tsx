@@ -154,7 +154,8 @@ describe('phone search: kind badge and filter', () => {
       click(kindButton('Все'));
       await flush();
       expect(modes[modes.length - 1]).toBe('');
-      expect(titles()).toContain(FILM);
+      expect(titles()).toContain(book);
+      expect(titles()).not.toContain(FILM);
     } finally {
       unregisterSource('fake-audio');
     }

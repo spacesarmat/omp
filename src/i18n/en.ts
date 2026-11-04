@@ -75,6 +75,8 @@ export const en: EnDict<typeof ru> = {
   date: {
     months: 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec',
     monthsFull: 'January February March April May June July August September October November December',
+    /** Month name alone, for the calendar header: "October 2026". */
+    monthsNom: 'January February March April May June July August September October November December',
     day: '{month} {d}',
     dayTime: '{day}, {time}',
     dayYear: '{day}, {year}',
@@ -802,7 +804,7 @@ export const en: EnDict<typeof ru> = {
     tvFileOnly: 'This release comes only as a .torrent file: add it from the phone',
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'from the tracker',
-    checkSeeds: 'Check',
+    checkSeeds: 'Check seeds',
     seedsNow: 'now',
     seedsTimeout: 'The tracker did not answer',
     seedsNoTracker: 'No tracker address',
@@ -1926,6 +1928,7 @@ export const en: EnDict<typeof ru> = {
     phoneSlow: 'The phone did not answer - try again',
     expired: 'The results are out of date - search again',
     details: 'Release details',
+    similar: 'Similar results ({n})',
     /** A phone site that failed for a reason fixed on the phone: shown instead of «did not answer». */
     reason: {
       login: '{name}: sign in on the phone',
@@ -2513,6 +2516,21 @@ export const en: EnDict<typeof ru> = {
     calEmpty: 'No new episodes in the next 30 days',
     calHint: 'The calendar is built from the series in Mine and the series subscriptions found on TMDB.',
     calRefreshing: 'Refreshing the calendar',
+    calList: 'List',
+    calMonth: 'Month',
+    calView: 'Calendar view',
+    calOut: 'Out',
+    calWeek: 'This week',
+    calNext: 'Next week',
+    calLater: 'Later',
+    calAll: 'All',
+    calSubsOnly: 'My subscriptions only',
+    calFilter: 'What to show',
+    calPrev: 'Previous month',
+    calNextMonth: 'Next month',
+    calDayEmpty: 'No episodes on this day',
+    calEmptySubs: 'No subscription episodes on these days',
+    calDayAria: '{date}, episodes: {n}',
   },
   now: {
     collapse: 'Collapse',

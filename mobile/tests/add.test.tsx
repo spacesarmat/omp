@@ -271,8 +271,8 @@ describe('Add', () => {
     const resolvers: Array<(v: any) => void> = [];
     vi.spyOn(TorrServerClient.prototype, 'search').mockImplementation(() => new Promise((r) => resolvers.push(r)));
     mount();
-    search('first');
-    search('second');
+    search('starbound');
+    search('starbound');
     resolvers[1]([results[1]]);
     await flush();
     resolvers[0]([results[0]]);
@@ -559,7 +559,7 @@ describe('Add unified search', () => {
     registerSource(fake('fake', [row({ Title: 'A 1080p', detailUrl: 'https://f.example/a' })]));
     registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
     mount();
-    search('ветер');
+    search('x');
     await flush();
     expect(el.querySelectorAll('.m-result').length).toBe(1);
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 1 · 1 из 2 источников ответил · ещё ищу в Фейк-2…');
@@ -741,12 +741,12 @@ describe('Add unified search: stable rows', () => {
     expect(currentRoute.value).toEqual({ name: 'sources' });
     act(() => render(null, el));
     // the running source answers while the screen is closed
-    late([row({ source: 'fake2', Title: 'Late 1080p', Size: '2 GB', detailUrl: 'https://g.example/l' })]);
+    late([row({ source: 'fake2', Title: 'Kept late 1080p', Size: '2 GB', detailUrl: 'https://g.example/l' })]);
     await flush();
     act(() => render(<Add />, el));
     await flush();
     expect((el.querySelector('input[aria-label="Поиск по источникам"]') as HTMLInputElement).value).toBe('kept');
-    expect(titles().sort()).toEqual(['Kept 1080p', 'Late 1080p']);
+    expect(titles().sort()).toEqual(['Kept 1080p', 'Kept late 1080p']);
     expect(el.querySelector('[data-search-progress]')!.textContent).toBe('Найдено 2 · 2 из 2 источников ответили');
   });
 

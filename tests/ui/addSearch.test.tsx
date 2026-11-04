@@ -102,11 +102,11 @@ describe('TV search', () => {
     const s = vi.spyOn(TorrServerClient.prototype, 'search').mockResolvedValue([tsRow]);
     mount();
     expect(host.querySelector('.choice-row')).toBeNull();
-    typeQuery('starbound ветер');
+    typeQuery('x');
     act(() => button('Искать').click());
     await flush();
-    expect(s).toHaveBeenCalledWith('starbound ветер', 'rutor');
-    expect(s).toHaveBeenCalledWith('starbound ветер', 'torznab');
+    expect(s).toHaveBeenCalledWith('x', 'rutor');
+    expect(s).toHaveBeenCalledWith('x', 'torznab');
     expect(host.querySelectorAll('.list-item')).toHaveLength(1);
     expect(host.querySelector('.search-progress')!.textContent).toBe('Найдено 1 · 2 из 3 источников ответили · ещё ищу в Фейк…');
     late([fakeRow({})]);
