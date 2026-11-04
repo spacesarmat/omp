@@ -29,6 +29,19 @@ describe('torrent header episodes', () => {
     expect(torrentHeaderEpisodes(files, 2, 8)).toBe('3 файла');
   });
 
+  it('an episode that names no season is counted once, in the total header, not in every season', () => {
+    const files = ['Show.S01E01.mkv', 'Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.E03.mkv'].map(f);
+    expect(torrentHeaderEpisodes(files, 2, 8)).toBe('2 из 8 серий');
+    expect(torrentHeaderEpisodes(files, 1, 8)).toBe('1 из 8 серий');
+    expect(torrentHeaderEpisodes(files, null, 0)).toBe('4 серии');
+  });
+
+  it('a single season also counts an episode file that names no season', () => {
+    const files = ['Show.S02E01.mkv', 'Show.E02.mkv'].map(f);
+    expect(torrentHeaderEpisodes(files, 2, 8)).toBe('2 из 8 серий');
+    expect(torrentHeaderEpisodes(files, null, 0)).toBe('2 серии');
+  });
+
   it('a single file stays blank, as the header does for a film', () => {
     expect(torrentHeaderEpisodes([f('Show.S02E01.mkv')], 2, 8)).toBe('');
   });

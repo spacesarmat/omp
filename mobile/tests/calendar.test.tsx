@@ -4,8 +4,10 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { Calendar } from '../src/screens/Calendar';
 import {
-  calendarEntries, calendarSeasons, calendarState, dayRows, episodesCode, findingFor, followable, groupByDay, loadCalendar, pool,
-  realEpisodeName, resetCalendar, rowFinding, rowLine, type CalEntry, type CalShow,
+  calendarEntries, calendarSeasons, calendarState, dayCountLabel, dayRows, defaultMonthDay, episodeActions, episodesCode, findingFor, followable, groupByDay,
+  ensureCalendarSpan, entriesForMonth, listGroups, loadCalendar, loadCalView, monthCells, monthSwipe, monthTitle, pool,
+  realEpisodeName, resetCalendar, rowFinding, rowLine, seasonsInRange,
+  saveCalView, subscribedOnly, type CalEntry, type CalShow,
 } from '../src/lib/calendar';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
@@ -13,7 +15,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
 import { addFindings, addSubscription, loadSubs } from '../../src/monitor/subs';
 import { EPISODES_ID, type Finding } from '../../src/monitor/types';
-import { torrentQuery, type CatalogCard, type CatalogTitle, type SeasonDetails } from '../../src/catalog/tmdb';
+import { episodeTorrentQuery, torrentQuery, type CatalogCard, type CatalogTitle, type SeasonDetails } from '../../src/catalog/tmdb';
 import type { CatalogClient } from '../../src/catalog/client';
 import type { Torrent } from '../../src/api/types';
 import type { SourceResult } from '../../src/sources/types';
@@ -267,6 +269,97 @@ describe('gathering', () => {
     expect(peak).toBeLessThanOrEqual(2);
   });
 
+  it('episodes loaded for the list are already visible in that month', async () => {
+    const c = fake();
+    torrents.value = [TOR];
+    await loadCalendar(torrents.value, [], false, NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+    const settled = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBe(settled);
+  });
+
+  it('a recent season with no air date stays in the list and in that month', async () => {
+    const c = fake();
+    const undated: CatalogCard = {
+      ...FROST,
+      nextEpisode: null,
+      seasons: [
+        { number: 3, episodes: 8, year: 2026, aired: 4, airDate: '' },
+        { number: 2, episodes: 8, year: 2025, aired: 8, airDate: '2025-03-01' },
+      ],
+    };
+    c.card.mockImplementation(() => Promise.resolve(undated));
+    c.season.mockImplementation((id: number, n: number) => {
+      if (id === 21 && n === 3) return Promise.resolve(FROST_S3);
+      if (id === 21) return Promise.resolve(season(n, []));
+      return Promise.reject(codeError('bad'));
+    });
+    torrents.value = [TOR];
+    await loadCalendar(torrents.value, [], false, NOW);
+    expect(calendarState.value.entries.map((e) => e.airDate)).toContain('2026-10-04');
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    const settled = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBe(settled);
+  });
+
+  it('a failed show is asked again and does not hide a show that answered', async () => {
+    const c = fake();
+    const ok = c.season.getMockImplementation();
+    torrents.value = [TOR];
+    addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true });
+    c.season.mockImplementation((id: number, n: number) => (id === 31 ? Promise.reject(codeError('offline')) : ok!(id, n)));
+    await loadCalendar(torrents.value, loadSubs(), false, NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 21 && e.airDate === '2026-10-04')).toBe(true);
+    // the failed show has only the card's next episode, not the rest of the season
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(false);
+    const calls = c.season.mock.calls.length;
+    c.season.mockImplementation(ok!);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBeGreaterThan(calls);
+    expect(entriesForMonth(2026, 9).some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(true);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    expect(calendarState.value.entries.some((e) => e.show.card.id === 31 && e.episode === 2)).toBe(true);
+  });
+
+  it('a failed read is not treated as loaded, so the next visit asks again', async () => {
+    const c = fake();
+    const ok = c.season.getMockImplementation();
+    torrents.value = [TOR];
+    c.season.mockRejectedValue(codeError('offline'));
+    await loadCalendar(torrents.value, [], false, NOW);
+    expect(entriesForMonth(2026, 9).map((e) => e.airDate)).toEqual(['2026-10-08']);
+    const afterFail = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBeGreaterThan(afterFail);
+    expect(entriesForMonth(2026, 9).map((e) => e.airDate)).toEqual(['2026-10-08']);
+    c.season.mockImplementation(ok!);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-04')).toBe(true);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+    const settled = c.season.mock.calls.length;
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(c.season.mock.calls.length).toBe(settled);
+  });
+
+  it('opening another month does not add its days to the list window', async () => {
+    fake();
+    torrents.value = [TOR];
+    await loadCalendar(torrents.value, [], false, NOW);
+    const list = calendarState.value.entries.map((e) => e.airDate);
+    await ensureCalendarSpan('2026-11-01', '2026-11-30', NOW);
+    expect(entriesForMonth(2026, 10).some((e) => e.airDate === '2026-11-20')).toBe(true);
+    expect(calendarState.value.entries.map((e) => e.airDate)).toEqual(list);
+    expect(list.indexOf('2026-11-20')).toBe(-1);
+    await ensureCalendarSpan('2026-10-01', '2026-10-31', NOW);
+    expect(entriesForMonth(2026, 9).some((e) => e.airDate === '2026-10-08')).toBe(true);
+  });
+
   it('offline with nothing known: the catalog error', async () => {
     fake({ fail: 'offline' });
     torrents.value = [TOR];
@@ -276,8 +369,61 @@ describe('gathering', () => {
   });
 });
 
+describe('list and month', () => {
+  const entries = () => calendarEntries(show(FROST), [FROST_S3], NOW).concat(calendarEntries(show(HARBOR), [HARBOR_S1], NOW));
+
+  it('released first, then this week, next week and later; a date stays on the row', () => {
+    const groups = listGroups(entries(), NOW);
+    expect(groups.map((g) => g.id)).toEqual(['out', 'week', 'next']);
+    expect(groups[0].rows.map((r) => r.show.card.title + ' ' + r.airDate)).toEqual(['Тихая гавань 2026-10-06', 'Ледяной перевал 2026-10-04']);
+    expect(groups[1].rows.map((r) => r.airDate)).toEqual(['2026-10-08']);
+    expect(groups[2].rows.map((r) => r.airDate)).toEqual(['2026-10-13', '2026-10-15']);
+  });
+
+  it('«Только мои подписки» keeps a show that has a subscription', () => {
+    const all = entries();
+    all[0].show = { ...all[0].show, subIds: ['s1'] };
+    expect(subscribedOnly(all).every((e) => e.show.card.id === 21)).toBe(true);
+  });
+
+  it('the month grid highlights today, marks a day, and counts several as +N', () => {
+    const twin = calendarEntries(show({ ...HARBOR, id: 32, title: 'Альфа', poster: 'https://img.test/a.jpg' }), [season(1, ['', '', '2026-10-08'])], NOW);
+    const cells = monthCells(2026, 9, entries().concat(twin), NOW);
+    const today = cells.filter((c) => c.iso === '2026-10-06')[0];
+    const eighth = cells.filter((c) => c.iso === '2026-10-08')[0];
+    expect(today.today).toBe(true);
+    expect(today.inMonth).toBe(true);
+    expect(eighth.count).toBe(2);
+    expect(dayCountLabel(eighth.count)).toBe('+2');
+    expect(dayCountLabel(1)).toBe('');
+    expect(eighth.poster).toBe(FROST.poster);
+    expect(monthTitle(2026, 9)).toBe('Октябрь 2026');
+    expect(defaultMonthDay(2026, 9, entries(), NOW)).toBe('2026-10-06');
+    expect(defaultMonthDay(2026, 10, entries(), NOW)).toBe('');
+    expect(monthSwipe(-80, 10)).toBe(1);
+    expect(monthSwipe(80, 10)).toBe(-1);
+    expect(monthSwipe(10, 40)).toBe(0);
+  });
+
+  it('a month outside the 30 day window still has its episodes', () => {
+    expect(seasonsInRange(FROST, '2026-11-01', '2026-11-30')).toEqual([3]);
+    expect(seasonsInRange(FROST, '2026-09-01', '2026-09-30')).toContain(3);
+    const nov = calendarEntries(show(FROST), [FROST_S3], NOW, { from: '2026-11-01', to: '2026-11-30' });
+    expect(nov.map((x) => [x.episode, x.airDate])).toEqual([[7, '2026-11-20']]);
+    expect(calendarEntries(show(FROST), [FROST_S3], NOW).some((x) => x.airDate === '2026-11-20')).toBe(false);
+    const sep = calendarEntries(show(FROST), [FROST_S3], NOW, { from: '2026-09-01', to: '2026-09-30' });
+    expect(sep.map((x) => x.airDate)).toEqual(['2026-09-13', '2026-09-20']);
+  });
+
+  it('the chosen view is remembered', () => {
+    expect(loadCalView()).toBe('list');
+    saveCalView('month');
+    expect(loadCalView()).toBe('month');
+  });
+});
+
 describe('the «Календарь» tab', () => {
-  it('rows by day: poster, title, «S03E05 · name», «вышла» / «сегодня» but no date chip; «Смотреть» opens the finding, «Найти» the season search', async () => {
+  it('list rows: poster, title, episode, date, «вышла» / «сегодня»; «Смотреть» opens the finding, «Найти» the season search', async () => {
     fake();
     torrents.value = [TOR];
     const sub = addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true })!;
@@ -287,19 +433,24 @@ describe('the «Календарь» tab', () => {
     }]);
     mount(<Calendar />);
     await flush();
-    const days = Array.from(el.querySelectorAll('.m-cal-day'));
-    expect(days.map((d) => d.querySelector('.m-set-label')!.textContent)).toEqual(['Вс 4 окт.', 'Сегодня', 'Чт 8 окт.', 'Вт 13 окт.', 'Чт 15 окт.']);
-    const first = days[0].querySelector('.m-cal-row')!;
+    const groups = Array.from(el.querySelectorAll('.m-cal-group'));
+    expect(groups.map((d) => d.querySelector('.m-set-label')!.textContent)).toEqual(['Вышли', 'Эта неделя', 'Следующая']);
+    const released = Array.from(groups[0].querySelectorAll('.m-cal-row'));
+    const today = released[0];
+    const first = released[1];
+    expect(today.querySelector('.m-cal-title')!.textContent).toBe('Тихая гавань');
+    expect(today.querySelector('.m-cal-chip')!.textContent).toBe('сегодня');
+    expect(today.querySelector('.m-cal-when')!.textContent).toBe('Сегодня');
     expect(first.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
     expect(first.querySelector('.m-cal-ep')!.textContent).toBe('S03E04 · Глава 4');
+    expect(first.querySelector('.m-cal-when')!.textContent).toBe('Вс 4 окт.');
     expect(first.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
     expect(first.querySelector('.m-cal-chip')!.textContent).toBe('вышла');
-    const today = days[1].querySelector('.m-cal-row')!;
-    expect(today.querySelector('.m-cal-chip')!.textContent).toBe('сегодня');
-    const future = days[2].querySelector('.m-cal-row')!;
+    const future = groups[1].querySelector('.m-cal-row')!;
     expect(future.querySelector('.m-cal-chip')).toBeNull();
     expect(future.querySelector('.m-cal-side')).toBeNull();
     expect(future.querySelector('button.m-btn')).toBeNull();
+    expect(future.querySelector('.m-cal-when')!.textContent).toBe('Чт 8 окт.');
 
     act(() => button('Смотреть', first)!.click());
     expect(currentRoute.value).toEqual({ name: 'news', seg: 'subs', finding: HASH + ':3:4' });
@@ -347,9 +498,119 @@ describe('the «Календарь» tab', () => {
     torrents.value = [TOR];
     mount(<Calendar />);
     await flush();
-    const labels = Array.from(el.querySelectorAll('.m-cal-day .m-set-label')).map((x) => x.textContent);
-    expect(labels).toEqual(['Sun, Oct 4', 'Thu, Oct 8', 'Thu, Oct 15']);
+    const labels = Array.from(el.querySelectorAll('.m-cal-group .m-set-label')).map((x) => x.textContent);
+    expect(labels).toEqual(['Out', 'This week', 'Next week']);
+    expect(el.querySelector('.m-cal-when')!.textContent).toBe('Sun, Oct 4');
     expect(el.querySelector('.m-cal-chip')!.textContent).toBe('out');
     expect(button('Find')).toBeTruthy();
+  });
+
+  it('month grid: today is selected, a day opens its rows, arrows change the month, the view is kept', async () => {
+    fake();
+    torrents.value = [TOR];
+    addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true });
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Месяц')!.click());
+    await flush();
+    expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Октябрь 2026');
+    const today = el.querySelector('[data-cal-cell="2026-10-06"]') as HTMLButtonElement;
+    expect(today.className).toContain('is-today');
+    expect(today.className).toContain('is-on');
+    expect(el.querySelector('[data-cal-picked="2026-10-06"] .m-cal-title')!.textContent).toBe('Тихая гавань');
+    expect(el.querySelector('[data-cal-cell="2026-10-08"] .m-cal-dotimg, [data-cal-cell="2026-10-08"] .m-cal-dot')).toBeTruthy();
+    act(() => (el.querySelector('[data-cal-cell="2026-10-04"]') as HTMLButtonElement).click());
+    expect(el.querySelector('[data-cal-picked="2026-10-04"] .m-cal-title')!.textContent).toBe('Ледяной перевал');
+    act(() => (el.querySelector('[data-code="P03.13"]') as HTMLButtonElement).click());
+    await flush();
+    expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Ноябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-11-20"] .m-cal-dotimg, [data-cal-cell="2026-11-20"] .m-cal-dot')).toBeTruthy();
+    expect(calendarState.value.entries.some((e) => e.airDate === '2026-11-20')).toBe(false);
+    act(() => (el.querySelector('[data-code="P03.12"]') as HTMLButtonElement).click());
+    expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Октябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-10-06"] .m-cal-dotimg, [data-cal-cell="2026-10-06"] .m-cal-dot')).toBeTruthy();
+    act(() => (el.querySelector('[data-code="P03.13"]') as HTMLButtonElement).click());
+    expect(el.querySelector('.m-cal-month-name')!.textContent).toBe('Ноябрь 2026');
+    expect(el.querySelector('[data-cal-cell="2026-11-20"] .m-cal-dotimg, [data-cal-cell="2026-11-20"] .m-cal-dot')).toBeTruthy();
+    expect(loadCalView()).toBe('month');
+    act(() => render(null, el));
+    mount(<Calendar />);
+    await flush();
+    expect(el.querySelector('.m-cal-grid')).toBeTruthy();
+  });
+
+  it('«Только мои подписки» hides a series that is only in the library', async () => {
+    fake();
+    torrents.value = [TOR];
+    addSubscription({ query: 'Тихая гавань', quality: '', sources: null, notify: true });
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Только мои подписки')!.click());
+    const titles = Array.from(el.querySelectorAll('.m-cal-title')).map((n) => n.textContent);
+    expect(titles).toContain('Тихая гавань');
+    expect(titles).not.toContain('Ледяной перевал');
+  });
+
+  it('tapping a row asks first: the season card when the show is in the catalog, cancel stays here', async () => {
+    fake();
+    torrents.value = [TOR];
+    mount(<Calendar />);
+    await flush();
+    const row = el.querySelector('[data-cal-row="21:3:4"] button.m-cal-open') as HTMLButtonElement;
+    act(() => row.click());
+    expect(currentRoute.value).toEqual({ name: 'news', seg: 'calendar' });
+    const sheet = el.querySelector('[data-cal-ask]')!;
+    expect(sheet.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
+    expect(sheet.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
+    expect(sheet.textContent).toContain('S03E04');
+    expect(button('Открыть в каталоге', sheet)!.getAttribute('data-code')).toBe('P03.15');
+    expect(button('Найти новую серию', sheet)).toBeUndefined();
+    act(() => button('Отмена', sheet)!.click());
+    expect(el.querySelector('[data-cal-ask]')).toBeNull();
+    expect(currentRoute.value).toEqual({ name: 'news', seg: 'calendar' });
+    act(() => row.click());
+    act(() => button('Открыть в каталоге')!.click());
+    expect(currentRoute.value).toEqual({ name: 'seasonCard', id: 21, season: 3 });
+  });
+
+  it('a month day row asks the same way', async () => {
+    fake();
+    torrents.value = [TOR];
+    addSubscription({ query: 'Ледяной перевал', quality: '', sources: null, notify: true });
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Месяц')!.click());
+    await flush();
+    act(() => (el.querySelector('[data-cal-cell="2026-10-04"]') as HTMLButtonElement).click());
+    act(() => (el.querySelector('[data-cal-picked="2026-10-04"] button.m-cal-open') as HTMLButtonElement).click());
+    const sheet = el.querySelector('[data-cal-ask]')!;
+    expect(button('Открыть в каталоге', sheet)).toBeTruthy();
+    expect(button('Найти новую серию', sheet)!.getAttribute('data-code')).toBe('P03.17');
+    act(() => button('Найти новую серию', sheet)!.click());
+    expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 4), run: true });
+  });
+});
+
+describe('episode routing', () => {
+  it('catalog opens that season; no catalog searches the season; a subscription adds the episode search', () => {
+    const followed = episodeActions({ show: show(FROST, { subIds: ['s1'] }), season: 11, episode: 7 });
+    expect(followed).toEqual({
+      inCatalog: true,
+      subscribed: true,
+      primary: { name: 'seasonCard', id: 21, season: 11 },
+      episode: { name: 'add', query: 'Ледяной перевал 11 сезон 7 серия', run: true },
+    });
+    const library = episodeActions({ show: show(FROST), season: 3, episode: 4 });
+    expect(library.primary).toEqual({ name: 'seasonCard', id: 21, season: 3 });
+    expect(library.episode).toBeNull();
+    const missing = episodeActions({
+      show: show({ ...FROST, id: 0, title: 'Американская история ужасов' }, { subIds: ['s1'] }),
+      season: 11,
+      episode: 2,
+    });
+    expect(missing.inCatalog).toBe(false);
+    expect(missing.subscribed).toBe(false);
+    expect(missing.episode).toBeNull();
+    expect(missing.primary).toEqual({ name: 'add', query: 'Американская история ужасов 11 сезон', run: true });
   });
 });

@@ -148,7 +148,10 @@ describe('Add filters sheet', () => {
       row({ Title: 'Гангстерленд (2026) WEB-DL 1080p', Seed: 90, detailUrl: 'https://f.example/unk', source: 'kinozal' }),
     ];
     registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve(seasonRows) });
-    await mountAndSearch();
+    mount();
+    // no significant words, so the season filter is what this test measures
+    search('x');
+    await flush();
     expect(titles().length).toBe(5);
     click(filtersChip());
     click(sheetBtn('Сезон 2'));

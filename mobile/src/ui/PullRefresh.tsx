@@ -59,7 +59,7 @@ export function usePullRefresh(rootRef: RefObject<HTMLElement | null>, onRefresh
       stop();
       if (busy || e.touches.length !== 1 || !atTop()) return;
       const target = e.target as Element | null;
-      if (target && target.closest && target.closest('.m-chips, .m-seg, .m-hfilters')) return;
+      if (target && target.closest && target.closest('.m-chips, .m-seg, .m-hfilters, .m-cal-grid')) return;
       startY = e.touches[0].clientY;
       startX = e.touches[0].clientX;
       pulling = true;

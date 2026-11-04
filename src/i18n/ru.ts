@@ -77,6 +77,8 @@ export const ru = {
     months: 'янв. февр. мар. апр. мая июн. июл. авг. сент. окт. нояб. дек.',
     /** Full month names for a day: «30 сентября». */
     monthsFull: 'января февраля марта апреля мая июня июля августа сентября октября ноября декабря',
+    /** Month name alone, for the calendar header: «Октябрь 2026». */
+    monthsNom: 'Январь Февраль Март Апрель Май Июнь Июль Август Сентябрь Октябрь Ноябрь Декабрь',
     day: '{d} {month}',
     dayTime: '{day} {time}',
     dayYear: '{day} {year}',
@@ -821,7 +823,7 @@ export const ru = {
     tvFileOnly: 'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'по данным трекера',
-    checkSeeds: 'Проверить',
+    checkSeeds: 'Проверить сиды',
     seedsNow: 'сейчас',
     seedsTimeout: 'Трекер не ответил',
     seedsNoTracker: 'Нет адреса трекера',
@@ -1733,6 +1735,7 @@ export const ru = {
   },
   catalog: {
     querySeason: '{n} сезон',
+    queryEpisode: '{n} серия',
     deleteAsk: 'Удалить «{title}»?',
     torrentDeleted: 'Торрент удалён',
     removeFromHistoryAsk: 'Убрать из истории?',
@@ -1971,6 +1974,7 @@ export const ru = {
     phoneSlow: 'Телефон не ответил - попробуйте ещё раз',
     expired: 'Результаты устарели - найдите ещё раз',
     details: 'Подробнее о раздаче',
+    similar: 'Похожие результаты ({n})',
     /** A phone site that failed for a reason fixed on the phone: shown instead of «не ответили». */
     reason: {
       login: '{name}: нужен вход на телефоне',
@@ -2563,6 +2567,25 @@ export const ru = {
     calEmpty: 'В ближайшие 30 дней новых серий нет',
     calHint: 'Календарь собирается из сериалов в «Моих» и из подписок на сериалы, которые нашлись в TMDB.',
     calRefreshing: 'Обновляю календарь',
+    calList: 'Список',
+    calMonth: 'Месяц',
+    calView: 'Вид календаря',
+    calOut: 'Вышли',
+    calWeek: 'Эта неделя',
+    calNext: 'Следующая',
+    calLater: 'Позже',
+    calAll: 'Всё',
+    calSubsOnly: 'Только мои подписки',
+    calFilter: 'Что показывать',
+    calPrev: 'Предыдущий месяц',
+    calNextMonth: 'Следующий месяц',
+    calDayEmpty: 'В этот день серий нет',
+    calEmptySubs: 'В подписках на эти дни серий нет',
+    calDayAria: '{date}, серий: {n}',
+    calSheet: 'Серия',
+    calOpenCatalog: 'Открыть в каталоге',
+    calSearchTorrents: 'Искать раздачи',
+    calFindEpisode: 'Найти новую серию',
   },
   now: {
     collapse: 'Свернуть',

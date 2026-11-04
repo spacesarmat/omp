@@ -145,6 +145,21 @@ describe('Torrent: TMDB episode names', () => {
     }
   });
 
+  it('one downloaded episode still shows the announced ones after it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 6, 12));
+    try {
+      torrents.value = [mk('abc', 2, 1)];
+      const dated = (n: number, t: string, airDate: string) => ({ ...ep(n, t), airDate });
+      setCatalogClientForTests(fake([2], [ep(1, 'Landfall'), dated(2, 'Пирамида', '2026-10-08')]));
+      mount();
+      await flush();
+      expect(Array.from(el.querySelectorAll('.m-ep-coming')).map((r) => r.textContent)).toEqual(['2. Пирамида · выйдет 8 окт.']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to «Серия N» without TMDB', async () => {
     setCatalogClientForTests({ ...fake([2]), search: () => Promise.reject(new Error('catalog:nokey')) });
     mount();

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { errorMessage } from '../../../src/api/http';
 import { filterByKind } from '../../../src/lib/releaseKind';
+import { relevantRows } from '../../../src/sources/relevance';
 import { t } from '../../../src/i18n';
 import { searchAll, type SearchHandle } from '../../../src/sources/search';
 import { onSearchFailure, type CheckedHosts } from '../../../src/sources/cloudflareCheck';
@@ -36,6 +37,8 @@ function progOf(h: SearchHandle): Prog {
 
 interface SearchMemo {
   query: string;
+  /** The query the current results were searched for. The field can change before the next search. */
+  searched: string;
   handle: SearchHandle | null;
   order: string[];
   rowCat: Record<string, string>;
@@ -43,7 +46,7 @@ interface SearchMemo {
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', handle: null, order: [], rowCat: {}, error: '' };
+  return { query: '', searched: '', handle: null, order: [], rowCat: {}, error: '' };
 }
 
 let memo: SearchMemo = freshMemo();
@@ -120,6 +123,7 @@ export function AudiobookSearch() {
     });
     memo.handle = h;
     memo.query = q;
+    memo.searched = q;
     sync(h);
   };
 
@@ -181,7 +185,7 @@ export function AudiobookSearch() {
     }
   };
 
-  const matching = rows ? filterByKind(rows, 'audiobook') : [];
+  const matching = rows ? filterByKind(relevantRows(rows, memo.searched), 'audiobook') : [];
   const visible = searching ? stableOrder(orderRef.current, matching, 'seeds') : sortResults(matching, 'seeds');
   orderRef.current = visible.map(resultKey);
   memo.order = orderRef.current;
