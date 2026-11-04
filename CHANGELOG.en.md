@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Billing: one log line per finished or aborted POST /v1/search (time, source, HTTP status, duration, result count, Jackett indexer ok/fail/timeout counts, client disconnect). The device is the first 8 hex characters of sha256, with no token, query text, or keys
 - [lg] Separate dub files in a release (for example Rus Sound/LostFilm/Show.S01E01.mka) show up in the webOS player next to the built-in audio tracks. While one plays, the video stays muted and the file plays as its own audio in step with the picture. If the TV cannot open the file, the video track comes back on
 
 ## 0.20.8-beta.2

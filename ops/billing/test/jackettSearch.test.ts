@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { activate, createSubscription, openAccount } from '../src/logic.mjs';
 import {
@@ -16,7 +18,7 @@ import {
   searchJackett,
   searchJacRed,
 } from '../src/jackett.mjs';
-import { createApp } from '../src/server.mjs';
+import { createApp, listen } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { writeState, testStore } from './pg';
 
@@ -185,6 +187,7 @@ describe('parallel Jackett search', () => {
     expect(found.xml).toContain('Fast Film');
     expect(found.xml).not.toContain('Slow');
     expect(found.timedOut).toEqual(['rutracker']);
+    expect(found.indexers).toEqual({ ok: 1, failed: 1, timedOut: 1 });
     expect(logged).toEqual([['rutracker']]);
     expect(calls.some(isAggregateSearch)).toBe(false);
     expect(calls.some((url) => url.indexOf('/indexers/other/') >= 0)).toBe(false);
@@ -224,6 +227,7 @@ describe('parallel Jackett search', () => {
       });
       expect(found.ok).toBe(false);
       expect(found.timedOut).toEqual(['kinozal', 'rutracker']);
+      expect(found.indexers).toEqual({ ok: 0, failed: 0, timedOut: 2 });
       const log = lines.join('');
       expect(log).toContain('jackett indexer timeout: kinozal,rutracker');
       expect(log).not.toContain(KEY);
@@ -309,6 +313,7 @@ describe('parallel Jackett search', () => {
       fetchImpl: (_url: string, opts: FetchOpts) => hangUntilAbort(opts.signal),
     });
     expect(found.ok).toBe(false);
+    expect(found.indexers).toEqual({ ok: 0, failed: 0, timedOut: 0 });
     expect(Date.now() - started).toBeLessThan(1200);
   });
 
@@ -328,6 +333,7 @@ describe('parallel Jackett search', () => {
       },
     });
     expect(found.ok).toBe(true);
+    expect(found.indexers).toEqual({ ok: 0, failed: 0, timedOut: 0 });
     expect(found.xml).toContain('<channel>');
     expect(found.xml).not.toContain('<item');
     expect(calls.every((url) => !isAggregateSearch(url) && !isTorznabList(url))).toBe(true);
@@ -349,12 +355,16 @@ function mockRes() {
   };
 }
 
-async function subscriber(extra: { user?: string; pass?: string } = {}) {
+function deviceHash(id: string) {
+  return createHash('sha256').update(id).digest('hex').slice(0, 8);
+}
+
+async function subscriber(extra: { user?: string; pass?: string; device?: string } = {}) {
   const file = await testStore();
   const now = Date.now();
   const opened = openAccount(emptyState(), { telegramId: '42', now });
   const created = createSubscription(opened.state, { accountId: opened.account.id, now, days: 30 });
-  const device = 'ab'.repeat(16);
+  const device = extra.device || 'ab'.repeat(16);
   const act = activate(created.state, { code: created.result.code, deviceId: device, now });
   act.state.settings.jackettUrl = ORIGIN;
   act.state.settings.jackettApiKey = KEY;
@@ -370,24 +380,67 @@ async function subscriber(extra: { user?: string; pass?: string } = {}) {
 
 async function postSearch(
   app: (req: unknown, res: unknown) => Promise<void>,
-  opts: { token?: string; device?: string; body: { [key: string]: string } },
+  opts: {
+    token?: string;
+    device?: string;
+    body: { [key: string]: string };
+    headers?: { [key: string]: string };
+    client?: 'abort' | 'close';
+  },
 ) {
   const payload = JSON.stringify(opts.body);
-  const req = {
-    method: 'POST',
-    url: '/v1/search',
-    headers: {
-      authorization: opts.token ? 'Bearer ' + opts.token : '',
-      'x-device-id': opts.device || '',
-      'content-type': 'application/json',
-    },
-    async *[Symbol.asyncIterator]() {
-      yield Buffer.from(payload);
-    },
+  const headers = {
+    authorization: opts.token ? 'Bearer ' + opts.token : '',
+    'x-device-id': opts.device || '',
+    'content-type': 'application/json',
+    ...(opts.headers || {}),
+  };
+  const req = new EventEmitter() as EventEmitter & {
+    method: string;
+    url: string;
+    headers: { [key: string]: string };
+    aborted: boolean;
+    [Symbol.asyncIterator]: () => AsyncGenerator<Buffer>;
+  };
+  req.method = 'POST';
+  req.url = '/v1/search';
+  req.headers = headers;
+  req.aborted = false;
+  req[Symbol.asyncIterator] = async function* () {
+    yield Buffer.from(payload);
+    if (opts.client === 'abort') {
+      req.aborted = true;
+      req.emit('aborted');
+      req.emit('close');
+    } else if (opts.client === 'close') {
+      req.emit('close');
+    }
   };
   const res = mockRes();
   await app(req, res);
   return res;
+}
+
+async function captureStderr(run: () => Promise<void>) {
+  const lines: string[] = [];
+  const orig = process.stderr.write;
+  process.stderr.write = ((chunk: string | Uint8Array) => {
+    lines.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await run();
+  } finally {
+    process.stderr.write = orig;
+  }
+  return lines.join('');
+}
+
+function searchLogLines(log: string) {
+  return log
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.indexOf('route=/v1/search') >= 0);
 }
 
 describe('JacRed query widening', () => {
@@ -647,6 +700,250 @@ describe('POST /v1/search', () => {
     expect(widened.status).toBe(200);
     expect(jacredCalls.map(queryOf)).toEqual(['matrix', 'matr']);
     expect(jacredCalls.every((url) => url.indexOf('cat=3030') >= 0)).toBe(true);
+  });
+});
+
+describe('POST /v1/search log', () => {
+  const QUERY = 'secret-query-text-zz';
+  const IP = '203.0.113.77';
+  const PASS = 'panel-secret-pass';
+
+  function assertNoSecrets(line: string, secret: { device: string; token?: string; query: string }) {
+    expect(line).not.toContain(secret.query);
+    expect(line).not.toContain(secret.device);
+    expect(line).not.toContain(KEY);
+    expect(line).not.toContain('JACREDKEY');
+    expect(line).not.toContain(PASS);
+    expect(line).not.toContain(IP);
+    expect(line).not.toContain('jackett.test');
+    expect(line).not.toContain('jacred.test');
+    if (secret.token) expect(line).not.toContain(secret.token);
+    expect(line).not.toContain('apikey');
+  }
+
+  it('logs status, duration, indexer counts, and no secrets', async () => {
+    process.env.BILLING_JACKETT_INDEXER_TIMEOUT_MS = '200';
+    process.env.BILLING_JACKETT_SEARCH_DEADLINE_MS = '2000';
+    const device = 'aa'.repeat(16);
+    const { file, token } = await subscriber({ device, user: 'omp', pass: PASS });
+    const fetchImpl = (url: string, opts: FetchOpts = {}) => {
+      if (isJsonList(url)) return Promise.resolve({ status: 200, text: async () => INDEXERS_JSON });
+      if (isIndexerSearch(url, 'rutor')) return Promise.resolve({ status: 200, text: async () => rss('Fast Film', KEY) });
+      if (isIndexerSearch(url, 'kinozal')) return Promise.resolve({ status: 500, text: async () => 'no' });
+      if (isIndexerSearch(url, 'rutracker')) return hangUntilAbort(opts.signal);
+      return Promise.resolve({ status: 404, text: async () => '' });
+    };
+    const app = createApp(file, fetchImpl);
+    let resStatus = 0;
+    const log = await captureStderr(async () => {
+      const res = await postSearch(app, {
+        token,
+        device,
+        headers: { 'x-forwarded-for': IP },
+        body: { q: QUERY, deviceId: device },
+      });
+      resStatus = res.status;
+    });
+    expect(resStatus).toBe(200);
+    const lines = searchLogLines(log);
+    expect(lines).toHaveLength(1);
+    const line = lines[0];
+    expect(line).toMatch(
+      /^search route=\/v1\/search at=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z source=jackett status=200 ms=\d+ results=1 indexers_ok=1 indexers_fail=1 indexers_timeout=1 abort=0 device=[0-9a-f]{8} qlen=\d+$/,
+    );
+    expect(line).toContain('device=' + deviceHash(device));
+    expect(line).toContain('qlen=' + String(QUERY.length));
+    assertNoSecrets(line, { device, token, query: QUERY });
+    expect(log).not.toContain(KEY);
+    expect(log).not.toContain(QUERY);
+    expect(log).not.toContain(token);
+  });
+
+  it('logs 401, 403, and 429 without the token or the query', async () => {
+    const device = 'bb'.repeat(16);
+    const { file, token } = await subscriber({ device });
+    const badToken = 'a1.' + 'S'.repeat(40);
+    const app = createApp(file, () => Promise.resolve({ status: 200, text: async () => rss('Nope') }));
+    const log = await captureStderr(async () => {
+      const denied = await postSearch(app, {
+        token: badToken,
+        device,
+        headers: { 'x-forwarded-for': IP },
+        body: { q: QUERY + ' apikey=' + KEY, deviceId: device },
+      });
+      expect(denied.status).toBe(401);
+      const expired = await postSearch(app, {
+        device,
+        headers: { 'x-forwarded-for': IP },
+        body: { q: QUERY, deviceId: device, source: 'jacred' },
+      });
+      expect(expired.status).toBe(403);
+    });
+    const lines = searchLogLines(log);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('source=jackett');
+    expect(lines[0]).toContain('status=401');
+    expect(lines[0]).toContain('abort=0');
+    expect(lines[0]).toContain('indexers_ok=-');
+    expect(lines[0]).toContain('results=0');
+    expect(lines[0]).toContain('device=' + deviceHash(device));
+    assertNoSecrets(lines[0], { device, token: badToken, query: QUERY });
+    expect(lines[1]).toContain('source=jacred');
+    expect(lines[1]).toContain('status=403');
+    expect(lines[1]).toContain('indexers_ok=-');
+    assertNoSecrets(lines[1], { device, token, query: QUERY });
+
+    const limitedDevice = 'cc'.repeat(16);
+    const limited = await subscriber({ device: limitedDevice });
+    const limitedApp = createApp(limited.file, (url: string) => {
+      if (isJsonList(url)) {
+        return Promise.resolve({ status: 200, text: async () => JSON.stringify([{ id: 'rutor', configured: true }]) });
+      }
+      return Promise.resolve({ status: 200, text: async () => rss('Hit') });
+    });
+    const rateLog = await captureStderr(async () => {
+      for (let i = 0; i < 31; i++) {
+        const res = await postSearch(limitedApp, {
+          token: limited.token,
+          device: limitedDevice,
+          body: { q: 'rate-bucket-query', deviceId: limitedDevice },
+        });
+        expect(res.status).toBe(i < 30 ? 200 : 429);
+      }
+    });
+    const rateLines = searchLogLines(rateLog);
+    expect(rateLines).toHaveLength(31);
+    expect(rateLines[0]).toContain('status=200');
+    expect(rateLines[0]).toContain('indexers_ok=1');
+    expect(rateLines[30]).toContain('status=429');
+    expect(rateLines[30]).toContain('abort=0');
+    expect(rateLines[30]).toContain('results=0');
+    expect(rateLines[30]).toContain('indexers_ok=-');
+    expect(rateLines[30]).toContain('device=' + deviceHash(limitedDevice));
+    assertNoSecrets(rateLines.join('\n'), { device: limitedDevice, token: limited.token, query: 'rate-bucket-query' });
+  });
+
+  it('logs abort=1 on req aborted and abort=0 on a normal body close', async () => {
+    const device = 'dd'.repeat(16);
+    const { file, token } = await subscriber({ device });
+    const fetchImpl = (url: string) => {
+      if (isJsonList(url)) {
+        return Promise.resolve({ status: 200, text: async () => JSON.stringify([{ id: 'rutor', configured: true }]) });
+      }
+      return Promise.resolve({ status: 200, text: async () => rss('Still') });
+    };
+    const app = createApp(file, fetchImpl);
+    const log = await captureStderr(async () => {
+      const dropped = await postSearch(app, {
+        token,
+        device,
+        client: 'abort',
+        body: { q: QUERY, deviceId: device },
+      });
+      expect(dropped.status).toBe(200);
+      const closed = await postSearch(app, {
+        token,
+        device,
+        client: 'close',
+        body: { q: 'other-close-query', deviceId: device },
+      });
+      expect(closed.status).toBe(200);
+    });
+    const lines = searchLogLines(log);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('abort=1');
+    expect(lines[0]).toContain('status=200');
+    expect(lines[1]).toContain('abort=0');
+    expect(lines[1]).toContain('status=200');
+    assertNoSecrets(lines[0], { device, token, query: QUERY });
+  });
+
+  it('logs abort=1 when the client drops the socket before the response', async () => {
+    const device = 'ee'.repeat(16);
+    const { file, token } = await subscriber({ device });
+    const fetchImpl = (url: string) => {
+      if (isJsonList(url)) {
+        return Promise.resolve({ status: 200, text: async () => JSON.stringify([{ id: 'rutor', configured: true }]) });
+      }
+      return new Promise((resolve) => {
+        setTimeout(() => resolve({ status: 200, text: async () => rss('Late Film') }), 250);
+      });
+    };
+    const lines: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    const server = await listen(file, 0, fetchImpl, { host: '127.0.0.1' });
+    try {
+      const addr = server.address();
+      const port = typeof addr === 'object' && addr ? addr.port : 0;
+      const ctrl = new AbortController();
+      const pending = fetch('http://127.0.0.1:' + port + '/v1/search', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer ' + token,
+          'x-device-id': device,
+          'content-type': 'application/json',
+          'x-forwarded-for': IP,
+        },
+        body: JSON.stringify({ q: 'socket-drop-query-zz', deviceId: device }),
+        signal: ctrl.signal,
+      }).catch((err) => err);
+      setTimeout(() => ctrl.abort(), 40);
+      await pending;
+      const deadline = Date.now() + 3000;
+      let line = '';
+      while (Date.now() < deadline) {
+        const found = lines.map((chunk) => String(chunk)).join('').split('\n').find((row) => row.indexOf('route=/v1/search') >= 0);
+        if (found) {
+          line = found.trim();
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(line).toContain('abort=1');
+      expect(line).toContain('status=200');
+      expect(line).toContain('source=jackett');
+      expect(line).toContain('device=' + deviceHash(device));
+      assertNoSecrets(line, { device, token, query: 'socket-drop-query-zz' });
+    } finally {
+      process.stderr.write = orig;
+      await new Promise((resolve) => server.close(() => resolve(null)));
+    }
+  });
+
+  it('logs a JacRed search with indexer counts left unset', async () => {
+    const device = 'ff'.repeat(16);
+    const { file, token } = await subscriber({ device });
+    const app = createApp(file, () =>
+      Promise.resolve({
+        status: 200,
+        text: async () =>
+          '<rss><channel><item><title>Jac</title><link>http://jacred.test:9118/dl/j?apikey=JACREDKEY</link></item><item><title>Two</title></item></channel></rss>',
+      }),
+    );
+    let resStatus = 0;
+    const log = await captureStderr(async () => {
+      const res = await postSearch(app, {
+        token,
+        device,
+        headers: { 'x-forwarded-for': IP },
+        body: { source: 'jacred', q: 'Секретныйзапрос', deviceId: device },
+      });
+      resStatus = res.status;
+    });
+    expect(resStatus).toBe(200);
+    const line = searchLogLines(log)[0];
+    expect(line).toContain('source=jacred');
+    expect(line).toContain('status=200');
+    expect(line).toContain('results=2');
+    expect(line).toContain('indexers_ok=-');
+    expect(line).toContain('indexers_fail=-');
+    expect(line).toContain('indexers_timeout=-');
+    expect(line).toContain('abort=0');
+    assertNoSecrets(line, { device, token, query: 'Секретныйзапрос' });
   });
 });
 
