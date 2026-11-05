@@ -34,4 +34,26 @@ describe('DHT admin counters', () => {
     noteDhtRequest({ status: 500, ms: 4, reason: 'down' }, now);
     expect(dhtStatsView(now).errors[0]).toEqual({ at: now, status: 500, reason: 'ошибка биллинга' });
   });
+
+  it('keeps totals after more than 8000 requests in the same day', () => {
+    const now = 1_800_000_000_000;
+    const n = 8001;
+    let withPeers = 0;
+    let sumMs = 0;
+    for (let i = 0; i < n; i++) {
+      const ms = i % 2 === 0 ? 10 : 30;
+      const peers = i % 3 === 0 ? 1 : 0;
+      if (peers > 0) withPeers++;
+      sumMs += ms;
+      noteDhtRequest({ status: 200, ms, peers }, now - (i % 50) * 1000);
+    }
+    for (let i = 0; i < 12; i++) noteDhtRequest({ status: 401, ms: 4, reason: 'bad_token' }, now - i * 1000);
+    const view = dhtStatsView(now);
+    expect(view.requests24h).toBe(n + 12);
+    expect(view.withPeers24h).toBe(withPeers);
+    expect(view.avgMs).toBe(Math.round((sumMs + 12 * 4) / (n + 12)));
+    expect(view.peersSharePct).toBe(Math.round((withPeers * 1000) / (n + 12)) / 10);
+    expect(view.errors).toHaveLength(10);
+    expect(view.errors[0].reason).toBe('нет токена');
+  });
 });
