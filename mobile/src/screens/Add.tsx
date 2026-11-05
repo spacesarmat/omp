@@ -370,7 +370,7 @@ export function Add({
   void srcTick;
   const all = allSources();
   const enabledIds = enabledSources(all).map((s) => s.id);
-  const resolved = sourcesForSearch(all, chosen);
+  const resolved = sourcesForSearch(all, chosen, { fallback: true });
   const selected = resolved.map((s) => s.id);
   const allChosen =
     chosen === null ||
@@ -405,7 +405,7 @@ export function Add({
     const mode = searchModeForKind(kind);
     if (mode) ctx.searchMode = mode;
     // live list, not the ids from the render that opened the screen
-    const ids = sourcesForSearch(allSources(), memo.chosen).map((s) => s.id);
+    const ids = sourcesForSearch(allSources(), memo.chosen, { fallback: true }).map((s) => s.id);
     const h: SearchHandle = searchAll(q, {
       ctx,
       sources: ids,
@@ -440,7 +440,7 @@ export function Add({
   useEffect(() => {
     const q = memo.searched.trim();
     if (scope !== 'sources' || !q || !memo.handle || memo.handle.sourceIds.length > 0) return;
-    if (!sourcesForSearch(allSources(), memo.chosen).length) return;
+    if (!sourcesForSearch(allSources(), memo.chosen, { fallback: true }).length) return;
     runSearch(q, {});
   }, [srcTick, chosen, scope]);
 

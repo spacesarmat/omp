@@ -1831,28 +1831,38 @@ export function createApp(file, fetchImpl, opts) {
         // Every response is one log line: status and duration. The token and the infohash are not logged.
         const started = Date.now();
         const device = String(req.headers['x-device-id'] || '');
+        let logged = false;
         const finish = (status, value) => {
-          process.stderr.write(formatDhtLog(status, Date.now() - started, device));
+          if (!logged) {
+            logged = true;
+            process.stderr.write(formatDhtLog(status, Date.now() - started, device));
+          }
           return json(res, status, value);
         };
-        const token = bearer(req);
-        if (!token) return finish(401, { error: 'bad_token' });
-        const state = await store.read();
-        const caller = await deviceCaller(state, token, device, Date.now());
-        if (!caller || caller.error) return finish(401, { error: (caller && caller.error) || 'bad_token' });
-        const hash = url.searchParams.get('infohash');
-        const cfg = dhtConfig(env);
-        if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return finish(400, { error: 'bad_infohash' });
-        if (!cfg.enabled) return finish(503, { error: 'disabled' });
-        const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
-        if (dhtRate && !dhtRate.allow(rateKey)) {
-          const wait = String(dhtRate.retryAfter(rateKey) || 1);
-          res.setHeader('retry-after', wait);
-          return finish(429, { error: 'rate' });
+        try {
+          const token = bearer(req);
+          if (!token) return finish(401, { error: 'bad_token' });
+          const state = await store.read();
+          const caller = await deviceCaller(state, token, device, Date.now());
+          if (!caller || caller.error) return finish(401, { error: (caller && caller.error) || 'bad_token' });
+          const hash = url.searchParams.get('infohash');
+          const cfg = dhtConfig(env);
+          if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return finish(400, { error: 'bad_infohash' });
+          if (!cfg.enabled) return finish(503, { error: 'disabled' });
+          const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+          if (dhtRate && !dhtRate.allow(rateKey)) {
+            const wait = String(dhtRate.retryAfter(rateKey) || 1);
+            res.setHeader('retry-after', wait);
+            return finish(429, { error: 'rate' });
+          }
+          const out = await queryDhtPeers(cfg, hash, net);
+          if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
+          return finish(out.status, out.body);
+        } catch (e) {
+          // store.read() and deviceCaller() throw into the outer handler as 500. Log that here too.
+          if (isReadOnlyError(e)) return finish(503, { error: 'read_only' });
+          return finish(500, { error: 'down' });
         }
-        const out = await queryDhtPeers(cfg, hash, net);
-        if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
-        return finish(out.status, out.body);
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();

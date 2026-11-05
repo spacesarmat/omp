@@ -8,8 +8,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] In the release sheet, Check seeds sits in the same row as Add, On the phone and On the TV. The label in that row is the short one, Seeds
 - With no OMP sign-in, a seed check whose tracker did not answer adds one line: DHT check needs an OMP subscription. No DHT request is made: without a billing session there was none. webOS shows no hint
-- [phone] Search does not stay on All sources · 0 while sources are switched on in Search sources. A chip whose ids no longer exist (a source registered again, or a paid source removed) does not zero the search: the switched-on sources are used. While the search screen is open, a source that appears updates the count and repeats an empty search
-- [tech] Billing writes one log line for every GET /v1/dht-peers (status, ms, device as the first 8 sha256 hex chars). No token and no infohash, including a 200 response. A new billing image is required. Caddy and the sidecar stay as they are. No migration
+- [phone] Search does not stay on All sources · 0 while sources are switched on in Search sources. A chip whose ids no longer exist (a source registered again, or a paid source removed) does not zero the search: the switched-on sources are used. That fallback is the search screen only. A monitoring subscription keeps its own source list: a missing id does not widen the check to every switched-on source. While the search screen is open, a source that appears updates the count and repeats an empty search
+- [tech] Billing writes one log line for every GET /v1/dht-peers (status, ms, device as the first 8 sha256 hex chars). No token and no infohash, including a 200 response and a 500 when the store read or the token check throws. A new billing image is required. Caddy and the sidecar stay as they are. No migration
 
 ## 0.20.8-beta.6
 

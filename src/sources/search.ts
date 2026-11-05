@@ -22,7 +22,7 @@ function logId(id: string): string {
 
 export interface SearchAllOptions {
   ctx: SourceContext;
-  /** Ids chosen for this search. Omitted: sources switched on. Empty: none. Every id unknown: sources switched on. */
+  /** Ids chosen for this search. Omitted: sources switched on. Empty or unknown: none. */
   sources?: string[];
   /** Candidate sources; default: allSources(). */
   from?: Source[];
@@ -69,16 +69,18 @@ function safe(fn: () => void): void {
  * Sources of one search.
  * No pick: the ones switched on.
  * An empty pick: the person cleared the chip, so nothing (the switches stay as they are).
- * A pick whose ids are all gone (a source registered again, a paid source removed): the switched-on
- * sources. One vanished id must not leave the search at 0 while others are still on.
+ * Unknown ids are dropped. `fallback` (the search screen only) then uses the switched-on sources,
+ * so one vanished id does not leave that screen at 0. A saved subscription does not pass it:
+ * its source list stays limited to the ids that still exist.
  */
-export function sourcesForSearch(from: Source[], picked?: string[] | null): Source[] {
+export function sourcesForSearch(from: Source[], picked?: string[] | null, opts?: { fallback?: boolean }): Source[] {
   const enabled = enabledSources(from);
   if (picked == null) return enabled;
   if (!picked.length) return [];
   const chosen = from.filter((s) => picked.indexOf(s.id) >= 0);
   if (chosen.length) return chosen;
-  return enabled;
+  if (opts && opts.fallback) return enabled;
+  return [];
 }
 
 export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
