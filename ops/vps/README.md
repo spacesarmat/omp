@@ -57,23 +57,22 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 
 ## On-demand DHT peer counts
 
-`dht-peers` (`omp-dht-peers`, `ops/vps/dht-peers`) answers one infohash when billing asks. It is not a crawler and it has no database. Compose profile `dht` keeps it out of a plain `docker compose up -d`, and `deploy.sh` does not start it. Nothing is published: billing calls `http://dht-peers:8788` on the `omp` network with `DHT_PEERS_TOKEN`. The app calls `GET /v1/dht-peers?infohash=` with its device token. The answer is a peer count (`approx: true`), not a seed/leecher split and not a list of addresses.
+`dht-peers` (`omp-dht-peers`, `ops/vps/dht-peers`) answers one infohash when billing asks. It is not a crawler and it has no database. Compose profile `dht` keeps it out of a plain `docker compose up -d`. `deploy.sh` copies `ops/vps/dht-peers` to `/opt/omp-vps/dht-peers` and recreates the container only when that directory changes, or when `docker-compose.yml` changes and the container is already running. A stopped sidecar stays stopped. Nothing is published: billing calls `http://dht-peers:8788` on the `omp` network with `DHT_PEERS_TOKEN`. The app calls `GET /v1/dht-peers?infohash=` with its device token. The answer is a peer count (`approx: true`), not a seed/leecher split and not a list of addresses.
 
 The Node process stays resident. The DHT UDP socket opens on the first lookup and closes `DHT_IDLE_MS` (10 minutes) after the last one, so an idle box sends no DHT traffic. `mem_limit` / `memswap_limit` are 150m. A cold lookup that has not bootstrapped returns 503 and the app keeps the tracker line. `GET /health` stays open on the docker network, does not open the DHT socket, and adds `rss` (resident bytes) for the admin panel.
 
-Not deployed until Andy asks. On the NUC, copy the compose files into `/opt/omp-vps` and the entire `ops/vps/dht-peers` directory into `/opt/omp-vps/dht-peers` (the image build context is `./dht-peers`). `deploy.sh` does not copy these files. Then run (do not print secrets):
+The image build context is `./dht-peers`. `deploy.sh` publishes that directory and `docker-compose.yml`. It does not write `.env`. Set the token once, by hand (do not print the value):
 
 ```bash
-# 1. Secret, once. Root-only .env. Do not echo the value.
 sudo sh -c 'umask 077; printf "DHT_PEERS_TOKEN=%s\n" "$(openssl rand -hex 32)" >> /opt/omp-vps/.env'
+```
 
+The next deploy that changes `dht-peers/` builds `omp-dht-peers:local` and runs `docker compose --profile dht up -d --no-deps dht-peers`. `--no-deps` does not recreate billing or any other service. A later deploy that changes `docker-compose.yml` recreates billing, so `BILLING_DHT_URL` and `BILLING_DHT_TOKEN` are picked up, and recreates `omp-dht-peers` only if it is already running. To start or stop the sidecar without a file change:
+
+```bash
 cd /opt/omp-vps
-# 2. Sidecar only. Does not recreate billing.
-docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht up -d --build dht-peers
-
-# 3. Billing picks up BILLING_DHT_URL and BILLING_DHT_TOKEN. This recreates omp-billing.
-#    Do this only when a billing restart is acceptable. deploy.sh does not do step 2 or 3.
-docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d billing
+docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht up -d --no-deps dht-peers
+docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht stop dht-peers
 ```
 
 Outbound UDP to the DHT bootstrap nodes has to be allowed. If it is not, lookups fail closed and the button stays on the tracker scrape. Roll back the sidecar with `docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht stop dht-peers` and clear `DHT_PEERS_TOKEN` before the next billing recreate (empty token: the route answers 503 disabled).
@@ -82,7 +81,7 @@ Outbound UDP to the DHT bootstrap nodes has to be allowed. If it is not, lookups
 
 `site/index.html` and `site/en/index.html` carry counter 113673968 (inline script in `<head>`, noscript pixel at the start of `<body>`). The landing CSP in `Caddyfile` and `Caddyfile.nuc` allows that inline script by its `sha256` and allows `mc.yandex.ru`, `mc.yandex.com`, and `yastatic.net` (scripts, hits, pixels, Webvisor frames). Any edit to the inline script needs a new hash in both Caddyfiles; `test/metrika.test.ts` fails until they match. Billing, Jackett, and JacRed have no counter. The landing sends no `X-Frame-Options` (it cannot list hosts); its CSP `frame-ancestors` allows `self` and the Metrika interface hosts from Yandex's CSP guide, so click and link maps can frame it. The other hosts keep `X-Frame-Options DENY`.
 
-On the NUC Caddy reads `Caddyfile.nuc`, which `deploy.sh` does not publish. Copy it over the existing file in place (`cp`, not `mv` or `rsync`, so the single-file bind mount keeps the same inode), reload Caddy, then copy `site/`.
+On the NUC Caddy reads `Caddyfile.nuc`. `deploy.sh` publishes it with `cp` over the existing file, so the bind mount keeps the same inode, and reloads Caddy when that file changes. A change to the VPS `Caddyfile` is copied on the NUC and does not reload, because the container mounts `Caddyfile.nuc`.
 
 ## Landing SEO
 
@@ -112,7 +111,7 @@ docker compose pull billing
 docker compose up -d billing
 ```
 
-`/opt/omp-vps` is not a git checkout. Landing, Caddyfile, and the locally built billing image are updated with `deploy.sh` (below). `docker-compose.yml` and `jacred/init.yaml` are not part of that script; copy those by hand when they change, and do not overwrite `.env` or `data/`.
+`/opt/omp-vps` is not a git checkout. Landing, both Caddyfiles, `docker-compose.yml`, `dht-peers/`, and the locally built billing image are updated with `deploy.sh` (below). `docker-compose.nuc.yml` and `jacred/init.yaml` are not part of that script; copy those by hand when they change, and do not overwrite `.env` or `data/`.
 
 `up -d` recreates a service whose image, environment, ports, or mounts changed. That includes Caddy: `caddy reload` only rereads the Caddyfile inside the container that is already running, so a new `INDEXER_HASH`, image, port, or volume stays on the old container until `up -d`. Use reload only for a Caddyfile-only edit (the file is bind-mounted):
 
@@ -122,18 +121,21 @@ docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 
 ## Deploy landing and local billing
 
-`deploy.sh` runs on the VPS (or over SSH) and publishes four paths from a git ref:
+`deploy.sh` runs on the VPS (or over SSH) and publishes these paths from a git ref:
 
 | Repo | On the VPS |
 |------|------------|
 | `ops/vps/Caddyfile` | `/opt/omp-vps/Caddyfile` |
+| `ops/vps/Caddyfile.nuc` | `/opt/omp-vps/Caddyfile.nuc` |
 | `ops/vps/site/` | `/opt/omp-vps/site/` (Caddy `/srv/site`) |
 | `ops/vps/Dockerfile` | `/opt/omp-vps/Dockerfile.billing` |
 | `ops/billing/` | `/opt/omp-vps/billing-src/` |
+| `ops/vps/docker-compose.yml` | `/opt/omp-vps/docker-compose.yml` |
+| `ops/vps/dht-peers/` | `/opt/omp-vps/dht-peers/` |
 
-It downloads the ref, copies those paths to `/opt/omp-vps-backup-<ref>-<utc>`, and tags the current `ghcr.io/spacesarmat/omp-billing:local` image before replacing anything. A `/` in the ref becomes `-`. `node --check` runs on billing `*.mjs`. The image is rebuilt and `docker compose up -d billing` runs only when billing source or `Dockerfile.billing` changed. A Caddyfile change reloads Caddy. A site-only change is served from the bind mount. Health checks hit Caddy on `127.0.0.1` with the public names: `GET`/`HEAD`/`OPTIONS /health`, `GET /admin`, landing `GET /` is 200, and each response has the security headers and no `Server`. HEAD uses `curl --head`, because billing answers with `Content-Length` and no body. Any failure after the backup restores that backup and the previous image. `--rollback` restores the files, reloads Caddy, and restores the billing image before health checks. A failed Caddy reload still restores the billing image, then the rollback exits non-zero. It always runs `docker compose up -d billing`, then checks that container `omp-billing` is running that image. A backup with no image id still rebuilds from the restored `Dockerfile.billing` and `billing-src`. A second `--rollback` of the same backup restarts billing again.
+`docker-compose.nuc.yml` is not in that list. It downloads the ref, copies those paths to `/opt/omp-vps-backup-<ref>-<utc>`, and tags the current `ghcr.io/spacesarmat/omp-billing:local` image (and `omp-dht-peers:local`, when that image exists) before replacing anything. A `/` in the ref becomes `-`. `node --check` runs on billing `*.mjs`. Before the files are replaced, `docker compose config -q` checks the release `docker-compose.yml` (plus `docker-compose.nuc.yml` on the NUC) against the host `.env`. Stdout and stderr of that command are discarded: without `-q` the rendered file expands secrets, and a failed render can too. The billing image is rebuilt only when billing source or `Dockerfile.billing` changed. `docker compose up -d --no-deps billing` runs when that image changed or `docker-compose.yml` changed. `dht-peers/` is rebuilt and recreated with `--profile dht` only when that directory changed. A compose change recreates an already running `omp-dht-peers` and does not start a stopped one. `--no-deps` is what keeps jackett, postgres, caddy, and the rest from being recreated. The Caddyfile this host mounts is reloaded in place (`Caddyfile.nuc` on the NUC, `Caddyfile` otherwise); both files are copied with `cp`, so the inode stays. A site-only change is served from the bind mount. Health checks hit Caddy on `127.0.0.1` with the public names: `GET`/`HEAD`/`OPTIONS /health`, `GET /admin`, landing `GET /` is 200, and each response has the security headers and no `Server`. HEAD uses `curl --head`, because billing answers with `Content-Length` and no body. Any failure after the backup restores those files and the previous images. A sidecar this deploy started, which was stopped at backup time, is stopped again. `--rollback` restores the files, reloads the mounted Caddyfile, and restores the billing image before health checks. A failed Caddy reload still restores the billing image and the dht image, then the rollback exits non-zero. It runs `docker compose up -d --no-deps billing`, then checks that container `omp-billing` is running that image. A backup with no image id still rebuilds from the restored `Dockerfile.billing` and `billing-src`. A second `--rollback` of the same backup restarts billing again. A backup written before these extra paths were recorded leaves `docker-compose.yml`, `Caddyfile.nuc`, and `dht-peers/` as they are.
 
-On the NUC the script needs no extra settings. When `docker-compose.nuc.yml` sits next to `docker-compose.yml`, every `docker compose` call gets `-f docker-compose.yml -f docker-compose.nuc.yml`, and the health checks use `http` on port `80` (Caddy there serves plain HTTP with `Caddyfile.nuc`; TLS ends at Cloudflare). The host has no node, so `node --check` runs in a throwaway container: `docker run --rm --network none` with the source mounted read-only, in the current billing image (or `OMP_NODE_IMAGE`, default `node:24-bookworm-slim`, when that image is missing). Overrides: `OMP_COMPOSE_FILES` (colon-separated names in `OMP_VPS_ROOT`), `OMP_HEALTH_SCHEME`/`OMP_HEALTH_PORT`, `OMP_NODE_CHECK=auto|host|docker`. Run it as root (`sudo`), because `.env` is root-only. `deploy.sh` still does not publish `Caddyfile.nuc`.
+On the NUC the script needs no extra settings. When `docker-compose.nuc.yml` sits next to `docker-compose.yml`, every `docker compose` call gets `-f docker-compose.yml -f docker-compose.nuc.yml`, and the health checks use `http` on port `80` (Caddy there serves plain HTTP with `Caddyfile.nuc`; TLS ends at Cloudflare). The host has no node, so `node --check` runs in a throwaway container: `docker run --rm --network none` with the source mounted read-only, in the current billing image (or `OMP_NODE_IMAGE`, default `node:24-bookworm-slim`, when that image is missing). Overrides: `OMP_COMPOSE_FILES` (colon-separated names in `OMP_VPS_ROOT`), `OMP_HEALTH_SCHEME`/`OMP_HEALTH_PORT`, `OMP_NODE_CHECK=auto|host|docker`, `OMP_DHT_IMAGE`, `OMP_DHT_CONTAINER`. Run it as root (`sudo`), because `.env` is root-only. `deploy.sh` publishes `Caddyfile.nuc` and reloads Caddy when it changes.
 
 `.env` must already contain `BILLING_IMAGE=ghcr.io/spacesarmat/omp-billing:local`. The script reads that line and refuses to continue if it does not match the tag it builds. It never writes `.env` or `data/`, and backups do not include them.
 
@@ -145,7 +147,7 @@ bash ops/vps/deploy.sh --rollback /opt/omp-vps-backup-main-20261016T120000123456
 
 The deploy prints `backup=` with the directory it created. Copy that path into `--rollback`.
 
-Dry-run downloads the ref and prints the plan. It does not back up, sync, build, or reload. From a checkout, the same script can be fed over SSH (`bash -s` does not use stdin for anything else):
+Dry-run downloads the ref, runs `docker compose config -q` without printing it, and prints what would change for each synced path. It does not back up, sync, build, or reload. From a checkout, the same script can be fed over SSH (`bash -s` does not use stdin for anything else):
 
 ```bash
 ssh root@vps 'bash -s -- --dry-run main' < ops/vps/deploy.sh

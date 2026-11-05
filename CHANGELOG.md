@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] deploy.sh копирует docker-compose.yml, ops/vps/dht-peers и Caddyfile.nuc вместе с остальным набором бэкапа и отката. Перед применением проверяет compose через docker compose config -q и не печатает вывод: там переменные из .env уже подставлены. Пересобирает и пересоздает только billing и, с профилем dht, dht-peers, если изменились их файлы. Смена docker-compose.yml пересоздает billing без пересборки образа и уже запущенный dht-peers. Остановленный sidecar не включает. На NUC смена Caddyfile.nuc делает caddy reload, файл копируется через cp и inode bind-монтирования сохраняется. Чужие контейнеры, .env и каталоги data не трогает. Ошибка health возвращает эти файлы и образы. docker-compose.nuc.yml по-прежнему копируется вручную
+
 ## 0.20.8-beta.7
 
 - [phone] Если Telegram уже привязан и у аккаунта есть подписка, включая льготный период, телефон получает вход сам. Код вводить не нужно. Все устройства заняты - прежний текст «Все устройства подписки заняты...». Нет подписки - поле кода остается
