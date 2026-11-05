@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.9-beta.1
+
+- [phone] Secondary screens now load on demand. The initial JavaScript bundle is about 2.6 times smaller
+- [tech] Dependencies are updated and known npm vulnerabilities are resolved. Billing installs are pinned by package-lock.json and use npm ci
+- [tech] External Docker images are pinned by digest. Health checks and service-readiness waits are added
+- [tech] Android tests no longer depend on reverse DNS and cannot hang on a local HTTP-server failure
+
 ## 0.20.8
 
 - The built-in TorrServer is updated to MatriX.149

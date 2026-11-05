@@ -2,6 +2,13 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## 0.20.9-beta.1
+
+- [phone] Второстепенные экраны загружаются по требованию. Начальный пакет JavaScript уменьшен примерно в 2,6 раза
+- [tech] Зависимости обновлены, известные уязвимости npm устранены. Установка биллинга закреплена package-lock.json и идет через npm ci
+- [tech] Внешние Docker-образы закреплены digest. Добавлены healthcheck и ожидание готовности сервисов
+- [tech] Android-тесты не зависят от обратного DNS и не зависают при ошибках локального HTTP-сервера
+
 ## 0.20.8
 
 - Встроенный TorrServer обновлён до MatriX.149
