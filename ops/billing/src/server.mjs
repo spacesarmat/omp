@@ -129,7 +129,8 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
-import { dhtConfig, dhtPeersLimitConfig, queryDhtPeers } from './dhtPeers.mjs';
+import { dhtConfig, dhtPeersLimitConfig, probeDhtSidecar, queryDhtPeers } from './dhtPeers.mjs';
+import { dhtStatsView, noteDhtRequest } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
@@ -937,6 +938,13 @@ export function createApp(file, fetchImpl, opts) {
         if (!admin) return json(res, 401, { auth: false });
         const telegramId = url.searchParams.get('telegramId') || '';
         return json(res, 200, { telegramId, messages: supportThread((await store.read()), telegramId).slice(-80) });
+      }
+      if (req.method === 'GET' && path === '/admin/api/dht') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const cfg = dhtConfig(env);
+        const sidecar = await probeDhtSidecar(cfg, net);
+        return json(res, 200, { ok: true, configured: !!cfg.enabled, sidecar, stats: dhtStatsView(Date.now()) });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
         const admin = adminOf(req);
@@ -1835,7 +1843,11 @@ export function createApp(file, fetchImpl, opts) {
         const finish = (status, value) => {
           if (!logged) {
             logged = true;
-            process.stderr.write(formatDhtLog(status, Date.now() - started, device));
+            const ms = Date.now() - started;
+            process.stderr.write(formatDhtLog(status, ms, device));
+            const peers = value && typeof value.peers === 'number' ? value.peers : 0;
+            const reason = value && typeof value.error === 'string' ? value.error : '';
+            noteDhtRequest({ status, ms, peers, reason });
           }
           return json(res, status, value);
         };

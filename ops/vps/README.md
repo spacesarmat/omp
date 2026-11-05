@@ -59,7 +59,7 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 
 `dht-peers` (`omp-dht-peers`, `ops/vps/dht-peers`) answers one infohash when billing asks. It is not a crawler and it has no database. Compose profile `dht` keeps it out of a plain `docker compose up -d`, and `deploy.sh` does not start it. Nothing is published: billing calls `http://dht-peers:8788` on the `omp` network with `DHT_PEERS_TOKEN`. The app calls `GET /v1/dht-peers?infohash=` with its device token. The answer is a peer count (`approx: true`), not a seed/leecher split and not a list of addresses.
 
-The Node process stays resident. The DHT UDP socket opens on the first lookup and closes `DHT_IDLE_MS` (10 minutes) after the last one, so an idle box sends no DHT traffic. `mem_limit` / `memswap_limit` are 150m. A cold lookup that has not bootstrapped returns 503 and the app keeps the tracker line.
+The Node process stays resident. The DHT UDP socket opens on the first lookup and closes `DHT_IDLE_MS` (10 minutes) after the last one, so an idle box sends no DHT traffic. `mem_limit` / `memswap_limit` are 150m. A cold lookup that has not bootstrapped returns 503 and the app keeps the tracker line. `GET /health` stays open on the docker network, does not open the DHT socket, and adds `rss` (resident bytes) for the admin panel.
 
 Not deployed until Andy asks. On the NUC, copy the compose files into `/opt/omp-vps` and the entire `ops/vps/dht-peers` directory into `/opt/omp-vps/dht-peers` (the image build context is `./dht-peers`). `deploy.sh` does not copy these files. Then run (do not print secrets):
 

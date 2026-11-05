@@ -83,6 +83,46 @@ export function mapDhtUpstream(status, text, headers) {
 }
 
 /**
+ * GET /health on the sidecar. No token is sent. A missing URL does not call the network.
+ * `rss` is resident bytes when the sidecar reports a sane number, otherwise null.
+ */
+export async function probeDhtSidecar(cfg, fetchImpl) {
+  if (!cfg || !cfg.url) return { configured: false, ok: false, dht: 'off', rss: null, latencyMs: 0 };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 2500);
+  const started = Date.now();
+  try {
+    const res = await fetchImpl(cfg.url + '/health', {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      redirect: 'error',
+      signal: ctrl.signal,
+    });
+    const text = await res.text();
+    let body = null;
+    try {
+      body = JSON.parse(text || '');
+    } catch (e) {
+      body = null;
+    }
+    const rssRaw = body && body.rss;
+    const rss = typeof rssRaw === 'number' && rssRaw >= 0 && rssRaw < 1e12 ? Math.floor(rssRaw) : null;
+    const dht = body && body.dht === 'up' ? 'up' : body && body.dht === 'idle' ? 'idle' : 'off';
+    return {
+      configured: true,
+      ok: res.status === 200 && !!(body && body.ok === true),
+      dht,
+      rss,
+      latencyMs: Date.now() - started,
+    };
+  } catch (e) {
+    return { configured: true, ok: false, dht: 'off', rss: null, latencyMs: Date.now() - started };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Ask the sidecar. `fetchImpl(url, init)` is the billing process fetch.
  * A disabled config or a bad infohash never calls it.
  */
