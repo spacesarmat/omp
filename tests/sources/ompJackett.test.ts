@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { ACCESS_KEY, MONITOR_FREE_MAX, monitorMax, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
-import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
+import { allowBillingRefresh, REFRESH_SECRET, resetBillingTokens } from '../../src/billing/tokens';
 import { billingSession, deviceId, onBillingChange, saveBillingSession, saveSeenAccount, seenAccount, sessionKey } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
 import { isLoginRequired } from '../../src/sources/types';
@@ -244,15 +244,17 @@ describe('omp Jackett source', () => {
     for (let i = 0; i < 40 && !waiting; i++) await Promise.resolve();
     expect(waiting).toBe(true);
     signOutBilling(ctx);
-    const signed = await activateCode(ctx, 'ABCD-EFGH');
-    expect(signed.access).toBe('a1.new');
-    const deletesAfterCode = deletes;
+    const signing = activateCode(ctx, 'ABCD-EFGH');
+    for (let i = 0; i < 20; i++) await Promise.resolve();
     releaseSet();
+    const signed = await signing;
+    expect(signed.access).toBe('a1.new');
     expect(await pending).toBeNull();
     expect(billingSession()?.access).toBe('a1.new');
     expect(billingSession()?.id).toBe(signed.id);
-    expect(deletes).toBe(deletesAfterCode);
+    expect(stored[REFRESH_SECRET]).toBe('r1.new');
     expect(billingSignedOut()).toBe(false);
+    expect(deletes).toBe(0);
   });
 
   it('a code entered while a claim waits for its reply is not replaced when the claim answers', async () => {
@@ -320,14 +322,126 @@ describe('omp Jackett source', () => {
     const pending = claimLinkedSession(ctx);
     for (let i = 0; i < 40 && !waiting; i++) await Promise.resolve();
     expect(waiting).toBe(true);
-    const signed = await activateCode(ctx, 'ABCD-EFGH');
-    expect(signed.access).toBe('a1.new');
-    const deletesAfterCode = deletes;
+    const signing = activateCode(ctx, 'ABCD-EFGH');
+    for (let i = 0; i < 20; i++) await Promise.resolve();
     releaseSet();
+    const signed = await signing;
+    expect(signed.access).toBe('a1.new');
     expect(await pending).toBeNull();
     expect(billingSession()?.access).toBe('a1.new');
     expect(billingSession()?.id).toBe(signed.id);
-    expect(deletes).toBe(deletesAfterCode);
+    expect(stored[REFRESH_SECRET]).toBe('r1.new');
+    expect(deletes).toBe(0);
+    expect(billingSignedOut()).toBe(false);
+  });
+
+  it('an in-flight claim set that applies the old token on completion still leaves the code token', async () => {
+    let releaseSet: () => void = () => undefined;
+    let waiting = false;
+    const written: string[] = [];
+    const claimPair = { refreshToken: 'r1.old', accessToken: 'a1.old', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const codePair = { refreshToken: 'r1.new', accessToken: 'a1.new', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 3e12 };
+    const me = { active: true, paidUntil: 3e12, accessUntil: 3e12, sources: { jackett: true, jacred: true }, monitorMax: 0 };
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('/v1/link/claim') > 0) return page(JSON.stringify(claimPair), c.url);
+      if (c.url.indexOf('/v1/activate') > 0) return page(JSON.stringify(codePair), c.url);
+      return page(JSON.stringify(me), c.url);
+    }, {});
+    const stored: { [key: string]: string } = {};
+    const ctx = {
+      ...site.ctx,
+      secrets: {
+        get: (key: string) => Promise.resolve(stored[key] || null),
+        set: (key: string, value: string) => {
+          if (!waiting) {
+            waiting = true;
+            return new Promise<void>((resolve) => {
+              releaseSet = () => {
+                written.push(value);
+                stored[key] = value;
+                resolve();
+              };
+            });
+          }
+          written.push(value);
+          stored[key] = value;
+          return Promise.resolve();
+        },
+        delete: (key: string) => {
+          delete stored[key];
+          written.push('deleted');
+          return Promise.resolve();
+        },
+      },
+    };
+    const pending = claimLinkedSession(ctx);
+    for (let i = 0; i < 40 && !waiting; i++) await Promise.resolve();
+    expect(waiting).toBe(true);
+    const signing = activateCode(ctx, 'ABCD-EFGH');
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    releaseSet();
+    const signed = await signing;
+    expect(await pending).toBeNull();
+    expect(written[0]).toBe('r1.old');
+    expect(written[written.length - 1]).toBe('r1.new');
+    expect(stored[REFRESH_SECRET]).toBe('r1.new');
+    expect(billingSession()?.access).toBe('a1.new');
+    expect(billingSession()?.id).toBe(signed.id);
+    expect(billingSignedOut()).toBe(false);
+  });
+
+  it('an in-flight claim adopt that applies the old token on completion still leaves the code token', async () => {
+    let release: () => void = () => undefined;
+    let waiting = false;
+    const written: string[] = [];
+    let keystore = '';
+    const claimPair = { refreshToken: 'r1.old', accessToken: 'a1.old', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const codePair = { refreshToken: 'r1.new', accessToken: 'a1.new', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 3e12 };
+    const me = { active: true, paidUntil: 3e12, accessUntil: 3e12, sources: { jackett: true, jacred: true }, monitorMax: 0 };
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('/v1/link/claim') > 0) return page(JSON.stringify(claimPair), c.url);
+      if (c.url.indexOf('/v1/activate') > 0) return page(JSON.stringify(codePair), c.url);
+      return page(JSON.stringify(me), c.url);
+    }, null);
+    const ctx = {
+      ...site.ctx,
+      billing: {
+        refresh: () => Promise.resolve({ ok: false as const, error: 'missing' as const }),
+        adopt: (token: string) => {
+          if (!waiting) {
+            waiting = true;
+            return new Promise<{ volatile: boolean }>((resolve) => {
+              release = () => {
+                written.push(token);
+                keystore = token;
+                resolve({ volatile: false });
+              };
+            });
+          }
+          written.push(token);
+          keystore = token;
+          return Promise.resolve({ volatile: false });
+        },
+        forget: () => {
+          keystore = '';
+          written.push('forgotten');
+          return Promise.resolve();
+        },
+      },
+    };
+    const pending = claimLinkedSession(ctx);
+    for (let i = 0; i < 40 && !waiting; i++) await Promise.resolve();
+    expect(waiting).toBe(true);
+    const signing = activateCode(ctx, 'ABCD-EFGH');
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    release();
+    const signed = await signing;
+    expect(await pending).toBeNull();
+    expect(written[0]).toBe('r1.old');
+    expect(written[written.length - 1]).toBe('r1.new');
+    expect(keystore).toBe('r1.new');
+    expect(billingSession()?.access).toBe('a1.new');
+    expect(billingSession()?.id).toBe(signed.id);
     expect(billingSignedOut()).toBe(false);
   });
 
