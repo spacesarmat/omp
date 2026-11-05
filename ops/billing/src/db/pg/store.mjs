@@ -14,6 +14,7 @@ import { LOG_TABLES, expiredLogCounts, pruneLogs, retentionCutoffs } from '../..
 import { decodeRow, encodeRow } from './mapper.mjs';
 import * as reg from './registry.mjs';
 import * as adsSql from './ads.mjs';
+import * as dhtSql from './dhtStatsSql.mjs';
 import { adStatsCutoffDay } from '../../ads.mjs';
 import { migrate } from './schema.mjs';
 import { COLLECTIONS, SPECIAL_KEYS } from './spec.mjs';
@@ -391,6 +392,11 @@ export async function createPgStore({ connectionString, schema, max }) {
       putImage: (img, now) => adsSql.putAdImage(pool, img, now),
       getImage: (id) => adsSql.getAdImage(pool, id),
       gcImages: (keepIds, now, graceMs) => adsSql.gcAdImages(pool, keepIds, now, graceMs),
+    },
+    /** DHT minute counters (db/pg/dhtStatsSql.mjs), outside the state snapshot. No hashes or tokens. */
+    dht: {
+      load: () => dhtSql.loadDht(pool),
+      save: (snap) => dhtSql.saveDht(pool, snap),
     },
     /** Read-only stats and tests: run SQL on the store's pool (same schema). */
     query: (sql, params) => pool.query(sql, params),

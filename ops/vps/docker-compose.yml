@@ -82,10 +82,11 @@ services:
       # «Проверить сиды» DHT counts. Empty DHT_PEERS_TOKEN: GET /v1/dht-peers answers 503 disabled.
       # Profile "dht". deploy.sh recreates the sidecar only when its build context changed,
       # or when this file changed and the container is already running.
+      # The per-device cap is the admin setting dhtPerMinute (default 30 per minute).
+      # BILLING_DHT_DEVICE_MAX applies only until that setting is saved. The window is one minute.
       BILLING_DHT_URL: ${BILLING_DHT_URL:-http://dht-peers:8788}
       BILLING_DHT_TOKEN: ${DHT_PEERS_TOKEN:-}
-      BILLING_DHT_DEVICE_MAX: ${BILLING_DHT_DEVICE_MAX:-30}
-      BILLING_DHT_WINDOW_SEC: ${BILLING_DHT_WINDOW_SEC:-600}
+      BILLING_DHT_DEVICE_MAX: ${BILLING_DHT_DEVICE_MAX:-}
       NODE_USE_ENV_PROXY: "1"
       # «Мониторинг» tab (ops/billing/src/monitor.mjs): container state, restarts and memory through the
       # read-only proxy below. Alerts go to BILLING_MONITOR_CHAT_ID (default 536445442), sendMessage only.

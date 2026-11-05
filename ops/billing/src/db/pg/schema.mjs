@@ -356,6 +356,40 @@ CREATE TABLE ad_stats (
 CREATE INDEX ad_stats_day ON ad_stats (day);
 `,
   },
+  {
+    version: '004_dht_stats',
+    sql: `
+-- Admin DHT tab (src/dhtStats.mjs): one row per minute for 24 hours, and the last few error labels.
+-- No token, device id, or infohash. reason is a fixed label; the check rejects anything else.
+-- Not part of the billing state snapshot. Pruned to the last 24 hours when counters flush.
+CREATE TABLE dht_minute (
+  minute bigint PRIMARY KEY,
+  count integer NOT NULL,
+  with_peers integer NOT NULL,
+  sum_ms bigint NOT NULL,
+  errors integer NOT NULL,
+  errors_4xx integer NOT NULL,
+  errors_5xx integer NOT NULL,
+  hist integer[] NOT NULL
+);
+CREATE TABLE dht_recent_error (
+  pos smallint PRIMARY KEY,
+  at bigint NOT NULL,
+  status integer NOT NULL,
+  reason text NOT NULL CHECK (reason IN (
+    'ошибка биллинга',
+    'нет токена',
+    'плохой запрос',
+    'sidecar выключен',
+    'лимит',
+    'только чтение',
+    'sidecar не ответил',
+    'ошибка',
+    'проверка'
+  ))
+);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

@@ -455,6 +455,7 @@ describe.skipIf(!PG_URL)('postgres only', () => {
       { version: '001_init' },
       { version: '002_monitor' },
       { version: '003_ads' },
+      { version: '004_dht_stats' },
     ]);
     const idx = await store.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'devices_active_code' AND schemaname = $1", [schema]);
     expect(idx.rows[0].indexdef).toMatch(/UNIQUE.*WHERE \(status = 'active'::text\)/);

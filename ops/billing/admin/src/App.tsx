@@ -273,7 +273,7 @@ export function App() {
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>
-        <TabsContent value="dht">{tab === 'dht' ? <DhtPanel /> : null}</TabsContent>
+        <TabsContent value="dht">{tab === 'dht' ? <DhtPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="monitor">
           <MonitorPanel csrf={d.csrf || ''} />
         </TabsContent>

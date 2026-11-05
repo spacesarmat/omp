@@ -560,6 +560,10 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['backupKeepDays', 'Хранить дампы, дней (1-365; последний не удаляется)'],
     ],
   },
+  {
+    title: 'DHT',
+    fields: [['dhtPerMinute', 'Запросов в минуту на устройство (0-1000, 0 выключает, по умолчанию 30)']],
+  },
 ];
 
 /** Secrets are read-only in the panel: they live in the server's .env. */
@@ -650,6 +654,11 @@ export function SettingsCard({
             <CardTitle>{group.title}</CardTitle>
             {group.title === 'Платежи' ? <CardDescription>Кошелёк показывается частично. Чтобы сменить, введите новый номер целиком.</CardDescription> : null}
             {group.title === 'Бэкапы Postgres' ? <BackupLine backup={backup} /> : null}
+            {group.title === 'DHT' ? (
+              <CardDescription>
+                Лимит кнопки «Проверить сиды»: сколько запросов /v1/dht-peers устройство может сделать за минуту. После сохранения действует это число. Пока поле ни разу не сохраняли, запасной предел берется из BILLING_DHT_DEVICE_MAX.
+              </CardDescription>
+            ) : null}
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {group.fields.map(([name, label]) =>
