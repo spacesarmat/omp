@@ -88,7 +88,14 @@ export function SeedCheck(p: {
         run();
       }}
     >
-      {phase === 'busy' ? <span class="seed-spin" aria-hidden="true" /> : t('sources.checkSeeds')}
+      {phase === 'busy' ? (
+        <span class="seed-spin" aria-hidden="true" />
+      ) : (
+        <>
+          <span class="seed-check-long">{t('sources.checkSeeds')}</span>
+          <span class="seed-check-short">{t('sources.checkSeedsShort')}</span>
+        </>
+      )}
     </button>
   );
   if (p.buttonOnly) return btn;

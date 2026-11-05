@@ -120,6 +120,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P03.16', 'Искать раздачи', 'Search releases'),
       it('P03.17', 'Найти новую серию', 'Find the new episode'),
       it('P03.18', 'Отмена', 'Cancel'),
+      it('P03.19', 'Выбор серии', 'Episode choice'),
     ],
   },
   { key: 'phone:subFindings', code: 'P04', ru: 'Находки подписки', en: 'Subscription findings', items: [it('P04.1', 'Назад', 'Back'), it('P04.2', 'Проверить сиды', 'Check seeds')] },

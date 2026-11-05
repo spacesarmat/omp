@@ -805,6 +805,7 @@ export const en: EnDict<typeof ru> = {
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'from the tracker',
     checkSeeds: 'Check seeds',
+    checkSeedsShort: 'Seeds',
     seedsNow: 'now',
     seedsTimeout: 'The tracker did not answer',
     seedsNoTracker: 'No tracker address',
@@ -2536,6 +2537,7 @@ export const en: EnDict<typeof ru> = {
     calOpenCatalog: 'Open in the catalog',
     calSearchTorrents: 'Search releases',
     calFindEpisode: 'Find the new episode',
+    calPickEpisode: 'Choose an episode',
   },
   now: {
     collapse: 'Collapse',

@@ -824,6 +824,7 @@ export const ru = {
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'по данным трекера',
     checkSeeds: 'Проверить сиды',
+    checkSeedsShort: 'Сиды',
     seedsNow: 'сейчас',
     seedsTimeout: 'Трекер не ответил',
     seedsNoTracker: 'Нет адреса трекера',
@@ -2586,6 +2587,7 @@ export const ru = {
     calOpenCatalog: 'Открыть в каталоге',
     calSearchTorrents: 'Искать раздачи',
     calFindEpisode: 'Найти новую серию',
+    calPickEpisode: 'Выберите серию',
   },
   now: {
     collapse: 'Свернуть',

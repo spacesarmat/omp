@@ -15,7 +15,7 @@ import { CatalogError } from './catalog/CatalogError';
 import { dayHeader } from '../lib/releaseDates';
 import {
   calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, episodesCode, listGroups, loadCalendar,
-  loadCalView, monthBounds, monthCells, monthRev, monthSwipe, monthTitle, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly,
+  loadCalView, monthBounds, monthCells, monthRev, monthSwipe, monthTitle, realEpisodeName, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly,
   weekdayHeads, STALE_MS, type CalGo, type CalRow, type CalView,
 } from '../lib/calendar';
 import { usePullRefresh, PullArea } from '../ui/PullRefresh';
@@ -199,8 +199,14 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpe
 
 function Ask({ e, onClose }: { e: CalRow; onClose: () => void }) {
   const card = e.show.card;
-  const plan = episodeActions({ show: e.show, season: e.season, episode: e.episodes[0] });
-  const code = episodesCode(e.season, e.episodes);
+  const [picked, setPicked] = useState(e.episodes[0]);
+  const several = e.episodes.length > 1;
+  const plan = episodeActions({ show: e.show, season: e.season, episode: picked });
+  const hit = e.entries.filter((x) => x.episode === picked)[0];
+  const pickedName = hit ? realEpisodeName(hit.name) : '';
+  const code = several
+    ? episodesCode(e.season, [picked]) + (pickedName ? ' · ' + pickedName : '')
+    : episodesCode(e.season, e.episodes);
   const episode = plan.episode;
   const run = (action: CalGo) => {
     onClose();
@@ -220,6 +226,22 @@ function Ask({ e, onClose }: { e: CalRow; onClose: () => void }) {
             <span class="m-small m-muted">{code}</span>
           </span>
         </div>
+        {several && (
+          <div class="m-cal-eps" role="group" aria-label={t('news.calPickEpisode')}>
+            {e.episodes.map((n) => (
+              <button
+                key={n}
+                type="button"
+                class={'m-chip tm' + (n === picked ? ' on' : '')}
+                data-code="P03.19"
+                aria-pressed={n === picked}
+                onClick={() => setPicked(n)}
+              >
+                {episodesCode(e.season, [n])}
+              </button>
+            ))}
+          </div>
+        )}
         <button type="button" class="m-btn m-btn-primary tm" data-code={plan.inCatalog ? 'P03.15' : 'P03.16'} onClick={() => run(plan.primary)}>
           {plan.inCatalog ? t('news.calOpenCatalog') : t('news.calSearchTorrents')}
         </button>
