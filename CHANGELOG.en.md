@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.6
 
 - [phone] In search, Check seeds stays to the left of add, inside the text column, at the same height as the round buttons. On a narrow screen the label is Seeds even without container queries, and the button shrinks when space is short, so it does not cover the poster. The same applies when the check is DHT only
 - Check seeds, when this device is signed in to OMP, also asks the server how many peers DHT can see right now. That is not a seed or leecher split: an estimate, a line such as "≈12 peers online · via DHT", beside the tracker answer. If the tracker does not answer, only that estimate remains. With no OMP sign-in, and on webOS, the tracker line stays as it is
