@@ -55,6 +55,29 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 - `cloudflared` runs tunnel `omp-nuc` (omp-player.online, www, billing, jackett, jacred -> `http://nuc-caddy:80`); `cloudflared-home-nas` is a replica connector for tunnel `home-nas` (music.omp-player.online -> NAS `192.168.1.191:8880`). Ingress is managed in Cloudflare.
 - Tokens live only in `tunnel.env` and `tunnel-home-nas.env` (root, mode 600, see `tunnel.env.example`); they are git-ignored.
 
+## On-demand DHT peer counts
+
+`dht-peers` (`omp-dht-peers`, `ops/vps/dht-peers`) answers one infohash when billing asks. It is not a crawler and it has no database. Compose profile `dht` keeps it out of a plain `docker compose up -d`, and `deploy.sh` does not start it. Nothing is published: billing calls `http://dht-peers:8788` on the `omp` network with `DHT_PEERS_TOKEN`. The app calls `GET /v1/dht-peers?infohash=` with its device token. The answer is a peer count (`approx: true`), not a seed/leecher split and not a list of addresses.
+
+The Node process stays resident. The DHT UDP socket opens on the first lookup and closes `DHT_IDLE_MS` (10 minutes) after the last one, so an idle box sends no DHT traffic. `mem_limit` / `memswap_limit` are 150m. A cold lookup that has not bootstrapped returns 503 and the app keeps the tracker line.
+
+Not deployed until Andy asks. On the NUC, after the compose files from this repo are copied into `/opt/omp-vps` (do not print secrets):
+
+```bash
+# 1. Secret, once. Root-only .env. Do not echo the value.
+sudo sh -c 'umask 077; printf "DHT_PEERS_TOKEN=%s\n" "$(openssl rand -hex 32)" >> /opt/omp-vps/.env'
+
+cd /opt/omp-vps
+# 2. Sidecar only. Does not recreate billing.
+docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht up -d --build dht-peers
+
+# 3. Billing picks up BILLING_DHT_URL and BILLING_DHT_TOKEN. This recreates omp-billing.
+#    Do this only when a billing restart is acceptable. deploy.sh does not do step 2 or 3.
+docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d billing
+```
+
+Outbound UDP to the DHT bootstrap nodes has to be allowed. If it is not, lookups fail closed and the button stays on the tracker scrape. Roll back the sidecar with `docker compose -f docker-compose.yml -f docker-compose.nuc.yml --profile dht stop dht-peers` and clear `DHT_PEERS_TOKEN` before the next billing recreate (empty token: the route answers 503 disabled).
+
 ## Yandex.Metrika on the landing
 
 `site/index.html` and `site/en/index.html` carry counter 113673968 (inline script in `<head>`, noscript pixel at the start of `<body>`). The landing CSP in `Caddyfile` and `Caddyfile.nuc` allows that inline script by its `sha256` and allows `mc.yandex.ru`, `mc.yandex.com`, and `yastatic.net` (scripts, hits, pixels, Webvisor frames). Any edit to the inline script needs a new hash in both Caddyfiles; `test/metrika.test.ts` fails until they match. Billing, Jackett, and JacRed have no counter. The landing sends no `X-Frame-Options` (it cannot list hosts); its CSP `frame-ancestors` allows `self` and the Metrika interface hosts from Yandex's CSP guide, so click and link maps can frame it. The other hosts keep `X-Frame-Options DENY`.

@@ -74,7 +74,13 @@ services:
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080
       HTTPS_PROXY: http://warp:1080
-      NO_PROXY: jackett,jacred,torrserver,caddy,docker-proxy,localhost,127.0.0.1
+      NO_PROXY: jackett,jacred,torrserver,caddy,docker-proxy,dht-peers,localhost,127.0.0.1
+      # «Проверить сиды» DHT counts. Empty DHT_PEERS_TOKEN: GET /v1/dht-peers answers 503 disabled.
+      # The sidecar is compose profile "dht" and is not started by deploy.sh.
+      BILLING_DHT_URL: ${BILLING_DHT_URL:-http://dht-peers:8788}
+      BILLING_DHT_TOKEN: ${DHT_PEERS_TOKEN:-}
+      BILLING_DHT_DEVICE_MAX: ${BILLING_DHT_DEVICE_MAX:-30}
+      BILLING_DHT_WINDOW_SEC: ${BILLING_DHT_WINDOW_SEC:-600}
       NODE_USE_ENV_PROXY: "1"
       # «Мониторинг» tab (ops/billing/src/monitor.mjs): container state, restarts and memory through the
       # read-only proxy below. Alerts go to BILLING_MONITOR_CHAT_ID (default 536445442), sendMessage only.
@@ -199,6 +205,44 @@ services:
       - /tmp
     networks:
       - dockerapi
+    # no ports
+
+  # On-demand DHT peer counts for «Проверить сиды». Profile "dht": a plain `up -d` does not start it,
+  # and deploy.sh does not either. No published port. Billing calls it on the omp network.
+  # The UDP socket opens on the first lookup and closes DHT_IDLE_MS after the last one. No database.
+  dht-peers:
+    profiles: ["dht"]
+    build:
+      context: ./dht-peers
+    image: omp-dht-peers:local
+    container_name: omp-dht-peers
+    restart: unless-stopped
+    environment:
+      DHT_HTTP_PORT: "8788"
+      DHT_TOKEN: ${DHT_PEERS_TOKEN:-}
+      DHT_LOOKUP_MS: "8000"
+      DHT_IDLE_MS: "600000"
+      DHT_CACHE_MS: "600000"
+      NODE_OPTIONS: "--max-old-space-size=96"
+      HOME: /tmp
+    mem_limit: 150m
+    memswap_limit: 150m
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - omp
     # no ports
 
 networks:

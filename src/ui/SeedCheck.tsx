@@ -1,6 +1,8 @@
 // A manual «Проверить сиды» next to a tracker seed count. The «Актуальные сиды» setting does not gate it.
 import { useRef, useState } from 'preact/hooks';
 import { t, tp } from '../i18n';
+import { askDhtPeers, seedCheckLine } from '../sources/dhtPeers';
+import { infohashOf } from '../sources/liveSeeds';
 import { probeSeeds, type ProbeResult } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
 import { Focusable } from './components';
@@ -10,9 +12,7 @@ export function liveSeedLine(seeders: number, leechers: number): string {
 }
 
 export function probeMessage(r: ProbeResult): string {
-  if (r.ok) return liveSeedLine(r.seeders, r.leechers);
-  if (r.reason === 'timeout') return t('sources.seedsTimeout');
-  return t('sources.seedsNoTracker');
+  return seedCheckLine(r, null);
 }
 
 export interface SeedProbe {
@@ -32,9 +32,14 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
   const run = () => {
     if (phaseRef.current === 'busy') return;
     setPhase('busy');
-    probeSeeds(r).then((res) => {
-      setLine(probeMessage(res));
-      setPhase(res.ok ? 'done' : 'err');
+    const hash = infohashOf(r);
+    const trackerP = probeSeeds(r);
+    const dhtP = hash ? askDhtPeers(hash) : Promise.resolve(null);
+    Promise.all([trackerP, dhtP]).then((pair) => {
+      const tracker = pair[0];
+      const dht = pair[1];
+      setLine(seedCheckLine(tracker, dht));
+      setPhase(tracker.ok || (dht !== null && dht.ok) ? 'done' : 'err');
     });
   };
   const text = (fallback: string) => (phase === 'done' || phase === 'err' ? line : fallback);

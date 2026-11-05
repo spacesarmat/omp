@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- Check seeds, when this device is signed in to OMP, also asks the server how many peers DHT can see right now. That is not a seed or leecher split: an estimate, a line such as "≈12 peers online · via DHT", beside the tracker answer. If the tracker does not answer, or it has no address, only that estimate remains. With no OMP sign-in, and on webOS, the tracker line stays as it is
+- [tech] DHT on button press only: service ops/vps/dht-peers (container omp-dht-peers, compose profile dht, no published ports, mem_limit 150m, no database). The DHT socket opens on the first request and closes after 10 minutes idle. Internal GET /v1/peers with Bearer DHT_PEERS_TOKEN. Billing: GET /v1/dht-peers?infohash= with the device token, no subscription required, 30 requests per device per 10 minutes. The answer is a peer count only, with no addresses. An empty token: 503 disabled, and the app keeps the tracker check. deploy.sh does not start the container. On the NUC it is started separately, after DHT_PEERS_TOKEN is set. No migration
+
 ## 0.20.8-beta.5
 
 - [phone] New, Calendar has List and Month, and the choice is kept. List puts episodes that are already out on top (the out badge and Find), then This week, Next week and Later, with the date on the row. Month is a grid with today highlighted, arrows and a swipe to change month, a marker and a count like +3 on days with episodes, and that day's episodes under the grid. List and Month read the same episodes: List keeps the nearest 30 days, and Month shows the open month. A season with no premiere date still stays in List when an episode aired recently. A show that failed is asked again and does not hide the shows that answered. The filter All / My subscriptions only is there because the calendar includes series from Mine and subscriptions. Tapping an episode opens a sheet with the poster, title and code: Open in the catalog goes to that season, Search releases looks up the title and season, and Cancel opens nothing. When the show is in the catalog and followed, Find the new episode searches that episode
