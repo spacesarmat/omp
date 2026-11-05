@@ -112,7 +112,10 @@ The billing image is rebuilt only when billing source or
 Dockerfile.billing changed. billing is recreated (up -d --no-deps) when
 that image changed or docker-compose.yml changed. dht-peers is rebuilt
 and recreated with --profile dht only when dht-peers/ changed. A release
-without that directory leaves the sidecar on disk unchanged. A compose
+without that directory leaves the sidecar on disk unchanged. Compose
+receives DHT_IMAGE and DHT_CONTAINER, the same names this script builds
+and inspects. If .env sets either one, it must match or the script stops
+before replacing files. A compose
 change recreates an already running dht-peers container and does not
 start a stopped one. The Caddyfile this host mounts is reloaded in place
 (Caddyfile.nuc on the NUC, Caddyfile otherwise). A site-only change is
@@ -340,6 +343,18 @@ prepare_root() {
   if [[ "$found" != "$IMAGE" ]]; then
     die ".env BILLING_IMAGE is '${found}'; this script builds '${IMAGE}' and will not change .env"
   fi
+  # Same rule as BILLING_IMAGE: compose interpolates these, so a shell override must match .env.
+  local env_dht
+  if env_dht="$(read_env_assignment DHT_IMAGE)"; then
+    if [[ "$env_dht" != "$DHT_IMAGE" ]]; then
+      die ".env DHT_IMAGE is '${env_dht}'; this script builds '${DHT_IMAGE}' and will not change .env"
+    fi
+  fi
+  if env_dht="$(read_env_assignment DHT_CONTAINER)"; then
+    if [[ "$env_dht" != "$DHT_CONTAINER" ]]; then
+      die ".env DHT_CONTAINER is '${env_dht}'; this script inspects '${DHT_CONTAINER}' and will not change .env"
+    fi
+  fi
   assert_managed_not_symlinks
   local lock
   lock="${OMP_LOCK_FILE:-${ROOT}.deploy.lock}"
@@ -350,24 +365,36 @@ prepare_root() {
   fi
 }
 
-read_billing_image() {
-  local line value dq sq
+read_env_assignment() {
+  local key="$1"
+  local line value dq sq seen
   value=""
+  seen=0
   dq='^"(.*)"$'
   sq="^'(.*)'\$"
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     case "$line" in
       '' | \#*) continue ;;
-      BILLING_IMAGE=*) value="${line#BILLING_IMAGE=}" ;;
     esac
+    if [[ "$line" == "$key"=* ]]; then
+      value="${line#"$key"=}"
+      seen=1
+    fi
   done <"$ROOT/.env"
+  if [[ "$seen" -eq 0 ]]; then
+    return 1
+  fi
   if [[ "$value" =~ $dq ]]; then
     value="${BASH_REMATCH[1]}"
   elif [[ "$value" =~ $sq ]]; then
     value="${BASH_REMATCH[1]}"
   fi
   printf '%s' "$value"
+}
+
+read_billing_image() {
+  read_env_assignment BILLING_IMAGE || true
 }
 
 assert_managed_not_symlinks() {
@@ -749,7 +776,7 @@ validate_compose() {
   if [[ "$NUC" -eq 1 ]]; then
     args+=(-f "$ROOT/docker-compose.nuc.yml")
   fi
-  if ! env -u BILLING_IMAGE docker compose "${args[@]}" config -q >/dev/null 2>&1; then
+  if ! compose_env docker compose "${args[@]}" config -q >/dev/null 2>&1; then
     die "compose config failed"
   fi
   log "compose config ok"
@@ -920,8 +947,14 @@ backup_live() {
   log "backup=${BACKUP_DIR}"
 }
 
+compose_env() {
+  # BILLING_IMAGE stays unset so .env wins for billing. DHT_IMAGE and DHT_CONTAINER
+  # are the values this script builds and inspects; compose interpolates the same names.
+  env -u BILLING_IMAGE DHT_IMAGE="$DHT_IMAGE" DHT_CONTAINER="$DHT_CONTAINER" "$@"
+}
+
 compose() {
-  env -u BILLING_IMAGE docker compose --project-directory "$ROOT" "${COMPOSE_ARGS[@]}" "$@"
+  compose_env docker compose --project-directory "$ROOT" "${COMPOSE_ARGS[@]}" "$@"
 }
 
 caddy_reload() {

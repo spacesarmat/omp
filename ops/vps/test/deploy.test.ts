@@ -51,6 +51,7 @@ fi
 case "$cmd" in
   info) exit 0 ;;
   compose)
+    printf 'dht-env DHT_IMAGE=%s DHT_CONTAINER=%s\\n' "\${DHT_IMAGE-}" "\${DHT_CONTAINER-}" >> "$log"
     if [[ "\${1:-}" == version ]]; then
       printf 'Docker Compose version v2\\n'
       exit 0
@@ -97,7 +98,7 @@ case "$cmd" in
         printf 'dht up failed\\n' >&2
         exit 1
       fi
-      img="\${OMP_DHT_IMAGE:-omp-dht-peers:local}"
+      img="\${DHT_IMAGE:-\${OMP_DHT_IMAGE:-omp-dht-peers:local}}"
       cp "\$(idfile "$img")" "$state/running-dht"
       exit 0
     fi
@@ -1400,6 +1401,37 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
     expect(result.stderr).toContain('archive is missing ops/vps/dht-peers/Dockerfile');
     expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
     expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+  });
+
+  it('passes DHT_IMAGE and DHT_CONTAINER into compose and refuses a different .env', () => {
+    const image = 'omp-dht-peers:custom';
+    const container = 'omp-dht-custom';
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 9;\n' }), {
+      OMP_DHT_IMAGE: image,
+      OMP_DHT_CONTAINER: container,
+    });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(log(box.dockerLog)).toContain(`dht-env DHT_IMAGE=${image} DHT_CONTAINER=${container}`);
+    expect(linesStarting(box.dockerLog, 'build').some((line) => line.includes(`-t ${image}`))).toBe(true);
+    expect(upLines(box.dockerLog).some((line) => line.includes('--profile dht') && line.includes('up -d --no-deps dht-peers'))).toBe(true);
+    expect(imageId(box.env, image)).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const mismatch = world(release());
+    writeFileSync(path.join(mismatch.root, '.env'), `${envFile()}DHT_IMAGE=other:tag\nDHT_CONTAINER=other-name\n`);
+    const refused = runDeploy(mismatch.env, ['main']);
+    expect(refused.status).not.toBe(0);
+    expect(refused.stderr).toContain(".env DHT_IMAGE is 'other:tag'");
+    expect(refused.stderr).not.toContain('SECRETVALUE');
+    expect(log(mismatch.curlLog)).not.toContain('/tarball/');
+    expect(readFileSync(path.join(mismatch.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+
+    const containerOnly = world(release());
+    writeFileSync(path.join(containerOnly.root, '.env'), `${envFile()}DHT_CONTAINER=other-name\n`);
+    const refusedContainer = runDeploy(containerOnly.env, ['main']);
+    expect(refusedContainer.status).not.toBe(0);
+    expect(refusedContainer.stderr).toContain(".env DHT_CONTAINER is 'other-name'");
+    expect(log(containerOnly.curlLog)).not.toContain('/tarball/');
   });
 
   it('a backup from before these paths were recorded does not remove them', () => {

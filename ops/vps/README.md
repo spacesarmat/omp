@@ -67,7 +67,7 @@ The image build context is `./dht-peers`. `deploy.sh` publishes that directory a
 sudo sh -c 'umask 077; printf "DHT_PEERS_TOKEN=%s\n" "$(openssl rand -hex 32)" >> /opt/omp-vps/.env'
 ```
 
-The next deploy that changes `dht-peers/` builds `omp-dht-peers:local` and runs `docker compose --profile dht up -d --no-deps dht-peers`. `--no-deps` does not recreate billing or any other service. A later deploy that changes `docker-compose.yml` recreates billing, so `BILLING_DHT_URL` and `BILLING_DHT_TOKEN` are picked up, and recreates `omp-dht-peers` only if it is already running. To start or stop the sidecar without a file change:
+The next deploy that changes `dht-peers/` builds the image named by `DHT_IMAGE` (default `omp-dht-peers:local`) and runs `docker compose --profile dht up -d --no-deps dht-peers`. Compose reads that image and `container_name` from `DHT_IMAGE` and `DHT_CONTAINER`, the same values `deploy.sh` builds and inspects (`OMP_DHT_IMAGE`, `OMP_DHT_CONTAINER`). If `.env` sets either name, it must match; the script does not change `.env`. `--no-deps` does not recreate billing or any other service. A later deploy that changes `docker-compose.yml` recreates billing, so `BILLING_DHT_URL` and `BILLING_DHT_TOKEN` are picked up, and recreates `omp-dht-peers` only if it is already running. To start or stop the sidecar without a file change:
 
 ```bash
 cd /opt/omp-vps

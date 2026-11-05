@@ -219,8 +219,8 @@ services:
     profiles: ["dht"]
     build:
       context: ./dht-peers
-    image: omp-dht-peers:local
-    container_name: omp-dht-peers
+    image: ${DHT_IMAGE:-omp-dht-peers:local}
+    container_name: ${DHT_CONTAINER:-omp-dht-peers}
     restart: unless-stopped
     environment:
       DHT_HTTP_PORT: "8788"
