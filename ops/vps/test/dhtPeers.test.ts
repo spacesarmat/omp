@@ -1,14 +1,74 @@
 import { createServer, request as httpRequest, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
+import { describe, expect, it, vi } from 'vitest';
+
+// Hoisted above the adapter import. The root suite does not install ops/vps/dht-peers dependencies.
+const dhtMock = vi.hoisted(() => {
+  type Listener = (...args: unknown[]) => void;
+  type NodeOpts = { maxTables: number; maxValues: number; maxPeers: number; maxAge: number };
+  const bag = {
+    startReady: false,
+    instances: [] as FakeDht[],
+  };
+  class FakeDht {
+    ready: boolean;
+    destroyed = false;
+    opts: NodeOpts;
+    listened = 0;
+    destroys = 0;
+    announces = 0;
+    lookups: string[] = [];
+    aborts = 0;
+    finish: (() => void) | null = null;
+    private listeners: { [ev: string]: Listener[] } = {};
+    constructor(opts: NodeOpts) {
+      this.opts = opts;
+      this.ready = bag.startReady;
+      bag.instances.push(this);
+    }
+    on(ev: string, fn: Listener) {
+      if (!this.listeners[ev]) this.listeners[ev] = [];
+      this.listeners[ev].push(fn);
+    }
+    removeListener(ev: string, fn: Listener) {
+      const list = this.listeners[ev] || [];
+      this.listeners[ev] = list.filter((item) => item !== fn);
+    }
+    emit(ev: string, ...args: unknown[]) {
+      const list = this.listeners[ev] || [];
+      for (let i = 0; i < list.length; i++) list[i](...args);
+    }
+    listen() {
+      this.listened++;
+    }
+    destroy() {
+      this.destroyed = true;
+      this.destroys++;
+    }
+    announce() {
+      this.announces++;
+    }
+    lookup(hash: string, cb: () => void) {
+      this.lookups.push(hash);
+      this.finish = () => cb();
+      return () => {
+        this.aborts++;
+      };
+    }
+  }
+  return { FakeDht, bag };
+});
+
+vi.mock('bittorrent-dht', () => ({ default: dhtMock.FakeDht }));
+
 // @ts-ignore plain module
 import { createDhtApp } from '../dht-peers/src/http.mjs';
 // @ts-ignore plain module
 import { countPeerKeys, createPeerCache, parseCompactPeer, peerKey, waitForReady } from '../dht-peers/src/peers.mjs';
 // @ts-ignore plain module
 import { createDhtLookup } from '../dht-peers/src/lookup.mjs';
-import { EventEmitter } from 'node:events';
 
 const TOKEN = 'ab'.repeat(16);
 const HASH = 'cd'.repeat(20);
@@ -210,53 +270,13 @@ function manualClock() {
   };
 }
 
-function controlledNode() {
-  const node = new EventEmitter() as EventEmitter & {
-    ready: boolean;
-    destroyed: boolean;
-    listen: () => void;
-    destroy: () => void;
-    announce: () => void;
-    lookup: (hash: string, cb: () => void) => () => void;
-  };
-  const calls = {
-    opts: null as { maxTables: number; maxValues: number; maxPeers: number; maxAge: number } | null,
-    listen: 0,
-    destroy: 0,
-    announce: 0,
-    lookups: [] as string[],
-    aborts: 0,
-    finish: null as null | (() => void),
-  };
-  node.ready = false;
-  node.destroyed = false;
-  node.listen = () => {
-    calls.listen++;
-  };
-  node.destroy = () => {
-    node.destroyed = true;
-    calls.destroy++;
-  };
-  node.announce = () => {
-    calls.announce++;
-  };
-  node.lookup = (hash, cb) => {
-    calls.lookups.push(hash);
-    calls.finish = () => cb();
-    return () => {
-      calls.aborts++;
-    };
-  };
-  return { node, calls };
-}
-
 describe('createDhtLookup limits', () => {
   const hash = 'ab'.repeat(20);
 
   function harness(extra?: { lookupMs?: number; idleMs?: number; maxPeers?: number; ready?: boolean }) {
     const clk = manualClock();
-    const made = controlledNode();
-    if (extra && extra.ready) made.node.ready = true;
+    dhtMock.bag.instances.length = 0;
+    dhtMock.bag.startReady = !!(extra && extra.ready);
     const lookup = createDhtLookup({
       lookupMs: extra && extra.lookupMs !== undefined ? extra.lookupMs : 5000,
       idleMs: extra && extra.idleMs !== undefined ? extra.idleMs : 1000,
@@ -264,76 +284,77 @@ describe('createDhtLookup limits', () => {
       now: clk.now,
       schedule: clk.schedule,
       clearTimer: clk.clear,
-      createNode: (opts: { maxTables: number; maxValues: number; maxPeers: number; maxAge: number }) => {
-        made.calls.opts = opts;
-        return made.node;
-      },
     });
-    return { clk, made, lookup };
+    return { clk, lookup, node: () => dhtMock.bag.instances[dhtMock.bag.instances.length - 1] };
   }
 
   it('builds a capped node, collects unique peers for this hash, and does not announce', async () => {
-    const { made, lookup } = harness({ ready: true, maxPeers: 2 });
+    const { lookup, node } = harness({ ready: true, maxPeers: 2 });
     const pending = lookup.lookup(hash);
     await Promise.resolve();
-    expect(made.calls.opts).toEqual({ maxTables: 4, maxValues: 8, maxPeers: 200, maxAge: 10 * 60 * 1000 });
-    expect(made.calls.listen).toBe(1);
-    expect(made.calls.announce).toBe(0);
-    expect(made.calls.lookups).toEqual([hash]);
+    const made = node();
+    expect(made.opts).toEqual({ maxTables: 4, maxValues: 8, maxPeers: 200, maxAge: 10 * 60 * 1000 });
+    expect(made.listened).toBe(1);
+    expect(made.announces).toBe(0);
+    expect(made.lookups).toEqual([hash]);
     expect(lookup.busy()).toBe(true);
-    made.node.emit('peer', { host: '1.1.1.1', port: 1 }, Buffer.from(hash, 'hex'));
-    made.node.emit('peer', { host: '1.1.1.1', port: 1 }, Buffer.from(hash, 'hex'));
-    made.node.emit('peer', { host: '2.2.2.2', port: 1 }, Buffer.from(hash, 'hex'));
-    made.node.emit('peer', { host: '3.3.3.3', port: 1 }, Buffer.from(hash, 'hex'));
-    made.node.emit('peer', { host: '9.9.9.9', port: 1 }, Buffer.from('b'.repeat(40), 'hex'));
-    made.calls.finish!();
+    made.emit('peer', { host: '1.1.1.1', port: 1 }, Buffer.from(hash, 'hex'));
+    made.emit('peer', { host: '1.1.1.1', port: 1 }, Buffer.from(hash, 'hex'));
+    made.emit('peer', { host: '2.2.2.2', port: 1 }, Buffer.from(hash, 'hex'));
+    made.emit('peer', { host: '3.3.3.3', port: 1 }, Buffer.from(hash, 'hex'));
+    made.emit('peer', { host: '9.9.9.9', port: 1 }, Buffer.from('b'.repeat(40), 'hex'));
+    made.finish!();
     expect(await pending).toEqual({ ok: true, peers: 2 });
     expect(lookup.busy()).toBe(false);
   });
 
   it('does not search until the node is ready, and gives up inside the budget', async () => {
-    const { clk, made, lookup } = harness({ lookupMs: 4000 });
+    const { clk, lookup, node } = harness({ lookupMs: 4000 });
     const pending = lookup.lookup(hash);
     await Promise.resolve();
+    const made = node();
     expect(lookup.busy()).toBe(true);
-    expect(made.calls.lookups).toEqual([]);
+    expect(made.lookups).toEqual([]);
     clk.flush(4000);
     expect(await pending).toEqual({ ok: false, error: 'not_ready' });
-    expect(made.calls.lookups).toEqual([]);
+    expect(made.lookups).toEqual([]);
     expect(lookup.busy()).toBe(false);
     expect(lookup.state()).toBe('up');
   });
 
   it('cancels a lookup that outlives the remaining budget', async () => {
-    const { clk, made, lookup } = harness({ ready: true, lookupMs: 2500 });
+    const { clk, lookup, node } = harness({ ready: true, lookupMs: 2500 });
     const pending = lookup.lookup(hash);
     await Promise.resolve();
-    expect(made.calls.lookups).toEqual([hash]);
+    const made = node();
+    expect(made.lookups).toEqual([hash]);
     clk.flush(2500);
-    expect(made.calls.aborts).toBe(1);
+    expect(made.aborts).toBe(1);
     expect(await pending).toEqual({ ok: true, peers: 0 });
   });
 
   it('closes the node after idle, and keeps it while another lookup is running', async () => {
-    const { clk, made, lookup } = harness({ ready: true, lookupMs: 5000, idleMs: 1000 });
+    const { clk, lookup, node } = harness({ ready: true, lookupMs: 5000, idleMs: 1000 });
     const first = lookup.lookup(hash);
     await Promise.resolve();
-    made.calls.finish!();
+    const made = node();
+    made.finish!();
     expect((await first).ok).toBe(true);
-    expect(made.calls.destroy).toBe(0);
+    expect(made.destroys).toBe(0);
     clk.flush(999);
-    expect(made.calls.destroy).toBe(0);
+    expect(made.destroys).toBe(0);
     expect(lookup.state()).toBe('up');
     const second = lookup.lookup(hash);
     await Promise.resolve();
     expect(lookup.busy()).toBe(true);
-    expect(made.calls.listen).toBe(1);
+    expect(made.listened).toBe(1);
+    expect(dhtMock.bag.instances).toHaveLength(1);
     clk.flush(1);
-    expect(made.calls.destroy).toBe(0);
-    made.calls.finish!();
+    expect(made.destroys).toBe(0);
+    made.finish!();
     await second;
     clk.flush(1000);
-    expect(made.calls.destroy).toBe(1);
+    expect(made.destroys).toBe(1);
     expect(lookup.state()).toBe('idle');
   });
 });

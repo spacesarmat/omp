@@ -1,8 +1,7 @@
 // One DHT node, created on the first lookup and destroyed after idleMs with no lookup in flight.
 // It answers get_peers only. It does not announce, and it does not keep a database.
 // While the socket is open the process replies to routing pings. After idle it sends nothing.
-// bittorrent-dht is loaded by main.mjs and passed as createNode. This file stays free of that
-// import so the app test runner can load it without the sidecar's node_modules.
+import DHT from 'bittorrent-dht';
 import { peerTotal, rememberPeer, waitForReady } from './peers.mjs';
 
 function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
@@ -53,7 +52,7 @@ export function createDhtLookup(opts) {
   const now = o.now || (() => Date.now());
   const schedule = o.schedule || ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = o.clearTimer || ((timer) => clearTimeout(timer));
-  const createNode = o.createNode;
+  const createNode = o.createNode || ((nodeOpts) => new DHT(nodeOpts));
   let node = null;
   let busy = 0;
   let idleTimer = null;
@@ -72,7 +71,6 @@ export function createDhtLookup(opts) {
 
   function ensure() {
     if (node && !node.destroyed) return node;
-    if (!createNode) throw new Error('dht node factory is required');
     const created = createNode({
       // Caps so a warm node stays inside the 150 MB container limit.
       maxTables: 4,

@@ -1,6 +1,5 @@
 // HTTP on the docker network only. DHT_TOKEN empty: lookups stay disabled, /health still answers.
 import { createServer } from 'node:http';
-import DHT from 'bittorrent-dht';
 import { createDhtApp } from './http.mjs';
 import { createDhtLookup } from './lookup.mjs';
 
@@ -15,7 +14,6 @@ const port = envInt('DHT_HTTP_PORT', 8788);
 const lookup = createDhtLookup({
   lookupMs: envInt('DHT_LOOKUP_MS', 8000),
   idleMs: envInt('DHT_IDLE_MS', 10 * 60 * 1000),
-  createNode: (nodeOpts) => new DHT(nodeOpts),
 });
 const app = createDhtApp({
   token: String(process.env.DHT_TOKEN || ''),

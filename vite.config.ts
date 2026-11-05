@@ -3,6 +3,7 @@ import preact from '@preact/preset-vite';
 import legacy from '@vitejs/plugin-legacy';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // file:// has origin "null": crossorigin script tags get blocked by CORS in Chrome
 const stripCrossorigin = () => ({
@@ -50,6 +51,8 @@ export default defineConfig({
     alias: {
       react: 'preact/compat',
       'react-dom': 'preact/compat',
+      // The sidecar dependency is not installed by the root `npm ci`. The test mocks this specifier.
+      'bittorrent-dht': fileURLToPath(new URL('./ops/vps/test/bittorrent-dht-stub.mjs', import.meta.url)),
     },
     server: {
       deps: {
