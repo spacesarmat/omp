@@ -227,7 +227,8 @@ describe('compose bounds for dht-peers', () => {
     expect(start).toBeGreaterThan(0);
     const block = base.slice(start, base.indexOf('\nnetworks:', start));
     expect(block).toContain('profiles: ["dht"]');
-    expect(block).toContain('container_name: omp-dht-peers');
+    expect(block).toContain('container_name: ${DHT_CONTAINER:-omp-dht-peers}');
+    expect(block).toContain('image: ${DHT_IMAGE:-omp-dht-peers:local}');
     expect(block).toContain('mem_limit: 150m');
     expect(block).toContain('memswap_limit: 150m');
     expect(block).toContain('DHT_TOKEN: ${DHT_PEERS_TOKEN:-}');

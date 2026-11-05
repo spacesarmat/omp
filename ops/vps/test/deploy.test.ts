@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -23,18 +23,23 @@ idfile() {
   printf '%s/%s' "$state" "$enc"
 }
 
-seed() {
-  if [[ "\${DEPLOY_TEST_NO_SEED:-}" == 1 ]]; then
-    return 0
-  fi
-  local name="\${DEPLOY_TEST_SEED_IMAGE:-}"
-  local id="\${DEPLOY_TEST_SEED_ID:-}"
+seed_one() {
+  local name="$1"
+  local id="$2"
   local f
   [[ -n "$name" && -n "$id" ]] || return 0
   f="\$(idfile "$name")"
   if [[ ! -f "$f" ]]; then
     printf '%s' "$id" > "$f"
   fi
+}
+
+seed() {
+  if [[ "\${DEPLOY_TEST_NO_SEED:-}" == 1 ]]; then
+    return 0
+  fi
+  seed_one "\${DEPLOY_TEST_SEED_IMAGE:-}" "\${DEPLOY_TEST_SEED_ID:-}"
+  seed_one "\${DEPLOY_TEST_DHT_IMAGE:-omp-dht-peers:local}" "\${DEPLOY_TEST_DHT_SEED_ID:-}"
 }
 seed
 
@@ -46,15 +51,35 @@ fi
 case "$cmd" in
   info) exit 0 ;;
   compose)
+    printf 'dht-env DHT_IMAGE=%s DHT_CONTAINER=%s\\n' "\${DHT_IMAGE-}" "\${DHT_CONTAINER-}" >> "$log"
     if [[ "\${1:-}" == version ]]; then
       printf 'Docker Compose version v2\\n'
+      exit 0
+    fi
+    # "config" is the compose subcommand. "caddy reload --config" is not.
+    if [[ "$*" == *" config "* || "$*" == *" config" ]]; then
+      if [[ "$*" != *"config -q"* && "$*" != *"--quiet"* ]]; then
+        printf 'compose config without -q\\n' >&2
+        exit 1
+      fi
+      if [[ "\${DEPLOY_TEST_COMPOSE_CONFIG_FAIL:-}" == 1 ]]; then
+        printf '%s\\n' 'INDEXER_HASH=$2a$14$SECRETVALUEKEEPTHESEBYTES' >&2
+        exit 1
+      fi
+      if [[ "\${DEPLOY_TEST_COMPOSE_CONFIG_LEAK:-}" == 1 ]]; then
+        printf '%s\\n' 'INDEXER_HASH=$2a$14$SECRETVALUEKEEPTHESEBYTES'
+      fi
       exit 0
     fi
     if [[ "$*" == *reload* && "\${DEPLOY_TEST_DOCKER_RELOAD_FAIL:-}" == 1 ]]; then
       printf 'reload failed\\n' >&2
       exit 1
     fi
-    if [[ "$*" == *"up -d billing"* ]]; then
+    if [[ "$*" == *"up -d"* && "$*" == *billing* ]]; then
+      if [[ "$*" != *"--no-deps"* ]]; then
+        printf 'billing up without --no-deps\\n' >&2
+        exit 1
+      fi
       if [[ "\${DEPLOY_TEST_DOCKER_UP_FAIL:-}" == 1 ]]; then
         printf 'up failed\\n' >&2
         exit 1
@@ -63,6 +88,36 @@ case "$cmd" in
       [[ -n "$img" ]] || { printf 'no seed image\\n' >&2; exit 1; }
       cp "\$(idfile "$img")" "$state/running-billing"
       exit 0
+    fi
+    if [[ "$*" == *"up -d"* && "$*" == *"dht-peers"* ]]; then
+      if [[ "$*" != *"--profile dht"* || "$*" != *"--no-deps"* ]]; then
+        printf 'dht up must set --profile dht and --no-deps\\n' >&2
+        exit 1
+      fi
+      if [[ "\${DEPLOY_TEST_DOCKER_DHT_UP_FAIL:-}" == 1 ]]; then
+        printf 'dht up failed\\n' >&2
+        exit 1
+      fi
+      img="\${DHT_IMAGE:-\${OMP_DHT_IMAGE:-omp-dht-peers:local}}"
+      cp "\$(idfile "$img")" "$state/running-dht"
+      exit 0
+    fi
+    if [[ "$*" == *"stop dht-peers"* ]]; then
+      if [[ "$*" != *"--profile dht"* ]]; then
+        printf 'dht stop without profile\\n' >&2
+        exit 1
+      fi
+      # After the old compose is restored this service is not defined.
+      if ! grep -q 'dht-peers:' "\${OMP_VPS_ROOT:?}/docker-compose.yml"; then
+        printf 'no such service dht-peers\\n' >&2
+        exit 1
+      fi
+      rm -f "$state/running-dht"
+      exit 0
+    fi
+    if [[ "$*" == *" up "* || "$*" == up* ]]; then
+      printf 'refusing compose up without one service\\n' >&2
+      exit 1
     fi
     exit 0
     ;;
@@ -75,6 +130,20 @@ case "$cmd" in
         *) name="$1"; shift ;;
       esac
     done
+    if [[ "$name" == "omp-dht-peers" ]]; then
+      [[ -f "$state/running-dht" ]] || { printf 'no such container\\n' >&2; exit 1; }
+      if [[ "$format" == "{{.State.Running}}" ]]; then
+        printf 'true\\n'
+        exit 0
+      fi
+      if [[ "$format" == "{{.Image}}" ]]; then
+        cat "$state/running-dht"
+        printf '\\n'
+        exit 0
+      fi
+      printf 'unexpected dht inspect format\\n' >&2
+      exit 1
+    fi
     [[ "$name" == "omp-billing" ]] || { printf 'unexpected inspect %s\\n' "$name" >&2; exit 1; }
     [[ -f "$state/running-billing" ]] || { printf 'no such container\\n' >&2; exit 1; }
     [[ "$format" == "{{.Image}}" ]] || { printf 'unexpected inspect format\\n' >&2; exit 1; }
@@ -107,6 +176,19 @@ case "$cmd" in
     ;;
   tag)
     cp "\$(idfile "\${1:?}")" "\$(idfile "\${2:?}")"
+    exit 0
+    ;;
+  rmi)
+    rm -f "\$(idfile "\${1:?}")"
+    exit 0
+    ;;
+  stop)
+    [[ "\${1:-}" == "omp-dht-peers" ]] || { printf 'unexpected stop %s\\n' "\${1:-}" >&2; exit 1; }
+    if [[ "\${DEPLOY_TEST_DOCKER_STOP_FAIL:-}" == 1 ]]; then
+      printf 'stop failed\\n' >&2
+      exit 1
+    fi
+    rm -f "$state/running-dht"
     exit 0
     ;;
   build)
@@ -297,6 +379,11 @@ function text(value: string | Buffer | undefined): string {
 function release(overrides: Record<string, string> = {}): Record<string, string> {
   return {
     'ops/vps/Caddyfile': 'old caddy\n',
+    'ops/vps/Caddyfile.nuc': 'old caddy nuc\n',
+    'ops/vps/docker-compose.yml': 'name: omp-vps\n',
+    'ops/vps/dht-peers/Dockerfile': 'FROM dht-old\n',
+    'ops/vps/dht-peers/package.json': '{"name":"dht-peers"}\n',
+    'ops/vps/dht-peers/src/main.mjs': 'export const peers = 1;\n',
     'ops/vps/site/index.html': 'old landing\n',
     'ops/vps/Dockerfile': 'FROM old\n',
     'ops/billing/package.json': '{"name":"omp-billing"}\n',
@@ -311,7 +398,10 @@ function release(overrides: Record<string, string> = {}): Record<string, string>
 
 function vpsPath(rel: string): string | null {
   if (rel.startsWith('ops/vps/site/')) return `site/${rel.slice('ops/vps/site/'.length)}`;
+  if (rel.startsWith('ops/vps/dht-peers/')) return rel.slice('ops/vps/'.length);
   if (rel === 'ops/vps/Caddyfile') return 'Caddyfile';
+  if (rel === 'ops/vps/Caddyfile.nuc') return 'Caddyfile.nuc';
+  if (rel === 'ops/vps/docker-compose.yml') return 'docker-compose.yml';
   if (rel === 'ops/vps/Dockerfile') return 'Dockerfile.billing';
   if (rel.startsWith('ops/billing/')) return `billing-src/${rel.slice('ops/billing/'.length)}`;
   return null;
@@ -471,7 +561,7 @@ describe('ops/vps deploy', () => {
     expect(readme).toContain('does not run on push');
   });
 
-  it('syncs only the four paths, restarts billing, and reloads caddy', () => {
+  it('syncs the release paths, restarts billing, and reloads caddy', () => {
     const files = release({
       'ops/vps/Caddyfile': 'new caddy\n',
       'ops/vps/site/index.html': 'new landing\n',
@@ -499,12 +589,12 @@ describe('ops/vps deploy', () => {
     expect(existsSync(path.join(backup, 'data'))).toBe(false);
     const docker = log(box.dockerLog);
     expect(linesStarting(box.dockerLog, 'build')).toHaveLength(1);
-    expect(docker).toContain('up -d billing');
+    expect(docker).toContain('up -d --no-deps billing');
     expect(docker).toContain('caddy reload');
     expect(docker).not.toContain('compose down');
     expect(docker).not.toContain(SECRET);
     for (const line of linesStarting(box.dockerLog, 'compose')) {
-      if (line.includes(' up ')) expect(line).toContain('up -d billing');
+      if (line.includes(' up ')) expect(line).toContain('up -d --no-deps billing');
     }
     expect(log(box.curlLog)).toContain('https://api.github.com/repos/spacesarmat/omp/tarball/main');
     expect(log(box.curlLog)).toContain('--head');
@@ -546,7 +636,7 @@ describe('ops/vps deploy', () => {
     const result = runDeploy(box.env, ['main']);
     expect(result.status, result.stderr).toBe(0);
     expect(linesStarting(box.dockerLog, 'build')).toHaveLength(1);
-    expect(log(box.dockerLog)).toContain('up -d billing');
+    expect(log(box.dockerLog)).toContain('up -d --no-deps billing');
     expect(log(box.dockerLog)).not.toContain('caddy reload');
   });
 
@@ -600,7 +690,7 @@ describe('ops/vps deploy', () => {
     expect(protectedNow(box.root)).toEqual(before);
     expect(imageId(box.env)).toBe(SEED_ID);
     expect(linesStarting(box.dockerLog, 'build').length).toBeGreaterThan(0);
-    expect(log(box.dockerLog)).toContain('up -d billing');
+    expect(log(box.dockerLog)).toContain('up -d --no-deps billing');
   });
 
   it('fails health when the landing still sends X-Frame-Options DENY', () => {
@@ -652,7 +742,7 @@ describe('ops/vps deploy', () => {
     expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
     expect(imageId(box.env)).toBe(SEED_ID);
     expect(readFileSync(path.join(box.parent, 'docker-state', 'running-billing'), 'utf8').trim()).toBe(SEED_ID);
-    expect(log(box.dockerLog).split('\n').filter((line) => line.includes('up -d billing'))).toHaveLength(2);
+    expect(log(box.dockerLog).split('\n').filter((line) => line.includes('up -d --no-deps billing'))).toHaveLength(2);
     expect(result.stderr).toContain('reload failed');
   });
 
@@ -683,10 +773,16 @@ describe('ops/vps deploy', () => {
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stdout).toContain('compose files: docker-compose.yml docker-compose.nuc.yml');
     const files = `-f ${box.root}/docker-compose.yml -f ${box.root}/docker-compose.nuc.yml`;
-    const composeLines = linesStarting(box.dockerLog, 'compose').filter((l) => !l.includes('version'));
+    const composeLines = linesStarting(box.dockerLog, 'compose').filter((l) => !l.includes('version') && !l.includes(' config '));
     expect(composeLines.length).toBeGreaterThan(0);
     for (const line of composeLines) expect(line).toContain(files);
-    expect(composeLines.some((l) => l.includes(`${files} up -d billing`))).toBe(true);
+    expect(composeLines.some((l) => l.includes(`${files} up -d --no-deps billing`))).toBe(true);
+    const configLines = linesStarting(box.dockerLog, 'compose').filter((l) => l.includes(' config '));
+    expect(configLines).toHaveLength(1);
+    expect(configLines[0]).toContain('config -q');
+    expect(configLines[0]).toContain('ops/vps/docker-compose.yml');
+    expect(configLines[0]).toContain(`-f ${box.root}/docker-compose.nuc.yml`);
+    expect(configLines[0]).not.toContain(SECRET);
     const curl = log(box.curlLog);
     expect(curl).toContain('http://billing.omp-player.online/health');
     expect(curl).toContain('http://omp-player.online/');
@@ -804,7 +900,7 @@ describe('ops/vps deploy', () => {
     const preview = runDeploy(box.env, ['--dry-run', '--rollback', backup]);
     expect(preview.status, preview.stderr).toBe(0);
     expect(preview.stdout).toContain('dry-run complete');
-    expect(preview.stdout).toContain('would docker compose up -d billing');
+    expect(preview.stdout).toContain('would docker compose up -d --no-deps billing');
     expect(readFileSync(path.join(box.root, 'Caddyfile'), 'utf8')).toBe('new caddy\n');
     const rolled = runDeploy(box.env, ['--rollback', backup]);
     expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
@@ -946,6 +1042,446 @@ tar.close()
     } finally {
       await closeServer(server);
     }
+  });
+});
+
+const DHT_IMAGE = 'omp-dht-peers:local';
+const DHT_ID = `sha256:${'c'.repeat(64)}`;
+
+function upLines(file: string): string[] {
+  return linesStarting(file, 'compose').filter((line) => line.includes(' up '));
+}
+
+describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
+  it('dry-run prints each path and discards compose config output', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\n# INDEXER_HASH=$2a$14$SECRETVALUEKEEPTHESEBYTES\n',
+      'ops/vps/dht-peers/src/main.mjs': 'export const peers = 9;\n',
+      'ops/vps/Caddyfile.nuc': 'new caddy nuc\n',
+    });
+    const box = world(files, { DEPLOY_TEST_COMPOSE_CONFIG_LEAK: '1' });
+    const compose = readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8');
+    const result = runDeploy(box.env, ['--dry-run', 'main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('docker-compose.yml would change');
+    expect(result.stdout).toContain('dht-peers would change');
+    expect(result.stdout).toContain('Caddyfile.nuc would change');
+    expect(result.stdout).toContain('Caddyfile unchanged');
+    expect(result.stdout).toContain('site unchanged');
+    expect(result.stdout).toContain('billing source unchanged');
+    expect(result.stdout).toContain('Dockerfile.billing unchanged');
+    expect(result.stdout).toContain('would docker compose up -d --no-deps billing');
+    expect(result.stdout).toContain(`would build ${DHT_IMAGE} and docker compose --profile dht up -d --no-deps dht-peers`);
+    expect(result.stdout).toContain('would not reload caddy');
+    expect(result.stdout).toContain('compose config ok');
+    expect(result.stdout).not.toContain('SECRETVALUE');
+    expect(result.stderr).not.toContain('SECRETVALUE');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe(compose);
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(box.root, 'Caddyfile.nuc'), 'utf8')).toBe('old caddy nuc\n');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+    expect(linesStarting(box.dockerLog, 'tag')).toHaveLength(0);
+    expect(log(box.dockerLog)).not.toContain('up -d');
+    expect(log(box.dockerLog)).toContain('config -q');
+    expect(log(box.dockerLog)).not.toContain('SECRETVALUE');
+    expect(readdirSync(box.parent).filter((name) => name.startsWith('omp-vps-backup-'))).toEqual([]);
+  });
+
+  it('refuses a compose file that does not render, without printing it or changing the host', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\n# INDEXER_HASH=$2a$14$SECRETVALUEKEEPTHESEBYTES\n',
+    });
+    const box = world(files, { DEPLOY_TEST_COMPOSE_CONFIG_FAIL: '1' });
+    const before = protectedNow(box.root);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('compose config failed');
+    expect(result.stdout).not.toContain('SECRETVALUE');
+    expect(result.stderr).not.toContain('SECRETVALUE');
+    expect(protectedNow(box.root)).toEqual(before);
+    expect(log(box.dockerLog)).not.toContain('up -d');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+    expect(readdirSync(box.parent).filter((name) => name.startsWith('omp-vps-backup-'))).toEqual([]);
+  });
+
+  it('publishes compose and dht-peers, recreates only those services, and keeps the Caddyfile.nuc inode', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\n# BILLING_CLAIM_IP_MAX\n',
+      'ops/vps/dht-peers/src/main.mjs': 'export const peers = 3;\n',
+      'ops/vps/Caddyfile.nuc': 'new caddy nuc\n',
+    });
+    const box = world(files, { DEPLOY_TEST_DHT_SEED_ID: DHT_ID });
+    mkdirSync(path.join(box.root, 'dht-peers/node_modules/pkg'), { recursive: true });
+    mkdirSync(path.join(box.root, 'dht-peers/data'), { recursive: true });
+    writeFileSync(path.join(box.root, 'dht-peers/node_modules/pkg/index.js'), 'keep-modules\n');
+    writeFileSync(path.join(box.root, 'dht-peers/data/local.txt'), 'keep-data\n');
+    writeFileSync(path.join(box.root, 'dht-peers/src/extra.mjs'), 'remove-me\n');
+    const nuc = path.join(box.root, 'Caddyfile.nuc');
+    const ino = statSync(nuc).ino;
+    const before = protectedNow(box.root);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toContain('BILLING_CLAIM_IP_MAX');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 3;\n');
+    expect(existsSync(path.join(box.root, 'dht-peers/src/extra.mjs'))).toBe(false);
+    expect(readFileSync(path.join(box.root, 'dht-peers/node_modules/pkg/index.js'), 'utf8')).toBe('keep-modules\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/data/local.txt'), 'utf8')).toBe('keep-data\n');
+    expect(readFileSync(nuc, 'utf8')).toBe('new caddy nuc\n');
+    expect(statSync(nuc).ino).toBe(ino);
+    expect(readFileSync(path.join(box.root, '.env'), 'utf8')).toBe(before.env);
+    expect(readFileSync(path.join(box.root, 'data/billing/billing.db'), 'utf8')).toBe(before.db);
+    expect(readFileSync(path.join(box.root, 'jacred/init.yaml'), 'utf8')).toBe(before.jacred);
+    expect(result.stdout).not.toContain('SECRETVALUE');
+    expect(result.stderr).not.toContain('SECRETVALUE');
+    const backup = backupFrom(result.stdout);
+    expect(readFileSync(path.join(backup, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(readFileSync(path.join(backup, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(backup, 'Caddyfile.nuc'), 'utf8')).toBe('old caddy nuc\n');
+    expect(existsSync(path.join(backup, 'dht-peers/data'))).toBe(false);
+    const manifest = readFileSync(path.join(backup, 'backup.manifest'), 'utf8');
+    expect(manifest).toContain('had_compose=1');
+    expect(manifest).toContain('had_dht=1');
+    expect(manifest).toContain('had_caddyfile_nuc=1');
+    expect(manifest).toContain(`dht_image_id=${DHT_ID}`);
+    expect(manifest).toContain('dht_running=0');
+    expect(existsSync(path.join(backup, '.env'))).toBe(false);
+    const ups = upLines(box.dockerLog);
+    expect(ups.length).toBeGreaterThan(0);
+    for (const line of ups) {
+      expect(line).toContain('--no-deps');
+      expect(line.includes(' up -d --no-deps billing') || line.includes(' up -d --no-deps dht-peers')).toBe(true);
+    }
+    expect(ups.some((line) => line.includes('--profile dht') && line.includes('up -d --no-deps dht-peers'))).toBe(true);
+    expect(log(box.dockerLog)).not.toContain('caddy reload');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(1);
+    expect(linesStarting(box.dockerLog, 'build')[0]).toContain('dht-peers/Dockerfile');
+    expect(imageId(box.env)).toBe(SEED_ID);
+    expect(imageId(box.env, DHT_IMAGE)).not.toBe(DHT_ID);
+  });
+
+  it('a compose-only change recreates billing and does not start a stopped dht-peers', () => {
+    const box = world(release({ 'ops/vps/docker-compose.yml': 'name: omp-vps\n# claim\n' }));
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toContain('# claim');
+    const ups = upLines(box.dockerLog);
+    expect(ups).toHaveLength(1);
+    expect(ups[0]).toContain('up -d --no-deps billing');
+    expect(ups[0]).not.toContain('dht-peers');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+    expect(log(box.dockerLog)).not.toContain('caddy reload');
+    expect(existsSync(path.join(box.parent, 'docker-state', 'running-dht'))).toBe(false);
+  });
+
+  it('a compose change recreates a running dht-peers container without rebuilding it', () => {
+    const box = world(release({ 'ops/vps/docker-compose.yml': 'name: omp-vps\nservices:\n  dht-peers:\n    image: omp-dht-peers:local\n' }), {
+      DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
+    });
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    const ups = upLines(box.dockerLog);
+    expect(ups.some((line) => line.includes('up -d --no-deps billing'))).toBe(true);
+    expect(ups.some((line) => line.includes('--profile dht') && line.includes('up -d --no-deps dht-peers'))).toBe(true);
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+    expect(imageId(box.env, DHT_IMAGE)).toBe(DHT_ID);
+  });
+
+  it('on the NUC reloads Caddy when Caddyfile.nuc changes and not when only the VPS Caddyfile changes', () => {
+    const nucBox = world(release({ 'ops/vps/Caddyfile.nuc': 'new caddy nuc\n' }));
+    writeFileSync(path.join(nucBox.root, 'docker-compose.nuc.yml'), 'services: {}\n');
+    const nuc = path.join(nucBox.root, 'Caddyfile.nuc');
+    const ino = statSync(nuc).ino;
+    const nucResult = runDeploy(nucBox.env, ['main']);
+    expect(nucResult.status, `${nucResult.stdout}\n${nucResult.stderr}`).toBe(0);
+    expect(readFileSync(nuc, 'utf8')).toBe('new caddy nuc\n');
+    expect(statSync(nuc).ino).toBe(ino);
+    expect(log(nucBox.dockerLog)).toContain('caddy reload');
+    expect(upLines(nucBox.dockerLog)).toHaveLength(0);
+    expect(linesStarting(nucBox.dockerLog, 'build')).toHaveLength(0);
+
+    const vpsFile = world(release({ 'ops/vps/Caddyfile': 'new caddy\n' }));
+    writeFileSync(path.join(vpsFile.root, 'docker-compose.nuc.yml'), 'services: {}\n');
+    const fileResult = runDeploy(vpsFile.env, ['main']);
+    expect(fileResult.status, `${fileResult.stdout}\n${fileResult.stderr}`).toBe(0);
+    expect(readFileSync(path.join(vpsFile.root, 'Caddyfile'), 'utf8')).toBe('new caddy\n');
+    expect(readFileSync(path.join(vpsFile.root, 'Caddyfile.nuc'), 'utf8')).toBe('old caddy nuc\n');
+    expect(log(vpsFile.dockerLog)).not.toContain('caddy reload');
+    expect(upLines(vpsFile.dockerLog)).toHaveLength(0);
+  });
+
+  it('rolls back compose, dht-peers, Caddyfile.nuc, and the dht image when health checks fail', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\n# claim\n',
+      'ops/vps/dht-peers/src/main.mjs': 'export const peers = 4;\n',
+      'ops/vps/Caddyfile.nuc': 'new caddy nuc\n',
+      'ops/billing/src/server.mjs': 'export const version = 2;\n',
+    });
+    const box = world(files, { DEPLOY_TEST_HEALTH_FAIL: '1', DEPLOY_TEST_DHT_SEED_ID: DHT_ID });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toContain('rolling back');
+    expect(result.stdout).toContain('stopping omp-dht-peers');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(box.root, 'Caddyfile.nuc'), 'utf8')).toBe('old caddy nuc\n');
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
+    expect(readFileSync(path.join(box.root, '.env'), 'utf8')).toBe(envFile());
+    expect(imageId(box.env)).toBe(SEED_ID);
+    expect(imageId(box.env, DHT_IMAGE)).toBe(DHT_ID);
+    expect(existsSync(path.join(box.parent, 'docker-state', 'running-dht'))).toBe(false);
+    expect(linesStarting(box.dockerLog, 'rmi')).toHaveLength(0);
+    const ups = upLines(box.dockerLog);
+    expect(ups.every((line) => line.includes('--no-deps'))).toBe(true);
+    expect(ups.some((line) => line.includes('dht-peers'))).toBe(true);
+    expect(result.stdout).not.toContain('SECRETVALUE');
+    expect(result.stderr).not.toContain('SECRETVALUE');
+  });
+
+  it('on the NUC a failed health check reloads the restored Caddyfile.nuc', () => {
+    const box = world(release({ 'ops/vps/Caddyfile.nuc': 'new caddy nuc\n' }), { DEPLOY_TEST_HEALTH_FAIL: '1' });
+    writeFileSync(path.join(box.root, 'docker-compose.nuc.yml'), 'services: {}\n');
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    const reloadAt = result.stdout.lastIndexOf('reloading restored Caddyfile.nuc');
+    const failedAt = result.stdout.lastIndexOf('health checks failed');
+    expect(reloadAt, result.stdout).toBeGreaterThan(-1);
+    expect(failedAt, result.stdout).toBeGreaterThan(reloadAt);
+    expect(readFileSync(path.join(box.root, 'Caddyfile.nuc'), 'utf8')).toBe('old caddy nuc\n');
+    expect(log(box.dockerLog).split('\n').filter((line) => line.includes('caddy reload'))).toHaveLength(2);
+  });
+
+  it('puts a running dht-peers back on the backup image', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
+      DEPLOY_TEST_HEALTH_FAIL: '1',
+      DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
+    });
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    const rolled = result.stdout.lastIndexOf('rolling back');
+    expect(result.stdout.indexOf('restarting dht-peers', rolled), result.stdout).toBeGreaterThan(rolled);
+    expect(result.stdout).not.toContain('stopping omp-dht-peers');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(imageId(box.env, DHT_IMAGE)).toBe(DHT_ID);
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(DHT_ID);
+  });
+
+  it('accepts a rebuilt sidecar image when the saved tag is gone', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
+      DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
+    });
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const manifest = readFileSync(path.join(backup, 'backup.manifest'), 'utf8');
+    const savedTag = manifest.match(/^dht_image_tag=(.+)$/m)?.[1] ?? '';
+    expect(savedTag).toMatch(/^omp-dht-peers:backup-/);
+    expect(manifest).toContain(`dht_image_id=${DHT_ID}`);
+    execFileSync('docker', ['rmi', savedTag], { env: box.env });
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(rolled.stdout).toContain('dht backup image tag missing; rebuilding restored dht-peers source');
+    expect(rolled.stdout).not.toContain(`want ${DHT_ID}`);
+    const rebuilt = imageId(box.env, DHT_IMAGE);
+    expect(rebuilt).not.toBe(DHT_ID);
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(rebuilt);
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    const again = runDeploy(box.env, ['--rollback', backup]);
+    expect(again.status, `${again.stdout}\n${again.stderr}`).toBe(0);
+    expect(again.stdout).not.toContain(`want ${DHT_ID}`);
+    const againId = imageId(box.env, DHT_IMAGE);
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(againId);
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(3);
+  });
+
+  it('removes a dht image created by this deploy when the backup had none', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
+      DEPLOY_TEST_HEALTH_FAIL: '1',
+    });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toContain('stopping omp-dht-peers');
+    expect(linesStarting(box.dockerLog, 'rmi')).toHaveLength(1);
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(() => imageId(box.env, DHT_IMAGE)).toThrow();
+  });
+
+  it('a second rollback restarts the sidecar when the first restart left the old container image', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
+      DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
+    });
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const built = readFileSync(path.join(state, 'running-dht'), 'utf8').trim();
+    expect(built).not.toBe(DHT_ID);
+    const first = runDeploy({ ...box.env, DEPLOY_TEST_DOCKER_DHT_UP_FAIL: '1' }, ['--rollback', backup]);
+    expect(first.status).not.toBe(0);
+    expect(first.stderr).toContain('dht up failed');
+    expect(first.stdout).toContain('dht-peers restore failed');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(built);
+    const second = runDeploy(box.env, ['--rollback', backup]);
+    expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+    expect(second.stdout).toContain('restarting dht-peers');
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(DHT_ID);
+    expect(imageId(box.env, DHT_IMAGE)).toBe(DHT_ID);
+  });
+
+  it('a second rollback stops the sidecar when the first stop failed', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }));
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const running = path.join(box.parent, 'docker-state', 'running-dht');
+    expect(existsSync(running)).toBe(true);
+    const first = runDeploy({ ...box.env, DEPLOY_TEST_DOCKER_STOP_FAIL: '1' }, ['--rollback', backup]);
+    expect(first.status).not.toBe(0);
+    expect(first.stderr).toContain('stop failed');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(existsSync(running)).toBe(true);
+    const second = runDeploy(box.env, ['--rollback', backup]);
+    expect(second.status, `${second.stdout}\n${second.stderr}`).toBe(0);
+    expect(second.stdout).toContain('stopping omp-dht-peers');
+    expect(existsSync(running)).toBe(false);
+    expect(linesStarting(box.dockerLog, 'stop').some((line) => line === 'stop omp-dht-peers')).toBe(true);
+  });
+
+  it('stops a new sidecar by container name when the backup compose has no dht-peers service', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\nservices:\n  dht-peers:\n    image: omp-dht-peers:local\n',
+      'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n',
+    });
+    const box = world(files, { DEPLOY_TEST_HEALTH_FAIL: '1' });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(result.stdout).toContain('stopping omp-dht-peers');
+    expect(existsSync(path.join(box.parent, 'docker-state', 'running-dht'))).toBe(false);
+    expect(log(box.dockerLog)).not.toContain('stop dht-peers');
+    expect(linesStarting(box.dockerLog, 'stop')).toContain('stop omp-dht-peers');
+  });
+
+  it('deploys a ref that predates dht-peers and leaves the sidecar in place', () => {
+    const files = release({ 'ops/billing/src/server.mjs': 'export const version = 2;\n' });
+    delete files['ops/vps/dht-peers/Dockerfile'];
+    delete files['ops/vps/dht-peers/package.json'];
+    delete files['ops/vps/dht-peers/src/main.mjs'];
+    const box = world(files);
+    writeFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'stay\n');
+    const result = runDeploy(box.env, ['v0.20.8-beta.6']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('release has no dht-peers; leaving the sidecar unchanged');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'utf8')).toBe('stay\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 2;\n');
+    expect(upLines(box.dockerLog).every((line) => line.includes('up -d --no-deps billing') && !line.includes('dht-peers'))).toBe(true);
+    expect(log(box.dockerLog)).not.toContain('dht-peers/Dockerfile');
+  });
+
+  it('does not restart a running sidecar when an older compose has no dht-peers service', () => {
+    const files = release();
+    delete files['ops/vps/dht-peers/Dockerfile'];
+    delete files['ops/vps/dht-peers/package.json'];
+    delete files['ops/vps/dht-peers/src/main.mjs'];
+    const box = world(files);
+    writeFileSync(
+      path.join(box.root, 'docker-compose.yml'),
+      'name: omp-vps\nservices:\n  dht-peers:\n    image: omp-dht-peers:local\n',
+    );
+    writeFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'stay\n');
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const result = runDeploy(box.env, ['v0.20.8-beta.2']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('release compose has no dht-peers service; leaving the sidecar unchanged');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'utf8')).toBe('stay\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(DHT_ID);
+    expect(upLines(box.dockerLog).some((line) => line.includes('dht-peers'))).toBe(false);
+    expect(upLines(box.dockerLog).some((line) => line.includes('up -d --no-deps billing'))).toBe(true);
+  });
+
+  it('rejects a release that has a partial dht-peers directory', () => {
+    const files = release();
+    delete files['ops/vps/dht-peers/Dockerfile'];
+    delete files['ops/vps/dht-peers/package.json'];
+    const box = world(files);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('archive is missing ops/vps/dht-peers/Dockerfile');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(0);
+  });
+
+  it('passes DHT_IMAGE and DHT_CONTAINER into compose and refuses a different .env', () => {
+    const image = 'omp-dht-peers:custom';
+    const container = 'omp-dht-custom';
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 9;\n' }), {
+      OMP_DHT_IMAGE: image,
+      OMP_DHT_CONTAINER: container,
+    });
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(log(box.dockerLog)).toContain(`dht-env DHT_IMAGE=${image} DHT_CONTAINER=${container}`);
+    expect(linesStarting(box.dockerLog, 'build').some((line) => line.includes(`-t ${image}`))).toBe(true);
+    expect(upLines(box.dockerLog).some((line) => line.includes('--profile dht') && line.includes('up -d --no-deps dht-peers'))).toBe(true);
+    expect(imageId(box.env, image)).toMatch(/^sha256:[0-9a-f]{64}$/);
+
+    const mismatch = world(release());
+    writeFileSync(path.join(mismatch.root, '.env'), `${envFile()}DHT_IMAGE=other:tag\nDHT_CONTAINER=other-name\n`);
+    const refused = runDeploy(mismatch.env, ['main']);
+    expect(refused.status).not.toBe(0);
+    expect(refused.stderr).toContain(".env DHT_IMAGE is 'other:tag'");
+    expect(refused.stderr).not.toContain('SECRETVALUE');
+    expect(log(mismatch.curlLog)).not.toContain('/tarball/');
+    expect(readFileSync(path.join(mismatch.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+
+    const containerOnly = world(release());
+    writeFileSync(path.join(containerOnly.root, '.env'), `${envFile()}DHT_CONTAINER=other-name\n`);
+    const refusedContainer = runDeploy(containerOnly.env, ['main']);
+    expect(refusedContainer.status).not.toBe(0);
+    expect(refusedContainer.stderr).toContain(".env DHT_CONTAINER is 'other-name'");
+    expect(log(containerOnly.curlLog)).not.toContain('/tarball/');
+  });
+
+  it('a backup from before these paths were recorded does not remove them', () => {
+    const files = release({
+      'ops/vps/Caddyfile': 'new caddy\n',
+      'ops/vps/Caddyfile.nuc': 'new caddy nuc\n',
+      'ops/vps/docker-compose.yml': 'name: omp-vps\n# claim\n',
+      'ops/vps/dht-peers/src/main.mjs': 'export const peers = 5;\n',
+    });
+    const box = world(files);
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const manifestPath = path.join(backup, 'backup.manifest');
+    const kept = readFileSync(manifestPath, 'utf8')
+      .split('\n')
+      .filter((line) => !/^(had_compose|had_dht|had_caddyfile_nuc|dht_)/.test(line))
+      .join('\n');
+    writeFileSync(manifestPath, kept.endsWith('\n') ? kept : `${kept}\n`);
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'Caddyfile'), 'utf8')).toBe('old caddy\n');
+    expect(readFileSync(path.join(box.root, 'Caddyfile.nuc'), 'utf8')).toBe('new caddy nuc\n');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toContain('# claim');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 5;\n');
   });
 });
 
