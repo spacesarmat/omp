@@ -9,7 +9,7 @@ name: omp-vps
 
 services:
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:8652f54d3ef21e120f78f3c6b396bcf7d3fc8f999cece30cd35490430da89430
     container_name: omp-caddy
     restart: unless-stopped
     ports:
@@ -95,13 +95,23 @@ services:
       BILLING_MONITOR_CHAT_ID: ${BILLING_MONITOR_CHAT_ID:-536445442}
       # 1 brings back the old admin notices the monitor duplicates (service down, Postgres backup)
       BILLING_LEGACY_ALERTS: ${BILLING_LEGACY_ALERTS:-0}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     volumes:
       - ./data/billing:/data
     depends_on:
-      - jackett
-      - jacred
-      - warp
-      - docker-proxy
+      jackett:
+        condition: service_healthy
+      jacred:
+        condition: service_healthy
+      warp:
+        condition: service_started
+      docker-proxy:
+        condition: service_healthy
     networks:
       - omp
       - dockerapi
@@ -109,7 +119,7 @@ services:
 
   # SOCKS/HTTP proxy so billing can reach Telegram Bot API from a blocked VPS IP
   warp:
-    image: caomingjun/warp:latest
+    image: caomingjun/warp@sha256:2891b92420a193a49c74cbd4387bee91f5c35fbc487fca8e8f739baed52c1d2b
     container_name: omp-warp
     restart: unless-stopped
     environment:
@@ -129,7 +139,7 @@ services:
       - omp
 
   jackett:
-    image: lscr.io/linuxserver/jackett:latest
+    image: lscr.io/linuxserver/jackett@sha256:08b2bfb651dcfa2c896ab3beaf5c1ea6fe6abe317a1ae9bbbfe801e84b360c58
     container_name: omp-jackett
     restart: unless-stopped
     environment:
@@ -139,11 +149,17 @@ services:
       AUTO_UPDATE: "true"
     volumes:
       - ./data/jackett:/config
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:9117/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - omp
 
   jacred:
-    image: ghcr.io/jacred-fdb/jacred:latest
+    image: ghcr.io/jacred-fdb/jacred@sha256:26dad9965eb8427246b6b60e964d6371189c45e0517a3949eebbe90dc79d3983
     container_name: omp-jacred
     restart: unless-stopped
     environment:
@@ -153,12 +169,19 @@ services:
       - ./jacred/init.yaml:/app/config/init.yaml:ro
       - ./data/jacred:/app/Data
     depends_on:
-      - torrserver
+      torrserver:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:9117/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - omp
 
   torrserver:
-    image: ghcr.io/yourok/torrserver:latest
+    image: ghcr.io/yourok/torrserver@sha256:9188743fbdba14dccd38654a1185f44338bf5062f4098730acb8adeac6e596d7
     container_name: omp-torrserver
     restart: unless-stopped
     environment:
@@ -170,12 +193,18 @@ services:
     volumes:
       - ./data/torrserver/config:/opt/ts/config
       - ./data/torrserver/torrents:/opt/ts/torrents
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8090/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - omp
 
   # Cloudflare challenge solver for Jackett/JacRed indexers. Localhost-only publish.
   flaresolverr:
-    image: ghcr.io/flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
     container_name: omp-flaresolverr
     restart: unless-stopped
     environment:
@@ -183,6 +212,12 @@ services:
       TZ: Europe/Moscow
     ports:
       - "127.0.0.1:8191:8191"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://127.0.0.1:8191/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - omp
 
@@ -209,6 +244,12 @@ services:
     tmpfs:
       - /run
       - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:2375/containers/json?limit=1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - dockerapi
     # no ports

@@ -27,8 +27,11 @@ services:
       - omp
       - pg
       - dockerapi
+    depends_on:
+      postgres:
+        condition: service_healthy
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
     container_name: omp-postgres
     restart: unless-stopped
     environment:
@@ -62,7 +65,7 @@ services:
   # Separate WARP (full-tunnel "warp" mode inside its own netns) used ONLY by cloudflared:
   # the home ISP breaks Cloudflare Tunnel edge connections, WARP carries them. Host routing is untouched.
   warp-tunnel:
-    image: caomingjun/warp:latest
+    image: caomingjun/warp@sha256:2891b92420a193a49c74cbd4387bee91f5c35fbc487fca8e8f739baed52c1d2b
     container_name: omp-warp-tunnel
     restart: unless-stopped
     environment:
@@ -87,7 +90,7 @@ services:
   # Ingress (in Cloudflare): omp-player.online, www, billing, jackett, jacred -> http://nuc-caddy:80 (Host preserved).
   # Token lives only in ./tunnel.env (root 600, never commit).
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
     container_name: omp-cloudflared
     restart: unless-stopped
     command: tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 run
@@ -101,7 +104,7 @@ services:
   # private range is excluded from WARP). The NAS's own connector can't reach the edge (ISP breaks TLS to :7844).
   # Token lives only in ./tunnel-home-nas.env (root 600, never commit).
   cloudflared-home-nas:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
     container_name: omp-cloudflared-home-nas
     restart: unless-stopped
     command: tunnel --no-autoupdate --protocol http2 --edge-ip-version 4 --metrics 127.0.0.1:20242 run

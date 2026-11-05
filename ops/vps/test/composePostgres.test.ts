@@ -26,7 +26,7 @@ const networks = block(text, '', 'networks');
 
 describe('NUC compose: postgres for billing', () => {
   it('postgres 17 publishes no port and sits only on the internal pg network', () => {
-    expect(pg).toContain('image: postgres:17-alpine');
+    expect(pg).toMatch(/image: postgres:17-alpine(@sha256:[a-f0-9]{64})?/);
     expect(pg).not.toMatch(/^\s+(ports|expose):/m);
     expect(block(pg, '    ', 'networks').trim()).toBe('- pg');
     expect(block(networks, '  ', 'pg').trim()).toBe('internal: true');
