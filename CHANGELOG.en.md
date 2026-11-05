@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Admin: the committed ops/billing/public bundle is rebuilt, so the DHT tab is in it (request /admin/api/dht). The billing CI job removes hashed assets, rebuilds admin, and fails if public has drifted from the sources. No migration
+
 ## 0.20.8-beta.7
 
 - [phone] When Telegram is already linked and the account has a subscription, including the grace period, the phone gets a sign-in on its own. No code is needed. When every device slot is taken, the existing "all devices are taken" text is shown. With no subscription, the code field stays

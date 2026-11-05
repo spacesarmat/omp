@@ -121,6 +121,18 @@ jobs:
       - name: Admin typecheck
         working-directory: ops/billing/admin
         run: npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json
-      - name: Admin build
+      # Production serves ops/billing/public. Vite keeps emptyOutDir false so logo.svg stays,
+      # which also leaves a previous hashed bundle in assets/. Wipe those files, rebuild, and
+      # fail when the committed tree differs. git diff misses untracked output, so status is checked too.
+      - name: Admin build matches committed public bundle
         working-directory: ops/billing/admin
-        run: npm run build
+        run: |
+          set -eu
+          rm -f ../public/assets/*
+          npm run build
+          git diff --exit-code -- ../public
+          status="$(git status --porcelain -- ../public)"
+          if [ -n "$status" ]; then
+            printf '%s\n' "$status" >&2
+            exit 1
+          fi
