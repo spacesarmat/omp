@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
-import { ACCESS_KEY, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
+import { ACCESS_KEY, MONITOR_FREE_MAX, monitorMax, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { allowBillingRefresh, resetBillingTokens } from '../../src/billing/tokens';
 import { billingSession, deviceId, onBillingChange, saveBillingSession, saveSeenAccount, seenAccount, sessionKey } from '../../src/billing/session';
 import { failureOf } from '../../src/monitor/upgradeText';
@@ -8,6 +8,8 @@ import { isLoginRequired } from '../../src/sources/types';
 import type { SourceResult } from '../../src/sources/types';
 import {
   activateCode,
+  allowBillingSignIn,
+  claimLinkedSession,
   clearBilling,
   ensureOmpJackettSources,
   fetchBillingAccount,
@@ -16,10 +18,13 @@ import {
   ompJackettSource,
   ompJacredSource,
   refreshOmpJackettSources,
+  signOutBilling,
   startOmpJackett,
   syncOmpJackett,
 } from '../../src/sources/ompJackett';
-import { getSource, unregisterSource } from '../../src/sources/registry';
+import { dhtSeedCheckAvailable, setDhtPeersContext } from '../../src/sources/dhtPeers';
+import { progressText, sourceName } from '../../src/sources/view';
+import { getSource, registerSource, unregisterSource } from '../../src/sources/registry';
 import type { HttpResponse } from '../../src/sources/types';
 import { fakeSite, page } from './fakeSite';
 
@@ -37,6 +42,8 @@ describe('omp Jackett source', () => {
     unregisterSource(OMP_JACRED_ID);
   });
   afterEach(() => {
+    allowBillingSignIn();
+    setDhtPeersContext(null);
     clearBilling();
     unregisterSource(OMP_JACKETT_ID);
     unregisterSource(OMP_JACRED_ID);
@@ -52,9 +59,67 @@ describe('omp Jackett source', () => {
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/activate');
     expect(site.calls[0].form).toEqual({ code: 'ABCD-EFGH', deviceId: deviceId(), tokens: 'pair' });
     startOmpJackett();
-    // A code alone is not a /v1/me. Paid sources stay off until the server confirms them.
+    // The follow-up /v1/me in this fake is the token pair, which is not an active account.
     expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('a confirmed code turns paid sources on without an app restart', async () => {
+    const pair = { refreshToken: 'r1.one', accessToken: 'a1.one', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const me = { telegramId: '9', paidUntil: 2e12, active: true, accessUntil: 2e12, sources: { jackett: true, jacred: true }, monitorMax: 0 };
+    const site = fakeSite((c) => page(JSON.stringify(c.url.indexOf('/v1/activate') > 0 ? pair : me), c.url));
+    await activateCode(site.ctx, 'ABCD-EFGH');
+    expect(getSource(OMP_JACKETT_ID)?.name).toBe('OMP Jackett');
+    expect(getSource(OMP_JACRED_ID)?.name).toBe('OMP JacRed');
+    expect(ompSubscribed()).toBe(true);
+    expect(monitorMax()).toBe(0);
+  });
+
+  it('names the paid sources OMP Jackett and OMP JacRed in the did-not-answer line', () => {
+    registerSource(ompJackettSource());
+    registerSource(ompJacredSource());
+    expect(sourceName(OMP_JACKETT_ID)).toBe('OMP Jackett');
+    expect(sourceName(OMP_JACRED_ID)).toBe('OMP JacRed');
+    const line = progressText({ found: 0, answered: 0, total: 2, pending: [], failed: [sourceName(OMP_JACKETT_ID), sourceName(OMP_JACRED_ID)] });
+    expect(line).toContain('не ответили: OMP Jackett, OMP JacRed');
+  });
+
+  it('claims a session for a linked Telegram account and does not send a telegram id', async () => {
+    const pair = { refreshToken: 'r1.tg', accessToken: 'a1.tg', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const me = { telegramId: '9', paidUntil: 2e12, active: true, accessUntil: 2e12, sources: { jackett: true, jacred: false }, monitorMax: 0 };
+    const site = fakeSite((c) => {
+      if (c.url.indexOf('/v1/link/claim') > 0) return page(JSON.stringify(pair), c.url);
+      return page(JSON.stringify(me), c.url);
+    });
+    const row = await claimLinkedSession(site.ctx);
+    expect(row && row.access).toBe('a1.tg');
+    const claim = site.calls.filter((c) => c.url.indexOf('/v1/link/claim') > 0)[0];
+    expect(claim.form).toEqual({ deviceId: deviceId(), tokens: 'pair' });
+    expect(JSON.stringify(claim.form)).not.toContain('telegram');
+    expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    expect(ompSubscribed()).toBe(true);
+  });
+
+  it('sign-out clears the session, paid sources, DHT and the monitoring cap', async () => {
+    const pair = { refreshToken: 'r1.tg', accessToken: 'a1.tg', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const me = { telegramId: '9', paidUntil: 2e12, active: true, accessUntil: 2e12, sources: { jackett: true, jacred: true }, monitorMax: 0 };
+    const site = fakeSite((c) => (c.url.indexOf('/v1/link/claim') > 0 ? page(JSON.stringify(pair), c.url) : page(JSON.stringify(me), c.url)));
+    setDhtPeersContext(() => site.ctx);
+    await claimLinkedSession(site.ctx);
+    expect(dhtSeedCheckAvailable()).toBe(true);
+    expect(monitorMax()).toBe(0);
+    signOutBilling(site.ctx);
+    expect(billingSession()).toBeNull();
+    expect(ompSubscribed()).toBe(false);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    expect(monitorMax()).toBe(MONITOR_FREE_MAX);
+    expect(dhtSeedCheckAvailable()).toBe(false);
+    expect(seenAccount()).toBeNull();
+    const again = await claimLinkedSession(site.ctx);
+    expect(again).toBeNull();
+    expect(billingSession()).toBeNull();
   });
 
   it('refuses a code bound to another device', async () => {

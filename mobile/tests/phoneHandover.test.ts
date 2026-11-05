@@ -13,7 +13,7 @@ const flush = async () => {
 interface Launch {
   report?: string;
   tv?: string;
-  phone: { url: string; token: string; name: string } | null;
+  phone: { url: string; token: string; name: string; sub?: boolean } | null;
 }
 
 const LG_IP = '192.168.1.50';
@@ -72,7 +72,7 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
     launches,
     atvAttaches,
     active,
-    init: () => rpc.initPhoneRpc({ connectedLg, reattach: link.attachIfOmpForeground }),
+    init: () => rpc.initPhoneRpc({ connectedLg, reattach: link.attachIfOmpForeground, pushSub: () => link.pushPhoneSub() }),
   };
 }
 
@@ -176,6 +176,36 @@ describe('phone address hand-over', () => {
     await attach;
     await flush();
     expect(s.launches.map((l) => [l.tv, l.phone && l.phone.url])).toEqual([[LG_IP, url(INFO)]]);
+  });
+
+  it('sign-in and sign-out reach the LG even while the player link is live', async () => {
+    const s = await setup();
+    s.init();
+    await flush();
+    expect(s.launches).toHaveLength(1);
+    expect(s.launches[0].phone && s.launches[0].phone.sub).toBe(false);
+    s.link.nowPlaying.value = { hash: 'h' } as never;
+    s.link.lastSeen.value = 1000;
+    const session = await import('../../src/billing/session');
+    const ent = await import('../../src/billing/entitlement');
+    const jack = await import('../../src/sources/ompJackett');
+    const until = Date.now() + 864e5;
+    session.saveBillingSession({ token: '', access: 'a1.x', accessExp: until, paidUntil: until, id: 'sub1' });
+    ent.saveBillingAccess({ active: true, accessUntil: until, checkedAt: Date.now() });
+    session.emitBillingChange();
+    await flush();
+    expect(s.launches[s.launches.length - 1].phone && s.launches[s.launches.length - 1].phone.sub).toBe(true);
+    jack.signOutBilling();
+    await flush();
+    expect(s.launches[s.launches.length - 1].phone && s.launches[s.launches.length - 1].phone.sub).toBe(false);
+    const store = await import('../../src/phone/phoneStore');
+    const sent = s.launches[s.launches.length - 1].phone;
+    expect(sent).toBeTruthy();
+    store.savePhoneLink({ url: sent!.url, token: sent!.token, name: sent!.name, sub: true });
+    expect(store.phoneLinkSubscribed(store.phoneLink.value)).toBe(true);
+    store.savePhoneLink({ url: sent!.url, token: sent!.token, name: sent!.name, sub: sent!.sub });
+    expect(store.phoneLinkSubscribed(store.phoneLink.value)).toBe(false);
+    jack.allowBillingSignIn();
   });
 
   it('the sent address is kept per TV: another LG gets it too', async () => {

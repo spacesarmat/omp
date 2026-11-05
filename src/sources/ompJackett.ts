@@ -89,6 +89,41 @@ export function clearBilling(ctx?: SourceContext): void {
   dropDeviceTokens(ctx || null, '');
 }
 
+/**
+ * True after «Отключить» or «Отвязать» until the next code or a new claim.
+ * Stops this run from issuing a session again and from painting «Подписка до» off a stale /v1/me.
+ * A new app start begins cleared, so a Telegram link can claim then.
+ */
+let signedOut = false;
+
+export function billingSignedOut(): boolean {
+  return signedOut;
+}
+
+/** A code or a fresh Telegram link may take a session again. */
+export function allowBillingSignIn(): void {
+  signedOut = false;
+}
+
+/**
+ * One sign-out: the session, the cached /v1/me answer and the paid sources.
+ * Unlink and disconnect both end here. Ads, the monitoring cap and DHT read the same cache.
+ * The phone tells a linked TV on the billing change.
+ */
+export function signOutBilling(ctx?: SourceContext): void {
+  signedOut = true;
+  clearBilling(ctx);
+  syncOmpJackett();
+}
+
+/** Asks /v1/me so a fresh session turns paid sources on before the next app start. A blip keeps the session. */
+function confirmPremium(ctx: SourceContext): Promise<void> {
+  return refreshOmpJackettSources(ctx).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 /** What a refused code means. The error code decides; a bare 409 is the old «другое устройство». */
 function activateError(status: number, code: string): Error {
   if (code === 'device_limit') return new Error(t('sources.billing.deviceLimit'));
@@ -111,11 +146,73 @@ export function activateCode(ctx: SourceContext, code: string): Promise<BillingS
     (res) => {
       const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
       if (!pair) throw activateError(res.status, errorOf(res.text));
-      return savePair(ctx, pair, null);
+      allowBillingSignIn();
+      return savePair(ctx, pair, null).then((row) => confirmPremium(ctx).then(() => row));
     },
     (e) => {
       throw failure(e);
     },
+  );
+}
+
+let claimFlight: Promise<BillingSession | null> | null = null;
+
+/**
+ * Asks billing for a session because this install is already linked to Telegram.
+ * Sends only the device id. A telegram id is never sent. `null`: no link or no active subscription
+ * (the code field stays). A full device list throws the same text as a refused code.
+ */
+export function claimLinkedSession(ctx: SourceContext): Promise<BillingSession | null> {
+  const cur = billingSession();
+  if (cur) return Promise.resolve(cur);
+  if (signedOut) return Promise.resolve(null);
+  if (claimFlight) return claimFlight;
+  const run = deviceNameField(ctx)
+    .then((named) => billingPost(ctx, '/v1/link/claim', { deviceId: deviceId(), tokens: 'pair', ...named }, { timeoutMs: 15000 }))
+    .then(
+      (res) => {
+        const code = errorOf(res.text);
+        if (res.status === 404 || code === 'not_linked' || code === 'no_subscription') return null;
+        const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
+        if (!pair) throw activateError(res.status, code);
+        allowBillingSignIn();
+        return savePair(ctx, pair, null).then((row) => confirmPremium(ctx).then(() => row));
+      },
+      (e) => {
+        throw failure(e);
+      },
+    );
+  let flight: Promise<BillingSession | null>;
+  flight = run.then(
+    (row) => {
+      if (claimFlight === flight) claimFlight = null;
+      return row;
+    },
+    (e) => {
+      if (claimFlight === flight) claimFlight = null;
+      throw e;
+    },
+  );
+  claimFlight = flight;
+  return flight;
+}
+
+/**
+ * App start and the account screen: a proven Telegram link and no session asks for one.
+ * No link, or a link without an active subscription (grace included), leaves the code field.
+ */
+export function ensureLinkedBilling(ctx: SourceContext): Promise<void> {
+  if (signedOut || billingSession()) return Promise.resolve();
+  return fetchBillingAccount(ctx).then(
+    (acc) => {
+      if (billingSession() || !acc || !acc.telegramId) return;
+      if (!acc.active && !acc.overLimit) return;
+      return claimLinkedSession(ctx).then(
+        () => undefined,
+        () => undefined,
+      );
+    },
+    () => undefined,
   );
 }
 
@@ -200,7 +297,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
             : { jackett: !!body.active, jacred: !!body.active },
         };
       }
-      saveSeenAccount({ paidUntil });
+      // After «Отключить» this run must not look signed in again off a device the server still knows.
+      if (!(signedOut && !session)) saveSeenAccount({ paidUntil });
       const listed = body.sources;
       const flags = listed
         ? { jackett: !!listed.jackett, jacred: !!listed.jacred }

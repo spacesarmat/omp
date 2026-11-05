@@ -1868,6 +1868,49 @@ export function telegramForDevice(account, deviceId) {
   return account.telegramId || '';
 }
 
+/**
+ * The account the bot linked to this device (`confirmDeviceLink` stored the device id).
+ * A telegram id from the client is never consulted.
+ */
+export function linkedAccount(state, deviceId) {
+  if (!deviceOk(deviceId)) return null;
+  return (state.accounts || []).find((a) => Array.isArray(a.linkedDevices) && a.linkedDevices.indexOf(deviceId) >= 0) || null;
+}
+
+/**
+ * Issue this device a session because the bot already linked it to a Telegram account that still has access
+ * (paid or grace). Same code binding, device limit and token shape as `activate` with `legacy: false`.
+ * A client-sent telegram id is not an argument. Errors: bad_device, not_linked, no_subscription,
+ * device_limit, extra_expired.
+ */
+export function claimLinkedDevice(state, { deviceId, now }) {
+  if (!deviceOk(deviceId)) return fail('bad_device', state);
+  const account = linkedAccount(state, deviceId);
+  if (!account) return fail('not_linked', state);
+  const sub = anySub(state, account.id);
+  const access = subAccess(state, sub, now);
+  if (!sub || !access.access) return fail('no_subscription', state);
+  const mine = (state.codes || []).find((c) => c.subscriptionId === sub.id && !c.revoked && c.deviceId === deviceId);
+  if (mine) {
+    if (!codeWithinLimit(state, sub, mine, now)) {
+      const why = overLimitReason(state, sub, mine, now);
+      return fail(why, recordAttempt(state, { at: now, hash: mine.hash, deviceId, ok: false, reason: why, accountId: account.id }));
+    }
+    const codes = state.codes.map((c) => (c.id === mine.id ? { ...c, plain: '' } : c));
+    const sessions = (state.sessions || []).filter((s) => s.codeId !== mine.id);
+    const next = recordAttempt({ ...state, codes, sessions }, { at: now, hash: mine.hash, deviceId, ok: true, reason: 'ok', accountId: account.id });
+    return { state: next, result: { token: '', paidUntil: sub.paidUntil, codeId: mine.id } };
+  }
+  // An unbound code that is still showable is bound by activate, which enforces the limit.
+  // A leftover plain code cannot skip it. No free code means the slots are full.
+  const slot = deviceCode(state, sub.id, now);
+  if (!slot.code) {
+    const why = fitsOnlyByLapsedExtra(state, sub, boundDevices(state, sub.id), now) ? 'extra_expired' : 'device_limit';
+    return fail(why, recordAttempt(slot.state, { at: now, deviceId, ok: false, reason: why, accountId: account.id }));
+  }
+  return activate(slot.state, { code: slot.code, deviceId, now, legacy: false });
+}
+
 /** Unbound activation code still showable in the bot (has plaintext). */
 export function revealableCode(state, accountId) {
   const sub = anySub(state, accountId);

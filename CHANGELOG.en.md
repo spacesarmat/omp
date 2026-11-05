@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] When Telegram is already linked and the account has a subscription, including the grace period, the phone gets a sign-in on its own. No code is needed. When every device slot is taken, the existing "all devices are taken" text is shown. With no subscription, the code field stays
+- [phone] Search sources, under Indexers, has a row "OMP server · Jackett, JacRed": connected until a date, no subscription, or not responding. A tap opens the OMP account. In results, in the "no answer" line and in the source list, the paid sources are named OMP Jackett and OMP JacRed, so they do not clash with your own Jackett
+- Signing in with a code or with linked Telegram turns on paid search, the DHT check, and turns off ads and the monitoring cap at once. Disconnect and Unlink turn all of that off at once, including on a TV that follows the phone's subscription. No app restart is needed
+- [tech] POST /v1/link/claim issues a token pair to a device the bot already stored in linkedDevices. A telegramId in the request is not read. The same slots and binding as POST /v1/activate with tokens pair. Limit: BILLING_CLAIM_IP_MAX (30) and BILLING_CLAIM_DEVICE_MAX (10) per BILLING_CLAIM_WINDOW_SEC (600). 0 turns the limit off. Over the limit: 429 and Retry-After. Defaults live in the code and in docker-compose, so .env does not need a change. No migration. A new billing image is required
+
 ## 0.20.8-beta.6
 
 - [phone] In search, Check seeds stays to the left of add, inside the text column, at the same height as the round buttons. On a narrow screen the label is Seeds even without container queries, and the button shrinks when space is short, so it does not cover the poster. The same applies when the check is DHT only

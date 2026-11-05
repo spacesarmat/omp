@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
+import { onBillingChange } from '../../../src/billing/session';
 import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
@@ -78,6 +79,8 @@ export function ResultCard(p: {
   seedCode?: string;
 }) {
   const { r } = p;
+  const [, setBillingTick] = useState(0);
+  useEffect(() => onBillingChange(() => setBillingTick((n) => n + 1)), []);
   const live = useSeedRow(r);
   const seeds = phoneSeedBits(live.view);
   const probe = useSeedProbe(r);

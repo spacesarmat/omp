@@ -312,6 +312,18 @@ export function tokenLimitConfig(env) {
 }
 
 /**
+ * POST /v1/link/claim: per IP and per device. The link is already proven, so this only stops a loop.
+ * BILLING_CLAIM_IP_MAX (30) and BILLING_CLAIM_DEVICE_MAX (10) per BILLING_CLAIM_WINDOW_SEC (600). 0 turns a limit off.
+ */
+export function claimLimitConfig(env) {
+  return {
+    ipMax: envInt(env, 'BILLING_CLAIM_IP_MAX', 30),
+    codeMax: envInt(env, 'BILLING_CLAIM_DEVICE_MAX', 10),
+    windowMs: Math.max(1, envInt(env, 'BILLING_CLAIM_WINDOW_SEC', 600)) * 1000,
+  };
+}
+
+/**
  * GET /v1/ads-config per IP. The body is public (banners, no secrets). 120 requests / 10 minutes is far above
  * an app that asks every 5 minutes, including several devices behind one address. 0 turns the limit off.
  */

@@ -817,6 +817,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P21.1 | Источники поиска | Search sources | Назад | Back |
 | P21.2 | Источники поиска | Search sources | FlareSolverr | FlareSolverr |
 | P21.3 | Источники поиска | Search sources | Аккаунт | Account |
+| P21.4 | Источники поиска | Search sources | Сервер OMP | OMP server |
 | P22 | FlareSolverr | FlareSolverr |  |  |
 | P22.1 | FlareSolverr | FlareSolverr | Назад | Back |
 | P23 | Сайт | Site |  |  |

@@ -248,6 +248,7 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P21.1', 'Назад', 'Back'),
       it('P21.2', 'FlareSolverr', 'FlareSolverr'),
       it('P21.3', 'Аккаунт', 'Account'),
+      it('P21.4', 'Сервер OMP', 'OMP server'),
     ],
   },
   { key: 'phone:flaresolverr', code: 'P22', ru: 'FlareSolverr', en: 'FlareSolverr', items: [it('P22.1', 'Назад', 'Back')] },

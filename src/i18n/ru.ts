@@ -968,8 +968,11 @@ export const ru = {
     billing: {
       title: 'Подписка OMP',
       text: 'Jackett и JacRed по подписке. Поиск идёт через сервер OMP; раздачи добавляйте в свой TorrServer.',
-      jackett: 'Jackett',
-      jacred: 'JacRed',
+      jackett: 'OMP Jackett',
+      jacred: 'OMP JacRed',
+      serverTitle: 'Сервер OMP · Jackett, JacRed',
+      serverNone: 'нет подписки',
+      serverDown: 'не отвечает',
       code: 'Код подписки',
       connect: 'Подключить',
       connecting: 'Подключаю…',

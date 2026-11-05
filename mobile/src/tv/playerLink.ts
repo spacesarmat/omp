@@ -250,6 +250,33 @@ async function attach(): Promise<void> {
   }
 }
 
+let pushing: Promise<void> | null = null;
+
+/**
+ * Tells a foreground LG the phone subscription changed. A live player link is not a reason to skip:
+ * the relaunch only carries the report address, and the TV stores the new `phone.sub`.
+ * Never rejects. Android TV does not take the phone address.
+ */
+export function pushPhoneSub(): Promise<void> {
+  if (deps.tvFailed() || deps.tvKind() === 'atv') return Promise.resolve();
+  if (!pushing) {
+    const p = (async () => {
+      try {
+        if ((await deps.foregroundAppId()) !== OMP_APP_ID) return;
+        const url = await reportUrl();
+        if (!url) return;
+        await deps.launchOnTv({ report: url });
+      } catch {
+        /* TV unreachable */
+      }
+    })().finally(() => {
+      if (pushing === p) pushing = null;
+    });
+    pushing = p;
+  }
+  return pushing;
+}
+
 /**
  * When the TV shows OMP, asks it to start reporting to this phone. Skips a live link and a failed TV;
  * concurrent calls share one attempt. Never rejects.

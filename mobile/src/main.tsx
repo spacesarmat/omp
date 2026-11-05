@@ -7,6 +7,7 @@ import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
+import { ensureLinkedBilling } from '../../src/sources/ompJackett';
 import { setDhtPeersContext } from '../../src/sources/dhtPeers';
 import { phoneSourceContext } from './searchContext';
 import { reloadSourcePrefs } from '../../src/sources/store';
@@ -15,7 +16,7 @@ import { ensureFirstRun } from './donate';
 import { t } from '../../src/i18n';
 import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
-import { attachIfOmpForeground } from './tv/playerLink';
+import { attachIfOmpForeground, pushPhoneSub } from './tv/playerLink';
 import { tvState, tvKind, sessionIp } from './tv/tvClient';
 import { native } from './platform/native';
 import { tvs } from './tv/tvStore';
@@ -48,10 +49,13 @@ startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
 setDhtPeersContext(phoneSourceContext);
 // Ads and the monitoring cap: /v1/me on resume (if the last answer is older than 15 minutes) and about every 6 hours.
 startPremiumRecheck(phoneSourceContext);
+// A Telegram link with no session: ask billing once. A subscription turns paid sources on without a code.
+void ensureLinkedBilling(phoneSourceContext());
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)
 initPhoneRpc({
   connectedLg: () => (tvState.value === 'connected' && tvKind() !== 'atv' ? sessionIp.value : null),
   reattach: attachIfOmpForeground,
+  pushSub: pushPhoneSub,
 });
 
 // the TV may switch a source on or off through the search server's page (mobile/rpc.html): re-read the switches when

@@ -6,6 +6,7 @@ import { monitorNative } from '../monitor/native';
 import { tvs } from './tvStore';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { ompSubscribed } from '../../../src/billing/entitlement';
+import { onBillingChange } from '../../../src/billing/session';
 
 export const TV_SEARCH_KEY = 'tsp.tvSearchService';
 
@@ -34,6 +35,11 @@ export interface PhoneRpcDeps {
   connectedLg: () => string | null;
   /** Re-sends the launch params (with `phone`) when OMP is in the TV foreground; never rejects. */
   reattach: () => Promise<void>;
+  /**
+   * Tells the foreground LG that this phone's subscription changed. Not skipped while the player link is live.
+   * Absent: `reattach` is used.
+   */
+  pushSub?: () => Promise<void>;
 }
 
 const noDeps: PhoneRpcDeps = { connectedLg: () => null, reattach: () => Promise.resolve() };
@@ -63,7 +69,7 @@ function settle(gen: number, info: RpcInfo | null): void {
   }, STARTING_RETRY_MS);
 }
 
-const keyOf = (p: { url: string; token: string }): string => p.url + ' ' + p.token;
+const keyOf = (p: { url: string; token: string; sub?: boolean }): string => p.url + ' ' + p.token + ' ' + (p.sub ? '1' : '0');
 
 /** The address the last launch of each LG carried (by the TV's IP, set by launchOnTv), so it is handed over once. */
 const sentKeys: { [tv: string]: string } = {};
@@ -173,6 +179,19 @@ export function initPhoneRpc(d?: PhoneRpcDeps): void {
   // a new Wi-Fi address while the app was in the background
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') refresh();
+  });
+  // Sign-in and sign-out change `sub` on the address the LG already has. Push it even while a video is playing.
+  onBillingChange(() => {
+    const p = phoneParam();
+    const tv = deps.connectedLg();
+    if (!p || !tv || sentKeys[tv] === keyOf(p)) return;
+    triedKey = null;
+    tries = 0;
+    const push = deps.pushSub || deps.reattach;
+    push().then(
+      () => deliver(),
+      () => deliver(),
+    );
   });
 }
 
