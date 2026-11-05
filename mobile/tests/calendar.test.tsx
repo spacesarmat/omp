@@ -73,7 +73,15 @@ function track<T>(p: () => Promise<T>): Promise<T> {
   );
 }
 
-function fake(opts?: { fail?: string }) {
+const SAME_DAY: SeasonDetails = {
+  number: 3, name: '', airDate: '', overview: '',
+  episodes: [
+    { n: 7, title: 'Первая', airDate: '2026-10-04', runtime: 0, overview: '' },
+    { n: 8, title: 'Вторая', airDate: '2026-10-04', runtime: 0, overview: '' },
+  ],
+};
+
+function fake(opts?: { fail?: string; sameDay?: boolean }) {
   const cards: { [id: number]: CatalogCard } = { 21: FROST, 31: HARBOR, 41: OVER };
   const c = {
     novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
@@ -88,7 +96,7 @@ function fake(opts?: { fail?: string }) {
     })),
     card: vi.fn((_k: string, id: number) => track(() => (cards[id] ? Promise.resolve(cards[id]) : Promise.reject(codeError('bad'))))),
     season: vi.fn((id: number, n: number) => track(() => {
-      if (id === 21 && n === 3) return Promise.resolve(FROST_S3);
+      if (id === 21 && n === 3) return Promise.resolve(opts && opts.sameDay ? SAME_DAY : FROST_S3);
       if (id === 31 && n === 1) return Promise.resolve(HARBOR_S1);
       return Promise.reject(codeError('bad'));
     })),
@@ -563,6 +571,7 @@ describe('the «Календарь» tab', () => {
     expect(sheet.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
     expect(sheet.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
     expect(sheet.textContent).toContain('S03E04');
+    expect(sheet.querySelector('[data-code="P03.19"]')).toBeNull();
     expect(button('Открыть в каталоге', sheet)!.getAttribute('data-code')).toBe('P03.15');
     expect(button('Найти новую серию', sheet)).toBeUndefined();
     act(() => button('Отмена', sheet)!.click());
@@ -588,6 +597,65 @@ describe('the «Календарь» tab', () => {
     expect(button('Найти новую серию', sheet)!.getAttribute('data-code')).toBe('P03.17');
     act(() => button('Найти новую серию', sheet)!.click());
     expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 4), run: true });
+  });
+
+  it('a day with two episodes of one show lets List choose each one', async () => {
+    fake({ sameDay: true });
+    torrents.value = [TOR];
+    addSubscription({ query: 'Ледяной перевал', quality: '', sources: null, notify: true });
+    mount(<Calendar />);
+    await flush();
+    const row = el.querySelector('[data-cal-row="21:3:7,8"]')!;
+    expect(row.querySelector('.m-cal-ep')!.textContent).toBe('S03E07-E08');
+    act(() => (row.querySelector('button.m-cal-open') as HTMLButtonElement).click());
+    const sheet = el.querySelector('[data-cal-ask]')!;
+    const choice = Array.from(sheet.querySelectorAll('[data-code="P03.19"]')) as HTMLButtonElement[];
+    expect(choice.map((b) => (b.textContent || '').trim())).toEqual(['S03E07', 'S03E08']);
+    choice.forEach((b) => expect(b.className).toContain('tm'));
+    expect(sheet.querySelector('.m-cal-eps')!.getAttribute('aria-label')).toBe('Выберите серию');
+    expect(choice[0].getAttribute('aria-pressed')).toBe('true');
+    expect(sheet.textContent).toContain('S03E07 · Первая');
+    expect(button('Открыть в каталоге', sheet)).toBeTruthy();
+    expect(button('Отмена', sheet)!.getAttribute('data-code')).toBe('P03.18');
+    act(() => button('Найти новую серию', sheet)!.click());
+    expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 7), run: true });
+
+    resetTo({ name: 'news', seg: 'calendar' });
+    act(() => (row.querySelector('button.m-cal-open') as HTMLButtonElement).click());
+    const again = el.querySelector('[data-cal-ask]')!;
+    act(() => button('S03E08', again)!.click());
+    expect(button('S03E08', again)!.getAttribute('aria-pressed')).toBe('true');
+    expect(button('S03E07', again)!.getAttribute('aria-pressed')).toBe('false');
+    expect(again.textContent).toContain('S03E08 · Вторая');
+    act(() => button('Найти новую серию', again)!.click());
+    expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 8), run: true });
+  });
+
+  it('a Month day list chooses the later episode the same way', async () => {
+    fake({ sameDay: true });
+    torrents.value = [TOR];
+    addSubscription({ query: 'Ледяной перевал', quality: '', sources: null, notify: true });
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Месяц')!.click());
+    await flush();
+    act(() => (el.querySelector('[data-cal-cell="2026-10-04"]') as HTMLButtonElement).click());
+    const day = el.querySelector('[data-cal-picked="2026-10-04"]')!;
+    expect(day.querySelectorAll('.m-cal-row').length).toBe(1);
+    expect(day.querySelector('.m-cal-ep')!.textContent).toBe('S03E07-E08');
+    act(() => (day.querySelector('button.m-cal-open') as HTMLButtonElement).click());
+    const sheet = el.querySelector('[data-cal-ask]')!;
+    act(() => button('S03E08', sheet)!.click());
+    expect(sheet.textContent).toContain('S03E08 · Вторая');
+    act(() => button('Найти новую серию', sheet)!.click());
+    expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 8), run: true });
+
+    resetTo({ name: 'news', seg: 'calendar' });
+    act(() => (day.querySelector('button.m-cal-open') as HTMLButtonElement).click());
+    const again = el.querySelector('[data-cal-ask]')!;
+    act(() => button('S03E08', again)!.click());
+    act(() => button('Открыть в каталоге', again)!.click());
+    expect(currentRoute.value).toEqual({ name: 'seasonCard', id: 21, season: 3 });
   });
 });
 

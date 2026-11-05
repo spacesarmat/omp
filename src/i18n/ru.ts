@@ -2586,6 +2586,7 @@ export const ru = {
     calOpenCatalog: 'Открыть в каталоге',
     calSearchTorrents: 'Искать раздачи',
     calFindEpisode: 'Найти новую серию',
+    calPickEpisode: 'Выберите серию',
   },
   now: {
     collapse: 'Свернуть',

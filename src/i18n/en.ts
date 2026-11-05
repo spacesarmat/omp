@@ -2536,6 +2536,7 @@ export const en: EnDict<typeof ru> = {
     calOpenCatalog: 'Open in the catalog',
     calSearchTorrents: 'Search releases',
     calFindEpisode: 'Find the new episode',
+    calPickEpisode: 'Choose an episode',
   },
   now: {
     collapse: 'Collapse',

@@ -1861,6 +1861,9 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-cal-ask { display: flex; flex-direction: column; gap: 10px; }
 .m-cal-ask-head { display: flex; align-items: center; gap: 10px; }
 .m-cal-ask .m-btn { width: 100%; }
+.m-cal-eps { display: flex; flex-wrap: wrap; gap: 8px; }
+.m-cal-eps .m-chip { font-family: inherit; background: var(--panel-2); color: var(--text); }
+.m-cal-eps .m-chip.on { background: var(--accent); color: var(--bg); }
 .m-cal-head { display: flex; align-items: center; margin-bottom: 8px; }
 .m-cal-head .m-icon-btn { flex: none; }
 .m-cal-month-name { flex: 1 1 auto; text-align: center; font-size: 16px; font-weight: 700; }
