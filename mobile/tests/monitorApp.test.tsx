@@ -22,7 +22,7 @@ function row(t: string): SourceResult {
 
 const flush = () =>
   act(async () => {
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    for (let i = 0; i < 30; i++) await Promise.resolve();
   });
 
 async function mount() {
@@ -131,7 +131,8 @@ describe('monitoring in the app shell', () => {
     await mount();
     expect(currentRoute.value).toEqual({ name: 'subFindings', id: s.id, finding: 'k1', watch: true });
     expect(routeStack.value.map((r) => r.name)).toEqual(['news', 'subFindings']);
-    expect(el.querySelector('.m-watch-prompt')).toBeTruthy();
+    await vi.waitFor(() => expect(el.querySelector('[data-route="subFindings"]')).toBeTruthy(), { timeout: 2000 });
+    await vi.waitFor(() => expect(el.querySelector('.m-watch-prompt')).toBeTruthy(), { timeout: 2000 });
   });
 
   it('links while running: new episodes open «Новое» on the card; junk is ignored', async () => {

@@ -32,7 +32,7 @@ import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { friendsShare } from '../share/text';
 import { sendShare } from '../share/send';
-import { phonePlayerName } from './VideoPlayer';
+import { phonePlayerName } from './videoPlayerSettings';
 import { localServer, canRun } from '../server/localServer';
 
 function testLabelPhone(): number {

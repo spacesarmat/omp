@@ -15,6 +15,12 @@ import { tvState, cancelWarmUp } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
 
+async function flush() {
+  await act(async () => {
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  });
+}
+
 let el: HTMLElement;
 const NOW = 100000;
 const queue = vi.fn();
@@ -491,14 +497,14 @@ describe('mini-player in the shell', () => {
     expect(el.querySelector('.m-mini')).not.toBeNull();
   });
 
-  it('shows on tab screens only', () => {
+  it('shows on tab screens only', async () => {
     setState(state());
     resetTo({ name: 'library' });
     mount(<App />);
     expect(el.querySelector('.m-mini')).not.toBeNull();
     act(() => navigate({ name: 'nowPlaying' }));
+    await vi.waitFor(() => expect(el.querySelector('.m-now')).not.toBeNull(), { timeout: 2000 });
     expect(el.querySelector('.m-mini')).toBeNull();
-    expect(el.querySelector('.m-now')).not.toBeNull();
     act(() => navigate({ name: 'torrent', hash: 'x' }));
     expect(el.querySelector('.m-mini')).toBeNull();
   });

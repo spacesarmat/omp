@@ -15,7 +15,7 @@ import { LazyImg } from '../../ui/LazyImg';
 import { CatalogError } from './CatalogError';
 import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
-import { Overview } from './TitleCard';
+import { Overview } from './titleMeta';
 import { PosterButton } from '../../share/PosterButton';
 import { readDiscoverCols, discoverGridClass, discoverLandscapeCols } from './discoverCols';
 import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';

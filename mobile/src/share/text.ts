@@ -3,7 +3,7 @@ import { t, tp, fmtDuration } from '../../../src/i18n';
 import { airDateText } from '../../../src/lib/seriesStatus';
 import { shareMessageText, titleUrl, SHARE_ORIGIN, type TitleRef } from '../../../src/lib/shareLink';
 import type { CatalogCard, Season } from '../../../src/catalog/tmdb';
-import { seriesDates, seriesStatusWord } from '../screens/catalog/TitleCard';
+import { seriesDates, seriesStatusWord } from '../screens/catalog/titleMeta';
 
 export interface SharePayload {
   text: string;

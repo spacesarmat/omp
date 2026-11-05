@@ -8,6 +8,7 @@ import { native } from '../platform/native';
 import { monitorNative } from '../monitor/native';
 import { P2160_RELEASES_URL } from '../../../src/player/player2160';
 import { useHint } from '../ui/Hint';
+import { phonePlayerName } from './videoPlayerSettings';
 const BACK = 'M15 5l-7 7 7 7';
 const CHECK = 'M5 12l5 5l9-10';
 
@@ -17,13 +18,6 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
       <span class="m-switch-knob" />
     </button>
   );
-}
-
-/** Label of the current phone player choice (for the Settings pick row). */
-export function phonePlayerName(v: PhonePlayer): string {
-  if (v === 'p2160') return t('player.p2160AppPhone');
-  if (v === 'chooser') return t('player.builtinPlayerPhone');
-  return t('player.embeddedPlayerPhone');
 }
 
 /**

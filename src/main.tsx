@@ -19,6 +19,7 @@ import { setCatalogProvider } from './catalog/activeCatalog';
 import { tvCatalog } from './catalog/tvCatalog';
 import { ensureFirstRun } from './ads/firstRun';
 import { installTvAds } from './ads/tvAds';
+import { tvSourceContext } from './sources/tvContext';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -74,9 +75,7 @@ if (platformKind() === 'androidtv') {
       (m) => {
         m.registerBuiltinSources();
         // Ads and paid sources: /v1/me on resume and about every 6 hours. LG never reaches this import.
-        return import('./billing/recheck').then((r) =>
-          import('./sources/tvContext').then((t) => r.startPremiumRecheck(t.tvSourceContext)),
-        );
+        return import('./billing/recheck').then((r) => r.startPremiumRecheck(tvSourceContext));
       },
       () => log('warn', 'tv', t('log.sourcesLoadFailed')),
     )
