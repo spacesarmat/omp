@@ -15,19 +15,9 @@ import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
 import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
-import { Tv } from './screens/Tv';
-import { Faq } from './screens/Faq';
-import { Log } from './screens/Log';
-import { Backup } from './screens/Backup';
-import { InstallAssistant } from './screens/InstallAssistant';
-import { Sources } from './screens/Sources';
-import { FlareSolverr } from './screens/FlareSolverr';
-import { SourceSite } from './screens/SourceSite';
-import { installPhoneCloudflare } from './cloudflare';
 import { Library } from './screens/Library';
-import { Torrent } from './screens/Torrent';
-import { Add } from './screens/Add';
-import { LocalServer } from './screens/LocalServer';
+import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { installPhoneCloudflare } from './cloudflare';
 import {
   autostartLocal,
   checkLocalServerUpdate,
@@ -35,14 +25,7 @@ import {
   localUpdatePrompt,
   watchLocalServer,
 } from './server/localServer';
-import { Remote } from './screens/Remote';
-import { NowPlaying } from './screens/NowPlaying';
 import { MiniPlayer } from './ui/MiniPlayer';
-import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
-import { Account } from './screens/Account';
-import { Advanced } from './screens/Advanced';
-import { VideoPlayer } from './screens/VideoPlayer';
-import { ServerSettings } from './screens/ServerSettings';
 import { UpdateSheet } from './ui/UpdateSheet';
 import { LocalUpdateSheet } from './ui/LocalUpdateSheet';
 import { runBack } from './ui/backStack';
@@ -66,25 +49,46 @@ import { activeTv } from './tv/tvStore';
 import { installFoundTvWatchers, refreshFoundTvScan } from './tv/foundTvDiscovery';
 import { startPlayerLink, attachIfOmpForeground, linkStatus } from './tv/playerLink';
 import { installTabSwipe } from './ui/tabSwipe';
-import { News } from './screens/News';
-import { SubFindings } from './screens/SubFindings';
-import { Monitor } from './screens/Monitor';
-import { TitleCard } from './screens/catalog/TitleCard';
-import { SeasonCard } from './screens/catalog/SeasonCard';
-import { Series } from './screens/Series';
-import { Person } from './screens/catalog/Person';
-import { Audiobooks } from './audiobooks/Audiobooks';
-import { AudiobookSearch } from './audiobooks/Search';
-import { MyBooks } from './audiobooks/MyBooks';
-import { Book } from './audiobooks/Book';
-import { AudioPlayer } from './audiobooks/Player';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
 import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import { installPhoneSubPosters } from './monitor/posters';
+import { lazyScreen } from './lib/lazyScreen';
 import './mobile.css';
+
+// Secondary screens are loaded on demand so the initial bundle stays small.
+// The three always-reachable roots (Connect, Library, Settings) stay eager.
+const Tv = lazyScreen(() => import('./screens/Tv'), 'Tv');
+const Faq = lazyScreen(() => import('./screens/Faq'), 'Faq');
+const Log = lazyScreen(() => import('./screens/Log'), 'Log');
+const Backup = lazyScreen(() => import('./screens/Backup'), 'Backup');
+const InstallAssistant = lazyScreen(() => import('./screens/InstallAssistant'), 'InstallAssistant');
+const Sources = lazyScreen(() => import('./screens/Sources'), 'Sources');
+const FlareSolverr = lazyScreen(() => import('./screens/FlareSolverr'), 'FlareSolverr');
+const SourceSite = lazyScreen(() => import('./screens/SourceSite'), 'SourceSite');
+const Torrent = lazyScreen(() => import('./screens/Torrent'), 'Torrent');
+const Add = lazyScreen(() => import('./screens/Add'), 'Add');
+const LocalServer = lazyScreen(() => import('./screens/LocalServer'), 'LocalServer');
+const Remote = lazyScreen(() => import('./screens/Remote'), 'Remote');
+const NowPlaying = lazyScreen(() => import('./screens/NowPlaying'), 'NowPlaying');
+const Account = lazyScreen(() => import('./screens/Account'), 'Account');
+const Advanced = lazyScreen(() => import('./screens/Advanced'), 'Advanced');
+const VideoPlayer = lazyScreen(() => import('./screens/VideoPlayer'), 'VideoPlayer');
+const ServerSettings = lazyScreen(() => import('./screens/ServerSettings'), 'ServerSettings');
+const News = lazyScreen(() => import('./screens/News'), 'News');
+const SubFindings = lazyScreen(() => import('./screens/SubFindings'), 'SubFindings');
+const Monitor = lazyScreen(() => import('./screens/Monitor'), 'Monitor');
+const TitleCard = lazyScreen(() => import('./screens/catalog/TitleCard'), 'TitleCard');
+const SeasonCard = lazyScreen(() => import('./screens/catalog/SeasonCard'), 'SeasonCard');
+const Series = lazyScreen(() => import('./screens/Series'), 'Series');
+const Person = lazyScreen(() => import('./screens/catalog/Person'), 'Person');
+const Audiobooks = lazyScreen(() => import('./audiobooks/Audiobooks'), 'Audiobooks');
+const AudiobookSearch = lazyScreen(() => import('./audiobooks/Search'), 'AudiobookSearch');
+const MyBooks = lazyScreen(() => import('./audiobooks/MyBooks'), 'MyBooks');
+const Book = lazyScreen(() => import('./audiobooks/Book'), 'Book');
+const AudioPlayer = lazyScreen(() => import('./audiobooks/Player'), 'AudioPlayer');
 
 // test-mode labels read the phone size (P11.20)
 markPhoneUi();
