@@ -42,7 +42,8 @@ beforeEach(() => {
   setDhtPeersContext(null);
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
-  vi.mocked(probeSeeds).mockClear();
+  vi.mocked(probeSeeds).mockReset();
+  vi.mocked(probeSeeds).mockImplementation(() => Promise.resolve({ ok: true, seeders: 12, leechers: 3 }));
 });
 
 afterEach(() => {
@@ -154,6 +155,58 @@ describe('seed check on a result card', () => {
     const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
     expect(sheet.getAttribute('data-code')).toBe('PD31.1');
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+  });
+
+  it('shows the tracker count before the DHT estimate arrives', async () => {
+    let releaseDht: (v: { status: number; url: string; text: string }) => void = () => undefined;
+    const http: SourceHttp = {
+      get: (url) =>
+        new Promise((resolve) => {
+          releaseDht = resolve;
+        }),
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    saveBillingSession({ token: '', paidUntil: 1, access: 'a1.test', accessExp: Date.now() + 3600_000 });
+    setDhtPeersContext(() => ({ http, client: null }));
+    let releaseTracker: (v: { ok: true; seeders: number; leechers: number }) => void = () => undefined;
+    vi.mocked(probeSeeds).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseTracker = resolve;
+        }),
+    );
+
+    act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    act(() => (el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement).click());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('сейчас');
+
+    await act(async () => {
+      releaseTracker({ ok: true, seeders: 12, leechers: 3 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    let meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('12 сидов');
+    expect(meta).toContain('сейчас');
+    expect(meta).not.toContain('по DHT');
+
+    await act(async () => {
+      releaseDht({ status: 200, url: '', text: JSON.stringify({ peers: 9, source: 'dht', approx: true }) });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('12 сидов');
+    expect(meta).toContain('9 пиров онлайн');
+    expect(meta).toContain('по DHT');
   });
 
   it('English short label is Seeds', () => {

@@ -28,15 +28,19 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
   const [phase, setPhase] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const [line, setLine] = useState('');
   const phaseRef = useRef(phase);
+  const genRef = useRef(0);
   phaseRef.current = phase;
   const run = () => {
     if (phaseRef.current === 'busy') return;
+    const gen = ++genRef.current;
     setPhase('busy');
     const hash = infohashOf(r);
     const listed = !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
+    const live = () => gen === genRef.current;
     // No tracker address: do not scrape. A signed-in phone or Android TV asks DHT only.
     if (hash && !listed && dhtSeedCheckAvailable()) {
       askDhtPeers(hash).then((dht) => {
+        if (!live()) return;
         if (dht.ok) {
           setLine(dhtPeerLine(dht.peers));
           setPhase('done');
@@ -47,13 +51,33 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
       });
       return;
     }
-    const trackerP = probeSeeds(r);
-    const dhtP = hash ? askDhtPeers(hash) : Promise.resolve(null);
-    Promise.all([trackerP, dhtP]).then((pair) => {
-      const tracker = pair[0];
-      const dht = pair[1];
+    // The tracker line shows as soon as it arrives. A slow DHT must not hold it.
+    // A failed tracker stays busy until DHT, so a later estimate can still replace the error.
+    let tracker: ProbeResult | null = null;
+    let dht: { ok: true; peers: number } | { ok: false; reason: 'skip' | 'bad' } | null = null;
+    let trackerIn = false;
+    let dhtIn = false;
+    const paint = () => {
+      if (!live() || !trackerIn || !tracker) return;
+      if (tracker.ok && !dhtIn) {
+        setLine(seedCheckLine(tracker, null));
+        setPhase('done');
+        return;
+      }
+      if (!dhtIn) return;
       setLine(seedCheckLine(tracker, dht));
       setPhase(tracker.ok || (dht !== null && dht.ok) ? 'done' : 'err');
+    };
+    probeSeeds(r).then((res) => {
+      tracker = res;
+      trackerIn = true;
+      paint();
+    });
+    const dhtP = hash ? askDhtPeers(hash) : Promise.resolve(null);
+    dhtP.then((res) => {
+      dht = res;
+      dhtIn = true;
+      paint();
     });
   };
   const text = (fallback: string) => (phase === 'done' || phase === 'err' ? line : fallback);

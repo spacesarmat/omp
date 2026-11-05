@@ -4,7 +4,9 @@
 import DHT from 'bittorrent-dht';
 import { peerTotal, rememberPeer, waitForReady } from './peers.mjs';
 
-function collectPeers(dht, hash, timeoutMs, maxPeers) {
+function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
+  const set = schedule || ((fn, ms) => setTimeout(fn, ms));
+  const clear = clearTimer || ((timer) => clearTimeout(timer));
   return new Promise((resolve) => {
     const seen = Object.create(null);
     let settled = false;
@@ -17,7 +19,7 @@ function collectPeers(dht, hash, timeoutMs, maxPeers) {
     const finish = (failed) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clear(timer);
       dht.removeListener('peer', onPeer);
       if (failed) return resolve({ ok: false, error: 'down' });
       const peers = peerTotal(seen);
@@ -25,7 +27,7 @@ function collectPeers(dht, hash, timeoutMs, maxPeers) {
       resolve({ ok: true, peers: peers });
     };
     let abort = () => {};
-    const timer = setTimeout(() => {
+    const timer = set(() => {
       try {
         abort();
       } catch (e) {
@@ -47,25 +49,29 @@ export function createDhtLookup(opts) {
   const lookupMs = o.lookupMs || 8000;
   const idleMs = o.idleMs || 10 * 60 * 1000;
   const maxPeers = o.maxPeers || 300;
+  const now = o.now || (() => Date.now());
+  const schedule = o.schedule || ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = o.clearTimer || ((timer) => clearTimeout(timer));
+  const createNode = o.createNode || ((nodeOpts) => new DHT(nodeOpts));
   let node = null;
   let busy = 0;
   let idleTimer = null;
 
   function armIdle() {
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => {
+    if (idleTimer) clearTimer(idleTimer);
+    idleTimer = schedule(() => {
       idleTimer = null;
       if (busy > 0) return armIdle();
       const current = node;
       node = null;
       if (current && !current.destroyed) current.destroy();
     }, idleMs);
-    if (idleTimer.unref) idleTimer.unref();
+    if (idleTimer && idleTimer.unref) idleTimer.unref();
   }
 
   function ensure() {
     if (node && !node.destroyed) return node;
-    const created = new DHT({
+    const created = createNode({
       // Caps so a warm node stays inside the 150 MB container limit.
       maxTables: 4,
       maxValues: 8,
@@ -95,14 +101,14 @@ export function createDhtLookup(opts) {
         return { ok: false, error: 'down' };
       }
       busy++;
-      const started = Date.now();
+      const started = now();
       try {
         // An empty routing table finishes get_peers at once and would look like "0 peers".
         // Wait out the bootstrap inside the same budget, then search with the time left.
-        await waitForReady(dht, lookupMs);
-        const left = lookupMs - (Date.now() - started);
+        await waitForReady(dht, lookupMs, schedule, clearTimer);
+        const left = lookupMs - (now() - started);
         if (!dht.ready || left < 1000) return { ok: false, error: 'not_ready' };
-        return await collectPeers(dht, hash, left, maxPeers);
+        return await collectPeers(dht, hash, left, maxPeers, schedule, clearTimer);
       } finally {
         busy--;
         armIdle();

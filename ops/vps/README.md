@@ -61,7 +61,7 @@ docker compose -f docker-compose.yml -f docker-compose.nuc.yml up -d
 
 The Node process stays resident. The DHT UDP socket opens on the first lookup and closes `DHT_IDLE_MS` (10 minutes) after the last one, so an idle box sends no DHT traffic. `mem_limit` / `memswap_limit` are 150m. A cold lookup that has not bootstrapped returns 503 and the app keeps the tracker line.
 
-Not deployed until Andy asks. On the NUC, after the compose files from this repo are copied into `/opt/omp-vps` (do not print secrets):
+Not deployed until Andy asks. On the NUC, copy the compose files into `/opt/omp-vps` and the entire `ops/vps/dht-peers` directory into `/opt/omp-vps/dht-peers` (the image build context is `./dht-peers`). `deploy.sh` does not copy these files. Then run (do not print secrets):
 
 ```bash
 # 1. Secret, once. Root-only .env. Do not echo the value.

@@ -102,7 +102,9 @@ export function createPeerCache(opts) {
  * Resolves true when `target` emits `ready` (or is already ready), false when `timeoutMs` passes first.
  * One listener, removed on either path.
  */
-export function waitForReady(target, timeoutMs) {
+export function waitForReady(target, timeoutMs, schedule, clearTimer) {
+  const set = schedule || ((fn, ms) => setTimeout(fn, ms));
+  const clear = clearTimer || ((timer) => clearTimeout(timer));
   return new Promise((resolve) => {
     if (target.ready) {
       resolve(true);
@@ -112,12 +114,12 @@ export function waitForReady(target, timeoutMs) {
     const done = (ok) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clear(timer);
       target.removeListener('ready', onReady);
       resolve(ok);
     };
     const onReady = () => done(true);
-    const timer = setTimeout(() => done(false), timeoutMs);
+    const timer = set(() => done(false), timeoutMs);
     target.on('ready', onReady);
   });
 }
