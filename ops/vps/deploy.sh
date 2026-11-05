@@ -49,6 +49,8 @@ DHT_IMAGE="${OMP_DHT_IMAGE:-omp-dht-peers:local}"
 DHT_CONTAINER="${OMP_DHT_CONTAINER:-omp-dht-peers}"
 DHT_IMAGE_ID=""
 DHT_BACKUP_TAG=""
+# Id the sidecar container should run after this restore. A rebuild replaces the saved id.
+DHT_EXPECTED_ID=""
 REF_DIR=""
 REF_TAG=""
 STAMP=""
@@ -1379,23 +1381,29 @@ restore_image() {
 
 restore_dht_image() {
   local current_id
-  current_id=""
-  if docker image inspect "$DHT_IMAGE" >/dev/null 2>&1; then
-    current_id="$(docker image inspect --format '{{.Id}}' "$DHT_IMAGE")"
-    current_id="${current_id,,}"
-    current_id="${current_id//$'\r'/}"
-    current_id="${current_id//$'\n'/}"
-  fi
+  DHT_EXPECTED_ID=""
+  current_id="$(dht_current_image_id)"
   if [[ -n "$MANIFEST_DHT_IMAGE_ID" && "$current_id" == "$MANIFEST_DHT_IMAGE_ID" ]]; then
     log "dht image already matches the backup"
+    DHT_EXPECTED_ID="$current_id"
     return 0
   fi
   if [[ -n "$MANIFEST_DHT_IMAGE_TAG" ]] && docker image inspect "$MANIFEST_DHT_IMAGE_TAG" >/dev/null 2>&1; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
       log "would tag ${MANIFEST_DHT_IMAGE_TAG} as ${DHT_IMAGE}"
+      DHT_EXPECTED_ID="$MANIFEST_DHT_IMAGE_ID"
       return 0
     fi
     docker tag "$MANIFEST_DHT_IMAGE_TAG" "$DHT_IMAGE" || return 1
+    DHT_EXPECTED_ID="$(dht_current_image_id)"
+    if [[ -z "$DHT_EXPECTED_ID" ]]; then
+      log "tagged dht image has no id"
+      return 1
+    fi
+    if [[ -n "$MANIFEST_DHT_IMAGE_ID" && "$DHT_EXPECTED_ID" != "$MANIFEST_DHT_IMAGE_ID" ]]; then
+      log "tagged dht image ${DHT_EXPECTED_ID} does not match backup ${MANIFEST_DHT_IMAGE_ID}"
+      return 1
+    fi
     return 0
   fi
   if [[ -f "$ROOT/dht-peers/Dockerfile" && -d "$ROOT/dht-peers" ]]; then
@@ -1403,8 +1411,15 @@ restore_dht_image() {
       log "would rebuild ${DHT_IMAGE} from the restored dht-peers source"
       return 0
     fi
+    # The saved tag is gone. The new build has a new id; the container must use that,
+    # not MANIFEST_DHT_IMAGE_ID, or every later rollback fails this check and rebuilds again.
     log "dht backup image tag missing; rebuilding restored dht-peers source"
     docker build -f "$ROOT/dht-peers/Dockerfile" -t "$DHT_IMAGE" "$ROOT/dht-peers" || return 1
+    DHT_EXPECTED_ID="$(dht_current_image_id)"
+    if [[ -z "$DHT_EXPECTED_ID" ]]; then
+      log "rebuilt dht image has no id"
+      return 1
+    fi
     return 0
   fi
   log "no dht image to restore"
@@ -1419,6 +1434,7 @@ restore_dht_service() {
   local compose_diff="$2"
   local current_id running container_image image_bad state_bad
   [[ -n "$MANIFEST_DHT_RUNNING" ]] || return 0
+  DHT_EXPECTED_ID="$MANIFEST_DHT_IMAGE_ID"
   current_id="$(dht_current_image_id)"
   running=0
   if dht_container_running; then
@@ -1468,12 +1484,13 @@ restore_dht_service() {
     if [[ "$state_bad" -eq 1 || "$image_bad" -eq 1 || "$diff" -eq 1 || "$compose_diff" -eq 1 ]]; then
       log "restarting dht-peers"
       compose --profile dht up -d --no-deps dht-peers || return 1
-      if [[ -n "$MANIFEST_DHT_IMAGE_ID" ]]; then
+      if [[ -n "$DHT_EXPECTED_ID" ]]; then
         container_image="$(dht_container_image)"
-        if [[ "$container_image" != "$MANIFEST_DHT_IMAGE_ID" ]]; then
-          log "dht container image is ${container_image} (want ${MANIFEST_DHT_IMAGE_ID})"
+        if [[ "$container_image" != "$DHT_EXPECTED_ID" ]]; then
+          log "dht container image is ${container_image} (want ${DHT_EXPECTED_ID})"
           return 1
         fi
+        log "dht container ${DHT_CONTAINER} is ${container_image}"
       fi
     fi
   elif [[ "$running" -eq 1 ]]; then

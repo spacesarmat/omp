@@ -1270,6 +1270,37 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
     expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(DHT_ID);
   });
 
+  it('accepts a rebuilt sidecar image when the saved tag is gone', () => {
+    const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
+      DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
+    });
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    const backup = backupFrom(deployed.stdout);
+    const manifest = readFileSync(path.join(backup, 'backup.manifest'), 'utf8');
+    const savedTag = manifest.match(/^dht_image_tag=(.+)$/m)?.[1] ?? '';
+    expect(savedTag).toMatch(/^omp-dht-peers:backup-/);
+    expect(manifest).toContain(`dht_image_id=${DHT_ID}`);
+    execFileSync('docker', ['rmi', savedTag], { env: box.env });
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(rolled.stdout).toContain('dht backup image tag missing; rebuilding restored dht-peers source');
+    expect(rolled.stdout).not.toContain(`want ${DHT_ID}`);
+    const rebuilt = imageId(box.env, DHT_IMAGE);
+    expect(rebuilt).not.toBe(DHT_ID);
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(rebuilt);
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    const again = runDeploy(box.env, ['--rollback', backup]);
+    expect(again.status, `${again.stdout}\n${again.stderr}`).toBe(0);
+    expect(again.stdout).not.toContain(`want ${DHT_ID}`);
+    const againId = imageId(box.env, DHT_IMAGE);
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(againId);
+    expect(linesStarting(box.dockerLog, 'build')).toHaveLength(3);
+  });
+
   it('removes a dht image created by this deploy when the backup had none', () => {
     const box = world(release({ 'ops/vps/dht-peers/src/main.mjs': 'export const peers = 8;\n' }), {
       DEPLOY_TEST_HEALTH_FAIL: '1',
