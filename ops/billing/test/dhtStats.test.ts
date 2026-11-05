@@ -177,6 +177,40 @@ describe('DHT admin counters', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 
+  it('keeps a newer error and the next minute when an idle flush waits on a save', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saved: { minutes: { minute: number; count: number }[]; errors: { at: number }[] | null; pruneAfter: number }[] = [];
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save(snap: { minutes: { minute: number; count: number }[]; errors: { at: number }[] | null; pruneAfter: number }) {
+        if (saved.length === 0) await gate;
+        saved.push(snap);
+      },
+    });
+    await readyDhtStats();
+    const minute = 1_800_000_000_000;
+    const next = minute + 60 * 1000;
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, minute);
+    const first = flushDhtStats(minute);
+    noteDhtRequest({ status: 502, ms: 4, reason: 'down' }, next);
+    const second = flushDhtStats(minute);
+    release();
+    await first;
+    await second;
+    const view = dhtStatsView(next);
+    expect(view.requests24h).toBe(2);
+    expect(view.errors).toEqual([{ at: next, status: 502, reason: 'sidecar не ответил' }]);
+    const follow = saved[saved.length - 1];
+    expect(follow.minutes.some((row) => row.minute === Math.floor(next / 60000) && row.count === 1)).toBe(true);
+    expect(follow.pruneAfter).toBeGreaterThanOrEqual(Math.floor(next / 60000));
+    expect(follow.errors && follow.errors.some((row) => row.at === next)).toBe(true);
+  });
+
   it('arms an idle prune so a quiet process still drops old minutes', async () => {
     const spy = vi.spyOn(global, 'setInterval');
     bindDhtStats({

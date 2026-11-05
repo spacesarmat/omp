@@ -311,17 +311,22 @@ function serializeMinute(key, row) {
  * the same cutoff the chart uses, so a quiet process still drops expired rows.
  */
 export async function flushDhtStats(now) {
-  const at = Number(now) || Date.now();
   clearFlushTimer();
   // This attempt replaces a pending backoff. A new failure schedules a fresh one.
   clearRetryTimer();
   if (!repo || !loaded) return;
   if (flushing) {
     await flushing;
-    if (dirty || dirtyMinutes.size || errorsDirty) return flushDhtStats(at);
+    if (dirty || dirtyMinutes.size || errorsDirty) {
+      // The clock from before the wait is stale. A request that finished during the
+      // save can be a newer error or the next minute. Prune with the old clock drops both.
+      return flushDhtStats(Math.max(latest || 0, Date.now()));
+    }
     return;
   }
+  const at = Number(now) || Date.now();
   // Same window as dhtStatsView: minutes older than 24h leave memory and then the table.
+  // `at` is chosen after any wait, so it is not older than rows noted while the previous save ran.
   prune(at);
   clearFlushTimer();
   if (!dirty && !dirtyMinutes.size && !errorsDirty) return;
