@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.8-beta.7
 
 - [phone] When Telegram is already linked and the account has a subscription, including the grace period, the phone gets a sign-in on its own. No code is needed. When every device slot is taken, the existing "all devices are taken" text is shown. With no subscription, the code field stays
 - [phone] Search sources, under Indexers, has a row "OMP server · Jackett, JacRed": connected until a date, no subscription, or not responding. A tap opens the OMP account. In results, in the "no answer" line and in the source list, the paid sources are named OMP Jackett and OMP JacRed, so they do not clash with your own Jackett
