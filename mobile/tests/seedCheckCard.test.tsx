@@ -3,7 +3,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+import { saveBillingSession } from '../../src/billing/session';
 import { applyLanguageSetting } from '../../src/i18n';
+import { setDhtPeersContext } from '../../src/sources/dhtPeers';
+import type { SourceHttp } from '../../src/sources/types';
 
 vi.mock('../../src/sources/liveSeedsRun', async () => {
   const actual = await vi.importActual<typeof import('../../src/sources/liveSeedsRun')>('../../src/sources/liveSeedsRun');
@@ -11,9 +14,11 @@ vi.mock('../../src/sources/liveSeedsRun', async () => {
 });
 
 import { probeSeeds } from '../../src/sources/liveSeedsRun';
-import { ResultCard } from '../src/ui/ResultCard';
+import { ResultCard, seedCheckable } from '../src/ui/ResultCard';
 import type { SourceResult } from '../../src/sources/types';
 
+const HASH = 'a'.repeat(40);
+const MAGNET = 'magnet:?xt=urn:btih:' + HASH + '&tr=' + encodeURIComponent('udp://tracker.example.org:6969/announce');
 const row = {
   Title: 'Американский папаша',
   Categories: '',
@@ -21,8 +26,8 @@ const row = {
   CreateDate: '',
   Tracker: 'rutor',
   Link: '',
-  Magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40),
-  Hash: 'a'.repeat(40),
+  Magnet: MAGNET,
+  Hash: HASH,
   Peer: 1,
   Seed: 3,
   source: 'rutor',
@@ -33,32 +38,41 @@ let el: HTMLElement;
 
 beforeEach(() => {
   applyLanguageSetting('ru');
+  saveBillingSession(null);
+  setDhtPeersContext(null);
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
   vi.mocked(probeSeeds).mockClear();
 });
 
 afterEach(() => {
+  saveBillingSession(null);
+  setDhtPeersContext(null);
   act(() => render(null, el));
 });
 
 describe('seed check on a result card', () => {
-  it('is a labeled chip, and a tap replaces the tracker count', async () => {
+  it('sits left of add, at the action height, and a tap replaces the tracker count', async () => {
     const css = readFileSync('mobile/src/mobile.css', 'utf8');
     expect(css).toMatch(/\.seed-check\s*\{[^}]*background:\s*var\(--panel-2\)/);
     expect(css).toMatch(/\.seed-check\s*\{[^}]*color:\s*var\(--text\)/);
     expect(css).toMatch(/appearance:\s*none/);
+    expect(css).toMatch(/\.m-rc-bottom \.seed-check,\s*\.m-rc-sheet-check \.seed-check\s*\{[^}]*height:\s*40px/);
+    expect(css).toContain('@container rc (max-width: 250px)');
+    expect(css).toContain('.m-rc-bottom .seed-check-short { display: inline; }');
 
-    act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
-    // 320px phone: padding 16+16, card padding 10+10, poster 64, gap 10 leaves ~194px.
-    // Three 40px buttons and two 8px gaps take 136px, so the chip cannot share that row.
-    const textCol = 320 - 32 - 20 - 64 - 10;
-    const actions = 40 * 3 + 8 * 2;
-    expect(textCol).toBeGreaterThanOrEqual(actions);
-    expect(el.querySelector('.m-rc-bottom .seed-check')).toBeNull();
-    const btn = el.querySelector('.m-rc-seed .seed-check') as HTMLButtonElement;
-    expect(css).toMatch(/\.m-rc-seed\s*\{[^}]*display:\s*flex/);
-    expect(btn.textContent).toBe('Проверить сиды');
+    act(() => render(<ResultCard r={row} category="tv" seedCode="P07.6" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    expect(el.querySelector('.m-rc-seed')).toBeNull();
+    const bottom = el.querySelector('.m-rc-bottom')!;
+    const btn = bottom.querySelector('.seed-check') as HTMLButtonElement;
+    expect(btn).toBe(bottom.firstElementChild);
+    expect(bottom.querySelector('.m-rc-btn')).toBe(btn.nextElementSibling);
+    expect(btn.className).toContain('tm');
+    expect(btn.getAttribute('data-code')).toBe('P07.6');
+    expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
+    expect(bottom.querySelector('.m-rc-date')).toBeNull();
+    expect(el.querySelector('.m-rc-meta .m-rc-date')!.textContent).toContain('окт');
     expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
     act(() => btn.click());
     expect(probeSeeds).toHaveBeenCalledTimes(1);
@@ -70,10 +84,83 @@ describe('seed check on a result card', () => {
     expect(meta).toContain('12 сидов');
     expect(meta).toContain('3 лича');
     expect(meta).not.toContain('по данным трекера');
-    expect(btn.textContent).toBe('Проверить сиды');
+    expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
-    const sheet = el.querySelector('[data-result-details] .seed-check') as HTMLButtonElement;
-    expect(sheet.textContent).toBe('Проверить сиды');
+    expect(el.querySelector('[data-result-details] .seed-check')).toBeNull();
+    expect(el.querySelector('.m-result-meta .seed-check')).toBeNull();
+    const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
+    expect(sheet.getAttribute('data-code')).toBe('PD31.1');
+    expect(sheet.className).toContain('tm');
+    expect(sheet.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    const actions = el.querySelector('.m-rc-sheet-actions')!;
+    expect(actions.firstElementChild).toBe(sheet.parentElement);
+    expect(actions.querySelector('.m-sheet-row')).toBe(sheet.parentElement!.nextElementSibling);
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('12 сидов');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('окт');
+  });
+
+  it('hides the button when the magnet has no tracker address and keeps the status', () => {
+    const bare = { ...row, Magnet: 'magnet:?xt=urn:btih:' + HASH, Title: 'Anidub' };
+    expect(seedCheckable(row)).toBe(true);
+    expect(seedCheckable(bare)).toBe(false);
+    act(() => render(<ResultCard r={bare} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    expect(el.querySelector('.seed-check')).toBeNull();
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('ГБ');
+    act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
+    expect(el.querySelector('.seed-check')).toBeNull();
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('Нет адреса трекера');
+    expect(el.querySelector('.m-sheet-row')).toBeTruthy();
+  });
+
+  it('checks a release with no tracker address through DHT only when signed in', async () => {
+    const bare = { ...row, Magnet: 'magnet:?xt=urn:btih:' + HASH, Title: 'Anidub' };
+    saveBillingSession({ token: '', paidUntil: 1, access: 'a1.test', accessExp: Date.now() + 3600_000 });
+    setDhtPeersContext(() => null);
+    expect(seedCheckable(bare)).toBe(false);
+    let seen = '';
+    const http: SourceHttp = {
+      get: (url) => {
+        seen = url;
+        return Promise.resolve({ status: 200, url, text: JSON.stringify({ peers: 4, source: 'dht', approx: true }) });
+      },
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    setDhtPeersContext(() => ({ http, client: null }));
+    expect(seedCheckable(bare)).toBe(true);
+
+    act(() => render(<ResultCard r={bare} category="tv" seedCode="P07.6" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const bottom = el.querySelector('.m-rc-bottom')!;
+    const btn = bottom.querySelector('.seed-check') as HTMLButtonElement;
+    expect(btn).toBe(bottom.firstElementChild);
+    expect(btn.getAttribute('data-code')).toBe('P07.6');
+    expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
+    act(() => btn.click());
+    expect(probeSeeds).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(seen).toContain('/v1/dht-peers?infohash=' + HASH);
+    expect(meta).toContain('4 пира онлайн');
+    expect(meta).not.toContain('Нет адреса трекера');
+    expect(meta).not.toContain('сейчас');
+    act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
+    const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
+    expect(sheet.getAttribute('data-code')).toBe('PD31.1');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+  });
+
+  it('English short label is Seeds', () => {
+    applyLanguageSetting('en');
+    act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const btn = el.querySelector('.m-rc-bottom .seed-check')!;
+    expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Check seeds');
+    expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Seeds');
   });
 });

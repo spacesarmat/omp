@@ -26,8 +26,9 @@ async function flush() {
 }
 
 const HASH = 'a'.repeat(40);
+const TRACKED = 'magnet:?xt=urn:btih:' + HASH + '&tr=' + encodeURIComponent('udp://tracker.example.org:6969/announce');
 const results = [
-  { Title: 'Starbound Frontier S02', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: 'magnet:?xt=urn:btih:' + HASH, Hash: HASH, Peer: 3, Seed: 152 },
+  { Title: 'Starbound Frontier S02', Categories: '', Size: '18 GB', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: TRACKED, Hash: HASH, Peer: 3, Seed: 152 },
   { Title: 'Starbound Frontier S01', Categories: '', Size: '17 GB', CreateDate: '', Tracker: 'rutor', Link: '', Magnet: '', Hash: 'b'.repeat(40), Peer: 1, Seed: 88 },
 ];
 
@@ -204,7 +205,7 @@ describe('Add', () => {
     await flush();
     click(byLabel('Добавить и смотреть на ТВ')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: 'magnet:?xt=urn:btih:' + HASH, title: 'Starbound Frontier S02', category: 'tv' });
+    expect(add).toHaveBeenCalledWith({ link: TRACKED, title: 'Starbound Frontier S02', category: 'tv' });
     expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: HASH });
     expect(toast.value).toBe('Запустил на LG OLED');
   });
@@ -446,7 +447,7 @@ describe('Add category', () => {
     closeDetails();
     click(byLabel('Добавить на сервер')[0]);
     await flush();
-    expect(add).toHaveBeenCalledWith({ link: M, title: 'Starbound Frontier S02', category: 'music' });
+    expect(add).toHaveBeenCalledWith({ link: TRACKED, title: 'Starbound Frontier S02', category: 'music' });
   });
 });
 

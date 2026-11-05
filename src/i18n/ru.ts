@@ -824,11 +824,13 @@ export const ru = {
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'по данным трекера',
     checkSeeds: 'Проверить сиды',
+    checkSeedsShort: 'Сиды',
     seedsNow: 'сейчас',
     seedsTimeout: 'Трекер не ответил',
     seedsNoTracker: 'Нет адреса трекера',
     /** DHT get_peers sample, not a seeder/leecher split. */
     dhtVia: 'по DHT',
+    dhtMiss: 'DHT не ответил',
     defaultPhone: 'Телефон',
     today: 'сегодня',
     yesterday: 'вчера',
@@ -2589,6 +2591,7 @@ export const ru = {
     calOpenCatalog: 'Открыть в каталоге',
     calSearchTorrents: 'Искать раздачи',
     calFindEpisode: 'Найти новую серию',
+    calPickEpisode: 'Выберите серию',
   },
   now: {
     collapse: 'Свернуть',

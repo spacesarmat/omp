@@ -26,6 +26,12 @@ export function setDhtPeersContext(fn: (() => SourceContext | null) | null): voi
   contextOf = fn || defaultDhtContext;
 }
 
+/** Signed in on a build that can call billing (phone, Android TV). webOS has no native HTTP, so this is false. */
+export function dhtSeedCheckAvailable(): boolean {
+  if (!billingSession()) return false;
+  return !!contextOf();
+}
+
 /** `{ peers, source: "dht", approx: true }` or null. Anything else is not shown. */
 export function parseDhtPeersBody(text: string): { peers: number } | null {
   let v: { peers?: unknown; source?: unknown; approx?: unknown };

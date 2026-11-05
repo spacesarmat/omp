@@ -1,8 +1,8 @@
 // A manual «Проверить сиды» next to a tracker seed count. The «Актуальные сиды» setting does not gate it.
 import { useRef, useState } from 'preact/hooks';
 import { t, tp } from '../i18n';
-import { askDhtPeers, seedCheckLine } from '../sources/dhtPeers';
-import { infohashOf } from '../sources/liveSeeds';
+import { askDhtPeers, dhtPeerLine, dhtSeedCheckAvailable, seedCheckLine } from '../sources/dhtPeers';
+import { infohashOf, trackerTargets } from '../sources/liveSeeds';
 import { probeSeeds, type ProbeResult } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
 import { Focusable } from './components';
@@ -33,6 +33,20 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
     if (phaseRef.current === 'busy') return;
     setPhase('busy');
     const hash = infohashOf(r);
+    const listed = !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
+    // No tracker address: do not scrape. A signed-in phone or Android TV asks DHT only.
+    if (hash && !listed && dhtSeedCheckAvailable()) {
+      askDhtPeers(hash).then((dht) => {
+        if (dht.ok) {
+          setLine(dhtPeerLine(dht.peers));
+          setPhase('done');
+        } else {
+          setLine(t('sources.dhtMiss'));
+          setPhase('err');
+        }
+      });
+      return;
+    }
     const trackerP = probeSeeds(r);
     const dhtP = hash ? askDhtPeers(hash) : Promise.resolve(null);
     Promise.all([trackerP, dhtP]).then((pair) => {
@@ -62,7 +76,7 @@ export function SeedCheck(p: {
   const own = useSeedProbe(p.r);
   const probe = p.probe || own;
   const phase = probe.phase;
-  if (!p.fallback && phase === 'idle') return null;
+  if (!p.buttonOnly && !p.fallback && phase === 'idle') return null;
   const run = () => probe.run();
   const label = (phase === 'busy' ? t('news.checking') : t('sources.checkSeeds')) + ': ' + p.r.Title;
   const shown = probe.text(p.fallback);
@@ -93,7 +107,14 @@ export function SeedCheck(p: {
         run();
       }}
     >
-      {phase === 'busy' ? <span class="seed-spin" aria-hidden="true" /> : t('sources.checkSeeds')}
+      {phase === 'busy' ? (
+        <span class="seed-spin" aria-hidden="true" />
+      ) : (
+        <>
+          <span class="seed-check-long">{t('sources.checkSeeds')}</span>
+          <span class="seed-check-short">{t('sources.checkSeedsShort')}</span>
+        </>
+      )}
     </button>
   );
   if (p.buttonOnly) return btn;

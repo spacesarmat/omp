@@ -10,8 +10,10 @@ import type { SourceResult } from '../../src/sources/types';
 const STAR_TREK =
   'Звездный путь: Странные новые миры / Star Trek: Strange New Worlds (2022-2026) WEB-DL [AV1/1080p] (S1-4E1-40 of 40) HDrezka, TVShows, LostFilm';
 
+const HASH = 'b'.repeat(40);
+const MAGNET = 'magnet:?xt=urn:btih:' + HASH + '&tr=' + encodeURIComponent('udp://tracker.example.org:6969/announce');
 const res = (Title: string, i = 0): SourceResult =>
-  ({ Title, Categories: '', Size: '10 GB', CreateDate: '', Tracker: 'rutor', Link: 'l' + i + Title, Magnet: '', Hash: '', Peer: 0, Seed: 5 }) as SourceResult;
+  ({ Title, Categories: '', Size: '10 GB', CreateDate: '', Tracker: 'rutor', Link: 'l' + i + Title, Magnet: MAGNET, Hash: HASH, Peer: 0, Seed: 5 }) as SourceResult;
 
 // a controllable IntersectionObserver: rows become visible only when the test says so
 let observers: { cb: IntersectionObserverCallback; nodes: Element[]; off: boolean }[] = [];
@@ -87,7 +89,8 @@ describe('seeds on a card', () => {
     expect(metas[0]).not.toContain('Проверить');
     const checks = el.querySelectorAll('.seed-check');
     expect(checks.length).toBe(1);
-    expect(checks[0].textContent).toBe('Проверить сиды');
+    expect(checks[0].querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    expect(checks[0].closest('.m-rc-bottom')).toBeTruthy();
     expect(metas[1]).toBe('10,0 ГБ');
     expect(resultMeta({ ...res('Film B', 3), Seed: 0 })).not.toContain('сид');
   });
