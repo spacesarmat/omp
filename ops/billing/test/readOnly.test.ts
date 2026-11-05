@@ -89,6 +89,7 @@ describe('BILLING_READONLY (cutover window)', () => {
       ['/v1/token/refresh', { refreshToken: 'x' }],
       ['/v1/token/upgrade', {}],
       ['/v1/link/start', {}],
+      ['/v1/link/claim', { deviceId: 'b'.repeat(32), telegramId: '1' }],
       ['/v1/link/clear', {}],
       ['/admin/login', { password: 'x' }],
       ['/admin/settings', { csrf: 'x' }],

@@ -25,7 +25,7 @@ import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
 import { billingSession, onBillingChange, seenAccount, type BillingAccount } from '../../../src/billing/session';
-import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { billingSignedOut, fetchBillingAccount } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
 import { t, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
@@ -240,6 +240,7 @@ type AccountView = { kind: 'in'; until: number } | { kind: 'out' } | { kind: 'ch
 function localAccountView(): AccountView {
   const session = billingSession();
   if (session) return { kind: 'in', until: session.paidUntil };
+  if (billingSignedOut()) return { kind: 'out' };
   const seen = seenAccount();
   if (seen) return { kind: 'in', until: seen.paidUntil };
   return { kind: 'checking' };
@@ -265,6 +266,10 @@ function AccountRow() {
       fetcher().then(
         (account) => {
           if (!alive || mine !== seq || billingSession()) return;
+          if (billingSignedOut()) {
+            setView({ kind: 'out' });
+            return;
+          }
           setView(account ? { kind: 'in', until: account.paidUntil } : { kind: 'out' });
         },
         () => {

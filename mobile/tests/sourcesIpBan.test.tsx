@@ -10,6 +10,7 @@ import { setBrowserLoginPlatform, type BrowserOutcome, type BrowserSpec } from '
 import { pauseSource, sourcePaused } from '../../src/sources/ipBan';
 import { torrentby } from '../../src/sources/torrentby';
 import { fakeSite, fixture, page, type FakeSite } from '../../tests/sources/fakeSite';
+import { BILLING_ORIGIN } from '../../src/billing/config';
 
 const BAN = 'torrent.by просит ввести проверочный код';
 
@@ -101,12 +102,14 @@ describe('phone «Источники поиска»: torrent.by asks for a verif
     expect(opened).toHaveLength(1);
     expect(opened[0].url).toBe('https://torrent.by/');
     expect(codeBtn()!.disabled).toBe(true);
-    expect(site.calls).toHaveLength(0);
+    // The sheet has not checked the site. The OMP server row's /v1/me is the only request so far.
+    expect(site.calls.filter((c) => c.url.indexOf(BILLING_ORIGIN) !== 0)).toHaveLength(0);
+    expect(site.calls.map((c) => c.url)).toContain(BILLING_ORIGIN + '/v1/me');
     // the person entered the code and closed the sheet
     banned = false;
     close({ result: 'cancelled' });
     await flush();
-    expect(site.calls.map((c) => c.url)).toEqual(['https://torrent.by/films/']);
+    expect(site.calls.filter((c) => c.url.indexOf(BILLING_ORIGIN) !== 0).map((c) => c.url)).toEqual(['https://torrent.by/films/']);
     expect(getHealth('torrentby')!.state).toBe('ok');
     expect(sourcePaused('torrentby')).toBe(false);
     expect(note()!.textContent).toMatch(/^работает/);
@@ -119,7 +122,7 @@ describe('phone «Источники поиска»: torrent.by asks for a verif
     await mount();
     act(() => codeBtn()!.click());
     await flush();
-    expect(site.calls).toHaveLength(1);
+    expect(site.calls.filter((c) => c.url.indexOf(BILLING_ORIGIN) !== 0)).toHaveLength(1);
     expect(note()!.textContent).toBe(BAN);
     expect(codeBtn()!.disabled).toBe(false);
   });

@@ -3,8 +3,12 @@
 // component state: it is read from the field at «Проверить и подключить», written to the Keystore storage, and the
 // field is emptied. A key imported from the TorrServer settings stays in memory only.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { billingSession, onBillingChange, type BillingAccount } from '../../../src/billing/session';
 import { allowTypedCleartext } from '../../../src/cleartextSync';
 import { t } from '../../../src/i18n';
+import { fetchBillingAccount } from '../../../src/sources/ompJackett';
+import { navigate } from '../nav';
+import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { native } from '../platform/native';
 import { client } from '../../../src/store/servers';
@@ -499,6 +503,65 @@ function IndexerCard({
   );
 }
 
+const CHEVRON = 'M9 6l6 6l-6 6';
+
+function serverDay(ms: number): string {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const p = (n: number) => (n < 10 ? '0' : '') + n;
+  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
+}
+
+/** подключено до / нет подписки / не отвечает. A failed check is «не отвечает» even when a date was known. */
+export function ompServerLine(acc: BillingAccount | null, failed: boolean): { text: string; tone: 'ok' | 'muted' | 'bad' } {
+  if (failed) return { text: t('sources.billing.serverDown'), tone: 'bad' };
+  const session = billingSession();
+  if (session && acc && acc.active) {
+    const until = acc.inGrace ? acc.accessUntil || acc.paidUntil : acc.paidUntil || session.paidUntil;
+    return { text: t('sources.billing.connected', { date: serverDay(until) || '-' }), tone: 'ok' };
+  }
+  return { text: t('sources.billing.serverNone'), tone: 'muted' };
+}
+
+/** «Сервер OMP» under indexers. A tap opens the OMP account. */
+export function OmpServerRow({ ctx }: { ctx: () => SourceContext }) {
+  const [line, setLine] = useState<{ text: string; tone: 'ok' | 'muted' | 'bad' } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      fetchBillingAccount(ctx()).then(
+        (acc) => {
+          if (alive) setLine(ompServerLine(acc, false));
+        },
+        () => {
+          if (alive) setLine(ompServerLine(null, true));
+        },
+      );
+    };
+    load();
+    const off = onBillingChange(load);
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [ctx]);
+  const tone = line ? line.tone : 'muted';
+  const klass = tone === 'ok' ? 'm-ok' : tone === 'bad' ? 'm-error' : 'm-muted';
+  return (
+    <button type="button" class="m-set-row m-set-pick tm" data-code="P21.4" data-row="omp-server" onClick={() => navigate({ name: 'account' })}>
+      <div class="m-set-text" style="flex-grow: 1">
+        <span>{t('sources.billing.serverTitle')}</span>
+        {line ? (
+          <span class={'m-small ' + klass} data-omp-server={tone}>
+            {line.text}
+          </span>
+        ) : null}
+      </div>
+      <Icon d={CHEVRON} size={20} />
+    </button>
+  );
+}
+
 /** The «Индексаторы» part of the phone's «Источники поиска» (mockup 5). onChange: a switch or the list changed. */
 export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContext; env: () => IndexerEnv; onChange: () => void }) {
   const [, setTick] = useState(0);
@@ -601,6 +664,7 @@ export function IndexerSection({ ctx, env, onChange }: { ctx: () => SourceContex
   return (
     <section class="m-set-group" data-section="indexers">
       <div class="m-set-label">{t('tvSources.indexers')}</div>
+      <OmpServerRow ctx={ctx} />
       {conns.map((c) => (
         <IndexerCard
           key={c.id}

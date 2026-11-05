@@ -111,11 +111,12 @@ describe('device tokens on the phone', () => {
 
   it('browser build: without a Keystore, or when it refuses, the refresh token stays in the session', async () => {
     useBillingKeystore(false);
-    const site = fakeSite((c) => page(pair(), c.url), null);
+    const body = (c: HttpCall) => (c.url.indexOf('/v1/me') > 0 ? '{"active":true,"paidUntil":2000000000000,"accessUntil":2000000000000,"monitorMax":0}' : pair());
+    const site = fakeSite((c) => page(body(c), c.url), null);
     await activateCode(site.ctx, 'ABCD-EFGH');
     expect(billingSession()!.refresh).toBe('r1.n1');
     clearBilling();
-    const refusing = fakeSite((c) => page(pair(), c.url), {});
+    const refusing = fakeSite((c) => page(body(c), c.url), {});
     await activateCode(withRefusingKeystore(refusing.ctx), 'ABCD-EFGH');
     expect(billingSession()!.refresh).toBe('r1.n2');
     expect(billingSession()!.volatile).toBeUndefined();
@@ -123,7 +124,7 @@ describe('device tokens on the phone', () => {
 
   it('Android: a refused Keystore write keeps the refresh token in memory only and logs it without the value', async () => {
     clearLog();
-    const site = fakeSite((c) => page(c.url.indexOf('/v1/search') > 0 ? RSS : pair(), c.url), {});
+    const site = fakeSite((c) => page(c.url.indexOf('/v1/search') > 0 ? RSS : c.url.indexOf('/v1/me') > 0 ? '{"active":true,"paidUntil":2000000000000,"accessUntil":2000000000000,"monitorMax":0}' : pair(), c.url), {});
     const ctx = withRefusingKeystore(site.ctx);
     await activateCode(ctx, 'ABCD-EFGH');
     const s = billingSession()!;

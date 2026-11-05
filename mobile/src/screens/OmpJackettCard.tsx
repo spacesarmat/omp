@@ -11,10 +11,13 @@ import {
 import { t } from '../../../src/i18n';
 import {
   activateCode,
-  clearBilling,
+  allowBillingSignIn,
+  claimLinkedSession,
   clearTelegramLink,
+  invalidateBillingClaims,
   fetchBillingAccount,
   refreshOmpJackettSources,
+  signOutBilling,
   startTelegramLink,
 } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
@@ -39,7 +42,18 @@ export function OmpJackettCard() {
   async function refreshAccount() {
     const ctx = phoneSourceContext();
     try {
-      setAccount(await fetchBillingAccount(ctx));
+      const acc = await fetchBillingAccount(ctx);
+      setAccount(acc);
+      // Linked Telegram, no session yet: the server issues one when the subscription is active (grace included).
+      if (!billingSession() && acc && acc.telegramId && (acc.active || acc.overLimit)) {
+        try {
+          const row = await claimLinkedSession(ctx);
+          if (row) setSession(row);
+          setError('');
+        } catch (e) {
+          setError(e instanceof Error ? e.message : t('sources.billing.down'));
+        }
+      }
       await refreshOmpJackettSources(ctx);
     } catch {
       // A blip must not clear the account already on screen. Source flags stay as they were.
@@ -105,12 +119,14 @@ export function OmpJackettCard() {
 
   async function linkTelegram() {
     if (linkBusy) return;
+    allowBillingSignIn();
     setLinkBusy(true);
     setError('');
     try {
       const deepLink = await startTelegramLink(phoneSourceContext());
       window.open(deepLink, '_system');
       window.setTimeout(() => void refreshAccount(), 2500);
+      window.setTimeout(() => void refreshAccount(), 8000);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sources.billing.down'));
     } finally {
@@ -122,10 +138,13 @@ export function OmpJackettCard() {
     if (linkBusy) return;
     setLinkBusy(true);
     setError('');
+    // Before the round trip: a claim that is already in flight must not sign this phone back in.
+    invalidateBillingClaims();
     try {
       await clearTelegramLink(phoneSourceContext());
-      setAccount((prev) => (prev ? { ...prev, telegramId: '' } : prev));
-      await refreshAccount();
+      signOutBilling(phoneSourceContext());
+      setSession(null);
+      setAccount(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sources.billing.down'));
     } finally {
@@ -197,7 +216,7 @@ export function OmpJackettCard() {
                 type="button"
                 class="m-btn m-btn-secondary"
                 onClick={() => {
-                  clearBilling(phoneSourceContext());
+                  signOutBilling(phoneSourceContext());
                   setSession(null);
                   setAccount(null);
                 }}

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRpcHandler, RpcError, MAX_RESULTS } from '../src/rpc/handler';
+import { saveBillingAccess } from '../../src/billing/entitlement';
+import { saveBillingSession } from '../../src/billing/session';
+import { allowBillingSignIn, signOutBilling } from '../../src/sources/ompJackett';
+import { phoneLink, phoneLinkSubscribed, savePhoneLink, setPhoneSubscribed } from '../../src/phone/phoneStore';
 import { setSourceOn, reloadSourcePrefs, setHealth, resetHealth } from '../../src/sources/store';
 import { stashFile, takeStashedFile } from '../../src/api/torrentFiles';
 import { clearLog, logEntries } from '../../src/lib/log';
@@ -22,6 +26,23 @@ describe('rpc handler', () => {
   it('ompSubscribed reports the phone subscription and nothing else', async () => {
     const r = (await createRpcHandler(deps()).dispatch('ompSubscribed', {})) as { subscribed: boolean };
     expect(r).toEqual({ subscribed: false });
+  });
+
+  it('sign-out makes ompSubscribed false and the TV phone link drops premium', async () => {
+    const until = Date.now() + 864e5;
+    saveBillingSession({ token: '', access: 'a1.x', accessExp: until, paidUntil: until, id: 'sub1' });
+    saveBillingAccess({ active: true, accessUntil: until, checkedAt: Date.now(), jackett: true, jacred: true, monitorMax: 0 });
+    const h = createRpcHandler(deps());
+    expect(await h.dispatch('ompSubscribed', {})).toEqual({ subscribed: true });
+    const phone = { url: 'http://192.168.1.20:8097', token: 'c'.repeat(32), name: 'Pixel', sub: true as const };
+    savePhoneLink(phone);
+    expect(phoneLinkSubscribed(phoneLink.value)).toBe(true);
+    signOutBilling();
+    expect(await h.dispatch('ompSubscribed', {})).toEqual({ subscribed: false });
+    setPhoneSubscribed(false);
+    expect(phoneLink.value && phoneLink.value.sub).toBe(false);
+    expect(phoneLinkSubscribed(phoneLink.value)).toBe(false);
+    allowBillingSignIn();
   });
   it('sources and search wait until prepareSources has registered paid sources', async () => {
     let ready = false;

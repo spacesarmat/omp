@@ -357,6 +357,38 @@ async function tempFile(state: unknown) {
 }
 
 describe('billing HTTP: activation, link clear, /v1/me', () => {
+  it('POST /v1/link/claim issues a pair for the linked device and ignores a client telegram id', async () => {
+    const device = 'd'.repeat(32);
+    const started = startDeviceLink(emptyState(), { deviceId: device, now: NOW });
+    const linked = confirmDeviceLink(started.state, { token: started.result.token, telegramId: '77', now: NOW });
+    const granted = grantDays(linked.state, { telegramId: '77', days: 30, now: NOW });
+    const live = {
+      ...granted.state,
+      subscriptions: granted.state.subscriptions.map((s: { paidUntil: number }) => ({ ...s, paidUntil: Date.now() + 10 * DAY })),
+    };
+    const file = await tempFile(live);
+    const app = createApp(file, noFetch, { env: { BILLING_CLAIM_IP_MAX: '2', BILLING_CLAIM_DEVICE_MAX: '5' } });
+    const ip = { 'cf-connecting-ip': '203.0.113.9' };
+    const spoof = await call(app, 'POST', '/v1/link/claim', {
+      headers: ip,
+      body: { deviceId: 'e'.repeat(32), telegramId: '77', tokens: 'pair' },
+    });
+    expect(spoof.status).toBe(404);
+    expect(spoof.data && spoof.data.error).toBe('not_linked');
+    const ok = await call(app, 'POST', '/v1/link/claim', {
+      headers: ip,
+      body: { deviceId: device, telegramId: '999', tokens: 'pair', name: 'Pixel' },
+    });
+    expect(ok.status).toBe(200);
+    expect(String(ok.data && ok.data.refreshToken)).toMatch(/^r1\./);
+    expect(String(ok.data && ok.data.accessToken)).toMatch(/^a1\./);
+    expect(ok.data && ok.data.telegramId).toBeUndefined();
+    const limited = await call(app, 'POST', '/v1/link/claim', { headers: ip, body: { deviceId: device } });
+    expect(limited.status).toBe(429);
+    expect(limited.data && limited.data.error).toBe('rate');
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
   it('/v1/activate answers 409 device_limit for a third device and 429 past the IP limit', async () => {
     const f = full();
     const minted = issueActivation(

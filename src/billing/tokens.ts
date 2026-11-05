@@ -50,6 +50,21 @@ let memoryRefresh: { id: string; token: string } | null = null;
 let inflight: Promise<BillingSession> | null = null;
 let failedAt = 0;
 let wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Refresh-token writes and deletes run one at a time. `gen` is the latest op to enter the queue.
+ * A set() already in flight may still apply its own value when it resolves; the critical section
+ * then writes `desire` again, so that stale value cannot be the one left in the Keystore.
+ */
+let keystorePending: Array<() => Promise<void>> = [];
+let keystoreDraining = false;
+let keystoreGen = 0;
+let keystoreEpoch = 0;
+let keystoreDesire: { gen: number; kind: 'token' | 'empty'; token: string; ctx: SourceContext | null } = {
+  gen: 0,
+  kind: 'empty',
+  token: '',
+  ctx: null,
+};
 
 /** The app's own page may rotate tokens (the hidden pages may not). */
 export function allowBillingRefresh(on: boolean): void {
@@ -62,6 +77,11 @@ export function resetBillingTokens(pause?: (ms: number) => Promise<void>): void 
   failedAt = 0;
   memoryRefresh = null;
   keystoreOnly = true;
+  keystoreEpoch++;
+  keystorePending = [];
+  keystoreDraining = false;
+  keystoreGen = 0;
+  keystoreDesire = { gen: 0, kind: 'empty', token: '', ctx: null };
   if (pause) wait = pause;
 }
 
@@ -143,27 +163,107 @@ interface Stored {
   local?: string;
   /** Android: the Keystore refused it, the token is in memory only. */
   volatile?: boolean;
+  /** This write lost the queue to a newer sign-in or a sign-out. Do not publish it. */
+  stale?: boolean;
+}
+
+/** One Keystore op at a time. The work runs only after every earlier set and delete has settled. */
+function enqueueKeystore<T>(
+  ctx: SourceContext | null,
+  kind: 'token' | 'empty',
+  token: string,
+  work: (gen: number) => Promise<T>,
+): Promise<T> {
+  const gen = ++keystoreGen;
+  const epoch = keystoreEpoch;
+  keystoreDesire = { gen, kind, token, ctx };
+  return new Promise((resolve, reject) => {
+    keystorePending.push(() =>
+      work(gen).then(
+        (result) => settleKeystore(epoch, gen, result).then(resolve, reject),
+        (err) => settleKeystore(epoch, gen, undefined as T).then(() => reject(err), reject),
+      ),
+    );
+    drainKeystore();
+  });
+}
+
+/** Starts the next Keystore op. An idle queue runs it now, so a lone delete is not deferred. */
+function drainKeystore(): void {
+  if (keystoreDraining) return;
+  const job = keystorePending.shift();
+  if (!job) return;
+  keystoreDraining = true;
+  const epoch = keystoreEpoch;
+  let run: Promise<void>;
+  try {
+    run = job();
+  } catch (err) {
+    run = Promise.reject(err);
+  }
+  run.then(
+    () => {
+      if (epoch !== keystoreEpoch) return;
+      keystoreDraining = false;
+      drainKeystore();
+    },
+    () => {
+      if (epoch !== keystoreEpoch) return;
+      keystoreDraining = false;
+      drainKeystore();
+    },
+  );
+}
+
+/** After a stale set() applies its value, put the current owner's token back before the next op starts. */
+function settleKeystore<T>(epoch: number, gen: number, result: T): Promise<T> {
+  if (epoch !== keystoreEpoch || keystoreDesire.gen === gen || keystoreDesire.gen === 0) return Promise.resolve(result);
+  return repairKeystore().then(() => result);
+}
+
+function repairKeystore(): Promise<void> {
+  const want = keystoreDesire;
+  const written =
+    want.kind === 'token' && want.token ? writeRefreshNow(want.ctx, want.token) : wipeRefreshNow(want.ctx);
+  return written.then(() => (keystoreDesire.gen === want.gen ? undefined : repairKeystore()));
+}
+
+function writeRefreshNow(ctx: SourceContext | null, token: string): Promise<void> {
+  if (ctx && ctx.billing && ctx.billing.adopt) return ctx.billing.adopt(token).then(() => undefined, () => undefined);
+  if (ctx && ctx.secrets) return ctx.secrets.set(REFRESH_SECRET, token).then(() => undefined, () => undefined);
+  return Promise.resolve();
+}
+
+function wipeRefreshNow(ctx: SourceContext | null): Promise<void> {
+  memoryRefresh = null;
+  if (ctx && ctx.billing && ctx.billing.forget) return ctx.billing.forget().then(() => undefined, () => undefined);
+  if (ctx && ctx.secrets) return ctx.secrets.delete(REFRESH_SECRET).then(() => undefined, () => undefined);
+  return Promise.resolve();
 }
 
 /**
  * Android: the Keystore or nowhere. A refused write keeps the token in memory for this run of the app and logs the
  * failure (never the value); after a restart the code is asked again. The browser build keeps it in the session.
  */
-function storeRefresh(ctx: SourceContext, token: string, id: string): Promise<Stored> {
+function storeRefresh(ctx: SourceContext, token: string, id: string, gen: number): Promise<Stored> {
   const store = ctx.secrets;
+  const missed = (): Stored => ({ stale: true });
+  if (gen !== keystoreGen) return Promise.resolve(missed());
   if (!store) return Promise.resolve({ local: token });
   if (!onAndroid(ctx)) {
     return store.set(REFRESH_SECRET, token).then(
-      () => ({}),
-      () => ({ local: token }),
+      () => (gen === keystoreGen ? {} : missed()),
+      () => (gen === keystoreGen ? { local: token } : missed()),
     );
   }
   return store.set(REFRESH_SECRET, token).then(
     () => {
+      if (gen !== keystoreGen) return missed();
       memoryRefresh = null;
       return {};
     },
     () => {
+      if (gen !== keystoreGen) return missed();
       memoryRefresh = { id, token };
       log('warn', 'app', t('log.billingKeystoreFailed'));
       return { volatile: true };
@@ -190,35 +290,88 @@ function lostOnRestart(ctx: SourceContext, s: BillingSession): boolean {
 }
 
 /** Saves a fresh pair: the refresh token to the Keystore, the access token to the session. `prev` keeps the binding id. */
-export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession> {
+export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession>;
+/** `current` is false when this claim was cancelled (sign-out). Then nothing is kept, including a token already written. */
+export function savePair(
+  ctx: SourceContext,
+  pair: TokenPair,
+  prev: BillingSession | null,
+  current: () => boolean,
+): Promise<BillingSession | null>;
+export function savePair(
+  ctx: SourceContext,
+  pair: TokenPair,
+  prev: BillingSession | null,
+  current?: () => boolean,
+): Promise<BillingSession | null> {
+  if (current && !current()) return Promise.resolve(null);
   const id = prev && prev.id ? prev.id : newId();
+  // A claim must not start writing over a session it does not own (a code entered while it waited).
+  if (current && billingSession() && billingSession()!.id !== id) return Promise.resolve(null);
+  return enqueueKeystore(ctx, 'token', pair.refreshToken, (gen) => {
+    if (gen !== keystoreGen || (current && !current())) return Promise.resolve(null);
+    if (current && billingSession() && billingSession()!.id !== id) return Promise.resolve(null);
+    return keepPair(ctx, pair, id, gen).then((stored) => {
+      // Still inside the queue. A set() that resolved late is stale: do not publish it.
+      // settleKeystore writes the current owner's token before the next op runs.
+      if (stored.stale || gen !== keystoreGen) return null;
+      if (current && !current()) return dropCancelledWrite(ctx, id);
+      if (current && billingSession() && billingSession()!.id !== id) return null;
+      if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
+      const row: BillingSession = {
+        token: '',
+        paidUntil: typeof pair.paidUntil === 'number' ? pair.paidUntil : prev ? prev.paidUntil : 0,
+        id,
+        access: pair.accessToken,
+        accessExp: pair.accessExpiresAt,
+        refreshExp: pair.refreshExpiresAt,
+      };
+      if (stored.local) row.refresh = stored.local;
+      if (stored.volatile) row.volatile = true;
+      saveBillingSession(row);
+      setBillingNotice('');
+      emitBillingChange();
+      // A listener may sign out, then a new code may publish, while this change is delivered.
+      if (gen !== keystoreGen) return null;
+      if (current && !current()) return dropCancelledWrite(ctx, id);
+      return row;
+    });
+  });
+}
+
+/** Adopt (Android) or Keystore set. Runs only while this queue turn is the latest one. */
+function keepPair(ctx: SourceContext, pair: TokenPair, id: string, gen: number): Promise<Stored> {
+  if (gen !== keystoreGen) return Promise.resolve({ stale: true });
   const native = ctx.billing;
-  const keep: Promise<Stored> =
-    native && native.adopt
-      ? native.adopt(pair.refreshToken).then(
-          (r) => (r.volatile ? { volatile: true } : {}),
-          () => {
-            // the app could not take the token at all: the code works again on this phone, ask for it once more
-            throw downError();
-          },
-        )
-      : storeRefresh(ctx, pair.refreshToken, id);
-  return keep.then((stored) => {
-    if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
-    const row: BillingSession = {
-      token: '',
-      paidUntil: typeof pair.paidUntil === 'number' ? pair.paidUntil : prev ? prev.paidUntil : 0,
-      id,
-      access: pair.accessToken,
-      accessExp: pair.accessExpiresAt,
-      refreshExp: pair.refreshExpiresAt,
-    };
-    if (stored.local) row.refresh = stored.local;
-    if (stored.volatile) row.volatile = true;
-    saveBillingSession(row);
-    setBillingNotice('');
+  if (native && native.adopt) {
+    return native.adopt(pair.refreshToken).then(
+      (r) => (gen === keystoreGen ? (r.volatile ? { volatile: true } : {}) : { stale: true }),
+      () => {
+        // the app could not take the token at all: the code works again on this phone, ask for it once more
+        throw downError();
+      },
+    );
+  }
+  return storeRefresh(ctx, pair.refreshToken, id, gen);
+}
+
+/**
+ * Drops a cancelled write only while this save still owns the session.
+ * A sign-in that replaced it (another id, already published) is left as it is.
+ * No session yet: the refresh token this write just stored is removed.
+ */
+function dropCancelledWrite(ctx: SourceContext, ownedId: string): Promise<null> {
+  const live = billingSession();
+  if (live && live.id !== ownedId) return Promise.resolve(null);
+  saveBillingAccess(null);
+  saveBillingSession(null);
+  saveSeenAccount(null);
+  setBillingNotice('');
+  memoryRefresh = null;
+  // Inline: this turn still holds the queue. A queued delete would run after a newer sign-in.
+  return wipeRefreshNow(ctx).then(() => {
     emitBillingChange();
-    return row;
+    return null;
   });
 }
 
@@ -230,8 +383,10 @@ export function dropDeviceTokens(ctx: SourceContext | null, notice: BillingNotic
   saveSeenAccount(null);
   setBillingNotice(notice);
   memoryRefresh = null;
-  if (ctx && ctx.billing && ctx.billing.forget) ctx.billing.forget().then(undefined, () => undefined);
-  else if (ctx && ctx.secrets) ctx.secrets.delete(REFRESH_SECRET).then(undefined, () => undefined);
+  enqueueKeystore(ctx, 'empty', '', (gen) => {
+    if (gen !== keystoreGen) return Promise.resolve();
+    return wipeRefreshNow(ctx);
+  }).then(undefined, () => undefined);
   emitBillingChange();
 }
 

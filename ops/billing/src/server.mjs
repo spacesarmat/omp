@@ -44,6 +44,7 @@ import {
   rememberTelegramProfile,
   startAdminPanelLogin,
   startDeviceLink,
+  claimLinkedDevice,
   subscriptionView,
   monitorMaxFor,
   supportThread,
@@ -118,6 +119,7 @@ import { sendMail } from './mail.mjs';
 import { loginPage } from './panel.mjs';
 import {
   activateLimitConfig,
+  claimLimitConfig,
   tokenLimitConfig,
   adsConfigLimitConfig,
   clientIp,
@@ -739,6 +741,8 @@ export function createApp(file, fetchImpl, opts) {
   const net = fetchImpl || fetch;
   const env = (opts && opts.env) || process.env;
   const activateLimit = createActivateLimiter(activateLimitConfig(env));
+  // A linked phone asks once at start and when the account screen opens. Per IP and per device.
+  const claimLimit = createActivateLimiter(claimLimitConfig(env));
   const strictLinkClear = linkClearRequiresToken(env);
   // Refresh and upgrade are cheap to call but should not be hammered from one address.
   const tokenLimit = createActivateLimiter(tokenLimitConfig(env));
@@ -1765,6 +1769,28 @@ export function createApp(file, fetchImpl, opts) {
         const state = (await store.read());
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);
         return json(res, 200, { token: result.token, deepLink, expiresAt: result.expiresAt });
+      }
+      if (req.method === 'POST' && path === '/v1/link/claim') {
+        // The bot stored this device on the account. A telegramId in the body is ignored.
+        const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const wait = claimLimit.check(clientIp(req), deviceId);
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const now = Date.now();
+        const result = await store.update((state) => claimLinkedDevice(state, { deviceId, now }));
+        if (result.error === 'not_linked') return json(res, 404, { error: 'not_linked' });
+        if (result.error === 'no_subscription') return json(res, 403, { error: 'no_subscription' });
+        if (result.error === 'bad_device') return json(res, 400, { error: 'bad_device' });
+        const conflict = result.error === 'device_limit' || result.error === 'extra_expired';
+        if (result.error) return json(res, conflict ? 409 : 403, { error: result.error });
+        const row = await reg.activeRowForCode(result.codeId);
+        if (row) await noteSeen(row.id, clientIp(req), true);
+        if (row) await noteName(row.id, body.name);
+        if (!row) return json(res, 403, { error: 'revoked' });
+        return json(res, 200, { ...(await reg.issuePair(await secret(), row, now)).pair, paidUntil: result.paidUntil });
       }
       if (req.method === 'POST' && path === '/v1/link/clear') {
         const body = await readBody(req);

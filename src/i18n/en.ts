@@ -943,8 +943,11 @@ export const en: EnDict<typeof ru> = {
     billing: {
       title: 'OMP subscription',
       text: 'Jackett and JacRed with the subscription. Search goes through the OMP server; add releases to your own TorrServer.',
-      jackett: 'Jackett',
-      jacred: 'JacRed',
+      jackett: 'OMP Jackett',
+      jacred: 'OMP JacRed',
+      serverTitle: 'OMP server · Jackett, JacRed',
+      serverNone: 'no subscription',
+      serverDown: 'not responding',
       code: 'Subscription code',
       connect: 'Connect',
       connecting: 'Connecting…',

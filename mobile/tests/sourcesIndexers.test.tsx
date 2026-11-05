@@ -5,7 +5,8 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Sources } from '../src/screens/Sources';
-import { IndexerAddSheet, foundCardState, keyNote, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { IndexerAddSheet, foundCardState, keyNote, ompServerLine, type IndexerEnv } from '../src/screens/SourcesIndexers';
+import { saveBillingSession } from '../../src/billing/session';
 import { allowTypedHost } from '../src/cleartextHosts';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { torznabHidden } from '../../src/sources/indexerStore';
@@ -486,5 +487,20 @@ describe('phone indexers in English', () => {
     await click(btn('Search the network')!);
     expect(el.textContent).toContain('Connect to Wi‑Fi to find Jackett and Prowlarr on the network');
     noCyrillic(el);
+  });
+});
+
+describe('OMP server row', () => {
+  it('says connected until, no subscription, or not responding', () => {
+    localStorage.clear();
+    expect(ompServerLine(null, true).text).toBe('не отвечает');
+    expect(ompServerLine(null, false).text).toBe('нет подписки');
+    expect(ompServerLine({ telegramId: '1', paidUntil: 0, active: false, deviceLimit: 2 }, false).text).toBe('нет подписки');
+    const until = Date.UTC(2026, 11, 15, 12);
+    saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: until, id: 's1' });
+    const on = ompServerLine({ telegramId: '1', paidUntil: until, active: true, deviceLimit: 2 }, false);
+    expect(on.tone).toBe('ok');
+    expect(on.text).toContain('Подключено до 15.12.2026');
+    localStorage.clear();
   });
 });
