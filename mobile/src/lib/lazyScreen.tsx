@@ -14,10 +14,12 @@ export function lazyScreen(
 
     useEffect(() => {
       let alive = true;
-      void loader().then((m) => {
-        const Comp = m[exportName] as ComponentType<any> | undefined;
-        if (alive && Comp) setScreen(() => Comp);
-      });
+      void loader()
+        .then((m) => {
+          const Comp = m[exportName] as ComponentType<any> | undefined;
+          if (alive && Comp) setScreen(() => Comp);
+        })
+        .catch(() => {});
       return () => {
         alive = false;
       };
