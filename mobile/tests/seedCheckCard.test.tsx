@@ -58,7 +58,9 @@ describe('seed check on a result card', () => {
     expect(css).toMatch(/\.seed-check\s*\{[^}]*background:\s*var\(--panel-2\)/);
     expect(css).toMatch(/\.seed-check\s*\{[^}]*color:\s*var\(--text\)/);
     expect(css).toMatch(/appearance:\s*none/);
-    expect(css).toMatch(/\.m-rc-bottom \.seed-check,\s*\.m-rc-sheet-check \.seed-check\s*\{[^}]*height:\s*40px/);
+    expect(css).toMatch(/\.m-rc-bottom \.seed-check \{[^}]*height:\s*40px/);
+    expect(css).not.toMatch(/\.m-rc-bottom \.seed-check \{[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.m-rc-sheet-actions \.m-sheet-row \.seed-check-short \{ display: inline; \}/);
     expect(css).toContain('@container rc (max-width: 250px)');
     const narrow = css.slice(css.indexOf('@media (max-width: 400px)'), css.indexOf('@media (max-width: 400px)') + 240);
     expect(narrow).toContain('.m-rc-bottom .seed-check-long { display: none; }');
@@ -96,13 +98,14 @@ describe('seed check on a result card', () => {
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
     expect(el.querySelector('[data-result-details] .seed-check')).toBeNull();
     expect(el.querySelector('.m-result-meta .seed-check')).toBeNull();
-    const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
+    const sheetRow = el.querySelector('.m-rc-sheet-actions .m-sheet-row')!;
+    const sheet = sheetRow.querySelector('.seed-check') as HTMLButtonElement;
+    expect(sheet).toBe(sheetRow.firstElementChild);
+    expect(el.querySelector('.m-rc-sheet-check')).toBeNull();
     expect(sheet.getAttribute('data-code')).toBe('PD31.1');
     expect(sheet.className).toContain('tm');
+    expect(sheet.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
     expect(sheet.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
-    const actions = el.querySelector('.m-rc-sheet-actions')!;
-    expect(actions.firstElementChild).toBe(sheet.parentElement);
-    expect(actions.querySelector('.m-sheet-row')).toBe(sheet.parentElement!.nextElementSibling);
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('12 сидов');
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('окт');
   });
@@ -163,7 +166,8 @@ describe('seed check on a result card', () => {
     expect(meta).not.toContain('Нет адреса трекера');
     expect(meta).not.toContain('сейчас');
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
-    const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
+    const sheet = el.querySelector('.m-rc-sheet-actions .m-sheet-row .seed-check') as HTMLButtonElement;
+    expect(sheet).toBe(el.querySelector('.m-rc-sheet-actions .m-sheet-row')!.firstElementChild);
     expect(sheet.getAttribute('data-code')).toBe('PD31.1');
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
   });
@@ -218,6 +222,42 @@ describe('seed check on a result card', () => {
     expect(meta).toContain('12 сидов');
     expect(meta).toContain('9 пиров онлайн');
     expect(meta).toContain('по DHT');
+  });
+
+  it('says DHT needs an OMP subscription when the tracker fails and there is no session', async () => {
+    let calls = 0;
+    const http: SourceHttp = {
+      get: () => {
+        calls += 1;
+        return Promise.resolve({ status: 200, url: '', text: '' });
+      },
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    setDhtPeersContext(() => ({ http, client: null }));
+    vi.mocked(probeSeeds).mockImplementation(() => Promise.resolve({ ok: false, reason: 'timeout' }));
+    act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    act(() => (el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement).click());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('Трекер не ответил');
+    expect(meta).toContain('Проверка по DHT - с подпиской OMP');
+    expect(meta).not.toContain('пир');
+    expect(calls).toBe(0);
+    setDhtPeersContext(() => null);
+    act(() => (el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement).click());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const webos = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(webos).toContain('Трекер не ответил');
+    expect(webos).not.toContain('Проверка по DHT');
   });
 
   it('English short label is Seeds', () => {

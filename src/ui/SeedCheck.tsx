@@ -1,7 +1,7 @@
 // A manual «Проверить сиды» next to a tracker seed count. The «Актуальные сиды» setting does not gate it.
 import { useRef, useState } from 'preact/hooks';
 import { t, tp } from '../i18n';
-import { askDhtPeers, dhtPeerLine, dhtSeedCheckAvailable, seedCheckLine } from '../sources/dhtPeers';
+import { askDhtPeers, dhtNeedsSubscriptionHint, dhtPeerLine, dhtSeedCheckAvailable, seedCheckLine, withDhtSubscriptionHint } from '../sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../sources/liveSeeds';
 import { probeSeeds, type ProbeResult } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
@@ -65,7 +65,10 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
         return;
       }
       if (!dhtIn) return;
-      setLine(seedCheckLine(tracker, dht));
+      // No session: DHT was not called. Say so once, and only when the tracker itself failed.
+      let line = seedCheckLine(tracker, dht);
+      if (!tracker.ok && !(dht && dht.ok) && dhtNeedsSubscriptionHint()) line = withDhtSubscriptionHint(line);
+      setLine(line);
       setPhase(tracker.ok || (dht !== null && dht.ok) ? 'done' : 'err');
     };
     probeSeeds(r).then((res) => {

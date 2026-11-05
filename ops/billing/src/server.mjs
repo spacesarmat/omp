@@ -349,6 +349,15 @@ export function deviceLogId(deviceId) {
   return sha256(id).slice(0, 8);
 }
 
+/** One line per GET /v1/dht-peers. Status and duration only. No token, no infohash. */
+export function formatDhtLog(status, ms, deviceId) {
+  const code = Number(status);
+  const st = Number.isFinite(code) ? String(Math.max(0, Math.min(599, Math.floor(code)))) : '0';
+  const n = Number(ms);
+  const dur = Number.isFinite(n) && n >= 0 ? String(Math.min(600000, Math.floor(n))) : '0';
+  return 'dht status=' + st + ' ms=' + dur + ' device=' + deviceLogId(deviceId) + '\n';
+}
+
 function searchCount(value, max) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return '0';
@@ -1819,29 +1828,31 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
         // No noteSeen: a tap must not write the device row. Peer addresses stay on the sidecar.
+        // Every response is one log line: status and duration. The token and the infohash are not logged.
+        const started = Date.now();
         const device = String(req.headers['x-device-id'] || '');
+        const finish = (status, value) => {
+          process.stderr.write(formatDhtLog(status, Date.now() - started, device));
+          return json(res, status, value);
+        };
         const token = bearer(req);
-        if (!token) return json(res, 401, { error: 'bad_token' });
+        if (!token) return finish(401, { error: 'bad_token' });
         const state = await store.read();
         const caller = await deviceCaller(state, token, device, Date.now());
-        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        if (!caller || caller.error) return finish(401, { error: (caller && caller.error) || 'bad_token' });
         const hash = url.searchParams.get('infohash');
         const cfg = dhtConfig(env);
-        if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return json(res, 400, { error: 'bad_infohash' });
-        if (!cfg.enabled) return json(res, 503, { error: 'disabled' });
+        if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return finish(400, { error: 'bad_infohash' });
+        if (!cfg.enabled) return finish(503, { error: 'disabled' });
         const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
         if (dhtRate && !dhtRate.allow(rateKey)) {
           const wait = String(dhtRate.retryAfter(rateKey) || 1);
           res.setHeader('retry-after', wait);
-          return json(res, 429, { error: 'rate' });
+          return finish(429, { error: 'rate' });
         }
-        const started = Date.now();
         const out = await queryDhtPeers(cfg, hash, net);
-        if (out.status !== 200) {
-          process.stderr.write('dht status=' + out.status + ' ms=' + (Date.now() - started) + ' device=' + deviceLogId(device) + '\n');
-        }
         if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
-        return json(res, out.status, out.body);
+        return finish(out.status, out.body);
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();

@@ -180,6 +180,14 @@ describe('searchAll', () => {
     called.length = 0;
     await searchAll('q', { ctx, from: all, sources: ['off', 'login'] }).done;
     expect(called).toEqual(['off', 'login']);
+    called.length = 0;
+    // ids from a source that registered again: do not search nobody while one source is on
+    await searchAll('q', { ctx, from: all, sources: ['gone-indexer'] }).done;
+    expect(called).toEqual(['on']);
+    called.length = 0;
+    // the person cleared the chip: that stays empty
+    await searchAll('q', { ctx, from: all, sources: [] }).done;
+    expect(called).toEqual([]);
   });
 
   it('cancel stops callbacks', async () => {

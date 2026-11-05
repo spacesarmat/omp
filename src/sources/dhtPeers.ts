@@ -32,6 +32,21 @@ export function dhtSeedCheckAvailable(): boolean {
   return !!contextOf();
 }
 
+/**
+ * Phone or Android TV, not signed in. DHT is not asked: there is no billing session.
+ * webOS has no native HTTP, so the hint would be a lie there.
+ */
+export function dhtNeedsSubscriptionHint(): boolean {
+  return !billingSession() && !!contextOf();
+}
+
+/** One honest line. Not a peer count: the check did not run. */
+export function withDhtSubscriptionHint(line: string): string {
+  const hint = t('sources.dhtNeedsSub');
+  if (!hint || line.indexOf(hint) >= 0) return line;
+  return line ? line + '. ' + hint : hint;
+}
+
 /** `{ peers, source: "dht", approx: true }` or null. Anything else is not shown. */
 export function parseDhtPeersBody(text: string): { peers: number } | null {
   let v: { peers?: unknown; source?: unknown; approx?: unknown };

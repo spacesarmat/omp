@@ -1,6 +1,24 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { deviceLogId, formatSearchLog } from '../src/server.mjs';
+import { deviceLogId, formatDhtLog, formatSearchLog } from '../src/server.mjs';
+
+describe('dht log line', () => {
+  const deviceId = 'device-SECRET-abcdef0123456789';
+  const hash = createHash('sha256').update(deviceId).digest('hex').slice(0, 8);
+  const infohash = 'ab'.repeat(20);
+
+  it('logs status and duration for every call, including 200, without the token or the infohash', () => {
+    const ok = formatDhtLog(200, 842.2, deviceId);
+    expect(ok).toBe('dht status=200 ms=842 device=' + hash + '\n');
+    const denied = formatDhtLog(401, 3, '');
+    expect(denied).toBe('dht status=401 ms=3 device=-\n');
+    const nasty = formatDhtLog('Bearer ' + deviceId + ' ' + infohash, -1, deviceId + '\n' + infohash);
+    expect(nasty).toBe('dht status=0 ms=0 device=' + createHash('sha256').update(deviceId + '\n' + infohash).digest('hex').slice(0, 8) + '\n');
+    expect(nasty).not.toContain(deviceId);
+    expect(nasty).not.toContain(infohash);
+    expect(nasty).not.toContain('Bearer');
+  });
+});
 
 describe('search log line', () => {
   const deviceId = 'device-SECRET-abcdef0123456789';

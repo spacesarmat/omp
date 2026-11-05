@@ -812,6 +812,8 @@ export const en: EnDict<typeof ru> = {
     /** DHT get_peers sample, not a seeder/leecher split. */
     dhtVia: 'via DHT',
     dhtMiss: 'DHT did not answer',
+    /** Shown once when the tracker failed and there is no billing session. Not a DHT result. */
+    dhtNeedsSub: 'DHT check needs an OMP subscription',
     defaultPhone: 'Phone',
     today: 'today',
     yesterday: 'yesterday',

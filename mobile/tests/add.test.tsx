@@ -618,6 +618,52 @@ describe('Add unified search', () => {
     expect(one).toHaveBeenCalledTimes(1);
     expect(two).not.toHaveBeenCalled();
   });
+
+  it('a chip of ids that no longer exist uses the sources that are switched on', async () => {
+    const one = vi.fn(() => Promise.resolve([row({ detailUrl: 'https://f.example/1' })]));
+    const two = vi.fn(() => Promise.resolve([row({ source: 'fake2', detailUrl: 'https://g.example/2' })]));
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: one });
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: two });
+    mount();
+    click(byText('Все источники · 2'));
+    const items = sheetButtons().filter((b) => b.getAttribute('role') === 'checkbox');
+    click(items[3]);
+    expect(byText('Источники · 1')).toBeTruthy();
+    act(() => unregisterSource('fake'));
+    expect(byText('Все источники · 1')).toBeTruthy();
+    search('x');
+    await flush();
+    expect(one).not.toHaveBeenCalled();
+    expect(two).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearing the chip searches nothing, and a source that appears later is counted', async () => {
+    const one = vi.fn(() => Promise.resolve([row({ detailUrl: 'https://f.example/1' })]));
+    mount();
+    expect(byText('Все источники · 0')).toBeTruthy();
+    act(() => registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: one }));
+    expect(byText('Все источники · 1')).toBeTruthy();
+    click(byText('Все источники · 1'));
+    const fakeBtn = sheetButtons().filter((b) => b.getAttribute('role') === 'checkbox' && (b.textContent || '').indexOf('Фейк') >= 0)[0];
+    click(fakeBtn);
+    expect(byText('Источники · 0')).toBeTruthy();
+    search('x');
+    await flush();
+    expect(one).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('Не выбрано ни одного источника');
+  });
+
+  it('searches again when a source appears after an empty search', async () => {
+    const one = vi.fn(() => Promise.resolve([row({ detailUrl: 'https://f.example/1' })]));
+    mount();
+    search('любовь');
+    await flush();
+    expect(el.textContent).toContain('Не выбрано ни одного источника');
+    act(() => registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: one }));
+    await flush();
+    expect(one).toHaveBeenCalled();
+    expect(el.textContent).not.toContain('Не выбрано ни одного источника');
+  });
 });
 
 describe('Add unified search: stable rows', () => {
