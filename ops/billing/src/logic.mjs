@@ -1834,16 +1834,22 @@ export function accountByDevice(state, deviceId) {
   return sub ? findAccount(state, sub.accountId) : null;
 }
 
-/** Drop this device from the account's Telegram link list (keeps telegramId on the account). */
+/**
+ * Drop this device from the Telegram link and from the subscription slot.
+ * The paying account keeps its telegram id. The code binding is cleared, so a token issued a moment
+ * earlier stops working and the slot is free. A phone that was only linked (no code yet) just leaves the list.
+ */
 export function unlinkDeviceTelegram(state, { deviceId, now }) {
   if (!deviceOk(deviceId)) return { state, result: { error: 'bad_device' } };
   const account = accountByDevice(state, deviceId);
   if (!account) return { state, result: { error: 'not_linked' } };
-  const linked = (Array.isArray(account.linkedDevices) ? account.linkedDevices : []).filter((d) => d !== deviceId);
-  const accounts = state.accounts.map((a) => (a.id === account.id ? { ...a, linkedDevices: linked } : a));
+  const unbound = unbindDevice(state, { accountId: account.id, deviceId });
+  const acc = findAccount(unbound, account.id) || account;
+  const linked = (Array.isArray(acc.linkedDevices) ? acc.linkedDevices : []).filter((d) => d !== deviceId);
+  const accounts = unbound.accounts.map((a) => (a.id === account.id ? { ...a, linkedDevices: linked } : a));
   return {
     state: logAudit(
-      { ...state, accounts },
+      { ...unbound, accounts },
       {
         action: 'tg_unlink',
         detail: account.id + ' ' + deviceId.slice(0, 8),

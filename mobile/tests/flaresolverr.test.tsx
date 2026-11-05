@@ -11,6 +11,7 @@ import { flareIntro, flareNoWifi, flareNotAnswering, flareNotFound, setFlareStat
 import type { LanScan } from '../../src/sources/indexerDiscovery';
 import type { HttpResponse, SourceContext } from '../../src/sources/types';
 import type { IndexerEnv } from '../src/screens/SourcesIndexers';
+import { BILLING_ORIGIN } from '../../src/billing/config';
 
 const READY = JSON.stringify({ msg: 'FlareSolverr is ready!', version: '3.4.0' });
 
@@ -176,7 +177,9 @@ describe('entry in «Источники поиска»', () => {
     act(() => render(<Sources ctx={ctx} indexerEnv={env} />, el));
     await flush();
     expect(el.querySelector('[data-entry="flaresolverr"]')!.textContent).toContain('не задан');
-    expect(calls).toEqual([]);
+    // No FlareSolverr probe. The OMP server row asks billing once for its status.
+    expect(calls.filter((u) => u.indexOf(BILLING_ORIGIN) !== 0)).toEqual([]);
+    expect(calls).toEqual([BILLING_ORIGIN + '/v1/me']);
   });
 });
 

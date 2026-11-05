@@ -95,22 +95,31 @@ export function clearBilling(ctx?: SourceContext): void {
  * A new app start begins cleared, so a Telegram link can claim then.
  */
 let signedOut = false;
+/** Bumped on sign-out and at the start of unlink. An in-flight claim from an older value must not save. */
+let claimGen = 0;
 
 export function billingSignedOut(): boolean {
   return signedOut;
 }
 
-/** A code or a fresh Telegram link may take a session again. */
+/** A code or a fresh Telegram link may take a session again. Does not revive a claim already in flight. */
 export function allowBillingSignIn(): void {
   signedOut = false;
+}
+
+/** Drops every claim that has not saved yet. The next claim gets a new generation. */
+export function invalidateBillingClaims(): void {
+  claimGen++;
+  claimFlight = null;
 }
 
 /**
  * One sign-out: the session, the cached /v1/me answer and the paid sources.
  * Unlink and disconnect both end here. Ads, the monitoring cap and DHT read the same cache.
- * The phone tells a linked TV on the billing change.
+ * The phone tells a linked TV on the billing change. A claim still waiting on the network is cancelled.
  */
 export function signOutBilling(ctx?: SourceContext): void {
+  invalidateBillingClaims();
   signedOut = true;
   clearBilling(ctx);
   syncOmpJackett();
@@ -167,16 +176,30 @@ export function claimLinkedSession(ctx: SourceContext): Promise<BillingSession |
   if (cur) return Promise.resolve(cur);
   if (signedOut) return Promise.resolve(null);
   if (claimFlight) return claimFlight;
+  const gen = claimGen;
+  const current = () => gen === claimGen;
   const run = deviceNameField(ctx)
     .then((named) => billingPost(ctx, '/v1/link/claim', { deviceId: deviceId(), tokens: 'pair', ...named }, { timeoutMs: 15000 }))
     .then(
       (res) => {
+        if (!current()) return null;
         const code = errorOf(res.text);
         if (res.status === 404 || code === 'not_linked' || code === 'no_subscription') return null;
+        if (!current()) return null;
         const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
         if (!pair) throw activateError(res.status, code);
-        allowBillingSignIn();
-        return savePair(ctx, pair, null).then((row) => confirmPremium(ctx).then(() => row));
+        return savePair(ctx, pair, null, current).then((row) => {
+          // savePair checks again after the Keystore write. A sign-out in between returns null.
+          if (!row || !current()) return null;
+          allowBillingSignIn();
+          return confirmPremium(ctx).then(() => {
+            if (!current()) {
+              signOutBilling(ctx);
+              return null;
+            }
+            return row;
+          });
+        });
       },
       (e) => {
         throw failure(e);

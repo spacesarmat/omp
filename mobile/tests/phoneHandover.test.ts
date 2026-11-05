@@ -19,7 +19,7 @@ interface Launch {
 const LG_IP = '192.168.1.50';
 const ATV_IP = '192.168.1.60';
 
-async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<void>; active?: 'lg' | 'atv' } = {}) {
+async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<void>; active?: 'lg' | 'atv'; pauseWhenSubscribed?: boolean } = {}) {
   vi.resetModules();
   localStorage.clear();
   // the same module instance as the code under test (resetModules gives it a fresh one)
@@ -36,6 +36,9 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
   const info = vi.spyOn(nat.native, 'rpcInfo').mockResolvedValue(INFO);
   const launches: Launch[] = [];
   let gate = o.gate || null;
+  let releaseSub: () => void = () => undefined;
+  const subGate = o.pauseWhenSubscribed ? new Promise<void>((r) => { releaseSub = r; }) : null;
+  let subHeld = false;
   link.setPlayerLinkDeps({
     now: () => 1000,
     tvIp: () => active.value.ip,
@@ -48,6 +51,10 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
     // as tvClient.launchOnTv: reads the address when the launch starts, marks it sent once the TV answered
     launchOnTv: async (p: object) => {
       const phone = rpc.phoneParam();
+      if (subGate && phone && phone.sub && !subHeld) {
+        subHeld = true;
+        await subGate;
+      }
       if (gate) {
         const g = gate;
         gate = null;
@@ -72,6 +79,7 @@ async function setup(o: { connected?: boolean; first?: RpcInfo; gate?: Promise<v
     launches,
     atvAttaches,
     active,
+    releaseSub: () => releaseSub(),
     init: () => rpc.initPhoneRpc({ connectedLg, reattach: link.attachIfOmpForeground, pushSub: () => link.pushPhoneSub() }),
   };
 }
@@ -183,7 +191,8 @@ describe('phone address hand-over', () => {
     s.init();
     await flush();
     expect(s.launches).toHaveLength(1);
-    expect(s.launches[0].phone && s.launches[0].phone.sub).toBe(false);
+    const firstPhone = s.launches[0].phone;
+    expect(firstPhone && firstPhone.sub).toBe(false);
     s.link.nowPlaying.value = { hash: 'h' } as never;
     s.link.lastSeen.value = 1000;
     const session = await import('../../src/billing/session');
@@ -194,17 +203,40 @@ describe('phone address hand-over', () => {
     ent.saveBillingAccess({ active: true, accessUntil: until, checkedAt: Date.now() });
     session.emitBillingChange();
     await flush();
-    expect(s.launches[s.launches.length - 1].phone && s.launches[s.launches.length - 1].phone.sub).toBe(true);
+    const signedIn = s.launches[s.launches.length - 1].phone;
+    expect(signedIn && signedIn.sub).toBe(true);
     jack.signOutBilling();
     await flush();
-    expect(s.launches[s.launches.length - 1].phone && s.launches[s.launches.length - 1].phone.sub).toBe(false);
+    const signedOut = s.launches[s.launches.length - 1].phone;
+    expect(signedOut && signedOut.sub).toBe(false);
     const store = await import('../../src/phone/phoneStore');
     const sent = s.launches[s.launches.length - 1].phone;
-    expect(sent).toBeTruthy();
-    store.savePhoneLink({ url: sent!.url, token: sent!.token, name: sent!.name, sub: true });
+    if (!sent) throw new Error('launch had no phone');
+    store.savePhoneLink({ url: sent.url, token: sent.token, name: sent.name, sub: true });
     expect(store.phoneLinkSubscribed(store.phoneLink.value)).toBe(true);
-    store.savePhoneLink({ url: sent!.url, token: sent!.token, name: sent!.name, sub: sent!.sub });
+    store.savePhoneLink({ url: sent.url, token: sent.token, name: sent.name, sub: sent.sub });
     expect(store.phoneLinkSubscribed(store.phoneLink.value)).toBe(false);
+    jack.allowBillingSignIn();
+  });
+
+  it('a sign-out while the launch reply is still in flight is pushed again', async () => {
+    const s = await setup({ pauseWhenSubscribed: true });
+    s.init();
+    await flush();
+    expect(s.launches).toHaveLength(1);
+    const session = await import('../../src/billing/session');
+    const ent = await import('../../src/billing/entitlement');
+    const jack = await import('../../src/sources/ompJackett');
+    const until = Date.now() + 864e5;
+    session.saveBillingSession({ token: '', access: 'a1.x', accessExp: until, paidUntil: until, id: 'sub1' });
+    ent.saveBillingAccess({ active: true, accessUntil: until, checkedAt: Date.now() });
+    session.emitBillingChange();
+    await flush();
+    expect(s.launches).toHaveLength(1);
+    jack.signOutBilling();
+    s.releaseSub();
+    await flush();
+    expect(s.launches.map((l) => (l.phone ? l.phone.sub : null))).toEqual([false, true, false]);
     jack.allowBillingSignIn();
   });
 

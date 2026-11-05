@@ -9,6 +9,7 @@ import {
   issueActivation,
   openAccount,
   startDeviceLink,
+  unlinkDeviceTelegram,
 } from '../src/logic.mjs';
 import { claimLimitConfig } from '../src/services.mjs';
 import { emptyState } from '../src/state.mjs';
@@ -70,6 +71,24 @@ describe('claim by linked Telegram', () => {
     const refused = claimLinkedDevice(linked.state, { deviceId: DEV_C, now: NOW });
     expect(refused.result.error).toBe('device_limit');
     expect(boundDevices(refused.state, start.sub)).toBe(2);
+  });
+
+  it('unlink removes the Telegram link and the device slot', () => {
+    const device = 'c'.repeat(32);
+    const started = startDeviceLink(emptyState(), { deviceId: device, now: NOW });
+    const linked = confirmDeviceLink(started.state, { token: started.result.token, telegramId: '77', now: NOW });
+    const granted = grantDays(linked.state, { telegramId: '77', days: 3, now: NOW });
+    const claimed = claimLinkedDevice(granted.state, { deviceId: device, now: NOW });
+    const codeId = claimed.result.codeId;
+    expect(claimed.state.codes.find((c: { id: string }) => c.id === codeId).deviceId).toBe(device);
+    const out = unlinkDeviceTelegram(claimed.state, { deviceId: device, now: NOW + 5 });
+    expect(out.result.ok).toBe(true);
+    expect(out.state.accounts[0].telegramId).toBe('77');
+    expect(out.state.accounts[0].linkedDevices).toEqual([]);
+    const row = out.state.codes.find((c: { id: string }) => c.id === codeId);
+    expect(row.deviceId).toBe('');
+    expect(row.plain).toBeTruthy();
+    expect(boundDevices(out.state, claimed.state.subscriptions[0].id)).toBe(0);
   });
 
   it('reads the claim rate-limit defaults', () => {

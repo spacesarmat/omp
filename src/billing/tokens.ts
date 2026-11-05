@@ -190,7 +190,21 @@ function lostOnRestart(ctx: SourceContext, s: BillingSession): boolean {
 }
 
 /** Saves a fresh pair: the refresh token to the Keystore, the access token to the session. `prev` keeps the binding id. */
-export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession> {
+export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSession | null): Promise<BillingSession>;
+/** `current` is false when this claim was cancelled (sign-out). Then nothing is kept, including a token already written. */
+export function savePair(
+  ctx: SourceContext,
+  pair: TokenPair,
+  prev: BillingSession | null,
+  current: () => boolean,
+): Promise<BillingSession | null>;
+export function savePair(
+  ctx: SourceContext,
+  pair: TokenPair,
+  prev: BillingSession | null,
+  current?: () => boolean,
+): Promise<BillingSession | null> {
+  if (current && !current()) return Promise.resolve(null);
   const id = prev && prev.id ? prev.id : newId();
   const native = ctx.billing;
   const keep: Promise<Stored> =
@@ -204,6 +218,11 @@ export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSessi
         )
       : storeRefresh(ctx, pair.refreshToken, id);
   return keep.then((stored) => {
+    // The Keystore write is async. Sign-out during it must not publish the session.
+    if (current && !current()) {
+      dropDeviceTokens(ctx, '');
+      return null;
+    }
     if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
     const row: BillingSession = {
       token: '',
@@ -218,6 +237,11 @@ export function savePair(ctx: SourceContext, pair: TokenPair, prev: BillingSessi
     saveBillingSession(row);
     setBillingNotice('');
     emitBillingChange();
+    // A listener may sign out while the change is delivered. Drop the pair we just wrote.
+    if (current && !current()) {
+      dropDeviceTokens(ctx, '');
+      return null;
+    }
     return row;
   });
 }

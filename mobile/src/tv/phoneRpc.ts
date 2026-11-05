@@ -182,17 +182,48 @@ export function initPhoneRpc(d?: PhoneRpcDeps): void {
   });
   // Sign-in and sign-out change `sub` on the address the LG already has. Push it even while a video is playing.
   onBillingChange(() => {
+    void pushSubscription();
+  });
+}
+
+/** One push at a time. When it finishes, push again if the subscription moved while the launch reply was in flight. */
+let subPush: Promise<void> | null = null;
+
+function pushSubscription(): Promise<void> {
+  if (subPush) return subPush;
+  const run = (): Promise<void> => {
     const p = phoneParam();
     const tv = deps.connectedLg();
-    if (!p || !tv || sentKeys[tv] === keyOf(p)) return;
+    if (!p || !tv || sentKeys[tv] === keyOf(p)) return Promise.resolve();
+    const before = sentKeys[tv];
     triedKey = null;
     tries = 0;
     const push = deps.pushSub || deps.reattach;
-    push().then(
-      () => deliver(),
-      () => deliver(),
+    return push().then(
+      () => {
+        const now = phoneParam();
+        const tvNow = deps.connectedLg();
+        // The launch reply carried an older subscription. Send the current one before deliver,
+        // or deliver would start a second launch of its own.
+        if (now && tvNow && sentKeys[tvNow] !== keyOf(now) && sentKeys[tvNow] !== before) return run();
+        deliver();
+      },
+      () => {
+        deliver();
+      },
     );
-  });
+  };
+  let done: Promise<void>;
+  done = run().then(
+    () => {
+      if (subPush === done) subPush = null;
+    },
+    () => {
+      if (subPush === done) subPush = null;
+    },
+  );
+  subPush = done;
+  return done;
 }
 
 /**

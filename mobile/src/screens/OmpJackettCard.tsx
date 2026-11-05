@@ -14,6 +14,7 @@ import {
   allowBillingSignIn,
   claimLinkedSession,
   clearTelegramLink,
+  invalidateBillingClaims,
   fetchBillingAccount,
   refreshOmpJackettSources,
   signOutBilling,
@@ -137,6 +138,8 @@ export function OmpJackettCard() {
     if (linkBusy) return;
     setLinkBusy(true);
     setError('');
+    // Before the round trip: a claim that is already in flight must not sign this phone back in.
+    invalidateBillingClaims();
     try {
       await clearTelegramLink(phoneSourceContext());
       signOutBilling(phoneSourceContext());

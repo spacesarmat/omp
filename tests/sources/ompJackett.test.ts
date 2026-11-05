@@ -9,6 +9,7 @@ import type { SourceResult } from '../../src/sources/types';
 import {
   activateCode,
   allowBillingSignIn,
+  billingSignedOut,
   claimLinkedSession,
   clearBilling,
   ensureOmpJackettSources,
@@ -120,6 +121,55 @@ describe('omp Jackett source', () => {
     const again = await claimLinkedSession(site.ctx);
     expect(again).toBeNull();
     expect(billingSession()).toBeNull();
+  });
+
+  it('a claim that answers after sign-out does not restore the session', async () => {
+    let release: (r: HttpResponse) => void = () => undefined;
+    const gate = new Promise<HttpResponse>((resolve) => {
+      release = resolve;
+    });
+    const pair = { refreshToken: 'r1.late', accessToken: 'a1.late', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const site = fakeSite((c) => (c.url.indexOf('/v1/link/claim') > 0 ? gate : page('{}', c.url)));
+    const pending = claimLinkedSession(site.ctx);
+    signOutBilling(site.ctx);
+    release(page(JSON.stringify(pair), 'http://billing/v1/link/claim'));
+    expect(await pending).toBeNull();
+    expect(billingSession()).toBeNull();
+    expect(billingSignedOut()).toBe(true);
+  });
+
+  it('a keystore write that finishes after sign-out does not keep the token', async () => {
+    let releaseSet: () => void = () => undefined;
+    let waiting = false;
+    let deletes = 0;
+    const pair = { refreshToken: 'r1.late', accessToken: 'a1.late', accessExpiresAt: Date.now() + 864e5, refreshExpiresAt: 3e12, paidUntil: 2e12 };
+    const me = { active: true, paidUntil: 2e12, accessUntil: 2e12, sources: { jackett: true, jacred: true }, monitorMax: 0 };
+    const site = fakeSite((c) => page(JSON.stringify(c.url.indexOf('/v1/link/claim') > 0 ? pair : me), c.url), {});
+    const ctx = {
+      ...site.ctx,
+      secrets: {
+        get: () => Promise.resolve(null),
+        set: () => {
+          waiting = true;
+          return new Promise<void>((resolve) => {
+            releaseSet = resolve;
+          });
+        },
+        delete: () => {
+          deletes++;
+          return Promise.resolve();
+        },
+      },
+    };
+    const pending = claimLinkedSession(ctx);
+    for (let i = 0; i < 30 && !waiting; i++) await Promise.resolve();
+    expect(waiting).toBe(true);
+    signOutBilling(ctx);
+    releaseSet();
+    expect(await pending).toBeNull();
+    expect(billingSession()).toBeNull();
+    expect(billingSignedOut()).toBe(true);
+    expect(deletes).toBeGreaterThan(0);
   });
 
   it('refuses a code bound to another device', async () => {
