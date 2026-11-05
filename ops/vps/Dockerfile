@@ -17,8 +17,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && pg_dump --version
 
-COPY package.json ./
-RUN npm install --omit=dev && npm cache clean --force
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 COPY src ./src
 # tools/migrateToPostgres.mjs: reads an archived billing.db into an empty Postgres (not used at runtime).
