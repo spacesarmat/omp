@@ -1,6 +1,7 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
 import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
+import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
 import { secretText } from './envSecrets.mjs';
 
 /** settings.baseDevices from the form: a whole number 1-20. */
@@ -43,7 +44,7 @@ export function walletUnchanged(incoming, current) {
 }
 
 /** Settings safe to send to the admin SPA. Secrets (they live in .env) only as «задан ✅, ****abcd» / «не задан». */
-export function publicAdminSettings(settings) {
+export function publicAdminSettings(settings, env) {
   const s = settings || {};
   const out = {
     botToken: secretText(s.botToken),
@@ -74,6 +75,7 @@ export function publicAdminSettings(settings) {
     publicPromo: s.publicPromo || '',
     backupEveryHours: backupEveryHours(s),
     backupKeepDays: backupKeepDays(s),
+    dhtPerMinute: dhtPerMinute(s, env),
   };
   return out;
 }
@@ -140,6 +142,11 @@ export function mergeSettings(prev, body) {
       .replace(/[^A-Z0-9]/g, '')
       .slice(0, 24),
   };
+  // 0-1000 per minute. Empty or a bad value keeps the current one (unset stays unset, so the env fallback still applies).
+  // A saved number wins over BILLING_DHT_DEVICE_MAX.
+  if (b.dhtPerMinute !== undefined && b.dhtPerMinute !== '' && validDhtPerMinute(b.dhtPerMinute)) {
+    next.dhtPerMinute = Number(b.dhtPerMinute);
+  }
   return next;
 }
 

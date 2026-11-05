@@ -143,7 +143,7 @@ export function homePayload(state, file, opts) {
     support: supportThreads(state).slice(0, 40),
     audit: (state.audit || []).slice(-40).reverse(),
     series: dailySeries(state, now, 90),
-    settings: publicAdminSettings(s),
+    settings: publicAdminSettings(s, opts && opts.env),
     // The server passes the store's info (Postgres: engine, database name, size).
     storage: (opts && opts.storage) || null,
     // Postgres dumps: null when BILLING_PG_BACKUP_DIR is not set (file names and sizes only, no paths with secrets).

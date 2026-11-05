@@ -46,9 +46,19 @@ export function readOnlyStore(store) {
         gcImages: async () => 0,
       }
     : undefined;
+  // DHT counters are still readable. A flush during cutover must not write.
+  const dht = store.dht
+    ? {
+        load: () => store.dht.load(),
+        save: async () => {
+          throw new ReadOnlyError();
+        },
+      }
+    : undefined;
   return {
     ...store,
     ads,
+    dht,
     engine: store.engine,
     readOnly: true,
     read: () => store.read(),

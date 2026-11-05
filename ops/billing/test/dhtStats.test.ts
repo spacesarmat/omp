@@ -1,10 +1,18 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { dhtStatsView, noteDhtRequest, resetDhtStats } from '../src/dhtStats.mjs';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { bindDhtStats, dhtStatsView, flushDhtStats, noteDhtRequest, readyDhtStats, resetDhtStats, shutdownDhtStats } from '../src/dhtStats.mjs';
 
 const HOUR = 60 * 60 * 1000;
 
 describe('DHT admin counters', () => {
-  beforeEach(() => resetDhtStats());
+  beforeEach(() => {
+    resetDhtStats();
+    bindDhtStats(null);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    resetDhtStats();
+    bindDhtStats(null);
+  });
 
   it('counts 24h requests, the share with peers, and the average time', () => {
     const now = 1_800_000_000_000;
@@ -17,6 +25,14 @@ describe('DHT admin counters', () => {
     expect(view.withPeers24h).toBe(1);
     expect(view.peersSharePct).toBe(33.3);
     expect(view.avgMs).toBe(300);
+    expect(view.errors24h).toBe(1);
+    expect(view.errors4xx24h).toBe(0);
+    expect(view.errors5xx24h).toBe(1);
+    expect(view.p50Ms).toBe(300);
+    expect(view.p95Ms).toBe(500);
+    expect(view.series.reduce((sum, p) => sum + p.requests, 0)).toBe(3);
+    expect(view.series.reduce((sum, p) => sum + p.errors, 0)).toBe(1);
+    expect(view.series.every((p) => p.t <= now && p.t >= now - 25 * HOUR)).toBe(true);
     expect(view.errors).toEqual([{ at: now - 30 * 60 * 1000, status: 502, reason: 'sidecar не ответил' }]);
   });
 
@@ -53,7 +69,161 @@ describe('DHT admin counters', () => {
     expect(view.withPeers24h).toBe(withPeers);
     expect(view.avgMs).toBe(Math.round((sumMs + 12 * 4) / (n + 12)));
     expect(view.peersSharePct).toBe(Math.round((withPeers * 1000) / (n + 12)) / 10);
+    expect(view.errors24h).toBe(12);
+    expect(view.errors4xx24h).toBe(12);
+    expect(view.errors5xx24h).toBe(0);
+    expect(view.p50Ms).toBe(10);
+    expect(view.p95Ms).toBe(30);
+    expect(view.series.reduce((sum, p) => sum + p.requests, 0)).toBe(n + 12);
     expect(view.errors).toHaveLength(10);
     expect(view.errors[0].reason).toBe('нет токена');
+  });
+
+  it('stores an admin probe as the label проверка and drops a raw hash', () => {
+    const now = 1_800_000_000_000;
+    const hash = 'cd'.repeat(20);
+    noteDhtRequest({ status: 400, ms: 8, reason: hash }, now - 1000);
+    noteDhtRequest({ status: 502, ms: 20, reason: 'probe', infohash: hash }, now);
+    const view = dhtStatsView(now);
+    expect(view.errors.map((e) => e.reason)).toEqual(['проверка', 'ошибка']);
+    expect(view.errors4xx24h).toBe(1);
+    expect(view.errors5xx24h).toBe(1);
+    expect(JSON.stringify(view)).not.toContain(hash);
+  });
+
+  it('merges counts that arrive while a load is in flight or after a failed load', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    bindDhtStats({
+      async load() {
+        calls += 1;
+        if (calls === 1) {
+          await gate;
+          throw new Error('down');
+        }
+        return {
+          minutes: [{ minute: 1, count: 4, withPeers: 0, sumMs: 40, errors: 0, errors4xx: 0, errors5xx: 0, hist: [] }],
+          errors: [],
+        };
+      },
+      async save() {},
+    });
+    const first = readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 10, peers: 2 }, 60 * 1000);
+    release();
+    await first;
+    expect(dhtStatsView(120 * 1000).requests24h).toBe(1);
+    await readyDhtStats();
+    const view = dhtStatsView(120 * 1000);
+    expect(view.requests24h).toBe(5);
+    expect(view.withPeers24h).toBe(1);
+  });
+
+  it('retries a failed save and does not retry a read-only refusal', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    let mode = 'fail';
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save() {
+        calls += 1;
+        if (mode === 'fail') throw new Error('down');
+        if (mode === 'ro') throw Object.assign(new Error('ro'), { code: 'READ_ONLY' });
+      },
+    });
+    await readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, Date.now());
+    await flushDhtStats();
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    mode = 'ro';
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, Date.now());
+    await flushDhtStats();
+    const seen = calls;
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(calls).toBe(seen);
+  });
+
+  it('flushes pending counts on shutdown and stops waiting when load never ends', async () => {
+    const saved: { minutes: { count: number }[] }[] = [];
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save(snap: { minutes: { count: number }[] }) {
+        saved.push(snap);
+      },
+    });
+    noteDhtRequest({ status: 200, ms: 15, peers: 1 }, Date.now());
+    await shutdownDhtStats(2000);
+    expect(saved.length).toBe(1);
+    expect(saved[0].minutes.reduce((sum, row) => sum + row.count, 0)).toBe(1);
+
+    resetDhtStats();
+    bindDhtStats({
+      load() {
+        return new Promise(() => {});
+      },
+      async save() {},
+    });
+    const started = Date.now();
+    await shutdownDhtStats(40);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('keeps a newer error and the next minute when an idle flush waits on a save', async () => {
+    // Wall time far past the fixed stamps. The waiting flush must keep the clock it was given.
+    vi.useFakeTimers();
+    const minute = 1_800_000_000_000;
+    const next = minute + 60 * 1000;
+    vi.setSystemTime(next + 48 * 60 * 60 * 1000);
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const saved: { minutes: { minute: number; count: number }[]; errors: { at: number }[] | null; pruneAfter: number }[] = [];
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save(snap: { minutes: { minute: number; count: number }[]; errors: { at: number }[] | null; pruneAfter: number }) {
+        if (saved.length === 0) await gate;
+        saved.push(snap);
+      },
+    });
+    await readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, minute);
+    const first = flushDhtStats(minute);
+    noteDhtRequest({ status: 502, ms: 4, reason: 'down' }, next);
+    const second = flushDhtStats(minute);
+    release();
+    await first;
+    await second;
+    const view = dhtStatsView(next);
+    expect(view.requests24h).toBe(2);
+    expect(view.errors).toEqual([{ at: next, status: 502, reason: 'sidecar не ответил' }]);
+    const follow = saved[saved.length - 1];
+    expect(follow.minutes.some((row) => row.minute === Math.floor(next / 60000) && row.count === 1)).toBe(true);
+    expect(follow.pruneAfter).toBeGreaterThanOrEqual(Math.floor(next / 60000));
+    expect(follow.errors && follow.errors.some((row) => row.at === next)).toBe(true);
+  });
+
+  it('arms an idle prune so a quiet process still drops old minutes', async () => {
+    const spy = vi.spyOn(global, 'setInterval');
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save() {},
+    });
+    await readyDhtStats();
+    expect(spy.mock.calls.map((call) => call[1])).toContain(60 * 1000);
+    spy.mockRestore();
   });
 });
