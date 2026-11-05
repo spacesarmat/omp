@@ -1174,7 +1174,7 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
   });
 
   it('a compose change recreates a running dht-peers container without rebuilding it', () => {
-    const box = world(release({ 'ops/vps/docker-compose.yml': 'name: omp-vps\n# claim\n' }), {
+    const box = world(release({ 'ops/vps/docker-compose.yml': 'name: omp-vps\nservices:\n  dht-peers:\n    image: omp-dht-peers:local\n' }), {
       DEPLOY_TEST_DHT_SEED_ID: DHT_ID,
     });
     const state = path.join(box.parent, 'docker-state');
@@ -1389,6 +1389,31 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
     expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 2;\n');
     expect(upLines(box.dockerLog).every((line) => line.includes('up -d --no-deps billing') && !line.includes('dht-peers'))).toBe(true);
     expect(log(box.dockerLog)).not.toContain('dht-peers/Dockerfile');
+  });
+
+  it('does not restart a running sidecar when an older compose has no dht-peers service', () => {
+    const files = release();
+    delete files['ops/vps/dht-peers/Dockerfile'];
+    delete files['ops/vps/dht-peers/package.json'];
+    delete files['ops/vps/dht-peers/src/main.mjs'];
+    const box = world(files);
+    writeFileSync(
+      path.join(box.root, 'docker-compose.yml'),
+      'name: omp-vps\nservices:\n  dht-peers:\n    image: omp-dht-peers:local\n',
+    );
+    writeFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'stay\n');
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-dht'), DHT_ID);
+    const result = runDeploy(box.env, ['v0.20.8-beta.2']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stdout).toContain('release compose has no dht-peers service; leaving the sidecar unchanged');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/keep-old.mjs'), 'utf8')).toBe('stay\n');
+    expect(readFileSync(path.join(box.root, 'dht-peers/src/main.mjs'), 'utf8')).toBe('export const peers = 1;\n');
+    expect(readFileSync(path.join(state, 'running-dht'), 'utf8').trim()).toBe(DHT_ID);
+    expect(upLines(box.dockerLog).some((line) => line.includes('dht-peers'))).toBe(false);
+    expect(upLines(box.dockerLog).some((line) => line.includes('up -d --no-deps billing'))).toBe(true);
   });
 
   it('rejects a release that has a partial dht-peers directory', () => {

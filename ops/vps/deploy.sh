@@ -43,6 +43,7 @@ DOCKERFILE_CHANGED=0
 COMPOSE_CHANGED=0
 DHT_CHANGED=0
 RELEASE_HAS_DHT=0
+RELEASE_HAS_DHT_SERVICE=0
 IMAGE_ID=""
 BACKUP_TAG=""
 DHT_IMAGE="${OMP_DHT_IMAGE:-omp-dht-peers:local}"
@@ -625,6 +626,7 @@ detect_changes() {
   COMPOSE_CHANGED=0
   DHT_CHANGED=0
   RELEASE_HAS_DHT=0
+  RELEASE_HAS_DHT_SERVICE=0
   if files_differ "$tree/ops/vps/Caddyfile" "$ROOT/Caddyfile"; then
     CADDY_CHANGED=1
   fi
@@ -650,6 +652,11 @@ detect_changes() {
     fi
   else
     log "release has no dht-peers; leaving the sidecar unchanged"
+  fi
+  # A ref from before the sidecar has no service key. A compose diff must not
+  # ask Compose to start a service that file does not define.
+  if [[ -f "$tree/ops/vps/docker-compose.yml" && ! -L "$tree/ops/vps/docker-compose.yml" ]] && grep -Eq '^[[:space:]]*dht-peers:[[:space:]]*(#.*)?$' "$tree/ops/vps/docker-compose.yml"; then
+    RELEASE_HAS_DHT_SERVICE=1
   fi
   log "changes caddyfile=${CADDY_CHANGED} caddyfile_nuc=${CADDY_NUC_CHANGED} site=${SITE_CHANGED} billing=${BILLING_CHANGED} dockerfile=${DOCKERFILE_CHANGED} compose=${COMPOSE_CHANGED} dht=${DHT_CHANGED}"
 }
@@ -982,9 +989,11 @@ apply_restarts() {
     docker build -f "$ROOT/dht-peers/Dockerfile" -t "$DHT_IMAGE" "$ROOT/dht-peers" || return 1
     log "restarting dht-peers"
     compose --profile dht up -d --no-deps dht-peers || return 1
-  elif [[ "$COMPOSE_CHANGED" -eq 1 ]] && dht_container_running; then
+  elif [[ "$COMPOSE_CHANGED" -eq 1 && "$RELEASE_HAS_DHT_SERVICE" -eq 1 ]] && dht_container_running; then
     log "restarting dht-peers"
     compose --profile dht up -d --no-deps dht-peers || return 1
+  elif [[ "$COMPOSE_CHANGED" -eq 1 && "$RELEASE_HAS_DHT_SERVICE" -eq 0 ]] && dht_container_running; then
+    log "release compose has no dht-peers service; leaving the sidecar unchanged"
   else
     log "dht-peers unchanged"
   fi
@@ -1029,8 +1038,11 @@ print_restart_plan() {
   fi
   if [[ "$DHT_CHANGED" -eq 1 ]]; then
     log "would build ${DHT_IMAGE} and docker compose --profile dht up -d --no-deps dht-peers"
-  elif [[ "$COMPOSE_CHANGED" -eq 1 ]] && dht_container_running; then
+  elif [[ "$COMPOSE_CHANGED" -eq 1 && "$RELEASE_HAS_DHT_SERVICE" -eq 1 ]] && dht_container_running; then
     log "would docker compose --profile dht up -d --no-deps dht-peers"
+  elif [[ "$COMPOSE_CHANGED" -eq 1 && "$RELEASE_HAS_DHT_SERVICE" -eq 0 ]] && dht_container_running; then
+    log "release compose has no dht-peers service; leaving the sidecar unchanged"
+    log "would not restart dht-peers"
   else
     log "would not restart dht-peers"
   fi
