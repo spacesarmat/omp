@@ -1,6 +1,8 @@
 // A manual «Проверить сиды» next to a tracker seed count. The «Актуальные сиды» setting does not gate it.
 import { useRef, useState } from 'preact/hooks';
 import { t, tp } from '../i18n';
+import { askDhtPeers, dhtPeerLine, dhtSeedCheckAvailable, seedCheckLine } from '../sources/dhtPeers';
+import { infohashOf, trackerTargets } from '../sources/liveSeeds';
 import { probeSeeds, type ProbeResult } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
 import { Focusable } from './components';
@@ -10,9 +12,7 @@ export function liveSeedLine(seeders: number, leechers: number): string {
 }
 
 export function probeMessage(r: ProbeResult): string {
-  if (r.ok) return liveSeedLine(r.seeders, r.leechers);
-  if (r.reason === 'timeout') return t('sources.seedsTimeout');
-  return t('sources.seedsNoTracker');
+  return seedCheckLine(r, null);
 }
 
 export interface SeedProbe {
@@ -28,13 +28,56 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
   const [phase, setPhase] = useState<'idle' | 'busy' | 'done' | 'err'>('idle');
   const [line, setLine] = useState('');
   const phaseRef = useRef(phase);
+  const genRef = useRef(0);
   phaseRef.current = phase;
   const run = () => {
     if (phaseRef.current === 'busy') return;
+    const gen = ++genRef.current;
     setPhase('busy');
+    const hash = infohashOf(r);
+    const listed = !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
+    const live = () => gen === genRef.current;
+    // No tracker address: do not scrape. A signed-in phone or Android TV asks DHT only.
+    if (hash && !listed && dhtSeedCheckAvailable()) {
+      askDhtPeers(hash).then((dht) => {
+        if (!live()) return;
+        if (dht.ok) {
+          setLine(dhtPeerLine(dht.peers));
+          setPhase('done');
+        } else {
+          setLine(t('sources.dhtMiss'));
+          setPhase('err');
+        }
+      });
+      return;
+    }
+    // The tracker line shows as soon as it arrives. A slow DHT must not hold it.
+    // A failed tracker stays busy until DHT, so a later estimate can still replace the error.
+    let tracker: ProbeResult | null = null;
+    let dht: { ok: true; peers: number } | { ok: false; reason: 'skip' | 'bad' } | null = null;
+    let trackerIn = false;
+    let dhtIn = false;
+    const paint = () => {
+      if (!live() || !trackerIn || !tracker) return;
+      if (tracker.ok && !dhtIn) {
+        setLine(seedCheckLine(tracker, null));
+        setPhase('done');
+        return;
+      }
+      if (!dhtIn) return;
+      setLine(seedCheckLine(tracker, dht));
+      setPhase(tracker.ok || (dht !== null && dht.ok) ? 'done' : 'err');
+    };
     probeSeeds(r).then((res) => {
-      setLine(probeMessage(res));
-      setPhase(res.ok ? 'done' : 'err');
+      tracker = res;
+      trackerIn = true;
+      paint();
+    });
+    const dhtP = hash ? askDhtPeers(hash) : Promise.resolve(null);
+    dhtP.then((res) => {
+      dht = res;
+      dhtIn = true;
+      paint();
     });
   };
   const text = (fallback: string) => (phase === 'done' || phase === 'err' ? line : fallback);
@@ -57,7 +100,7 @@ export function SeedCheck(p: {
   const own = useSeedProbe(p.r);
   const probe = p.probe || own;
   const phase = probe.phase;
-  if (!p.fallback && phase === 'idle') return null;
+  if (!p.buttonOnly && !p.fallback && phase === 'idle') return null;
   const run = () => probe.run();
   const label = (phase === 'busy' ? t('news.checking') : t('sources.checkSeeds')) + ': ' + p.r.Title;
   const shown = probe.text(p.fallback);

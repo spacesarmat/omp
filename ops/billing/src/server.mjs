@@ -129,6 +129,7 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
+import { dhtConfig, dhtPeersLimitConfig, queryDhtPeers } from './dhtPeers.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
@@ -735,6 +736,9 @@ export function createApp(file, fetchImpl, opts) {
   // A tight loop from one IP is refused. 0 turns the limit off.
   const adsLimit = adsConfigLimitConfig(env);
   const adsConfigRate = adsLimit.ipMax > 0 ? createRateLimit(adsLimit.ipMax, adsLimit.windowMs) : null;
+  // «Проверить сиды» DHT lookup. 0 turns the per-device limit off. The sidecar is optional.
+  const dhtLimit = dhtPeersLimitConfig(env);
+  const dhtRate = dhtLimit.max > 0 ? createRateLimit(dhtLimit.max, dhtLimit.windowMs) : null;
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
@@ -1811,6 +1815,33 @@ export function createApp(file, fetchImpl, opts) {
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
         });
+      }
+      if (req.method === 'GET' && path === '/v1/dht-peers') {
+        // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
+        // No noteSeen: a tap must not write the device row. Peer addresses stay on the sidecar.
+        const device = String(req.headers['x-device-id'] || '');
+        const token = bearer(req);
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        const state = await store.read();
+        const caller = await deviceCaller(state, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const hash = url.searchParams.get('infohash');
+        const cfg = dhtConfig(env);
+        if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return json(res, 400, { error: 'bad_infohash' });
+        if (!cfg.enabled) return json(res, 503, { error: 'disabled' });
+        const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+        if (dhtRate && !dhtRate.allow(rateKey)) {
+          const wait = String(dhtRate.retryAfter(rateKey) || 1);
+          res.setHeader('retry-after', wait);
+          return json(res, 429, { error: 'rate' });
+        }
+        const started = Date.now();
+        const out = await queryDhtPeers(cfg, hash, net);
+        if (out.status !== 200) {
+          process.stderr.write('dht status=' + out.status + ' ms=' + (Date.now() - started) + ' device=' + deviceLogId(device) + '\n');
+        }
+        if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
+        return json(res, out.status, out.body);
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();

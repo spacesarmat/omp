@@ -7,6 +7,7 @@ import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
+import { setDhtPeersContext } from '../../src/sources/dhtPeers';
 import { phoneSourceContext } from './searchContext';
 import { reloadSourcePrefs } from '../../src/sources/store';
 
@@ -43,6 +44,8 @@ registerBuiltinSources();
 // OMP subscription: only this page rotates the device tokens (it can write the Keystore); keeps the access token fresh
 // the refresh token lives in the Keystore only on Android; the browser build keeps it in localStorage
 startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
+// «Проверить сиды» asks billing for a DHT count with the same device token. webOS has no native HTTP and skips it.
+setDhtPeersContext(phoneSourceContext);
 // Ads and the monitoring cap: /v1/me on resume (if the last answer is older than 15 minutes) and about every 6 hours.
 startPremiumRecheck(phoneSourceContext);
 // TV search: keeps the phone's TV search server in step with the switch (on by default once a TV is saved)

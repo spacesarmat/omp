@@ -1,0 +1,8 @@
+{
+  "name": "omp-dht-peers",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "bittorrent-dht": "11.0.12"
+  }
+}

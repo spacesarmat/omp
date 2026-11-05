@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import { dhtSeedCheckAvailable } from '../../../src/sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
@@ -38,16 +39,25 @@ const PHONE_PLAY = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 
 
 const pageLink = (r: SourceResult): string => (/^https?:\/\//i.test(r.detailUrl || '') ? r.detailUrl! : '');
 
-/** A manual seed check needs an infohash and at least one tracker address in the magnet. */
-export function seedCheckable(r: SourceResult): boolean {
+function trackerListed(r: SourceResult): boolean {
   const hash = infohashOf(r);
   return !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
 }
 
 /**
+ * A manual seed check needs an infohash. A tracker address in the magnet is enough.
+ * With no address, the button stays only when this device can ask DHT (signed in, not webOS).
+ */
+export function seedCheckable(r: SourceResult): boolean {
+  if (trackerListed(r)) return true;
+  return !!infohashOf(r) && dhtSeedCheckAvailable();
+}
+
+/**
  * A found release, compact: the poster down the whole card; the short title with its meta, quality chips,
  * «source · size · seeds · date», then the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ»,
- * with «Проверить сиды» on the left of «＋» when the release has a tracker address. A tap on the
+ * with «Проверить сиды» on the left of «＋» when the release has a tracker address, or, with no address,
+ * when this device is signed in to OMP and can ask DHT. A tap on the
  * card opens «Подробнее»: the full tracker title, the category, the same actions as full buttons and «Открыть на сайте».
  * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1-8 из 8»), none when it is unknown.
  */
@@ -71,9 +81,16 @@ export function ResultCard(p: {
   const live = useSeedRow(r);
   const seeds = phoneSeedBits(live.view);
   const probe = useSeedProbe(r);
+  const trackers = trackerListed(r);
   const checkable = seedCheckable(r);
-  const seedText = !checkable && (seeds.text || probe.phase !== 'idle') ? t('sources.seedsNoTracker') : probe.text(seeds.text);
-  const showCheck = checkable && (!!seeds.text || probe.phase !== 'idle');
+  const answered = probe.phase === 'done' || probe.phase === 'err';
+  const seedText =
+    !checkable && (seeds.text || probe.phase !== 'idle')
+      ? t('sources.seedsNoTracker')
+      : !trackers && !answered && seeds.text
+        ? t('sources.seedsNoTracker')
+        : probe.text(seeds.text);
+  const showCheck = trackers ? checkable && (!!seeds.text || probe.phase !== 'idle') : checkable;
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);

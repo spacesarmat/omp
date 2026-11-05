@@ -828,11 +828,15 @@ export const ru = {
     seedsNow: 'сейчас',
     seedsTimeout: 'Трекер не ответил',
     seedsNoTracker: 'Нет адреса трекера',
+    /** DHT get_peers sample, not a seeder/leecher split. */
+    dhtVia: 'по DHT',
+    dhtMiss: 'DHT не ответил',
     defaultPhone: 'Телефон',
     today: 'сегодня',
     yesterday: 'вчера',
     seeds: { one: '{n} сид', few: '{n} сида', many: '{n} сидов' },
     leechers: { one: '{n} лич', few: '{n} лича', many: '{n} личей' },
+    dhtPeers: { one: '{n} пир онлайн', few: '{n} пира онлайн', many: '{n} пиров онлайн' },
     jackettHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr - как, в «Вопросах и ответах».',
     /** The TV search under sites behind Cloudflare: one sentence, the error itself not repeated. */
     cloudflareTvOne: '{name} закрыт проверкой Cloudflare - войдите на него на телефоне в «Источниках поиска»',

@@ -1,5 +1,6 @@
 // Live seeders for a search row: parse a tracker scrape, remember it, and ask only for rows still on screen.
-// The request itself runs on this device (phone, Android TV, webOS). Nothing is sent to the VPS.
+// The tracker request itself runs on this device (phone, Android TV, webOS). The automatic scrape sends nothing
+// to the server. A manual «Проверить сиды» may also ask billing for a DHT peer count (src/sources/dhtPeers.ts).
 // Chromium 53 safe: no Object.values/entries, no AbortController, no regex u flag.
 import { t, tp } from '../i18n';
 import { infohashFromMagnet } from './html';

@@ -3,7 +3,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
+import { saveBillingSession } from '../../src/billing/session';
 import { applyLanguageSetting } from '../../src/i18n';
+import { setDhtPeersContext } from '../../src/sources/dhtPeers';
+import type { SourceHttp } from '../../src/sources/types';
 
 vi.mock('../../src/sources/liveSeedsRun', async () => {
   const actual = await vi.importActual<typeof import('../../src/sources/liveSeedsRun')>('../../src/sources/liveSeedsRun');
@@ -35,12 +38,17 @@ let el: HTMLElement;
 
 beforeEach(() => {
   applyLanguageSetting('ru');
+  saveBillingSession(null);
+  setDhtPeersContext(null);
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
-  vi.mocked(probeSeeds).mockClear();
+  vi.mocked(probeSeeds).mockReset();
+  vi.mocked(probeSeeds).mockImplementation(() => Promise.resolve({ ok: true, seeders: 12, leechers: 3 }));
 });
 
 afterEach(() => {
+  saveBillingSession(null);
+  setDhtPeersContext(null);
   act(() => render(null, el));
 });
 
@@ -104,6 +112,101 @@ describe('seed check on a result card', () => {
     expect(el.querySelector('.seed-check')).toBeNull();
     expect(el.querySelector('[data-result-details]')!.textContent).toContain('Нет адреса трекера');
     expect(el.querySelector('.m-sheet-row')).toBeTruthy();
+  });
+
+  it('checks a release with no tracker address through DHT only when signed in', async () => {
+    const bare = { ...row, Magnet: 'magnet:?xt=urn:btih:' + HASH, Title: 'Anidub' };
+    saveBillingSession({ token: '', paidUntil: 1, access: 'a1.test', accessExp: Date.now() + 3600_000 });
+    setDhtPeersContext(() => null);
+    expect(seedCheckable(bare)).toBe(false);
+    let seen = '';
+    const http: SourceHttp = {
+      get: (url) => {
+        seen = url;
+        return Promise.resolve({ status: 200, url, text: JSON.stringify({ peers: 4, source: 'dht', approx: true }) });
+      },
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    setDhtPeersContext(() => ({ http, client: null }));
+    expect(seedCheckable(bare)).toBe(true);
+
+    act(() => render(<ResultCard r={bare} category="tv" seedCode="P07.6" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const bottom = el.querySelector('.m-rc-bottom')!;
+    const btn = bottom.querySelector('.seed-check') as HTMLButtonElement;
+    expect(btn).toBe(bottom.firstElementChild);
+    expect(btn.getAttribute('data-code')).toBe('P07.6');
+    expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
+    act(() => btn.click());
+    expect(probeSeeds).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(seen).toContain('/v1/dht-peers?infohash=' + HASH);
+    expect(meta).toContain('4 пира онлайн');
+    expect(meta).not.toContain('Нет адреса трекера');
+    expect(meta).not.toContain('сейчас');
+    act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
+    const sheet = el.querySelector('.m-rc-sheet-check .seed-check') as HTMLButtonElement;
+    expect(sheet.getAttribute('data-code')).toBe('PD31.1');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+  });
+
+  it('shows the tracker count before the DHT estimate arrives', async () => {
+    let releaseDht: (v: { status: number; url: string; text: string }) => void = () => undefined;
+    const http: SourceHttp = {
+      get: (url) =>
+        new Promise((resolve) => {
+          releaseDht = resolve;
+        }),
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    saveBillingSession({ token: '', paidUntil: 1, access: 'a1.test', accessExp: Date.now() + 3600_000 });
+    setDhtPeersContext(() => ({ http, client: null }));
+    let releaseTracker: (v: { ok: true; seeders: number; leechers: number }) => void = () => undefined;
+    vi.mocked(probeSeeds).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseTracker = resolve;
+        }),
+    );
+
+    act(() => render(<ResultCard r={row} category="tv" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    act(() => (el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement).click());
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('сейчас');
+
+    await act(async () => {
+      releaseTracker({ ok: true, seeders: 12, leechers: 3 });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    let meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('12 сидов');
+    expect(meta).toContain('сейчас');
+    expect(meta).not.toContain('по DHT');
+
+    await act(async () => {
+      releaseDht({ status: 200, url: '', text: JSON.stringify({ peers: 9, source: 'dht', approx: true }) });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('12 сидов');
+    expect(meta).toContain('9 пиров онлайн');
+    expect(meta).toContain('по DHT');
   });
 
   it('English short label is Seeds', () => {
