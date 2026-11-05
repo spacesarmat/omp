@@ -30,6 +30,8 @@ class FlareSolverrClientTest {
         server.shutdown()
     }
 
+    private fun localUrl(path: String) = server.url(path).toString().replace(server.hostName, "127.0.0.1").toHttpUrl()
+
     private val solution = """{"status":"ok","message":"Challenge solved!","solution":{"url":"https://rustorka.example.com/","status":200,
         "cookies":[{"name":"cf_clearance","value":"cl","domain":".rustorka.example.com","path":"/","expires":4102444800.5,"httpOnly":true,"secure":true},
         {"name":"sess","value":"s1","domain":"rustorka.example.com","path":"/","expires":-1},
@@ -40,8 +42,8 @@ class FlareSolverrClientTest {
     @Test
     fun postsRequestGetAndParsesTheSolution() {
         server.enqueue(MockResponse().setBody(solution))
-        val r = client.solve(server.url("/"), target)
-        val req = server.takeRequest()
+        val r = client.solve(localUrl("/"), target)
+        val req = server.takeRequest(2, TimeUnit.SECONDS)!!
         assertEquals("POST", req.method)
         assertEquals("/v1", req.path)
         val body = JSONObject(req.body.readUtf8())
@@ -63,22 +65,22 @@ class FlareSolverrClientTest {
     @Test
     fun basePathIsKept() {
         server.enqueue(MockResponse().setBody(solution))
-        client.solve(server.url("/flaresolverr/"), target)
-        assertEquals("/flaresolverr/v1", server.takeRequest().path)
+        client.solve(localUrl("/flaresolverr/"), target)
+        assertEquals("/flaresolverr/v1", server.takeRequest(2, TimeUnit.SECONDS)!!.path)
         assertEquals("http://h:8191/v1", FlareSolverrClient.endpoint("http://h:8191".toHttpUrl()).toString())
     }
 
     @Test
     fun errorsAreFailures() {
         server.enqueue(MockResponse().setBody("""{"status":"error","message":"Error: Error solving the challenge. Timeout after 60.0 seconds."}"""))
-        assertTrue(client.solve(server.url("/"), target) is FlareSolverrClient.Result.Failed)
+        assertTrue(client.solve(localUrl("/"), target) is FlareSolverrClient.Result.Failed)
         server.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
-        val bad = client.solve(server.url("/"), target)
+        val bad = client.solve(localUrl("/"), target)
         assertTrue(bad is FlareSolverrClient.Result.Failed)
         // never the address in the reason
         assertEquals(FlareSolverrClient.FAILED, (bad as FlareSolverrClient.Result.Failed).reason)
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
-        val silent = client.solve(server.url("/"), target)
+        val silent = client.solve(localUrl("/"), target)
         assertEquals(FlareSolverrClient.NO_ANSWER, (silent as FlareSolverrClient.Result.Failed).reason)
     }
 

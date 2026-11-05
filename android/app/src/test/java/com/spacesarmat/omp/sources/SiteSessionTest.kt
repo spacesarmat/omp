@@ -155,11 +155,11 @@ class SiteSessionTest {
         server.enqueue(MockResponse().setBody("<form>login</form>"))
         server.start()
         try {
-            val root = server.url("/")
+            val root = server.url("/").toString().replace(server.hostName, "127.0.0.1").toHttpUrl()
             val v = SessionVerifier(5_000) { now }
             val c = SiteSession.check("my.php", "logout.php?hash4u=", "login.php", emptyList())!!
             assertTrue(v.verify(root, listOf("uid" to "1", "pass" to "p"), "Phone-UA", c))
-            val r = server.takeRequest()
+            val r = server.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
             assertEquals("/my.php", r.path)
             assertEquals("Phone-UA", r.getHeader("User-Agent"))
             val cookie = r.getHeader("Cookie")
