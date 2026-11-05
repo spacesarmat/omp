@@ -206,6 +206,8 @@ export function savePair(
 ): Promise<BillingSession | null> {
   if (current && !current()) return Promise.resolve(null);
   const id = prev && prev.id ? prev.id : newId();
+  // A claim must not start writing over a session it does not own (a code entered while it waited).
+  if (current && billingSession() && billingSession()!.id !== id) return Promise.resolve(null);
   const native = ctx.billing;
   const keep: Promise<Stored> =
     native && native.adopt
@@ -223,6 +225,8 @@ export function savePair(
       dropCancelledWrite(ctx, id);
       return null;
     }
+    // The code's session may have been published while this Keystore write ran. Leave it, including its token.
+    if (current && billingSession() && billingSession()!.id !== id) return null;
     if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
     const row: BillingSession = {
       token: '',

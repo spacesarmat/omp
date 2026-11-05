@@ -147,14 +147,22 @@ function activateError(status: number, code: string): Error {
   return new Error(t('sources.billing.badCode'));
 }
 
-/** Binds a code to this phone and keeps the device token pair (refresh in the Keystore). */
+/**
+ * Binds a code to this phone and keeps the device token pair (refresh in the Keystore).
+ * This is an explicit sign-in: a Telegram claim still waiting on the network is cancelled first,
+ * so its later answer cannot replace this session. Token refresh and the legacy upgrade keep the
+ * same session id and refuse a mismatched one (takePair), so they are not a second sign-in.
+ */
 export function activateCode(ctx: SourceContext, code: string): Promise<BillingSession> {
+  invalidateBillingClaims();
   return deviceNameField(ctx)
     .then((named) => billingPost(ctx, '/v1/activate', { code: code, deviceId: deviceId(), tokens: 'pair', ...named }, { timeoutMs: 15000 }))
     .then(
     (res) => {
       const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
       if (!pair) throw activateError(res.status, errorOf(res.text));
+      // A claim started while this request was in flight gets a new generation too.
+      invalidateBillingClaims();
       allowBillingSignIn();
       return savePair(ctx, pair, null).then((row) => confirmPremium(ctx).then(() => row));
     },
@@ -188,6 +196,8 @@ export function claimLinkedSession(ctx: SourceContext): Promise<BillingSession |
         if (!current()) return null;
         const pair = res.status >= 200 && res.status < 300 ? pairOf(res.text) : null;
         if (!pair) throw activateError(res.status, code);
+        // A code (or another sign-in) may already own the session. Do not replace it.
+        if (billingSession()) return null;
         return savePair(ctx, pair, null, current).then((row) => {
           // savePair checks again after the Keystore write. A sign-out in between returns null.
           if (!row || !current()) return null;
