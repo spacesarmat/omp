@@ -42,6 +42,7 @@ BILLING_CHANGED=0
 DOCKERFILE_CHANGED=0
 COMPOSE_CHANGED=0
 DHT_CHANGED=0
+RELEASE_HAS_DHT=0
 IMAGE_ID=""
 BACKUP_TAG=""
 DHT_IMAGE="${OMP_DHT_IMAGE:-omp-dht-peers:local}"
@@ -108,13 +109,18 @@ replaced. Its output is discarded: the rendered file expands secrets.
 The billing image is rebuilt only when billing source or
 Dockerfile.billing changed. billing is recreated (up -d --no-deps) when
 that image changed or docker-compose.yml changed. dht-peers is rebuilt
-and recreated with --profile dht only when dht-peers/ changed. A compose
+and recreated with --profile dht only when dht-peers/ changed. A release
+without that directory leaves the sidecar on disk unchanged. A compose
 change recreates an already running dht-peers container and does not
 start a stopped one. The Caddyfile this host mounts is reloaded in place
 (Caddyfile.nuc on the NUC, Caddyfile otherwise). A site-only change is
 served from the bind mount. No other service is restarted. Health checks
 cover /health GET, HEAD, and OPTIONS, /admin, the landing page, and the
 security headers. A failure after the backup restores the files and images.
+A second --rollback checks the dht image and whether the sidecar container
+is running, not only the files. The sidecar is stopped with docker stop
+on its container name, so a restored compose file that has no dht-peers
+service still stops it.
 
 --dry-run downloads the ref, checks compose, and prints what would change
 for each path. It does not back up, sync, build, reload, or roll back.
@@ -534,9 +540,12 @@ validate_tree() {
   require_regular_file "$tree/ops/vps/Caddyfile.nuc" "$tree"
   require_regular_file "$tree/ops/vps/docker-compose.yml" "$tree"
   require_real_dir "$tree/ops/vps/site" "$tree"
-  require_real_dir "$tree/ops/vps/dht-peers" "$tree"
-  require_regular_file "$tree/ops/vps/dht-peers/Dockerfile" "$tree"
-  require_regular_file "$tree/ops/vps/dht-peers/package.json" "$tree"
+  # Older tags have no sidecar. A partial directory is still a bad archive.
+  if [[ -e "$tree/ops/vps/dht-peers" || -L "$tree/ops/vps/dht-peers" ]]; then
+    require_real_dir "$tree/ops/vps/dht-peers" "$tree"
+    require_regular_file "$tree/ops/vps/dht-peers/Dockerfile" "$tree"
+    require_regular_file "$tree/ops/vps/dht-peers/package.json" "$tree"
+  fi
   require_regular_file "$tree/ops/vps/Dockerfile" "$tree"
   require_regular_file "$tree/ops/billing/package.json" "$tree"
   require_regular_file "$tree/ops/billing/src/server.mjs" "$tree"
@@ -586,6 +595,7 @@ detect_changes() {
   DOCKERFILE_CHANGED=0
   COMPOSE_CHANGED=0
   DHT_CHANGED=0
+  RELEASE_HAS_DHT=0
   if files_differ "$tree/ops/vps/Caddyfile" "$ROOT/Caddyfile"; then
     CADDY_CHANGED=1
   fi
@@ -604,8 +614,13 @@ detect_changes() {
   if files_differ "$tree/ops/vps/docker-compose.yml" "$ROOT/docker-compose.yml"; then
     COMPOSE_CHANGED=1
   fi
-  if dirs_differ "$tree/ops/vps/dht-peers" "$ROOT/dht-peers" dht; then
-    DHT_CHANGED=1
+  if [[ -e "$tree/ops/vps/dht-peers" || -L "$tree/ops/vps/dht-peers" ]]; then
+    RELEASE_HAS_DHT=1
+    if dirs_differ "$tree/ops/vps/dht-peers" "$ROOT/dht-peers" dht; then
+      DHT_CHANGED=1
+    fi
+  else
+    log "release has no dht-peers; leaving the sidecar unchanged"
   fi
   log "changes caddyfile=${CADDY_CHANGED} caddyfile_nuc=${CADDY_NUC_CHANGED} site=${SITE_CHANGED} billing=${BILLING_CHANGED} dockerfile=${DOCKERFILE_CHANGED} compose=${COMPOSE_CHANGED} dht=${DHT_CHANGED}"
 }
@@ -653,7 +668,9 @@ sync_release() {
   assert_managed_not_symlinks
   rsync_dir "$tree/ops/vps/site" "$ROOT/site" site delete || return 1
   rsync_dir "$tree/ops/billing" "$ROOT/billing-src" billing delete || return 1
-  rsync_dir "$tree/ops/vps/dht-peers" "$ROOT/dht-peers" dht delete || return 1
+  if [[ "$RELEASE_HAS_DHT" -eq 1 ]]; then
+    rsync_dir "$tree/ops/vps/dht-peers" "$ROOT/dht-peers" dht delete || return 1
+  fi
   # cp, not mv or rsync: a single-file bind mount keeps the inode.
   install_file "$tree/ops/vps/Caddyfile" "$ROOT/Caddyfile" || return 1
   install_file "$tree/ops/vps/Caddyfile.nuc" "$ROOT/Caddyfile.nuc" || return 1
@@ -743,6 +760,43 @@ dht_container_running() {
   raw="${raw//$'\r'/}"
   raw="${raw//$'\n'/}"
   [[ "$raw" == "true" ]]
+}
+
+dht_current_image_id() {
+  local raw
+  raw="$(docker image inspect --format '{{.Id}}' "$DHT_IMAGE" 2>/dev/null)" || {
+    printf ''
+    return 0
+  }
+  raw="${raw,,}"
+  raw="${raw//$'\r'/}"
+  raw="${raw//$'\n'/}"
+  printf '%s' "$raw"
+}
+
+dht_container_image() {
+  local raw
+  raw="$(docker inspect --format '{{.Image}}' "$DHT_CONTAINER" 2>/dev/null)" || {
+    printf ''
+    return 0
+  }
+  raw="${raw,,}"
+  raw="${raw//$'\r'/}"
+  raw="${raw//$'\n'/}"
+  printf '%s' "$raw"
+}
+
+# By container name, not `compose stop`: the restored compose may predate the service.
+stop_dht_container() {
+  if ! dht_container_running; then
+    return 0
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "would stop ${DHT_CONTAINER}"
+    return 0
+  fi
+  log "stopping ${DHT_CONTAINER}"
+  docker stop "$DHT_CONTAINER" >/dev/null || return 1
 }
 
 # NUC Caddy mounts Caddyfile.nuc. The VPS mount is Caddyfile.
@@ -1357,45 +1411,78 @@ restore_dht_image() {
   return 1
 }
 
-# diff: dht-peers directory differs from the backup. compose_diff: compose file differs.
-# A sidecar that was stopped at backup stays stopped. One this deploy started is stopped.
+# Saved running state and image are checked on every rollback. A first attempt can
+# restore the files and still fail to retag, restart, or stop the container; the
+# next --rollback then sees no file diff and must not skip the sidecar.
 restore_dht_service() {
   local diff="$1"
   local compose_diff="$2"
-  local touch=0
+  local current_id running container_image image_bad state_bad
   [[ -n "$MANIFEST_DHT_RUNNING" ]] || return 0
-  if [[ "$diff" -eq 1 ]]; then
-    touch=1
+  current_id="$(dht_current_image_id)"
+  running=0
+  if dht_container_running; then
+    running=1
   fi
-  if [[ "$compose_diff" -eq 1 && "$MANIFEST_DHT_RUNNING" == 1 ]]; then
-    touch=1
+  container_image=""
+  if [[ "$running" -eq 1 ]]; then
+    container_image="$(dht_container_image)"
   fi
-  if [[ "$diff" -eq 1 || "$compose_diff" -eq 1 ]] && dht_container_running && [[ "$MANIFEST_DHT_RUNNING" != 1 ]]; then
-    touch=1
+  image_bad=0
+  state_bad=0
+  if [[ -n "$MANIFEST_DHT_IMAGE_ID" ]]; then
+    if [[ "$current_id" != "$MANIFEST_DHT_IMAGE_ID" ]]; then
+      image_bad=1
+    fi
+    if [[ "$MANIFEST_DHT_RUNNING" == 1 && "$container_image" != "$MANIFEST_DHT_IMAGE_ID" ]]; then
+      image_bad=1
+    fi
+  elif [[ -z "$MANIFEST_DHT_IMAGE_TAG" && -n "$current_id" ]]; then
+    image_bad=1
   fi
-  [[ "$touch" -eq 1 ]] || return 0
+  if [[ "$running" != "$MANIFEST_DHT_RUNNING" ]]; then
+    state_bad=1
+  fi
+  if [[ "$diff" -eq 0 && "$compose_diff" -eq 0 && "$image_bad" -eq 0 && "$state_bad" -eq 0 ]]; then
+    log "dht-peers already matches the backup"
+    return 0
+  fi
   if [[ -n "$MANIFEST_DHT_IMAGE_ID" || -n "$MANIFEST_DHT_IMAGE_TAG" ]]; then
-    restore_dht_image || return 1
-  elif [[ "$DRY_RUN" -eq 1 ]]; then
+    if [[ "$image_bad" -eq 1 || "$diff" -eq 1 ]]; then
+      restore_dht_image || return 1
+    fi
+  elif [[ "$DRY_RUN" -eq 1 && "$image_bad" -eq 1 ]]; then
     log "would remove image ${DHT_IMAGE}"
   fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     if [[ "$MANIFEST_DHT_RUNNING" == 1 ]]; then
-      log "would docker compose --profile dht up -d --no-deps dht-peers"
-    elif dht_container_running; then
-      log "would stop dht-peers"
+      if [[ "$state_bad" -eq 1 || "$image_bad" -eq 1 || "$diff" -eq 1 || "$compose_diff" -eq 1 ]]; then
+        log "would docker compose --profile dht up -d --no-deps dht-peers"
+      fi
+    elif [[ "$running" -eq 1 ]]; then
+      log "would stop ${DHT_CONTAINER}"
     fi
     return 0
   fi
   if [[ "$MANIFEST_DHT_RUNNING" == 1 ]]; then
-    log "restarting dht-peers"
-    compose --profile dht up -d --no-deps dht-peers || return 1
-  elif dht_container_running; then
-    log "stopping dht-peers"
-    compose --profile dht stop dht-peers || return 1
+    if [[ "$state_bad" -eq 1 || "$image_bad" -eq 1 || "$diff" -eq 1 || "$compose_diff" -eq 1 ]]; then
+      log "restarting dht-peers"
+      compose --profile dht up -d --no-deps dht-peers || return 1
+      if [[ -n "$MANIFEST_DHT_IMAGE_ID" ]]; then
+        container_image="$(dht_container_image)"
+        if [[ "$container_image" != "$MANIFEST_DHT_IMAGE_ID" ]]; then
+          log "dht container image is ${container_image} (want ${MANIFEST_DHT_IMAGE_ID})"
+          return 1
+        fi
+      fi
+    fi
+  elif [[ "$running" -eq 1 ]]; then
+    stop_dht_container || return 1
   fi
   if [[ -z "$MANIFEST_DHT_IMAGE_ID" && -z "$MANIFEST_DHT_IMAGE_TAG" ]]; then
-    docker rmi "$DHT_IMAGE" >/dev/null 2>&1 || log "dht image ${DHT_IMAGE} was not removed"
+    if [[ -n "$(dht_current_image_id)" ]]; then
+      docker rmi "$DHT_IMAGE" >/dev/null 2>&1 || log "dht image ${DHT_IMAGE} was not removed"
+    fi
   fi
   return 0
 }
