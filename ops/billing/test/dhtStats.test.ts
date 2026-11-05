@@ -17,6 +17,14 @@ describe('DHT admin counters', () => {
     expect(view.withPeers24h).toBe(1);
     expect(view.peersSharePct).toBe(33.3);
     expect(view.avgMs).toBe(300);
+    expect(view.errors24h).toBe(1);
+    expect(view.errors4xx24h).toBe(0);
+    expect(view.errors5xx24h).toBe(1);
+    expect(view.p50Ms).toBe(300);
+    expect(view.p95Ms).toBe(500);
+    expect(view.series.reduce((sum, p) => sum + p.requests, 0)).toBe(3);
+    expect(view.series.reduce((sum, p) => sum + p.errors, 0)).toBe(1);
+    expect(view.series.every((p) => p.t <= now && p.t >= now - 25 * HOUR)).toBe(true);
     expect(view.errors).toEqual([{ at: now - 30 * 60 * 1000, status: 502, reason: 'sidecar не ответил' }]);
   });
 
@@ -53,7 +61,25 @@ describe('DHT admin counters', () => {
     expect(view.withPeers24h).toBe(withPeers);
     expect(view.avgMs).toBe(Math.round((sumMs + 12 * 4) / (n + 12)));
     expect(view.peersSharePct).toBe(Math.round((withPeers * 1000) / (n + 12)) / 10);
+    expect(view.errors24h).toBe(12);
+    expect(view.errors4xx24h).toBe(12);
+    expect(view.errors5xx24h).toBe(0);
+    expect(view.p50Ms).toBe(10);
+    expect(view.p95Ms).toBe(30);
+    expect(view.series.reduce((sum, p) => sum + p.requests, 0)).toBe(n + 12);
     expect(view.errors).toHaveLength(10);
     expect(view.errors[0].reason).toBe('нет токена');
+  });
+
+  it('stores an admin probe as the label проверка and drops a raw hash', () => {
+    const now = 1_800_000_000_000;
+    const hash = 'cd'.repeat(20);
+    noteDhtRequest({ status: 400, ms: 8, reason: hash }, now - 1000);
+    noteDhtRequest({ status: 502, ms: 20, reason: 'probe', infohash: hash }, now);
+    const view = dhtStatsView(now);
+    expect(view.errors.map((e) => e.reason)).toEqual(['проверка', 'ошибка']);
+    expect(view.errors4xx24h).toBe(1);
+    expect(view.errors5xx24h).toBe(1);
+    expect(JSON.stringify(view)).not.toContain(hash);
   });
 });

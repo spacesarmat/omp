@@ -1,19 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { when } from '@/lib/text';
 
 type DhtError = { at: number; status: number; reason: string };
+type DhtPoint = { t: number; requests: number; errors: number };
+
+type DhtStats = {
+  requests24h?: number;
+  withPeers24h?: number;
+  peersSharePct?: number;
+  avgMs?: number;
+  errors24h?: number;
+  errors4xx24h?: number;
+  errors5xx24h?: number;
+  p50Ms?: number;
+  p95Ms?: number;
+  series?: DhtPoint[];
+  errors?: DhtError[];
+};
 
 type DhtPayload = {
   auth?: boolean;
   ok?: boolean;
   configured?: boolean;
   sidecar?: { configured?: boolean; ok?: boolean; dht?: string; rss?: number | null; latencyMs?: number };
-  stats?: { requests24h?: number; withPeers24h?: number; peersSharePct?: number; avgMs?: number; errors?: DhtError[] };
+  limit?: { perMinute?: number; windowSec?: number };
+  stats?: DhtStats;
 };
+
+type ProbeResult = { ok?: boolean; auth?: boolean; status?: number; peers?: number; ms?: number; error?: string };
+
+const REFRESH_MS = 20000;
 
 function memText(rss?: number | null) {
   if (rss == null || rss < 0) return '';
@@ -34,33 +55,101 @@ function socketText(dht?: string) {
   return '';
 }
 
-export function DhtPanel() {
+function limitText(limit?: { perMinute?: number }) {
+  const n = limit && typeof limit.perMinute === 'number' ? limit.perMinute : 30;
+  if (n <= 0) return 'лимит выключен (0 в настройках)';
+  return n + ' запросов в минуту на устройство';
+}
+
+/** Same bar row as the finance DayChart: one bar per 10-minute slot, gold or red. */
+function Bars({ rows, field, label, color }: { rows: DhtPoint[]; field: 'requests' | 'errors'; label: string; color: string }) {
+  const max = Math.max(1, ...rows.map((r) => r[field]));
+  const first = rows[0] ? when(rows[0].t) : '';
+  const last = rows.length ? when(rows[rows.length - 1].t) : '';
+  return (
+    <div>
+      <div className="mb-2 text-sm text-muted-foreground">{label}</div>
+      <div className="flex h-36 items-end gap-px overflow-x-auto">
+        {rows.map((r) => (
+          <div key={field + ':' + r.t} title={when(r.t) + ': ' + r[field]} className="flex h-full min-w-[4px] flex-1 flex-col justify-end">
+            <div className="w-full rounded-sm" style={{ height: Math.max(2, Math.round((r[field] / max) * 128)) + 'px', background: color }} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+        <span>{first}</span>
+        <span>{last}</span>
+      </div>
+    </div>
+  );
+}
+
+function probeText(row: ProbeResult) {
+  if (row.auth === false) return 'Нужен вход';
+  if (row.error === 'rate' || row.status === 429) return 'лимит проверки - это лимит кнопки, не сбой DHT';
+  if (row.ok) return 'ок, пиров ' + (row.peers || 0) + ', ' + (row.ms || 0) + ' мс';
+  if (row.status === 503) return 'проверка: sidecar выключен (' + (row.ms || 0) + ' мс)';
+  return 'проверка не прошла (' + (row.status || 0) + ', ' + (row.ms || 0) + ' мс)';
+}
+
+export function DhtPanel({ csrf }: { csrf: string }) {
   const [data, setData] = useState<DhtPayload | null>(null);
   const [err, setErr] = useState('');
+  const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [probing, setProbing] = useState(false);
 
-  useEffect(() => {
-    let stop = false;
-    api<DhtPayload>('/admin/api/dht')
+  const load = useCallback(() => {
+    return api<DhtPayload>('/admin/api/dht')
       .then((res) => {
-        if (stop) return;
         if (res.auth === false) {
           setErr('Нужен вход');
           return;
         }
+        setErr('');
         setData(res);
       })
       .catch((e) => {
-        if (!stop) setErr(e instanceof Error ? e.message : 'Не удалось загрузить DHT');
+        setErr(e instanceof Error ? e.message : 'Не удалось загрузить DHT');
       });
+  }, []);
+
+  useEffect(() => {
+    let stop = false;
+    const run = () => {
+      void load().then(() => {
+        if (stop) return;
+      });
+    };
+    run();
+    const timer = window.setInterval(run, REFRESH_MS);
     return () => {
       stop = true;
+      window.clearInterval(timer);
     };
-  }, []);
+  }, [load]);
+
+  async function onProbe() {
+    setProbing(true);
+    try {
+      const res = await api<ProbeResult>('/admin/api/dht/probe', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ csrf }),
+      });
+      setProbe(res);
+      await load();
+    } catch (e) {
+      setProbe({ ok: false, error: e instanceof Error ? e.message : 'проверка' });
+    } finally {
+      setProbing(false);
+    }
+  }
 
   const stats = (data && data.stats) || {};
   const requests = stats.requests24h || 0;
   const withPeers = stats.withPeers24h || 0;
   const errors = stats.errors || [];
+  const series = stats.series || [];
   const mem = data && data.sidecar ? memText(data.sidecar.rss) : '';
   const socket = data && data.sidecar && data.sidecar.ok ? socketText(data.sidecar.dht) : '';
 
@@ -68,11 +157,21 @@ export function DhtPanel() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>DHT</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>DHT</CardTitle>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="secondary" onClick={() => void load()}>
+                Обновить
+              </Button>
+              <Button type="button" size="sm" disabled={!csrf || probing} onClick={() => void onProbe()}>
+                {probing ? 'Проверка...' : 'Проверить DHT'}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           {err ? <p className="text-destructive">{err}</p> : null}
-          {!data && !err ? <p className="text-muted-foreground">Загрузка…</p> : null}
+          {!data && !err ? <p className="text-muted-foreground">Загрузка...</p> : null}
           {data ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
@@ -81,7 +180,9 @@ export function DhtPanel() {
                 {socket ? <span className="text-muted-foreground">{socket}</span> : null}
                 {mem ? <span className="text-muted-foreground">память {mem}</span> : null}
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <p className="text-muted-foreground">Лимит: {limitText(data.limit)}. Меняется в «Настройках». Обновление само, раз в 20 с.</p>
+              {probe ? <p>{probeText(probe)}</p> : null}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <div className="text-muted-foreground">Запросов за 24 ч</div>
                   <div className="text-lg font-semibold">{requests}</div>
@@ -91,12 +192,26 @@ export function DhtPanel() {
                   <div className="text-lg font-semibold">
                     {requests ? stats.peersSharePct + '% (' + withPeers + ' из ' + requests + ')' : 'нет запросов'}
                   </div>
+                  <div className="text-muted-foreground">
+                    Ошибок за 24 ч: {stats.errors24h || 0} (4xx {stats.errors4xx24h || 0}, 5xx {stats.errors5xx24h || 0})
+                  </div>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Среднее время</div>
                   <div className="text-lg font-semibold">{requests ? (stats.avgMs || 0) + ' мс' : '-'}</div>
                 </div>
+                <div>
+                  <div className="text-muted-foreground">p50 / p95 за 24 ч</div>
+                  <div className="text-lg font-semibold">{requests ? (stats.p50Ms || 0) + ' / ' + (stats.p95Ms || 0) + ' мс' : '-'}</div>
+                </div>
               </div>
+              <Bars rows={series} field="requests" label="Запросы за 24 ч, слот 10 мин" color="#f5b700" />
+              <Bars rows={series} field="errors" label="Ошибки за 24 ч, слот 10 мин" color="#e11d48" />
+              <p className="text-muted-foreground">
+                429 и причина «лимит» - это лимит биллинга на запросы с устройства, а не сбой сети DHT. Панель не показывает названия торрентов и infohash.
+                Счетчики за 24 часа лежат в Postgres и остаются после перезапуска. Токен, id устройства и infohash по-прежнему не пишутся.
+                «Проверить DHT» зовет sidecar с постоянным тестовым хешем из нулей (это не торрент пользователя) и тоже попадает в счетчики. В таблице ошибок у такой проверки причина «проверка», без самого хеша.
+              </p>
             </>
           ) : null}
         </CardContent>

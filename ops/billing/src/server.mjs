@@ -131,8 +131,8 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
-import { dhtConfig, dhtPeersLimitConfig, probeDhtSidecar, queryDhtPeers } from './dhtPeers.mjs';
-import { dhtStatsView, noteDhtRequest } from './dhtStats.mjs';
+import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
+import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
@@ -640,6 +640,11 @@ function badBackupSetting(body) {
   return (set(body.backupEveryHours) && !validBackupEveryHours(body.backupEveryHours)) || (set(body.backupKeepDays) && !validBackupKeepDays(body.backupKeepDays));
 }
 
+/** An admin settings form with dhtPerMinute outside 0-1000. Empty means "leave it". */
+function badDhtSetting(body) {
+  return body.dhtPerMinute !== undefined && body.dhtPerMinute !== '' && !validDhtPerMinute(body.dhtPerMinute);
+}
+
 /**
  * BILLING_LINK_CLEAR_REQUIRE_TOKEN=1: /v1/link/clear without a subscription token is refused.
  * Off by default because the current app sends only X-Device-Id there (and a Telegram-only phone has no token).
@@ -750,12 +755,28 @@ export function createApp(file, fetchImpl, opts) {
   // A tight loop from one IP is refused. 0 turns the limit off.
   const adsLimit = adsConfigLimitConfig(env);
   const adsConfigRate = adsLimit.ipMax > 0 ? createRateLimit(adsLimit.ipMax, adsLimit.windowMs) : null;
-  // «Проверить сиды» DHT lookup. 0 turns the per-device limit off. The sidecar is optional.
-  const dhtLimit = dhtPeersLimitConfig(env);
-  const dhtRate = dhtLimit.max > 0 ? createRateLimit(dhtLimit.max, dhtLimit.windowMs) : null;
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
+  // Minute counters survive a restart when the store has the DHT tables. Memory-only stores keep the process map.
+  bindDhtStats(store.dht || null);
+  // Per device, settings.dhtPerMinute (default 30) per minute. Rebuilt when the saved cap changes.
+  let dhtRate = null;
+  let dhtRateMax = -1;
+  function dhtLimiter(max) {
+    if (!(max > 0)) {
+      dhtRate = null;
+      dhtRateMax = 0;
+      return null;
+    }
+    if (!dhtRate || dhtRateMax !== max) {
+      dhtRate = createRateLimit(max, DHT_WINDOW_MS);
+      dhtRateMax = max;
+    }
+    return dhtRate;
+  }
+  // «Проверить DHT» on the admin tab. Separate from the per-device cap. Six presses a minute.
+  const dhtProbeRate = createRateLimit(6, DHT_WINDOW_MS);
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
   // «Мониторинг»: the scheduled runner when the server passes it, else one for «Проверить сейчас» only.
@@ -839,6 +860,42 @@ export function createApp(file, fetchImpl, opts) {
     const sub = row ? state.subscriptions.find((s) => s.id === row.subscription_id) : null;
     return sub ? sub.paidUntil : 0;
   }
+
+  /**
+   * Admin probe. Calls the sidecar with DHT_PROBE_INFOHASH (forty zeros, not a user torrent).
+   * The hash is not written to the error table or the dht log line. A failed probe is reason «проверка».
+   */
+  async function runDhtProbe(admin) {
+    await readyDhtStats();
+    const key = String((admin && admin.id) || 'admin').slice(0, 80);
+    if (!dhtProbeRate.allow(key)) {
+      return { http: 429, body: { ok: false, status: 429, peers: 0, ms: 0, error: 'rate' } };
+    }
+    const started = Date.now();
+    const cfg = dhtConfig(env);
+    let status = 503;
+    let peers = 0;
+    try {
+      if (!cfg.enabled) {
+        status = 503;
+      } else {
+        const out = await queryDhtPeers(cfg, DHT_PROBE_INFOHASH, net);
+        status = out && out.status ? out.status : 502;
+        peers = out && out.body && typeof out.body.peers === 'number' ? out.body.peers : 0;
+      }
+    } catch (e) {
+      status = 502;
+      peers = 0;
+    }
+    const ms = Date.now() - started;
+    process.stderr.write(formatDhtLog(status, ms, ''));
+    noteDhtRequest({ status, ms, peers, reason: status === 200 ? '' : 'probe' });
+    return {
+      http: 200,
+      body: { ok: status === 200, status, peers, ms, error: status === 200 ? '' : 'проверка' },
+    };
+  }
+
   return async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -925,6 +982,7 @@ export function createApp(file, fetchImpl, opts) {
             readOnly,
             // Read-only secret rows (set or not, last 4 characters, the .env name); never a value.
             secrets: secretViews((await store.read()).settings, env),
+            env,
             tokenStats: await (async () => {
               if (typeof reg.authStats !== 'function') return null;
               try {
@@ -946,9 +1004,17 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/dht') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
+        await readyDhtStats();
         const cfg = dhtConfig(env);
         const sidecar = await probeDhtSidecar(cfg, net);
-        return json(res, 200, { ok: true, configured: !!cfg.enabled, sidecar, stats: dhtStatsView(Date.now()) });
+        const settings = (await store.read()).settings;
+        return json(res, 200, {
+          ok: true,
+          configured: !!cfg.enabled,
+          sidecar,
+          limit: { perMinute: dhtPerMinute(settings, env), windowSec: DHT_WINDOW_MS / 1000 },
+          stats: dhtStatsView(Date.now()),
+        });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
         const admin = adminOf(req);
@@ -1181,6 +1247,12 @@ export function createApp(file, fetchImpl, opts) {
       const admin = adminOf(req);
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
         const body = await readBody(req);
+        if (path === '/admin/api/dht/probe') {
+          if (!admin) return json(res, 401, { auth: false });
+          if (body.csrf !== admin.csrf) return json(res, 403, { ok: false, error: 'forbidden' });
+          const probed = await runDhtProbe(admin);
+          return json(res, probed.http, probed.body);
+        }
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
         if (path === '/admin/monitor/run' || path === '/admin/monitor/config') {
           if (!monitor) return json(res, 200, { ok: false, error: 'Мониторинг недоступен на этом экземпляре' });
@@ -1244,6 +1316,10 @@ export function createApp(file, fetchImpl, opts) {
         if (badBase) flashError = 'Базовых устройств: целое число от 1 до 20 - оставлено прежнее значение';
         if (path === '/admin/settings' && !lowerBlocked && badBackupSetting(body)) {
           flashError = 'Бэкап Postgres: каждые 1-168 часов, хранить 1-365 дней (целые числа) - оставлено прежнее значение';
+        }
+        if (path === '/admin/settings' && !lowerBlocked && badDhtSetting(body)) {
+          const msg = 'DHT: целое число от 0 до 1000 - оставлено прежнее значение';
+          flashError = flashError ? flashError + ' ' + msg : msg;
         }
         if (lowerBlocked) {
           flashError =
@@ -1863,6 +1939,7 @@ export function createApp(file, fetchImpl, opts) {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
         // No noteSeen: a tap must not write the device row. Peer addresses stay on the sidecar.
         // Every response is one log line: status and duration. The token and the infohash are not logged.
+        await readyDhtStats();
         const started = Date.now();
         const device = String(req.headers['x-device-id'] || '');
         let logged = false;
@@ -1888,8 +1965,9 @@ export function createApp(file, fetchImpl, opts) {
           if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return finish(400, { error: 'bad_infohash' });
           if (!cfg.enabled) return finish(503, { error: 'disabled' });
           const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
-          if (dhtRate && !dhtRate.allow(rateKey)) {
-            const wait = String(dhtRate.retryAfter(rateKey) || 1);
+          const gate = dhtLimiter(dhtPerMinute(state.settings, env));
+          if (gate && !gate.allow(rateKey)) {
+            const wait = String(gate.retryAfter(rateKey) || 1);
             res.setHeader('retry-after', wait);
             return finish(429, { error: 'rate' });
           }
@@ -2099,7 +2177,8 @@ export function listen(file, port, fetchImpl, opts) {
   const server = createServer(app);
   // BILLING_HOST=127.0.0.1 for host+tunnel; 0.0.0.0 inside Docker (Caddy reaches it on the compose network)
   const host = (opts && opts.host) || process.env.BILLING_HOST || '0.0.0.0';
-  return new Promise((resolve) => server.listen(port, host, () => resolve(server)));
+  // Load saved DHT counters before the first request, so a restart does not serve an empty chart.
+  return readyDhtStats().then(() => new Promise((resolve) => server.listen(port, host, () => resolve(server))));
 }
 
 export async function refreshMissingProfiles(file, token, net, opts) {

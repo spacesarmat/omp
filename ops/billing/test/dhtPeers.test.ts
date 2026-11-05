@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dhtConfig, dhtPeersLimitConfig, probeDhtSidecar, publicDhtBody, queryDhtPeers } from '../src/dhtPeers.mjs';
+import { dhtConfig, dhtPeersLimitConfig, dhtPerMinute, DHT_WINDOW_MS, probeDhtSidecar, publicDhtBody, queryDhtPeers, validDhtPerMinute } from '../src/dhtPeers.mjs';
+import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 
 const HASH = 'ab'.repeat(20);
 const TOKEN = 'cd'.repeat(16);
@@ -31,7 +32,21 @@ describe('billing DHT peer contract', () => {
     expect(on.enabled).toBe(true);
     expect(on.url).toBe('http://dht-peers:8788');
     expect(dhtPeersLimitConfig({}).max).toBe(30);
+    expect(dhtPeersLimitConfig({}).windowMs).toBe(DHT_WINDOW_MS);
+    expect(dhtPeersLimitConfig({ BILLING_DHT_WINDOW_SEC: '1' }).windowMs).toBe(60 * 1000);
     expect(dhtPeersLimitConfig({ BILLING_DHT_DEVICE_MAX: '0' }).max).toBe(0);
+    expect(dhtPerMinute(null, {})).toBe(30);
+    expect(dhtPerMinute({}, { BILLING_DHT_DEVICE_MAX: '8' })).toBe(8);
+    expect(dhtPerMinute({ dhtPerMinute: 12 }, { BILLING_DHT_DEVICE_MAX: '8' })).toBe(12);
+    expect(dhtPerMinute({ dhtPerMinute: 0 }, { BILLING_DHT_DEVICE_MAX: '8' })).toBe(0);
+    expect(validDhtPerMinute('1.5')).toBe(false);
+    expect(validDhtPerMinute('1001')).toBe(false);
+    expect(mergeSettings({ dhtPerMinute: 12 }, { dhtPerMinute: '4' }).dhtPerMinute).toBe(4);
+    expect(mergeSettings({ dhtPerMinute: 12 }, { dhtPerMinute: 'nope' }).dhtPerMinute).toBe(12);
+    expect(mergeSettings({}, { priceRub: '1' }).dhtPerMinute).toBeUndefined();
+    expect(publicAdminSettings({}, { BILLING_DHT_DEVICE_MAX: '8' }).dhtPerMinute).toBe(8);
+    expect(publicAdminSettings({ dhtPerMinute: 4 }, { BILLING_DHT_DEVICE_MAX: '8' }).dhtPerMinute).toBe(4);
+    expect(publicAdminSettings({}, {}).dhtPerMinute).toBe(30);
   });
 
   it('drops peer addresses and skips the sidecar when disabled or the hash is bad', async () => {
