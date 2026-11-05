@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Admin: the committed ops/billing/public bundle is rebuilt, so the DHT tab is in it (request /admin/api/dht). The billing CI job removes hashed assets, rebuilds admin, and fails if public has drifted from the sources. No migration
 - [tech] deploy.sh syncs docker-compose.yml, ops/vps/dht-peers, and Caddyfile.nuc with the rest of the backup and rollback set. Before applying it runs docker compose config -q and does not print that output, because the rendered file expands variables from .env. It rebuilds and recreates only billing, and dht-peers with the dht profile, when their own files change. A docker-compose.yml change recreates billing without an image rebuild, and recreates dht-peers only when that container is already running. A stopped sidecar stays stopped. A ref with no dht-peers directory still deploys and leaves the sidecar on disk unchanged. A later rollback compares the omp-dht-peers image and running state, not only the files, and stops that container by name when the restored compose has no such service. On the NUC a Caddyfile.nuc change reloads Caddy; the file is copied with cp so the bind-mount inode stays. Other containers, .env, and data directories are left alone. A failed health check restores these files and images. docker-compose.nuc.yml is still copied by hand
 
 ## 0.20.8-beta.7
