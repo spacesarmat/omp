@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { addCategories } from '../../../src/lib/categoryGuess';
 import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
+import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
@@ -37,9 +38,16 @@ const PHONE_PLAY = 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 
 
 const pageLink = (r: SourceResult): string => (/^https?:\/\//i.test(r.detailUrl || '') ? r.detailUrl! : '');
 
+/** A manual seed check needs an infohash and at least one tracker address in the magnet. */
+export function seedCheckable(r: SourceResult): boolean {
+  const hash = infohashOf(r);
+  return !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
+}
+
 /**
  * A found release, compact: the poster down the whole card; the short title with its meta, quality chips,
- * «source · size · seeds», the date with the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ». A tap on the
+ * «source · size · seeds · date», then the round «＋», «▶ телефон» (when onPhone is given) and «▶ ТВ»,
+ * with «Проверить сиды» on the left of «＋» when the release has a tracker address. A tap on the
  * card opens «Подробнее»: the full tracker title, the category, the same actions as full buttons and «Открыть на сайте».
  * The first chip is the kind of the release («Фильм», «Сериал · S02 · 1-8 из 8»), none when it is unknown.
  */
@@ -63,8 +71,9 @@ export function ResultCard(p: {
   const live = useSeedRow(r);
   const seeds = phoneSeedBits(live.view);
   const probe = useSeedProbe(r);
-  const seedText = probe.text(seeds.text);
-  const showCheck = !!seeds.text || probe.phase !== 'idle';
+  const checkable = seedCheckable(r);
+  const seedText = !checkable && (seeds.text || probe.phase !== 'idle') ? t('sources.seedsNoTracker') : probe.text(seeds.text);
+  const showCheck = checkable && (!!seeds.text || probe.phase !== 'idle');
   const [open, setOpen] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
@@ -93,22 +102,16 @@ export function ResultCard(p: {
             <span class="m-src-badge">{sourceBadge(r)}</span>
             <span class="m-rc-meta-text">
               {[sizeText(r), seedText].filter(Boolean).join(' · ')}
+              {p.busy === 'link' ? (
+                <span class="m-rc-date" role="status">{(sizeText(r) || seedText ? ' · ' : '') + t('add.gettingLink')}</span>
+              ) : date ? (
+                <span class="m-rc-date">{(sizeText(r) || seedText ? ' · ' : '') + date}</span>
+              ) : null}
               {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
-          {showCheck && (
-            <div class="m-rc-seed">
-              <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode={p.seedCode} />
-            </div>
-          )}
           <div class="m-rc-bottom">
-            {p.busy === 'link' ? (
-              <span class="m-rc-date m-small m-muted" role="status">
-                {t('add.gettingLink')}
-              </span>
-            ) : (
-              <span class="m-rc-date m-small m-muted">{date}</span>
-            )}
+            {showCheck && <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode={p.seedCode} />}
             <button
               type="button"
               class="m-rc-btn"
@@ -155,11 +158,9 @@ export function ResultCard(p: {
               {p.flag && <span class="m-flag">{p.flag}</span>}
               <span class="m-src-badge">{sourceBadge(r)}</span>
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
-                {sizeText(r)}
-                {seedText || showCheck ? ' · ' : ''}
-                <SeedCheck r={r} fallback={seeds.text} probe={probe} testCode="PD31.1" live={seeds.mode === 'live'} />
-                {date ? ' · ' + date : ''}
+                {[sizeText(r), seedText, date].filter(Boolean).join(' · ')}
                 {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
+                {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
               </span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>
@@ -187,20 +188,27 @@ export function ResultCard(p: {
               {t('add.gettingLink')}
             </div>
           )}
-          <div class="m-sheet-row">
-            <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
-              {t('common.add')}
-            </button>
-            {showPhone && (
-              <button type="button" class={book ? 'm-btn m-btn-primary' : 'm-btn m-btn-secondary'} disabled={!!p.busy} onClick={act(p.onPhone!)}>
-                {phoneLabel}
-              </button>
+          <div class="m-rc-sheet-actions">
+            {showCheck && (
+              <div class="m-rc-sheet-check">
+                <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode="PD31.1" />
+              </div>
             )}
-            {showTv && (
-              <button type="button" class={book ? 'm-btn m-btn-secondary' : 'm-btn m-btn-primary'} disabled={!!p.busy} onClick={act(p.onWatch)}>
-                {t('add.onTv')}
+            <div class="m-sheet-row">
+              <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
+                {t('common.add')}
               </button>
-            )}
+              {showPhone && (
+                <button type="button" class={book ? 'm-btn m-btn-primary' : 'm-btn m-btn-secondary'} disabled={!!p.busy} onClick={act(p.onPhone!)}>
+                  {phoneLabel}
+                </button>
+              )}
+              {showTv && (
+                <button type="button" class={book ? 'm-btn m-btn-secondary' : 'm-btn m-btn-primary'} disabled={!!p.busy} onClick={act(p.onWatch)}>
+                  {t('add.onTv')}
+                </button>
+              )}
+            </div>
           </div>
         </Sheet>
       )}
