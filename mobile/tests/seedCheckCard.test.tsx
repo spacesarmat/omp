@@ -60,7 +60,14 @@ describe('seed check on a result card', () => {
     expect(css).toMatch(/appearance:\s*none/);
     expect(css).toMatch(/\.m-rc-bottom \.seed-check,\s*\.m-rc-sheet-check \.seed-check\s*\{[^}]*height:\s*40px/);
     expect(css).toContain('@container rc (max-width: 250px)');
-    expect(css).toContain('.m-rc-bottom .seed-check-short { display: inline; }');
+    const narrow = css.slice(css.indexOf('@media (max-width: 400px)'), css.indexOf('@media (max-width: 400px)') + 240);
+    expect(narrow).toContain('.m-rc-bottom .seed-check-long { display: none; }');
+    expect(narrow).toContain('.m-rc-bottom .seed-check-short { display: inline; }');
+    expect(css).toMatch(/\.m-rc-bottom \{[^}]*min-width:\s*0/);
+    expect(css).toMatch(/\.m-rc-bottom \{[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.m-rc-text \{[^}]*overflow:\s*hidden/);
+    expect(css).toMatch(/\.m-rc-bottom \.seed-check \{[^}]*flex:\s*0 1 auto/);
+    expect(css).toMatch(/\.m-rc-bottom \.seed-check \{[^}]*min-width:\s*0/);
 
     act(() => render(<ResultCard r={row} category="tv" seedCode="P07.6" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
     expect(el.querySelector('.m-rc-seed')).toBeNull();
@@ -131,12 +138,16 @@ describe('seed check on a result card', () => {
     setDhtPeersContext(() => ({ http, client: null }));
     expect(seedCheckable(bare)).toBe(true);
 
-    act(() => render(<ResultCard r={bare} category="tv" seedCode="P07.6" onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
-    const bottom = el.querySelector('.m-rc-bottom')!;
+    act(() => render(<ResultCard r={bare} category="tv" seedCode="P07.6" onPhone={() => {}} onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const bottom = el.querySelector('.m-rc-text .m-rc-bottom')!;
     const btn = bottom.querySelector('.seed-check') as HTMLButtonElement;
     expect(btn).toBe(bottom.firstElementChild);
+    expect(bottom.querySelectorAll('.m-rc-btn').length).toBe(3);
+    expect(btn.nextElementSibling!.classList.contains('m-rc-btn')).toBe(true);
+    expect(btn.className).toContain('tm');
     expect(btn.getAttribute('data-code')).toBe('P07.6');
     expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
+    expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
     expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
     act(() => btn.click());
     expect(probeSeeds).not.toHaveBeenCalled();

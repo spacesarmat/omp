@@ -1441,7 +1441,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-rc { position: relative; flex-direction: row; align-items: stretch; gap: 10px; padding: 10px 10px 10px 10px; }
 .m-rc-open { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: none; border-radius: inherit; background: none; }
 .m-rc > .m-rel-thumb { width: 64px; min-width: 64px; height: 96px; border-radius: 8px; pointer-events: none; }
-.m-rc-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; pointer-events: none; container-type: inline-size; container-name: rc; }
+.m-rc-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; pointer-events: none; overflow: hidden; container-type: inline-size; container-name: rc; }
 .m-rc .m-result-title { font-size: 14px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .m-rc .m-rel-chips { flex-wrap: nowrap; overflow: hidden; }
 .m-rc .m-rel-chips .m-badge-inline { flex-shrink: 0; font-size: 10px; line-height: 14px; }
@@ -1453,13 +1453,20 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .seed-approx { opacity: 0.72; }
 .seed-live { display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--ok, #3fb950); vertical-align: middle; }
-.m-rc-bottom { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; }
-/* The seed chip shares the action row, left of «+», and matches the round buttons' height.
-   Under 250px of text column (a 320px phone) the full label does not fit, so it becomes «Сиды». */
+.m-rc-bottom { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; min-width: 0; max-width: 100%; overflow: hidden; }
+/* The seed chip stays left of «+» and the same height as the round buttons, inside the text column.
+   A 320px phone with «+», phone and TV leaves about 50px. The full label does not fit there, and
+   Chrome 90-104 ignores @container, so a plain media query switches to «Сиды». The chip can still
+   shrink, so it never paints over the poster. */
 .m-rc-bottom .seed-check,
-.m-rc-sheet-check .seed-check { height: 40px; min-height: 40px; margin-left: 0; border-radius: 20px; flex-shrink: 0; }
+.m-rc-sheet-check .seed-check { height: 40px; min-height: 40px; margin-left: 0; border-radius: 20px; }
+.m-rc-bottom .seed-check { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; padding-left: 8px; padding-right: 8px; }
 .seed-check-short { display: none; }
 @container rc (max-width: 250px) {
+  .m-rc-bottom .seed-check-long { display: none; }
+  .m-rc-bottom .seed-check-short { display: inline; }
+}
+@media (max-width: 400px) {
   .m-rc-bottom .seed-check-long { display: none; }
   .m-rc-bottom .seed-check-short { display: inline; }
 }
