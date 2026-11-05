@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { homePayload } from '../src/adminApi.mjs';
 import { botReply, reminderMessage } from '../src/bot.mjs';
 import {
@@ -683,8 +683,7 @@ describe('reminder runner', () => {
     expect((await readState(file)).subscriptions[0].reminders).toBeUndefined();
     const on = capture();
     stops.push(startReminders(file, on.net, { env: {}, firstMs: 1, everyMs: 5, now: clock }));
-    await new Promise((r) => setTimeout(r, 80));
-    expect(on.sent).toHaveLength(1);
+    await vi.waitFor(() => expect(on.sent).toHaveLength(1));
     expect(on.sent[0].text).toContain('заканчивается завтра');
   });
 });

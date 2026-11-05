@@ -108,7 +108,7 @@ jobs:
       - run: npm ci
       - name: Install billing dependencies
         working-directory: ops/billing
-        run: npm install
+        run: npm ci
       - name: Install admin dependencies
         working-directory: ops/billing/admin
         run: npm ci
