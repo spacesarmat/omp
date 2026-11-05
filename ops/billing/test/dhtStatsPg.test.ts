@@ -23,7 +23,7 @@ describe('DHT stats persistence', () => {
     noteDhtRequest({ status: 401, ms: 4, reason: 'token=SECRET infohash=' + HASH }, now - 60 * 1000);
     noteDhtRequest({ status: 502, ms: 500, reason: 'down' }, now);
     noteDhtRequest({ status: 200, ms: 100, peers: 1 }, now - 25 * 60 * 60 * 1000);
-    await flushDhtStats();
+    await flushDhtStats(now);
 
     const dumped = await store.query('SELECT reason FROM dht_recent_error ORDER BY pos');
     const raw = JSON.stringify(dumped.rows);
@@ -50,5 +50,18 @@ describe('DHT stats persistence', () => {
     expect(view.errors.map((e) => e.reason)).toEqual(['sidecar не ответил', 'ошибка']);
     expect(JSON.stringify(view)).not.toContain('SECRET');
     expect(JSON.stringify(view)).not.toContain(HASH);
+  });
+
+  it('drops a stored minute once it is older than 24h even when no new request arrived', async () => {
+    const now = Date.now();
+    const store = await testStore();
+    bindDhtStats(store.dht);
+    await readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 20, peers: 1 }, now - 30 * 60 * 1000);
+    await flushDhtStats(now);
+    expect(Number((await store.query('SELECT COUNT(*)::int AS n FROM dht_minute')).rows[0].n)).toBe(1);
+    await flushDhtStats(now + 25 * 60 * 60 * 1000);
+    expect(Number((await store.query('SELECT COUNT(*)::int AS n FROM dht_minute')).rows[0].n)).toBe(0);
+    expect(dhtStatsView(now + 25 * 60 * 60 * 1000).requests24h).toBe(0);
   });
 });

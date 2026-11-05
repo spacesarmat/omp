@@ -1,10 +1,18 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { dhtStatsView, noteDhtRequest, resetDhtStats } from '../src/dhtStats.mjs';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { bindDhtStats, dhtStatsView, flushDhtStats, noteDhtRequest, readyDhtStats, resetDhtStats, shutdownDhtStats } from '../src/dhtStats.mjs';
 
 const HOUR = 60 * 60 * 1000;
 
 describe('DHT admin counters', () => {
-  beforeEach(() => resetDhtStats());
+  beforeEach(() => {
+    resetDhtStats();
+    bindDhtStats(null);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    resetDhtStats();
+    bindDhtStats(null);
+  });
 
   it('counts 24h requests, the share with peers, and the average time', () => {
     const now = 1_800_000_000_000;
@@ -81,5 +89,104 @@ describe('DHT admin counters', () => {
     expect(view.errors4xx24h).toBe(1);
     expect(view.errors5xx24h).toBe(1);
     expect(JSON.stringify(view)).not.toContain(hash);
+  });
+
+  it('merges counts that arrive while a load is in flight or after a failed load', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let calls = 0;
+    bindDhtStats({
+      async load() {
+        calls += 1;
+        if (calls === 1) {
+          await gate;
+          throw new Error('down');
+        }
+        return {
+          minutes: [{ minute: 1, count: 4, withPeers: 0, sumMs: 40, errors: 0, errors4xx: 0, errors5xx: 0, hist: [] }],
+          errors: [],
+        };
+      },
+      async save() {},
+    });
+    const first = readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 10, peers: 2 }, 60 * 1000);
+    release();
+    await first;
+    expect(dhtStatsView(120 * 1000).requests24h).toBe(1);
+    await readyDhtStats();
+    const view = dhtStatsView(120 * 1000);
+    expect(view.requests24h).toBe(5);
+    expect(view.withPeers24h).toBe(1);
+  });
+
+  it('retries a failed save and does not retry a read-only refusal', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    let mode = 'fail';
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save() {
+        calls += 1;
+        if (mode === 'fail') throw new Error('down');
+        if (mode === 'ro') throw Object.assign(new Error('ro'), { code: 'READ_ONLY' });
+      },
+    });
+    await readyDhtStats();
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, Date.now());
+    await flushDhtStats();
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    mode = 'ro';
+    noteDhtRequest({ status: 200, ms: 10, peers: 1 }, Date.now());
+    await flushDhtStats();
+    const seen = calls;
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(calls).toBe(seen);
+  });
+
+  it('flushes pending counts on shutdown and stops waiting when load never ends', async () => {
+    const saved: { minutes: { count: number }[] }[] = [];
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save(snap: { minutes: { count: number }[] }) {
+        saved.push(snap);
+      },
+    });
+    noteDhtRequest({ status: 200, ms: 15, peers: 1 }, Date.now());
+    await shutdownDhtStats(2000);
+    expect(saved.length).toBe(1);
+    expect(saved[0].minutes.reduce((sum, row) => sum + row.count, 0)).toBe(1);
+
+    resetDhtStats();
+    bindDhtStats({
+      load() {
+        return new Promise(() => {});
+      },
+      async save() {},
+    });
+    const started = Date.now();
+    await shutdownDhtStats(40);
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it('arms an idle prune so a quiet process still drops old minutes', async () => {
+    const spy = vi.spyOn(global, 'setInterval');
+    bindDhtStats({
+      async load() {
+        return { minutes: [], errors: [] };
+      },
+      async save() {},
+    });
+    await readyDhtStats();
+    expect(spy.mock.calls.map((call) => call[1])).toContain(60 * 1000);
+    spy.mockRestore();
   });
 });

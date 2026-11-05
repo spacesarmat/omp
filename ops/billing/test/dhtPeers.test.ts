@@ -60,7 +60,7 @@ describe('billing DHT peer contract', () => {
 
     upstream.calls = 0;
     const off = await queryDhtPeers(dhtConfig({}), HASH, upstream);
-    expect(off).toEqual({ status: 503, body: { error: 'disabled' } });
+    expect(off).toEqual({ status: 503, body: { error: 'disabled' }, upstream: 'disabled' });
     const bad = await queryDhtPeers(dhtConfig({ BILLING_DHT_URL: 'http://dht-peers:8788', BILLING_DHT_TOKEN: TOKEN }), 'nope', upstream);
     expect(bad.status).toBe(400);
     expect(upstream.calls).toBe(0);
@@ -85,7 +85,7 @@ describe('billing DHT peer contract', () => {
         throw new Error('refused');
       },
     );
-    expect(down).toEqual({ status: 502, body: { error: 'down' } });
+    expect(down).toEqual({ status: 502, body: { error: 'down' }, upstream: 'down' });
 
     const limited = await queryDhtPeers(
       dhtConfig({ BILLING_DHT_URL: 'http://dht-peers:8788', BILLING_DHT_TOKEN: TOKEN }),

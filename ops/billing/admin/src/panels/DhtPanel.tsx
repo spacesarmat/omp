@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
+import { createLoadGate } from '@/lib/dhtLoad';
+import { probeText, type DhtProbeResult } from '@/lib/dhtProbe';
 import { when } from '@/lib/text';
 
 type DhtError = { at: number; status: number; reason: string };
@@ -32,7 +34,7 @@ type DhtPayload = {
   stats?: DhtStats;
 };
 
-type ProbeResult = { ok?: boolean; auth?: boolean; status?: number; peers?: number; ms?: number; error?: string };
+type ProbeResult = DhtProbeResult;
 
 const REFRESH_MS = 20000;
 
@@ -84,23 +86,18 @@ function Bars({ rows, field, label, color }: { rows: DhtPoint[]; field: 'request
   );
 }
 
-function probeText(row: ProbeResult) {
-  if (row.auth === false) return 'Нужен вход';
-  if (row.error === 'rate' || row.status === 429) return 'лимит проверки - это лимит кнопки, не сбой DHT';
-  if (row.ok) return 'ок, пиров ' + (row.peers || 0) + ', ' + (row.ms || 0) + ' мс';
-  if (row.status === 503) return 'проверка: sidecar выключен (' + (row.ms || 0) + ' мс)';
-  return 'проверка не прошла (' + (row.status || 0) + ', ' + (row.ms || 0) + ' мс)';
-}
-
 export function DhtPanel({ csrf }: { csrf: string }) {
   const [data, setData] = useState<DhtPayload | null>(null);
   const [err, setErr] = useState('');
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [probing, setProbing] = useState(false);
+  const loads = useRef(createLoadGate());
 
   const load = useCallback(() => {
+    const id = loads.current.next();
     return api<DhtPayload>('/admin/api/dht')
       .then((res) => {
+        if (!loads.current.isCurrent(id)) return;
         if (res.auth === false) {
           setErr('Нужен вход');
           return;
@@ -109,21 +106,16 @@ export function DhtPanel({ csrf }: { csrf: string }) {
         setData(res);
       })
       .catch((e) => {
+        if (!loads.current.isCurrent(id)) return;
         setErr(e instanceof Error ? e.message : 'Не удалось загрузить DHT');
       });
   }, []);
 
   useEffect(() => {
-    let stop = false;
-    const run = () => {
-      void load().then(() => {
-        if (stop) return;
-      });
-    };
-    run();
-    const timer = window.setInterval(run, REFRESH_MS);
+    void load();
+    const timer = window.setInterval(() => void load(), REFRESH_MS);
     return () => {
-      stop = true;
+      loads.current.next();
       window.clearInterval(timer);
     };
   }, [load]);

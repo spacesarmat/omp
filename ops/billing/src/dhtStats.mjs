@@ -10,6 +10,10 @@ const DAY_MS = 24 * 60 * MINUTE_MS;
 const MAX_ERRORS = 10;
 const SLOT_MINUTES = 10;
 const FLUSH_MS = 1000;
+const IDLE_PRUNE_MS = 60 * 1000;
+const SHUTDOWN_MS = 2000;
+/** After a failed save. Each step is longer, then it stays at the last one. Read-only does not retry. */
+const RETRY_MS = [1000, 2000, 5000, 15000, 30000];
 
 /** Upper edge of each latency bin, milliseconds. A sample of N lands in the first edge that is >= N. */
 const LAT_EDGES = [
@@ -37,7 +41,25 @@ let dirtyMinutes = new Set();
 let errorsDirty = false;
 let dirty = false;
 let flushTimer = null;
+let retryTimer = null;
+let idleTimer = null;
 let flushing = null;
+let saveFails = 0;
+
+function clearFlushTimer() {
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
+}
+
+function clearRetryTimer() {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
+}
+
+function clearIdleTimer() {
+  if (idleTimer) clearInterval(idleTimer);
+  idleTimer = null;
+}
 
 export function resetDhtStats() {
   buckets = Object.create(null);
@@ -46,12 +68,15 @@ export function resetDhtStats() {
   dirtyMinutes = new Set();
   errorsDirty = false;
   dirty = false;
-  if (flushTimer) clearTimeout(flushTimer);
-  flushTimer = null;
+  saveFails = 0;
+  clearFlushTimer();
+  clearRetryTimer();
+  clearIdleTimer();
 }
 
 /** Attach or detach the Postgres adapter. Memory counters stay until resetDhtStats or a load. */
 export function bindDhtStats(next) {
+  clearIdleTimer();
   repo = next && typeof next.load === 'function' && typeof next.save === 'function' ? next : null;
   loaded = !repo;
   loadPromise = null;
@@ -106,12 +131,33 @@ function reasonOf(status, code) {
 function scheduleFlush() {
   if (!repo || !loaded) return;
   dirty = true;
-  if (flushing || flushTimer) return;
+  // A backoff retry already owns the next write. A new count stays dirty until that attempt.
+  if (flushing || flushTimer || retryTimer) return;
   flushTimer = setTimeout(() => {
     flushTimer = null;
     void flushDhtStats();
   }, FLUSH_MS);
   if (flushTimer.unref) flushTimer.unref();
+}
+
+function scheduleRetry() {
+  if (!repo || !loaded || retryTimer) return;
+  const wait = RETRY_MS[Math.min(saveFails, RETRY_MS.length - 1)];
+  saveFails += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void flushDhtStats();
+  }, wait);
+  if (retryTimer.unref) retryTimer.unref();
+}
+
+/** Quiet process: drop minutes older than 24h even when no new request arrives. */
+function armIdlePrune() {
+  if (idleTimer || !repo || !loaded) return;
+  idleTimer = setInterval(() => {
+    void flushDhtStats(Date.now());
+  }, IDLE_PRUNE_MS);
+  if (idleTimer.unref) idleTimer.unref();
 }
 
 /** Drop minutes that cannot overlap the last 24 hours ending at `now`. */
@@ -148,7 +194,43 @@ function takeBucket(at) {
   return { key, row };
 }
 
+function rowFromSnap(src) {
+  return {
+    count: intIn(src.count, 0, 1e12),
+    withPeers: intIn(src.withPeers, 0, 1e12),
+    sumMs: intIn(src.sumMs, 0, 1e15),
+    errors: intIn(src.errors, 0, 1e12),
+    errors4xx: intIn(src.errors4xx, 0, 1e12),
+    errors5xx: intIn(src.errors5xx, 0, 1e12),
+    hist: normalizeHist(src.hist),
+  };
+}
+
+function addRow(into, extra) {
+  into.count += extra.count;
+  into.withPeers += extra.withPeers;
+  into.sumMs += extra.sumMs;
+  into.errors += extra.errors;
+  into.errors4xx += extra.errors4xx || 0;
+  into.errors5xx += extra.errors5xx || 0;
+  const hist = normalizeHist(extra.hist);
+  for (let i = 0; i < into.hist.length; i++) into.hist[i] += hist[i];
+}
+
+function safeError(e) {
+  const text = e && typeof e.reason === 'string' ? e.reason : '';
+  const safe = text === 'ошибка биллинга' || text === 'ошибка' || Object.values(REASONS).indexOf(text) >= 0;
+  if (!safe) return null;
+  return { at: intIn(e.at, 0, 1e15), status: intIn(e.status, 0, 599), reason: text };
+}
+
+/**
+ * DB snapshot plus counts that arrived while the load was in flight (or after a failed load).
+ * Replacing would drop those counts. Memory holds only the delta: flush waits until loaded.
+ */
 function applySnapshot(snap) {
+  const pendingBuckets = buckets;
+  const pendingErrors = errors.slice();
   buckets = Object.create(null);
   errors = [];
   latest = 0;
@@ -160,29 +242,33 @@ function applySnapshot(snap) {
     const src = minutes[i];
     const minute = Math.floor(Number(src.minute));
     if (!Number.isFinite(minute)) continue;
-    const row = {
-      count: intIn(src.count, 0, 1e12),
-      withPeers: intIn(src.withPeers, 0, 1e12),
-      sumMs: intIn(src.sumMs, 0, 1e15),
-      errors: intIn(src.errors, 0, 1e12),
-      errors4xx: intIn(src.errors4xx, 0, 1e12),
-      errors5xx: intIn(src.errors5xx, 0, 1e12),
-      hist: normalizeHist(src.hist),
-    };
-    buckets[String(minute)] = row;
+    buckets[String(minute)] = rowFromSnap(src);
     const at = minute * MINUTE_MS;
     if (at > latest) latest = at;
   }
   const list = snap && Array.isArray(snap.errors) ? snap.errors : [];
   for (let i = 0; i < list.length && errors.length < MAX_ERRORS; i++) {
-    const e = list[i];
-    const reason = reasonOf(intIn(e.status, 0, 599), '');
-    // Reload only labels we ourselves wrote. A stray row cannot bring a hash back.
-    const text = typeof e.reason === 'string' ? e.reason : '';
-    const safe = text === 'ошибка биллинга' || text === 'ошибка' || Object.values(REASONS).indexOf(text) >= 0;
-    if (!safe) continue;
-    errors.push({ at: intIn(e.at, 0, 1e15), status: intIn(e.status, 0, 599), reason: text });
+    const row = safeError(list[i]);
+    if (row) errors.push(row);
   }
+  const pendingKeys = Object.keys(pendingBuckets);
+  for (let i = 0; i < pendingKeys.length; i++) {
+    const key = pendingKeys[i];
+    const extra = pendingBuckets[key];
+    if (!extra || !extra.count) continue;
+    if (!buckets[key]) buckets[key] = extra;
+    else addRow(buckets[key], extra);
+    dirtyMinutes.add(key);
+    const at = Number(key) * MINUTE_MS;
+    if (at > latest) latest = at;
+  }
+  if (pendingErrors.length) {
+    const merged = errors.concat(pendingErrors);
+    merged.sort((a, b) => a.at - b.at);
+    errors = merged.slice(Math.max(0, merged.length - MAX_ERRORS));
+    errorsDirty = true;
+  }
+  if (dirtyMinutes.size || errorsDirty) dirty = true;
 }
 
 /** Load once. Later calls wait for the same load. A failure leaves memory as it is and retries next time. */
@@ -194,6 +280,8 @@ export async function readyDhtStats() {
       .then((snap) => {
         applySnapshot(snap);
         loaded = true;
+        armIdlePrune();
+        if (dirty || dirtyMinutes.size || errorsDirty) scheduleFlush();
       })
       .catch(() => {
         loadPromise = null;
@@ -217,18 +305,25 @@ function serializeMinute(key, row) {
   };
 }
 
-/** Write dirty minutes and, when the error list changed, the last 10 labels. Safe to call often. */
-export async function flushDhtStats() {
-  if (flushTimer) {
-    clearTimeout(flushTimer);
-    flushTimer = null;
-  }
+/**
+ * Write dirty minutes and, when the error list changed, the last 10 labels.
+ * `now` is the clock for the 24h cutoff (tests pass one). The default is the wall clock,
+ * the same cutoff the chart uses, so a quiet process still drops expired rows.
+ */
+export async function flushDhtStats(now) {
+  const at = Number(now) || Date.now();
+  clearFlushTimer();
+  // This attempt replaces a pending backoff. A new failure schedules a fresh one.
+  clearRetryTimer();
   if (!repo || !loaded) return;
   if (flushing) {
     await flushing;
-    if (dirty || dirtyMinutes.size || errorsDirty) return flushDhtStats();
+    if (dirty || dirtyMinutes.size || errorsDirty) return flushDhtStats(at);
     return;
   }
+  // Same window as dhtStatsView: minutes older than 24h leave memory and then the table.
+  prune(at);
+  clearFlushTimer();
   if (!dirty && !dirtyMinutes.size && !errorsDirty) return;
   const minutes = [];
   for (const key of dirtyMinutes) {
@@ -239,22 +334,52 @@ export async function flushDhtStats() {
   const savedErrors = errorsDirty ? errors.map((e) => ({ at: e.at, status: e.status, reason: e.reason })) : null;
   errorsDirty = false;
   dirty = false;
-  const pruneBefore = minuteOf((latest || Date.now()) - DAY_MS);
+  const pruneBefore = minuteOf(at - DAY_MS);
+  const pruneAfter = minuteOf(at);
   let failed = false;
+  let retry = false;
   flushing = repo
-    .save({ minutes, errors: savedErrors, pruneBefore })
+    .save({ minutes, errors: savedErrors, pruneBefore, pruneAfter })
     .catch((e) => {
       failed = true;
       dirty = true;
       for (let i = 0; i < minutes.length; i++) dirtyMinutes.add(String(minutes[i].minute));
       if (savedErrors) errorsDirty = true;
-      if (!(e && e.code === 'READ_ONLY')) process.stderr.write('dht stats save failed\n');
+      // Cutover refuses writes on purpose. Retrying would only fill the log.
+      if (e && e.code === 'READ_ONLY') return;
+      retry = true;
+      process.stderr.write('dht stats save failed\n');
     })
     .finally(() => {
       flushing = null;
     });
   await flushing;
-  if (!failed && (dirty || dirtyMinutes.size || errorsDirty)) scheduleFlush();
+  if (failed) {
+    if (retry) scheduleRetry();
+    return;
+  }
+  saveFails = 0;
+  if (dirty || dirtyMinutes.size || errorsDirty) scheduleFlush();
+}
+
+/** SIGTERM / SIGINT: write what is still in memory, then give up after `timeoutMs`. */
+export async function shutdownDhtStats(timeoutMs) {
+  const limit = Math.floor(Number(timeoutMs));
+  const wait = Number.isFinite(limit) && limit > 0 ? Math.min(10000, limit) : SHUTDOWN_MS;
+  let timer = null;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(resolve, wait);
+  });
+  const work = (async () => {
+    await readyDhtStats();
+    clearRetryTimer();
+    await flushDhtStats(Date.now());
+  })();
+  try {
+    await Promise.race([work, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /** One finished /v1/dht-peers response, or the admin probe. `now` is the timestamp (tests pass a clock). */

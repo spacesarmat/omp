@@ -110,10 +110,16 @@ export function mapDhtUpstream(status, text, headers) {
     if (!pub) return { status: 502, body: { error: 'down' } };
     return { status: 200, body: pub };
   }
-  if (status === 400) return { status: 400, body: { error: 'bad_infohash' } };
-  if (status === 429) return { status: 429, body: { error: 'rate' }, retryAfter: retrySeconds(headers, body) };
-  if (status === 503) return { status: 503, body: { error: 'disabled' } };
-  return { status: 502, body: { error: 'down' } };
+  if (status === 400) return { status: 400, body: { error: 'bad_infohash' }, upstream: 'down' };
+  // 429 from the sidecar means it is already in a lookup (busy), not the billing device cap.
+  if (status === 429) return { status: 429, body: { error: 'rate' }, retryAfter: retrySeconds(headers, body), upstream: 'sidecar_rate' };
+  // 503 + error down is "not bootstrapped yet". Any other 503 is "turned off".
+  // The public body stays `disabled` so the phone keeps treating every 503 as "skip".
+  if (status === 503) {
+    const upstream = body && body.error === 'down' ? 'not_ready' : 'disabled';
+    return { status: 503, body: { error: 'disabled' }, upstream };
+  }
+  return { status: 502, body: { error: 'down' }, upstream: 'down' };
 }
 
 /**
@@ -162,8 +168,8 @@ export async function probeDhtSidecar(cfg, fetchImpl) {
  */
 export async function queryDhtPeers(cfg, infohash, fetchImpl) {
   const hash = String(infohash || '').trim().toLowerCase();
-  if (!/^[0-9a-f]{40}$/.test(hash)) return { status: 400, body: { error: 'bad_infohash' } };
-  if (!cfg || !cfg.enabled) return { status: 503, body: { error: 'disabled' } };
+  if (!/^[0-9a-f]{40}$/.test(hash)) return { status: 400, body: { error: 'bad_infohash' }, upstream: 'down' };
+  if (!cfg || !cfg.enabled) return { status: 503, body: { error: 'disabled' }, upstream: 'disabled' };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), cfg.timeoutMs);
   try {
@@ -176,7 +182,7 @@ export async function queryDhtPeers(cfg, infohash, fetchImpl) {
     const text = await res.text();
     return mapDhtUpstream(res.status, text, res.headers);
   } catch (e) {
-    return { status: 502, body: { error: 'down' } };
+    return { status: 502, body: { error: 'down' }, upstream: 'down' };
   } finally {
     clearTimeout(timer);
   }

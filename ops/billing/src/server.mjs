@@ -132,7 +132,7 @@ import {
   sourceEnabled,
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
-import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats } from './dhtStats.mjs';
+import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
@@ -869,30 +869,34 @@ export function createApp(file, fetchImpl, opts) {
     await readyDhtStats();
     const key = String((admin && admin.id) || 'admin').slice(0, 80);
     if (!dhtProbeRate.allow(key)) {
-      return { http: 429, body: { ok: false, status: 429, peers: 0, ms: 0, error: 'rate' } };
+      return { http: 429, body: { ok: false, status: 429, peers: 0, ms: 0, error: 'rate', reason: 'probe_rate' } };
     }
     const started = Date.now();
     const cfg = dhtConfig(env);
     let status = 503;
     let peers = 0;
+    let reason = 'disabled';
     try {
       if (!cfg.enabled) {
         status = 503;
+        reason = 'disabled';
       } else {
         const out = await queryDhtPeers(cfg, DHT_PROBE_INFOHASH, net);
         status = out && out.status ? out.status : 502;
         peers = out && out.body && typeof out.body.peers === 'number' ? out.body.peers : 0;
+        reason = status === 200 ? 'ok' : (out && out.upstream) || 'down';
       }
     } catch (e) {
       status = 502;
       peers = 0;
+      reason = 'down';
     }
     const ms = Date.now() - started;
     process.stderr.write(formatDhtLog(status, ms, ''));
     noteDhtRequest({ status, ms, peers, reason: status === 200 ? '' : 'probe' });
     return {
       http: 200,
-      body: { ok: status === 200, status, peers, ms, error: status === 200 ? '' : 'проверка' },
+      body: { ok: status === 200, status, peers, ms, error: status === 200 ? '' : 'проверка', reason },
     };
   }
 
@@ -2736,6 +2740,18 @@ if (started) {
       // «Мониторинг»: scheduled only on the instance that polls the bot (no doubled alerts), never read-only.
       const monitor = monitorFor(store, { env: process.env, backups: pgBackups, readOnly });
       await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor });
+      // Docker stop is SIGTERM. Write the DHT counters before exit; do not wait forever.
+      let dhtStopping = false;
+      const stopDht = () => {
+        if (dhtStopping) return;
+        dhtStopping = true;
+        shutdownDhtStats(2000).then(
+          () => process.exit(0),
+          () => process.exit(0),
+        );
+      };
+      process.on('SIGTERM', stopDht);
+      process.on('SIGINT', stopDht);
       if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
       else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
       process.stdout.write(

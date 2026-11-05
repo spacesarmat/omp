@@ -47,10 +47,14 @@ export async function saveDht(pool, snap) {
   const minutes = Array.isArray(body.minutes) ? body.minutes : [];
   const errs = Array.isArray(body.errors) ? body.errors : null;
   const pruneBefore = Math.floor(Number(body.pruneBefore));
+  const pruneAfter = Math.floor(Number(body.pruneAfter));
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    if (Number.isFinite(pruneBefore)) {
+    // Same window as the chart: strictly before now-24h, or after the current minute.
+    if (Number.isFinite(pruneBefore) && Number.isFinite(pruneAfter)) {
+      await client.query('DELETE FROM dht_minute WHERE minute < $1 OR minute > $2', [pruneBefore, pruneAfter]);
+    } else if (Number.isFinite(pruneBefore)) {
       await client.query('DELETE FROM dht_minute WHERE minute < $1', [pruneBefore]);
     }
     for (let i = 0; i < minutes.length; i++) {

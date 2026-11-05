@@ -210,6 +210,7 @@ describe('POST /admin/api/dht/probe', () => {
       const failed = JSON.parse(fail.body);
       expect(failed.ok).toBe(false);
       expect(failed.error).toBe('проверка');
+      expect(failed.reason).toBe('down');
       expect(fail.body).not.toContain(DHT_PROBE_INFOHASH);
       expect(fail.body).not.toContain(TOKEN);
       const errLine = lines.filter((l) => l.indexOf('dht status=') === 0).join('');
@@ -253,7 +254,53 @@ describe('POST /admin/api/dht/probe', () => {
     const limited = await post(app, '/admin/api/dht/probe', cookie, { csrf });
     expect(limited.status).toBe(429);
     expect(JSON.parse(limited.body).error).toBe('rate');
+    expect(JSON.parse(limited.body).reason).toBe('probe_rate');
     expect(limited.body).not.toContain(DHT_PROBE_INFOHASH);
     expect(peersCalls).toBe(6);
+  });
+
+  it('separates a busy sidecar, a disabled sidecar, and a DHT that is not up yet', async () => {
+    const queue = [
+      { status: 429, body: { error: 'rate', retryAfter: 2 } },
+      { status: 503, body: { error: 'disabled' } },
+      { status: 503, body: { error: 'down' } },
+    ];
+    const net = async (url: string) => {
+      if (String(url).indexOf('/v1/peers') >= 0) {
+        const next = queue.shift();
+        return {
+          status: next ? next.status : 500,
+          headers: { get: () => null },
+          text: async () => JSON.stringify(next ? next.body : {}),
+        };
+      }
+      return { status: 200, headers: { get: () => null }, text: async () => '{}' };
+    };
+    const store = memStore();
+    const app = createApp(store, net, {
+      env: { BILLING_DHT_URL: 'http://dht-peers:8788', BILLING_DHT_TOKEN: TOKEN },
+      monitor: { health: () => null },
+    });
+    const now = Date.now();
+    const issued = await store.update((cur) => issueCliAdminLogin(cur as never, { now }));
+    const token = (issued as { token: string }).token;
+    const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(token));
+    const m = /omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
+    const cookie = { cookie: 'omp_admin=' + m![1] };
+    const home = await call(app, '/admin/api/home', cookie);
+    const csrf = JSON.parse(home.body).csrf as string;
+    const busy = JSON.parse((await post(app, '/admin/api/dht/probe', cookie, { csrf })).body);
+    const off = JSON.parse((await post(app, '/admin/api/dht/probe', cookie, { csrf })).body);
+    const cold = JSON.parse((await post(app, '/admin/api/dht/probe', cookie, { csrf })).body);
+    expect(busy).toMatchObject({ ok: false, status: 429, reason: 'sidecar_rate', error: 'проверка' });
+    expect(off).toMatchObject({ ok: false, status: 503, reason: 'disabled' });
+    expect(cold).toMatchObject({ ok: false, status: 503, reason: 'not_ready' });
+    expect(JSON.stringify(busy) + JSON.stringify(off) + JSON.stringify(cold)).not.toContain(DHT_PROBE_INFOHASH);
+
+    const bare = createApp(store, async () => {
+      throw new Error('should not fetch');
+    }, { env: {}, monitor: { health: () => null } });
+    const denied = JSON.parse((await post(bare, '/admin/api/dht/probe', cookie, { csrf })).body);
+    expect(denied).toMatchObject({ ok: false, status: 503, reason: 'disabled' });
   });
 });
