@@ -50,6 +50,10 @@ class SiteHttpCloudflareTest {
         flare.shutdown()
     }
 
+    private fun localSiteUrl(path: String) = site.url(path).toString().replace(site.hostName, "127.0.0.1").toHttpUrl()
+
+    private fun localFlareUrl(path: String) = flare.url(path).toString().replace(flare.hostName, "127.0.0.1").toHttpUrl()
+
     private fun challenge(): MockResponse = MockResponse().setResponseCode(403)
         .addHeader("Server", "cloudflare").addHeader("cf-mitigated", "challenge")
         .setBody("<html><head><title>Just a moment...</title></head><body><script src=\"/cdn-cgi/challenge-platform/x\"></script></body></html>")
@@ -59,14 +63,14 @@ class SiteHttpCloudflareTest {
     private fun http(solver: FakeSolver?): SiteHttp = SiteHttp(jar, CloudflarePass(solver, FlareSolverrClient(), jar))
 
     private fun get(h: SiteHttp, cf: SiteHttp.CloudflareOptions?): SiteHttp.Response =
-        h.request(site.url("/browse.php?q=x").toString(), "GET", emptyMap(), null, null, null, 10_000, null, cf)
+        h.request(localSiteUrl("/browse.php?q=x").toString(), "GET", emptyMap(), null, null, null, 10_000, null, cf)
 
     private fun flareSolution(): String = JSONObject()
         .put("status", "ok")
         .put(
             "solution",
             JSONObject()
-                .put("cookies", org.json.JSONArray().put(JSONObject().put("name", "cf_clearance").put("value", "from-flare").put("domain", site.url("/").host).put("path", "/")))
+                .put("cookies", org.json.JSONArray().put(JSONObject().put("name", "cf_clearance").put("value", "from-flare").put("domain", localSiteUrl("/").host).put("path", "/")))
                 .put("userAgent", "FlareAgent/1.0"),
         )
         .toString()
@@ -104,14 +108,14 @@ class SiteHttpCloudflareTest {
     fun builtInPassThenOneRetry() {
         site.enqueue(challenge())
         site.enqueue(page())
-        val r = get(http(FakeSolver(CloudflareSolver.Result.SOLVED)), SiteHttp.CloudflareOptions(flare.url("/")))
+        val r = get(http(FakeSolver(CloudflareSolver.Result.SOLVED)), SiteHttp.CloudflareOptions(localFlareUrl("/")))
         assertEquals(200, r.status)
         assertEquals("browser", r.cloudflare)
         assertEquals(listOf("browser"), events)
         // FlareSolverr is not asked when the built-in check passed
         assertEquals(0, flare.requestCount)
-        site.takeRequest()
-        val retry = site.takeRequest()
+        site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
+        val retry = site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
         assertEquals("/browse.php?q=x", retry.path)
         assertEquals("cf_clearance=from-browser", retry.getHeader("Cookie"))
         assertEquals(SiteHttp.USER_AGENT, retry.getHeader("User-Agent"))
@@ -124,25 +128,25 @@ class SiteHttpCloudflareTest {
         site.enqueue(page())
         flare.enqueue(MockResponse().setBody(flareSolution()))
         val h = http(FakeSolver(CloudflareSolver.Result.FAILED))
-        val r = get(h, SiteHttp.CloudflareOptions(flare.url("/")))
+        val r = get(h, SiteHttp.CloudflareOptions(localFlareUrl("/")))
         assertEquals("flaresolverr", r.cloudflare)
         assertEquals(listOf("browser"), events)
         assertEquals(1, flare.requestCount)
         // FlareSolverr fetched the site root, not the search
-        assertEquals(site.url("/").toString(), JSONObject(flare.takeRequest().body.readUtf8()).getString("url"))
-        val first = site.takeRequest()
+        assertEquals(localSiteUrl("/").toString(), JSONObject(flare.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.body.readUtf8()).getString("url"))
+        val first = site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
         assertEquals(SiteHttp.USER_AGENT, first.getHeader("User-Agent"))
-        val retry = site.takeRequest()
+        val retry = site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
         assertEquals("FlareAgent/1.0", retry.getHeader("User-Agent"))
         assertEquals("cf_clearance=from-flare", retry.getHeader("Cookie"))
         // the next request to that host keeps FlareSolverr's User-Agent
         get(h, null)
-        assertEquals("FlareAgent/1.0", site.takeRequest().getHeader("User-Agent"))
+        assertEquals("FlareAgent/1.0", site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("User-Agent"))
     }
 
     @Test
     fun flareSolverrKeepsTheSiteLoginAndTakesOnlyCloudflareCookies() {
-        val root = site.url("/")
+        val root = localSiteUrl("/")
         jar.saveFromResponse(root, listOf(Cookie.Builder().name("sid").value("login").hostOnlyDomain(root.host).path("/").expiresAt(System.currentTimeMillis() + 3_600_000).build()))
         site.enqueue(challenge())
         site.enqueue(page())
@@ -160,10 +164,10 @@ class SiteHttpCloudflareTest {
                 ).toString(),
             ),
         )
-        val r = get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(flare.url("/")))
+        val r = get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(localFlareUrl("/")))
         assertEquals("flaresolverr", r.cloudflare)
-        site.takeRequest()
-        val cookie = site.takeRequest().getHeader("Cookie")!!
+        site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!
+        val cookie = site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("Cookie")!!
         assertTrue(cookie, cookie.contains("sid=login"))
         assertTrue(cookie, cookie.contains("cf_clearance=from-flare"))
         assertFalse(cookie, cookie.contains("guest") || cookie.contains("other"))
@@ -172,13 +176,13 @@ class SiteHttpCloudflareTest {
     @Test
     fun flareSolverrIsSkippedForAHostWithABrowserSession() {
         val agents = SessionAgents(null)
-        agents.set(site.url("/").host, "Phone-UA", System.currentTimeMillis() + 60_000)
+        agents.set(localSiteUrl("/").host, "Phone-UA", System.currentTimeMillis() + 60_000)
         site.enqueue(challenge())
         flare.enqueue(MockResponse().setBody(flareSolution()))
         val h = SiteHttp(jar, CloudflarePass(FakeSolver(CloudflareSolver.Result.FAILED), FlareSolverrClient(), jar, { SiteHttp.USER_AGENT }, null, agents))
-        failure { get(h, SiteHttp.CloudflareOptions(flare.url("/"))) }
+        failure { get(h, SiteHttp.CloudflareOptions(localFlareUrl("/"))) }
         assertEquals(0, flare.requestCount)
-        assertEquals("Phone-UA", site.takeRequest().getHeader("User-Agent"))
+        assertEquals("Phone-UA", site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("User-Agent"))
     }
 
     @Test
@@ -194,7 +198,7 @@ class SiteHttpCloudflareTest {
     fun interactiveStaysInteractiveWhenFlareSolverrFails() {
         site.enqueue(challenge())
         flare.enqueue(MockResponse().setBody("""{"status":"error","message":"timeout"}"""))
-        val e = failure { get(http(FakeSolver(CloudflareSolver.Result.INTERACTIVE)), SiteHttp.CloudflareOptions(flare.url("/"))) }
+        val e = failure { get(http(FakeSolver(CloudflareSolver.Result.INTERACTIVE)), SiteHttp.CloudflareOptions(localFlareUrl("/"))) }
         assertEquals(SiteHttp.CODE_CLOUDFLARE_INTERACTIVE, e.code)
         assertEquals(1, flare.requestCount)
     }
@@ -203,7 +207,7 @@ class SiteHttpCloudflareTest {
     fun failedEverywhere() {
         site.enqueue(challenge())
         flare.enqueue(MockResponse().setResponseCode(500))
-        val e = failure { get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(flare.url("/"))) }
+        val e = failure { get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(localFlareUrl("/"))) }
         assertEquals(SiteHttp.CODE_CLOUDFLARE, e.code)
         assertTrue(e.reason.contains("Cloudflare"))
         // never an address or a cookie in what the page sees
@@ -268,17 +272,17 @@ class SiteHttpCloudflareTest {
 
     @Test
     fun theOverrideFollowsTheHostAfterARedirect() {
-        val first = site.url("/").host
+        val first = localSiteUrl("/").host
         val other = if (first == "localhost") "127.0.0.1" else "localhost"
-        val moved = site.url("/browse.php?q=x").newBuilder().host(other).build()
+        val moved = localSiteUrl("/browse.php?q=x").newBuilder().host(other).build()
         site.enqueue(MockResponse().setResponseCode(302).addHeader("Location", moved.toString()))
         site.enqueue(challenge())
         site.enqueue(MockResponse().setResponseCode(302).addHeader("Location", moved.toString()))
         site.enqueue(page())
         flare.enqueue(MockResponse().setBody(flareFor(other)))
-        val r = get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(flare.url("/")))
+        val r = get(http(FakeSolver(CloudflareSolver.Result.FAILED)), SiteHttp.CloudflareOptions(localFlareUrl("/")))
         assertEquals("flaresolverr", r.cloudflare)
-        val uas = (1..4).map { site.takeRequest().getHeader("User-Agent") }
+        val uas = (1..4).map { site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("User-Agent") }
         // the first host keeps the default; the challenged host (after the redirect) gets FlareSolverr's on the retry
         assertEquals(listOf(SiteHttp.USER_AGENT, SiteHttp.USER_AGENT, SiteHttp.USER_AGENT, "FlareAgent/1.0"), uas)
     }
@@ -287,12 +291,12 @@ class SiteHttpCloudflareTest {
     fun oneFlareSolverrCallPerHost() {
         flare.enqueue(MockResponse().setBody(flareSolution()).setBodyDelay(400, java.util.concurrent.TimeUnit.MILLISECONDS))
         val pass = CloudflarePass(FakeSolver(CloudflareSolver.Result.FAILED), FlareSolverrClient(), jar)
-        val url = site.url("/x")
+        val url = localSiteUrl("/x")
         val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
         try {
-            val a = pool.submit<CloudflarePass.Outcome> { pass.pass(url, flare.url("/")) }
+            val a = pool.submit<CloudflarePass.Outcome> { pass.pass(url, localFlareUrl("/")) }
             Thread.sleep(100)
-            val b = pool.submit<CloudflarePass.Outcome> { pass.pass(url, flare.url("/")) }
+            val b = pool.submit<CloudflarePass.Outcome> { pass.pass(url, localFlareUrl("/")) }
             assertEquals(CloudflarePass.Outcome.FLARESOLVERR, a.get(10, java.util.concurrent.TimeUnit.SECONDS))
             assertEquals(CloudflarePass.Outcome.FLARESOLVERR, b.get(10, java.util.concurrent.TimeUnit.SECONDS))
         } finally {
@@ -311,11 +315,11 @@ class SiteHttpCloudflareTest {
             }
         }
         var now = 1_000_000_000_000L
-        val host = site.url("/").host
+        val host = localSiteUrl("/").host
         flare.enqueue(MockResponse().setBody(flareFor(host, now + 3_600_000)))
         val pass = CloudflarePass(FakeSolver(CloudflareSolver.Result.FAILED), FlareSolverrClient(), jar, { "Device/1" }, store) { now }
         assertEquals("Device/1", pass.userAgentFor(host))
-        assertEquals(CloudflarePass.Outcome.FLARESOLVERR, pass.pass(site.url("/"), flare.url("/")))
+        assertEquals(CloudflarePass.Outcome.FLARESOLVERR, pass.pass(localSiteUrl("/"), localFlareUrl("/")))
         assertEquals("FlareAgent/1.0", pass.userAgentFor(host))
         // never a cookie in the stored overrides
         assertFalse(stored!!.contains("from-flare"))
@@ -338,13 +342,13 @@ class SiteHttpCloudflareTest {
             }
         }
         val solver = FakeSolver(CloudflareSolver.Result.FAILED)
-        val host = site.url("/").host
+        val host = localSiteUrl("/").host
         flare.enqueue(MockResponse().setBody(flareFor(host)))
         val pass = CloudflarePass(solver, FlareSolverrClient(), jar, { "Device/1" }, store)
-        pass.pass(site.url("/"), flare.url("/"))
+        pass.pass(localSiteUrl("/"), localFlareUrl("/"))
         assertEquals("FlareAgent/1.0", pass.userAgentFor(host))
         solver.result = CloudflareSolver.Result.SOLVED
-        assertEquals(CloudflarePass.Outcome.BROWSER, pass.pass(site.url("/"), flare.url("/")))
+        assertEquals(CloudflarePass.Outcome.BROWSER, pass.pass(localSiteUrl("/"), localFlareUrl("/")))
         assertEquals("Device/1", pass.userAgentFor(host))
     }
 
@@ -352,12 +356,12 @@ class SiteHttpCloudflareTest {
     fun theDeviceUserAgentGoesWithEveryRequest() {
         site.enqueue(page())
         val pass = CloudflarePass(null, FlareSolverrClient(), jar, { "Device/1" })
-        SiteHttp(jar, pass) { "Device/1" }.request(site.url("/").toString(), "GET", emptyMap(), null, null, null, 5_000)
-        assertEquals("Device/1", site.takeRequest().getHeader("User-Agent"))
+        SiteHttp(jar, pass) { "Device/1" }.request(localSiteUrl("/").toString(), "GET", emptyMap(), null, null, null, 5_000)
+        assertEquals("Device/1", site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("User-Agent"))
         site.enqueue(page())
         // a page-set one wins
-        SiteHttp(jar, pass) { "Device/1" }.request(site.url("/").toString(), "GET", mapOf("User-Agent" to "Own/2"), null, null, null, 5_000)
-        assertEquals("Own/2", site.takeRequest().getHeader("User-Agent"))
+        SiteHttp(jar, pass) { "Device/1" }.request(localSiteUrl("/").toString(), "GET", mapOf("User-Agent" to "Own/2"), null, null, null, 5_000)
+        assertEquals("Own/2", site.takeRequest(2, java.util.concurrent.TimeUnit.SECONDS)!!.getHeader("User-Agent"))
     }
 
     @Test

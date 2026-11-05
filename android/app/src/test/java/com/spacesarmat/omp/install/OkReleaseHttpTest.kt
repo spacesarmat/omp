@@ -17,7 +17,7 @@ class OkReleaseHttpTest {
     fun start() {
         server = MockWebServer()
         server.start()
-        val origin = server.url("/").toString()
+        val origin = localUrl("/")
         http = OkReleaseHttp(allowed = { it.startsWith(origin) })
     }
 
@@ -25,6 +25,8 @@ class OkReleaseHttpTest {
     fun stop() {
         server.shutdown()
     }
+
+    private fun localUrl(path: String): String = server.url(path).toString().replace(server.hostName, "127.0.0.1")
 
     private fun code(block: () -> Unit): String {
         try {
@@ -40,14 +42,14 @@ class OkReleaseHttpTest {
     fun followsAllowedRedirects() {
         server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/next"))
         server.enqueue(MockResponse().setBody("{\"ok\":true}"))
-        assertEquals("{\"ok\":true}", http.text(server.url("/feed").toString(), 1000, CancelToken()))
+        assertEquals("{\"ok\":true}", http.text(localUrl("/feed"), 1000, CancelToken()))
         assertEquals(2, server.requestCount)
     }
 
     @Test
     fun aRedirectToAForeignHostIsRefused() {
         server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "https://evil.example/omp.apk"))
-        assertEquals(InstallCodes.RELEASE, code { http.text(server.url("/feed").toString(), 1000, CancelToken()) })
+        assertEquals(InstallCodes.RELEASE, code { http.text(localUrl("/feed"), 1000, CancelToken()) })
         assertEquals(1, server.requestCount)
     }
 
@@ -56,27 +58,27 @@ class OkReleaseHttpTest {
         // the production rule: https only
         assertEquals(false, ReleaseHosts.allowed("http://github.com/spacesarmat/omp/releases/download/v1/OMP.apk"))
         val real = OkReleaseHttp()
-        assertEquals(InstallCodes.RELEASE, code { real.text(server.url("/feed").toString(), 1000, CancelToken()) })
+        assertEquals(InstallCodes.RELEASE, code { real.text(localUrl("/feed"), 1000, CancelToken()) })
         assertEquals(0, server.requestCount)
     }
 
     @Test
     fun tooManyRedirectsFail() {
         repeat(10) { server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/loop")) }
-        assertEquals(InstallCodes.NETWORK, code { http.text(server.url("/loop").toString(), 1000, CancelToken()) })
+        assertEquals(InstallCodes.NETWORK, code { http.text(localUrl("/loop"), 1000, CancelToken()) })
         assertEquals(6, server.requestCount)
     }
 
     @Test
     fun httpErrorsAreNetworkFailures() {
         server.enqueue(MockResponse().setResponseCode(404))
-        assertEquals(InstallCodes.NETWORK, code { http.text(server.url("/x").toString(), 1000, CancelToken()) })
+        assertEquals(InstallCodes.NETWORK, code { http.text(localUrl("/x"), 1000, CancelToken()) })
     }
 
     @Test
     fun oversizedTextIsRefused() {
         server.enqueue(MockResponse().setBody("x".repeat(2000)))
-        assertEquals(InstallCodes.RELEASE, code { http.text(server.url("/x").toString(), 1000, CancelToken()) })
+        assertEquals(InstallCodes.RELEASE, code { http.text(localUrl("/x"), 1000, CancelToken()) })
     }
 
     private val file = ByteArray(200_000) { (it % 241).toByte() }
@@ -89,7 +91,7 @@ class OkReleaseHttpTest {
                 .setBody(okio.Buffer().write(file.copyOfRange(150_000, 200_000))),
         )
         var got: Triple<Int, Long, Long>? = null
-        http.streamFrom(server.url("/dl").toString(), 150_000L, CancelToken()) { input, length, start ->
+        http.streamFrom(localUrl("/dl"), 150_000L, CancelToken()) { input, length, start ->
             got = Triple(input.readBytes().size, length, start)
         }
         assertEquals(Triple(50_000, 50_000L, 150_000L), got)
@@ -101,7 +103,7 @@ class OkReleaseHttpTest {
     fun aServerIgnoringTheRangeSendsTheWholeFileFromZero() {
         server.enqueue(MockResponse().setBody(okio.Buffer().write(file)))
         var start = -1L
-        http.streamFrom(server.url("/dl").toString(), 1000L, CancelToken()) { input, _, s ->
+        http.streamFrom(localUrl("/dl"), 1000L, CancelToken()) { input, _, s ->
             input.readBytes()
             start = s
         }
@@ -111,11 +113,11 @@ class OkReleaseHttpTest {
     @Test
     fun aWrongContentRangeIsRefusedAnd416StartsOver() {
         server.enqueue(MockResponse().setResponseCode(206).setHeader("Content-Range", "bytes 0-9/200000").setBody("0123456789"))
-        assertEquals(InstallCodes.NETWORK, code { http.streamFrom(server.url("/dl").toString(), 500L, CancelToken()) { _, _, _ -> } })
+        assertEquals(InstallCodes.NETWORK, code { http.streamFrom(localUrl("/dl"), 500L, CancelToken()) { _, _, _ -> } })
         server.enqueue(MockResponse().setResponseCode(416))
         server.enqueue(MockResponse().setBody(okio.Buffer().write(file)))
         var start = -1L
-        http.streamFrom(server.url("/dl").toString(), 999_999L, CancelToken()) { input, _, s ->
+        http.streamFrom(localUrl("/dl"), 999_999L, CancelToken()) { input, _, s ->
             input.readBytes()
             start = s
         }
@@ -130,7 +132,7 @@ class OkReleaseHttpTest {
     @Test
     fun theDownloaderResumesABrokenTransferOverHttpAndChecksTheWholeFile() {
         val dir = tempDir()
-        val pkg = ReleasePackage(Item.TORRSERVER, "ts", "1", server.url("/dl").toString(), sha256(file), file.size.toLong())
+        val pkg = ReleasePackage(Item.TORRSERVER, "ts", "1", localUrl("/dl"), sha256(file), file.size.toLong())
         // the first response dies midway through the body
         server.enqueue(
             MockResponse().setBody(okio.Buffer().write(file))
@@ -164,7 +166,7 @@ class OkReleaseHttpTest {
         assertEquals(
             InstallCodes.CANCELLED,
             code {
-                http.stream(server.url("/big").toString(), cancel) { input, _ ->
+                http.stream(localUrl("/big"), cancel) { input, _ ->
                     val buf = ByteArray(8192)
                     input.read(buf)
                     cancel.cancel()
