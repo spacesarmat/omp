@@ -170,7 +170,11 @@ describe('dht-peers HTTP contract', () => {
     const srv = await listen(createDhtApp({ token: '', lookup: found }));
     const health = await call(srv.port, '/health');
     expect(health.status).toBe(200);
-    expect(JSON.parse(health.body)).toEqual({ ok: true, dht: 'idle' });
+    const healthBody = JSON.parse(health.body);
+    expect(healthBody.ok).toBe(true);
+    expect(healthBody.dht).toBe('idle');
+    expect(typeof healthBody.rss).toBe('number');
+    expect(healthBody.rss).toBeGreaterThan(0);
     const peers = await call(srv.port, '/v1/peers?infohash=' + HASH, { authorization: 'Bearer ' + TOKEN });
     expect(peers.status).toBe(503);
     expect(JSON.parse(peers.body)).toEqual({ error: 'disabled' });

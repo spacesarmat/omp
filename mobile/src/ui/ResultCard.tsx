@@ -209,12 +209,8 @@ export function ResultCard(p: {
             </div>
           )}
           <div class="m-rc-sheet-actions">
-            {showCheck && (
-              <div class="m-rc-sheet-check">
-                <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode="PD31.1" />
-              </div>
-            )}
             <div class="m-sheet-row">
+              {showCheck && <SeedCheck r={r} fallback={seeds.text} probe={probe} buttonOnly testCode="PD31.1" />}
               <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
                 {t('common.add')}
               </button>

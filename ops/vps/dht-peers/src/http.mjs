@@ -55,7 +55,9 @@ export function createDhtApp(opts) {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'method' });
     if (url.pathname === '/health') {
       const state = lookup && typeof lookup.state === 'function' ? lookup.state() : 'idle';
-      return sendJson(res, 200, { ok: true, dht: state === 'up' ? 'up' : 'idle' });
+      const mem = process.memoryUsage();
+      const rss = mem && typeof mem.rss === 'number' && mem.rss >= 0 ? Math.floor(mem.rss) : 0;
+      return sendJson(res, 200, { ok: true, dht: state === 'up' ? 'up' : 'idle', rss });
     }
     if (url.pathname !== '/v1/peers') return sendJson(res, 404, { error: 'not_found' });
     if (!tokenConfigured(token)) return sendJson(res, 503, { error: 'disabled' });

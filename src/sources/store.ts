@@ -27,9 +27,29 @@ export function sanitizeSourcePrefs(v: unknown): { [id: string]: SourcePref } {
 }
 
 let prefs = sanitizeSourcePrefs(loadJson<unknown>(KEY, {}, isObject));
+let prefListeners: (() => void)[] = [];
+
+function notifyPrefs(): void {
+  prefListeners.slice().forEach((cb) => {
+    try {
+      cb();
+    } catch (e) {
+      /* a listener failure must not stop the others */
+    }
+  });
+}
+
+/** After a switch is saved or re-read from storage. Returns the unsubscribe. */
+export function onSourcePrefsChange(cb: () => void): () => void {
+  prefListeners.push(cb);
+  return () => {
+    prefListeners = prefListeners.filter((x) => x !== cb);
+  };
+}
 
 export function reloadSourcePrefs(): void {
   prefs = sanitizeSourcePrefs(loadJson<unknown>(KEY, {}, isObject));
+  notifyPrefs();
 }
 
 /** Saved switch; by default every source is on except those that need a login. */
@@ -42,6 +62,7 @@ export function setSourceOn(id: string, on: boolean): void {
   const p = prefs[id];
   prefs[id] = p && p.cloudflareBypass ? { on, cloudflareBypass: true } : { on };
   saveJson(KEY, prefs);
+  notifyPrefs();
 }
 
 let bypassListeners: (() => void)[] = [];
@@ -60,6 +81,7 @@ export function setCloudflareBypass(id: string, on: boolean): void {
   if (next.on === undefined && !next.cloudflareBypass) delete prefs[id];
   else prefs[id] = next;
   saveJson(KEY, prefs);
+  notifyPrefs();
   bypassListeners.slice().forEach((cb) => cb());
 }
 

@@ -131,7 +131,8 @@ import {
   validBase,
   sourceEnabled,
 } from './services.mjs';
-import { dhtConfig, dhtPeersLimitConfig, queryDhtPeers } from './dhtPeers.mjs';
+import { dhtConfig, dhtPeersLimitConfig, probeDhtSidecar, queryDhtPeers } from './dhtPeers.mjs';
+import { dhtStatsView, noteDhtRequest } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { notificationOk } from './yoomoney.mjs';
@@ -349,6 +350,15 @@ export function deviceLogId(deviceId) {
   const id = String(deviceId == null ? '' : deviceId);
   if (!id) return '-';
   return sha256(id).slice(0, 8);
+}
+
+/** One line per GET /v1/dht-peers. Status and duration only. No token, no infohash. */
+export function formatDhtLog(status, ms, deviceId) {
+  const code = Number(status);
+  const st = Number.isFinite(code) ? String(Math.max(0, Math.min(599, Math.floor(code)))) : '0';
+  const n = Number(ms);
+  const dur = Number.isFinite(n) && n >= 0 ? String(Math.min(600000, Math.floor(n))) : '0';
+  return 'dht status=' + st + ' ms=' + dur + ' device=' + deviceLogId(deviceId) + '\n';
 }
 
 function searchCount(value, max) {
@@ -932,6 +942,13 @@ export function createApp(file, fetchImpl, opts) {
         if (!admin) return json(res, 401, { auth: false });
         const telegramId = url.searchParams.get('telegramId') || '';
         return json(res, 200, { telegramId, messages: supportThread((await store.read()), telegramId).slice(-80) });
+      }
+      if (req.method === 'GET' && path === '/admin/api/dht') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const cfg = dhtConfig(env);
+        const sidecar = await probeDhtSidecar(cfg, net);
+        return json(res, 200, { ok: true, configured: !!cfg.enabled, sidecar, stats: dhtStatsView(Date.now()) });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
         const admin = adminOf(req);
@@ -1845,29 +1862,45 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
         // No noteSeen: a tap must not write the device row. Peer addresses stay on the sidecar.
-        const device = String(req.headers['x-device-id'] || '');
-        const token = bearer(req);
-        if (!token) return json(res, 401, { error: 'bad_token' });
-        const state = await store.read();
-        const caller = await deviceCaller(state, token, device, Date.now());
-        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
-        const hash = url.searchParams.get('infohash');
-        const cfg = dhtConfig(env);
-        if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return json(res, 400, { error: 'bad_infohash' });
-        if (!cfg.enabled) return json(res, 503, { error: 'disabled' });
-        const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
-        if (dhtRate && !dhtRate.allow(rateKey)) {
-          const wait = String(dhtRate.retryAfter(rateKey) || 1);
-          res.setHeader('retry-after', wait);
-          return json(res, 429, { error: 'rate' });
-        }
+        // Every response is one log line: status and duration. The token and the infohash are not logged.
         const started = Date.now();
-        const out = await queryDhtPeers(cfg, hash, net);
-        if (out.status !== 200) {
-          process.stderr.write('dht status=' + out.status + ' ms=' + (Date.now() - started) + ' device=' + deviceLogId(device) + '\n');
+        const device = String(req.headers['x-device-id'] || '');
+        let logged = false;
+        const finish = (status, value) => {
+          if (!logged) {
+            logged = true;
+            const ms = Date.now() - started;
+            process.stderr.write(formatDhtLog(status, ms, device));
+            const peers = value && typeof value.peers === 'number' ? value.peers : 0;
+            const reason = value && typeof value.error === 'string' ? value.error : '';
+            noteDhtRequest({ status, ms, peers, reason });
+          }
+          return json(res, status, value);
+        };
+        try {
+          const token = bearer(req);
+          if (!token) return finish(401, { error: 'bad_token' });
+          const state = await store.read();
+          const caller = await deviceCaller(state, token, device, Date.now());
+          if (!caller || caller.error) return finish(401, { error: (caller && caller.error) || 'bad_token' });
+          const hash = url.searchParams.get('infohash');
+          const cfg = dhtConfig(env);
+          if (!/^[0-9a-fA-F]{40}$/.test(String(hash || '').trim())) return finish(400, { error: 'bad_infohash' });
+          if (!cfg.enabled) return finish(503, { error: 'disabled' });
+          const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+          if (dhtRate && !dhtRate.allow(rateKey)) {
+            const wait = String(dhtRate.retryAfter(rateKey) || 1);
+            res.setHeader('retry-after', wait);
+            return finish(429, { error: 'rate' });
+          }
+          const out = await queryDhtPeers(cfg, hash, net);
+          if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
+          return finish(out.status, out.body);
+        } catch (e) {
+          // store.read() and deviceCaller() throw into the outer handler as 500. Log that here too.
+          if (isReadOnlyError(e)) return finish(503, { error: 'read_only' });
+          return finish(500, { error: 'down' });
         }
-        if (out.retryAfter) res.setHeader('retry-after', String(out.retryAfter));
-        return json(res, out.status, out.body);
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();
