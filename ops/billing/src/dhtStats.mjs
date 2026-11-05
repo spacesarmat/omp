@@ -318,9 +318,12 @@ export async function flushDhtStats(now) {
   if (flushing) {
     await flushing;
     if (dirty || dirtyMinutes.size || errorsDirty) {
-      // The clock from before the wait is stale. A request that finished during the
-      // save can be a newer error or the next minute. Prune with the old clock drops both.
-      return flushDhtStats(Math.max(latest || 0, Date.now()));
+      // A note during the wait can be newer than this call's clock. Extend that clock
+      // to `latest`. Do not read Date.now() when the caller passed one: wall time 24h
+      // later would prune the caller's window, including those new rows.
+      const passed = Number(now);
+      const base = Number.isFinite(passed) && passed > 0 ? passed : Date.now();
+      return flushDhtStats(Math.max(base, latest || 0));
     }
     return;
   }

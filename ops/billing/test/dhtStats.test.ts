@@ -178,6 +178,11 @@ describe('DHT admin counters', () => {
   });
 
   it('keeps a newer error and the next minute when an idle flush waits on a save', async () => {
+    // Wall time far past the fixed stamps. The waiting flush must keep the clock it was given.
+    vi.useFakeTimers();
+    const minute = 1_800_000_000_000;
+    const next = minute + 60 * 1000;
+    vi.setSystemTime(next + 48 * 60 * 60 * 1000);
     let release = () => {};
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -193,8 +198,6 @@ describe('DHT admin counters', () => {
       },
     });
     await readyDhtStats();
-    const minute = 1_800_000_000_000;
-    const next = minute + 60 * 1000;
     noteDhtRequest({ status: 200, ms: 10, peers: 1 }, minute);
     const first = flushDhtStats(minute);
     noteDhtRequest({ status: 502, ms: 4, reason: 'down' }, next);
