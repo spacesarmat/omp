@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dhtConfig, dhtPeersLimitConfig, publicDhtBody, queryDhtPeers } from '../src/dhtPeers.mjs';
+import { dhtConfig, dhtPeersLimitConfig, probeDhtSidecar, publicDhtBody, queryDhtPeers } from '../src/dhtPeers.mjs';
 
 const HASH = 'ab'.repeat(20);
 const TOKEN = 'cd'.repeat(16);
@@ -80,5 +80,29 @@ describe('billing DHT peer contract', () => {
     expect(limited.status).toBe(429);
     expect(limited.body).toEqual({ error: 'rate' });
     expect(limited.retryAfter).toBe(3);
+  });
+
+  it('reads sidecar health without sending the token', async () => {
+    const cfg = dhtConfig({ BILLING_DHT_URL: 'http://dht-peers:8788', BILLING_DHT_TOKEN: TOKEN });
+    let seen = '';
+    let auth = '';
+    const ok = await probeDhtSidecar(cfg, async (url: string, init: { headers?: { authorization?: string } }) => {
+      seen = url;
+      auth = init && init.headers && init.headers.authorization ? init.headers.authorization : '';
+      return { status: 200, text: async () => JSON.stringify({ ok: true, dht: 'idle', rss: 40 * 1024 * 1024, token: TOKEN }) };
+    });
+    expect(seen).toBe('http://dht-peers:8788/health');
+    expect(auth).toBe('');
+    expect(ok).toMatchObject({ configured: true, ok: true, dht: 'idle', rss: 40 * 1024 * 1024 });
+    expect(JSON.stringify(ok)).not.toContain(TOKEN);
+    const off = await probeDhtSidecar(dhtConfig({}), async () => {
+      throw new Error('should not fetch');
+    });
+    expect(off).toEqual({ configured: false, ok: false, dht: 'off', rss: null, latencyMs: 0 });
+    const down = await probeDhtSidecar(cfg, async () => {
+      throw new Error('token=' + TOKEN);
+    });
+    expect(down.ok).toBe(false);
+    expect(JSON.stringify(down)).not.toContain(TOKEN);
   });
 });

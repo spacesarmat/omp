@@ -15,10 +15,10 @@ import { useTvLaunch, watchAddedOnPhone } from '../watch';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
-import { searchAll, type SearchHandle } from '../../../src/sources/search';
+import { searchAll, sourcesForSearch, type SearchHandle } from '../../../src/sources/search';
 import { onSearchFailure, type CheckedHosts } from '../../../src/sources/cloudflareCheck';
-import { allSources } from '../../../src/sources/registry';
-import { enabledSources } from '../../../src/sources/store';
+import { allSources, onSourcesChange } from '../../../src/sources/registry';
+import { enabledSources, onSourcePrefsChange } from '../../../src/sources/store';
 import { getHealth } from '../../../src/sources/store';
 import { getSource } from '../../../src/sources/registry';
 import { online } from '../lib/online';
@@ -223,6 +223,8 @@ export function Add({
   const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
   const [searchError, setSearchError] = useState('');
   const [sheet, setSheet] = useState<'sources' | 'sort' | 'filters' | null>(null);
+  // sources register and switches change while this screen is open: re-read them
+  const [srcTick, setSrcTick] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [rowCat, setRowCatState] = useState<Record<string, string>>(memo.rowCat);
   const [subSheet, setSubSheet] = useState(false);
@@ -292,9 +294,14 @@ export function Add({
   useEffect(() => {
     listener = sync;
     if (memo.handle) sync(memo.handle);
+    const bump = () => setSrcTick((n) => n + 1);
+    const offSources = onSourcesChange(bump);
+    const offPrefs = onSourcePrefsChange(bump);
     return () => {
       alive.v = false;
       if (listener === sync) listener = null;
+      offSources();
+      offPrefs();
     };
   }, []);
   useEffect(() => {
@@ -357,11 +364,17 @@ export function Add({
     }
   };
 
-  // sources of this search: the ones picked in the sheet, else those switched on in «Источники поиска»
+  // sources of this search: the chip, else those switched on. A chip of ids that no longer exist
+  // falls back to the switched-on sources, so the count cannot stick at 0 while they are on.
+  // An empty chip (the person cleared it) stays empty. srcTick re-reads the registry.
+  void srcTick;
   const all = allSources();
   const enabledIds = enabledSources(all).map((s) => s.id);
-  const selected = chosen || enabledIds;
-  const allChosen = chosen === null || (chosen.length === enabledIds.length && enabledIds.every((id) => chosen.indexOf(id) >= 0));
+  const resolved = sourcesForSearch(all, chosen, { fallback: true });
+  const selected = resolved.map((s) => s.id);
+  const allChosen =
+    chosen === null ||
+    (enabledIds.length > 0 && selected.length === enabledIds.length && enabledIds.every((id) => selected.indexOf(id) >= 0));
   const sourcesLabel = allChosen ? t('add.sourcesAll', { n: enabledIds.length }) : t('add.sourcesSome', { n: selected.length });
 
   const onSearch = (e?: Event) => {
@@ -391,9 +404,11 @@ export function Add({
     const ctx = phoneSourceContext();
     const mode = searchModeForKind(kind);
     if (mode) ctx.searchMode = mode;
+    // live list, not the ids from the render that opened the screen
+    const ids = sourcesForSearch(allSources(), memo.chosen, { fallback: true }).map((s) => s.id);
     const h: SearchHandle = searchAll(q, {
       ctx,
-      sources: selected,
+      sources: ids,
       onResult: notify,
       onDone: (id, err) => {
         notify();
@@ -421,6 +436,13 @@ export function Add({
     memo.query = initialQuery || '';
     if (run) runSearch(q, {});
   }, []);
+  // a search that ran while the registry was empty stays at 0 until sources exist again
+  useEffect(() => {
+    const q = memo.searched.trim();
+    if (scope !== 'sources' || !q || !memo.handle || memo.handle.sourceIds.length > 0) return;
+    if (!sourcesForSearch(allSources(), memo.chosen, { fallback: true }).length) return;
+    runSearch(q, {});
+  }, [srcTick, chosen, scope]);
 
   const toggleChosen = (id: string) => {
     const next = selected.indexOf(id) >= 0 ? selected.filter((x) => x !== id) : selected.concat([id]);

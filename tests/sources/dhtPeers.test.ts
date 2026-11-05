@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lang } from '../../src/i18n';
-import { askDhtPeers, dhtPeerLine, parseDhtPeersBody, seedCheckLine } from '../../src/sources/dhtPeers';
+import { askDhtPeers, dhtNeedsSubscriptionHint, dhtPeerLine, parseDhtPeersBody, seedCheckLine, setDhtPeersContext, withDhtSubscriptionHint } from '../../src/sources/dhtPeers';
 import type { ProbeResult } from '../../src/sources/liveSeedsRun';
 
 const trackerOk: ProbeResult = { ok: true, seeders: 152, leechers: 3 };
@@ -40,5 +40,19 @@ describe('DHT peer line', () => {
   it('does not call billing without a session or a hash', async () => {
     expect(await askDhtPeers('')).toEqual({ ok: false, reason: 'skip' });
     expect(await askDhtPeers('ab'.repeat(20))).toEqual({ ok: false, reason: 'skip' });
+  });
+
+  it('hints about a subscription only when the device could call DHT and is not signed in', () => {
+    lang.value = 'ru';
+    setDhtPeersContext(() => null);
+    expect(dhtNeedsSubscriptionHint()).toBe(false);
+    setDhtPeersContext(() => ({ http: { get: () => Promise.resolve({ status: 0, url: '', text: '' }), post: () => Promise.resolve({ status: 0, url: '', text: '' }), clearCookies: () => Promise.resolve() }, client: null }));
+    expect(dhtNeedsSubscriptionHint()).toBe(true);
+    expect(withDhtSubscriptionHint('Трекер не ответил')).toBe('Трекер не ответил. Проверка по DHT - с подпиской OMP');
+    expect(withDhtSubscriptionHint(withDhtSubscriptionHint('Трекер не ответил'))).toBe('Трекер не ответил. Проверка по DHT - с подпиской OMP');
+    lang.value = 'en';
+    expect(withDhtSubscriptionHint('The tracker did not answer')).toBe('The tracker did not answer. DHT check needs an OMP subscription');
+    lang.value = 'ru';
+    setDhtPeersContext(null);
   });
 });

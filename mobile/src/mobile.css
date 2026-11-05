@@ -1458,9 +1458,12 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
    A 320px phone with «+», phone and TV leaves about 50px. The full label does not fit there, and
    Chrome 90-104 ignores @container, so a plain media query switches to «Сиды». The chip can still
    shrink, so it never paints over the poster. */
-.m-rc-bottom .seed-check,
-.m-rc-sheet-check .seed-check { height: 40px; min-height: 40px; margin-left: 0; border-radius: 20px; }
-.m-rc-bottom .seed-check { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; padding-left: 8px; padding-right: 8px; }
+.m-rc-bottom .seed-check { height: 40px; min-height: 40px; margin-left: 0; border-radius: 20px; flex: 0 1 auto; min-width: 0; max-width: 100%; padding-left: 8px; padding-right: 8px; }
+/* The sheet puts «Сиды» in the same row as Add / phone / TV. overflow stays visible so the test-mode code is not clipped. */
+.m-rc-sheet-actions .m-sheet-row { flex-wrap: wrap; align-items: center; }
+.m-rc-sheet-actions .m-sheet-row .seed-check { flex: 0 0 auto; height: var(--m-btn-h); min-height: var(--m-btn-h); margin-left: 0; border-radius: 12px; overflow: visible; }
+.m-rc-sheet-actions .m-sheet-row .seed-check-long { display: none; }
+.m-rc-sheet-actions .m-sheet-row .seed-check-short { display: inline; }
 .seed-check-short { display: none; }
 @container rc (max-width: 250px) {
   .m-rc-bottom .seed-check-long { display: none; }
@@ -1472,7 +1475,6 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 }
 .m-rc-date { white-space: nowrap; }
 .m-rc-sheet-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.m-rc-sheet-check { display: flex; }
 .m-rc-btn { position: relative; z-index: 1; pointer-events: auto; width: 40px; height: 40px; min-width: 40px; min-height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: none; border-radius: 50%; background: var(--panel-2); color: var(--text); }
 .m-rc-btn-tv { background: var(--accent); color: var(--bg); }
 .m-rc-btn:disabled { opacity: 0.5; }

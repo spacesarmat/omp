@@ -42,9 +42,29 @@ let builtins: Source[] = [];
 // is asked on every listing, so a switch changed in «Источники поиска» takes effect at once. Hidden sources are still
 // found by getSource, so results saved earlier keep their label.
 let hideRule: ((id: string) => boolean) | null = null;
+let sourceListeners: (() => void)[] = [];
+
+function notifySources(): void {
+  sourceListeners.slice().forEach((cb) => {
+    try {
+      cb();
+    } catch (e) {
+      /* a listener failure must not stop the others */
+    }
+  });
+}
+
+/** After a source is added, removed, or hidden. The search screen re-reads the list. Returns the unsubscribe. */
+export function onSourcesChange(cb: () => void): () => void {
+  sourceListeners.push(cb);
+  return () => {
+    sourceListeners = sourceListeners.filter((x) => x !== cb);
+  };
+}
 
 export function setHideRule(rule: ((id: string) => boolean) | null): void {
   hideRule = rule;
+  notifySources();
 }
 
 export function torrServerSources(): Source[] {
@@ -58,10 +78,12 @@ export function builtinSources(): Source[] {
 /** Adds a built-in source (replaces one with the same id). */
 export function registerSource(s: Source): void {
   builtins = builtins.filter((b) => b.id !== s.id).concat([s]);
+  notifySources();
 }
 
 export function unregisterSource(id: string): void {
   builtins = builtins.filter((b) => b.id !== id);
+  notifySources();
 }
 
 export function allSources(): Source[] {

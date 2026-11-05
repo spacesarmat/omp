@@ -1,6 +1,118 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { deviceLogId, formatSearchLog } from '../src/server.mjs';
+import { createApp, deviceLogId, formatDhtLog, formatSearchLog } from '../src/server.mjs';
+import { emptyState } from '../src/state.mjs';
+
+describe('dht log line', () => {
+  const deviceId = 'device-SECRET-abcdef0123456789';
+  const hash = createHash('sha256').update(deviceId).digest('hex').slice(0, 8);
+  const infohash = 'ab'.repeat(20);
+
+  it('logs status and duration for every call, including 200, without the token or the infohash', () => {
+    const ok = formatDhtLog(200, 842.2, deviceId);
+    expect(ok).toBe('dht status=200 ms=842 device=' + hash + '\n');
+    const denied = formatDhtLog(401, 3, '');
+    expect(denied).toBe('dht status=401 ms=3 device=-\n');
+    const nasty = formatDhtLog('Bearer ' + deviceId + ' ' + infohash, -1, deviceId + '\n' + infohash);
+    expect(nasty).toBe('dht status=0 ms=0 device=' + createHash('sha256').update(deviceId + '\n' + infohash).digest('hex').slice(0, 8) + '\n');
+    expect(nasty).not.toContain(deviceId);
+    expect(nasty).not.toContain(infohash);
+    expect(nasty).not.toContain('Bearer');
+  });
+
+  it('logs 500 when the store or the token check throws, without the token', async () => {
+    const deviceId = 'device-SECRET-abcdef0123456789';
+    const secret = 'SUPERSECRET-token-value';
+    const lines: string[] = [];
+    const orig = process.stderr.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      lines.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    const call = async (app: (req: unknown, res: unknown) => Promise<void>, headers: Record<string, string>) => {
+      const req = {
+        method: 'GET',
+        url: '/v1/dht-peers?infohash=' + 'ab'.repeat(20),
+        headers,
+        socket: { remoteAddress: '127.0.0.1' },
+        async *[Symbol.asyncIterator]() {},
+      };
+      const res = {
+        status: 0,
+        body: Buffer.alloc(0),
+        writeHead(status: number) {
+          this.status = status;
+        },
+        setHeader() {},
+        end(buf?: Buffer | string) {
+          this.body = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf || ''));
+        },
+      };
+      await app(req, res);
+      return { status: res.status, body: res.body.toString('utf8') };
+    };
+    try {
+      const down = createApp(
+        {
+          engine: 'postgres',
+          read: async () => {
+            throw new Error('db down token=' + secret);
+          },
+          update: async () => {
+            throw new Error('no');
+          },
+          registry: { tokenSecret: async () => 'k'.repeat(40), verifyAccess: async () => ({ error: 'bad_token' }) },
+          info() {
+            return {};
+          },
+          async close() {},
+        },
+        async () => {
+          throw new Error('no fetch');
+        },
+        { env: {}, monitor: { health: () => null } },
+      );
+      const readFail = await call(down, { authorization: 'Bearer ' + secret, 'x-device-id': deviceId });
+      expect(readFail.status).toBe(500);
+      expect(readFail.body).toContain('down');
+
+      const callerDown = createApp(
+        {
+          engine: 'postgres',
+          read: async () => emptyState(),
+          update: async () => {
+            throw new Error('no');
+          },
+          registry: {
+            tokenSecret: async () => 'k'.repeat(40),
+            verifyAccess: async () => {
+              throw new Error('verify failed token=' + secret);
+            },
+          },
+          info() {
+            return {};
+          },
+          async close() {},
+        },
+        async () => {
+          throw new Error('no fetch');
+        },
+        { env: {}, monitor: { health: () => null } },
+      );
+      const checkFail = await call(callerDown, { authorization: 'Bearer a1.payload.sig', 'x-device-id': deviceId });
+      expect(checkFail.status).toBe(500);
+    } finally {
+      process.stderr.write = orig;
+    }
+    const log = lines.filter((l) => l.indexOf('dht status=') === 0);
+    expect(log).toHaveLength(2);
+    log.forEach((line) => expect(line).toMatch(new RegExp('^dht status=500 ms=\\d+ device=' + hash + '\\n$')));
+    const text = lines.join('');
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain(deviceId);
+    expect(text).not.toContain('ab'.repeat(20));
+  });
+});
 
 describe('search log line', () => {
   const deviceId = 'device-SECRET-abcdef0123456789';

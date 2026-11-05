@@ -22,7 +22,7 @@ function logId(id: string): string {
 
 export interface SearchAllOptions {
   ctx: SourceContext;
-  /** Ids chosen for this search («Все источники · N»); default: the sources switched on. */
+  /** Ids chosen for this search. Omitted: sources switched on. Empty or unknown: none. */
   sources?: string[];
   /** Candidate sources; default: allSources(). */
   from?: Source[];
@@ -65,9 +65,27 @@ function safe(fn: () => void): void {
   }
 }
 
+/**
+ * Sources of one search.
+ * No pick: the ones switched on.
+ * An empty pick: the person cleared the chip, so nothing (the switches stay as they are).
+ * Unknown ids are dropped. `fallback` (the search screen only) then uses the switched-on sources,
+ * so one vanished id does not leave that screen at 0. A saved subscription does not pass it:
+ * its source list stays limited to the ids that still exist.
+ */
+export function sourcesForSearch(from: Source[], picked?: string[] | null, opts?: { fallback?: boolean }): Source[] {
+  const enabled = enabledSources(from);
+  if (picked == null) return enabled;
+  if (!picked.length) return [];
+  const chosen = from.filter((s) => picked.indexOf(s.id) >= 0);
+  if (chosen.length) return chosen;
+  if (opts && opts.fallback) return enabled;
+  return [];
+}
+
 export function searchAll(query: string, opts: SearchAllOptions): SearchHandle {
   const from = opts.from || allSources();
-  const chosen = opts.sources ? from.filter((s) => opts.sources!.indexOf(s.id) >= 0) : enabledSources(from);
+  const chosen = sourcesForSearch(from, opts.sources);
   return runSources(chosen, (source) => source.search(query, opts.ctx), opts);
 }
 
@@ -99,6 +117,8 @@ export function runSources(
   const done = new Promise<void>((resolve) => {
     finish = resolve;
   });
+  // no sources: nothing will call settle, and a waiter (a subscription check) must not hang
+  if (!pending.length) finish();
 
   const settle = (id: string) => {
     const i = pending.indexOf(id);

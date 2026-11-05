@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CLOUDFLARE_TIMEOUT_MS, searchAll, SOURCE_TIMEOUT_MS } from '../../src/sources/search';
+import { checkSubscription } from '../../src/monitor/check';
+import { addSubscription } from '../../src/monitor/subs';
+import { CLOUDFLARE_TIMEOUT_MS, searchAll, sourcesForSearch, SOURCE_TIMEOUT_MS } from '../../src/sources/search';
 import { getHealth, resetHealth, reloadSourcePrefs, setCloudflareBypass, setSourceOn } from '../../src/sources/store';
 import { loginRequired, isLoginRequired } from '../../src/sources/types';
 import type { Source, SourceContext, SourceResult } from '../../src/sources/types';
@@ -180,6 +182,33 @@ describe('searchAll', () => {
     called.length = 0;
     await searchAll('q', { ctx, from: all, sources: ['off', 'login'] }).done;
     expect(called).toEqual(['off', 'login']);
+    called.length = 0;
+    // the person cleared the chip: that stays empty
+    await searchAll('q', { ctx, from: all, sources: [] }).done;
+    expect(called).toEqual([]);
+  });
+
+  it('keeps a saved source list, and the search screen can fall back when every id is gone', async () => {
+    const called: string[] = [];
+    const all = [
+      source('on', () => { called.push('on'); return Promise.resolve([]); }),
+      source('off', () => { called.push('off'); return Promise.resolve([]); }),
+    ];
+    setSourceOn('off', false);
+    // monitoring: checkSubscription passes sub.sources straight to searchAll, with no fallback
+    const kept = addSubscription({ query: 'q', quality: '', sources: ['gone', 'off'], notify: false }, 1000)!;
+    await checkSubscription(ctx, kept, { from: all, timeoutMs: 1000 });
+    expect(called).toEqual(['off']);
+    called.length = 0;
+    const gone = addSubscription({ query: 'q2', quality: '', sources: ['gone-only'], notify: false }, 2000)!;
+    await checkSubscription(ctx, gone, { from: all, timeoutMs: 1000 });
+    expect(called).toEqual([]);
+    expect(sourcesForSearch(all, ['gone-only']).map((s) => s.id)).toEqual([]);
+    // the search screen opts in: a chip of ids that no longer exist uses the switched-on sources
+    const picked = sourcesForSearch(all, ['gone-only'], { fallback: true });
+    expect(picked.map((s) => s.id)).toEqual(['on']);
+    await searchAll('q', { ctx, from: all, sources: picked.map((s) => s.id) }).done;
+    expect(called).toEqual(['on']);
   });
 
   it('cancel stops callbacks', async () => {
