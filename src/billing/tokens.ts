@@ -218,9 +218,9 @@ export function savePair(
         )
       : storeRefresh(ctx, pair.refreshToken, id);
   return keep.then((stored) => {
-    // The Keystore write is async. Sign-out during it must not publish the session.
+    // The Keystore write is async. Sign-out during it must not publish this pair over a newer sign-in.
     if (current && !current()) {
-      dropDeviceTokens(ctx, '');
+      dropCancelledWrite(ctx, id);
       return null;
     }
     if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
@@ -237,13 +237,24 @@ export function savePair(
     saveBillingSession(row);
     setBillingNotice('');
     emitBillingChange();
-    // A listener may sign out while the change is delivered. Drop the pair we just wrote.
+    // A listener may sign out, then a new code may publish, while this change is delivered.
     if (current && !current()) {
-      dropDeviceTokens(ctx, '');
+      dropCancelledWrite(ctx, id);
       return null;
     }
     return row;
   });
+}
+
+/**
+ * Drops a cancelled write only while this save still owns the session.
+ * A sign-in that replaced it (another id, already published) is left as it is.
+ * No session yet: the refresh token this write just stored is removed.
+ */
+function dropCancelledWrite(ctx: SourceContext, ownedId: string): void {
+  const live = billingSession();
+  if (live && live.id !== ownedId) return;
+  dropDeviceTokens(ctx, '');
 }
 
 /** Forgets the binding on this phone (tokens and the cached /v1/me answer). `notice` says why on the code screen. */

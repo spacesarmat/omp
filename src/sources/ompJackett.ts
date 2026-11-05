@@ -194,7 +194,9 @@ export function claimLinkedSession(ctx: SourceContext): Promise<BillingSession |
           allowBillingSignIn();
           return confirmPremium(ctx).then(() => {
             if (!current()) {
-              signOutBilling(ctx);
+              // Only the session this claim published. A code entered since then stays.
+              const live = billingSession();
+              if (live && row.id && live.id === row.id) signOutBilling(ctx);
               return null;
             }
             return row;
