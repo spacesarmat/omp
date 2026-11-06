@@ -66,6 +66,7 @@ export const ru = {
     faq: 'Вопросы и ответы',
     back: 'Назад',
     open: 'Открыть',
+    openScreenFailed: 'Не удалось открыть экран',
     name: 'Название',
     added: 'Добавлено',
     more: 'Подробнее',

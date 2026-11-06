@@ -20,7 +20,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.CommandButton
@@ -37,7 +38,25 @@ import com.spacesarmat.omp.MainActivity
 import com.spacesarmat.omp.OmpNativePlugin
 import com.spacesarmat.omp.R
 import com.spacesarmat.omp.TorrServerService
+import java.security.SecureRandom
+import javax.net.ssl.SSLContext
+import okhttp3.OkHttpClient
+import okhttp3.internal.tls.OkHostnameVerifier
 import org.json.JSONObject
+
+@UnstableApi
+internal fun audioHttpFactory(header: String?): HttpDataSource.Factory {
+    val tm = TorrServerTrust.trustManager()
+    val ctx = SSLContext.getInstance("TLS")
+    ctx.init(null, arrayOf(tm), SecureRandom())
+    val client = OkHttpClient.Builder()
+        .sslSocketFactory(ctx.socketFactory, tm)
+        .hostnameVerifier(TorrServerTrust.verifier(OkHostnameVerifier))
+        .build()
+    val http = OkHttpDataSource.Factory(client).setUserAgent("OMP")
+    if (!header.isNullOrEmpty()) http.setDefaultRequestProperties(mapOf("Authorization" to header))
+    return http
+}
 
 /**
  * Audiobook playback: its own ExoPlayer and Media3 session ([AudioSession.ID]), not player-core's PlaybackService.
@@ -241,10 +260,7 @@ class AudioPlayerService : MediaSessionService() {
     }
 
     private fun newPlayer(header: String? = authHeader): ExoPlayer {
-        val http = DefaultHttpDataSource.Factory()
-            .setUserAgent("OMP")
-            .setAllowCrossProtocolRedirects(true)
-        if (!header.isNullOrEmpty()) http.setDefaultRequestProperties(mapOf("Authorization" to header))
+        val http = audioHttpFactory(header)
         val attrs = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH)

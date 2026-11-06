@@ -40,6 +40,8 @@ export interface HttpOptions {
   timeoutMs?: number;
   auth?: string;
   responseType?: 'json' | 'text' | 'arraybuffer';
+  /** Largest accepted response body. Default 5 MiB, matching the native source client. */
+  maxBytes?: number;
   /** The caller expects this to fail sometimes (optional endpoints, offline checks): keep it out of the log. */
   quiet?: boolean;
   /** Extra request headers. Basic auth, when set, replaces an Authorization header from here. */
@@ -93,8 +95,48 @@ export function toBase64(bytes: Uint8Array): string {
 export interface FetchLike {
   ok: boolean;
   status: number;
+  body?: ReadableStream<Uint8Array> | null;
   text(): Promise<string>;
   arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+async function readCapped(res: FetchLike, maxBytes: number, type: 'json' | 'text' | 'arraybuffer'): Promise<Uint8Array> {
+  if (res.body) {
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        const chunk = next.value;
+        if (!chunk) continue;
+        size += chunk.byteLength;
+        if (size > maxBytes) {
+          await reader.cancel().catch(() => undefined);
+          throw apiError('http', 'Response too large', 413);
+        }
+        chunks.push(chunk);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const out = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
+  }
+  if (type !== 'arraybuffer') {
+    const bytes = new TextEncoder().encode(await res.text());
+    if (bytes.byteLength > maxBytes) throw apiError('http', 'Response too large', 413);
+    return bytes;
+  }
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength > maxBytes) throw apiError('http', 'Response too large', 413);
+  return new Uint8Array(buf);
 }
 
 /** [t] as fetch(): the answer's bytes decoded as UTF-8 for text(). */
@@ -143,33 +185,30 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
 
   const method = opts.method || (hasBody ? 'POST' : 'GET');
   const body = hasBody ? JSON.stringify(opts.body) : undefined;
+  const maxBytes = opts.maxBytes === undefined ? 5 * 1024 * 1024 : opts.maxBytes;
   const timeoutMs = opts.timeoutMs === undefined ? 5000 : opts.timeoutMs;
+  const controller = opts.transport || typeof AbortController === 'undefined' ? null : new AbortController();
   const sent: Promise<FetchLike> = opts.transport
     ? transportFetch(opts.transport, url, { method, headers, body, timeoutMs: timeoutMs > 0 ? timeoutMs : 120000 })
-    : fetch(url, { method, headers, body });
+    : fetch(url, { method, headers, body, signal: controller ? controller.signal : undefined });
   const p = sent.then(
     (res) => {
       if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
-      if (type === 'arraybuffer') {
-        return res.arrayBuffer().then((buf) => buf as unknown as T).catch((e) => {
-          throw isApiError(e) ? e : apiError('network', 'Network error');
-        });
-      } else if (type === 'text') {
-        return res.text().then((text) => text as unknown as T).catch((e) => {
-          throw isApiError(e) ? e : apiError('network', 'Network error');
-        });
-      } else {
-        return res.text().then((text) => {
-          if (!text) return null as unknown as T;
-          try {
-            return JSON.parse(text) as T;
-          } catch (e) {
-            throw apiError('parse', 'Bad JSON');
-          }
-        }).catch((e) => {
-          throw isApiError(e) ? e : apiError('network', 'Network error');
-        });
-      }
+      return readCapped(res, maxBytes, type).then((bytes) => {
+        if (type === 'arraybuffer') {
+          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer as T;
+        }
+        const text = new TextDecoder('utf-8').decode(bytes);
+        if (type === 'text') return text as T;
+        if (!text) return null as T;
+        try {
+          return JSON.parse(text) as T;
+        } catch (e) {
+          throw apiError('parse', 'Bad JSON');
+        }
+      }).catch((e) => {
+        throw isApiError(e) ? e : apiError('network', 'Network error');
+      });
     },
     (e) => {
       // a transport already says what failed (a timeout, a refused certificate)
@@ -188,6 +227,7 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
     let settled = false;
     const timer = setTimeout(() => {
       settled = true;
+      if (controller) controller.abort();
       const e = apiError('timeout', 'Timeout');
       if (!opts.quiet) logFailure(url, e);
       reject(e);

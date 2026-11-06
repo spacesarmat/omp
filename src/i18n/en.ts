@@ -66,6 +66,7 @@ export const en: EnDict<typeof ru> = {
     faq: 'Questions and answers',
     back: 'Back',
     open: 'Open',
+    openScreenFailed: 'Could not open the screen',
     name: 'Name',
     added: 'Added',
     more: 'More',

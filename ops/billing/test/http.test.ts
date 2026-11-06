@@ -113,4 +113,36 @@ describe('billing HTTP methods', () => {
     expect(post.status).toBe(400);
     expect(post.body).toBe('bad signature');
   });
+
+  it('refuses an oversized request body with 413', async () => {
+    const res = await call(port, 'POST', '/v1/yoomoney', 'x'.repeat(8 * 1024 * 1024 + 1));
+    expect(res.status).toBe(413);
+  });
+
+  it('answers 413 before an oversized chunked upload finishes', async () => {
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: '/v1/yoomoney',
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded', 'transfer-encoding': 'chunked' },
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () => {
+            resolve(res.statusCode || 0);
+            req.destroy();
+          });
+          res.on('aborted', () => reject(new Error('response aborted')));
+          res.on('error', reject);
+        },
+      );
+      req.on('error', reject);
+      const chunk = Buffer.alloc(64 * 1024, 120);
+      for (let i = 0; i < 129; i++) req.write(chunk);
+    });
+    expect(status).toBe(413);
+  });
 });

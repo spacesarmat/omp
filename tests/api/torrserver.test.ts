@@ -2,8 +2,12 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TorrServerClient, normalizeServerUrl, parseTorrentData } from '../../src/api/torrserver';
 import { mockFetch } from '../helpers/fetchMock';
 import { knownFiles, resetKnownFilesForTests } from '../../src/lib/knownFiles';
+import { stashFile } from '../../src/api/torrentFiles';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const HASH = 'c4c4bd6a4618e1042aa89649d629f85951eff546';
 
@@ -90,6 +94,34 @@ describe('TorrServerClient', () => {
     expect(JSON.parse(fn.mock.calls[0][1].body)).toEqual({
       action: 'add', link: 'magnet:?xt=urn:btih:' + HASH, title: 'X', poster: '', category: 'movie', save_to_db: true,
     });
+  });
+
+  it('aborts a stalled torrent upload after 30 seconds', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      signal = init.signal;
+      return new Promise(() => {});
+    }));
+    const p = c.add({ link: stashFile(new Uint8Array([1, 2, 3])) });
+    vi.advanceTimersByTime(30001);
+    await expect(p).rejects.toMatchObject({ kind: 'timeout' });
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('times out when the upload response headers arrive but its body stalls', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      signal = init.signal;
+      return Promise.resolve({ ok: true, status: 200, text: () => new Promise(() => {}) });
+    }));
+    const p = c.add({ link: stashFile(new Uint8Array([1, 2, 3])) });
+    let rejection: unknown;
+    void p.catch((e) => { rejection = e; });
+    await vi.advanceTimersByTimeAsync(30001);
+    expect(rejection).toMatchObject({ kind: 'timeout' });
+    expect(signal?.aborted).toBe(true);
   });
 
   it('files() prefers file_stats then data', () => {

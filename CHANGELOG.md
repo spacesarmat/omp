@@ -2,6 +2,11 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [phone] При ошибке загрузки второстепенного экрана появилась кнопка «Повторить»
+- [tech] Ограничены размеры HTTP-запросов, ответов и скачиваемых APK. Таймауты прерывают сетевые запросы. Аудиоплеер не передает Authorization на другой origin при redirect. Образ биллинга закреплен по digest и версии PostgreSQL client
+
 ## 0.20.9-beta.1
 
 - [phone] Второстепенные экраны загружаются по требованию. Начальный пакет JavaScript уменьшен примерно в 2,6 раза
