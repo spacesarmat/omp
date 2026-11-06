@@ -98,8 +98,8 @@ describe('download page feeds', () => {
 
 describe('download page languages and fallbacks', () => {
   const pages = [
-    { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js' },
-    { file: 'ops/pages/en/index.html', lang: 'en', title: 'Download OMP', otherLang: 'ru', otherPath: '/omp/', script: '../download.js' },
+    { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js', guide: 'https://github.com/spacesarmat/omp#установка' },
+    { file: 'ops/pages/en/index.html', lang: 'en', title: 'Download OMP', otherLang: 'ru', otherPath: '/omp/', script: '../download.js', guide: 'https://github.com/spacesarmat/omp/blob/main/README.en.md#install' },
   ];
 
   for (const page of pages) {
@@ -126,7 +126,7 @@ describe('download page languages and fallbacks', () => {
       expect(doc.querySelector('[data-download="beta-android"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
       expect(doc.querySelector('a[href="https://omp-player.online"]')).not.toBeNull();
       expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp"]')).not.toBeNull();
-      expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp#установка"]')).not.toBeNull();
+      expect(doc.querySelector(`a[href="${page.guide}"]`)).not.toBeNull();
       expect(doc.querySelector('[data-version="stable"]')).not.toBeNull();
       expect(doc.querySelector('[data-version="beta"]')).not.toBeNull();
 

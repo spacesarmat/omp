@@ -78,7 +78,7 @@ git commit -m "[tech] Ссылки загрузки из update-фидов"
 
 - [ ] **Step 1: Add failing page-contract tests**
 
-Read both HTML files. Assert Russian and English copy, correct `lang`, reciprocal language-switch and `hreflang` links, stable and beta sections, all four download selectors, ABI fallbacks, links to `https://omp-player.online`, `https://github.com/spacesarmat/omp` and `https://github.com/spacesarmat/omp#установка`, module scripts with correct relative paths, viewport and text-scale meta tags. Assert no third-party script, external font or analytics URL.
+Read both HTML files. Assert Russian and English copy, correct `lang`, reciprocal language-switch and `hreflang` links, stable and beta sections, all four download selectors, ABI fallbacks, links to `https://omp-player.online`, `https://github.com/spacesarmat/omp` and language-appropriate installation guides, module scripts with correct relative paths, viewport and text-scale meta tags. Assert no third-party script, external font or analytics URL.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
