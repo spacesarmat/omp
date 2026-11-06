@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="text-scale" content="scale">
+  <meta name="description" content="Download OMP for Android, Android TV and LG webOS. Stable and beta versions with direct APK and IPK links.">
+  <meta name="theme-color" content="#111310">
+  <link rel="canonical" href="/omp/en/">
+  <link rel="alternate" hreflang="ru" href="/omp/">
+  <link rel="alternate" hreflang="en" href="/omp/en/">
+  <title>Download OMP - Android and webOS</title>
+  <style>
+    :root { color-scheme: dark; --bg: #111310; --panel: #181a15; --text: #f2f2e9; --muted: #b3b8a8; --yellow: #f9c400; --line: #34382d; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+    a { color: inherit; text-decoration: none; }
+    a:focus-visible { outline: .15rem solid var(--yellow); outline-offset: .3rem; border-radius: .2rem; }
+    a:hover { color: var(--yellow); }
+    .wrap { width: min(70rem, calc(100% - 2rem)); margin-inline: auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-block: 1.5rem; }
+    .brand { display: flex; align-items: center; font-size: 1.65rem; font-weight: 800; letter-spacing: .04em; }
+    .brand::before { content: ""; width: .8rem; height: .8rem; margin-right: .65rem; border-radius: .15rem; background: var(--yellow); }
+    .header nav { display: flex; align-items: center; flex-wrap: wrap; }
+    .header nav a { padding: .45rem .7rem; color: var(--muted); }
+    .header nav a[aria-current="page"] { color: var(--yellow); }
+    .hero { padding-block: clamp(2.5rem, 1.5rem + 5vw, 6rem) clamp(1.5rem, 1rem + 3vw, 3.5rem); text-align: center; }
+    .eyebrow { color: var(--yellow); font-size: .8rem; font-weight: 700; letter-spacing: .16em; }
+    h1 { margin: .8rem 0 1rem; font-size: clamp(2.35rem, 1.65rem + 4vw, 4.8rem); line-height: 1.08; letter-spacing: -.04em; }
+    .hero p { max-width: 44rem; margin: 0 auto 1.6rem; color: var(--muted); font-size: clamp(1rem, .95rem + .3vw, 1.2rem); }
+    .main-site { display: inline-block; border-bottom: .1rem solid var(--yellow); padding-bottom: .15rem; font-weight: 650; }
+    .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr)); gap: 1.25rem; padding-bottom: 2rem; }
+    .panel { min-width: 0; padding: clamp(1.2rem, 1rem + 1vw, 2rem); border: .0625rem solid var(--line); border-radius: 1rem; background: var(--panel); }
+    .panel.beta { border-color: #62581f; }
+    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 1.4rem; }
+    .panel h2 { margin: 0 0 .35rem; font-size: 1.45rem; }
+    .panel-head p { margin: 0; color: var(--muted); font-size: .9rem; }
+    .version { flex-shrink: 0; margin-left: .8rem; padding: .3rem .55rem; border: .0625rem solid var(--line); border-radius: .4rem; color: var(--yellow); font-size: .8rem; font-weight: 700; }
+    .platform + .platform { margin-top: 1.25rem; padding-top: 1.25rem; border-top: .0625rem solid var(--line); }
+    .platform h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
+    .platform p { margin: 0 0 .85rem; color: var(--muted); font-size: .9rem; }
+    .button { display: block; padding: .8rem 1rem; border-radius: .5rem; text-align: center; font-weight: 750; }
+    .button.primary { background: var(--yellow); color: #171710; }
+    .button.primary:hover { background: #ffd84d; color: #171710; }
+    .button.secondary { border: .0625rem solid var(--line); color: var(--text); }
+    .abis { display: flex; flex-wrap: wrap; margin-top: .65rem; }
+    .abis a { margin-right: 1rem; padding-block: .25rem; color: var(--muted); font-size: .85rem; text-decoration: underline; text-underline-offset: .2rem; }
+    .fallback { margin: .7rem 0 0; color: var(--muted); font-size: .78rem; }
+    .fallback a { text-decoration: underline; text-underline-offset: .15rem; }
+    footer { padding-block: 1.5rem 2.5rem; border-top: .0625rem solid var(--line); color: var(--muted); }
+    footer nav { display: flex; justify-content: center; flex-wrap: wrap; }
+    footer a { margin: .4rem .8rem; text-decoration: underline; text-underline-offset: .2rem; }
+    @media (max-width: 40em) {
+      .header { justify-content: center; }
+      .header nav { justify-content: center; }
+      .downloads { grid-template-columns: 1fr; }
+      .panel-head { display: block; }
+      .version { display: inline-block; margin: .6rem 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header wrap">
+    <a class="brand" href="/omp/en/" aria-label="OMP - download page">OMP</a>
+    <nav aria-label="Language and links">
+      <a href="/omp/" hreflang="ru" lang="ru">RU</a>
+      <a href="/omp/en/" hreflang="en" lang="en" aria-current="page">EN</a>
+      <a href="https://github.com/spacesarmat/omp">GitHub</a>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">OPEN MOVIE PLAYER</div>
+      <h1>Download OMP</h1>
+      <p>Movies and series on Android, Android TV and LG webOS. Choose the stable release or try the latest improvements in beta.</p>
+      <a class="main-site" href="https://omp-player.online">Visit the main website</a>
+    </section>
+
+    <div class="downloads">
+      <section class="panel" aria-labelledby="stable-title">
+        <div class="panel-head">
+          <div>
+            <h2 id="stable-title">Stable release</h2>
+            <p>The tested version for everyday use</p>
+          </div>
+          <span class="version" data-version="stable">Current release</span>
+        </div>
+        <div class="platform">
+          <h3>Android and Android TV</h3>
+          <p>Universal APK for most devices. Separate architecture builds are also available.</p>
+          <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Download for Android</a>
+          <div class="abis" aria-label="Android architecture builds">
+            <a data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64 APK</a>
+            <a data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7 APK</a>
+          </div>
+        </div>
+        <div class="platform">
+          <h3>LG webOS</h3>
+          <p>IPK package for your LG TV.</p>
+          <a class="button secondary" data-download="stable-webos" href="https://github.com/spacesarmat/omp/releases/latest">Download for webOS</a>
+        </div>
+        <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases/latest">open the stable release page</a>.</p>
+      </section>
+
+      <section class="panel beta" aria-labelledby="beta-title">
+        <div class="panel-head">
+          <div>
+            <h2 id="beta-title">Beta release</h2>
+            <p>New features and fixes before the next stable release</p>
+          </div>
+          <span class="version" data-version="beta">Latest beta</span>
+        </div>
+        <div class="platform">
+          <h3>Android and Android TV</h3>
+          <p>Universal beta APK and separate architecture builds.</p>
+          <a class="button primary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Download beta for Android</a>
+          <div class="abis" aria-label="Beta Android architecture builds">
+            <a data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64 APK</a>
+            <a data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7 APK</a>
+          </div>
+        </div>
+        <div class="platform">
+          <h3>LG webOS</h3>
+          <p>Beta IPK package for your LG TV.</p>
+          <a class="button secondary" data-download="beta-webos" href="https://github.com/spacesarmat/omp/releases">Download beta for webOS</a>
+        </div>
+        <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases">open the release list</a>.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="wrap">
+    <nav aria-label="More links">
+      <a href="https://github.com/spacesarmat/omp#установка">Installation guide</a>
+      <a href="https://github.com/spacesarmat/omp">Source code on GitHub</a>
+      <a href="https://omp-player.online">Main OMP website</a>
+    </nav>
+  </footer>
+  <script type="module" src="../download.js"></script>
+</body>
+</html>

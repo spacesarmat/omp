@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+// @ts-ignore node builtins
+import { readFileSync } from 'node:fs';
 import { updateDownloads } from '../../ops/pages/download';
 
 const KINDS = ['stable-android', 'stable-webos', 'beta-android', 'beta-webos'] as const;
@@ -92,4 +94,49 @@ describe('download page feeds', () => {
     expect(link('stable-android', 'arm64').href).toBe('https://github.com/spacesarmat/omp/releases');
     expect(link('beta-android', 'armv7').href).toBe('https://github.com/spacesarmat/omp/releases');
   });
+});
+
+describe('download page languages and fallbacks', () => {
+  const pages = [
+    { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js' },
+    { file: 'ops/pages/en/index.html', lang: 'en', title: 'Download OMP', otherLang: 'ru', otherPath: '/omp/', script: '../download.js' },
+  ];
+
+  for (const page of pages) {
+    it(`${page.lang} keeps language switching and all release fallbacks`, () => {
+      const doc = new DOMParser().parseFromString(readFileSync(page.file, 'utf8'), 'text/html');
+      expect(doc.documentElement.lang).toBe(page.lang);
+      expect(doc.body.textContent).toContain(page.title);
+      const switchLink = doc.querySelector(`a[hreflang="${page.otherLang}"]`)!;
+      expect(switchLink.getAttribute('href')).toBe(page.otherPath);
+      expect(doc.querySelector(`link[rel="alternate"][hreflang="${page.otherLang}"]`)!.getAttribute('href')).toBe(page.otherPath);
+      expect(doc.querySelector(`a[hreflang="${page.lang}"]`)!.getAttribute('aria-current')).toBe('page');
+      expect(doc.querySelector('meta[name="viewport"]')).not.toBeNull();
+      expect(doc.querySelector('meta[name="text-scale"]')!.getAttribute('content')).toBe('scale');
+      expect(doc.querySelector('script[type="module"]')!.getAttribute('src')).toBe(page.script);
+
+      for (const kind of KINDS) {
+        expect(doc.querySelector(`[data-download="${kind}"]:not([data-abi])`)).not.toBeNull();
+      }
+      for (const kind of ['stable-android', 'beta-android']) {
+        expect(doc.querySelector(`[data-download="${kind}"][data-abi="arm64"]`)).not.toBeNull();
+        expect(doc.querySelector(`[data-download="${kind}"][data-abi="armv7"]`)).not.toBeNull();
+      }
+      expect(doc.querySelector('[data-download="stable-android"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases/latest');
+      expect(doc.querySelector('[data-download="beta-android"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
+      expect(doc.querySelector('a[href="https://omp-player.online"]')).not.toBeNull();
+      expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp"]')).not.toBeNull();
+      expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp#установка"]')).not.toBeNull();
+      expect(doc.querySelector('[data-version="stable"]')).not.toBeNull();
+      expect(doc.querySelector('[data-version="beta"]')).not.toBeNull();
+
+      const html = doc.documentElement.outerHTML;
+      expect(html).not.toContain('fonts.googleapis.com');
+      expect(html).not.toContain('mc.yandex.ru');
+      expect(html).not.toContain('googletagmanager.com');
+      for (const script of doc.querySelectorAll('script[src]')) {
+        expect(script.getAttribute('src')).not.toMatch(/^https?:/);
+      }
+    });
+  }
 });

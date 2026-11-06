@@ -34,3 +34,7 @@ export async function updateDownloads(root, fetchImpl) {
     }
   }));
 }
+
+if (typeof document !== 'undefined' && document.querySelector('script[type="module"][src$="download.js"]')) {
+  void updateDownloads(document, fetch);
+}
