@@ -4,7 +4,7 @@
 
 **Goal:** Publish small Russian and English download pages at `https://spacesarmat.github.io/omp/` and `https://spacesarmat.github.io/omp/en/` with current stable and beta downloads while preserving every update feed.
 
-**Architecture:** Static HTML and CSS live in `ops/pages`. A dependency-free ES module reads the existing update feeds and replaces fallback release-page links with direct downloads. A copy helper and a dedicated workflow publish only page files, while a shared concurrency group serializes writes with the release workflow.
+**Architecture:** Static HTML and CSS live in `ops/pages`. A dependency-free ES module reads the existing update feeds and replaces fallback release-page links with direct downloads. A copy helper and a dedicated workflow publish only page files. A rebase-with-retry helper preserves concurrent page and release commits without force-push or a lossy concurrency queue, and the page workflow explicitly requests a Pages build.
 
 **Tech Stack:** HTML, CSS, browser ES modules, Node.js, Vitest, GitHub Actions.
 
@@ -23,7 +23,7 @@
 - Feed request fails or returns incomplete data: keep the original release-page link and visible fallback text; covered by Task 1 tests.
 - JavaScript is disabled: both language versions still offer working release-page links; covered by Task 2 tests and browser checks.
 - Stable and beta feeds have different versions and ABI links: each button reads the correct feed; covered by Task 1 tests.
-- Page publication races a release: both workflows share `gh-pages-publish` with `cancel-in-progress: false`; covered by Task 3 checks.
+- Page publication races a release: independent workflows retry push with rebase and preserve every run; covered by the real concurrent Git test and Task 3 workflow checks.
 - Publication runs over an existing `gh-pages` clone: only `index.html`, `download.js` and `en/index.html` change, all other files remain; covered by Task 3 tests.
 - Narrow viewport or enlarged text: cards reflow without clipping in both languages; covered by Task 2 browser verification at 360 px and 1280 px plus text scaling inspection.
 
@@ -107,34 +107,37 @@ git commit -m "[tech] Русская и английская страницы з
 
 **Files:**
 - Create: `scripts/publish-pages.mjs`
+- Create: `scripts/git-push-retry.mjs`
 - Create: `.github/workflows/pages.yml`
 - Modify: `.github/workflows/release.yml`
 - Test: `tests/pages/publishPages.test.ts`
+- Test: `tests/pages/gitPushRetry.test.ts`
+- Test: `tests/pages/workflow.test.ts`
 
 **Interfaces:**
 - Consumes: `ops/pages/index.html`, `ops/pages/en/index.html` and `ops/pages/download.js` from Tasks 1 and 2.
-- Produces: `copyDownloadPages(sourceDir: string, destinationDir: string): void`; both workflows use concurrency group `gh-pages-publish` with `cancel-in-progress: false`.
+- Produces: `copyDownloadPages(sourceDir: string, destinationDir: string): void` and `pushWithRebase(cwd: string): void`; both workflows publish without force and preserve every run.
 
 - [ ] **Step 1: Write failing publication tests**
 
-Create temporary source and destination directories. Put all three page files in source and literal update/Homebrew fixtures plus an obsolete page file in destination. Call `copyDownloadPages`. Assert all page files match source, every unrelated file remains byte-identical and only the three declared page filenames are copied. Add a test that any missing page input fails before changing destination files.
+Create temporary source and destination directories. Put all three page files in source and literal update/Homebrew fixtures plus an obsolete page file in destination. Call `copyDownloadPages`. Assert all page files match source, every unrelated file remains byte-identical and only the three declared page filenames are copied. Add a test that any missing page input fails before changing destination files. Add a real Git test with concurrent page and feed commits, and workflow checks for explicit Pages build, rebase retry and the absence of force-push.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run tests/pages/publishPages.test.ts`
-Expected: FAIL because `scripts/publish-pages.mjs` does not exist.
+Run: `npx vitest run tests/pages/publishPages.test.ts tests/pages/gitPushRetry.test.ts tests/pages/workflow.test.ts`
+Expected: FAIL because the publication and retry helpers do not exist.
 
 - [ ] **Step 3: Implement the copy helper and workflows**
 
-Validate all three inputs before copying only `index.html`, `download.js` and `en/index.html`. The CLI accepts source and destination arguments. `pages.yml` runs on relevant pushes to `main` and `workflow_dispatch`, clones `gh-pages`, calls the helper, commits only when the page changed and pushes without force. Add the same concurrency group to `release.yml`. Reuse the repository's pinned checkout actions and existing bot identity pattern.
+Validate all three inputs before copying only `index.html`, `download.js` and `en/index.html`. The CLI accepts source and destination arguments. `pages.yml` runs on relevant pushes to `main` and `workflow_dispatch`, clones `gh-pages`, calls the helper, commits only when the page changed, retries push with rebase and explicitly requests a Pages build. The release workflow keeps the existing clone and uses the same retry helper instead of reinitializing history and force-pushing. Reuse the repository's pinned checkout actions and existing bot identity pattern.
 
 - [ ] **Step 4: Verify publication behavior and CI configuration**
 
-Run: `npx vitest run tests/pages/publishPages.test.ts tests/pages/download.test.ts`
-Expected: PASS.
+Run: `npx vitest run tests/pages`
+Expected: all page, copy, concurrent Git and workflow tests PASS.
 
 Run: `npx vitest run tests/pages && npm test`
-Expected: all page tests and the standard Linux CI suite PASS. Separately inspect both workflow definitions for the shared concurrency group and confirm no new force-push exists.
+Expected: all page tests and the standard Linux CI suite PASS. Separately inspect both workflow definitions and confirm no new force-push or shared lossy concurrency queue exists.
 
 - [ ] **Step 5: Commit**
 

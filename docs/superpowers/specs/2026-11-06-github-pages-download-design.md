@@ -19,7 +19,8 @@
 - `ops/pages/download.js`: общий ES module без зависимостей. Читает `update-android.json`, `update.json`, `update-android-beta.json`, `update-beta.json` относительно корня GitHub Pages. Подставляет версии, universal APK, arm64, armv7 и IPK. Ошибка загрузки фида оставляет резервные ссылки без изменений.
 - Стили встроены в HTML: системные шрифты, адаптивные карточки, заметный keyboard focus, `meta name="text-scale" content="scale"`, относительные размеры и `clamp()`. Внешние шрифты, аналитика и сторонние скрипты не используются.
 - `.github/workflows/pages.yml`: публикация после изменения `ops/pages/**` в `main` и вручную. Workflow копирует только файлы страниц в клон `gh-pages`, не удаляет JSON и Homebrew-файлы и делает push без force.
-- Общий `concurrency` для `pages.yml` и `release.yml` не допускает одновременной записи в `gh-pages`.
+- `scripts/git-push-retry.mjs`: обычный push без force с rebase и повторными попытками при одновременной записи. Он сохраняет каждый page и release commit и не вытесняет ожидающие запуски, как общая `concurrency`-группа.
+- `pages.yml` дополнительно запрашивает Pages build через GitHub API, чтобы публикация не зависела от автоматического запуска по push.
 
 ## Проверки
 
