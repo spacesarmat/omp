@@ -109,6 +109,21 @@ describe('TorrServerClient', () => {
     expect(signal?.aborted).toBe(true);
   });
 
+  it('times out when the upload response headers arrive but its body stalls', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      signal = init.signal;
+      return Promise.resolve({ ok: true, status: 200, text: () => new Promise(() => {}) });
+    }));
+    const p = c.add({ link: stashFile(new Uint8Array([1, 2, 3])) });
+    let rejection: unknown;
+    void p.catch((e) => { rejection = e; });
+    await vi.advanceTimersByTimeAsync(30001);
+    expect(rejection).toMatchObject({ kind: 'timeout' });
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('files() prefers file_stats then data', () => {
     expect(c.files({ hash: HASH, title: 'T', stat: 3, file_stats: [{ id: 2, path: 'x.mkv', length: 1 }] })[0].id).toBe(2);
     const data = JSON.stringify({ TorrServer: { Files: [{ id: 7, path: 'y.mkv', length: 1 }] } });

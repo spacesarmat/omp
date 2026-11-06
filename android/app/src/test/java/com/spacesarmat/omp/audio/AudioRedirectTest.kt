@@ -1,7 +1,12 @@
 package com.spacesarmat.omp.audio
 
 import androidx.media3.datasource.DataSpec
+import com.spacesarmat.omp.CertPins
+import com.spacesarmat.omp.tls.TorrServerTrust
+import java.security.KeyStore
 import java.security.Security
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.AfterClass
@@ -43,6 +48,33 @@ class AudioRedirectTest {
         } finally {
             first.shutdown()
             second.shutdown()
+        }
+    }
+
+    @Test
+    fun pinnedHttpsServerCanPlay() {
+        val ks = KeyStore.getInstance("PKCS12")
+        javaClass.classLoader!!.getResourceAsStream("untrusted-site.p12")!!.use {
+            ks.load(it, "testpass".toCharArray())
+        }
+        val leaf = ks.getCertificate(ks.aliases().nextElement()) as java.security.cert.X509Certificate
+        val kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
+            init(ks, "testpass".toCharArray())
+        }
+        val ctx = SSLContext.getInstance("TLS").apply { init(kmf.keyManagers, null, null) }
+        val server = MockWebServer()
+        server.useHttps(ctx.socketFactory, false)
+        server.enqueue(MockResponse().setBody(okio.Buffer().write(ByteArray(16))))
+        server.start()
+        try {
+            TorrServerTrust.trust(server.hostName + ":" + server.port, CertPins.fingerprint(leaf))
+            val source = audioHttpFactory(null).createDataSource()
+            val data = ByteArray(16)
+            source.open(DataSpec(android.net.Uri.parse(server.url("/audio").toString())))
+            assertEquals(16, source.read(data, 0, data.size))
+        } finally {
+            server.shutdown()
+            TorrServerTrust.reset()
         }
     }
 }

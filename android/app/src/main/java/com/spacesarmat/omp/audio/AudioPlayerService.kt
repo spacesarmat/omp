@@ -38,12 +38,22 @@ import com.spacesarmat.omp.MainActivity
 import com.spacesarmat.omp.OmpNativePlugin
 import com.spacesarmat.omp.R
 import com.spacesarmat.omp.TorrServerService
+import java.security.SecureRandom
+import javax.net.ssl.SSLContext
 import okhttp3.OkHttpClient
+import okhttp3.internal.tls.OkHostnameVerifier
 import org.json.JSONObject
 
 @UnstableApi
 internal fun audioHttpFactory(header: String?): HttpDataSource.Factory {
-    val http = OkHttpDataSource.Factory(OkHttpClient()).setUserAgent("OMP")
+    val tm = TorrServerTrust.trustManager()
+    val ctx = SSLContext.getInstance("TLS")
+    ctx.init(null, arrayOf(tm), SecureRandom())
+    val client = OkHttpClient.Builder()
+        .sslSocketFactory(ctx.socketFactory, tm)
+        .hostnameVerifier(TorrServerTrust.verifier(OkHostnameVerifier))
+        .build()
+    val http = OkHttpDataSource.Factory(client).setUserAgent("OMP")
     if (!header.isNullOrEmpty()) http.setDefaultRequestProperties(mapOf("Authorization" to header))
     return http
 }

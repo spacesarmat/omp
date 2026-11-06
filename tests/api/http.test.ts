@@ -46,6 +46,24 @@ describe('request', () => {
     mockFetch(() => ({ body: 'яяя' }));
     await expect(request('http://h/x', { maxBytes: 4 })).rejects.toMatchObject({ kind: 'http', status: 413 });
   });
+  it('cancels a streamed response as soon as its chunks exceed the limit', async () => {
+    let cancelled = false;
+    const text = vi.fn(() => Promise.resolve('{}'));
+    const body = {
+      getReader: () => ({
+        read: () => Promise.resolve({ done: false, value: new Uint8Array([1, 2, 3]) }),
+        cancel: () => {
+          cancelled = true;
+          return Promise.resolve();
+        },
+        releaseLock: () => {},
+      }),
+    };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, body, text })));
+    await expect(request('http://h/x', { maxBytes: 2 })).rejects.toMatchObject({ kind: 'http', status: 413 });
+    expect(cancelled).toBe(true);
+    expect(text).not.toHaveBeenCalled();
+  });
   it('rejects an oversized binary response', async () => {
     mockFetch(() => ({ body: 'x'.repeat(5 * 1024 * 1024 + 1) }));
     await expect(request('http://h/x', { responseType: 'arraybuffer' })).rejects.toMatchObject({ kind: 'http', status: 413 });
