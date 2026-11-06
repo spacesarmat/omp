@@ -98,8 +98,8 @@ describe('download page feeds', () => {
 
 describe('download page languages and fallbacks', () => {
   const pages = [
-    { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js', guide: 'https://github.com/spacesarmat/omp#установка', mainSite: 'https://omp-player.online' },
-    { file: 'ops/pages/en/index.html', lang: 'en', title: 'Download OMP', otherLang: 'ru', otherPath: '/omp/', script: '../download.js', guide: 'https://github.com/spacesarmat/omp/blob/main/README.en.md#install', mainSite: 'https://omp-player.online/en/' },
+    { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js', guide: 'https://github.com/spacesarmat/omp#установка', mainSite: 'https://omp-player.online', logo: './assets/logo.svg' },
+    { file: 'ops/pages/en/index.html', lang: 'en', title: 'Download OMP', otherLang: 'ru', otherPath: '/omp/', script: '../download.js', guide: 'https://github.com/spacesarmat/omp/blob/main/README.en.md#install', mainSite: 'https://omp-player.online/en/', logo: '../assets/logo.svg' },
   ];
 
   for (const page of pages) {
@@ -114,6 +114,11 @@ describe('download page languages and fallbacks', () => {
       expect(doc.querySelector('meta[name="viewport"]')).not.toBeNull();
       expect(doc.querySelector('meta[name="text-scale"]')!.getAttribute('content')).toBe('scale');
       expect(doc.querySelector('script[type="module"]')!.getAttribute('src')).toBe(page.script);
+      const logo = doc.querySelector('img.brand-logo')!;
+      expect(logo.getAttribute('src')).toBe(page.logo);
+      expect(logo.getAttribute('width')).toBe('40');
+      expect(logo.getAttribute('height')).toBe('40');
+      expect(logo.getAttribute('alt')).toBe('');
 
       for (const kind of KINDS) {
         expect(doc.querySelector(`[data-download="${kind}"]:not([data-abi])`)).not.toBeNull();

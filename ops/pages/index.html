@@ -20,7 +20,7 @@
     .wrap { width: min(70rem, calc(100% - 2rem)); margin-inline: auto; }
     .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-block: 1.5rem; }
     .brand { display: flex; align-items: center; font-size: 1.65rem; font-weight: 800; letter-spacing: .04em; }
-    .brand::before { content: ""; width: .8rem; height: .8rem; margin-right: .65rem; border-radius: .15rem; background: var(--yellow); }
+    .brand-logo { display: block; width: 2.5rem; height: 2.5rem; margin-right: .65rem; }
     .header nav { display: flex; align-items: center; flex-wrap: wrap; }
     .header nav a { padding: .45rem .7rem; color: var(--muted); }
     .header nav a[aria-current="page"] { color: var(--yellow); }
@@ -61,7 +61,7 @@
 </head>
 <body>
   <header class="header wrap">
-    <a class="brand" href="/omp/" aria-label="OMP - страница загрузки">OMP</a>
+    <a class="brand" href="/omp/" aria-label="OMP - страница загрузки"><img class="brand-logo" src="./assets/logo.svg" width="40" height="40" alt="">OMP</a>
     <nav aria-label="Язык и ссылки">
       <a href="/omp/" hreflang="ru" lang="ru" aria-current="page">RU</a>
       <a href="/omp/en/" hreflang="en" lang="en">EN</a>

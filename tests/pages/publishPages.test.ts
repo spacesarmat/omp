@@ -32,6 +32,7 @@ describe('copyDownloadPages', () => {
     write(source, 'index.html', '<html>ru new</html>');
     write(source, 'en/index.html', '<html>en new</html>');
     write(source, 'download.js', 'export const current = true;');
+    write(source, 'assets/logo.svg', '<svg>omp logo</svg>');
     write(source, 'not-for-publication.txt', 'source only');
     write(destination, 'index.html', '<html>old</html>');
     write(destination, 'old-page.txt', 'keep me');
@@ -44,6 +45,7 @@ describe('copyDownloadPages', () => {
     expect(readFileSync(join(destination, 'index.html'), 'utf8')).toBe('<html>ru new</html>');
     expect(readFileSync(join(destination, 'en/index.html'), 'utf8')).toBe('<html>en new</html>');
     expect(readFileSync(join(destination, 'download.js'), 'utf8')).toBe('export const current = true;');
+    expect(readFileSync(join(destination, 'assets/logo.svg'), 'utf8')).toBe('<svg>omp logo</svg>');
     expect(readFileSync(join(destination, 'update.json'), 'utf8')).toBe('{"version":"1.0.0"}');
     expect(readFileSync(join(destination, 'update-beta.json'), 'utf8')).toBe('{"version":"1.1.0-beta.2"}');
     expect(readFileSync(join(destination, 'apps.json'), 'utf8')).toBe('{"packages":[]}');

@@ -24,7 +24,7 @@
 - JavaScript is disabled: both language versions still offer working release-page links; covered by Task 2 tests and browser checks.
 - Stable and beta feeds have different versions and ABI links: each button reads the correct feed; covered by Task 1 tests.
 - Page publication races a release: independent workflows retry push with rebase and preserve every run; covered by the real concurrent Git test and Task 3 workflow checks.
-- Publication runs over an existing `gh-pages` clone: only `index.html`, `download.js` and `en/index.html` change, all other files remain; covered by Task 3 tests.
+- Publication runs over an existing `gh-pages` clone: only `index.html`, `download.js`, `en/index.html` and `assets/logo.svg` change, all other files remain; covered by Task 3 tests.
 - Narrow viewport or enlarged text: cards reflow without clipping in both languages; covered by Task 2 browser verification at 360 px and 1280 px plus text scaling inspection.
 
 ---
@@ -115,12 +115,12 @@ git commit -m "[tech] Русская и английская страницы з
 - Test: `tests/pages/workflow.test.ts`
 
 **Interfaces:**
-- Consumes: `ops/pages/index.html`, `ops/pages/en/index.html` and `ops/pages/download.js` from Tasks 1 and 2.
+- Consumes: `ops/pages/index.html`, `ops/pages/en/index.html`, `ops/pages/download.js` and `ops/pages/assets/logo.svg` from Tasks 1 and 2.
 - Produces: `copyDownloadPages(sourceDir: string, destinationDir: string): void` and `pushWithRebase(cwd: string): void`; both workflows publish without force and preserve every run.
 
 - [ ] **Step 1: Write failing publication tests**
 
-Create temporary source and destination directories. Put all three page files in source and literal update/Homebrew fixtures plus an obsolete page file in destination. Call `copyDownloadPages`. Assert all page files match source, every unrelated file remains byte-identical and only the three declared page filenames are copied. Add a test that any missing page input fails before changing destination files. Add a real Git test with concurrent page and feed commits, and workflow checks for explicit Pages build, rebase retry and the absence of force-push.
+Create temporary source and destination directories. Put all four page files in source and literal update/Homebrew fixtures plus an obsolete page file in destination. Call `copyDownloadPages`. Assert all page files match source, every unrelated file remains byte-identical and only the four declared page filenames are copied. Add a test that any missing page input fails before changing destination files. Add a real Git test with concurrent page and feed commits, and workflow checks for explicit Pages build, rebase retry and the absence of force-push.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -129,7 +129,7 @@ Expected: FAIL because the publication and retry helpers do not exist.
 
 - [ ] **Step 3: Implement the copy helper and workflows**
 
-Validate all three inputs before copying only `index.html`, `download.js` and `en/index.html`. The CLI accepts source and destination arguments. `pages.yml` runs on relevant pushes to `main` and `workflow_dispatch`, clones `gh-pages`, calls the helper, commits only when the page changed, retries push with rebase and explicitly requests a Pages build. The release workflow keeps the existing clone and uses the same retry helper instead of reinitializing history and force-pushing. Reuse the repository's pinned checkout actions and existing bot identity pattern.
+Validate all four inputs before copying only `index.html`, `download.js`, `en/index.html` and `assets/logo.svg`. The CLI accepts source and destination arguments. `pages.yml` runs on relevant pushes to `main` and `workflow_dispatch`, clones `gh-pages`, calls the helper, commits only when the page changed, retries push with rebase and explicitly requests a Pages build. The release workflow keeps the existing clone and uses the same retry helper instead of reinitializing history and force-pushing. Reuse the repository's pinned checkout actions and existing bot identity pattern.
 
 - [ ] **Step 4: Verify publication behavior and CI configuration**
 

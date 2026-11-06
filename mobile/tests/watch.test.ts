@@ -130,6 +130,7 @@ describe('watchOnPhone', () => {
     localStorage.clear();
     reloadProgress();
     vi.spyOn(TorrServerClient.prototype, 'list').mockResolvedValue([]);
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor as any);
     vi.spyOn(TorrServerClient.prototype, 'setViewed').mockResolvedValue(undefined);
   };
   const done = () => {

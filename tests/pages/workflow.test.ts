@@ -9,6 +9,7 @@ describe('gh-pages workflows', () => {
   it('requests an explicit Pages build after publication', () => {
     expect(pages).toContain('pages: write');
     expect(pages).toContain('repos/${{ github.repository }}/pages/builds');
+    expect(pages).toContain('git add index.html download.js en/index.html assets/logo.svg');
     expect(pages.indexOf('node scripts/git-push-retry.mjs')).toBeLessThan(pages.indexOf('/pages/builds'));
   });
 

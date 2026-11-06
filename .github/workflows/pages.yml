@@ -31,7 +31,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html download.js en/index.html
+          git add index.html download.js en/index.html assets/logo.svg
           if git diff --cached --quiet; then
             echo "Download pages are already current"
             exit 0
