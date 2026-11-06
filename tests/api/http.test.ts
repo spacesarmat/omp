@@ -17,6 +17,14 @@ describe('request', () => {
     expect(init.body).toBe('{"action":"list"}');
     expect(init.headers['Content-Type']).toBe('application/json');
   });
+  it('supports text-only response implementations', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"ok":true}'),
+    })));
+    await expect(request('http://h/x')).resolves.toEqual({ ok: true });
+  });
   it('returns null on empty body', async () => {
     mockFetch(() => ({ body: '' }));
     expect(await request('http://h/x')).toBeNull();

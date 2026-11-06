@@ -100,7 +100,7 @@ export interface FetchLike {
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
-async function readCapped(res: FetchLike, maxBytes: number): Promise<Uint8Array> {
+async function readCapped(res: FetchLike, maxBytes: number, type: 'json' | 'text' | 'arraybuffer'): Promise<Uint8Array> {
   if (res.body) {
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
@@ -128,6 +128,11 @@ async function readCapped(res: FetchLike, maxBytes: number): Promise<Uint8Array>
       offset += chunk.byteLength;
     }
     return out;
+  }
+  if (type !== 'arraybuffer') {
+    const bytes = new TextEncoder().encode(await res.text());
+    if (bytes.byteLength > maxBytes) throw apiError('http', 'Response too large', 413);
+    return bytes;
   }
   const buf = await res.arrayBuffer();
   if (buf.byteLength > maxBytes) throw apiError('http', 'Response too large', 413);
@@ -189,7 +194,7 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
   const p = sent.then(
     (res) => {
       if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);
-      return readCapped(res, maxBytes).then((bytes) => {
+      return readCapped(res, maxBytes, type).then((bytes) => {
         if (type === 'arraybuffer') {
           return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer as T;
         }
