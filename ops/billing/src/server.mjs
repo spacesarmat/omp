@@ -307,9 +307,20 @@ function audit(file, action, detail, admin) {
   }));
 }
 
+const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
+
 async function readBody(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > BODY_LIMIT_BYTES) {
+      const err = new Error('body too large');
+      err.code = 'BODY_TOO_LARGE';
+      throw err;
+    }
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString('utf8');
   const type = String(req.headers['content-type'] || '');
   if (type.indexOf('application/json') >= 0) {
@@ -2168,6 +2179,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       return send(res, 404, 'not found');
     } catch (e) {
+      if (e && e.code === 'BODY_TOO_LARGE') return json(res, 413, { error: 'too_large' });
       if (isReadOnlyError(e)) return json(res, 503, { error: 'read_only' });
       return json(res, 500, { error: 'down' });
     }

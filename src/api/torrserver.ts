@@ -46,6 +46,27 @@ export function setTorrServerTransport(t: HttpTransport | null): void {
   httpsTransport = t;
 }
 
+function uploadWithTimeout(start: (signal?: AbortSignal) => Promise<Response>, timeoutMs: number): Promise<Response> {
+  const controller = typeof AbortController === 'undefined' ? null : new AbortController();
+  const promise = start(controller ? controller.signal : undefined);
+  return new Promise<Response>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      if (controller) controller.abort();
+      reject(apiError('timeout', 'Timeout'));
+    }, timeoutMs);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 export class TorrServerClient {
   readonly baseUrl: string;
   private readonly auth?: string;
@@ -123,7 +144,7 @@ export class TorrServerClient {
             transportFetch(tr, url, { method: 'POST', headers, bodyBase64: toBase64(new Uint8Array(buf)), contentType: type, timeoutMs: 30000 }),
           );
         })()
-      : fetch(url, { method: 'POST', headers, body: form });
+      : uploadWithTimeout((signal) => fetch(url, { method: 'POST', headers, body: form, signal }), 30000);
     return sent.then(
       (res) => {
         if (!res.ok) throw apiError('http', 'HTTP ' + res.status, res.status);

@@ -121,6 +121,7 @@ dependencies {
     // Media3 is aligned with 2160 Player's player-core (it exposes media3-exoplayer as api), see the version
     // catalog in vendor/2160player/gradle/libs.versions.toml
     implementation 'androidx.media3:media3-exoplayer:1.11.1'
+    implementation 'androidx.media3:media3-datasource-okhttp:1.11.1'
     implementation 'androidx.media3:media3-ui:1.11.1'
     // MediaSession / notification actions for the phone's foreground PlaybackService. player-core depends on
     // media3-session as implementation, so the app module does not see it unless it is declared here too.
@@ -143,6 +144,7 @@ dependencies {
     testImplementation "org.json:json:20240303"
     // local HTTP server for the release download redirect tests (install/OkReleaseHttpTest)
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

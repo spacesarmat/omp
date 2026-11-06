@@ -113,4 +113,9 @@ describe('billing HTTP methods', () => {
     expect(post.status).toBe(400);
     expect(post.body).toBe('bad signature');
   });
+
+  it('refuses an oversized request body with 413', async () => {
+    const res = await call(port, 'POST', '/v1/yoomoney', 'x'.repeat(8 * 1024 * 1024 + 1));
+    expect(res.status).toBe(413);
+  });
 });

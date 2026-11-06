@@ -38,6 +38,18 @@ describe('request', () => {
     mockFetch(() => ({ body: '<html>' }));
     await expect(request('http://h/x')).rejects.toMatchObject({ kind: 'parse' });
   });
+  it('rejects an oversized response body', async () => {
+    mockFetch(() => ({ body: 'x'.repeat(5 * 1024 * 1024 + 1) }));
+    await expect(request('http://h/x')).rejects.toMatchObject({ kind: 'http', status: 413 });
+  });
+  it('measures the response limit in UTF-8 bytes', async () => {
+    mockFetch(() => ({ body: 'яяя' }));
+    await expect(request('http://h/x', { maxBytes: 4 })).rejects.toMatchObject({ kind: 'http', status: 413 });
+  });
+  it('rejects an oversized binary response', async () => {
+    mockFetch(() => ({ body: 'x'.repeat(5 * 1024 * 1024 + 1) }));
+    await expect(request('http://h/x', { responseType: 'arraybuffer' })).rejects.toMatchObject({ kind: 'http', status: 413 });
+  });
   it('rejects with network error', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
     await expect(request('http://h/x')).rejects.toMatchObject({ kind: 'network' });
@@ -48,6 +60,18 @@ describe('request', () => {
     const p = request('http://h/x', { timeoutMs: 1000 });
     vi.advanceTimersByTime(1001);
     await expect(p).rejects.toMatchObject({ kind: 'timeout' });
+  });
+  it('aborts the underlying fetch on timeout', async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_url, init) => {
+      signal = init.signal;
+      return new Promise(() => {});
+    }));
+    const p = request('http://h/x', { timeoutMs: 1000 });
+    vi.advanceTimersByTime(1001);
+    await expect(p).rejects.toMatchObject({ kind: 'timeout' });
+    expect(signal?.aborted).toBe(true);
   });
   it('maps body read error to network error', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({

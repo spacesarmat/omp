@@ -1,6 +1,6 @@
 # OMP billing panel — build from repo root:
 #   docker build -f ops/vps/Dockerfile -t ghcr.io/spacesarmat/omp-billing ops/billing
-FROM node:24-bookworm-slim
+FROM node:24-bookworm-slim@sha256:01d566e8d94d8c619591d78652babfccd3c6992a3dffa9ed5ab39e11cf6c70e9
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ RUN apt-get update \
   && . /etc/os-release \
   && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $VERSION_CODENAME-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
   && apt-get update \
-  && apt-get install -y --no-install-recommends postgresql-client-17 \
+  && apt-get install -y --no-install-recommends postgresql-client-17=17.11-1.pgdg12+2 \
   && apt-get purge -y curl && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/* \
   && pg_dump --version

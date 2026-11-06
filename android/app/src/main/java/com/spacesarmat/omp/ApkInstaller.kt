@@ -18,6 +18,7 @@ class UserError(message: String) : Exception(message)
 /** Download, SHA-256 check and hand-off to the system installer. Blocking: call off the main thread. */
 object ApkInstaller {
     private const val APK_MIME = "application/vnd.android.package-archive"
+    private const val MAX_BYTES = 256L * 1024 * 1024
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -40,7 +41,10 @@ object ApkInstaller {
     }
 
     /** Downloads [url] to cacheDir/updates/omp.apk and verifies [sha256]; [progress] gets 0..100. */
-    fun download(context: Context, url: String, sha256: String, progress: (Int) -> Unit): File {
+    fun download(context: Context, url: String, sha256: String, progress: (Int) -> Unit): File =
+        downloadToDir(File(context.cacheDir, "updates").apply { mkdirs() }, url, sha256, MAX_BYTES, progress)
+
+    internal fun downloadToDir(dir: File, url: String, sha256: String, maxBytes: Long, progress: (Int) -> Unit): File {
         val expected = sha256.trim().lowercase()
         if (!Regex("[0-9a-f]{64}").matches(expected)) throw UserError(I18n.s("install.err.noChecksum"))
         val request = try {
@@ -48,7 +52,6 @@ object ApkInstaller {
         } catch (_: IllegalArgumentException) {
             throw UserError(I18n.s("install.err.badUrl"))
         }
-        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         val part = File(dir, "omp.apk.part")
         val target = File(dir, "omp.apk")
         part.delete()
@@ -59,6 +62,7 @@ object ApkInstaller {
                 if (!resp.isSuccessful) throw UserError(I18n.s("install.err.downloadHttp", "code" to resp.code.toString()))
                 val body = resp.body ?: throw UserError(I18n.s("install.err.download"))
                 val total = body.contentLength()
+                if (total > maxBytes) throw UserError(I18n.s("install.err.download"))
                 var done = 0L
                 var lastPercent = -1
                 progress(0)
@@ -68,9 +72,10 @@ object ApkInstaller {
                         while (true) {
                             val n = input.read(buf)
                             if (n < 0) break
+                            done += n
+                            if (done > maxBytes) throw UserError(I18n.s("install.err.download"))
                             out.write(buf, 0, n)
                             digest.update(buf, 0, n)
-                            done += n
                             if (total > 0) {
                                 val p = ((done * 100) / total).toInt().coerceIn(0, 100)
                                 if (p != lastPercent) {
