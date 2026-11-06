@@ -1,0 +1,44 @@
+name: Download page
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/pages/**'
+      - 'scripts/publish-pages.mjs'
+      - 'scripts/git-push-retry.mjs'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Check out gh-pages
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: gh-pages
+          path: build/pages
+      - name: Copy the download pages
+        run: node scripts/publish-pages.mjs ops/pages build/pages
+      - name: Publish to gh-pages
+        working-directory: build/pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html download.js en/index.html
+          if git diff --cached --quiet; then
+            echo "Download pages are already current"
+            exit 0
+          fi
+          git commit -m "Update OMP download pages"
+          node "$GITHUB_WORKSPACE/scripts/git-push-retry.mjs"
+      - name: Request a GitHub Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"

@@ -132,18 +132,16 @@ jobs:
         run: |
           # gh-pages holds every feed: a release replaces them all (the beta ones too), a beta only its two
           git clone -q --depth 1 -b gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" build/pages || mkdir -p build/pages
-          rm -rf build/pages/.git
           case "$TAG" in
             *-beta.*) cp build/hb/update-beta.json build/hb/update-android-beta.json build/pages/ ;;
             *) cp -r build/hb/. build/pages/ ;;
           esac
           cd build/pages
-          git init -q -b gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -q -m "Update feed for ${TAG}"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          node "$GITHUB_WORKSPACE/scripts/git-push-retry.mjs"
       # Telegram channel post (skipped without the bot token): photo, caption and buttons only, no files attached (the
       # buttons link every build and the release page). A failure must not fail the release.
       # A stable release whose docs/screenshots/release-<version>/ is in the tag checkout above goes as a photo album.
