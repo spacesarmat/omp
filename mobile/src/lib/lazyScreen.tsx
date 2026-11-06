@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentType, VNode } from 'preact';
+import { t } from '../../../src/i18n';
 
 /**
  * A tiny Preact wrapper around a dynamic import of a screen component.
@@ -32,12 +33,12 @@ export function lazyScreen(
     if (failed) {
       return (
         <div class="lazy-error" role="alert">
-          <span>Не удалось открыть экран</span>
+          <span>{t('common.openScreenFailed')}</span>
           <button onClick={() => {
             setScreen(null);
             setFailed(false);
             setAttempt((n) => n + 1);
-          }}>Повторить</button>
+          }}>{t('common.retry')}</button>
         </div>
       );
     }
