@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.20.9-beta.2
+
+- [phone] A Retry button now appears when a secondary screen fails to load
+- [tech] HTTP request and response sizes and APK downloads are limited. Timeouts abort network requests. The audio player does not forward Authorization to another origin on redirect. The billing image is pinned by digest and PostgreSQL client version
+
 ## 0.20.9-beta.1
 
 - [phone] Secondary screens now load on demand. The initial JavaScript bundle is about 2.6 times smaller
