@@ -17,6 +17,7 @@
 - `ops/pages/index.html`: русская семантическая страница с двумя разделами загрузки и резервными ссылками на страницы релизов.
 - `ops/pages/en/index.html`: английская версия с теми же возможностями. Обе страницы имеют `lang`, переключатель языка и ссылки `hreflang`.
 - `ops/pages/download.js`: общий ES module без зависимостей. Читает `update-android.json`, `update.json`, `update-android-beta.json`, `update-beta.json` относительно корня GitHub Pages. Подставляет версии, universal APK, arm64, armv7 и IPK. Ошибка загрузки фида оставляет резервные ссылки без изменений.
+- `ops/pages/assets/logo.svg`: существующий логотип OMP в шапке обеих страниц, локальный файл с явными размерами 40 x 40.
 - Стили встроены в HTML: системные шрифты, адаптивные карточки, заметный keyboard focus, `meta name="text-scale" content="scale"`, относительные размеры и `clamp()`. Внешние шрифты, аналитика и сторонние скрипты не используются.
 - `.github/workflows/pages.yml`: публикация после изменения `ops/pages/**` в `main` и вручную. Workflow копирует только файлы страниц в клон `gh-pages`, не удаляет JSON и Homebrew-файлы и делает push без force.
 - `scripts/git-push-retry.mjs`: обычный push без force с rebase и повторными попытками при одновременной записи. Он сохраняет каждый page и release commit и не вытесняет ожидающие запуски, как общая `concurrency`-группа.
