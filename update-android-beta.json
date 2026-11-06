@@ -1,0 +1,26 @@
+{
+  "version": "0.20.9-beta.2",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.2/OMP-0.20.9-beta.2.apk",
+  "ipkHash": "0deedfb712a6bb2db8c807d98d604efb14a1be2dd01b42a5afb8cf261068ee24",
+  "ipkSize": 93149780,
+  "apks": {
+    "arm64": {
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.2/OMP-0.20.9-beta.2-arm64.apk",
+      "sha256": "d743581362d827573dac8f5a3ee0d56082be596206223636c423bef8729cbcbd",
+      "size": 58601514
+    },
+    "armv7": {
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.2/OMP-0.20.9-beta.2-armv7.apk",
+      "sha256": "f7c348e5667a04cb54784b078fd513918678c502844f4604defff243d2aff6de",
+      "size": 54420542
+    }
+  },
+  "notes": [
+    "Исправления и улучшения"
+  ],
+  "notesTv": [],
+  "notesPhone": [
+    "При ошибке загрузки второстепенного экрана появилась кнопка «Повторить»"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.2"
+}

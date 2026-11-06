@@ -1,0 +1,14 @@
+{
+  "version": "0.20.9-beta.2",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.2/OMP-0.20.9-beta.2-webOS.ipk",
+  "ipkHash": "b73b9232f2f6a85f140eb1abde7791311ac0f8e4f434c9318b00e3919c21eddc",
+  "ipkSize": 544184,
+  "notes": [
+    "Исправления и улучшения"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.2",
+  "notesTv": [],
+  "notesPhone": [
+    "При ошибке загрузки второстепенного экрана появилась кнопка «Повторить»"
+  ]
+}
