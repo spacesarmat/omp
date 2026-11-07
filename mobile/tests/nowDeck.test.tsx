@@ -13,6 +13,8 @@ import { setWatchActions } from '../src/watch';
 import { resetTo, navigate } from '../src/nav';
 import type { PlayerState } from '../../src/phone/protocol';
 import type { Torrent } from '../../src/api/types';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
+import { resetEpisodeNames } from '../../src/lib/episodeNames';
 
 const launch = vi.fn(() => Promise.resolve());
 
@@ -104,6 +106,8 @@ describe('NowPlaying swipes', () => {
     cancelWarmUp();
     setWatchActions(null);
     setPlayerLinkDeps(null);
+    setCatalogClientForTests(null);
+    resetEpisodeNames();
     torrents.value = [];
     act(() => render(null, el));
     vi.restoreAllMocks();
@@ -181,5 +185,56 @@ describe('NowPlaying swipes', () => {
       for (let i = 0; i < 30; i++) await Promise.resolve();
     });
     expect(launch).toHaveBeenCalledWith(expect.objectContaining({ file: 2 }));
+  });
+
+  it('episodes show TMDB names and keep the filename when TMDB has no real name', async () => {
+    const show = { kind: 'tv' as const, id: 31, title: 'Ледяной перевал', original: 'Frost Pass', year: 2026, poster: '', rating: 0 };
+    const season = vi.fn().mockResolvedValue({
+      number: 1,
+      name: '',
+      airDate: '',
+      overview: '',
+      episodes: [
+        { n: 1, title: 'Ледяной прибой', airDate: '', runtime: 0, overview: '' },
+        { n: 2, title: 'Эпизод 2', airDate: '', runtime: 0, overview: '' },
+      ],
+    });
+    setCatalogClientForTests({
+      search: vi.fn().mockResolvedValue({ items: [show], pages: 1 }),
+      card: vi.fn().mockResolvedValue({ ...show, backdrop: '', genres: [], runtime: 0, overview: '', cast: [], airing: false, seasons: [] }),
+      season,
+    } as never);
+    resetEpisodeNames();
+    swipe(card(), [200, 500], [200, 100]);
+    for (let r = 0; r < 6; r++) {
+      await act(async () => {
+        for (let i = 0; i < 20; i++) await Promise.resolve();
+      });
+    }
+    expect(season).toHaveBeenCalledTimes(1);
+    const rows = Array.from(el.querySelectorAll('.m-now-ep-title')).map((n) => n.textContent);
+    expect(rows).toEqual(['S01E01 · Ледяной прибой', 'S01E02 · Frost.Pass.S01E02']);
+  });
+
+  it('episode names do not leak when the release changes', async () => {
+    const show = { kind: 'tv' as const, id: 31, title: 'Ледяной перевал', original: 'Frost Pass', year: 2026, poster: '', rating: 0 };
+    setCatalogClientForTests({
+      search: vi.fn().mockResolvedValue({ items: [show], pages: 1 }),
+      card: vi.fn().mockResolvedValue({ ...show, backdrop: '', genres: [], runtime: 0, overview: '', cast: [], airing: false, seasons: [] }),
+      season: vi.fn().mockResolvedValue({ number: 1, name: '', airDate: '', overview: '', episodes: [{ n: 1, title: 'Ледяной прибой', airDate: '', runtime: 0, overview: '' }] }),
+    } as never);
+    resetEpisodeNames();
+    swipe(card(), [200, 500], [200, 100]);
+    for (let r = 0; r < 6; r++) {
+      await act(async () => {
+        for (let i = 0; i < 20; i++) await Promise.resolve();
+      });
+    }
+    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('S01E01 · Ледяной прибой');
+    const first = torrents.value[0];
+    torrents.value = [first, { ...first, hash: 'h2', title: 'Другой сериал S01', file_stats: [{ id: 3, path: 'Other.Show.S01E01.mkv', length: 1000 }] }];
+    nowPlaying.value = { ...nowPlaying.value!, hash: 'h2', file: 3, title: 'Другой сериал', subtitle: 'S01E01' };
+    render(<NowPlaying />, el);
+    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('S01E01 · Other.Show.S01E01');
   });
 });

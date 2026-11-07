@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] In landscape, card zoom in Library and Discover now applies instantly, without overlapping cards or scroll jumps. Cards and their captions are sized to the available screen height
 - [phone] Downloaded APK files are now deleted automatically after a confirmed installation. If installation is cancelled, the file is kept for a retry
+- [phone] The remote's episode list shows the episode number and its TMDB title. The filename remains when the title is unavailable
 
 ## 0.20.9-beta.4
 
