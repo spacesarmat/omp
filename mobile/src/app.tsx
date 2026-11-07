@@ -56,6 +56,7 @@ import { lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import { installPhoneSubPosters } from './monitor/posters';
 import { lazyScreen } from './lib/lazyScreen';
+import { WifiPrompt } from './servers/WifiBox';
 import './mobile.css';
 
 // Secondary screens are loaded on demand so the initial bundle stays small.
@@ -492,6 +493,7 @@ export function App() {
       <ConfirmHost />
       <TestModeHost />
       <ElementLabelsHost phone />
+      <WifiPrompt />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}

@@ -10,7 +10,7 @@ import {
   type KnownServer,
   type WifiPrefs,
 } from '../src/servers/wifiSelect';
-import { cancelWifiRun, considerWifi, laterWifi, resetWifiScan, type WifiRunDeps } from '../src/servers/wifiRun';
+import { cancelWifiRun, considerWifi, ensureWifiPrimary, laterWifi, loadWifiPrefs, resetWifiScan, setWifiEnabled, wifiPrompt, type WifiRunDeps } from '../src/servers/wifiRun';
 
 const home: KnownServer = { id: 'home', url: 'http://10.0.0.2:8090', name: 'Home', user: 'me', password: 'secret' };
 const primary: KnownServer = { id: 'main', url: 'http://10.0.0.5:8090', name: 'Main' };
@@ -184,5 +184,38 @@ describe('phone Wi-Fi TorrServer choice', () => {
     });
     expect(await considerWifi(locked)).toEqual({ kind: 'use', serverId: 'main', reason: 'override' });
     expect(scanned).toBe(0);
+  });
+
+  it('a repeated run keeps the unanswered server question', async () => {
+    const found = [{ url: 'http://10.0.0.9:8090', name: 'other' }];
+    const d = deps({ discover: async () => found });
+    const first = await considerWifi(d);
+    expect(first.kind).toBe('confirm');
+    expect(wifiPrompt.value).toEqual(first);
+    const second = await considerWifi(d);
+    expect(second.kind).toBe('fallback');
+    expect(wifiPrompt.value).toEqual(first);
+  });
+
+  it('disabling Wi-Fi selection cancels a pending saved-server check and clears its question', async () => {
+    let answer!: (ok: boolean) => void;
+    const d = deps({
+      prefs: () => prefs({ profiles: [{ id: 'p', ssid: 'home', serverId: 'home', host: '10.0.0.2:8090' }] }),
+      echo: () => new Promise<boolean>((resolve) => (answer = resolve)),
+    });
+    const run = considerWifi(d);
+    for (let i = 0; i < 10 && !answer; i++) await Promise.resolve();
+    expect(typeof answer).toBe('function');
+    setWifiEnabled(false, 'main');
+    answer(true);
+    await run;
+    expect(d.applied).toEqual([]);
+    expect(wifiPrompt.value).toBeNull();
+  });
+
+  it('the first connected server becomes primary and is never replaced automatically', () => {
+    expect(ensureWifiPrimary('main').primaryId).toBe('main');
+    expect(loadWifiPrefs().primaryId).toBe('main');
+    expect(ensureWifiPrimary('other').primaryId).toBe('main');
   });
 });

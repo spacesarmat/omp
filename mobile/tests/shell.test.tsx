@@ -4,6 +4,7 @@ import { App } from '../src/app';
 import { currentRoute, routeStack, resetTo, navigate, goBack } from '../src/nav';
 import { activeServer, setActiveServer, addServer, removeServer, servers } from '../../src/store/servers';
 import { saveTv, forgetTv, tvs } from '../src/tv/tvStore';
+import { wifiPrompt } from '../src/servers/wifiRun';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -67,5 +68,17 @@ describe('mobile shell', () => {
     expect(goBack()).toBe(true);
     expect(currentRoute.value.name).toBe('library');
     expect(goBack()).toBe(false);
+  });
+
+  it('shows the Wi-Fi server question outside the connect screen', () => {
+    resetTo({ name: 'library' });
+    wifiPrompt.value = { kind: 'confirm', ssid: 'home', hosts: [{ url: 'http://10.0.0.9:8090', name: 'Other' }] };
+    try {
+      mount();
+      expect(currentRoute.value.name).toBe('library');
+      expect(document.querySelector('.m-sheet')?.textContent).toContain('Other');
+    } finally {
+      wifiPrompt.value = null;
+    }
   });
 });

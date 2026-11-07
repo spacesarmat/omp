@@ -5,14 +5,20 @@ import { nowPlaying, linkStatus, sendCmd } from '../tv/playerLink';
 import { formatDuration } from '../../../src/lib/format';
 import { playerPosterStyle } from './playerPoster';
 import { t } from '../../../src/i18n';
-import { subtitleCode, usePlayingNames } from '../lib/playingNames';
+import { humanEpisodeCode, subtitleCode, usePlayingNames } from '../lib/playingNames';
+import { realEpisodeName } from '../../../src/lib/episodeNames';
 
 export { subtitleCode };
 
-/** «S02E03 · Тишина в эфире» with a real episode name, else «S02E03 · Тёмная материя»; a film by its name. */
+/** The episode with a real TMDB name, else the episode code with the show title; a film by its name. */
 export function miniTitle(names: { title: string; sub: string }): string {
   if (!names.sub) return names.title;
-  return names.sub.indexOf(' · ') >= 0 ? names.sub : names.sub + ' · ' + names.title;
+  const named = names.sub.split(' · ').slice(1).some((part) => {
+    if (!realEpisodeName(part)) return false;
+    const numbered = /^(\d+)\s/.exec(part);
+    return !numbered || part !== humanEpisodeCode('S01E' + numbered[1], false);
+  });
+  return named ? names.sub : names.sub + ' · ' + names.title;
 }
 
 /** Compact player above the tab bar; hidden while the TV link is gone. */

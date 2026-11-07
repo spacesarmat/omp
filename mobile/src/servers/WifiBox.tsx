@@ -16,8 +16,12 @@ import {
 } from './wifiRun';
 import type { WifiPlan } from './wifiSelect';
 
-export function WifiBox() {
+export function WifiPrompt() {
   const prompt = wifiPrompt.value;
+  return prompt && (prompt.kind === 'confirm' || prompt.kind === 'choose') ? <WifiAsk plan={prompt} /> : null;
+}
+
+export function WifiBox() {
   const [prefs, setPrefs] = useState(loadWifiPrefs);
   const [manual, setManual] = useState(prefs.manualSsid);
   const list = servers.value;
@@ -105,14 +109,11 @@ export function WifiBox() {
       <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void considerWifi(undefined, true)}>
         {t('connect.wifiCheck')}
       </button>
-      {prompt && (prompt.kind === 'confirm' || prompt.kind === 'choose') && (
-        <WifiAsk plan={prompt} onDone={refresh} />
-      )}
     </section>
   );
 }
 
-function WifiAsk({ plan, onDone }: { plan: Extract<WifiPlan, { kind: 'confirm' | 'choose' }>; onDone: () => void }) {
+function WifiAsk({ plan, onDone = () => undefined }: { plan: Extract<WifiPlan, { kind: 'confirm' | 'choose' }>; onDone?: () => void }) {
   const title = plan.kind === 'choose' ? t('connect.wifiChoose', { ssid: plan.ssid }) : t('connect.wifiConfirm', { name: plan.hosts[0].name || plan.hosts[0].url, ssid: plan.ssid });
   return (
     <Sheet label={title} onClose={() => laterWifi(plan)}>

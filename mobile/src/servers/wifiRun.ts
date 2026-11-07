@@ -130,7 +130,7 @@ export async function considerWifi(over?: Partial<WifiRunDeps>, force = false): 
   if (plan.kind === 'use' || (plan.kind === 'fallback' && plan.serverId)) {
     useServer(d, plan.kind === 'use' ? plan.serverId : plan.serverId!);
   }
-  wifiPrompt.value = plan.kind === 'confirm' || plan.kind === 'choose' ? plan : null;
+  if (plan.kind === 'confirm' || plan.kind === 'choose') wifiPrompt.value = plan;
   return plan;
 }
 
@@ -156,8 +156,20 @@ export function laterWifi(plan: Extract<WifiPlan, { kind: 'confirm' | 'choose' }
 }
 
 export function setWifiEnabled(on: boolean, primaryId: string | null): WifiPrefs {
+  if (!on) {
+    cancelWifiRun();
+    wifiPrompt.value = null;
+  }
   const cur = loadWifiPrefs();
   const next = { ...cur, enabled: on, primaryId: cur.primaryId || primaryId };
+  saveWifiPrefs(next);
+  return next;
+}
+
+export function ensureWifiPrimary(id: string | null): WifiPrefs {
+  const cur = loadWifiPrefs();
+  if (!id || cur.primaryId) return cur;
+  const next = { ...cur, primaryId: id };
   saveWifiPrefs(next);
   return next;
 }

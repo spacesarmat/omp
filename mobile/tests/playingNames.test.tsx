@@ -95,6 +95,8 @@ describe('playing names', () => {
   it('the mini player line: the episode name when real, else the code with the series; a film by its name', () => {
     expect(miniTitle({ title: 'Тёмная материя', sub: 'S02E01 · Спокойная жизнь' })).toBe('S02E01 · Спокойная жизнь');
     expect(miniTitle({ title: 'Тёмная материя', sub: 'S02E02' })).toBe('S02E02 · Тёмная материя');
+    expect(miniTitle({ title: 'Тёмная материя', sub: '2 сезон · 1 серия' })).toBe('2 сезон · 1 серия · Тёмная материя');
+    expect(miniTitle({ title: 'Тёмная материя', sub: '2 сезон · 1 серия · Спокойная жизнь' })).toBe('2 сезон · 1 серия · Спокойная жизнь');
     expect(miniTitle({ title: 'Тихий сигнал', sub: '' })).toBe('Тихий сигнал');
   });
 
