@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
 import { tileLabel, digitalSoonLabel, tileYear, releaseParts, upcomingEpisodes, nextEpisodeSeasons, dayHeader, episodeCode } from '../src/lib/releaseDates';
 import { TitleCard } from '../src/screens/catalog/TitleCard';
-import { TileTitle, TileWhen } from '../src/screens/catalog/Discover';
+import { TileMeta, TileTitle, TileWhen } from '../src/screens/catalog/Discover';
 import { resetTileCards } from '../src/catalog/tileCards';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetTo, navigate } from '../src/nav';
@@ -274,6 +274,30 @@ describe('«Обзор» tile labels', () => {
     });
     await flush();
     expect(el.querySelector('.m-disc-title')!.textContent).toBe('Renegade Immortal');
+  });
+
+  it('a plain list row, with no date line, still loads the card: English title and the digital year', async () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver);
+    const c = fake(() => Promise.resolve({ ...film({ digital: '2026-11-12' }), id: 11, title: 'Renegade Immortal', year: 2006 }));
+    const x = { kind: 'movie' as const, id: 11, title: '仙逆', original: '仙逆', year: 0, poster: '', rating: 0, digital: '2026-11-06' };
+    mount(
+      <button class="m-crow">
+        <span class="m-disc-title"><TileTitle x={x} /></span>
+        <TileMeta x={x} />
+      </button>,
+    );
+    await flush();
+    expect(c.card).not.toHaveBeenCalled();
+    expect(el.querySelector('.m-disc-title')!.textContent).toBe('仙逆');
+    expect(el.querySelector('.m-disc-meta')!.textContent).toBe('Фильм');
+    expect(el.querySelector('.m-disc-when')).toBeNull();
+    await act(async () => {
+      observers.forEach((o) => o.cb([{ isIntersecting: true, target: o.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    });
+    await flush();
+    expect(c.card).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('.m-disc-title')!.textContent).toBe('Renegade Immortal');
+    expect(el.querySelector('.m-disc-meta')!.textContent).toBe('Фильм · 2006');
   });
 
   it('a «Скоро в цифре» tile shows its matched digital date at once, even when the card has none upcoming', async () => {

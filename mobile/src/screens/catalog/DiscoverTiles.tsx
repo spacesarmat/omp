@@ -8,15 +8,11 @@ import { digitalSoonLabel, tileLabel, tileYear } from '../../lib/releaseDates';
 import { readableTitle, type CatalogTitle, type Kind } from '../../../../src/catalog/tmdb';
 
 /**
- * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): the tile's card is asked for once the tile
- * comes into view; nothing until it is known. A «Скоро в цифре» item brings its `digital` date: shown at once (the
- * card is still asked for: the tile's year comes from it).
+ * The tile card is asked for once this row is on screen. The date line is not the only reader: a plain list
+ * still needs the English title and, for «Скоро в цифре», the year.
  */
-export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digital?: string }) {
-  void tileCardVersion.value;
-  const ref = useRef<HTMLSpanElement>(null);
-  const card = cachedTileCard(kind, id);
-  const unknown = card === undefined;
+function useTileCard(kind: Kind, id: number, ref: { current: HTMLElement | null }) {
+  const unknown = cachedTileCard(kind, id) === undefined;
   useEffect(() => {
     const node = ref.current;
     if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
@@ -31,6 +27,17 @@ export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digita
       leaveTileCard(kind, id);
     };
   }, [kind, id, unknown]);
+}
+
+/**
+ * The date label of a tile («в цифре 12 нояб.», «новая серия 8 окт.»): nothing until the card is known.
+ * A «Скоро в цифре» item brings its `digital` date: shown at once (the card is still asked for).
+ */
+export function TileWhen({ kind, id, digital }: { kind: Kind; id: number; digital?: string }) {
+  void tileCardVersion.value;
+  const ref = useRef<HTMLSpanElement>(null);
+  useTileCard(kind, id, ref);
+  const card = cachedTileCard(kind, id);
   const text = digital ? digitalSoonLabel(digital) : card && card.kind !== 'tv' ? tileLabel(card) : '';
   return (
     <span ref={ref} class={'m-small m-accent m-disc-when' + (text ? '' : ' m-disc-when-none')} data-when={text ? '' : undefined}>
@@ -67,9 +74,16 @@ export function DiscPoster({ x, owned }: { x: CatalogTitle; owned: boolean }) {
  */
 export function TileTitle({ x }: { x: CatalogTitle }) {
   void tileCardVersion.value;
-  if (readableTitle(x.title)) return <>{x.title}</>;
+  const ref = useRef<HTMLSpanElement>(null);
+  useTileCard(x.kind, x.id, ref);
   const card = cachedTileCard(x.kind, x.id);
-  return <>{card && readableTitle(card.title) ? card.title : x.title}</>;
+  const title = readableTitle(x.title) ? x.title : card && readableTitle(card.title) ? card.title : x.title;
+  return (
+    <>
+      <span ref={ref} hidden aria-hidden="true" />
+      {title}
+    </>
+  );
 }
 
 /** «Фильм · 2006»: a «Скоро в цифре» item takes its year from the card (none until known). */
