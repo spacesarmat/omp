@@ -22,8 +22,10 @@ class ApkInstallTracker(context: Context, private val apk: File, private val onI
     private val appContext = context.applicationContext
     private val packageName = context.packageName
 
+    constructor(context: Context) : this(context, File(context.cacheDir, "updates/omp.apk"), {})
+
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED) return
+        if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         if (intent.data?.schemeSpecificPart != packageName) return
         apk.delete()
         runCatching { appContext.unregisterReceiver(this) }

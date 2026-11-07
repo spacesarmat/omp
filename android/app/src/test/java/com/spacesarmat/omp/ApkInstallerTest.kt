@@ -71,4 +71,16 @@ class ApkInstallerTest {
         assertFalse(apk.exists())
         assertEquals(1, completed)
     }
+
+    @Test
+    fun manifestReceiverDeletesTheApkAfterProcessReplacement() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File(context.cacheDir, "updates").apply { mkdirs() }.let { File(it, "omp.apk") }
+        apk.writeText("pending")
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        assertTrue(manifest.contains("android:name=\".ApkInstallTracker\""))
+        assertTrue(manifest.contains("android.intent.action.MY_PACKAGE_REPLACED") )
+        ApkInstallTracker(context).onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED).setData(android.net.Uri.parse("package:" + context.packageName)))
+        assertFalse(apk.exists())
+    }
 }
