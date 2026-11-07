@@ -90,21 +90,22 @@ function stubFrame() {
  * Cards laid out in a column, 150 px apart (50 px for compact rows): 200 px wide in the large grid, 60 px at three
  * posters, 100 px otherwise. A row's poster is 56 x 84 at (0, 28) in the row; a tile's poster fills its width, 1.4 high.
  */
-function cardRect(card: Element): DOMRect {
+function cardRect(card: Element, shift: boolean): DOMRect {
   const i = Array.prototype.indexOf.call(card.parentElement!.children, card);
   const w = card.closest('.m-view-large') ? 200 : card.closest('.m-cols-3') ? 60 : 100;
-  return new DOMRect(0, 10 + i * (card.closest('.m-clist') ? 50 : 150), w, 140);
+  const dy = shift && (card.closest('.m-view-small') || card.closest('.m-cols-3')) ? 50 : 0;
+  return new DOMRect(0, 10 + i * (card.closest('.m-clist') ? 50 : 150) + dy, w, 140);
 }
-function mockRects() {
+function mockRects(shift = false) {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     if (this.hasAttribute('data-poster')) {
       const card = this.closest('[data-anchor]');
       if (!card || !card.parentElement) return new DOMRect(0, 0, 0, 0);
-      const c = cardRect(card);
+      const c = cardRect(card, shift);
       return this.classList.contains('m-poster-row') ? new DOMRect(0, c.top + 28, 56, 84) : new DOMRect(0, c.top, c.width, c.width * 1.4);
     }
     if (!this.hasAttribute('data-anchor') || !this.parentElement) return new DOMRect(0, 0, 0, 0);
-    return cardRect(this);
+    return cardRect(this, shift);
   });
 }
 type Frames = Record<string, unknown>[];
@@ -420,6 +421,29 @@ describe('pinch in «Мои»', () => {
     expect(animate).not.toHaveBeenCalled();
   });
 
+  it('in landscape the view switches at once, with no animation or scroll correction', async () => {
+    reduced = false;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (q: string) => ({ matches: q.includes('landscape'), media: q, addEventListener() {}, removeEventListener() {} }),
+    });
+    mockAnimate();
+    mockRects(true);
+    stubFrame();
+    updateSettings({ libraryView: 'large' });
+    mount(<Library />);
+    await flush();
+    document.documentElement.scrollTop = 0;
+    pinch(body(), 80);
+    expect(settings.value.libraryView).toBe('small');
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    await flush();
+    expect(animate).not.toHaveBeenCalled();
+    expect(document.documentElement.scrollTop).toBe(0);
+  });
+
   it('does nothing at the ends of the range', async () => {
     updateSettings({ libraryView: 'large' });
     mount(<Library />);
@@ -578,6 +602,26 @@ describe('pinch in «Обзор»', () => {
     expect(tiles.length).toBe(2);
     expect(animate.mock.contexts).toEqual(tiles);
     expect(grid().style.transform).toBe('');
+  });
+
+  it('in landscape the posters switch at once, with no animation or scroll correction', async () => {
+    reduced = false;
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (q: string) => ({ matches: q.includes('landscape'), media: q, addEventListener() {}, removeEventListener() {} }),
+    });
+    mockAnimate();
+    mockRects(true);
+    stubFrame();
+    mount(<Discover />);
+    await flush();
+    document.documentElement.scrollTop = 0;
+    pinch(el.querySelector('.m-discover')!, 60);
+    expect(grid().classList.contains('m-cols-3')).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    await flush();
+    expect(animate).not.toHaveBeenCalled();
+    expect(document.documentElement.scrollTop).toBe(0);
   });
 
   it('a pinch does not open the title under the fingers', async () => {

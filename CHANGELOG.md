@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [phone] В ландшафтном режиме масштаб карточек в «Мои» и «Обзоре» меняется мгновенно, без наложения карточек и рывков прокрутки. Размер подбирается по свободной высоте экрана вместе с подписями
+
 ## 0.20.9-beta.4
 
 - Встроенный TorrServer обновлён до MatriX.150

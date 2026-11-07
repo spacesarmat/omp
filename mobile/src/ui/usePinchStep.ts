@@ -1,8 +1,9 @@
 // Two-finger pinch on a list container: one view step per gesture (fingers apart = bigger, together = smaller).
 // The step fires as soon as the finger distance passes a threshold; the rest of the gesture is ignored until the
-// fingers lift. Nothing is scaled while the fingers move: the change itself is animated afterwards, FLIP style on the
-// cards visible on screen, so the text stays crisp. When the card markup changes (rows and poster tiles), each
-// poster moves and resizes from its old place to its new one (a shared-element transition) and the rest fades in.
+// fingers lift. Nothing is scaled while the fingers move: portrait changes are animated afterwards, FLIP style on the
+// cards visible on screen, so the text stays crisp. Landscape changes are immediate, without overlapping card layers.
+// When the card markup changes (rows and poster tiles), each poster moves and resizes from its old place to its new one
+// (a shared-element transition) and the rest fades in.
 // Touch events, not pointer events: with the page's default touch-action the WebView cancels the pointers as soon as
 // it treats two fingers as a pan or zoom, while touchmove keeps coming and can be cancelled.
 import { useEffect, useRef } from 'preact/hooks';
@@ -40,6 +41,14 @@ export function pinchTarget(level: number, levels: number, dir: number): number 
 export function prefersReducedMotion(): boolean {
   try {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
+function landscapeViewport(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(orientation: landscape)').matches;
   } catch {
     return false;
   }
@@ -349,14 +358,14 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
       // measured with any running animation still on, so a new step starts from what is seen
       const before = attr ? visibleCards(root, attr) : [];
       const anchor = anchorOf(before);
-      const still = prefersReducedMotion() || !canAnimate(root);
+      const still = prefersReducedMotion() || landscapeViewport() || !canAnimate(root);
       const morphing = !still && !!o.morph && !!o.posterAttr && o.morph(from, to);
       const posters = morphing && o.posterAttr ? postersOf(before, o.posterAttr) : null;
       stopAnimations();
       optsRef.current.apply(to);
       afterRender(() => {
-        if (anchor) keepAnchor(anchor);
         if (still) return;
+        if (anchor) keepAnchor(anchor);
         if (posters) morph(posters);
         else flip(before);
       });
