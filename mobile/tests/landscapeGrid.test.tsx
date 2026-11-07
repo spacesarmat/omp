@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { colsToFit, landscapeCols, visibleHeight, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, LANDSCAPE_ROWS, type CardFit } from '../src/ui/landscapeCols';
-import { DISCOVER_FITS, discoverLandscapeCols, saveDiscoverCols, type DiscoverCols } from '../src/screens/catalog/discoverCols';
+import { colsToFit, landscapeCols, railTileWidth, visibleHeight, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, LANDSCAPE_ROWS, RAIL_TILE_MAX, type CardFit } from '../src/ui/landscapeCols';
+import { DISCOVER_FITS, discoverLandscapeCols, discoverRailFit, saveDiscoverCols, type DiscoverCols } from '../src/screens/catalog/discoverCols';
 import { Discover } from '../src/screens/catalog/Discover';
 import { Person } from '../src/screens/catalog/Person';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
@@ -127,6 +127,20 @@ describe('landscape columns', () => {
     expect(landscapeCols(700, 50, DISCOVER_FITS)).toEqual([3, 4, 5]);
     expect(colsToFit(0, 300, DISCOVER_FITS[0])).toBe(1);
   });
+
+  it('a landscape rail tile is exactly as wide as a whole card is tall, and capped', () => {
+    const fit = discoverRailFit(360);
+    // the S21 on its side: 240 px between the rail top and the tab bar
+    const w = railTileWidth(240, fit);
+    expect(w).toBeGreaterThan(0);
+    expect(w * fit.aspect + fit.caption + 2 * LANDSCAPE_MARGIN).toBeLessThanOrEqual(240 + 0.01);
+    // one pixel wider and the card would not fit any more
+    expect((w + 1) * fit.aspect + fit.caption + 2 * LANDSCAPE_MARGIN).toBeGreaterThan(240);
+    // a tall window: the cap keeps the tiles card-sized
+    expect(railTileWidth(2000, fit)).toBe(RAIL_TILE_MAX);
+    // too short for any poster: no width, the CSS default stays
+    expect(railTileWidth(fit.caption + 2 * LANDSCAPE_MARGIN, fit)).toBe(0);
+  });
 });
 
 // --- the grids in a landscape window (jsdom has no layout: the window and the grid width are set by hand)
@@ -229,6 +243,53 @@ describe('«Обзор» on its side', () => {
     act(() => (el.querySelectorAll('.m-disc-sort-opt')[1] as HTMLElement).click());
     await flush();
     expect(grid().style.gridTemplateColumns).toBe('repeat(10, minmax(0, 1fr))');
+  });
+
+  const homeClient = (): CatalogClient => ({
+    novelties: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
+    discover: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
+    home: vi.fn(() => Promise.resolve([{ id: 'popularMovies' as const, items: ITEMS }])),
+    search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+    card: vi.fn(() => Promise.reject(new Error('x'))),
+    season: vi.fn(() => Promise.reject(new Error('x'))),
+    person: vi.fn(() => Promise.reject(new Error('x'))),
+    similar: vi.fn(() => Promise.resolve([])),
+    posters: vi.fn(() => Promise.resolve([])),
+  });
+
+  it('the home rails: the tile width lets a whole card (the poster and the caption) fit above the tab bar', async () => {
+    saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
+    setCatalogClientForTests(homeClient());
+    windowSize(800, 360, 768);
+    mount(<Discover />);
+    await flush();
+    const home = () => el.querySelector('.m-disc-home') as HTMLElement;
+    const row = el.querySelector('.m-disc-rail-row') as HTMLElement;
+    expect(row).not.toBeNull();
+    // no tab bar yet: the window height rules
+    expect(home().style.getPropertyValue('--m-rail-w')).not.toBe('');
+    const nav = tabBar(300);
+    row.getBoundingClientRect = () => rectAt(60, 200);
+    try {
+      await resize();
+      const fit = discoverRailFit(360);
+      const w = parseInt(home().style.getPropertyValue('--m-rail-w'), 10);
+      expect(w).toBeGreaterThan(0);
+      // the whole card takes the 240 px between the rail top (60) and the tab bar (300)
+      expect(w * fit.aspect + fit.caption + 2 * LANDSCAPE_MARGIN).toBeLessThanOrEqual(240 + 0.01);
+      expect((w + 1) * fit.aspect + fit.caption + 2 * LANDSCAPE_MARGIN).toBeGreaterThan(240);
+    } finally {
+      nav.remove();
+    }
+  });
+
+  it('portrait leaves the rail tiles at the CSS width', async () => {
+    saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
+    setCatalogClientForTests(homeClient());
+    windowSize(360, 800, 328);
+    mount(<Discover />);
+    await flush();
+    expect((el.querySelector('.m-disc-home') as HTMLElement).style.getPropertyValue('--m-rail-w')).toBe('');
   });
 
   for (const [cols, want] of [[2, 12], [3, 13], [4, 14]] as [DiscoverCols, number][]) {
