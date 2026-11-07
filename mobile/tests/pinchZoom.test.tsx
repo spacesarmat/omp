@@ -444,6 +444,24 @@ describe('pinch in «Мои»', () => {
     expect(document.documentElement.scrollTop).toBe(0);
   });
 
+  it('portrait reduced motion keeps the card under the fingers without animating', async () => {
+    mockAnimate();
+    mockRects(true);
+    stubFrame();
+    updateSettings({ libraryView: 'large' });
+    mount(<Library />);
+    await flush();
+    document.documentElement.scrollTop = 0;
+    pinch(body(), 80);
+    expect(settings.value.libraryView).toBe('small');
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    await flush();
+    expect(animate).not.toHaveBeenCalled();
+    expect(document.documentElement.scrollTop).toBe(50);
+  });
+
   it('does nothing at the ends of the range', async () => {
     updateSettings({ libraryView: 'large' });
     mount(<Library />);
