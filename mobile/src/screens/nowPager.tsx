@@ -7,7 +7,9 @@ import type { TorrentFile } from '../../../src/lib/episodes';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import { getLocalProgress } from '../../../src/store/progress';
 import { torrents } from '../../../src/store/library';
-import { libraryTorrent } from '../lib/playingNames';
+import { episodeLine, libraryTorrent } from '../lib/playingNames';
+import { realEpisodeName } from '../../../src/lib/episodeNames';
+import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { sharedResume } from '../lib/sharedProgress';
 import { navigate } from '../nav';
 import { activeTv } from '../tv/tvStore';
@@ -55,14 +57,14 @@ function ordered(files: TorrentFile[]): TorrentFile[] {
   });
 }
 
-function EpisodeRow({ file, on, onPlay }: { file: TorrentFile; on: boolean; onPlay: (file: TorrentFile) => void }) {
+function EpisodeRow({ file, tmdbName, on, onPlay }: { file: TorrentFile; tmdbName: string; on: boolean; onPlay: (file: TorrentFile) => void }) {
   const [slide, setSlide] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const playRef = useRef(onPlay);
   playRef.current = onPlay;
   const code = episodeLabel(file.path);
   const name = stripExt(baseName(file.path));
-  const label = code && name && name !== code ? code + ' · ' + name : code || name;
+  const label = tmdbName ? episodeLine(code, tmdbName) : code && name && name !== code ? code + ' · ' + name : code || name;
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -141,6 +143,8 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
   void torrents.value;
   const tor = libraryTorrent(hash);
   const files = tor ? ordered(playableFiles(filesOf(tor))) : [];
+  const seasons = files.map((f) => parseEpisode(f.path).season).filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
+  const tmdb = useTmdbEpisodes(tor, seasons, !!tor && seasons.length > 0);
   return (
     <div class="m-now-eps">
       <h2>{t('torrent.screen.episodesHead')}</h2>
@@ -154,9 +158,13 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
             <Icon d={ICONS.play} size={14} />
             <span>{t('now.swipeEpisode')}</span>
           </p>
-          {files.map((f) => (
-            <EpisodeRow key={f.id} file={f} on={f.id === fileId} onPlay={onPlay} />
-          ))}
+          {files.map((f) => {
+            const pe = parseEpisode(f.path);
+            const season = pe.season !== null ? tmdb.eps[pe.season] : undefined;
+            const episode = pe.episode !== null && season ? season[pe.episode] : undefined;
+            const tmdbName = episode ? realEpisodeName(episode.title) : '';
+            return <EpisodeRow key={f.id} file={f} tmdbName={tmdbName} on={f.id === fileId} onPlay={onPlay} />;
+          })}
         </>
       )}
     </div>

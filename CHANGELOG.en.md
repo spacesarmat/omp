@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] The remote's episode list shows the episode number and its TMDB title. The filename remains when the title is unavailable
+
 ## 0.20.9-beta.4
 
 - The built-in TorrServer is updated to MatriX.150

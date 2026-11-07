@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [phone] В списке серий пульта показываются номер и название эпизода из TMDB. Если название недоступно, остаётся имя файла
+
 ## 0.20.9-beta.4
 
 - Встроенный TorrServer обновлён до MatriX.150
