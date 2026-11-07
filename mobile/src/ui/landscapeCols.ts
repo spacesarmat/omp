@@ -1,8 +1,7 @@
-// Poster grids in landscape («Обзор», a person's films, «Мои»): a phone on its side is short, so a whole card (the
-// poster and its caption) must fit between the top of the screen and the tab bar. The card width comes from that
-// height, and the number of cards in a row is what fits across. Every card size keeps its own step: the biggest size
-// is the biggest card that still fits, each smaller one has at least one more card per row. Portrait is untouched
-// (the CSS classes of the grid decide there).
+// Poster grids in landscape («Обзор», a person's films, «Мои»): two whole cards with captions must fit between the
+// actual grid top and the tab bar. Each card width comes from half that height, and the number of cards in a row is
+// what fits across. Every card size keeps its own step: the biggest size is the biggest card that still fits, each
+// smaller one has at least one more card per row. Portrait is untouched (the CSS classes of the grid decide there).
 import { useEffect, useState } from 'preact/hooks';
 import type { RefObject } from 'preact';
 import { editableFocused } from './keyboard';
@@ -14,6 +13,8 @@ export type CardFit = { aspect: number; caption: number; gap: number };
 export const LANDSCAPE_MARGIN = 8;
 /** The biggest size never has fewer cards per row than this in landscape. */
 export const LANDSCAPE_MIN_COLS = 3;
+/** Complete card rows visible in landscape. */
+export const LANDSCAPE_ROWS = 2;
 
 /** The fewest columns of `width` px where a whole card of `fit` is at most `height` px tall. */
 export function colsToFit(width: number, height: number, fit: CardFit): number {
@@ -24,29 +25,30 @@ export function colsToFit(width: number, height: number, fit: CardFit): number {
 }
 
 /**
- * Columns per card size, biggest size first: the biggest is the fewest columns where its card fits the height (at
- * least LANDSCAPE_MIN_COLS), every smaller size at least one more than the size before it.
+ * Columns per card size, biggest size first: the biggest is the fewest columns where its card fits one of two rows
+ * (at least LANDSCAPE_MIN_COLS), every smaller size at least one more than the size before it.
  */
 export function landscapeCols(width: number, height: number, fits: CardFit[]): number[] {
   const out: number[] = [];
   fits.forEach((fit, i) => {
     const least = i === 0 ? LANDSCAPE_MIN_COLS : out[i - 1] + 1;
-    out.push(Math.max(least, colsToFit(width, height, fit)));
+    out.push(Math.max(least, colsToFit(width, height / LANDSCAPE_ROWS, fit)));
   });
   return out;
 }
 
 /**
- * The screen's visible height for the grid: from the top inset down to the top of the tab bar. The TV mini-player is
- * not taken off on purpose (Andy): the columns stay the same whether a TV is linked or not, and the last row scrolls
- * clear of it.
+ * The visible height for the grid: from its actual top down to the top of the tab bar, without off-screen space above
+ * the viewport. The TV mini-player is not taken off on purpose (Andy): the columns stay the same whether a TV is linked
+ * or not, and the last row scrolls clear.
  */
-function visibleHeight(): number {
+export function visibleHeight(ref: RefObject<HTMLElement | null>): number {
   const nav = document.querySelector('.m-nav');
   const r = nav ? nav.getBoundingClientRect() : null;
   const bottom = r && r.height > 0 ? r.top : window.innerHeight;
-  const top = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--m-safe-top')) || 0;
-  return bottom - top;
+  const safeTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--m-safe-top')) || 0;
+  const top = ref.current ? Math.max(safeTop, ref.current.getBoundingClientRect().top) : safeTop;
+  return Math.max(0, bottom - top);
 }
 
 export type GridBox = { width: number; height: number };
@@ -71,7 +73,7 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
       }
       if (tallest.w !== w || h > tallest.h || !editableFocused()) tallest = { w, h };
       const width = el.clientWidth;
-      const height = Math.round(visibleHeight() + (tallest.h - h));
+      const height = Math.round(visibleHeight(ref) + (tallest.h - h));
       if (!(width > 0) || !(height > 0)) return;
       setBox((b) => (b && b.width === width && b.height === height ? b : { width, height }));
     };
@@ -84,7 +86,10 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
     window.addEventListener('resize', later);
     window.addEventListener('orientationchange', later);
     const ro = typeof ResizeObserver !== 'undefined' && ref.current ? new ResizeObserver(later) : null;
-    if (ro && ref.current) ro.observe(ref.current);
+    if (ro && ref.current) {
+      ro.observe(ref.current);
+      if (ref.current.parentElement) ro.observe(ref.current.parentElement);
+    }
     return () => {
       window.removeEventListener('resize', later);
       window.removeEventListener('orientationchange', later);

@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- The built-in TorrServer is updated to MatriX.150
+
 ## 0.20.9-beta.3
 
 - [tech] The OMP download page is available in Russian and English on GitHub Pages. Direct links to stable and beta APK/IPK packages and the OMP logo are added. watchOnPhone tests are isolated from the network

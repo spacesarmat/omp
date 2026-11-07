@@ -2073,7 +2073,15 @@ html.m-hint-hold .m-hint { display: none; }
 }
 @media (orientation: landscape) and (max-height: 560px) {
   :root { --m-nav-h: 48px; }
-  /* the poster grids get narrow tiles on their side (landscapeCols.ts): a poster without an image keeps its title small */
+  /* two complete poster rows: compact captions stay within the heights calculated by landscapeCols.ts */
+  .m-grid .m-card { gap: 2px; }
+  .m-grid .m-card-title { margin-top: 0; font-size: 11px; line-height: 14px; min-height: 28px; max-height: 28px; }
+  .m-grid .m-card-meta, .m-grid .m-small { font-size: 10px; line-height: 12px; }
+  .m-grid .m-card-meta-pad { height: 12px; }
+  .m-grid .m-new-badge { max-width: 100%; padding: 0 4px; font-size: 9px; line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-disc-grid .m-disc-tile { gap: 2px; }
+  .m-disc-grid .m-disc-tile .m-disc-title { font-size: 11px; line-height: 14px; min-height: 0; max-height: 28px; }
+  .m-disc-grid .m-disc-meta, .m-disc-grid .m-disc-when { font-size: 10px; line-height: 12px; }
   .m-disc-grid .m-disc-ph { padding: 8px; font-size: 12px; }
   .m-disc-grid.m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
   .m-nav { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
