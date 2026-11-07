@@ -31,6 +31,16 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
   return out;
 }
 
+/** ffprobe sometimes stores the start time as the only title (`00:12:03`, `1:02:03.000`). That is not a name. */
+const TIME_TITLE = /^(?:\d{1,3}:)?\d{1,2}:\d{2}(?:[.,]\d{1,3})?$/;
+
+/** A chapter title worth showing. Empty when missing or when it is only a timestamp. */
+export function namedChapterTitle(title: string): string {
+  const s = (title || '').replace(/^\s+|\s+$/g, '');
+  if (!s || TIME_TITLE.test(s)) return '';
+  return s;
+}
+
 /** Chapter name for lists: its title, else «Глава N» (N is the 1-based place in the list, so untitled chapters never repeat). */
 export function chapterLabel(c: { title: string }, index: number): string {
   const title = c.title.replace(/^\s+|\s+$/g, '');

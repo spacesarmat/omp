@@ -216,11 +216,12 @@ describe('calendar data', () => {
     const named = (n: number, name: string, card: CatalogCard = FROST, s = 13): CalEntry =>
       ({ show: show(card), season: s, episode: n, name: name, airDate: '2026-10-08', status: 'future' });
     const rows = dayRows([named(7, 'Эпизод 7'), named(8, 'Возвращение'), named(1, 'Начало', HARBOR, 1), named(9, 'Серия 9')]);
-    expect(rows.map(rowLine)).toEqual(['S13E07-E09', 'S01E01 · Начало']);
-    expect(rowLine(dayRows([named(7, 'Эпизод 7')])[0])).toBe('S13E07');
-    expect(rowLine(dayRows([named(7, 'Episode 7')])[0])).toBe('S13E07');
-    expect(rowLine(dayRows([named(7, 'Возвращение')])[0])).toBe('S13E07 · Возвращение');
-    expect(rowLine(dayRows([named(7, ''), named(9, '')])[0])).toBe('S13E07, E09');
+    expect(rows.map(rowLine)).toEqual(['7-9 серия', '1 серия · Начало']);
+    expect(rowLine(dayRows([named(7, 'Эпизод 7')])[0])).toBe('7 серия');
+    expect(rowLine(dayRows([named(7, 'Episode 7')])[0])).toBe('7 серия');
+    expect(rowLine(dayRows([named(7, 'Возвращение')])[0])).toBe('7 серия · Возвращение');
+    expect(rowLine(dayRows([named(7, ''), named(9, '')])[0])).toBe('7, 9 серия');
+    expect(rowLine(dayRows([named(7, 'Возвращение')])[0], { withSeason: true })).toBe('13 сезон · 7 серия · Возвращение');
     // another season of the same show stays its own row
     expect(dayRows([named(7, ''), named(1, '', FROST, 14)]).length).toBe(2);
   });
@@ -450,7 +451,7 @@ describe('the «Календарь» tab', () => {
     expect(today.querySelector('.m-cal-chip')!.textContent).toBe('сегодня');
     expect(today.querySelector('.m-cal-when')!.textContent).toBe('Сегодня');
     expect(first.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
-    expect(first.querySelector('.m-cal-ep')!.textContent).toBe('S03E04 · Глава 4');
+    expect(first.querySelector('.m-cal-ep')!.textContent).toBe('3 сезон · 4 серия · Глава 4');
     expect(first.querySelector('.m-cal-when')!.textContent).toBe('Вс 4 окт.');
     expect(first.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
     expect(first.querySelector('.m-cal-chip')!.textContent).toBe('вышла');
@@ -570,7 +571,7 @@ describe('the «Календарь» tab', () => {
     const sheet = el.querySelector('[data-cal-ask]')!;
     expect(sheet.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
     expect(sheet.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
-    expect(sheet.textContent).toContain('S03E04');
+    expect(sheet.textContent).toContain('3 сезон · 4 серия');
     expect(sheet.querySelector('[data-code="P03.19"]')).toBeNull();
     expect(button('Открыть в каталоге', sheet)!.getAttribute('data-code')).toBe('P03.15');
     expect(button('Найти новую серию', sheet)).toBeUndefined();
@@ -606,15 +607,15 @@ describe('the «Календарь» tab', () => {
     mount(<Calendar />);
     await flush();
     const row = el.querySelector('[data-cal-row="21:3:7,8"]')!;
-    expect(row.querySelector('.m-cal-ep')!.textContent).toBe('S03E07-E08');
+    expect(row.querySelector('.m-cal-ep')!.textContent).toBe('3 сезон · 7-8 серия');
     act(() => (row.querySelector('button.m-cal-open') as HTMLButtonElement).click());
     const sheet = el.querySelector('[data-cal-ask]')!;
     const choice = Array.from(sheet.querySelectorAll('[data-code="P03.19"]')) as HTMLButtonElement[];
-    expect(choice.map((b) => (b.textContent || '').trim())).toEqual(['S03E07', 'S03E08']);
+    expect(choice.map((b) => (b.textContent || '').trim())).toEqual(['3 сезон · 7 серия', '3 сезон · 8 серия']);
     choice.forEach((b) => expect(b.className).toContain('tm'));
     expect(sheet.querySelector('.m-cal-eps')!.getAttribute('aria-label')).toBe('Выберите серию');
     expect(choice[0].getAttribute('aria-pressed')).toBe('true');
-    expect(sheet.textContent).toContain('S03E07 · Первая');
+    expect(sheet.textContent).toContain('3 сезон · 7 серия · Первая');
     expect(button('Открыть в каталоге', sheet)).toBeTruthy();
     expect(button('Отмена', sheet)!.getAttribute('data-code')).toBe('P03.18');
     act(() => button('Найти новую серию', sheet)!.click());
@@ -623,10 +624,10 @@ describe('the «Календарь» tab', () => {
     resetTo({ name: 'news', seg: 'calendar' });
     act(() => (row.querySelector('button.m-cal-open') as HTMLButtonElement).click());
     const again = el.querySelector('[data-cal-ask]')!;
-    act(() => button('S03E08', again)!.click());
-    expect(button('S03E08', again)!.getAttribute('aria-pressed')).toBe('true');
-    expect(button('S03E07', again)!.getAttribute('aria-pressed')).toBe('false');
-    expect(again.textContent).toContain('S03E08 · Вторая');
+    act(() => button('3 сезон · 8 серия', again)!.click());
+    expect(button('3 сезон · 8 серия', again)!.getAttribute('aria-pressed')).toBe('true');
+    expect(button('3 сезон · 7 серия', again)!.getAttribute('aria-pressed')).toBe('false');
+    expect(again.textContent).toContain('3 сезон · 8 серия · Вторая');
     act(() => button('Найти новую серию', again)!.click());
     expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 8), run: true });
   });
@@ -642,18 +643,18 @@ describe('the «Календарь» tab', () => {
     act(() => (el.querySelector('[data-cal-cell="2026-10-04"]') as HTMLButtonElement).click());
     const day = el.querySelector('[data-cal-picked="2026-10-04"]')!;
     expect(day.querySelectorAll('.m-cal-row').length).toBe(1);
-    expect(day.querySelector('.m-cal-ep')!.textContent).toBe('S03E07-E08');
+    expect(day.querySelector('.m-cal-ep')!.textContent).toBe('3 сезон · 7-8 серия');
     act(() => (day.querySelector('button.m-cal-open') as HTMLButtonElement).click());
     const sheet = el.querySelector('[data-cal-ask]')!;
-    act(() => button('S03E08', sheet)!.click());
-    expect(sheet.textContent).toContain('S03E08 · Вторая');
+    act(() => button('3 сезон · 8 серия', sheet)!.click());
+    expect(sheet.textContent).toContain('3 сезон · 8 серия · Вторая');
     act(() => button('Найти новую серию', sheet)!.click());
     expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 8), run: true });
 
     resetTo({ name: 'news', seg: 'calendar' });
     act(() => (day.querySelector('button.m-cal-open') as HTMLButtonElement).click());
     const again = el.querySelector('[data-cal-ask]')!;
-    act(() => button('S03E08', again)!.click());
+    act(() => button('3 сезон · 8 серия', again)!.click());
     act(() => button('Открыть в каталоге', again)!.click());
     expect(currentRoute.value).toEqual({ name: 'seasonCard', id: 21, season: 3 });
   });

@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from 'preact';
+import { act } from 'preact/test-utils';
 import { App } from '../src/app';
 import { currentRoute, routeStack, resetTo, navigate, goBack } from '../src/nav';
 import { activeServer, setActiveServer, addServer, removeServer, servers } from '../../src/store/servers';
 import { saveTv, forgetTv, tvs } from '../src/tv/tvStore';
+import { wifiPrompt } from '../src/servers/wifiRun';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -67,5 +69,31 @@ describe('mobile shell', () => {
     expect(goBack()).toBe(true);
     expect(currentRoute.value.name).toBe('library');
     expect(goBack()).toBe(false);
+  });
+
+  it('shows the Wi-Fi server question outside the connect screen', () => {
+    resetTo({ name: 'library' });
+    wifiPrompt.value = { kind: 'confirm', ssid: 'home', hosts: [{ url: 'http://10.0.0.9:8090', name: 'Other' }] };
+    try {
+      mount();
+      expect(currentRoute.value.name).toBe('library');
+      expect(document.querySelector('.m-sheet')?.textContent).toContain('Other');
+    } finally {
+      wifiPrompt.value = null;
+    }
+  });
+
+  it('accepting a server immediately shows its saved profile on the connect screen', () => {
+    resetTo({ name: 'connect' });
+    wifiPrompt.value = { kind: 'confirm', ssid: 'home', hosts: [{ url: 'http://10.0.0.9:8090', name: 'Other' }] };
+    const el = mount();
+    try {
+      const accept = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => (b.textContent || '').includes('Использовать'))!;
+      act(() => accept.click());
+      expect(el.textContent).toContain('Запомнено: home');
+      expect(el.textContent).toContain('Забыть');
+    } finally {
+      wifiPrompt.value = null;
+    }
   });
 });

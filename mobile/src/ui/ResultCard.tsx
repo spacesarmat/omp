@@ -5,6 +5,7 @@ import { resultDate, seedsText, sourceBadge, sourceName } from '../../../src/sou
 import type { SourceResult } from '../../../src/sources/types';
 import { dhtSeedCheckAvailable } from '../../../src/sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
+import { rowNeedsMagnet } from '../../../src/sources/rowMagnet';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
@@ -77,6 +78,11 @@ export function ResultCard(p: {
   onPhone?: () => void;
   /** Fixed test-mode code of the row's «Проверить» (the sheet uses PD31.1). */
   seedCode?: string;
+  /**
+   * Feed: a tap opens the action menu. «+» and play do not open it.
+   * Search cards keep the details sheet.
+   */
+  menu?: boolean;
 }) {
   const { r } = p;
   const [, setBillingTick] = useState(0);
@@ -85,16 +91,19 @@ export function ResultCard(p: {
   const seeds = phoneSeedBits(live.view);
   const probe = useSeedProbe(r);
   const trackers = trackerListed(r);
-  const checkable = seedCheckable(r);
+  const topic = rowNeedsMagnet(r);
+  const checkable = seedCheckable(r) || topic;
   const answered = probe.phase === 'done' || probe.phase === 'err';
+  // A topic page can still supply the announce URL. Until that check runs, keep the site's own seed count.
   const seedText =
-    !checkable && (seeds.text || probe.phase !== 'idle')
-      ? t('sources.seedsNoTracker')
-      : !trackers && !answered && seeds.text
+    answered
+      ? probe.text(seeds.text)
+      : !trackers && !topic && (seeds.text || probe.phase !== 'idle')
         ? t('sources.seedsNoTracker')
-        : probe.text(seeds.text);
+        : seeds.text;
   const showCheck = trackers ? checkable && (!!seeds.text || probe.phase !== 'idle') : checkable;
   const [open, setOpen] = useState(false);
+  const [details, setDetails] = useState(false);
   const link = pageLink(r);
   const date = resultDate(r);
   const kindName = releaseKind(r).kind;
@@ -112,7 +121,16 @@ export function ResultCard(p: {
   return (
     <>
       <div ref={live.bind} class={'m-result m-result-card m-rc' + (p.highlight ? ' m-hl' : '')} data-title={r.Title} data-highlight={p.highlight ? '' : undefined}>
-        <button type="button" class="m-rc-open" aria-label={t('add.detailsOf', { title: r.Title })} aria-haspopup="dialog" onClick={() => setOpen(true)} />
+        <button
+          type="button"
+          class="m-rc-open"
+          aria-label={p.menu ? t('add.actionsFor', { title: r.Title }) : t('add.detailsOf', { title: r.Title })}
+          aria-haspopup="dialog"
+          onClick={() => {
+            setDetails(false);
+            setOpen(true);
+          }}
+        />
         <ResultThumb title={r.Title} />
         <div class="m-rc-text">
           <ReleaseName raw={r.Title} />
@@ -137,7 +155,10 @@ export function ResultCard(p: {
               class="m-rc-btn"
               aria-label={t('add.addToServer', { title: r.Title })}
               disabled={!!p.busy}
-              onClick={p.onAdd}
+              onClick={(e) => {
+                e.stopPropagation();
+                p.onAdd();
+              }}
             >
               <Icon d={PLUS} size={22} />
             </button>
@@ -147,7 +168,10 @@ export function ResultCard(p: {
                 class={'m-rc-btn m-rc-btn-phone' + (book ? ' m-rc-btn-tv' : '')}
                 aria-label={phoneAria}
                 disabled={!!p.busy}
-                onClick={p.onPhone}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (p.onPhone) p.onPhone();
+                }}
               >
                 <Icon d={PHONE_PLAY} size={22} />
               </button>
@@ -158,7 +182,10 @@ export function ResultCard(p: {
                 class={'m-rc-btn' + (book ? '' : ' m-rc-btn-tv')}
                 aria-label={t('add.addAndWatch', { title: r.Title })}
                 disabled={!!p.busy}
-                onClick={p.onWatch}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  p.onWatch();
+                }}
               >
                 <Icon d={TV_PLAY} size={22} />
               </button>
@@ -166,7 +193,36 @@ export function ResultCard(p: {
           </div>
         </div>
       </div>
-      {open && (
+      {open && p.menu && !details && (
+        <Sheet label={t('add.actions')} testId="PD31" onClose={() => setOpen(false)}>
+          <div class="m-rc-sheet-actions" role="menu" data-result-menu="">
+            <div class="m-sheet-row m-sheet-col">
+              <button type="button" class="m-btn m-btn-secondary" onClick={() => setDetails(true)}>
+                {t('add.details')}
+              </button>
+              {link && (
+                <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(link, '_system')}>
+                  {t('add.openOnSite')}
+                </button>
+              )}
+              <button type="button" class="m-btn m-btn-secondary" disabled={!!p.busy} onClick={act(p.onAdd)}>
+                {t('common.add')}
+              </button>
+              {showPhone && (
+                <button type="button" class={book ? 'm-btn m-btn-primary' : 'm-btn m-btn-secondary'} disabled={!!p.busy} onClick={act(p.onPhone!)}>
+                  {phoneLabel}
+                </button>
+              )}
+              {showTv && (
+                <button type="button" class={book ? 'm-btn m-btn-secondary' : 'm-btn m-btn-primary'} disabled={!!p.busy} onClick={act(p.onWatch)}>
+                  {t('add.onTv')}
+                </button>
+              )}
+            </div>
+          </div>
+        </Sheet>
+      )}
+      {open && (!p.menu || details) && (
         <Sheet label={t('common.more')} testId="PD31" onClose={() => setOpen(false)}>
           <div class="m-sheet-scroll m-rc-sheet" data-result-details="">
             <ReleaseName raw={r.Title} class="m-rc-sheet-title" />

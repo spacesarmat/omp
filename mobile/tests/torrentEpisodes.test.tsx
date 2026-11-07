@@ -112,7 +112,8 @@ describe('Torrent: TMDB episode names', () => {
     expect(mainLine(0)).toContain('45 мин');
     // the code and the size, never the release file name
     const sub = rows()[0].querySelector('.m-ep-sub')!.textContent!;
-    expect(sub).toBe('S02E01 · 1,8 ГБ');
+    expect(sub).toBe('1,8 ГБ');
+    expect(sub).not.toContain('S02E01');
     expect(sub).not.toContain('Ultradox');
     expect(rows()[0].querySelector('.m-bar-track')).toBeTruthy();
   });

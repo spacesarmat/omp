@@ -230,6 +230,11 @@ export interface OmpNativeApi {
   clearLocalServerCache(): Promise<void>;
   /** Wi-Fi IPv4 of the phone; null without Wi-Fi or off-device. */
   localIpv4(): Promise<string | null>;
+  /**
+   * SSID of the connected Wi-Fi when the app already has the permission. Never starts a scan.
+   * `{ available: false }` when the name cannot be read (no permission, browser, or unknown).
+   */
+  wifiHint(): Promise<{ available: boolean; ssid: string | null }>;
   /** TV search on (foreground service) or off (stops it and revokes the token); null off-device or when off. */
   rpcSetEnabled(on: boolean): Promise<RpcInfo | null>;
   /** The TV search address; null off-device or when off. */
@@ -354,6 +359,7 @@ interface OmpNativePlugin {
   localServerCache(): Promise<{ usedBytes?: number }>;
   clearLocalServerCache(): Promise<{ usedBytes?: number }>;
   localIpv4(): Promise<{ ip?: string | null }>;
+  wifiHint?(): Promise<{ available?: boolean; ssid?: string | null }>;
   rpcSetEnabled(o: { on: boolean }): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
   rpcInfo(): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
   http(o: NativeHttpRequest): Promise<Partial<HttpResponse>>;
@@ -861,6 +867,17 @@ export const native: OmpNativeApi = {
     if (!plugin) return null;
     const r = await plugin.localIpv4();
     return text(r.ip) ?? null;
+  },
+
+  async wifiHint() {
+    if (!plugin || !plugin.wifiHint) return { available: false, ssid: null };
+    try {
+      const r = await plugin.wifiHint();
+      const ssid = text(r.ssid) ?? null;
+      return { available: r.available === true, ssid: ssid };
+    } catch (e) {
+      return { available: false, ssid: null };
+    }
   },
 
   async rpcSetEnabled(on) {

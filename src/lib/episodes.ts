@@ -63,6 +63,18 @@ export function episodeLabel(path: string): string {
   return (e.season !== null ? 'S' + pad(e.season) : '') + 'E' + pad(e.episode);
 }
 
+/** True when the paths name more than one season. One season, or none, is false. */
+export function spansSeasons(paths: string[]): boolean {
+  let seen: number | null = null;
+  for (let i = 0; i < paths.length; i++) {
+    const season = parseEpisode(paths[i]).season;
+    if (season === null) continue;
+    if (seen === null) seen = season;
+    else if (seen !== season) return true;
+  }
+  return false;
+}
+
 /** A folder that holds extras, not episodes («Extras», «SP», «NC»). */
 const EXTRA_DIR = /^(?:extras?|specials?|sp|nc|ncop\d*|nced\d*|creditless|bonus|bonuses)$/i;
 /** NCOP / NCED (and NCOP2) in the file name: a creditless opening or ending. */

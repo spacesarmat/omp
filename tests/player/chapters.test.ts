@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chapterLabel, introChapter, chapterList, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
+import { chapterLabel, introChapter, chapterList, namedChapterTitle, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
 import type { FfprobeResult } from '../../src/api/types';
 
 const probe = (titles: [number, number, string][]): FfprobeResult => ({
@@ -162,5 +162,11 @@ describe('chapterLabel', () => {
   it('uses the title, else «Глава N» by place so untitled chapters never repeat', () => {
     const list = chapterList(probe([[0, 60, 'Пролог'], [60, 120, ''], [120, 200, '  '], [200, 300, 'Погоня']]));
     expect(list.map((c, i) => chapterLabel(c, i))).toEqual(['Пролог', 'Глава 2', 'Глава 3', 'Погоня']);
+  });
+
+  it('a timestamp title is not a name for the phone, so the time column is not repeated', () => {
+    const list = chapterList(probe([[0, 60, '00:00:00'], [60, 120, '00:01:00.000'], [120, 200, 'Пролог']]));
+    expect(list.map((c) => namedChapterTitle(c.title))).toEqual(['', '', 'Пролог']);
+    expect(chapterLabel(list[0], 0)).toBe('00:00:00');
   });
 });

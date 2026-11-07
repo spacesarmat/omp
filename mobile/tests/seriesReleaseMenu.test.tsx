@@ -141,7 +141,8 @@ describe('release menu on the series screen', () => {
     expect(shown()).toBe('p12');
     const eps = Array.from(el.querySelectorAll('.m-ep')).map((r) => r.textContent || '');
     expect(eps.length).toBe(1);
-    expect(eps[0]).toContain('S02E01');
+    expect(eps[0]).toContain('2 сезон');
+    expect(eps[0]).not.toContain('S02E01');
   });
 
   it('«Открыть» in the menu opens the release page', async () => {

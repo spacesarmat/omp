@@ -7,7 +7,7 @@ import { activeTv } from '../tv/tvStore';
 import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
-import { chapterIndexAt, chapterLabel, chapterStepIndex, type Chapter } from '../../../src/player/chapters';
+import { chapterIndexAt, chapterStepIndex, namedChapterTitle, type Chapter } from '../../../src/player/chapters';
 import { NowPoster } from '../ui/NowPoster';
 import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
@@ -117,7 +117,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const list: Chapter[] = (s.chapters || []).map((c) => ({ start: c.t, end: c.t, title: c.title, kind: null }));
   const local = chapterIndexAt(list, shown);
   const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
-  const chapterName = (i: number) => chapterLabel(list[i], i);
+  const chapterName = (i: number) => namedChapterTitle(list[i].title) || t('player.chapterN', { n: i + 1 });
   const chapterLabelAria = (i: number, start: number) => t('now.chapterAria', { name: chapterName(i), time: formatDuration(start) });
   const stepChapter = (dir: 1 | -1) => {
     const i = chapterStepIndex(list, shown, dir);
@@ -134,7 +134,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
       <NowDeck hash={s.hash} fileId={s.file} remote={<Remote />}>
         <div class="m-screen m-now m-now-bleed" data-route="nowPlaying">
           {/* the fold fills the first screen: the poster shrinks so the controls clear the «Серии» chip and the system bar */}
-          <div class="m-now-fold">
+          <div class={'m-now-fold' + (list.length ? ' m-now-fold-fit' : '')}>
             <div class="m-now-hero">
               {/* no title on the poster: the body already shows it under the art */}
               <NowPoster state={posterState} />
@@ -202,7 +202,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                     <span class="m-now-chnum">
                       {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
                     </span>
-                    {cur >= 0 && list[cur].title.trim() !== '' && chapterName(cur)}
+                    {cur >= 0 && namedChapterTitle(list[cur].title) !== '' && chapterName(cur)}
                   </span>
                   <button
                     type="button"

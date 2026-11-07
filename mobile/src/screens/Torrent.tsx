@@ -33,7 +33,7 @@ import {
 import type { Torrent as TorrentT } from '../../../src/api/types';
 import { sharedRatio, sharedResume } from '../lib/sharedProgress';
 import { errorMessage } from '../../../src/api/http';
-import { activePackPick, baseName, episodeLabel, filesForPack, hasLooseFiles, parseEpisode, playableFiles, seasonsInFiles, stripExt, type PackPick, type TorrentFile } from '../../../src/lib/episodes';
+import { activePackPick, baseName, episodeLabel, filesForPack, hasLooseFiles, parseEpisode, playableFiles, seasonsInFiles, spansSeasons, stripExt, type PackPick, type TorrentFile } from '../../../src/lib/episodes';
 import { formatDuration } from '../../../src/lib/format';
 import { useSkip, firstPlayableId } from '../../../src/lib/useSkip';
 import { parseMark, skipStatus } from '../../../src/lib/skipMarks';
@@ -328,12 +328,15 @@ export function EpisodeRows({
   eps,
   coming,
   onPick,
+  withSeason,
 }: {
   hash: string;
   files: TorrentFile[];
   eps: EpisodeMap;
   coming: ComingEpisode[];
   onPick: (f: TorrentFile) => void;
+  /** The release has more than one season, even when `files` is only the season on screen. */
+  withSeason?: boolean;
 }) {
   const tmdb = { eps };
   const setSheet = onPick;
@@ -360,7 +363,8 @@ export function EpisodeRows({
         const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
         const real = ep ? realEpisodeName(ep.title) : '';
         const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
-        const sub = [fileCode(f), fmtSize(f.length)].filter(Boolean).join(' · ');
+        const seasonBit = pe.season !== null && (withSeason || spansSeasons(files.map((x) => x.path))) ? t('library.seasonNamed', { n: pe.season }) : '';
+        const sub = [seasonBit, fmtSize(f.length)].filter(Boolean).join(' · ');
         return (
           <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
             <span class="m-ep-text">
@@ -867,7 +871,7 @@ export function Torrent({ hash }: { hash: string }) {
           </div>
         )}
         {files.length > 0 && <div class="m-section">{hasEpisodes ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>}
-        <EpisodeRows hash={hash} files={shownFiles} eps={tmdb.eps} coming={coming} onPick={setSheet} />
+        <EpisodeRows hash={hash} files={shownFiles} eps={tmdb.eps} coming={coming} onPick={setSheet} withSeason={spansSeasons(allFiles.map((f) => f.path))} />
         {!book && !files.length && noFilesSeason !== null && epsNow && seasonEpisodeList(epsNow, noFilesSeason).length > 0 && (
           <>
             <div class="m-section">{t('torrent.screen.episodesHead')}</div>

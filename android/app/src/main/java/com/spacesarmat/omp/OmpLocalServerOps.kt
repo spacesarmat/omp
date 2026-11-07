@@ -132,6 +132,29 @@ internal fun OmpNativePlugin.localIpv4Op(call: PluginCall) {
     call.resolve(JSObject().put("ip", LocalTorrServer.wifiIpv4(context) ?: JSONObject.NULL))
 }
 
+/**
+ * SSID only. No scan, no permission dialog. Without ACCESS_FINE_LOCATION or NEARBY_WIFI_DEVICES the name
+ * is not available and the phone asks the person to type it.
+ */
+internal fun OmpNativePlugin.wifiHintOp(call: PluginCall) {
+    val fine = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val nearby = Build.VERSION.SDK_INT >= 33 &&
+        context.checkSelfPermission("android.permission.NEARBY_WIFI_DEVICES") == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val out = JSObject()
+    if (!fine && !nearby) {
+        out.put("available", false)
+        out.put("ssid", JSONObject.NULL)
+        call.resolve(out)
+        return
+    }
+    val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+    val raw = wm?.connectionInfo?.ssid?.trim()?.trim('"')
+    val known = !raw.isNullOrEmpty() && raw != "<unknown ssid>" && !raw.startsWith("0x")
+    out.put("available", true)
+    out.put("ssid", if (known) raw else JSONObject.NULL)
+    call.resolve(out)
+}
+
 internal fun OmpNativePlugin.vpnStateOp(call: PluginCall) {
     call.resolve(JSObject().put("active", LocalTorrServer.vpnOnActiveNetwork(context)))
 }

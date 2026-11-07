@@ -4,6 +4,16 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen
+- [phone] The Discover title and search sit on one row, with less empty space. In landscape the list scrolls clear of the mini-player and the bottom bar. The four views and the width-based grid stay
+- [phone] An episode in the list, the remote, the mini-player and the calendar reads "episode 1 · Title". The season is added when the release or the show has more than one. Order and playback stay the same
+- [phone] In New, Feed, a tap opens an action menu: details, the site, add, watch. The + and play buttons do not open that menu
+- [phone] An NNM-Club feed row has no magnet, so it has no tracker address: that address is on the topic page. A seed check opens that page. Until the page is read, the site's own seed count stays. If the page fails or has no address, the reason stays on screen. No address is invented
+- [phone] A long subscription title no longer shares a row with Edit. The calendar keeps List / Month and All / My subscriptions on one strip, rows no longer touch, and Find lines up
+- [phone] The phone can pick a TorrServer for a Wi-Fi network: the saved server is checked first, otherwise one search, otherwise the primary server. The first find asks before it is remembered. Several servers show a chooser. Playback does not switch servers. A password is never sent to another address. When Android cannot report the network name, it is typed. TV settings and the TV link are left alone
+
 ## 0.20.9-beta.6
 
 - [phone] Discover's plain list, including the homepage and a filmography, still loads the tile card. A title in another script falls back to English, and a coming-to-digital film keeps its year. One line leaving the screen does not cancel that load while the card is still visible. After a network failure the card is asked again once the pause has passed and a line comes back on screen, even if another part of the card never left

@@ -26,7 +26,7 @@ export interface ResultRows {
   error: string;
 }
 
-export function useResultRows(o?: { category?: (r: SourceResult) => string; seedCode?: string }): ResultRows {
+export function useResultRows(o?: { category?: (r: SourceResult) => string; seedCode?: string; menu?: boolean }): ResultRows {
   const [pending, setPending] = useState<Record<string, RowBusy>>({});
   const pendingRef = useRef<Record<string, RowBusy>>({});
   const [rowCat, setRowCat] = useState<Record<string, string>>({});
@@ -105,6 +105,7 @@ export function useResultRows(o?: { category?: (r: SourceResult) => string; seed
       onAdd={() => void add(r, false, c?.onAdded)}
       onWatch={() => void add(r, true, c?.onAdded)}
       seedCode={o && o.seedCode}
+      menu={!!(o && o.menu)}
     />
   );
 

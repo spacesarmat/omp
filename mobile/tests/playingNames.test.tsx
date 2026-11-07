@@ -84,8 +84,9 @@ describe('playing names', () => {
   });
 
   it('the episode line: the code and a real name only', () => {
-    expect(episodeLine('S02E01', 'Спокойная жизнь')).toBe('S02E01 · Спокойная жизнь');
-    expect(episodeLine('S02E02', 'Эпизод 2')).toBe('S02E02');
+    expect(episodeLine('S02E01', 'Спокойная жизнь')).toBe('1 серия · Спокойная жизнь');
+    expect(episodeLine('S02E02', 'Эпизод 2')).toBe('2 серия');
+    expect(episodeLine('S02E01', 'Спокойная жизнь', true)).toBe('2 сезон · 1 серия · Спокойная жизнь');
     expect(looksLikeName('Тишина в эфире')).toBe(true);
     expect(looksLikeName('Dark Matter S02E01 1080p WEB-DL RGzsRutracker')).toBe(false);
     expect(looksLikeName('Dark.Matter.mkv')).toBe(false);
@@ -94,17 +95,19 @@ describe('playing names', () => {
   it('the mini player line: the episode name when real, else the code with the series; a film by its name', () => {
     expect(miniTitle({ title: 'Тёмная материя', sub: 'S02E01 · Спокойная жизнь' })).toBe('S02E01 · Спокойная жизнь');
     expect(miniTitle({ title: 'Тёмная материя', sub: 'S02E02' })).toBe('S02E02 · Тёмная материя');
+    expect(miniTitle({ title: 'Тёмная материя', sub: '2 сезон · 1 серия' })).toBe('2 сезон · 1 серия · Тёмная материя');
+    expect(miniTitle({ title: 'Тёмная материя', sub: '2 сезон · 1 серия · Спокойная жизнь' })).toBe('2 сезон · 1 серия · Спокойная жизнь');
     expect(miniTitle({ title: 'Тихий сигнал', sub: '' })).toBe('Тихий сигнал');
   });
 
   it('«Откуда смотреть?»: the code at once, then «S02E01 · Спокойная жизнь»; a film by its name; the fallback outside «Мои»', async () => {
     fake();
     const named = vi.fn();
-    expect(launchLabel('dm', 1, 'raw', named)).toBe('S02E01');
+    expect(launchLabel('dm', 1, 'raw', named)).toBe('1 серия');
     await flush();
-    expect(named).toHaveBeenCalledWith('S02E01 · Спокойная жизнь');
+    expect(named).toHaveBeenCalledWith('1 серия · Спокойная жизнь');
     const none = vi.fn();
-    expect(launchLabel('dm', 2, 'raw', none)).toBe('S02E02');
+    expect(launchLabel('dm', 2, 'raw', none)).toBe('2 серия');
     await flush();
     // «Эпизод 2» is no name
     expect(none).not.toHaveBeenCalled();
@@ -122,7 +125,7 @@ describe('playing names', () => {
     act(() => render(<NowPlaying volume={() => Promise.resolve()} />, el));
     await flush();
     expect(el.querySelector('.m-now-title')!.textContent).toBe('Тёмная материя');
-    expect(el.querySelector('.m-now-sub')!.textContent).toBe('S02E01 · Спокойная жизнь');
+    expect(el.querySelector('.m-now-sub')!.textContent).toBe('1 серия · Спокойная жизнь');
     expect(el.textContent).not.toContain('RGzsRutracker');
   });
 });

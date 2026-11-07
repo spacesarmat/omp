@@ -418,9 +418,16 @@ button, .m-btn {
 }
 /* chips: 36px, tighter padding, still a horizontal scroller */
 .m-library .m-tab { min-height: 36px; height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; }
-.m-discover { display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow-x: hidden; }
-.m-disc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.m-disc-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.m-discover { display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-x: hidden; }
+.m-disc-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.m-disc-head h2 { margin: 0; font-size: 18px; font-weight: 700; white-space: nowrap; }
+.m-disc-head .m-grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-disc-tools { display: flex; flex: 0 0 auto; align-items: center; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .m-discover { gap: 6px; }
+  .m-disc-head h2 { font-size: 16px; }
+  .m-library { padding-top: calc(env(safe-area-inset-top) + 8px); }
+}
 .m-disc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .m-disc-chips::-webkit-scrollbar { display: none; }
 .m-disc-home { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1040,6 +1047,8 @@ button, .m-btn {
 .m-switch.on .m-switch-knob::after { left: 25px; background: var(--bg); }
 .m-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.4; }
 .m-sheet-row { display: flex; gap: 10px; }
+.m-sheet-col { flex-direction: column; align-items: stretch; }
+.m-sheet-col .m-btn { width: 100%; }
 .m-sheet-row .m-btn { flex: 1 1 0; }
 
 .m-dialog-host { justify-content: center; padding: 0 20px; }
@@ -1132,6 +1141,8 @@ button, .m-btn {
 .m-now-hero { position: relative; width: 100%; flex: 0 0 auto; }
 /* first screen: the poster takes what the controls leave, the controls end above the «Серии» chip and the system bar */
 .m-now-fold { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; }
+.m-now-fold-fit { min-height: 0; }
+.m-now-fold-fit .m-now-hero { flex: 0 1 auto; min-height: 0; }
 .m-now-fold .m-now-hero { flex: 1 1 0; min-height: 200px; }
 .m-now-body {
   position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
@@ -1291,7 +1302,7 @@ button, .m-btn {
   position: fixed; left: 8px; right: 8px; bottom: calc(var(--m-nav-h) + 8px + env(safe-area-inset-bottom)); height: var(--m-mini-h); z-index: 5;
   padding: 0 8px 0 10px; border-radius: 16px; background: var(--panel-2); display: flex; align-items: center; gap: 12px; overflow: hidden;
 }
-.m-mini-pad { height: 72px; }
+.m-mini-pad { height: calc(var(--m-mini-h) + 20px); }
 .m-mini-poster { width: 36px; height: 48px; border-radius: 6px; flex-shrink: 0; }
 .m-mini-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: none; background: none; text-align: left; padding: 0; }
 .m-mini-title { min-width: 0; max-width: 100%; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1598,7 +1609,13 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-sub-poster { flex: none; width: 40px; height: 60px; border-radius: 6px; object-fit: cover; background: var(--panel-2); }
 .m-sub-ph { display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; }
 .m-sub-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
-.m-sub-q { font-size: 15px; font-weight: 700; }
+.m-sub-q { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.m-sub-page-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.m-wifi { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel); }
+.m-wifi-hint, .m-wifi-manual { display: flex; flex-direction: column; gap: 4px; }
+.m-wifi-profile { display: flex; align-items: center; gap: 8px; }
+.m-wifi-ask { display: flex; flex-direction: column; gap: 8px; }
+.m-wifi-ask .m-btn { width: 100%; }
 .m-sub-paused { opacity: 0.55; }
 .m-sub-paused-note { color: var(--accent); font-weight: 600; }
 .m-subs-quota { text-transform: none; letter-spacing: 0; }
@@ -1873,17 +1890,21 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 /* «Новое» → «Календарь» */
 .m-cal { display: flex; flex-direction: column; }
 .m-cal-day { display: flex; flex-direction: column; gap: 8px; }
+.m-cal-group { display: flex; flex-direction: column; gap: 8px; }
 .m-cal-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; background: var(--panel); }
 .m-cal-open { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; }
 .m-cal-poster { flex-shrink: 0; width: 40px; height: 60px; border-radius: 6px; object-fit: cover; font-size: 0; }
 .m-cal-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .m-cal-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-cal-ep { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.m-cal-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+.m-cal-side { display: flex; flex-direction: column; align-items: stretch; gap: 6px; flex-shrink: 0; min-width: 92px; }
+.m-cal-side .m-btn { width: 100%; }
 .m-cal-chip { padding: 2px 8px; border-radius: 10px; background: var(--panel-2); color: var(--muted); font-size: 12px; white-space: nowrap; }
 .m-cal-chip.m-cal-aired, .m-cal-chip.m-cal-today { background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-cal-empty { display: flex; flex-direction: column; gap: 6px; }
-.m-cal-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.m-cal-tools { display: flex; flex-direction: row; align-items: stretch; gap: 8px; margin-bottom: 8px; }
+.m-cal-tools .m-seg { flex: 1 1 0; min-width: 0; }
+.m-cal-tools .m-seg button { min-height: 40px; padding: 6px 8px; font-size: 13px; white-space: normal; line-height: 1.2; }
 .m-cal-when { display: block; }
 .m-cal-ask { display: flex; flex-direction: column; gap: 10px; }
 .m-cal-ask-head { display: flex; align-items: center; gap: 10px; }
