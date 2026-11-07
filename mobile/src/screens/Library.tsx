@@ -51,13 +51,12 @@ import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
 /**
- * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the tallest caption under it (title, meta
- * line, the series badge (up to three lines on a narrow card) and, for large, the size line, with their gaps) and the
- * column gap.
+ * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the compact caption under it (two title
+ * lines, one meta line, a one-line series badge and, for large, the size line, with their gaps) and the column gap.
  */
 export const LIBRARY_FITS: CardFit[] = [
-  { aspect: 240 / 173, caption: 140, gap: 12 },
-  { aspect: 240 / 173, caption: 110, gap: 8 },
+  { aspect: 240 / 173, caption: 72, gap: 12 },
+  { aspect: 240 / 173, caption: 58, gap: 8 },
 ];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;
@@ -150,6 +149,7 @@ export function Library() {
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
   const [menuFor, setMenuFor] = useState<PhoneItem | null>(null);
@@ -344,9 +344,9 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
-  // landscape: the poster views get as many cards per row as it takes for a whole card to fit the screen height
+  // landscape: the poster views get as many cards per row as two whole rows fit above the tab bar
   const gridView = mine && (view === 'large' || view === 'small');
-  const box = useLandscapeBox(bodyRef, gridView);
+  const box = useLandscapeBox(gridRef, gridView);
   const landCols = box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : 0;
   const gridStyle = colsStyle(landCols || null);
 
@@ -898,7 +898,7 @@ export function Library() {
                 })}
               </div>
             ) : (
-              <div class={'m-grid m-view-' + view} style={gridStyle}>
+              <div class={'m-grid m-view-' + view} style={gridStyle} ref={gridRef}>
                 {withAds(shown, ads.admitted).map((e) => {
                   if (e.item === undefined) return adCell(e.ad, 'grid');
                   const it = e.item;

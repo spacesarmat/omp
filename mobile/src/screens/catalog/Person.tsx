@@ -90,9 +90,9 @@ function Body({ card }: { card: PersonCard }) {
   const items = useMemo(() => filmography(card, job, sort, owned, onlyOwned), [card, job, sort, owned, onlyOwned]);
   const cols = readDiscoverCols();
   const gridClass = discoverGridClass(cols);
-  // landscape: the posters per row of «Обзор» (a whole tile fits the screen height); the filter row is full width
-  const widthRef = useRef<HTMLDivElement>(null);
-  const box = useLandscapeBox(widthRef);
+  // landscape: the posters per row of «Обзор» (two whole tile rows fit above the tab bar)
+  const gridRef = useRef<HTMLDivElement>(null);
+  const box = useLandscapeBox(gridRef);
   const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height) : null);
   const years = yearsText(card);
   return (
@@ -120,7 +120,7 @@ function Body({ card }: { card: PersonCard }) {
           ]}
         />
       )}
-      <div class="m-person-filters" ref={widthRef}>
+      <div class="m-person-filters">
         <Segment
           value={onlyOwned ? 'owned' : 'all'}
           items={[
@@ -140,7 +140,7 @@ function Body({ card }: { card: PersonCard }) {
       {items.length === 0 ? (
         <p class="m-muted m-disc-empty">{onlyOwned ? t('person.ownedEmpty', { name: card.name }) : t('discover.nothingFound')}</p>
       ) : (
-        <div class={gridClass} style={gridStyle}>
+        <div class={gridClass} style={gridStyle} ref={gridRef}>
           {items.map((x) => {
             const c = x.credit;
             return (

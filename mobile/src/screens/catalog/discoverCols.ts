@@ -30,7 +30,7 @@ export const DISCOVER_FITS: CardFit[] = [
   { aspect: 1.5, caption: 62, gap: 6 },
 ];
 
-/** Posters per row in landscape for the chosen size, in a grid `width` px wide with `height` px of screen. */
+/** Posters per row for the chosen size, in a grid `width` px wide with `height` px available for two rows. */
 export function discoverLandscapeCols(cols: DiscoverCols, width: number, height: number): number {
   return landscapeCols(width, height, DISCOVER_FITS)[2 - COLS_BY_SIZE.indexOf(cols)];
 }

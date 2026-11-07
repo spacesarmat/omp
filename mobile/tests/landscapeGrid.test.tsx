@@ -4,6 +4,7 @@ import { act } from 'preact/test-utils';
 import { colsToFit, landscapeCols, visibleHeight, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, LANDSCAPE_ROWS, type CardFit } from '../src/ui/landscapeCols';
 import { DISCOVER_FITS, discoverLandscapeCols, saveDiscoverCols, type DiscoverCols } from '../src/screens/catalog/discoverCols';
 import { Discover } from '../src/screens/catalog/Discover';
+import { Person } from '../src/screens/catalog/Person';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
 import { Library, LIBRARY_FITS } from '../src/screens/Library';
 import { DEFAULT_DISCOVER_QUERY } from '../../src/catalog/discoverQuery';
@@ -15,7 +16,7 @@ import { addServer, setActiveServer, servers, removeServer } from '../../src/sto
 import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src/store/library';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { CatalogClient } from '../../src/catalog/client';
-import type { CatalogTitle } from '../../src/catalog/tmdb';
+import type { CatalogTitle, PersonCard } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
 
 /** The height of a whole card when `width` px are shared by `n` columns. */
@@ -145,6 +146,22 @@ function windowSize(w: number, h: number, contentWidth: number) {
   Object.defineProperty(window, 'innerHeight', { configurable: true, value: h });
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(contentWidth);
 }
+function rectAt(top: number, height = 48): DOMRect {
+  return { top, bottom: top + height, height, left: 0, right: 800, width: 800, x: 0, y: top, toJSON() {} } as DOMRect;
+}
+function tabBar(top: number): HTMLElement {
+  const nav = document.createElement('nav');
+  nav.className = 'm-nav';
+  nav.getBoundingClientRect = () => rectAt(top);
+  document.body.appendChild(nav);
+  return nav;
+}
+async function resize() {
+  await act(async () => {
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 30));
+  });
+}
 const realW = window.innerWidth;
 const realH = window.innerHeight;
 
@@ -152,6 +169,17 @@ const ITEMS: CatalogTitle[] = [
   { kind: 'movie', id: 11, title: 'Midnight Archive', original: 'Midnight Archive', year: 2026, poster: '', rating: 7 },
   { kind: 'tv', id: 21, title: 'Frost Pass', original: 'Frost Pass', year: 2026, poster: '', rating: 0 },
 ];
+const PERSON: PersonCard = {
+  id: 7,
+  name: 'Test Person',
+  photo: '',
+  birth: '1970-05-01',
+  death: '',
+  bio: '',
+  known: 'acting',
+  acting: ITEMS.map((item) => ({ ...item, roles: [], genreIds: [18], date: '2026-01-01' })),
+  directing: [],
+};
 
 describe('«Обзор» on its side', () => {
   beforeEach(() => {
@@ -192,7 +220,7 @@ describe('«Обзор» on its side', () => {
   });
 
   for (const [cols, want] of [[2, 17], [3, 18], [4, 19]] as [DiscoverCols, number][]) {
-    it(`landscape 800x360, size ${cols}: ${want} posters per row`, async () => {
+    it(`landscape 800x360, size ${cols}: ${want} posters per row and two rows from the grid top`, async () => {
       saveDiscoverCols(cols);
       windowSize(800, 360, 768);
       mount(<Discover />);
@@ -200,8 +228,46 @@ describe('«Обзор» on its side', () => {
       // no tab bar in this test: the whole window height is the screen
       expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(cols, 768, 360)}, minmax(0, 1fr))`);
       expect(discoverLandscapeCols(cols, 768, 312)).toBe(want);
+      const nav = tabBar(360);
+      grid().getBoundingClientRect = () => rectAt(120, 500);
+      try {
+        await resize();
+        expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(cols, 768, 240)}, minmax(0, 1fr))`);
+      } finally {
+        nav.remove();
+      }
     });
   }
+
+  it('person filmography measures its own grid and clears inline columns in portrait', async () => {
+    setCatalogClientForTests({
+      novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+      discover: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+      home: vi.fn(() => Promise.resolve([])),
+      search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
+      card: vi.fn(() => Promise.reject(new Error('x'))),
+      season: vi.fn(() => Promise.reject(new Error('x'))),
+      person: vi.fn(() => Promise.resolve(PERSON)),
+      similar: vi.fn(() => Promise.resolve([])),
+      posters: vi.fn(() => Promise.resolve([])),
+    });
+    windowSize(800, 360, 768);
+    mount(<Person id={7} />);
+    await flush();
+    const nav = tabBar(360);
+    grid().getBoundingClientRect = () => rectAt(120, 500);
+    try {
+      await resize();
+      expect(grid().style.gridTemplateColumns).toBe(`repeat(${discoverLandscapeCols(2, 768, 240)}, minmax(0, 1fr))`);
+    } finally {
+      nav.remove();
+    }
+    act(() => render(null, el));
+    windowSize(360, 800, 328);
+    mount(<Person id={7} />);
+    await flush();
+    expect(grid().style.gridTemplateColumns).toBe('');
+  });
 
   it('turning the phone back to portrait drops the inline columns', async () => {
     windowSize(800, 360, 768);
@@ -303,7 +369,7 @@ describe('«Мои» on its side', () => {
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: realH });
   });
 
-  it('large and small posters: as many per row as fit the height; portrait and the list views untouched', async () => {
+  it('large and small posters fit two rows from the grid top; portrait and the list views stay untouched', async () => {
     windowSize(800, 360, 768);
     updateSettings({ libraryView: 'large' });
     mount(<Library />);
@@ -314,8 +380,26 @@ describe('«Мои» on its side', () => {
     act(() => updateSettings({ libraryView: 'small' }));
     await flush();
     expect(g().style.gridTemplateColumns).toBe(`repeat(${large[1]}, minmax(0, 1fr))`);
-    // without compact captions the large view keeps its safe minimum on a short screen
-    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([3, 27]);
+    act(() => updateSettings({ libraryView: 'large' }));
+    await flush();
+
+    const compact = landscapeCols(768, 240, LIBRARY_FITS);
+    const nav = tabBar(360);
+    g().getBoundingClientRect = () => rectAt(120, 500);
+    try {
+      await resize();
+      expect(g().style.gridTemplateColumns).toBe(`repeat(${compact[0]}, minmax(0, 1fr))`);
+      act(() => updateSettings({ libraryView: 'small' }));
+      await flush();
+      expect(g().style.gridTemplateColumns).toBe(`repeat(${compact[1]}, minmax(0, 1fr))`);
+      compact.forEach((n, i) => {
+        expect(LANDSCAPE_ROWS * cardHeight(768, n, LIBRARY_FITS[i])).toBeLessThanOrEqual(240 - LANDSCAPE_ROWS * 2 * LANDSCAPE_MARGIN + 0.01);
+      });
+    } finally {
+      nav.remove();
+    }
+    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([13, 14]);
+
     act(() => render(null, el));
     windowSize(360, 800, 328);
     updateSettings({ libraryView: 'large' });
