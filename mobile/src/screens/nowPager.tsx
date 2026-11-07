@@ -346,7 +346,7 @@ export function NowDeck({
           {children}
         </section>
         <section class="m-now-pane" data-pane="episodes">
-          {opened.episodes || pane === 'episodes' ? <Episodes hash={hash} fileId={fileId} onPlay={play} /> : null}
+          {opened.episodes || pane === 'episodes' ? <Episodes key={hash} hash={hash} fileId={fileId} onPlay={play} /> : null}
           {launchError ? <LaunchError message={launchError} class="m-hint-warn" /> : null}
         </section>
       </div>
