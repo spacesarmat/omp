@@ -62,7 +62,9 @@ internal fun OmpNativePlugin.startApkInstall(job: ApkJob) {
             val apk = ApkInstaller.download(context, url, sha) { p ->
                 emit("apkProgress", JSObject().put("percent", p))
             }
-            ApkInstaller.install(context, apk)
+            ApkInstaller.install(context, apk) {
+                // Only the real package broadcast removes the file; cancellation keeps it for a retry.
+            }
             once.resolve()
         } catch (e: UserError) {
             once.reject(e.message ?: I18n.s("plugin.updateFailed"), "omp")

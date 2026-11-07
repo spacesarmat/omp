@@ -1,7 +1,10 @@
 package com.spacesarmat.omp
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import androidx.core.net.toUri
 import android.provider.Settings
 import androidx.core.content.FileProvider
@@ -14,6 +17,19 @@ import okhttp3.Request
 
 /** Thrown with a user-facing (Russian) message. */
 class UserError(message: String) : Exception(message)
+
+class ApkInstallTracker(context: Context, private val apk: File, private val onInstalled: () -> Unit) : BroadcastReceiver() {
+    private val appContext = context.applicationContext
+    private val packageName = context.packageName
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED) return
+        if (intent.data?.schemeSpecificPart != packageName) return
+        apk.delete()
+        runCatching { appContext.unregisterReceiver(this) }
+        onInstalled()
+    }
+}
 
 /** Download, SHA-256 check and hand-off to the system installer. Blocking: call off the main thread. */
 object ApkInstaller {
@@ -107,12 +123,28 @@ object ApkInstaller {
         return target
     }
 
-    /** Opens the system package installer for [apk] via FileProvider. */
-    fun install(context: Context, apk: File) {
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", apk)
-        val intent = Intent(Intent.ACTION_VIEW)
-            .setDataAndType(uri, APK_MIME)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+    /** Opens the system package installer for [apk] and calls [onInstalled] after the package is really installed. */
+    fun install(context: Context, apk: File, onInstalled: () -> Unit) {
+        val tracker = ApkInstallTracker(context, apk, onInstalled)
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(tracker, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(tracker, filter)
+        }
+        try {
+            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", apk)
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, APK_MIME)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            context.unregisterReceiver(tracker)
+            throw e
+        }
     }
 }

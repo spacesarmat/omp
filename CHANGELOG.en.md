@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Downloaded APK files are now deleted automatically after a confirmed installation. If installation is cancelled, the file is kept for a retry
+
 ## 0.20.9-beta.4
 
 - The built-in TorrServer is updated to MatriX.150
