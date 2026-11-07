@@ -9,7 +9,7 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
+import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverFitsForHeight, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
 import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 import { usePinchStep } from '../../ui/usePinchStep';
 import {
@@ -76,6 +76,7 @@ export function Discover() {
   const colsRef = useRef(cols);
   colsRef.current = cols;
   const rootRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
     enabled: !home,
     levels: COLS_BY_SIZE.length,
@@ -89,9 +90,9 @@ export function Discover() {
     anchorAttr: 'data-anchor',
   });
   const gridClass = discoverGridClass(cols);
-  // landscape: as many posters per row as it takes for a whole tile to fit the screen height
-  const box = useLandscapeBox(rootRef);
-  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height) : 0;
+  // landscape: as many posters per row as it takes for two whole tile rows to fit above the tab bar
+  const box = useLandscapeBox(gridRef, !home);
+  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height, discoverFitsForHeight(window.innerHeight)) : 0;
   const gridStyle = colsStyle(landCols || null);
   // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
   // Search lives on its own tab now, so this grid is never a search result.
@@ -250,7 +251,7 @@ export function Discover() {
           }}
         />
       ) : !feed ? (
-        <div class={gridClass} style={gridStyle} aria-busy="true">
+        <div class={gridClass} style={gridStyle} ref={gridRef} aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (
             <div key={i} class="m-disc-tile m-disc-skel" aria-hidden="true">
               <span class="m-disc-poster" />
@@ -262,7 +263,7 @@ export function Discover() {
         <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>
       ) : (
         <>
-          <div class={gridClass} style={gridStyle}>
+          <div class={gridClass} style={gridStyle} ref={gridRef}>
             {withAds(feed.items, ads.admitted).map((e) => {
               if (e.item === undefined) {
                 const b = ads.banner(e.ad);
