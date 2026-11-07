@@ -219,6 +219,18 @@ describe('«Обзор» on its side', () => {
     expect(grid().getAttribute('style') || '').toBe('');
   });
 
+  it('switching from the discover home to a grid measures the newly mounted grid', async () => {
+    saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
+    windowSize(800, 360, 768);
+    mount(<Discover />);
+    await flush();
+    act(() => (el.querySelector('.m-sort') as HTMLElement).click());
+    await flush();
+    act(() => (el.querySelectorAll('.m-disc-sort-opt')[1] as HTMLElement).click());
+    await flush();
+    expect(grid().style.gridTemplateColumns).toBe('repeat(13, minmax(0, 1fr))');
+  });
+
   for (const [cols, want] of [[2, 17], [3, 18], [4, 19]] as [DiscoverCols, number][]) {
     it(`landscape 800x360, size ${cols}: ${want} posters per row and two rows from the grid top`, async () => {
       saveDiscoverCols(cols);

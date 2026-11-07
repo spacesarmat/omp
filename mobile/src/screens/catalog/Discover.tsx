@@ -91,7 +91,7 @@ export function Discover() {
   });
   const gridClass = discoverGridClass(cols);
   // landscape: as many posters per row as it takes for two whole tile rows to fit above the tab bar
-  const box = useLandscapeBox(gridRef);
+  const box = useLandscapeBox(gridRef, !home);
   const landCols = box ? discoverLandscapeCols(cols, box.width, box.height) : 0;
   const gridStyle = colsStyle(landCols || null);
   // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
