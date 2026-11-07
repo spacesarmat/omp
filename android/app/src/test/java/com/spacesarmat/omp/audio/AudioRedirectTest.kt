@@ -1,8 +1,11 @@
 package com.spacesarmat.omp.audio
 
+import android.content.Intent
 import androidx.media3.datasource.DataSpec
+import com.spacesarmat.omp.ApkInstallTracker
 import com.spacesarmat.omp.CertPins
 import com.spacesarmat.omp.tls.TorrServerTrust
+import java.io.File
 import java.security.KeyStore
 import java.security.Security
 import javax.net.ssl.KeyManagerFactory
@@ -11,10 +14,13 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.AfterClass
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -76,5 +82,51 @@ class AudioRedirectTest {
             server.shutdown()
             TorrServerTrust.reset()
         }
+    }
+
+    @Test
+    fun anotherPackageDoesNotDeleteTheDownloadedApk() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File.createTempFile("omp-other", ".apk")
+        var completed = 0
+        val tracker = ApkInstallTracker(context, apk) { completed++ }
+        tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED).setData(android.net.Uri.parse("package:example.other")))
+        assertTrue(apk.exists())
+        assertEquals(0, completed)
+        apk.delete()
+    }
+
+    @Test
+    fun packageAddedDeletesTheDownloadedApk() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File.createTempFile("omp-added", ".apk")
+        var completed = 0
+        val tracker = ApkInstallTracker(context, apk) { completed++ }
+        tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED).setData(android.net.Uri.parse("package:" + context.packageName)))
+        assertFalse(apk.exists())
+        assertEquals(1, completed)
+    }
+
+    @Test
+    fun packageReplacedDeletesTheDownloadedApk() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File.createTempFile("omp-replaced", ".apk")
+        var completed = 0
+        val tracker = ApkInstallTracker(context, apk) { completed++ }
+        tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_REPLACED).setData(android.net.Uri.parse("package:" + context.packageName)))
+        assertFalse(apk.exists())
+        assertEquals(1, completed)
+    }
+
+    @Test
+    fun manifestReceiverDeletesTheApkAfterProcessReplacement() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File(context.cacheDir, "updates").apply { mkdirs() }.let { File(it, "omp.apk") }
+        apk.writeText("pending")
+        val manifest = File("src/main/AndroidManifest.xml").readText()
+        assertTrue(manifest.contains("android:name=\".ApkInstallTracker\""))
+        assertTrue(manifest.contains("android.intent.action.MY_PACKAGE_REPLACED"))
+        ApkInstallTracker().onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED).setData(android.net.Uri.parse("package:" + context.packageName)))
+        assertFalse(apk.exists())
     }
 }

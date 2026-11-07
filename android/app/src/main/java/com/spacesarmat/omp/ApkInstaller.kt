@@ -18,18 +18,21 @@ import okhttp3.Request
 /** Thrown with a user-facing (Russian) message. */
 class UserError(message: String) : Exception(message)
 
-class ApkInstallTracker(context: Context, private val apk: File, private val onInstalled: () -> Unit) : BroadcastReceiver() {
-    private val appContext = context.applicationContext
-    private val packageName = context.packageName
+class ApkInstallTracker() : BroadcastReceiver() {
+    private var apk: File? = null
+    private var onInstalled: (() -> Unit)? = null
 
-    constructor(context: Context) : this(context, File(context.cacheDir, "updates/omp.apk"), {})
+    constructor(context: Context, apk: File, onInstalled: () -> Unit) : this() {
+        this.apk = apk
+        this.onInstalled = onInstalled
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (intent.data?.schemeSpecificPart != packageName) return
-        apk.delete()
-        runCatching { appContext.unregisterReceiver(this) }
-        onInstalled()
+        if (intent.data?.schemeSpecificPart != context.packageName) return
+        (apk ?: File(context.cacheDir, "updates/omp.apk")).delete()
+        runCatching { context.unregisterReceiver(this) }
+        onInstalled?.invoke()
     }
 }
 
