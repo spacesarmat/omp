@@ -143,5 +143,38 @@ describe('download page languages and fallbacks', () => {
         expect(script.getAttribute('src')).not.toMatch(/^https?:/);
       }
     });
+
+    it(`${page.lang} keeps version badges in the heading row at every viewport width`, () => {
+      const doc = new DOMParser().parseFromString(readFileSync(page.file, 'utf8'), 'text/html');
+      const style = document.createElement('style');
+      style.textContent = doc.querySelector('style')!.textContent;
+      document.head.append(style);
+      try {
+        const rules = Array.from(style.sheet!.cssRules).flatMap((rule) => (
+          rule.type === CSSRule.MEDIA_RULE ? Array.from((rule as CSSMediaRule).cssRules) : [rule]
+        ));
+        const styleRule = (selector: string): CSSStyleRule[] => rules.filter((rule): rule is CSSStyleRule => (
+          rule.type === CSSRule.STYLE_RULE && (rule as CSSStyleRule).selectorText === selector
+        ));
+
+        const panelHeads = styleRule('.panel-head');
+        expect(panelHeads).toHaveLength(2);
+        for (const rule of panelHeads) expect(rule.style.display).toBe('grid');
+        for (const rule of styleRule('.panel-head > div')) expect(rule.style.display).toBe('contents');
+        for (const rule of styleRule('.panel-head h2')) expect(rule.style.overflowWrap).toBe('anywhere');
+        const versions = styleRule('.version');
+        for (const rule of versions) {
+          expect(rule.style.gridColumn).toBe('2');
+          expect(rule.style.gridRow).toBe('1');
+        }
+        for (const rule of versions.slice(0, 1)) {
+          expect(rule.style.minWidth).toBe('0px');
+          expect(rule.style.whiteSpace).toBe('normal');
+          expect(rule.style.overflowWrap).toBe('anywhere');
+        }
+      } finally {
+        style.remove();
+      }
+    });
   }
 });

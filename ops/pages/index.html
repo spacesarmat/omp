@@ -26,20 +26,22 @@
     .header nav a[aria-current="page"] { color: var(--yellow); }
     .hero { padding-block: clamp(2.5rem, 1.5rem + 5vw, 6rem) clamp(1.5rem, 1rem + 3vw, 3.5rem); text-align: center; }
     .eyebrow { color: var(--yellow); font-size: .8rem; font-weight: 700; letter-spacing: .16em; }
-    h1 { margin: .8rem 0 1rem; font-size: clamp(2.35rem, 1.65rem + 4vw, 4.8rem); line-height: 1.08; letter-spacing: -.04em; }
+    h1 { margin: .8rem 0 1rem; font-size: clamp(2.35rem, 1.65rem + 4vw, 4.8rem); line-height: 1.08; letter-spacing: -.04em; overflow-wrap: anywhere; }
     .hero p { max-width: 44rem; margin: 0 auto 1.6rem; color: var(--muted); font-size: clamp(1rem, .95rem + .3vw, 1.2rem); }
     .main-site { display: inline-block; border-bottom: .1rem solid var(--yellow); padding-bottom: .15rem; font-weight: 650; }
     .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr)); gap: 1.25rem; padding-bottom: 2rem; }
     .panel { min-width: 0; padding: clamp(1.2rem, 1rem + 1vw, 2rem); border: .0625rem solid var(--line); border-radius: 1rem; background: var(--panel); }
     .panel.beta { border-color: #62581f; }
-    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 1.4rem; }
+    .panel-head { display: grid; grid-template-columns: minmax(min-content, 1fr) minmax(0, max-content); align-items: start; column-gap: .8rem; margin-bottom: 1.4rem; }
+    .panel-head > div { display: contents; }
     .panel h2 { margin: 0 0 .35rem; font-size: 1.45rem; }
-    .panel-head p { margin: 0; color: var(--muted); font-size: .9rem; }
-    .version { flex-shrink: 0; margin-left: .8rem; padding: .3rem .55rem; border: .0625rem solid var(--line); border-radius: .4rem; color: var(--yellow); font-size: .8rem; font-weight: 700; }
+    .panel-head h2 { grid-column: 1; grid-row: 1; overflow-wrap: anywhere; }
+    .panel-head p { grid-column: 1 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: .9rem; }
+    .version { grid-column: 2; grid-row: 1; min-width: 0; margin-left: 0; white-space: normal; overflow-wrap: anywhere; padding: .3rem .55rem; border: .0625rem solid var(--line); border-radius: .4rem; color: var(--yellow); font-size: .8rem; font-weight: 700; }
     .platform + .platform { margin-top: 1.25rem; padding-top: 1.25rem; border-top: .0625rem solid var(--line); }
     .platform h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
     .platform p { margin: 0 0 .85rem; color: var(--muted); font-size: .9rem; }
-    .button { display: block; padding: .8rem 1rem; border-radius: .5rem; text-align: center; font-weight: 750; }
+    .button { display: block; padding: .8rem 1rem; border-radius: .5rem; text-align: center; font-weight: 750; overflow-wrap: anywhere; }
     .button.primary { background: var(--yellow); color: #171710; }
     .button.primary:hover { background: #ffd84d; color: #171710; }
     .button.secondary { border: .0625rem solid var(--line); color: var(--text); }
@@ -54,8 +56,8 @@
       .header { justify-content: center; }
       .header nav { justify-content: center; }
       .downloads { grid-template-columns: 1fr; }
-      .panel-head { display: block; }
-      .version { display: inline-block; margin: .6rem 0 0; }
+      .panel-head { display: grid; }
+      .version { grid-column: 2; grid-row: 1; margin: 0; }
     }
   </style>
 </head>
