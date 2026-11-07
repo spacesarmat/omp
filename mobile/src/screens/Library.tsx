@@ -24,7 +24,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, sortOptions } from '../../../src/lib/librarySearch';
-import { libraryTabs, BY_SIZE, viewLabel, viewOptions, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
@@ -36,7 +36,7 @@ import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { usePinchStep } from '../ui/usePinchStep';
-import { colsStyle, landscapeCols, useLandscapeBox, type CardFit } from '../ui/landscapeCols';
+import { cardWidth, gridCols, gridTemplate, useContentWidth, type GridMode } from '../ui/landscapeCols';
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
@@ -50,18 +50,6 @@ import { AdCell, type AdCellKind } from '../ads/AdCell';
 import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
-/**
- * Landscape, «Мои» poster views (large, then small): the 173:240 poster, the compact caption under it (two title
- * lines, one meta line, a one-line series badge and, for large, the size line, with their gaps) and the column gap.
- */
-export const LIBRARY_FITS: CardFit[] = [
-  { aspect: 240 / 173, caption: 72, gap: 12 },
-  { aspect: 240 / 173, caption: 58, gap: 8 },
-];
-const LIBRARY_FITS_TALL: CardFit[] = [
-  { aspect: 240 / 173, caption: 105, gap: 12 },
-  { aspect: 240 / 173, caption: 83, gap: 8 },
-];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;
 const PULL_MAX = 110;
@@ -115,7 +103,7 @@ const LONG_PRESS_SLOP = 10;
 
 /** The views drawn as rows (the others are poster grids). */
 function isRowView(v: string): boolean {
-  return v === 'compact' || v === 'list';
+  return isRowCatalogView(v);
 }
 
 export function Library() {
@@ -348,12 +336,12 @@ export function Library() {
     else empty = t('catalog.categoryEmpty');
   }
 
-  // landscape: the poster views get as many cards per row as two whole rows fit above the tab bar
+  // poster grids: columns from the content width, the same rule in portrait and landscape
   const gridView = mine && !isHistory && (view === 'large' || view === 'small');
-  const box = useLandscapeBox(gridRef, gridView);
-  const fits = window.innerHeight > 560 ? LIBRARY_FITS_TALL : LIBRARY_FITS;
-  const landCols = box && gridView ? landscapeCols(box.width, box.height, fits)[view === 'large' ? 0 : 1] : 0;
-  const gridStyle = colsStyle(landCols || null);
+  const gridMode: GridMode = view === 'small' ? 'small' : 'large';
+  const gridWidth = useContentWidth(gridRef, gridView);
+  const gridColsNow = gridView && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
+  const gridStyle = gridView ? { gridTemplateColumns: gridTemplate(gridMode) } : undefined;
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
@@ -380,7 +368,7 @@ export function Library() {
   const ads = useAdSlots({
     section: 'mine',
     count: shown.length,
-    perScreen: landCols || PER_SCREEN[view] || PER_SCREEN.list,
+    perScreen: gridColsNow || PER_SCREEN[view] || PER_SCREEN.list,
     active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
     listKey: tab + '|' + sort,
     itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
@@ -593,7 +581,7 @@ export function Library() {
             type="button"
             class="m-icon-btn m-sort tm"
             data-code="P02.3"
-            aria-label={t('nav.viewSortNow', { sort: sortLabel(sort), view: viewLabel(view) })}
+            aria-label={t('nav.viewSortNow', { sort: sortLabel(sort), view: phoneViewLabel(view) })}
             aria-haspopup="dialog"
             onClick={() => setViewSheet(true)}
           >
@@ -825,7 +813,7 @@ export function Library() {
             </div>
           ) : (
             view === 'list' ? (
-              <div class="m-vlist">
+              <div class="m-vlist" data-view="list">
                 {withAds(shown, ads.admitted).map((e) => {
                   if (e.item === undefined) return adCell(e.ad, 'list');
                   const it = e.item;
@@ -876,7 +864,7 @@ export function Library() {
                 })}
               </div>
             ) : view === 'compact' ? (
-              <div class="m-vlist m-clist">
+              <div class="m-vlist m-clist" data-view="compact">
                 {withAds(shown, ads.admitted).map((e) => {
                   if (e.item === undefined) return adCell(e.ad, 'compact');
                   const it = e.item;
@@ -905,7 +893,7 @@ export function Library() {
                 })}
               </div>
             ) : (
-              <div class={'m-grid m-view-' + view} style={gridStyle} ref={gridRef}>
+              <div class={'m-grid m-view-' + view} style={gridStyle} data-cols={gridColsNow || undefined} data-card-min={gridView && gridWidth > 0 ? String(Math.round(cardWidth(gridWidth, gridMode))) : undefined} data-view={view} ref={gridRef}>
                 {withAds(shown, ads.admitted).map((e) => {
                   if (e.item === undefined) return adCell(e.ad, 'grid');
                   const it = e.item;
@@ -967,13 +955,13 @@ export function Library() {
           </div>
           <div class="m-section">{t('nav.viewHead')}</div>
           <div class="m-sub-pick tm" data-code="P02.4" role="radiogroup" aria-label={t('nav.viewHead')} data-sheet-view>
-            {viewOptions().map((o) => (
+            {phoneViewOptions().map((o) => (
               <button
                 key={o.value}
                 type="button"
                 role="radio"
                 aria-checked={view === o.value}
-                class="m-opt"
+                class={'m-opt' + (view === o.value ? ' on' : '')}
                 data-view={o.value}
                 onClick={() => updateSettings({ libraryView: o.value })}
               >

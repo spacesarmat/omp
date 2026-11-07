@@ -9,8 +9,10 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverFitsForHeight, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
-import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
+import { readDiscoverCols, saveDiscoverCols, discoverGridClass, isGridDiscoverView, type DiscoverView } from './discoverCols';
+import { gridCols, gridTemplate, useContentWidth, type GridMode } from '../../ui/landscapeCols';
+import { BY_SIZE, isRowCatalogView, phoneViewLabel, phoneViewOptions } from '../../../../src/lib/libraryView';
+import { Sheet } from '../../ui/Sheet';
 import { usePinchStep } from '../../ui/usePinchStep';
 import {
   discoverQueryKey,
@@ -23,6 +25,7 @@ import { loadDiscoverQuery, saveDiscoverQuery } from './discoverQueryStore';
 import { DiscoverSortSheet, DiscoverFiltersSheet, sortName } from './DiscoverSheets';
 import { DiscoverHome } from './DiscoverHome';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { ratingText } from './CatalogSearch';
 import { PosterButton } from '../../share/PosterButton';
 import { cancelTileCards } from '../../catalog/tileCards';
 import type { TrendingWindow } from '../../../../src/catalog/tmdb';
@@ -35,6 +38,7 @@ export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 const SKELETONS = 6;
 
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
+const CHECK = 'M5 12.5l4.5 4.5L19 7';
 
 function chips(): { id: Filter; label: string }[] {
   return [
@@ -51,7 +55,7 @@ export function Discover() {
   const [query, setQuery] = useState<DiscoverQuery>(loadDiscoverQuery);
   const qkey = discoverQueryKey(query);
   const home = isHomeDiscoverQuery(query);
-  const [sheet, setSheet] = useState<'sort' | 'filters' | null>(null);
+  const [sheet, setSheet] = useState<'sort' | 'filters' | 'view' | null>(null);
   const [trendWindow, setTrendWindow] = useState<TrendingWindow>('day');
   // back from a title card (or another tab): the chip, the loaded pages and the open search come back as they were
   const kept = useMemo(() => readDiscover(qkey), []);
@@ -71,40 +75,43 @@ export function Discover() {
   const homeFresh = useRef(true);
   const list = torrents.value;
   const index = useMemo(() => libraryIndex(list), [list]);
-  // posters per row: one two-finger pinch steps between 2, 3 and 4 (apart = fewer, bigger posters)
-  const [cols, setCols] = useState<DiscoverCols>(readDiscoverCols);
-  const colsRef = useRef(cols);
-  colsRef.current = cols;
+  // one of four views, the same in portrait and landscape. A pinch steps them (spread = bigger cards).
+  const [view, setView] = useState<DiscoverView>(readDiscoverCols);
+  const viewRef = useRef(view);
+  viewRef.current = view;
   const rootRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   usePinchStep(rootRef, {
     enabled: !home,
-    levels: COLS_BY_SIZE.length,
-    level: () => Math.max(0, COLS_BY_SIZE.indexOf(colsRef.current)),
+    levels: BY_SIZE.length,
+    level: () => Math.max(0, BY_SIZE.indexOf(viewRef.current)),
     apply: (i) => {
-      const next = COLS_BY_SIZE[i];
-      colsRef.current = next;
-      setCols(next);
+      const next = BY_SIZE[i];
+      viewRef.current = next;
+      setView(next);
       saveDiscoverCols(next);
     },
     anchorAttr: 'data-anchor',
-    // landscape: the two-row grid fills the screen and a FLIP of every tile overlaps them - the step lands at once
+    posterAttr: 'data-poster',
+    morph: (from, to) => isRowCatalogView(BY_SIZE[from]) !== isRowCatalogView(BY_SIZE[to]),
+    // a landscape FLIP of every tile overlaps them - the step lands at once
     calm: () => window.innerWidth > window.innerHeight,
   });
-  const gridClass = discoverGridClass(cols);
-  // landscape: as many posters per row as it takes for two whole tile rows to fit above the tab bar
-  const box = useLandscapeBox(gridRef, !home);
-  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height, discoverFitsForHeight(window.innerHeight)) : 0;
-  const gridStyle = colsStyle(landCols || null);
+  const gridClass = discoverGridClass(view);
+  const gridMode: GridMode = view === 'small' ? 'small' : 'large';
+  const gridOn = !home && isGridDiscoverView(view);
+  const gridWidth = useContentWidth(gridRef, gridOn);
+  const gridColsNow = gridOn && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
+  const gridStyle = gridOn ? { gridTemplateColumns: gridTemplate(gridMode) } : undefined;
   // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
   // Search lives on its own tab now, so this grid is never a search result.
   const ads = useAdSlots({
     section: 'discoverGrid',
     count: feed ? feed.items.length : 0,
-    perScreen: landCols || (cols === 4 ? PER_SCREEN.cols4 : cols === 3 ? PER_SCREEN.cols3 : PER_SCREEN.cols2),
+    perScreen: view === 'list' ? PER_SCREEN.list : view === 'compact' ? PER_SCREEN.compact : gridColsNow || (view === 'small' ? PER_SCREEN.cols3 : PER_SCREEN.cols2),
     active: !home && !error && !!feed && feed.items.length > 0,
-    listKey: filter + '|' + qkey,
-    itemEl: (i) => (rootRef.current ? rootRef.current.querySelectorAll('.m-disc-grid [data-anchor]')[i] || null : null),
+    listKey: filter + '|' + qkey + '|' + view,
+    itemEl: (i) => (gridRef.current ? gridRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
   });
 
   useEffect(() => {
@@ -200,6 +207,17 @@ export function Discover() {
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
         <button
           type="button"
+          class="m-icon-btn m-view-btn tm"
+          aria-label={t('nav.viewNow', { view: phoneViewLabel(view) })}
+          aria-haspopup="dialog"
+          aria-expanded={sheet === 'view'}
+          data-current-view={view}
+          onClick={() => setSheet('view')}
+        >
+          <Icon d={ICONS[('view-' + view) as keyof typeof ICONS]} size={20} />
+        </button>
+        <button
+          type="button"
           class="m-icon-btn m-sort tm"
           data-code="P34.3"
           aria-label={home ? t('discover.homeBrowseLists') : t('discover.sortAria', { name: sortName(query.sort) })}
@@ -232,6 +250,7 @@ export function Discover() {
       {home ? (
         <DiscoverHome
           kind={filter}
+          view={view}
           window={trendWindow}
           onWindow={setTrendWindow}
           reload={reload}
@@ -253,7 +272,7 @@ export function Discover() {
           }}
         />
       ) : !feed ? (
-        <div class={gridClass} style={gridStyle} ref={gridRef} aria-busy="true">
+        <div class={gridClass} style={gridStyle} data-view={view} ref={gridRef} aria-busy="true">
           {Array.from({ length: SKELETONS }, (_, i) => (
             <div key={i} class="m-disc-tile m-disc-skel" aria-hidden="true">
               <span class="m-disc-poster" />
@@ -265,24 +284,57 @@ export function Discover() {
         <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>
       ) : (
         <>
-          <div class={gridClass} style={gridStyle} ref={gridRef}>
+          <div class={gridClass} style={gridStyle} data-view={view} data-cols={gridColsNow || undefined} ref={gridRef}>
             {withAds(feed.items, ads.admitted).map((e) => {
               if (e.item === undefined) {
                 const b = ads.banner(e.ad);
                 const pos = e.ad;
-                return b ? <AdCell key={'ad:grid:' + pos} kind="disc" banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+                const kind = view === 'compact' ? 'compact' : view === 'list' ? 'list' : 'disc';
+                return b ? <AdCell key={'ad:grid:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
               }
               const x = e.item;
+              const owned = inLibrary(index, x);
+              const label = x.year ? x.title + ' ' + x.year : x.title;
+              const open = () => navigate({ name: 'title', kind: x.kind, id: x.id });
+              if (view === 'compact') {
+                return (
+                  <PosterButton key={x.kind + ':' + x.id} item={x} anchor={x.kind + ':' + x.id} className="m-crow" label={label} onOpen={open}>
+                    <span class="m-crow-main">
+                      <span class="m-card-title m-crow-title m-disc-title"><TileTitle x={x} /></span>
+                      <span class="m-crow-sub">
+                        <TileMeta x={x} />
+                        {x.rating > 0 && <span class="m-muted m-small">{ratingText(x.rating)}</span>}
+                        {owned && <span class="m-muted m-small">{t('discover.inLibrary')}</span>}
+                      </span>
+                    </span>
+                  </PosterButton>
+                );
+              }
+              if (view === 'list') {
+                return (
+                  <PosterButton key={x.kind + ':' + x.id} item={x} anchor={x.kind + ':' + x.id} className="m-vrow" label={label} onOpen={open}>
+                    <DiscPoster x={x} owned={owned} />
+                    <span class="m-vrow-text">
+                      <span class="m-card-title m-disc-title"><TileTitle x={x} /></span>
+                      <span class="m-vrow-meta">
+                        <TileMeta x={x} />
+                        {owned && <span class="m-muted m-small">{t('discover.inLibrary')}</span>}
+                      </span>
+                      <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
+                    </span>
+                  </PosterButton>
+                );
+              }
               return (
               <PosterButton
                 key={x.kind + ':' + x.id}
                 item={x}
                 anchor={x.kind + ':' + x.id}
                 className="m-disc-tile"
-                label={x.year ? x.title + ' ' + x.year : x.title}
-                onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
+                label={label}
+                onOpen={open}
               >
-                <DiscPoster x={x} owned={inLibrary(index, x)} />
+                <DiscPoster x={x} owned={owned} />
                 <span class="m-card-title m-disc-title">
                   <TileTitle x={x} />
                 </span>
@@ -313,6 +365,32 @@ export function Discover() {
           }}
           onClose={() => setSheet(null)}
         />
+      )}
+      {sheet === 'view' && (
+        <Sheet label={t('nav.viewHead')} onClose={() => setSheet(null)}>
+          <div class="m-sheet-title">{t('nav.viewHead')}</div>
+          <div class="m-sub-pick" role="radiogroup" aria-label={t('nav.viewHead')} data-sheet-view>
+            {phoneViewOptions().map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={view === o.value}
+                class={'m-opt' + (view === o.value ? ' on' : '')}
+                data-view={o.value}
+                onClick={() => {
+                  setView(o.value);
+                  saveDiscoverCols(o.value);
+                  setSheet(null);
+                }}
+              >
+                <Icon d={ICONS[('view-' + o.value) as keyof typeof ICONS]} size={20} />
+                <span class="m-opt-name m-grow">{o.label}</span>
+                {view === o.value && <Icon d={CHECK} size={20} />}
+              </button>
+            ))}
+          </div>
+        </Sheet>
       )}
       {sheet === 'filters' && (
         <DiscoverFiltersSheet

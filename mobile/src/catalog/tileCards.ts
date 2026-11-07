@@ -9,7 +9,8 @@ import type { CatalogCard, Kind } from '../../../src/catalog/tmdb';
 import { phoneCatalog } from './phoneCatalog';
 
 const MAX_LOOKUPS = 2;
-const RETRY_MS = 10 * 60 * 1000;
+/** A failed card is not asked again until this long after the failure, even if a reader re-enters. */
+export const RETRY_MS = 10 * 60 * 1000;
 /** Queued tiles at most (the oldest go first). */
 const MAX_WAITING = 24;
 /** Projections kept at most (the oldest go first). */
@@ -21,6 +22,8 @@ export type TileCard = CatalogCard;
 const cards = new Map<string, TileCard>();
 let waiting: { key: string; kind: Kind; id: number }[] = [];
 const visible = new Set<string>();
+/** How many on-screen readers (title, date line) still want this card. One leaving does not drop the rest. */
+const viewers = new Map<string, number>();
 const pending = new Set<string>();
 const failedAt = new Map<string, number>();
 let running = 0;
@@ -80,9 +83,20 @@ function pump(): void {
   }
 }
 
-/** A tile came into view: fetch its card unless known, queued or failed lately. */
+function dropQueued(key: string): void {
+  const before = waiting.length;
+  waiting = waiting.filter((j) => j.key !== key);
+  if (waiting.length !== before) pending.delete(key);
+}
+
+/**
+ * A reader came into view and holds one view (cleanup uses the count). Whether to ask again is separate:
+ * a known card, one already queued, or a failure newer than RETRY_MS does not start a fetch.
+ * Another reader still on screen does not block a retry after that pause.
+ */
 export function requestTileCard(kind: Kind, id: number): void {
   const key = keyOf(kind, id);
+  viewers.set(key, (viewers.get(key) || 0) + 1);
   visible.add(key);
   if (cards.has(key) || pending.has(key)) return;
   const failed = failedAt.get(key);
@@ -93,13 +107,20 @@ export function requestTileCard(kind: Kind, id: number): void {
   pump();
 }
 
-/** A tile left the view: its queued fetch (if any) is dropped. */
+/**
+ * One reader left. The queued fetch stays while another reader of the same card is still on screen
+ * (the title scrolled away, the date line did not).
+ */
 export function leaveTileCard(kind: Kind, id: number): void {
   const key = keyOf(kind, id);
+  const n = (viewers.get(key) || 0) - 1;
+  if (n > 0) {
+    viewers.set(key, n);
+    return;
+  }
+  viewers.delete(key);
   visible.delete(key);
-  const before = waiting.length;
-  waiting = waiting.filter((j) => j.key !== key);
-  if (waiting.length !== before) pending.delete(key);
+  dropQueued(key);
 }
 
 /** «Обзор» was left: nothing queued is fetched any more (the running ones finish). */
@@ -107,6 +128,7 @@ export function cancelTileCards(): void {
   waiting.forEach((j) => pending.delete(j.key));
   waiting = [];
   visible.clear();
+  viewers.clear();
 }
 
 /** Tests: forget every card and the queue. */
@@ -114,6 +136,7 @@ export function resetTileCards(): void {
   cards.clear();
   waiting = [];
   visible.clear();
+  viewers.clear();
   pending.clear();
   failedAt.clear();
   running = 0;

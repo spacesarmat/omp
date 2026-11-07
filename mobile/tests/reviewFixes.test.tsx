@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, resetTileCards } from '../src/catalog/tileCards';
+import { RETRY_MS, cachedTileCard, cancelTileCards, leaveTileCard, requestTileCard, resetTileCards } from '../src/catalog/tileCards';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { knownOver, matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { loadCalendar, pickSubShow, resetCalendar, subQueryName } from '../src/lib/calendar';
@@ -83,6 +83,62 @@ describe('«Обзор» tile-card queue', () => {
     expect(kept.nextEpisode).toEqual({ season: 1, episode: 2, airDate: '2026-10-08' });
     expect(kept.overview).toBe('');
     expect(kept.cast).toEqual([]);
+  });
+
+  it('one of two readers leaving keeps the card queued behind two active requests', async () => {
+    const waiting: (() => void)[] = [];
+    const c = fake({ card: vi.fn((_k: string, id: number) => new Promise<CatalogCard>((res) => waiting.push(() => res(card(id))))) as never });
+    requestTileCard('movie', 1);
+    requestTileCard('movie', 2);
+    requestTileCard('movie', 3);
+    requestTileCard('movie', 3);
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2]);
+    leaveTileCard('movie', 3);
+    await act(async () => waiting.splice(0).forEach((f) => f()));
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2, 3]);
+  });
+
+  it('the last reader leaving drops a card that is still only queued', async () => {
+    const waiting: (() => void)[] = [];
+    const c = fake({ card: vi.fn((_k: string, id: number) => new Promise<CatalogCard>((res) => waiting.push(() => res(card(id))))) as never });
+    requestTileCard('movie', 1);
+    requestTileCard('movie', 2);
+    requestTileCard('movie', 3);
+    requestTileCard('movie', 3);
+    await flush();
+    leaveTileCard('movie', 3);
+    leaveTileCard('movie', 3);
+    await act(async () => waiting.splice(0).forEach((f) => f()));
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2]);
+    expect(cachedTileCard('movie', 3)).toBeUndefined();
+  });
+
+  it('a failed card retries after the pause when one reader re-enters and the other stayed', async () => {
+    let fail = true;
+    const c = fake({
+      card: vi.fn((_k: string, id: number) => (fail ? Promise.reject(new Error('offline')) : Promise.resolve(card(id)))) as never,
+    });
+    requestTileCard('movie', 3);
+    requestTileCard('movie', 3);
+    await flush();
+    expect(c.card).toHaveBeenCalledTimes(1);
+    expect(cachedTileCard('movie', 3)).toBeUndefined();
+    leaveTileCard('movie', 3);
+    vi.advanceTimersByTime(RETRY_MS - 1);
+    requestTileCard('movie', 3);
+    await flush();
+    expect(c.card).toHaveBeenCalledTimes(1);
+    leaveTileCard('movie', 3);
+    vi.advanceTimersByTime(2);
+    fail = false;
+    requestTileCard('movie', 3);
+    await flush();
+    expect(c.card).toHaveBeenCalledTimes(2);
+    expect(cachedTileCard('movie', 3)!.title).toBe('Show 3');
+    expect(cachedTileCard('movie', 3)!.overview).toBe('');
   });
 
   it('leaving «Обзор» clears the queue', async () => {

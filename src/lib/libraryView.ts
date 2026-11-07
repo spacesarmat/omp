@@ -39,6 +39,25 @@ export function viewLabel(v: LibraryView): string {
   return viewOptions()[indexOfView(v)].label;
 }
 
+/** Phone catalog («Мои» and «Обзор»): the same four modes in portrait and landscape. TV keeps viewOptions(). */
+export const phoneViewOptions = (): { value: LibraryView; label: string }[] => [
+  { value: 'large', label: t('library.viewCardsLarge') },
+  { value: 'small', label: t('library.viewCardsMedium') },
+  { value: 'list', label: t('library.viewListPictures') },
+  { value: 'compact', label: t('library.viewListPlain') },
+];
+
+export function phoneViewLabel(v: LibraryView): string {
+  const list = phoneViewOptions();
+  for (let k = 0; k < list.length; k++) if (list[k].value === v) return list[k].label;
+  return list[0].label;
+}
+
+/** Rows rather than a poster grid. */
+export function isRowCatalogView(v: string): boolean {
+  return v === 'list' || v === 'compact';
+}
+
 /** 'discover' is the TV «Обзор» tab (TMDB catalog); the phone has its own «Мои / Обзор» switch. 'news' is the TV
  * «Новое» tab (findings from OMP on the phone). */
 export type LibraryTab = 'history' | 'news' | 'discover' | 'all' | Category;

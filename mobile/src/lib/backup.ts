@@ -15,7 +15,7 @@ import { sanitizeIndexers } from '../../../src/sources/indexerStore';
 import { sanitizeFlare } from '../../../src/sources/flareStore';
 import { sanitizeFilters } from '../../../src/sources/filters';
 import { sanitizeDiscoverQuery } from '../../../src/catalog/discoverQuery';
-import { isDiscoverCols } from '../screens/catalog/discoverCols';
+import { cleanDiscoverView } from '../screens/catalog/discoverCols';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
@@ -120,11 +120,11 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
   { key: 'tsp.playlists', clean: (v) => cleanList(v, sanitizeFavorites(v)) },
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
-  // «Каталог»: the «Мои / Обзор» switch and the «Обзор» posters per row
+  // «Каталог»: the «Мои / Обзор» switch and the «Обзор» view (large, medium, list, plain list)
   { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
   // a poster picked on a series or season card (`tv:21`, `tv:21:s2` → image URL)
   { key: 'tsp.catalogArt', clean: cleanCatalogArt },
-  { key: 'tsp.discoverCols', clean: (v) => (isDiscoverCols(v) ? v : undefined) },
+  { key: 'tsp.discoverCols', clean: (v) => cleanDiscoverView(v) },
   // «Обзор»: the sort and the filters
   { key: 'tsp.discoverQuery', clean: (v) => (isObject(v) ? sanitizeDiscoverQuery(v) : undefined) },
   // «Добавить»: the search filters; «Подписки»: the sort (SUBS_SORTS); the torrent screen: «не открывать»

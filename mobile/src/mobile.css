@@ -2,7 +2,7 @@
   --m-nav-h: 78px;
   --m-nav-reserve: var(--m-nav-h);
   --m-mini-h: 64px;
-  /* read by the landscape poster grids (landscapeCols.ts) */
+  /* safe area above the phone catalog; the grids size themselves from the content width */
   --m-safe-top: env(safe-area-inset-top, 0px);
   --bg: #0F1115;
   --panel: #181B22;
@@ -251,8 +251,10 @@ button, .m-btn {
 /* the button under a centred heading and text sits in the middle too («Подключить ТВ» on «Пульт») */
 .m-empty .m-btn { margin: 0 auto; }
 .m-library { overflow-x: hidden; }
-.m-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
-.m-grid.m-view-small { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
+/* columns follow the width: a card stays at least 156px (large) or 104px (medium), a short row grows to fill */
+.m-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(156px, 100%), 1fr)); gap: 16px 12px; min-width: 0; width: 100%; }
+.m-grid.m-view-small { grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr)); gap: 12px 8px; }
+.m-card > .m-small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-view-small .m-poster { padding: 8px; border-radius: 10px; }
 .m-view-small .m-poster-title { font-size: 12px; }
 .m-view-small .m-badge { top: 6px; left: 6px; padding: 1px 6px; font-size: 10px; }
@@ -416,7 +418,7 @@ button, .m-btn {
 }
 /* chips: 36px, tighter padding, still a horizontal scroller */
 .m-library .m-tab { min-height: 36px; height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; }
-.m-discover { display: flex; flex-direction: column; gap: 14px; }
+.m-discover { display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow-x: hidden; }
 .m-disc-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .m-disc-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
 .m-disc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
@@ -432,10 +434,10 @@ button, .m-btn {
 }
 .m-disc-rail-row::-webkit-scrollbar { display: none; }
 .m-disc-rail-tile { flex: 0 0 112px; width: 112px; }
-/* landscape: DiscoverHome sets --m-rail-w so a whole card (poster + caption) fits above the tab bar */
-.m-disc-rail-tile { flex-basis: var(--m-rail-w, 112px); width: var(--m-rail-w, 112px); }
-.m-disc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
-.m-disc-grid.m-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
+/* DiscoverHome sets --m-rail-w from the view (156 large, 112 otherwise). Never a height-fit strip. */
+.m-disc-rail-tile { flex-basis: var(--m-rail-w, 112px); width: var(--m-rail-w, 112px); max-width: 100%; }
+.m-disc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(156px, 100%), 1fr)); gap: 16px 12px; min-width: 0; width: 100%; }
+.m-disc-grid.m-cols-3, .m-disc-grid.m-cards-medium { grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr)); gap: 12px 8px; }
 .m-cols-3 .m-disc-poster { border-radius: 10px; }
 .m-cols-3 .m-disc-ph { padding: 8px; font-size: 12px; }
 .m-cols-3 .m-disc-rating, .m-cols-3 .m-disc-badge { top: 6px; left: 6px; padding: 1px 5px; font-size: 10px; }
@@ -448,7 +450,14 @@ button, .m-btn {
 .m-cols-3 .m-disc-tile .m-disc-title { line-height: 16px; min-height: 0; max-height: 32px; }
 .m-disc-meta { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* four per row (also carries m-cols-3): tighter gaps, smaller labels, a 14px two-line title clamp */
-.m-disc-grid.m-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 6px; }
+.m-disc-rows { min-width: 0; width: 100%; }
+.m-disc-rows .m-vrow, .m-disc-rows .m-crow { width: 100%; max-width: 100%; }
+.m-disc-rows .m-disc-poster { width: 56px; min-width: 56px; height: 84px; aspect-ratio: auto; flex-shrink: 0; border-radius: 8px; }
+.m-disc-rows .m-disc-badge { display: none; }
+.m-disc-rows .m-disc-ph { padding: 0; font-size: 0; color: transparent; }
+.m-disc-rows .m-vrow-text, .m-disc-rows .m-crow-main { min-width: 0; flex: 1 1 auto; }
+.m-disc-rows .m-disc-title { margin-top: 0; min-height: 0; max-height: 38px; }
+.m-disc-grid.m-cols-4 { gap: 10px 6px; }
 .m-cols-4 .m-disc-poster { border-radius: 8px; }
 .m-cols-4 .m-disc-ph { padding: 6px; font-size: 11px; }
 .m-cols-4 .m-disc-rating, .m-cols-4 .m-disc-badge { top: 4px; left: 4px; padding: 0 4px; font-size: 9px; }
@@ -1633,7 +1642,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-offline-reason { margin: 0; font-size: 15px; line-height: 1.45; }
 .m-offline-actions { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 320px; margin-top: 8px; }
 .m-offline-hint { margin-top: 6px; }
-.m-warn-row { display: flex; align-items: center; gap: 10px; }
+.m-warn-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; max-width: 100%; }
 .m-warn-row > span { flex: 1; min-width: 0; }
 .m-warn-row .m-btn { flex-shrink: 0; height: 38px; font-size: 14px; padding: 0 14px; }
 
@@ -2141,7 +2150,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-icon-btn.m-glass { background: rgba(15, 17, 21, 0.6); color: #fff; }
 .m-icon-btn.m-glass.m-danger { color: #FF9EA2; }
 /* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
-.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); }
+.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); background: var(--panel-2); }
 .m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
 /* phone navigation: search scopes, continue row, release line */
 .m-search-scopes { margin: 4px 0 8px; }

@@ -1,59 +1,53 @@
-// «Обзор»: posters per row (2, 3 or 4), stepped by a two-finger pinch and kept across launches.
+// «Обзор» view, kept across launches. The old store was posters per row (2, 3 or 4).
 import { loadJson, saveJson } from '../../../../src/store/storage';
-import { landscapeCols, type CardFit } from '../../ui/landscapeCols';
+import type { LibraryView } from '../../../../src/lib/libraryView';
 
-export type DiscoverCols = 2 | 3 | 4;
-
-/** Smallest posters first: the pinch steps through these (spread = fewer, bigger posters). */
-export const COLS_BY_SIZE: DiscoverCols[] = [4, 3, 2];
+export type DiscoverView = LibraryView;
 
 export const DISCOVER_COLS_KEY = 'tsp.discoverCols';
 
-export const isDiscoverCols = (v: unknown): v is DiscoverCols => v === 2 || v === 3 || v === 4;
-
-/** The stored choice; anything else (missing, a string, another number, broken JSON) is the default 2. */
-export function readDiscoverCols(): DiscoverCols {
-  return loadJson<DiscoverCols>(DISCOVER_COLS_KEY, 2, isDiscoverCols);
+/** Home-rail tile width (px). Large cards are wider; the others stay the readable portrait size. */
+export function railTilePx(view: DiscoverView): number {
+  return view === 'large' ? 156 : 112;
 }
 
-export function saveDiscoverCols(n: DiscoverCols): void {
-  saveJson(DISCOVER_COLS_KEY, n);
+/** Old 2 columns are large cards. Old 3 and 4 columns are medium cards. The four names pass through. */
+export function migrateDiscoverView(v: unknown): DiscoverView | null {
+  if (v === 'large' || v === 'small' || v === 'list' || v === 'compact') return v;
+  if (v === 2) return 'large';
+  if (v === 3 || v === 4) return 'small';
+  return null;
 }
 
-/**
- * Landscape: a tile per card size, biggest first (the 2, 3 and 4 classes): a 2:3 poster, the tallest caption (two
- * title lines, the meta line and the date line with their gaps) and the column gap of that class.
- */
-export const DISCOVER_FITS: CardFit[] = [
-  { aspect: 1.5, caption: 56, gap: 12 },
-  { aspect: 1.5, caption: 56, gap: 8 },
-  { aspect: 1.5, caption: 56, gap: 6 },
-];
-export const DISCOVER_FITS_TALL: CardFit[] = [
-  { aspect: 1.5, caption: 86, gap: 12 },
-  { aspect: 1.5, caption: 80, gap: 8 },
-  { aspect: 1.5, caption: 62, gap: 6 },
-];
-
-/** The compact captions in mobile.css stop at 560px; taller landscape windows use the portrait caption sizes. */
-export function discoverFitsForHeight(height: number): CardFit[] {
-  return height > 560 ? DISCOVER_FITS_TALL : DISCOVER_FITS;
+function isStoredDiscover(v: unknown): boolean {
+  return migrateDiscoverView(v) !== null;
 }
 
-/**
- * The home rails: the same tile as the grid, its three inter-line gaps included (28/38 title, the meta and the date
- * lines, the gaps). Compact up to 560px, the portrait caption sizes above.
- */
-export function discoverRailFit(height: number): CardFit {
-  return { aspect: 1.5, caption: height > 560 ? 90 : 58, gap: 10 };
+/** The stored view. A legacy column count is rewritten to one of the four modes. Anything else is large cards. */
+export function readDiscoverCols(): DiscoverView {
+  const raw = loadJson<unknown>(DISCOVER_COLS_KEY, undefined, isStoredDiscover);
+  const view = migrateDiscoverView(raw);
+  if (!view) return 'large';
+  if (typeof raw === 'number') saveJson(DISCOVER_COLS_KEY, view);
+  return view;
 }
 
-/** Posters per row for the chosen size, in a grid `width` px wide with `height` px available for two rows. */
-export function discoverLandscapeCols(cols: DiscoverCols, width: number, height: number, fits = DISCOVER_FITS): number {
-  return landscapeCols(width, height, fits)[2 - COLS_BY_SIZE.indexOf(cols)];
+export function saveDiscoverCols(v: DiscoverView): void {
+  saveJson(DISCOVER_COLS_KEY, v);
 }
 
-/** The grid classes of a size: the smaller sizes have tighter gaps and smaller labels. */
-export function discoverGridClass(cols: DiscoverCols): string {
-  return 'm-disc-grid' + (cols === 3 ? ' m-cols-3' : cols === 4 ? ' m-cols-3 m-cols-4' : '');
+/** Backup cleaner: legacy counts migrate, unknown values are dropped. */
+export function cleanDiscoverView(v: unknown): DiscoverView | undefined {
+  return migrateDiscoverView(v) || undefined;
+}
+
+/** Poster grids keep the medium-card type styles (m-cols-3). Lists are rows. */
+export function discoverGridClass(view: DiscoverView): string {
+  if (view === 'list') return 'm-vlist m-disc-rows';
+  if (view === 'compact') return 'm-vlist m-clist m-disc-rows';
+  return 'm-disc-grid' + (view === 'small' ? ' m-cards-medium m-cols-3' : ' m-cards-large');
+}
+
+export function isGridDiscoverView(view: DiscoverView): boolean {
+  return view === 'large' || view === 'small';
 }

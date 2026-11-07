@@ -16,7 +16,7 @@ export function keyboardInset(): number {
   return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
 }
 
-/** A text field has the focus: a shorter window then means the soft keyboard (also read by landscapeCols.ts). */
+/** A text field has the focus: a shorter window then means the soft keyboard. */
 export function editableFocused(): boolean {
   const el = document.activeElement as HTMLElement | null;
   if (!el) return false;

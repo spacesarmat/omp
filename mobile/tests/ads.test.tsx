@@ -580,18 +580,18 @@ describe('ads in «Обзор»', () => {
 
   beforeEach(() => clearDiscover());
 
-  it('the feed grid: a poster-size cell in 2, 3 and 4 columns', async () => {
+  it('the feed grid: a poster-size cell for large and medium cards', async () => {
     fakeCatalog(0);
     saveDiscoverQuery({ ...DEFAULT_DISCOVER_QUERY, sort: 'rating' });
-    for (const cols of [2, 3, 4] as const) {
-      saveDiscoverCols(cols);
+    for (const view of ['large', 'small'] as const) {
+      saveDiscoverCols(view);
       mount(<Discover />);
       await flush();
       await flush();
       const grid = el.querySelector('.m-disc-grid')!;
-      // 30 posters: every 10 in 2 columns, 12 in 3, 20 in 4 (about one screen each)
+      // unmeasured width: large keeps the old 2-column spacing, medium the old 3-column spacing
       const at = Array.from(grid.children).map((c, i) => (c.classList.contains('m-ad') ? i : -1)).filter((i) => i >= 0);
-      expect(at).toEqual(cols === 2 ? [10, 21] : cols === 3 ? [10, 23] : [10]);
+      expect(at).toEqual(view === 'large' ? [10, 21] : [10, 23]);
       expect(grid.querySelector('.m-ad')!.classList.contains('m-disc-tile')).toBe(true);
       expect(grid.querySelector('.m-ad .m-ad-badge')!.textContent).toBe('Реклама');
       act(() => render(null, el));
