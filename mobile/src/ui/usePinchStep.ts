@@ -114,6 +114,8 @@ export interface PinchOptions {
   posterAttr?: string;
   /** The step changes the card markup (rows and poster tiles): morph the posters instead of moving the cards. */
   morph?: (from: number, to: number) => boolean;
+  /** Landscape fills the screen with cards: a FLIP of every one overlaps them. True = the step lands at once. */
+  calm?: (from: number, to: number) => boolean;
 }
 
 interface PosterBox {
@@ -349,7 +351,7 @@ export function usePinchStep(ref: RefObject<HTMLElement | null>, opts: PinchOpti
       // measured with any running animation still on, so a new step starts from what is seen
       const before = attr ? visibleCards(root, attr) : [];
       const anchor = anchorOf(before);
-      const still = prefersReducedMotion() || !canAnimate(root);
+      const still = prefersReducedMotion() || !canAnimate(root) || !!(o.calm && o.calm(from, to));
       const morphing = !still && !!o.morph && !!o.posterAttr && o.morph(from, to);
       const posters = morphing && o.posterAttr ? postersOf(before, o.posterAttr) : null;
       stopAnimations();

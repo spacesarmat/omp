@@ -100,6 +100,15 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
   return box;
 }
 
+/** A landscape rail tile never gets wider than this (px), however tall the window is. */
+export const RAIL_TILE_MAX = 160;
+
+/** The rail tile width where a whole card (the poster and the caption under it) takes at most `height` px. */
+export function railTileWidth(height: number, fit: CardFit): number {
+  const w = Math.floor((height - fit.caption - 2 * LANDSCAPE_MARGIN) / fit.aspect);
+  return w > 0 ? Math.min(RAIL_TILE_MAX, w) : 0;
+}
+
 /** The inline style of a grid with `n` columns (none in portrait). */
 export function colsStyle(n: number | null): { gridTemplateColumns: string } | undefined {
   return n ? { gridTemplateColumns: 'repeat(' + n + ', minmax(0, 1fr))' } : undefined;

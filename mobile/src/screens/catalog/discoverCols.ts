@@ -40,6 +40,14 @@ export function discoverFitsForHeight(height: number): CardFit[] {
   return height > 560 ? DISCOVER_FITS_TALL : DISCOVER_FITS;
 }
 
+/**
+ * The home rails: the same tile as the grid, its three inter-line gaps included (28/38 title, the meta and the date
+ * lines, the gaps). Compact up to 560px, the portrait caption sizes above.
+ */
+export function discoverRailFit(height: number): CardFit {
+  return { aspect: 1.5, caption: height > 560 ? 90 : 58, gap: 10 };
+}
+
 /** Posters per row for the chosen size, in a grid `width` px wide with `height` px available for two rows. */
 export function discoverLandscapeCols(cols: DiscoverCols, width: number, height: number, fits = DISCOVER_FITS): number {
   return landscapeCols(width, height, fits)[2 - COLS_BY_SIZE.indexOf(cols)];
