@@ -25,9 +25,9 @@ export function saveDiscoverCols(n: DiscoverCols): void {
  * title lines, the meta line and the date line with their gaps) and the column gap of that class.
  */
 export const DISCOVER_FITS: CardFit[] = [
-  { aspect: 1.5, caption: 86, gap: 12 },
-  { aspect: 1.5, caption: 80, gap: 8 },
-  { aspect: 1.5, caption: 62, gap: 6 },
+  { aspect: 1.5, caption: 56, gap: 12 },
+  { aspect: 1.5, caption: 56, gap: 8 },
+  { aspect: 1.5, caption: 56, gap: 6 },
 ];
 
 /** Posters per row for the chosen size, in a grid `width` px wide with `height` px available for two rows. */

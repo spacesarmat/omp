@@ -38,15 +38,16 @@ export function landscapeCols(width: number, height: number, fits: CardFit[]): n
 }
 
 /**
- * The visible height for the grid: from its actual top down to the top of the tab bar. The TV mini-player is not
- * taken off on purpose (Andy): the columns stay the same whether a TV is linked or not, and the last row scrolls clear.
+ * The visible height for the grid: from its actual top down to the top of the tab bar, without off-screen space above
+ * the viewport. The TV mini-player is not taken off on purpose (Andy): the columns stay the same whether a TV is linked
+ * or not, and the last row scrolls clear.
  */
 export function visibleHeight(ref: RefObject<HTMLElement | null>): number {
   const nav = document.querySelector('.m-nav');
   const r = nav ? nav.getBoundingClientRect() : null;
   const bottom = r && r.height > 0 ? r.top : window.innerHeight;
   const safeTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--m-safe-top')) || 0;
-  const top = ref.current ? ref.current.getBoundingClientRect().top : safeTop;
+  const top = ref.current ? Math.max(safeTop, ref.current.getBoundingClientRect().top) : safeTop;
   return Math.max(0, bottom - top);
 }
 
@@ -85,7 +86,10 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
     window.addEventListener('resize', later);
     window.addEventListener('orientationchange', later);
     const ro = typeof ResizeObserver !== 'undefined' && ref.current ? new ResizeObserver(later) : null;
-    if (ro && ref.current) ro.observe(ref.current);
+    if (ro && ref.current) {
+      ro.observe(ref.current);
+      if (ref.current.parentElement) ro.observe(ref.current.parentElement);
+    }
     return () => {
       window.removeEventListener('resize', later);
       window.removeEventListener('orientationchange', later);

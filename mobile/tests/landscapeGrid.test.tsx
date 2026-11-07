@@ -31,12 +31,12 @@ const S21 = { width: 800 - 32, height: 360 - 48 };
 const WIDE = { width: 915 - 32, height: 412 - 48 };
 
 describe('landscape columns', () => {
-  it('the S21 on its side: 17, 18 and 19 posters per row in two-row «Обзор»', () => {
-    expect(landscapeCols(S21.width, S21.height, DISCOVER_FITS)).toEqual([17, 18, 19]);
-    expect(landscapeCols(WIDE.width, WIDE.height, DISCOVER_FITS)).toEqual([14, 15, 16]);
-    expect(landscapeCols(740 - 32, 360 - 48, DISCOVER_FITS)).toEqual([15, 16, 17]);
+  it('the S21 on its side: 12, 13 and 14 posters per row in two-row «Обзор»', () => {
+    expect(landscapeCols(S21.width, S21.height, DISCOVER_FITS)).toEqual([12, 13, 14]);
+    expect(landscapeCols(WIDE.width, WIDE.height, DISCOVER_FITS)).toEqual([11, 12, 13]);
+    expect(landscapeCols(740 - 32, 360 - 48, DISCOVER_FITS)).toEqual([11, 12, 13]);
     // camera cutout and the system bar on the sides, the status bar on top
-    expect(landscapeCols(800 - 32 - 80, 360 - 48 - 24, DISCOVER_FITS)).toEqual([18, 19, 20]);
+    expect(landscapeCols(800 - 32 - 80, 360 - 48 - 24, DISCOVER_FITS)).toEqual([12, 13, 14]);
   });
 
   it('every size with enough room fits one of two rows, and one column fewer would not', () => {
@@ -84,7 +84,7 @@ describe('landscape columns', () => {
     }
   });
 
-  it('clamps inverted bounds and keeps a grid that starts above the viewport measurable', () => {
+  it('clamps inverted bounds and does not count off-screen space above the viewport', () => {
     const grid = document.createElement('div');
     const nav = document.createElement('nav');
     nav.className = 'm-nav';
@@ -94,8 +94,8 @@ describe('landscape columns', () => {
     try {
       grid.getBoundingClientRect = () => rect(400);
       expect(visibleHeight({ current: grid })).toBe(0);
-      grid.getBoundingClientRect = () => rect(-20);
-      expect(visibleHeight({ current: grid })).toBe(380);
+      grid.getBoundingClientRect = () => rect(-600);
+      expect(visibleHeight({ current: grid })).toBe(360);
     } finally {
       grid.remove();
       nav.remove();
@@ -228,10 +228,10 @@ describe('«Обзор» on its side', () => {
     await flush();
     act(() => (el.querySelectorAll('.m-disc-sort-opt')[1] as HTMLElement).click());
     await flush();
-    expect(grid().style.gridTemplateColumns).toBe('repeat(13, minmax(0, 1fr))');
+    expect(grid().style.gridTemplateColumns).toBe('repeat(10, minmax(0, 1fr))');
   });
 
-  for (const [cols, want] of [[2, 17], [3, 18], [4, 19]] as [DiscoverCols, number][]) {
+  for (const [cols, want] of [[2, 12], [3, 13], [4, 14]] as [DiscoverCols, number][]) {
     it(`landscape 800x360, size ${cols}: ${want} posters per row and two rows from the grid top`, async () => {
       saveDiscoverCols(cols);
       windowSize(800, 360, 768);
@@ -418,5 +418,35 @@ describe('«Мои» on its side', () => {
     mount(<Library />);
     await flush();
     expect(g().style.gridTemplateColumns).toBe('');
+  });
+
+  it('remeasures when content above the grid changes its position', async () => {
+    let notify = () => {};
+    const observed: Element[] = [];
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(cb: ResizeObserverCallback) { notify = () => cb([], {} as ResizeObserver); }
+      observe(node: Element) { observed.push(node); }
+      unobserve() {}
+      disconnect() {}
+    });
+    windowSize(800, 360, 768);
+    updateSettings({ libraryView: 'large' });
+    mount(<Library />);
+    await flush();
+    const g = () => el.querySelector('.m-grid') as HTMLElement;
+    const nav = tabBar(360);
+    g().getBoundingClientRect = () => rectAt(120, 500);
+    await resize();
+    try {
+      g().getBoundingClientRect = () => rectAt(40, 500);
+      expect(observed).toContain(g().parentElement);
+      await act(async () => {
+        notify();
+        await new Promise((r) => setTimeout(r, 30));
+      });
+      expect(g().style.gridTemplateColumns).toBe('repeat(13, minmax(0, 1fr))');
+    } finally {
+      nav.remove();
+    }
   });
 });
