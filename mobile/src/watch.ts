@@ -24,6 +24,8 @@ import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
 import { isAudiobookTorrent } from '../../src/lib/audiobookRoute';
 import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
+import { seasonFileIds, seasonSpan, seasonStep } from '../../src/player/seasonQueue';
+import { torrents } from '../../src/store/library';
 import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
@@ -37,15 +39,18 @@ export interface WatchOnTvParams {
   report?: string;
   /** Phone name: the TV writes its watch journal entries as this phone's. */
   from?: string;
+  /** Episode file ids of this season, from the chosen one. Absent: the TV keeps its own full queue. */
+  files?: number[];
 }
 
 /** `t` is kept (0 included) whenever a file is set; values below 1 become 0; `from` only with a file. */
-export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string, from?: string): WatchOnTvParams {
+export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string, from?: string, files?: number[]): WatchOnTvParams {
   const p: WatchOnTvParams = { server: serverUrl, torrent: hash };
   if (file !== undefined) p.file = file;
   if (file !== undefined && t !== undefined) p.t = t >= 1 ? Math.floor(t) : 0;
   if (report) p.report = report;
   if (file !== undefined && from) p.from = from;
+  if (file !== undefined && files && files.length && files.indexOf(file) >= 0) p.files = files;
   return p;
 }
 
@@ -157,6 +162,15 @@ export interface PhoneWatch {
   at: number;
   /** Known duration, seconds (0: unknown). */
   duration: number;
+  /** Catalog episode count of this season, when known. */
+  total?: number;
+  /** The release has no later episode of this season. The caller can offer a search. */
+  onMissing?: (season: number, episode: number) => void;
+}
+
+export interface PhonePlayEnd {
+  missing: number | null;
+  season: number | null;
 }
 
 /**
@@ -165,19 +179,28 @@ export interface PhoneWatch {
  * the user stopped is saved like the built-in players' progress. «Выбор Android», an app without the embedded screen
  * or a missing 2160 Player app: the stream goes to the system chooser. Rejects when no player could be opened.
  */
-export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatch): Promise<void> {
+const nonePlayed = (): PhonePlayEnd => ({ missing: null, season: null });
+
+function reportMissing(w: PhoneWatch, season: number | null, missing: number | null): void {
+  if (missing === null || season === null) return;
+  if (w.onMissing) w.onMissing(season, missing);
+  else showToast(tr('torrent.screen.seasonGap', { season: String(season), episode: String(missing) }));
+}
+
+export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatch): Promise<PhonePlayEnd> {
   // A book never opens in 2160. The book card plays it in the native audiobook player.
   if (isAudiobookTorrent(t)) {
     navigate({ name: 'audiobook', hash: w.hash });
-    return;
+    return nonePlayed();
   }
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
   const mode = settings.value.phonePlayer;
+  const span = seasonSpan(filesOf(t), w.file.id, w.total);
   let open: ((o: Open2160Options) => Promise<unknown>) | null = null;
   if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160({ ...o, background: settings.value.backgroundAudio });
   else if (mode === 'p2160' && (await actions.player2160().catch(() => null))) open = (o) => actions.open2160(o);
   if (open) {
-    const files = playableFiles(filesOf(t));
+    const files = span.season === null ? playableFiles(filesOf(t)) : span.files.slice();
     let start = files.findIndex((f) => f.id === w.file.id);
     if (start < 0) {
       files.unshift(w.file);
@@ -190,17 +213,45 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
       fileIndex: f.id,
     }));
     const skip = await loadSkip(c, w.hash).catch(() => null);
-    const saved = await play2160({ open2160: open }, c, queue, start, at, skip, w.duration);
-    // the journal gets where the player stopped, not a start at 0:00: a start that never played (no network,
-    // a dead source) is not a watch and must not show in «История» as «0:00»
-    // an end with no known length comes back at 0: nothing to write then, so an older real position stays
-    if (saved && saved.item.fileIndex !== undefined && saved.time >= 1) {
-      void recordPhoneWatch(c, w.hash, saved.item.fileIndex, saved.time, saved.duration);
+    let index = start;
+    let seen: number | null = null;
+    let finished: number | null = null;
+    while (index >= 0 && index < queue.length) {
+      const saved = await play2160({ open2160: open }, c, queue, index, index === start ? at : 0, skip, index === start ? w.duration : 0);
+      // the journal gets where the player stopped, not a start at 0:00: a start that never played (no network,
+      // a dead source) is not a watch and must not show in «История» as «0:00»
+      // an end with no known length comes back at 0: nothing to write then, so an older real position stays
+      if (saved && saved.item.fileIndex !== undefined && saved.time >= 1) {
+        void recordPhoneWatch(c, w.hash, saved.item.fileIndex, saved.time, saved.duration);
+      }
+      const hit = saved ? queue.findIndex((q) => q.fileIndex === saved.item.fileIndex) : -1;
+      const cur = hit >= 0 ? hit : index;
+      const decision = seasonStep({
+        length: queue.length,
+        index: cur,
+        ended: !!(saved && saved.ended),
+        cancel: !saved || !saved.ended,
+        seen,
+        missing: span.missing,
+      });
+      seen = decision.seen;
+      if (decision.step.kind !== 'next') {
+        if (decision.step.kind === 'done') {
+          finished = decision.step.missing;
+          reportMissing(w, span.season, decision.step.missing);
+        }
+        break;
+      }
+      index = decision.step.index;
     }
-    return;
+    return { missing: finished, season: span.season };
   }
   // an outside player tells us nothing back (did it play, where did it stop), so no journal entry at 0:00
+  // and it cannot start the next episode. Say so when this release still has later episodes of the season.
+  if (span.season !== null && span.files.length > 1) showToast(tr('torrent.screen.seasonExternal'));
+  reportMissing(w, span.season, span.missing);
   await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');
+  return { missing: span.missing, season: span.season };
 }
 
 /**
@@ -296,6 +347,8 @@ export interface TvLaunchOpts {
   duration?: number;
   /** «S02E03 · Title» for the resume sheet. */
   label: string;
+  /** Catalog episode count of the season, when the screen knows it. */
+  seasonTotal?: number;
   /** True while the launch is in flight and until the post-launch jump has happened. */
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
@@ -375,7 +428,18 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>
       const serverUrl = await tvServerUrl(c.baseUrl);
       const report = await actions.reportUrl();
       const from = o.file !== undefined ? await phoneNameSafe() : undefined;
-      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from));
+      let seasonFiles: number[] | undefined;
+      if (o.file !== undefined) {
+        const tor = torrents.peek().filter((x) => x.hash.toLowerCase() === o.hash.toLowerCase())[0];
+        if (tor) {
+          const span = seasonSpan(filesOf(tor), o.file, o.seasonTotal);
+          seasonFiles = span.season === null ? undefined : span.files.map((f) => f.id);
+          if (span.missing !== null && span.season !== null) {
+            showToast(tr('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) }));
+          }
+        }
+      }
+      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from, seasonFiles));
       if (report && landing === 'nowPlaying') markLaunched();
       if (o.file !== undefined) void recordPhoneWatch(c, o.hash, o.file, t || 0, o.duration || 0, from);
       if (!alive.v) return false;

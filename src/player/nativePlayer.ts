@@ -46,6 +46,8 @@ export interface NativeStartOptions {
   startAt: number;
   seekStep: number;
   autoNext: boolean;
+  /** Next episode starts at once. No countdown. Off when absent. */
+  immediateNext?: boolean;
   audioLang: string;
   subLang: string;
   subtitlesOn: boolean;
@@ -328,6 +330,7 @@ export class NativeSession {
           session: this.sid,
           seekStep: o.seekStep,
           autoNext: o.autoNext,
+          ...(o.immediateNext ? { immediateNext: true } : {}),
           audioLang: o.audioLang,
           subLang: o.subLang,
           subtitlesOn: o.subtitlesOn,

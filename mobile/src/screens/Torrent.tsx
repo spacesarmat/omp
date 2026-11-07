@@ -21,6 +21,7 @@ import { routeForHash } from '../audiobooks/route';
 import { isAudiobookTorrent } from '../../../src/lib/audiobookRoute';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
+import { seasonSpan } from '../../../src/player/seasonQueue';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, repairTitles } from '../../../src/store/library';
@@ -101,6 +102,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
   );
 
   const code = fileCode(file);
+  const span = seasonSpan(filesOf(torrent), file.id);
   // the episode code (a film: its short name) and the size, never the file name
   const head = [code || libraryTitle(torrent).title, fmtSize(file.length)].filter(Boolean);
 
@@ -189,6 +191,28 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
             <span class="m-opt-sub">{t('torrent.screen.copyNoPasswordSub')}</span>
           </span>
         </button>
+      )}
+      {span.missing !== null && span.season !== null && (
+        <div class="m-hint-warn">
+          <div>{t('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) })}</div>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-btn-sm"
+            onClick={() => {
+              const season = span.season;
+              const episode = span.missing;
+              onClose();
+              if (season === null || episode === null) return;
+              navigate({
+                name: 'add',
+                query: libraryTitle(torrent).title + ' ' + t('catalog.querySeason', { n: season }) + ' ' + t('catalog.queryEpisode', { n: episode }),
+                run: true,
+              });
+            }}
+          >
+            {t('torrent.screen.seasonGapFind', { episode: String(span.missing) })}
+          </button>
+        </div>
       )}
       {status && status.kind === 'error' && <LaunchError message={status.text} class="m-status-err" />}
       {status && status.kind === 'ok' && (

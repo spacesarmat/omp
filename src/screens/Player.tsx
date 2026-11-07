@@ -61,9 +61,11 @@ interface Props {
   startAt?: number;
   /** Name of the phone that launched the player (watch journal source). */
   from?: string;
+  /** Season queue from the phone: the next episode starts at once, with no countdown. */
+  seasonNext?: boolean;
 }
 
-export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props) {
+export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNext }: Props) {
   const c = client.value;
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -157,9 +159,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const chapterIdx = chapterIndexAt(chapters, vs.time);
   const segs = skipSegments(probe, prefs, vs.duration);
 
+  const immediate = !!seasonNext;
   const next = useNextEpisode({
     itemKey: index,
-    enabled: settings.value.autoNext,
+    enabled: immediate ? false : settings.value.autoNext,
     hasNext,
     time: vs.time,
     duration: vs.duration,
@@ -168,7 +171,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     creditsStart: segs.credits ? segs.credits.start : null,
     onNext: goNext,
     onEnd: () => goBack(),
+    holdEnd: immediate,
   });
+  const advanced = useRef(-1);
+  useEffect(() => {
+    if (!immediate || !vs.ended) return;
+    if (advanced.current === index) return;
+    advanced.current = index;
+    if (index < queue.length - 1) setIndex(index + 1);
+    else goBack();
+  }, [immediate, vs.ended]);
 
   useEffect(() => { if (ready && !vs.paused && !blocked) setStarted(true); }, [ready, vs.paused, blocked]);
   const donate = donateMode({

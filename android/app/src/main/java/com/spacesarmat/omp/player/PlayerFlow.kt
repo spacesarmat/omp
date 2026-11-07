@@ -28,7 +28,10 @@ class PlayerFlow {
     /** The queue item the next-item warm-up was sent for (once per item per run). */
     private var preloaded = -1
 
-    enum class End { COUNTDOWN, CLOSE, NONE }
+    enum class End { COUNTDOWN, CLOSE, NONE, NEXT }
+
+    /** This item's end was already handled. A second ended event does not move again. */
+    private var consumedEnd = false
 
     enum class Play { PAUSE, PLAY, NEXT, CLOSE }
 
@@ -36,6 +39,7 @@ class PlayerFlow {
     fun reset() {
         cancel()
         ended = false
+        consumedEnd = false
         preloaded = -1
     }
 
@@ -43,11 +47,13 @@ class PlayerFlow {
     fun entered() {
         cancel()
         ended = false
+        consumedEnd = false
     }
 
     /** The position moved (seek, retry): no longer at the end. */
     fun moved() {
         ended = false
+        consumedEnd = false
     }
 
     fun cancel() {
@@ -56,11 +62,14 @@ class PlayerFlow {
     }
 
     /** The engine reported the end of the item. */
-    fun itemEnded(hasNext: Boolean, autoNext: Boolean): End {
+    fun itemEnded(hasNext: Boolean, autoNext: Boolean, immediate: Boolean = false): End {
+        if (consumedEnd) return End.NONE
+        consumedEnd = true
         ended = true
         // a credits countdown still running at the end (short credits) gives way to the end-of-item one
         if (creditsCountdown) cancel()
         if (countdown >= 0) return End.NONE
+        if (hasNext && immediate) return End.NEXT
         if (hasNext && autoNext) {
             countdown = NEXT_COUNTDOWN_S
             return End.COUNTDOWN
@@ -69,8 +78,8 @@ class PlayerFlow {
     }
 
     /** The credits started (SkipState.countdownDue): true when the 10 s countdown starts now. */
-    fun creditsDue(hasNext: Boolean, autoNext: Boolean, playing: Boolean): Boolean {
-        if (countdown >= 0 || !autoNext || !hasNext || !playing) return false
+    fun creditsDue(hasNext: Boolean, autoNext: Boolean, playing: Boolean, immediate: Boolean = false): Boolean {
+        if (immediate || countdown >= 0 || !autoNext || !hasNext || !playing) return false
         countdown = CREDITS_COUNTDOWN_S
         creditsCountdown = true
         return true

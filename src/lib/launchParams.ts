@@ -2,7 +2,7 @@ import { sanitizePhoneLink } from '../phone/phoneStore';
 
 export type LaunchAction =
   | { kind: 'play'; url: string; title: string }
-  | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string }
+  | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string; files?: number[] }
   | { kind: 'magnet'; link: string };
 
 /** The phone search server's address (`PhoneLink` without `at`). */
@@ -87,6 +87,18 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
         const t = num(o.t);
         if (t === null || action.file === undefined) plan.invalid = true;
         else action.t = t;
+      }
+      // Season queue from the phone. A bad list is ignored: an older TV still plays the one file.
+      if (action.file !== undefined && Array.isArray(o.files)) {
+        const ids: number[] = [];
+        const list = o.files as unknown[];
+        let ok = list.length > 0 && list.length <= 80;
+        for (let i = 0; ok && i < list.length; i++) {
+          const id = num(list[i]);
+          if (id === null) ok = false;
+          else ids.push(id);
+        }
+        if (ok && ids.indexOf(action.file) >= 0) action.files = ids;
       }
       plan.action = action;
     } else plan.invalid = true;

@@ -72,8 +72,8 @@ function renderRoute(r: Route) {
       return <SeriesScreen seriesKey={r.key} season={r.season} />;
     case 'player':
       return platformKind() === 'androidtv'
-        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />
-        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} />;
+        ? <NativePlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} seasonNext={r.seasonNext} />
+        : <PlayerScreen queue={r.queue} index={r.index} startAt={r.startAt} from={r.from} seasonNext={r.seasonNext} />;
     case 'add':
       return <AddScreen />;
     case 'playlist':

@@ -30,6 +30,8 @@ interface Props {
   startAt?: number;
   /** Name of the phone that launched the player (watch journal source). */
   from?: string;
+  /** Season queue: the next episode starts at once, with no countdown. */
+  seasonNext?: boolean;
 }
 
 function failText(e: unknown): string {
@@ -60,7 +62,7 @@ function skipIo(c: TorrServerClient | null): SkipIo | null {
 }
 
 /** Android TV: the player route opens the native player and stays as a placeholder behind it. */
-export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
+export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: Props) {
   const [current, setCurrent] = useState(index);
   const [opened, setOpened] = useState(false);
 
@@ -115,7 +117,7 @@ export function NativePlayerScreen({ queue, index, startAt, from }: Props) {
       if (donate) unwatch = effect(() => { if (journalSupportActive()) run.hideDonate(); });
       const firstHash = queue[index].hash;
       run.start({
-        index, startAt: pos, seekStep: s.seekStep, autoNext: s.autoNext,
+        index, startAt: pos, seekStep: s.seekStep, autoNext: seasonNext ? true : s.autoNext, immediateNext: !!seasonNext,
         // «Озвучка» of the series (else the torrent's own choice, else the settings): by title, then language
         ...nativeTrackStart(seriesTracksFor(firstHash), firstHash ? getTrackPref(firstHash) : null, s),
         donate,

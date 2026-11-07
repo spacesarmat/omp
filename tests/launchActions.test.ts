@@ -97,6 +97,31 @@ describe('runLaunchParams', () => {
     expect(top.startAt).toBe(1394);
     expect('from' in top).toBe(false);
   });
+  it('a season file list plays that order only and asks for the next episode at once', async () => {
+    setActiveServer(addServer({ url: 'h:1' }).id);
+    routeStack.value = [{ name: 'library' }];
+    mockFetch(() => ({
+      body: JSON.stringify({
+        hash: HASH,
+        title: 'TNG',
+        stat: 3,
+        file_stats: [
+          { id: 5, path: 'TNG.S06E05.mkv', length: 10 },
+          { id: 6, path: 'TNG.S06E06.mkv', length: 10 },
+          { id: 8, path: 'TNG.S06E08.mkv', length: 10 },
+          { id: 11, path: 'TNG.S07E01.mkv', length: 10 },
+        ],
+      }),
+    }));
+    runLaunchParams({ torrent: HASH, file: 5, t: 0, files: [5, 6] });
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    const opened = routeStack.value[routeStack.value.length - 1] as any;
+    expect(opened.name).toBe('player');
+    expect(opened.seasonNext).toBe(true);
+    expect(opened.queue.map((q: { fileIndex: number }) => q.fileIndex)).toEqual([5, 6]);
+    expect(opened.index).toBe(0);
+  });
   it('passes the launching phone to the player (watch journal source)', async () => {
     setActiveServer(addServer({ url: 'h:1' }).id);
     routeStack.value = [{ name: 'library' }];
