@@ -9,7 +9,8 @@ import type { CatalogCard, Kind } from '../../../src/catalog/tmdb';
 import { phoneCatalog } from './phoneCatalog';
 
 const MAX_LOOKUPS = 2;
-const RETRY_MS = 10 * 60 * 1000;
+/** A failed card is not asked again until this long after the failure, even if a reader re-enters. */
+export const RETRY_MS = 10 * 60 * 1000;
 /** Queued tiles at most (the oldest go first). */
 const MAX_WAITING = 24;
 /** Projections kept at most (the oldest go first). */
@@ -88,13 +89,16 @@ function dropQueued(key: string): void {
   if (waiting.length !== before) pending.delete(key);
 }
 
-/** A tile came into view: fetch its card unless known, queued or failed lately. Each caller holds one view. */
+/**
+ * A reader came into view and holds one view (cleanup uses the count). Whether to ask again is separate:
+ * a known card, one already queued, or a failure newer than RETRY_MS does not start a fetch.
+ * Another reader still on screen does not block a retry after that pause.
+ */
 export function requestTileCard(kind: Kind, id: number): void {
   const key = keyOf(kind, id);
-  const n = (viewers.get(key) || 0) + 1;
-  viewers.set(key, n);
+  viewers.set(key, (viewers.get(key) || 0) + 1);
   visible.add(key);
-  if (n > 1 || cards.has(key) || pending.has(key)) return;
+  if (cards.has(key) || pending.has(key)) return;
   const failed = failedAt.get(key);
   if (failed !== undefined && Date.now() - failed < RETRY_MS) return;
   pending.add(key);

@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [phone] Discover's plain list, including the homepage and a filmography, still loads the tile card. A title in another script falls back to English, and a coming-to-digital film keeps its year. One line leaving the screen does not cancel that load while the card is still visible
+- [phone] Discover's plain list, including the homepage and a filmography, still loads the tile card. A title in another script falls back to English, and a coming-to-digital film keeps its year. One line leaving the screen does not cancel that load while the card is still visible. After a network failure the card is asked again once the pause has passed and a line comes back on screen, even if another part of the card never left
 - [phone] Library and Discover now have the same four views in portrait and landscape: Large cards, Medium cards, List with pictures, and List. Columns follow the screen width, a card stays at a readable minimum, and a short row fills the width instead of collapsing to the left. The selected view is marked and remembered. Old Discover choices of 2 columns become large cards, and 3 or 4 become medium cards. Rotation reflows the grid without loading the list again. A saved list shown when the catalog is unavailable uses the same view. The Discover homepage uses the same four views: poster rails for the card modes, rows with or without pictures for the lists
 
 ## 0.20.9-beta.5
