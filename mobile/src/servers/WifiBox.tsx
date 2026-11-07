@@ -1,5 +1,5 @@
 // Phone TorrServer for this Wi-Fi. Does not change the TV or the phone link.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { activeServerId, addServer, serverLabel, servers } from '../../../src/store/servers';
 import { Sheet } from '../ui/Sheet';
@@ -12,6 +12,7 @@ import {
   setWifiEnabled,
   setWifiManual,
   setWifiOverride,
+  wifiPrefsVersion,
   wifiPrompt,
 } from './wifiRun';
 import type { WifiPlan } from './wifiSelect';
@@ -27,6 +28,7 @@ export function WifiBox() {
   const list = servers.value;
   const refresh = () => setPrefs(loadWifiPrefs());
   const enabled = prefs.enabled;
+  useEffect(() => setPrefs(loadWifiPrefs()), [wifiPrefsVersion.value]);
 
   const toggle = () => {
     const next = setWifiEnabled(!enabled, activeServerId.value);

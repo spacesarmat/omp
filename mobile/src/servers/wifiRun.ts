@@ -41,8 +41,11 @@ export function loadWifiPrefs(): WifiPrefs {
   };
 }
 
+export const wifiPrefsVersion = signal(0);
+
 export function saveWifiPrefs(p: WifiPrefs): void {
   saveJson(KEY, p);
+  wifiPrefsVersion.value++;
 }
 
 export interface WifiRunDeps {
@@ -130,7 +133,12 @@ export async function considerWifi(over?: Partial<WifiRunDeps>, force = false): 
   if (plan.kind === 'use' || (plan.kind === 'fallback' && plan.serverId)) {
     useServer(d, plan.kind === 'use' ? plan.serverId : plan.serverId!);
   }
-  if (plan.kind === 'confirm' || plan.kind === 'choose') wifiPrompt.value = plan;
+  if (plan.kind === 'confirm' || plan.kind === 'choose') {
+    wifiPrompt.value = plan;
+  } else {
+    const pending = wifiPrompt.value;
+    if (pending && (pending.kind === 'confirm' || pending.kind === 'choose') && (!prefs.enabled || !!prefs.overrideId || pending.ssid !== ssid)) wifiPrompt.value = null;
+  }
   return plan;
 }
 
@@ -175,12 +183,14 @@ export function ensureWifiPrimary(id: string | null): WifiPrefs {
 }
 
 export function setWifiManual(ssid: string): WifiPrefs {
+  wifiPrompt.value = null;
   const next = { ...loadWifiPrefs(), manualSsid: ssid };
   saveWifiPrefs(next);
   return next;
 }
 
 export function setWifiOverride(id: string | null): WifiPrefs {
+  wifiPrompt.value = null;
   const next = { ...loadWifiPrefs(), overrideId: id };
   saveWifiPrefs(next);
   return next;

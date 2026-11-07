@@ -197,6 +197,18 @@ describe('phone Wi-Fi TorrServer choice', () => {
     expect(wifiPrompt.value).toEqual(first);
   });
 
+  it('a network change clears the unanswered question for the old network', async () => {
+    const first = await considerWifi(deps({ discover: async () => [{ url: 'http://10.0.0.9:8090', name: 'other' }] }));
+    expect(first.kind).toBe('confirm');
+    expect(wifiPrompt.value).toEqual(first);
+    const second = await considerWifi(deps({
+      hint: async () => ({ available: true, ssid: 'Office' }),
+      prefs: () => prefs({ profiles: [{ id: 'p', ssid: 'office', serverId: 'home', host: '10.0.0.2:8090' }] }),
+    }));
+    expect(second).toEqual({ kind: 'use', serverId: 'home', reason: 'profile' });
+    expect(wifiPrompt.value).toBeNull();
+  });
+
   it('disabling Wi-Fi selection cancels a pending saved-server check and clears its question', async () => {
     let answer!: (ok: boolean) => void;
     const d = deps({

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render } from 'preact';
+import { act } from 'preact/test-utils';
 import { App } from '../src/app';
 import { currentRoute, routeStack, resetTo, navigate, goBack } from '../src/nav';
 import { activeServer, setActiveServer, addServer, removeServer, servers } from '../../src/store/servers';
@@ -77,6 +78,20 @@ describe('mobile shell', () => {
       mount();
       expect(currentRoute.value.name).toBe('library');
       expect(document.querySelector('.m-sheet')?.textContent).toContain('Other');
+    } finally {
+      wifiPrompt.value = null;
+    }
+  });
+
+  it('accepting a server immediately shows its saved profile on the connect screen', () => {
+    resetTo({ name: 'connect' });
+    wifiPrompt.value = { kind: 'confirm', ssid: 'home', hosts: [{ url: 'http://10.0.0.9:8090', name: 'Other' }] };
+    const el = mount();
+    try {
+      const accept = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => (b.textContent || '').includes('Использовать'))!;
+      act(() => accept.click());
+      expect(el.textContent).toContain('Запомнено: home');
+      expect(el.textContent).toContain('Забыть');
     } finally {
       wifiPrompt.value = null;
     }
