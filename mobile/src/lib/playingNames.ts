@@ -2,10 +2,11 @@
 // torrent) and the episode line «S02E01 · Спокойная жизнь» (the code and the real TMDB name, if any). Never a file
 // name or a raw tracker title. Used by «Сейчас на ТВ» and by the «Откуда смотреть?» sheet.
 import { useEffect, useState } from 'preact/hooks';
+import { t } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import type { PlayerState } from '../../../src/phone/protocol';
 import { displayTitle } from '../ui/displayTitle';
-import { episodeLabel, parseEpisode } from '../../../src/lib/episodes';
+import { episodeLabel, parseEpisode, spansSeasons } from '../../../src/lib/episodes';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
 import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
@@ -42,9 +43,23 @@ export function looksLikeName(title: string): boolean {
   return !!s && !FILE_EXT.test(s) && !episodeLabel(s) && !/\b(1080p|2160p|720p|WEB-?DL|BDRip|HDTV)\b/i.test(s);
 }
 
-/** «S02E01 · Спокойная жизнь», «S02E01» without a real name. */
-export function episodeLine(code: string, name: string): string {
-  return [code, realEpisodeName(name)].filter(Boolean).join(' · ');
+/**
+ * «1 серия · Спокойная жизнь». The season is added only when the release has more than one
+ * (`withSeason`), so a single-season pack stays short. A code that is not SxxEyy is kept as written.
+ */
+export function episodeLine(code: string, name: string, withSeason = false): string {
+  const human = humanEpisodeCode(code, withSeason);
+  return [human || code, realEpisodeName(name)].filter(Boolean).join(' · ');
+}
+
+/** «1 серия», or «2 сезон · 1 серия» when the season is needed. '' when `code` is not SxxEyy. */
+export function humanEpisodeCode(code: string, withSeason: boolean): string {
+  const m = /^S(\d+)E(\d+)$/i.exec((code || '').trim());
+  if (!m) return '';
+  const episode = String(parseInt(m[2], 10));
+  const head = t('library.episodeNamed', { n: episode });
+  if (!withSeason) return head;
+  return t('library.seasonNamed', { n: String(parseInt(m[1], 10)) }) + ' · ' + head;
 }
 
 /** The real TMDB name of the episode at `path` of the torrent; '' when unknown or TMDB is out of reach. */
@@ -71,12 +86,18 @@ export function launchLabel(hash: string, file: number | undefined, fallback: st
   const path = filePath(tor, file);
   const code = path ? episodeLabel(path) : '';
   if (!code) return torrentName(tor);
+  const withSeason = spansSeasons(filesOfTorrent(tor));
   if (named) {
     episodeNameOf(tor, path).then((name) => {
-      if (name) named(episodeLine(code, name));
+      if (name) named(episodeLine(code, name, withSeason));
     });
   }
-  return code;
+  return episodeLine(code, '', withSeason);
+}
+
+function filesOfTorrent(tor: Torrent): string[] {
+  const files = tor.file_stats && tor.file_stats.length ? tor.file_stats : parseTorrentData(tor.data);
+  return files.map((f) => f.path);
 }
 
 /** The episode code the TV puts last in the subtitle («… · S02E03»); '' when there is none. */
@@ -159,6 +180,7 @@ export function usePlayingNames(s: PlayerState | null): { title: string; sub: st
   const title = tor ? torrentName(tor) : (raw && libraryTitle({ hash: hash, title: raw }).title) || displayTitle(s.title);
   if (!code) return { title: title, sub: '' };
   const known = tmdbName.key === key ? tmdbName.name : '';
-  return { title: title, sub: episodeLine(code, known || (looksLikeName(s.title) ? s.title : '')) };
+  const withSeason = tor ? spansSeasons(filesOfTorrent(tor)) : false;
+  return { title: title, sub: episodeLine(code, known || (looksLikeName(s.title) ? s.title : ''), withSeason) };
 }
 

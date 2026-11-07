@@ -707,6 +707,10 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun localIpv4(call: PluginCall) = localIpv4Op(call)
 
+    /** Connected Wi-Fi name when a location or nearby-wifi permission is already granted. Does not scan or prompt. */
+    @PluginMethod
+    fun wifiHint(call: PluginCall) = wifiHintOp(call)
+
     /**
      * { active }: OMP's own traffic goes through a VPN (the active network has TRANSPORT_VPN). An app excluded from the
      * VPN sees its Wi-Fi/Ethernet here. Always-on / lockdown is not readable by apps, so it is never reported.

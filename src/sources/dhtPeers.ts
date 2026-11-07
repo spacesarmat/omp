@@ -77,6 +77,7 @@ export function seedCheckLine(tracker: ProbeResult, dht: DhtPeersResult | null):
   }
   if (tracker.ok) return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow');
   if (dhtText) return dhtText;
+  if (!tracker.ok && tracker.note) return tracker.note;
   if (!tracker.ok && tracker.reason === 'timeout') return t('sources.seedsTimeout');
   return t('sources.seedsNoTracker');
 }

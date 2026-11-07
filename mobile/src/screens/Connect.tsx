@@ -28,6 +28,7 @@ import { connectServer } from '../connect/connectServer';
 import { native } from '../platform/native';
 import { localServer, refreshLocalServer, startLocal, localName, LOCAL_URL } from '../server/localServer';
 import { TextField } from '../ui/TextField';
+import { WifiBox } from '../servers/WifiBox';
 
 type ServerScanner = (isCancelled: () => boolean, onFound?: (s: FoundServer) => void) => Promise<FoundServer[]>;
 let scanner: ServerScanner | null = null;
@@ -309,6 +310,7 @@ export function Connect() {
           <div class="m-muted">Open Movie Player</div>
         </div>
       </div>
+      <WifiBox />
       {auto && scanState === 'scanning' && (
         <div class="m-hint-info m-muted">{t('connect.searchingLan')}</div>
       )}

@@ -205,6 +205,7 @@ export function Discover() {
       <div class="m-disc-head">
         <h2>{home ? t('discover.browse') : t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
+        <span class="m-disc-tools">
         <button
           type="button"
           class="m-icon-btn m-view-btn tm"
@@ -229,6 +230,7 @@ export function Discover() {
         <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P34.4" aria-label={t('add.search')} onClick={() => switchTab({ name: 'add', scope: 'catalog' })}>
           <Icon d={SEARCH} size={18} />
         </button>
+        </span>
       </div>
       <div class="m-disc-chips" role="group" aria-label={home ? t('discover.browse') : t('discover.novelties')}>
         {chips().map((c) => (

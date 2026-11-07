@@ -236,9 +236,28 @@ export function dayRows(entries: CalEntry[]): CalRow[] {
   return rows;
 }
 
-/** The row's line: «S13E07 · name», «S13E07-E08». */
-export function rowLine(row: CalRow): string {
-  return episodesCode(row.season, row.episodes) + (row.name ? ' · ' + row.name : '');
+/**
+ * «7 серия», «7-8 серия», «7, 9 серия». The season is included only when the caller says the show
+ * has more than one (`withSeason`). `episodesCode` stays the SxxEyy form for search.
+ */
+export function humanEpisodes(season: number, episodes: number[], withSeason = false): string {
+  const eps = episodes.slice().sort((a, b) => a - b);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < eps.length) {
+    let j = i;
+    while (j + 1 < eps.length && eps[j + 1] === eps[j] + 1) j++;
+    parts.push(j > i ? String(eps[i]) + '-' + String(eps[j]) : String(eps[i]));
+    i = j + 1;
+  }
+  const head = t('library.episodeNamed', { n: parts.join(', ') });
+  return withSeason ? t('library.seasonNamed', { n: season }) + ' · ' + head : head;
+}
+
+/** The row's line: «7 серия · name». A number (from `rows.map`) is ignored. `true` adds the season. */
+export function rowLine(row: CalRow, opts?: boolean | number | { withSeason?: boolean }): string {
+  const withSeason = typeof opts === 'number' ? false : typeof opts === 'boolean' ? opts : !!(opts && opts.withSeason);
+  return humanEpisodes(row.season, row.episodes, withSeason) + (row.name ? ' · ' + row.name : '');
 }
 
 // --- list and month views

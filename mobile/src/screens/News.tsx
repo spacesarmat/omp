@@ -118,7 +118,7 @@ function Feed() {
   const [cat, setCatState] = useState<FeedCategory>(memo.cat);
   const [hd, setHdState] = useState(memo.hd);
   const [, setTick] = useState(0);
-  const rows = useResultRows({ category: feedCategoryOf(cat), seedCode: 'P03.7' });
+  const rows = useResultRows({ category: feedCategoryOf(cat), seedCode: 'P03.7', menu: true });
   void monitorVersion.value;
 
   useEffect(() => {

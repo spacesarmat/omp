@@ -182,6 +182,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/screens/catalog/DiscoverSheets.tsx',
       'mobile/src/screens/catalog/PosterSheet.tsx',
       'mobile/src/screens/catalog/WantSheet.tsx',
+      'mobile/src/servers/WifiBox.tsx',
       'mobile/src/share/ShareMenu.tsx',
       'mobile/src/ui/BetterSheet.tsx',
       'mobile/src/ui/BoxCodeSheet.tsx',

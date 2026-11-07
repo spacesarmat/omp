@@ -57,14 +57,14 @@ function ordered(files: TorrentFile[]): TorrentFile[] {
   });
 }
 
-function EpisodeRow({ file, tmdbName, on, onPlay }: { file: TorrentFile; tmdbName: string; on: boolean; onPlay: (file: TorrentFile) => void }) {
+function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentFile; tmdbName: string; on: boolean; onPlay: (file: TorrentFile) => void; withSeason: boolean }) {
   const [slide, setSlide] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const playRef = useRef(onPlay);
   playRef.current = onPlay;
   const code = episodeLabel(file.path);
   const name = stripExt(baseName(file.path));
-  const label = tmdbName ? episodeLine(code, tmdbName) : code && name && name !== code ? code + ' · ' + name : code || name;
+  const label = code ? episodeLine(code, tmdbName || (name && name !== code ? name : ''), withSeason) : name;
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -163,7 +163,7 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
             const season = pe.season !== null ? tmdb.eps[pe.season] : undefined;
             const episode = pe.episode !== null && season ? season[pe.episode] : undefined;
             const tmdbName = episode ? realEpisodeName(episode.title) : '';
-            return <EpisodeRow key={f.id} file={f} tmdbName={tmdbName} on={f.id === fileId} onPlay={onPlay} />;
+            return <EpisodeRow key={f.id} file={f} tmdbName={tmdbName} on={f.id === fileId} onPlay={onPlay} withSeason={seasons.length > 1} />;
           })}
         </>
       )}
@@ -322,7 +322,7 @@ export function NowDeck({
         file: file.id,
         at: sharedResume(hash, file.id),
         duration: getLocalProgress(hash, file.id)?.duration || undefined,
-        label: [code, stripExt(baseName(file.path))].filter(Boolean).join(' · '),
+        label: code ? episodeLine(code, stripExt(baseName(file.path))) : stripExt(baseName(file.path)),
         onError: setLaunchError,
       })
       .then((ok) => {

@@ -113,7 +113,8 @@ describe('Torrent', () => {
     expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 4 серии · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     const rows = el.querySelectorAll('.m-ep');
     expect(rows.length).toBe(4);
-    expect(rows[2].textContent).toContain('S02E03');
+    expect(rows[2].textContent).toContain('Серия 3');
+    expect(rows[2].textContent).not.toContain('S02E03');
   });
 
   it('main button resumes the last position', async () => {
@@ -640,7 +641,7 @@ describe('TV launch flow', () => {
     await open1();
     const dlg = el.querySelectorAll('[role=dialog]')[1];
     // the episode code and the TV, never the file name
-    expect(dlg.querySelector('.m-muted')!.textContent).toBe('S02E04 · на LG OLED');
+    expect(dlg.querySelector('.m-muted')!.textContent).toBe('4 серия · на LG OLED');
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();

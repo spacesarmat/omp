@@ -2,21 +2,25 @@ import { render } from 'preact';
 import { App } from './app';
 import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
 import { resetTo, type MRoute } from './nav';
-import { activeServer } from '../../src/store/servers';
+import { activeServer, activeServerId, servers, setActiveServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
 import { ensureLinkedBilling } from '../../src/sources/ompJackett';
 import { setDhtPeersContext } from '../../src/sources/dhtPeers';
+import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
+import { TorrServerClient } from '../../src/api/torrserver';
+import { scanLan } from './screens/Connect';
+import { bindWifiRuntime, considerWifi, loadWifiPrefs, saveWifiPrefs } from './servers/wifiRun';
 import { reloadSourcePrefs } from '../../src/sources/store';
 
 import { ensureFirstRun } from './donate';
 import { t } from '../../src/i18n';
 import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
-import { attachIfOmpForeground, pushPhoneSub } from './tv/playerLink';
+import { attachIfOmpForeground, nowPlaying, pushPhoneSub } from './tv/playerLink';
 import { tvState, tvKind, sessionIp } from './tv/tvClient';
 import { native } from './platform/native';
 import { tvs } from './tv/tvStore';
@@ -47,6 +51,24 @@ registerBuiltinSources();
 startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
 // «Проверить сиды» asks billing for a DHT count with the same device token. webOS has no native HTTP and skips it.
 setDhtPeersContext(phoneSourceContext);
+// A feed row without a magnet (NNM-Club) loads the announce list from its topic page. No invented tracker URL.
+setProbeContext(() => phoneSourceContext());
+bindWifiRuntime({
+  hint: () => native.wifiHint(),
+  prefs: loadWifiPrefs,
+  save: saveWifiPrefs,
+  saved: () => servers.peek().map((s) => ({ id: s.id, url: s.url, name: s.name, user: s.user, password: s.password })),
+  playback: () => {
+    const n = nowPlaying.peek();
+    return !!(n && n.hash);
+  },
+  echo: (s) => new TorrServerClient(s).echo().then(() => true, () => false),
+  discover: (cancel) => scanLan(cancel).then((list) => list.map((s) => ({ url: s.url }))),
+  apply: (id) => setActiveServer(id),
+});
+const prefs = loadWifiPrefs();
+if (!prefs.primaryId && activeServerId.peek()) saveWifiPrefs({ ...prefs, primaryId: activeServerId.peek() });
+void considerWifi();
 // Ads and the monitoring cap: /v1/me on resume (if the last answer is older than 15 minutes) and about every 6 hours.
 startPremiumRecheck(phoneSourceContext);
 // A Telegram link with no session: ask billing once. A subscription turns paid sources on without a code.
@@ -64,7 +86,10 @@ window.addEventListener('storage', (e) => {
   if (e.key === 'tsp.sources' || e.key === null) reloadSourcePrefs();
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') reloadSourcePrefs();
+  if (document.visibilityState === 'visible') {
+    reloadSourcePrefs();
+    void considerWifi();
+  }
 });
 
 resetTo({ name: activeServer.value ? 'library' : 'connect' });

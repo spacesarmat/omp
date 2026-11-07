@@ -14,7 +14,7 @@ import { Icon } from '../ui/Icon';
 import { CatalogError } from './catalog/CatalogError';
 import { dayHeader } from '../lib/releaseDates';
 import {
-  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, episodesCode, listGroups, loadCalendar,
+  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, humanEpisodes, listGroups, loadCalendar,
   loadCalView, monthBounds, monthCells, monthRev, monthSwipe, monthTitle, realEpisodeName, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly,
   weekdayHeads, STALE_MS, type CalGo, type CalRow, type CalView,
 } from '../lib/calendar';
@@ -45,7 +45,8 @@ function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: 
   const card = e.show.card;
   const out = e.status !== 'future';
   const found = out ? rowFinding(e, findings) : null;
-  const code = episodesCode(e.season, e.episodes);
+  const multi = card.seasons.length > 1;
+  const code = humanEpisodes(e.season, e.episodes, multi);
   const chip = chipText(e);
   return (
     <div class="m-cal-row" data-cal-row={card.id + ':' + e.season + ':' + e.episodes.join(',')}>
@@ -57,7 +58,7 @@ function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: 
         )}
         <span class="m-cal-text">
           <span class="m-cal-title">{card.title}</span>
-          <span class="m-small m-muted m-cal-ep">{rowLine(e)}</span>
+          <span class="m-small m-muted m-cal-ep">{rowLine(e, { withSeason: multi })}</span>
           <span class="m-cal-when m-small m-muted">{dayHeader(e.airDate)}</span>
         </span>
       </button>
@@ -204,9 +205,10 @@ function Ask({ e, onClose }: { e: CalRow; onClose: () => void }) {
   const plan = episodeActions({ show: e.show, season: e.season, episode: picked });
   const hit = e.entries.filter((x) => x.episode === picked)[0];
   const pickedName = hit ? realEpisodeName(hit.name) : '';
+  const multi = card.seasons.length > 1;
   const code = several
-    ? episodesCode(e.season, [picked]) + (pickedName ? ' · ' + pickedName : '')
-    : episodesCode(e.season, e.episodes);
+    ? humanEpisodes(e.season, [picked], multi) + (pickedName ? ' · ' + pickedName : '')
+    : humanEpisodes(e.season, e.episodes, multi);
   const episode = plan.episode;
   const run = (action: CalGo) => {
     onClose();
@@ -237,7 +239,7 @@ function Ask({ e, onClose }: { e: CalRow; onClose: () => void }) {
                 aria-pressed={n === picked}
                 onClick={() => setPicked(n)}
               >
-                {episodesCode(e.season, [n])}
+                {humanEpisodes(e.season, [n], card.seasons.length > 1)}
               </button>
             ))}
           </div>

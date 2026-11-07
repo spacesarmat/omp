@@ -49,13 +49,14 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
         <button type="button" class="m-icon-btn tm" data-code="P04.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
-        <h1 class="m-bar-title m-grow">{sub ? sub.query : t('monitor.sub.title')}</h1>
+        <span class="m-grow" />
         {sub && (
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => setEditing(true)}>
             {t('connect.edit')}
           </button>
         )}
       </div>
+      <h1 class="m-sub-page-title">{sub ? sub.query : t('monitor.sub.title')}</h1>
       {!sub ? (
         <div class="m-muted">{t('monitor.sub.deleted')}</div>
       ) : (

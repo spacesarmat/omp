@@ -28,7 +28,7 @@ import { activeTv } from '../tv/tvStore';
 import { torrents } from '../../../src/store/library';
 import { continueWatching, getLocalProgress, progressVersion, serverViewed } from '../../../src/store/progress';
 import { libraryTitle } from '../../../src/lib/libraryView';
-import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, playableFiles, spansSeasons, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
@@ -555,7 +555,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           {main && files.length > 0 && (
             <>
               <div class="m-section">{files.length > 1 ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>
-              <EpisodeRows hash={main.hash} files={files} eps={tmdb.eps} coming={[]} onPick={setEpisode} />
+              <EpisodeRows hash={main.hash} files={files} eps={tmdb.eps} coming={[]} onPick={setEpisode} withSeason={spansSeasons(allFiles.map((f) => f.path))} />
             </>
           )}
           {tmdbOnly.length > 0 && (

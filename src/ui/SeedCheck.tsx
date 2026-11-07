@@ -3,6 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import { t, tp } from '../i18n';
 import { askDhtPeers, dhtNeedsSubscriptionHint, dhtPeerLine, dhtSeedCheckAvailable, seedCheckLine, withDhtSubscriptionHint } from '../sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../sources/liveSeeds';
+import { rowNeedsMagnet } from '../sources/rowMagnet';
 import { probeSeeds, type ProbeResult } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
 import { Focusable } from './components';
@@ -37,8 +38,8 @@ export function useSeedProbe(r: SourceResult): SeedProbe {
     const hash = infohashOf(r);
     const listed = !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
     const live = () => gen === genRef.current;
-    // No tracker address: do not scrape. A signed-in phone or Android TV asks DHT only.
-    if (hash && !listed && dhtSeedCheckAvailable()) {
+    // No tracker address and no topic page to load one from: do not scrape. A signed-in phone or Android TV asks DHT only.
+    if (hash && !listed && !rowNeedsMagnet(r) && dhtSeedCheckAvailable()) {
       askDhtPeers(hash).then((dht) => {
         if (!live()) return;
         if (dht.ok) {

@@ -105,6 +105,8 @@ describe('chapters', () => {
   it('snapshot carries starts, titles and the current index; none without chapters', () => {
     const s = buildSnapshot({ ...base, time: 100, chapters })!;
     expect(s.chapters).toEqual([{ t: 0, title: 'Пролог' }, { t: 60, title: 'Заставка' }]);
+    const timed = buildSnapshot({ ...base, time: 10, chapters: [{ start: 10, end: 20, title: '00:00:10', kind: null }] })!;
+    expect(timed.chapters).toEqual([{ t: 10, title: '' }]);
     expect(s.chapter).toBe(1);
     expect(buildSnapshot({ ...base, time: 0, chapters })!.chapter).toBe(0);
     const none = buildSnapshot({ ...base, chapters: [] })!;

@@ -89,7 +89,7 @@ describe('NowPlaying', () => {
     setState(state());
     mount(<NowPlaying volume={volume} />);
     expect(el.querySelector('.m-now-title')!.textContent).toBe('Starbound Frontier');
-    expect(el.querySelector('.m-now-sub')!.textContent).toBe('S02E03 · Тишина в эфире');
+    expect(el.querySelector('.m-now-sub')!.textContent).toBe('3 серия · Тишина в эфире');
     expect(el.textContent).toContain('23:14');
     expect(el.textContent).toContain('−25:18');
     expect(el.textContent).toContain('СЕЙЧАС НА ТВ');
@@ -445,7 +445,7 @@ describe('MiniPlayer', () => {
     setState(state());
     resetTo({ name: 'library' });
     mount(<MiniPlayer />);
-    expect(el.textContent).toContain('S02E03 · Тишина в эфире');
+    expect(el.textContent).toContain('3 серия · Тишина в эфире');
     expect(el.textContent).toContain('На LG OLED · 23:14 из 48:32');
     click(el.querySelector('.m-mini-text')!);
     expect(currentRoute.value.name).toBe('nowPlaying');
@@ -553,7 +553,7 @@ describe('raw names from the TV', () => {
     );
     mount(<NowPlaying volume={volume} />);
     expect(el.querySelector('.m-now-title')!.textContent).toBe('Темная материя');
-    expect(el.querySelector('.m-now-sub')!.textContent).toBe('S02E01');
+    expect(el.querySelector('.m-now-sub')!.textContent).toBe('1 серия');
   });
 
   it('a film: the title alone', () => {
