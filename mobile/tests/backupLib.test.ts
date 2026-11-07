@@ -86,7 +86,7 @@ describe('collectBackup', () => {
     put('tsp.ui.skipOpen', false);
     const b = collectBackup(NOW);
     expect(b.data['tsp.catalogMode']).toBe('discover');
-    expect(b.data['tsp.discoverCols']).toBe(3);
+    expect(b.data['tsp.discoverCols']).toBe('small');
     expect(b.data['tsp.discoverQuery']).toEqual({ sort: 'rating', genres: ['drama'], year: 'any', from: 0, to: 0, country: '', rating: 7 });
     expect(b.data['tsp.support']).toEqual({ until: 1798934400000 });
     expect(b.data['tsp.flaresolverr']).toEqual({ url: 'http://192.168.1.5:8191' });
@@ -187,9 +187,11 @@ describe('collectBackup', () => {
     put('tsp.discoverCols', 2);
     b = collectBackup(NOW);
     expect(b.data['tsp.catalogMode']).toBe('mine');
-    expect(b.data['tsp.discoverCols']).toBe(2);
+    expect(b.data['tsp.discoverCols']).toBe('large');
     put('tsp.discoverCols', 4);
-    expect(collectBackup(NOW).data['tsp.discoverCols']).toBe(4);
+    expect(collectBackup(NOW).data['tsp.discoverCols']).toBe('small');
+    put('tsp.discoverCols', 'list');
+    expect(collectBackup(NOW).data['tsp.discoverCols']).toBe('list');
     put('tsp.discoverCols', 5);
     expect(collectBackup(NOW).data['tsp.discoverCols']).toBeUndefined();
   });

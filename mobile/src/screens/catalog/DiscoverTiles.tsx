@@ -46,7 +46,7 @@ export function DiscPoster({ x, owned }: { x: CatalogTitle; owned: boolean }) {
     setReady(!x.poster);
   }, [x.poster]);
   return (
-    <span class={'m-disc-poster' + (x.poster && !ready ? ' m-disc-loading' : '')}>
+    <span class={'m-disc-poster' + (x.poster && !ready ? ' m-disc-loading' : '')} data-poster={x.kind + ':' + x.id}>
       {x.poster ? (
         <>
           {!ready && <span class="m-disc-poster-skel" aria-hidden="true" />}

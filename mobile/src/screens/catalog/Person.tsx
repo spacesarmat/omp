@@ -17,8 +17,8 @@ import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
 import { Overview } from './titleMeta';
 import { PosterButton } from '../../share/PosterButton';
-import { readDiscoverCols, discoverFitsForHeight, discoverGridClass, discoverLandscapeCols } from './discoverCols';
-import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
+import { readDiscoverCols, discoverGridClass, isGridDiscoverView } from './discoverCols';
+import { gridCols, gridTemplate, useContentWidth, type GridMode } from '../../ui/landscapeCols';
 
 const BACK = 'M15 5l-7 7l7 7';
 
@@ -88,12 +88,14 @@ function Body({ card }: { card: PersonCard }) {
   const list = torrents.value;
   const owned = useMemo(() => ownedChecker(list), [list]);
   const items = useMemo(() => filmography(card, job, sort, owned, onlyOwned), [card, job, sort, owned, onlyOwned]);
-  const cols = readDiscoverCols();
-  const gridClass = discoverGridClass(cols);
-  // landscape: the posters per row of «Обзор» (two whole tile rows fit above the tab bar)
+  const view = readDiscoverCols();
+  const gridClass = discoverGridClass(view);
   const gridRef = useRef<HTMLDivElement>(null);
-  const box = useLandscapeBox(gridRef);
-  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height, discoverFitsForHeight(window.innerHeight)) : null);
+  const gridMode: GridMode = view === 'small' ? 'small' : 'large';
+  const gridOn = isGridDiscoverView(view);
+  const gridWidth = useContentWidth(gridRef, gridOn && items.length > 0);
+  const gridColsNow = gridOn && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
+  const gridStyle = gridOn ? { gridTemplateColumns: gridTemplate(gridMode) } : undefined;
   const years = yearsText(card);
   return (
     <>
@@ -140,23 +142,57 @@ function Body({ card }: { card: PersonCard }) {
       {items.length === 0 ? (
         <p class="m-muted m-disc-empty">{onlyOwned ? t('person.ownedEmpty', { name: card.name }) : t('discover.nothingFound')}</p>
       ) : (
-        <div class={gridClass} style={gridStyle} ref={gridRef}>
+        <div class={gridClass} style={gridStyle} data-view={view} data-cols={gridColsNow || undefined} ref={gridRef}>
           {items.map((x) => {
             const c = x.credit;
+            const label = c.year ? c.title + ' ' + c.year : c.title;
+            const open = () => navigate(routeOf(list, c));
+            const poster = (
+              <span class="m-disc-poster" data-poster={c.kind + ':' + c.id}>
+                {c.poster ? <LazyImg src={c.poster} /> : <span class={'m-disc-ph m-disc-ph-' + (c.id % 4)}>{c.title}</span>}
+                {c.rating > 0 && <span class="m-disc-rating">{ratingText(c.rating)}</span>}
+                {x.owned && <span class="m-disc-badge">{t('person.owned')}</span>}
+              </span>
+            );
+            if (view === 'compact') {
+              return (
+                <PosterButton key={c.kind + ':' + c.id} item={c} anchor={c.kind + ':' + c.id} className={'m-crow' + (x.owned ? ' m-person-owned' : '')} label={label} onOpen={open}>
+                  <span class="m-crow-main">
+                    <span class="m-card-title m-crow-title m-disc-title"><TileTitle x={c} /></span>
+                    <span class="m-crow-sub">
+                      {c.roles.length > 0 && <span class="m-muted m-small m-disc-meta m-person-roles">{c.roles.join(', ')}</span>}
+                      {c.rating > 0 && <span class="m-muted m-small">{ratingText(c.rating)}</span>}
+                      {x.owned && <span class="m-muted m-small">{t('person.owned')}</span>}
+                    </span>
+                  </span>
+                </PosterButton>
+              );
+            }
+            if (view === 'list') {
+              return (
+                <PosterButton key={c.kind + ':' + c.id} item={c} anchor={c.kind + ':' + c.id} className={'m-vrow' + (x.owned ? ' m-person-owned' : '')} label={label} onOpen={open}>
+                  {poster}
+                  <span class="m-vrow-text">
+                    <span class="m-card-title m-disc-title"><TileTitle x={c} /></span>
+                    <span class="m-vrow-meta">
+                      {c.roles.length > 0 && <span class="m-muted m-small m-disc-meta m-person-roles">{c.roles.join(', ')}</span>}
+                      {x.owned && <span class="m-muted m-small">{t('person.owned')}</span>}
+                    </span>
+                    <TileWhen kind={c.kind} id={c.id} />
+                  </span>
+                </PosterButton>
+              );
+            }
             return (
               <PosterButton
                 key={c.kind + ':' + c.id}
                 item={c}
                 anchor={c.kind + ':' + c.id}
                 className={'m-disc-tile' + (x.owned ? ' m-person-owned' : '')}
-                label={c.year ? c.title + ' ' + c.year : c.title}
-                onOpen={() => navigate(routeOf(list, c))}
+                label={label}
+                onOpen={open}
               >
-                <span class="m-disc-poster">
-                  {c.poster ? <LazyImg src={c.poster} /> : <span class={'m-disc-ph m-disc-ph-' + (c.id % 4)}>{c.title}</span>}
-                  {c.rating > 0 && <span class="m-disc-rating">{ratingText(c.rating)}</span>}
-                  {x.owned && <span class="m-disc-badge">{t('person.owned')}</span>}
-                </span>
+                {poster}
                 <span class="m-card-title m-disc-title">
                   <TileTitle x={c} />
                 </span>

@@ -155,10 +155,14 @@ describe('pinch step', () => {
     expect(pinchTarget(0, 4, -1)).toBe(0);
   });
 
-  it('the backup keeps four posters per row', () => {
+  it('the backup migrates old column counts onto the four views', () => {
     const k = BACKUP_KEYS.find((x) => x.key === 'tsp.discoverCols')!;
-    expect(k.clean(4)).toBe(4);
-    expect(k.clean(3)).toBe(3);
+    expect(k.clean(2)).toBe('large');
+    expect(k.clean(3)).toBe('small');
+    expect(k.clean(4)).toBe('small');
+    expect(k.clean('large')).toBe('large');
+    expect(k.clean('list')).toBe('list');
+    expect(k.clean('compact')).toBe('compact');
     expect(k.clean(5)).toBeUndefined();
     expect(k.clean('4')).toBeUndefined();
   });
@@ -591,36 +595,38 @@ describe('pinch in «Обзор»', () => {
 
   const grid = () => el.querySelector('.m-disc-grid') as HTMLElement;
 
-  it('two posters per row by default; one pinch makes three, the next four, and it is kept', async () => {
+  it('large cards by default; a pinch steps medium, list with pictures, then plain list, and it is kept', async () => {
     mount(<Discover />);
     await flush();
     const root = () => el.querySelector('.m-discover')!;
+    expect(grid().classList.contains('m-cards-large')).toBe(true);
     expect(grid().classList.contains('m-cols-3')).toBe(false);
     pinch(root(), 60);
     await flush();
-    expect(grid().classList.contains('m-cols-3')).toBe(true);
-    expect(grid().classList.contains('m-cols-4')).toBe(false);
-    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('3');
+    expect(grid().classList.contains('m-cards-medium')).toBe(true);
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('"small"');
     expect(vibrate).toHaveBeenCalledTimes(1);
     act(() => render(null, el));
     mount(<Discover />);
     await flush();
-    expect(grid().classList.contains('m-cols-3')).toBe(true);
+    expect(grid().classList.contains('m-cards-medium')).toBe(true);
     pinch(root(), 80);
     await flush();
-    expect(grid().classList.contains('m-cols-4')).toBe(true);
-    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('4');
-    // the end of the range
+    expect(el.querySelector('.m-disc-rows .m-vrow .m-disc-poster')).not.toBeNull();
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('"list"');
     pinch(root(), 50);
     await flush();
-    expect(vibrate).toHaveBeenCalledTimes(2);
-    // a big spread is still one step: four to three
+    expect(el.querySelector('.m-clist .m-crow')).not.toBeNull();
+    expect(el.querySelector('.m-disc-poster')).toBeNull();
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('"compact"');
+    const vib = vibrate.mock.calls.length;
+    pinch(root(), 40);
+    await flush();
+    expect(vibrate.mock.calls.length).toBe(vib);
     pinch(root(), 250);
     await flush();
-    expect(grid().classList.contains('m-cols-4')).toBe(false);
-    expect(grid().classList.contains('m-cols-3')).toBe(true);
-    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('3');
-    expect(grid().style.transform).toBe('');
+    expect(el.querySelector('.m-disc-rows .m-vrow')).not.toBeNull();
+    expect(localStorage.getItem(DISCOVER_COLS_KEY)).toBe('"list"');
   });
 
   it('the posters move to their new place by their TMDB key; nothing is scaled during the gesture', async () => {
@@ -693,14 +699,16 @@ describe('pinch in «Обзор»', () => {
     expect(currentRoute.value.name).toBe('library');
   });
 
-  it('a bad stored value falls back to two', () => {
+  it('a bad stored value falls back to large cards, and old counts migrate', () => {
     for (const bad of ['7', '5', '1', '"3"', 'garbage', '{}', '0', '2.5']) {
       localStorage.setItem(DISCOVER_COLS_KEY, bad);
-      expect(readDiscoverCols()).toBe(2);
+      expect(readDiscoverCols()).toBe('large');
     }
     localStorage.setItem(DISCOVER_COLS_KEY, '3');
-    expect(readDiscoverCols()).toBe(3);
-    localStorage.setItem(DISCOVER_COLS_KEY, '4');
-    expect(readDiscoverCols()).toBe(4);
+    expect(readDiscoverCols()).toBe('small');
+    localStorage.setItem(DISCOVER_COLS_KEY, '2');
+    expect(readDiscoverCols()).toBe('large');
+    localStorage.setItem(DISCOVER_COLS_KEY, '"list"');
+    expect(readDiscoverCols()).toBe('list');
   });
 });

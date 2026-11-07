@@ -735,7 +735,7 @@ describe('Library', () => {
     const chip = () => el.querySelector('.m-sort') as HTMLElement;
     const titles = () => Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent);
     const pick = (sel: string) => act(() => (document.querySelector(sel) as HTMLElement).click());
-    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: Новые, Крупные постеры');
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: Новые, Большие карточки');
     expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('нов');
     expect(titles()[0]).toContain('Starbound');
     act(() => chip().click());
@@ -744,7 +744,7 @@ describe('Library', () => {
     expect(sheet.querySelector('[data-sort="new"]')!.getAttribute('aria-checked')).toBe('true');
     expect(sheet.querySelector('[data-view="large"]')!.getAttribute('aria-checked')).toBe('true');
     pick('[data-sort="title"]');
-    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По названию, Крупные постеры');
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По названию, Большие карточки');
     // the order that is on is visible, not only in the label (QA B13)
     expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('А-Я');
     expect(settings.value.librarySort).toBe('title');
@@ -768,7 +768,7 @@ describe('Library', () => {
     expect(el.querySelectorAll('.m-crow')[0].querySelector('.m-poster')).toBeNull();
     pick('[data-view="large"]');
     expect(settings.value.libraryView).toBe('large');
-    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По размеру, Крупные постеры');
+    expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По размеру, Большие карточки');
     act(() => historyButton().click());
     expect(el.querySelector('.m-sort')).toBeNull();
     updateSettings({ librarySort: 'new', libraryView: 'large' });
