@@ -21,6 +21,12 @@ import type { CatalogClient } from '../../src/catalog/client';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
 
+/** jsdom starts at 1024x768 (a landscape); the suites say which way the phone lies. */
+function windowSize(width: number, height: number): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: height });
+}
+
 const T: Torrent[] = [
   { hash: 'h1', title: 'Starbound Frontier S02 1080p', category: 'tv', stat: 3, torrent_size: 1024, timestamp: 3 },
   { hash: 'h2', title: 'Quiet Signal 2160p', category: 'movie', stat: 3, torrent_size: 1024, timestamp: 2 },
@@ -117,6 +123,8 @@ let reduced = true;
 
 beforeEach(() => {
   localStorage.clear();
+  // portrait by default: the FLIP tests animate; the landscape suites set their own window
+  windowSize(390, 844);
   vibrate = vi.fn(() => true);
   Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true });
   // most tests: reduced motion, so the step lands with no animation
@@ -421,6 +429,24 @@ describe('pinch in «Мои»', () => {
     expect(animate).not.toHaveBeenCalled();
   });
 
+  it('in landscape the step also lands at once: the two-row grid fills the screen and a FLIP overlaps the cards', async () => {
+    reduced = false;
+    mockAnimate();
+    stubFrame();
+    mockRects();
+    windowSize(844, 390);
+    updateSettings({ libraryView: 'list' });
+    mount(<Library />);
+    await flush();
+    pinch(body(), 130);
+    expect(settings.value.libraryView).toBe('small');
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+    await flush();
+    expect(animate).not.toHaveBeenCalled();
+  });
+
   it('in landscape the view switches at once, with no animation or scroll correction', async () => {
     reduced = false;
     Object.defineProperty(window, 'matchMedia', {
@@ -620,6 +646,22 @@ describe('pinch in «Обзор»', () => {
     expect(tiles.length).toBe(2);
     expect(animate.mock.contexts).toEqual(tiles);
     expect(grid().style.transform).toBe('');
+  });
+
+  it('in landscape the step lands at once, with no tile animation', async () => {
+    reduced = false;
+    mockAnimate();
+    mockRects();
+    stubFrame();
+    windowSize(844, 390);
+    mount(<Discover />);
+    await flush();
+    pinch(el.querySelector('.m-discover') as HTMLElement, 60);
+    await flush();
+    expect(grid().classList.contains('m-cols-3')).toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
+    await flush();
+    expect(animate).not.toHaveBeenCalled();
   });
 
   it('in landscape the posters switch at once, with no animation or scroll correction', async () => {

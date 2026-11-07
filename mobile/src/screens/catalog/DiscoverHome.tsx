@@ -1,5 +1,6 @@
 // TMDB.org-style homepage: horizontal rails from trending / popular / now playing / …
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { RefObject } from 'preact';
 import { t } from '../../../../src/i18n';
 import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
@@ -13,6 +14,8 @@ import { PosterButton } from '../../share/PosterButton';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
 import { useAdSlots } from '../../ads/useAdSlots';
+import { railTileWidth, useLandscapeBox } from '../../ui/landscapeCols';
+import { discoverRailFit } from './discoverCols';
 
 function sectionTitle(id: HomeSectionId): string {
   switch (id) {
@@ -37,11 +40,19 @@ function sectionTitle(id: HomeSectionId): string {
   }
 }
 
-function Rail({ section, owned }: { section: HomeSection; owned: (x: HomeSection['items'][0]) => boolean }) {
+function Rail({
+  section,
+  owned,
+  rowRef,
+}: {
+  section: HomeSection;
+  owned: (x: HomeSection['items'][0]) => boolean;
+  rowRef?: RefObject<HTMLDivElement | null>;
+}) {
   return (
     <section class="m-disc-rail" data-rail={section.id}>
       <h3 class="m-disc-rail-title">{sectionTitle(section.id)}</h3>
-      <div class="m-disc-rail-row">
+      <div class="m-disc-rail-row" ref={rowRef}>
         {section.items.map((x) => (
           <PosterButton
             key={x.kind + ':' + x.id}
@@ -86,6 +97,10 @@ export function DiscoverHome({
   const list = torrents.value;
   const lib = useMemo(() => libraryIndex(list), [list]);
   const homeRef = useRef<HTMLDivElement>(null);
+  // landscape: the tiles of every rail take the width where a whole card fits above the tab bar
+  const rowRef = useRef<HTMLDivElement>(null);
+  const box = useLandscapeBox(rowRef, !!sections && sections.length > 0, true);
+  const railW = box ? railTileWidth(box.height, discoverRailFit(globalThis.innerHeight)) : 0;
   // an ad block between the rails (a card-size cell with its text beside it), only below the screen when it appears
   const ads = useAdSlots({
     section: 'discoverRails',
@@ -142,8 +157,9 @@ export function DiscoverHome({
   if (sections.length === 0) {
     return <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>;
   }
+  let rowSeen = false;
   return (
-    <div class="m-disc-home" ref={homeRef}>
+    <div class="m-disc-home" ref={homeRef} style={railW ? '--m-rail-w:' + railW + 'px' : undefined}>
       <div class="m-disc-trend" role="group" aria-label={t('discover.homeTrending')}>
         <button
           type="button"
@@ -169,7 +185,10 @@ export function DiscoverHome({
           return b ? <AdCell key={'ad:rails:' + pos} kind="rail" banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
         }
         const s = e.item;
-        return <Rail key={s.id} section={s} owned={(x) => inLibrary(lib, x)} />;
+        // the first rail's row sets the tile width of every rail
+        const first = !rowSeen;
+        rowSeen = true;
+        return <Rail key={s.id} section={s} owned={(x) => inLibrary(lib, x)} rowRef={first ? rowRef : undefined} />;
       })}
     </div>
   );

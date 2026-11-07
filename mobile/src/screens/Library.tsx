@@ -370,6 +370,8 @@ export function Library() {
     // rows and poster cards have different markup: the posters morph between them and the text fades in
     posterAttr: 'data-poster',
     morph: (from, to) => isRowView(BY_SIZE[from]) !== isRowView(BY_SIZE[to]),
+    // landscape: the two-row grid fills the screen and a FLIP of every card overlaps them - the step lands at once
+    calm: () => window.innerWidth > window.innerHeight,
   });
 
   const selecting = selected !== null;

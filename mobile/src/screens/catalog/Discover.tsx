@@ -88,6 +88,8 @@ export function Discover() {
       saveDiscoverCols(next);
     },
     anchorAttr: 'data-anchor',
+    // landscape: the two-row grid fills the screen and a FLIP of every tile overlaps them - the step lands at once
+    calm: () => window.innerWidth > window.innerHeight,
   });
   const gridClass = discoverGridClass(cols);
   // landscape: as many posters per row as it takes for two whole tile rows to fit above the tab bar

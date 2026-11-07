@@ -42,12 +42,13 @@ export function landscapeCols(width: number, height: number, fits: CardFit[]): n
  * the viewport. The TV mini-player is not taken off on purpose (Andy): the columns stay the same whether a TV is linked
  * or not, and the last row scrolls clear.
  */
-export function visibleHeight(ref: RefObject<HTMLElement | null>): number {
+export function visibleHeight(ref: RefObject<HTMLElement | null>, atPageTop = false): number {
   const nav = document.querySelector('.m-nav');
   const r = nav ? nav.getBoundingClientRect() : null;
   const bottom = r && r.height > 0 ? r.top : window.innerHeight;
   const safeTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--m-safe-top')) || 0;
-  const top = ref.current ? Math.max(safeTop, ref.current.getBoundingClientRect().top) : safeTop;
+  const scroll = atPageTop ? window.scrollY || document.documentElement.scrollTop || 0 : 0;
+  const top = ref.current ? Math.max(safeTop, ref.current.getBoundingClientRect().top + scroll) : safeTop;
   return Math.max(0, bottom - top);
 }
 
@@ -57,8 +58,9 @@ export type GridBox = { width: number; height: number };
  * The grid box in landscape (null in portrait or before layout). `ref` is the element whose width the grid takes.
  * The soft keyboard only makes the window shorter: while a text field has the focus, the tallest height seen for that
  * width is kept, so typing in the search does not shrink the posters. Any other shorter window (split screen) counts.
+ * `atPageTop` keeps the height budget valid when a horizontally scrolling rail is measured after the page scrolled.
  */
-export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = true): GridBox | null {
+export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = true, atPageTop = false): GridBox | null {
   const [box, setBox] = useState<GridBox | null>(null);
   useEffect(() => {
     let tallest = { w: 0, h: 0 };
@@ -73,7 +75,7 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
       }
       if (tallest.w !== w || h > tallest.h || !editableFocused()) tallest = { w, h };
       const width = el.clientWidth;
-      const height = Math.round(visibleHeight(ref) + (tallest.h - h));
+      const height = Math.round(visibleHeight(ref, atPageTop) + (tallest.h - h));
       if (!(width > 0) || !(height > 0)) return;
       setBox((b) => (b && b.width === width && b.height === height ? b : { width, height }));
     };
@@ -96,8 +98,17 @@ export function useLandscapeBox(ref: RefObject<HTMLElement | null>, active = tru
       if (ro) ro.disconnect();
       cancelAnimationFrame(raf);
     };
-  }, [ref, active]);
+  }, [ref, active, atPageTop]);
   return box;
+}
+
+/** A landscape rail tile never gets wider than this (px), however tall the window is. */
+export const RAIL_TILE_MAX = 160;
+
+/** The rail tile width where a whole card (the poster and the caption under it) takes at most `height` px. */
+export function railTileWidth(height: number, fit: CardFit): number {
+  const w = Math.floor((height - fit.caption - 2 * LANDSCAPE_MARGIN) / fit.aspect);
+  return w > 0 ? Math.min(RAIL_TILE_MAX, w) : 0;
 }
 
 /** The inline style of a grid with `n` columns (none in portrait). */
