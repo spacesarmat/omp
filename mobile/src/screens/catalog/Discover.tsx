@@ -9,7 +9,7 @@ import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
-import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
+import { readDiscoverCols, saveDiscoverCols, COLS_BY_SIZE, discoverFitsForHeight, discoverGridClass, discoverLandscapeCols, type DiscoverCols } from './discoverCols';
 import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 import { usePinchStep } from '../../ui/usePinchStep';
 import {
@@ -92,7 +92,7 @@ export function Discover() {
   const gridClass = discoverGridClass(cols);
   // landscape: as many posters per row as it takes for two whole tile rows to fit above the tab bar
   const box = useLandscapeBox(gridRef, !home);
-  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height) : 0;
+  const landCols = box ? discoverLandscapeCols(cols, box.width, box.height, discoverFitsForHeight(window.innerHeight)) : 0;
   const gridStyle = colsStyle(landCols || null);
   // ads in the feed grid: a cell of the posters' size, every N posters, only below the screen when it appears.
   // Search lives on its own tab now, so this grid is never a search result.

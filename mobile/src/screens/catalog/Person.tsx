@@ -17,7 +17,7 @@ import { ratingText } from './CatalogSearch';
 import { TileTitle, TileWhen } from './Discover';
 import { Overview } from './titleMeta';
 import { PosterButton } from '../../share/PosterButton';
-import { readDiscoverCols, discoverGridClass, discoverLandscapeCols } from './discoverCols';
+import { readDiscoverCols, discoverFitsForHeight, discoverGridClass, discoverLandscapeCols } from './discoverCols';
 import { colsStyle, useLandscapeBox } from '../../ui/landscapeCols';
 
 const BACK = 'M15 5l-7 7l7 7';
@@ -93,7 +93,7 @@ function Body({ card }: { card: PersonCard }) {
   // landscape: the posters per row of «Обзор» (two whole tile rows fit above the tab bar)
   const gridRef = useRef<HTMLDivElement>(null);
   const box = useLandscapeBox(gridRef);
-  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height) : null);
+  const gridStyle = colsStyle(box ? discoverLandscapeCols(cols, box.width, box.height, discoverFitsForHeight(window.innerHeight)) : null);
   const years = yearsText(card);
   return (
     <>

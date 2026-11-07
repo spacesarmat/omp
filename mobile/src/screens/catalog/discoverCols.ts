@@ -29,10 +29,20 @@ export const DISCOVER_FITS: CardFit[] = [
   { aspect: 1.5, caption: 56, gap: 8 },
   { aspect: 1.5, caption: 56, gap: 6 },
 ];
+export const DISCOVER_FITS_TALL: CardFit[] = [
+  { aspect: 1.5, caption: 86, gap: 12 },
+  { aspect: 1.5, caption: 80, gap: 8 },
+  { aspect: 1.5, caption: 62, gap: 6 },
+];
+
+/** The compact captions in mobile.css stop at 560px; taller landscape windows use the portrait caption sizes. */
+export function discoverFitsForHeight(height: number): CardFit[] {
+  return height > 560 ? DISCOVER_FITS_TALL : DISCOVER_FITS;
+}
 
 /** Posters per row for the chosen size, in a grid `width` px wide with `height` px available for two rows. */
-export function discoverLandscapeCols(cols: DiscoverCols, width: number, height: number): number {
-  return landscapeCols(width, height, DISCOVER_FITS)[2 - COLS_BY_SIZE.indexOf(cols)];
+export function discoverLandscapeCols(cols: DiscoverCols, width: number, height: number, fits = DISCOVER_FITS): number {
+  return landscapeCols(width, height, fits)[2 - COLS_BY_SIZE.indexOf(cols)];
 }
 
 /** The grid classes of a size: the smaller sizes have tighter gaps and smaller labels. */

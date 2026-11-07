@@ -58,6 +58,10 @@ export const LIBRARY_FITS: CardFit[] = [
   { aspect: 240 / 173, caption: 72, gap: 12 },
   { aspect: 240 / 173, caption: 58, gap: 8 },
 ];
+const LIBRARY_FITS_TALL: CardFit[] = [
+  { aspect: 240 / 173, caption: 105, gap: 12 },
+  { aspect: 240 / 173, caption: 83, gap: 8 },
+];
 // pull-to-refresh: the list follows the finger at half speed; release past TRIGGER refreshes
 const PULL_DAMP = 0.5;
 const PULL_MAX = 110;
@@ -345,9 +349,10 @@ export function Library() {
   }
 
   // landscape: the poster views get as many cards per row as two whole rows fit above the tab bar
-  const gridView = mine && (view === 'large' || view === 'small');
+  const gridView = mine && !isHistory && (view === 'large' || view === 'small');
   const box = useLandscapeBox(gridRef, gridView);
-  const landCols = box && gridView ? landscapeCols(box.width, box.height, LIBRARY_FITS)[view === 'large' ? 0 : 1] : 0;
+  const fits = window.innerHeight > 560 ? LIBRARY_FITS_TALL : LIBRARY_FITS;
+  const landCols = box && gridView ? landscapeCols(box.width, box.height, fits)[view === 'large' ? 0 : 1] : 0;
   const gridStyle = colsStyle(landCols || null);
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change

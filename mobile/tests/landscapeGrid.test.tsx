@@ -251,6 +251,13 @@ describe('«Обзор» on its side', () => {
     });
   }
 
+  it('a tall landscape window reserves the larger portrait captions', async () => {
+    windowSize(800, 600, 768);
+    mount(<Discover />);
+    await flush();
+    expect(grid().style.gridTemplateColumns).toBe('repeat(6, minmax(0, 1fr))');
+  });
+
   it('person filmography measures its own grid and clears inline columns in portrait', async () => {
     setCatalogClientForTests({
       novelties: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
@@ -379,6 +386,26 @@ describe('«Мои» on its side', () => {
     updateSettings({ libraryView: 'large' });
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: realW });
     Object.defineProperty(window, 'innerHeight', { configurable: true, value: realH });
+  });
+
+  it('returning from History measures the newly mounted poster grid', async () => {
+    libraryTab.value = 'history';
+    windowSize(800, 360, 768);
+    mount(<Library />);
+    await flush();
+    act(() => { libraryTab.value = 'all'; });
+    await flush();
+    const g = () => el.querySelector('.m-grid') as HTMLElement;
+    expect(g().style.gridTemplateColumns).toBe('repeat(10, minmax(0, 1fr))');
+  });
+
+  it('a tall landscape window reserves the larger portrait captions in «Мои»', async () => {
+    windowSize(1000, 600, 968);
+    updateSettings({ libraryView: 'large' });
+    mount(<Library />);
+    await flush();
+    const g = () => el.querySelector('.m-grid') as HTMLElement;
+    expect(g().style.gridTemplateColumns).toBe('repeat(7, minmax(0, 1fr))');
   });
 
   it('large and small posters fit two rows from the grid top; portrait and the list views stay untouched', async () => {
