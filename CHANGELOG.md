@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.9-beta.4
 
 - Встроенный TorrServer обновлён до MatriX.150
 - [phone] В ландшафтном положении «Мои», «Обзор» и фильмография показывают две полные строки карточек с компактными подписями. Высота сетки учитывает заголовки и фильтры, портретный режим не изменился

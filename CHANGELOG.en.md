@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.9-beta.4
 
 - The built-in TorrServer is updated to MatriX.150
 - [tech] On the download page, stable and beta version badges stay to the right of their headings at any viewport width
