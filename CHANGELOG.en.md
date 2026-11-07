@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.9
 
 - [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen
 - [phone] The Discover title and search sit on one row, with less empty space. In landscape the list scrolls clear of the mini-player and the bottom bar. The four views and the width-based grid stay
