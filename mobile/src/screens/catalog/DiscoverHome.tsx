@@ -99,7 +99,7 @@ export function DiscoverHome({
   const homeRef = useRef<HTMLDivElement>(null);
   // landscape: the tiles of every rail take the width where a whole card fits above the tab bar
   const rowRef = useRef<HTMLDivElement>(null);
-  const box = useLandscapeBox(rowRef, !!sections && sections.length > 0);
+  const box = useLandscapeBox(rowRef, !!sections && sections.length > 0, true);
   const railW = box ? railTileWidth(box.height, discoverRailFit(globalThis.innerHeight)) : 0;
   // an ad block between the rails (a card-size cell with its text beside it), only below the screen when it appears
   const ads = useAdSlots({

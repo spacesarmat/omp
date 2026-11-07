@@ -283,6 +283,32 @@ describe('«Обзор» on its side', () => {
     }
   });
 
+  it('home rails keep their top-page height after rotating while scrolled', async () => {
+    saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
+    setCatalogClientForTests(homeClient());
+    windowSize(360, 800, 328);
+    mount(<Discover />);
+    await flush();
+    const home = () => el.querySelector('.m-disc-home') as HTMLElement;
+    const row = el.querySelector('.m-disc-rail-row') as HTMLElement;
+    const nav = tabBar(300);
+    try {
+      windowSize(800, 360, 768);
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 660 });
+      row.getBoundingClientRect = () => rectAt(-600, 200);
+      await resize();
+      const fit = discoverRailFit(360);
+      const w = parseInt(home().style.getPropertyValue('--m-rail-w'), 10);
+      expect(w * fit.aspect + fit.caption + 2 * LANDSCAPE_MARGIN).toBeLessThanOrEqual(240 + 0.01);
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      row.getBoundingClientRect = () => rectAt(60, 200);
+      expect(parseInt(home().style.getPropertyValue('--m-rail-w'), 10)).toBe(w);
+    } finally {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      nav.remove();
+    }
+  });
+
   it('portrait leaves the rail tiles at the CSS width', async () => {
     saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
     setCatalogClientForTests(homeClient());
