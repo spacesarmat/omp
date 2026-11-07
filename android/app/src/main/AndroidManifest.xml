@@ -129,6 +129,15 @@
                 android:value="Answers torrent searches from the user's TV on the local network" />
         </service>
 
+        <!-- Package replacement restarts the process, so the update cleanup must live in the manifest. -->
+        <receiver
+            android:name=".ApkInstallTracker"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- TV search: start the service again after a reboot or an update when it is on -->
         <receiver
             android:name=".rpc.RpcBootReceiver"
