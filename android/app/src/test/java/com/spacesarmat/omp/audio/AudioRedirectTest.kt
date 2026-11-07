@@ -126,7 +126,7 @@ class AudioRedirectTest {
         val manifest = File("src/main/AndroidManifest.xml").readText()
         assertTrue(manifest.contains("android:name=\".ApkInstallTracker\""))
         assertTrue(manifest.contains("android.intent.action.MY_PACKAGE_REPLACED"))
-        ApkInstallTracker().onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED).setData(android.net.Uri.parse("package:" + context.packageName)))
+        ApkInstallTracker().onReceive(context, Intent(Intent.ACTION_MY_PACKAGE_REPLACED))
         assertFalse(apk.exists())
     }
 }

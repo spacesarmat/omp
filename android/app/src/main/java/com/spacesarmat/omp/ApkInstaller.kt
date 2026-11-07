@@ -29,7 +29,7 @@ class ApkInstallTracker() : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (intent.data?.schemeSpecificPart != context.packageName) return
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED && intent.data?.schemeSpecificPart != context.packageName) return
         (apk ?: File(context.cacheDir, "updates/omp.apk")).delete()
         runCatching { context.unregisterReceiver(this) }
         onInstalled?.invoke()
