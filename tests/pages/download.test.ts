@@ -160,9 +160,17 @@ describe('download page languages and fallbacks', () => {
         const panelHeads = styleRule('.panel-head');
         expect(panelHeads).toHaveLength(2);
         for (const rule of panelHeads) expect(rule.style.display).toBe('grid');
-        for (const rule of styleRule('.version')) {
+        for (const rule of styleRule('.panel-head > div')) expect(rule.style.display).toBe('contents');
+        for (const rule of styleRule('.panel-head h2')) expect(rule.style.overflowWrap).toBe('anywhere');
+        const versions = styleRule('.version');
+        for (const rule of versions) {
           expect(rule.style.gridColumn).toBe('2');
           expect(rule.style.gridRow).toBe('1');
+        }
+        for (const rule of versions.slice(0, 1)) {
+          expect(rule.style.minWidth).toBe('0px');
+          expect(rule.style.whiteSpace).toBe('normal');
+          expect(rule.style.overflowWrap).toBe('anywhere');
         }
       } finally {
         style.remove();
