@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- Встроенный TorrServer обновлён до MatriX.150
+
 ## 0.20.9-beta.3
 
 - [tech] Страница загрузки OMP на GitHub Pages доступна на русском и английском. Добавлены прямые ссылки на стабильные и beta APK/IPK и логотип OMP. Тесты watchOnPhone изолированы от сети

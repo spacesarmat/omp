@@ -1,7 +1,7 @@
 {
-  "tag": "MatriX.149",
+  "tag": "MatriX.150",
   "asset": "TorrServer-android-arm64",
-  "url": "https://github.com/YouROK/TorrServer/releases/download/MatriX.149/TorrServer-android-arm64",
-  "sha256": "f3486100192cd49776465348c73b34e2c4944abb72d89898c531a517c4903a2f",
-  "size": 64493832
+  "url": "https://github.com/YouROK/TorrServer/releases/download/MatriX.150/TorrServer-android-arm64",
+  "sha256": "760f18c6837c7fc1c440726a14e7534e3baca914b780fbc3ec28a38b6158aaf0",
+  "size": 64493320
 }
