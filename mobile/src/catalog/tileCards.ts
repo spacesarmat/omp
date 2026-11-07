@@ -21,6 +21,8 @@ export type TileCard = CatalogCard;
 const cards = new Map<string, TileCard>();
 let waiting: { key: string; kind: Kind; id: number }[] = [];
 const visible = new Set<string>();
+/** How many on-screen readers (title, date line) still want this card. One leaving does not drop the rest. */
+const viewers = new Map<string, number>();
 const pending = new Set<string>();
 const failedAt = new Map<string, number>();
 let running = 0;
@@ -80,11 +82,19 @@ function pump(): void {
   }
 }
 
-/** A tile came into view: fetch its card unless known, queued or failed lately. */
+function dropQueued(key: string): void {
+  const before = waiting.length;
+  waiting = waiting.filter((j) => j.key !== key);
+  if (waiting.length !== before) pending.delete(key);
+}
+
+/** A tile came into view: fetch its card unless known, queued or failed lately. Each caller holds one view. */
 export function requestTileCard(kind: Kind, id: number): void {
   const key = keyOf(kind, id);
+  const n = (viewers.get(key) || 0) + 1;
+  viewers.set(key, n);
   visible.add(key);
-  if (cards.has(key) || pending.has(key)) return;
+  if (n > 1 || cards.has(key) || pending.has(key)) return;
   const failed = failedAt.get(key);
   if (failed !== undefined && Date.now() - failed < RETRY_MS) return;
   pending.add(key);
@@ -93,13 +103,20 @@ export function requestTileCard(kind: Kind, id: number): void {
   pump();
 }
 
-/** A tile left the view: its queued fetch (if any) is dropped. */
+/**
+ * One reader left. The queued fetch stays while another reader of the same card is still on screen
+ * (the title scrolled away, the date line did not).
+ */
 export function leaveTileCard(kind: Kind, id: number): void {
   const key = keyOf(kind, id);
+  const n = (viewers.get(key) || 0) - 1;
+  if (n > 0) {
+    viewers.set(key, n);
+    return;
+  }
+  viewers.delete(key);
   visible.delete(key);
-  const before = waiting.length;
-  waiting = waiting.filter((j) => j.key !== key);
-  if (waiting.length !== before) pending.delete(key);
+  dropQueued(key);
 }
 
 /** «Обзор» was left: nothing queued is fetched any more (the running ones finish). */
@@ -107,6 +124,7 @@ export function cancelTileCards(): void {
   waiting.forEach((j) => pending.delete(j.key));
   waiting = [];
   visible.clear();
+  viewers.clear();
 }
 
 /** Tests: forget every card and the queue. */
@@ -114,6 +132,7 @@ export function resetTileCards(): void {
   cards.clear();
   waiting = [];
   visible.clear();
+  viewers.clear();
   pending.clear();
   failedAt.clear();
   running = 0;

@@ -5,7 +5,7 @@ import { applyLanguageSetting } from '../../src/i18n';
 import { tileLabel, digitalSoonLabel, tileYear, releaseParts, upcomingEpisodes, nextEpisodeSeasons, dayHeader, episodeCode } from '../src/lib/releaseDates';
 import { TitleCard } from '../src/screens/catalog/TitleCard';
 import { TileMeta, TileTitle, TileWhen } from '../src/screens/catalog/Discover';
-import { resetTileCards } from '../src/catalog/tileCards';
+import { requestTileCard, resetTileCards } from '../src/catalog/tileCards';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetTo, navigate } from '../src/nav';
 import { torrents } from '../../src/store/library';
@@ -296,6 +296,42 @@ describe('«Обзор» tile labels', () => {
     });
     await flush();
     expect(c.card).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('.m-disc-title')!.textContent).toBe('Renegade Immortal');
+    expect(el.querySelector('.m-disc-meta')!.textContent).toBe('Фильм · 2006');
+  });
+
+  it('the title leaving the screen does not cancel the date line while two other cards are loading', async () => {
+    vi.stubGlobal('IntersectionObserver', FakeObserver);
+    const waiting: (() => void)[] = [];
+    const c = fake((kind, id) => {
+      if (id === 1 || id === 2) return new Promise<CatalogCard>((res) => waiting.push(() => res(film({}))));
+      return Promise.resolve({ ...film({}), id: 11, title: 'Renegade Immortal', year: 2006 });
+    });
+    requestTileCard('movie', 1);
+    requestTileCard('movie', 2);
+    const x = { kind: 'movie' as const, id: 11, title: '仙逆', original: '仙逆', year: 0, poster: '', rating: 0, digital: '2026-11-06' };
+    mount(
+      <button class="m-disc-tile">
+        <span class="m-disc-title"><TileTitle x={x} /></span>
+        <TileMeta x={x} />
+        <TileWhen kind="movie" id={11} />
+      </button>,
+    );
+    await flush();
+    expect(c.card.mock.calls.map((call) => call[1])).toEqual([1, 2]);
+    const titleObs = observers.find((o) => o.el && (o.el as Element).classList.contains('m-disc-title'));
+    const rowObs = observers.find((o) => o.el && (o.el as Element).classList.contains('m-disc-tile'));
+    expect(titleObs && rowObs).toBeTruthy();
+    await act(async () => {
+      titleObs!.cb([{ isIntersecting: true, target: titleObs!.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+      rowObs!.cb([{ isIntersecting: true, target: rowObs!.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    await act(async () => {
+      titleObs!.cb([{ isIntersecting: false, target: titleObs!.el } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+    });
+    await act(async () => waiting.splice(0).forEach((f) => f()));
+    await flush();
+    expect(c.card.mock.calls.map((call) => call[1])).toContain(11);
     expect(el.querySelector('.m-disc-title')!.textContent).toBe('Renegade Immortal');
     expect(el.querySelector('.m-disc-meta')!.textContent).toBe('Фильм · 2006');
   });

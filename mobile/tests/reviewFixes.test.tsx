@@ -85,6 +85,37 @@ describe('«Обзор» tile-card queue', () => {
     expect(kept.cast).toEqual([]);
   });
 
+  it('one of two readers leaving keeps the card queued behind two active requests', async () => {
+    const waiting: (() => void)[] = [];
+    const c = fake({ card: vi.fn((_k: string, id: number) => new Promise<CatalogCard>((res) => waiting.push(() => res(card(id))))) as never });
+    requestTileCard('movie', 1);
+    requestTileCard('movie', 2);
+    requestTileCard('movie', 3);
+    requestTileCard('movie', 3);
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2]);
+    leaveTileCard('movie', 3);
+    await act(async () => waiting.splice(0).forEach((f) => f()));
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2, 3]);
+  });
+
+  it('the last reader leaving drops a card that is still only queued', async () => {
+    const waiting: (() => void)[] = [];
+    const c = fake({ card: vi.fn((_k: string, id: number) => new Promise<CatalogCard>((res) => waiting.push(() => res(card(id))))) as never });
+    requestTileCard('movie', 1);
+    requestTileCard('movie', 2);
+    requestTileCard('movie', 3);
+    requestTileCard('movie', 3);
+    await flush();
+    leaveTileCard('movie', 3);
+    leaveTileCard('movie', 3);
+    await act(async () => waiting.splice(0).forEach((f) => f()));
+    await flush();
+    expect(c.card.mock.calls.map((x) => x[1])).toEqual([1, 2]);
+    expect(cachedTileCard('movie', 3)).toBeUndefined();
+  });
+
   it('leaving «Обзор» clears the queue', async () => {
     const waiting: (() => void)[] = [];
     const c = fake({ card: vi.fn((_k: string, id: number) => new Promise<CatalogCard>((res) => waiting.push(() => res(card(id))))) as never });

@@ -17,14 +17,25 @@ function useTileCard(kind: Kind, id: number, ref: { current: HTMLElement | null 
     const node = ref.current;
     if (!unknown || !node || typeof IntersectionObserver === 'undefined') return;
     const target = node.parentElement || node;
+    let held = false;
+    const hold = () => {
+      if (held) return;
+      held = true;
+      requestTileCard(kind, id);
+    };
+    const drop = () => {
+      if (!held) return;
+      held = false;
+      leaveTileCard(kind, id);
+    };
     const io = new IntersectionObserver((entries) => {
-      if (entries.some((e) => e.isIntersecting)) requestTileCard(kind, id);
-      else leaveTileCard(kind, id);
+      if (entries.some((e) => e.isIntersecting)) hold();
+      else drop();
     });
     io.observe(target);
     return () => {
       io.disconnect();
-      leaveTileCard(kind, id);
+      drop();
     };
   }, [kind, id, unknown]);
 }
