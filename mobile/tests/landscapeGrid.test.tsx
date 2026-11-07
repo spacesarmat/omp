@@ -112,11 +112,11 @@ const PERSON: PersonCard = {
   directing: [],
 };
 
-function catalog(discover: CatalogClient['discover']): CatalogClient {
+function catalog(discover: CatalogClient['discover'], home?: CatalogClient['home']): CatalogClient {
   return {
     novelties: vi.fn(() => Promise.resolve({ items: ITEMS, pages: 1 })),
     discover,
-    home: vi.fn(() => Promise.resolve([{ id: 'popularMovies' as const, items: ITEMS }])),
+    home: home || vi.fn(() => Promise.resolve([{ id: 'popularMovies' as const, items: ITEMS }])),
     search: vi.fn(() => Promise.resolve({ items: [], pages: 0 })),
     card: vi.fn(() => Promise.reject(new Error('x'))),
     season: vi.fn(() => Promise.reject(new Error('x'))),
@@ -225,6 +225,63 @@ describe('«Обзор» four modes, portrait and landscape', () => {
     expect(readDiscoverCols()).toBe('list');
     expect(el.querySelector('.m-disc-rows')).not.toBeNull();
     expect(discover).toHaveBeenCalledTimes(1);
+  });
+
+  it('the homepage uses all four modes in portrait and landscape, and a switch does not reload', async () => {
+    const home = vi.fn(() => Promise.resolve([{ id: 'popularMovies' as const, items: ITEMS }]));
+    setCatalogClientForTests(catalog(discover as CatalogClient['discover'], home));
+    saveDiscoverQuery(DEFAULT_DISCOVER_QUERY);
+    for (const orient of [PORTRAIT, LANDSCAPE]) {
+      for (const view of VIEWS) {
+        saveDiscoverCols(view);
+        windowSize(orient.w, orient.h, orient.content);
+        mount(<Discover />);
+        await flush();
+        const root = el.querySelector('.m-disc-home') as HTMLElement;
+        expect(root.getAttribute('data-view')).toBe(view);
+        const rails = root.querySelectorAll('.m-disc-rail-row');
+        const pictures = root.querySelectorAll('.m-vrow .m-disc-poster');
+        const plain = root.querySelectorAll('.m-crow');
+        if (view === 'large' || view === 'small') {
+          expect(rails.length).toBeGreaterThan(0);
+          expect(pictures.length).toBe(0);
+          expect(plain.length).toBe(0);
+          expect(root.style.getPropertyValue('--m-rail-w')).toBe(view === 'large' ? '156px' : '112px');
+          expect(root.querySelector('.m-disc-rating, .m-disc-tile')).not.toBeNull();
+        } else if (view === 'list') {
+          expect(rails.length).toBe(0);
+          expect(pictures.length).toBe(ITEMS.length);
+          expect(plain.length).toBe(0);
+          expect(root.style.getPropertyValue('--m-rail-w')).toBe('');
+          expect(root.textContent).toContain('Сериал');
+        } else {
+          expect(rails.length).toBe(0);
+          expect(root.querySelector('.m-disc-poster')).toBeNull();
+          expect(plain.length).toBe(ITEMS.length);
+          expect(root.textContent).toContain('7,2');
+        }
+        expect(root.textContent).toContain('Midnight');
+        act(() => render(null, el));
+      }
+    }
+    saveDiscoverCols('large');
+    windowSize(LANDSCAPE.w, LANDSCAPE.h, LANDSCAPE.content);
+    home.mockClear();
+    mount(<Discover />);
+    await flush();
+    expect(home).toHaveBeenCalledTimes(1);
+    act(() => (el.querySelector('.m-view-btn') as HTMLElement).click());
+    act(() => (document.querySelector('[data-view="list"]') as HTMLElement).click());
+    await flush();
+    expect(el.querySelector('.m-disc-home .m-vrow .m-disc-poster')).not.toBeNull();
+    expect(el.querySelector('.m-disc-rail-row')).toBeNull();
+    expect(home).toHaveBeenCalledTimes(1);
+    windowSize(PORTRAIT.w, PORTRAIT.h, PORTRAIT.content);
+    await resize();
+    expect(el.querySelector('.m-disc-home')!.getAttribute('data-view')).toBe('list');
+    expect(el.querySelectorAll('.m-vrow .m-disc-poster').length).toBe(ITEMS.length);
+    expect(home).toHaveBeenCalledTimes(1);
+    act(() => render(null, el));
   });
 
   it('home rails stay a readable width in landscape, including after a cached feed is not the home', async () => {

@@ -7,13 +7,14 @@ import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog
 import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
-import type { HomeSection, HomeSectionId, Kind, TrendingWindow } from '../../../../src/catalog/tmdb';
+import type { CatalogTitle, HomeSection, HomeSectionId, Kind, TrendingWindow } from '../../../../src/catalog/tmdb';
 import { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
+import { ratingText } from './CatalogSearch';
 import { PosterButton } from '../../share/PosterButton';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
 import { useAdSlots } from '../../ads/useAdSlots';
-import { railTilePx, type DiscoverView } from './discoverCols';
+import { isGridDiscoverView, railTilePx, type DiscoverView } from './discoverCols';
 
 function sectionTitle(id: HomeSectionId): string {
   switch (id) {
@@ -38,34 +39,77 @@ function sectionTitle(id: HomeSectionId): string {
   }
 }
 
+function itemLabel(x: CatalogTitle): string {
+  return x.year ? x.title + ' ' + x.year : x.title;
+}
+
+/** One homepage section: poster rail for the card modes, rows for the two lists. */
 function Rail({
   section,
+  view,
   owned,
 }: {
   section: HomeSection;
-  owned: (x: HomeSection['items'][0]) => boolean;
+  view: DiscoverView;
+  owned: (x: CatalogTitle) => boolean;
 }) {
   return (
-    <section class="m-disc-rail" data-rail={section.id}>
+    <section class="m-disc-rail" data-rail={section.id} data-view={view}>
       <h3 class="m-disc-rail-title">{sectionTitle(section.id)}</h3>
-      <div class="m-disc-rail-row">
-        {section.items.map((x) => (
-          <PosterButton
-            key={x.kind + ':' + x.id}
-            item={x}
-            className="m-disc-tile m-disc-rail-tile"
-            label={x.year ? x.title + ' ' + x.year : x.title}
-            onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
-          >
-            <DiscPoster x={x} owned={owned(x)} />
-            <span class="m-card-title m-disc-title">
-              <TileTitle x={x} />
-            </span>
-            <TileMeta x={x} />
-            <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
-          </PosterButton>
-        ))}
-      </div>
+      {isGridDiscoverView(view) ? (
+        <div class="m-disc-rail-row">
+          {section.items.map((x) => (
+            <PosterButton
+              key={x.kind + ':' + x.id}
+              item={x}
+              className="m-disc-tile m-disc-rail-tile"
+              label={itemLabel(x)}
+              onOpen={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
+            >
+              <DiscPoster x={x} owned={owned(x)} />
+              <span class="m-card-title m-disc-title">
+                <TileTitle x={x} />
+              </span>
+              <TileMeta x={x} />
+              <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
+            </PosterButton>
+          ))}
+        </div>
+      ) : (
+        <div class={view === 'compact' ? 'm-vlist m-clist m-disc-rows' : 'm-vlist m-disc-rows'}>
+          {section.items.map((x) => {
+            const has = owned(x);
+            const open = () => navigate({ name: 'title', kind: x.kind, id: x.id });
+            if (view === 'compact') {
+              return (
+                <PosterButton key={x.kind + ':' + x.id} item={x} className="m-crow" label={itemLabel(x)} onOpen={open}>
+                  <span class="m-crow-main">
+                    <span class="m-card-title m-crow-title m-disc-title"><TileTitle x={x} /></span>
+                    <span class="m-crow-sub">
+                      <TileMeta x={x} />
+                      {x.rating > 0 && <span class="m-muted m-small">{ratingText(x.rating)}</span>}
+                      {has && <span class="m-muted m-small">{t('discover.inLibrary')}</span>}
+                    </span>
+                  </span>
+                </PosterButton>
+              );
+            }
+            return (
+              <PosterButton key={x.kind + ':' + x.id} item={x} className="m-vrow" label={itemLabel(x)} onOpen={open}>
+                <DiscPoster x={x} owned={has} />
+                <span class="m-vrow-text">
+                  <span class="m-card-title m-disc-title"><TileTitle x={x} /></span>
+                  <span class="m-vrow-meta">
+                    <TileMeta x={x} />
+                    {has && <span class="m-muted m-small">{t('discover.inLibrary')}</span>}
+                  </span>
+                  <TileWhen kind={x.kind} id={x.id} digital={x.digital} />
+                </span>
+              </PosterButton>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -95,15 +139,16 @@ export function DiscoverHome({
   const list = torrents.value;
   const lib = useMemo(() => libraryIndex(list), [list]);
   const homeRef = useRef<HTMLDivElement>(null);
-  // readable rail tiles in both orientations; large cards are wider, nothing shrinks to the screen height
-  const railW = railTilePx(view);
+  const cards = isGridDiscoverView(view);
+  // card modes: a horizontal rail, wider for large cards. Lists are rows in either orientation.
+  const railW = cards ? railTilePx(view) : 0;
   // an ad block between the rails (a card-size cell with its text beside it), only below the screen when it appears
   const ads = useAdSlots({
     section: 'discoverRails',
     count: sections ? sections.length : 0,
     perScreen: 3,
     active: !error && !!sections && sections.length > 2,
-    listKey: kind + '|' + window,
+    listKey: kind + '|' + window + '|' + view,
     itemEl: (i) => (homeRef.current ? homeRef.current.querySelectorAll('[data-rail]')[i] || null : null),
   });
 
@@ -133,18 +178,29 @@ export function DiscoverHome({
   }
   if (!sections) {
     return (
-      <div class="m-disc-home" aria-busy="true">
+      <div class="m-disc-home" aria-busy="true" data-view={view}>
         {[0, 1, 2].map((i) => (
           <section key={i} class="m-disc-rail">
             <div class="m-disc-skel-line m-disc-rail-skel-title" />
-            <div class="m-disc-rail-row">
-              {Array.from({ length: 4 }, (_, j) => (
-                <div key={j} class="m-disc-tile m-disc-rail-tile m-disc-skel" aria-hidden="true">
-                  <span class="m-disc-poster" />
-                  <span class="m-disc-skel-line" />
-                </div>
-              ))}
-            </div>
+            {cards ? (
+              <div class="m-disc-rail-row">
+                {Array.from({ length: 4 }, (_, j) => (
+                  <div key={j} class="m-disc-tile m-disc-rail-tile m-disc-skel" aria-hidden="true">
+                    <span class="m-disc-poster" />
+                    <span class="m-disc-skel-line" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div class={view === 'compact' ? 'm-vlist m-clist m-disc-rows' : 'm-vlist m-disc-rows'}>
+                {Array.from({ length: 3 }, (_, j) => (
+                  <div key={j} class={view === 'compact' ? 'm-crow m-disc-skel' : 'm-vrow m-disc-skel'} aria-hidden="true">
+                    {view === 'list' && <span class="m-disc-poster" />}
+                    <span class="m-disc-skel-line" />
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         ))}
       </div>
@@ -154,7 +210,7 @@ export function DiscoverHome({
     return <p class="m-muted m-disc-empty">{t('discover.nothingFound')}</p>;
   }
   return (
-    <div class="m-disc-home" ref={homeRef} data-view={view} style={'--m-rail-w:' + railW + 'px'}>
+    <div class="m-disc-home" ref={homeRef} data-view={view} style={railW ? '--m-rail-w:' + railW + 'px' : undefined}>
       <div class="m-disc-trend" role="group" aria-label={t('discover.homeTrending')}>
         <button
           type="button"
@@ -177,10 +233,11 @@ export function DiscoverHome({
         if (e.item === undefined) {
           const b = ads.banner(e.ad);
           const pos = e.ad;
-          return b ? <AdCell key={'ad:rails:' + pos} kind="rail" banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
+          const kind = view === 'compact' ? 'compact' : view === 'list' ? 'list' : 'rail';
+          return b ? <AdCell key={'ad:rails:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
         }
         const s = e.item;
-        return <Rail key={s.id} section={s} owned={(x) => inLibrary(lib, x)} />;
+        return <Rail key={s.id} section={s} view={view} owned={(x) => inLibrary(lib, x)} />;
       })}
     </div>
   );

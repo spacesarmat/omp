@@ -178,6 +178,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/screens/Settings.tsx',
       'mobile/src/screens/SourcesIndexers.tsx',
       'mobile/src/screens/Torrent.tsx',
+      'mobile/src/screens/catalog/Discover.tsx',
       'mobile/src/screens/catalog/DiscoverSheets.tsx',
       'mobile/src/screens/catalog/PosterSheet.tsx',
       'mobile/src/screens/catalog/WantSheet.tsx',
