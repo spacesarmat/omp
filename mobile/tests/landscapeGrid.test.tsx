@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { colsToFit, landscapeCols, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, type CardFit } from '../src/ui/landscapeCols';
+import { colsToFit, landscapeCols, visibleHeight, LANDSCAPE_MARGIN, LANDSCAPE_MIN_COLS, LANDSCAPE_ROWS, type CardFit } from '../src/ui/landscapeCols';
 import { DISCOVER_FITS, discoverLandscapeCols, saveDiscoverCols, type DiscoverCols } from '../src/screens/catalog/discoverCols';
 import { Discover } from '../src/screens/catalog/Discover';
 import { clearDiscover } from '../src/screens/catalog/discoverCache';
@@ -30,35 +30,95 @@ const S21 = { width: 800 - 32, height: 360 - 48 };
 const WIDE = { width: 915 - 32, height: 412 - 48 };
 
 describe('landscape columns', () => {
-  it('the S21 on its side: 6, 7 and 8 posters per row in «Обзор» (was 2, 3 and 4)', () => {
-    expect(landscapeCols(S21.width, S21.height, DISCOVER_FITS)).toEqual([6, 7, 8]);
-    expect(landscapeCols(WIDE.width, WIDE.height, DISCOVER_FITS)).toEqual([5, 6, 7]);
-    expect(landscapeCols(740 - 32, 360 - 48, DISCOVER_FITS)).toEqual([5, 6, 7]);
+  it('the S21 on its side: 17, 18 and 19 posters per row in two-row «Обзор»', () => {
+    expect(landscapeCols(S21.width, S21.height, DISCOVER_FITS)).toEqual([17, 18, 19]);
+    expect(landscapeCols(WIDE.width, WIDE.height, DISCOVER_FITS)).toEqual([14, 15, 16]);
+    expect(landscapeCols(740 - 32, 360 - 48, DISCOVER_FITS)).toEqual([15, 16, 17]);
     // camera cutout and the system bar on the sides, the status bar on top
-    expect(landscapeCols(800 - 32 - 80, 360 - 48 - 24, DISCOVER_FITS)).toEqual([6, 7, 8]);
+    expect(landscapeCols(800 - 32 - 80, 360 - 48 - 24, DISCOVER_FITS)).toEqual([18, 19, 20]);
   });
 
-  it('every size: a whole card fits the height, and one column fewer would not', () => {
+  it('every size with enough room fits one of two rows, and one column fewer would not', () => {
     for (let width = 560; width <= 1400; width += 37) {
       for (let height = 260; height <= 700; height += 23) {
+        const rowHeight = height / LANDSCAPE_ROWS;
         for (const fits of [DISCOVER_FITS, LIBRARY_FITS]) {
           const cols = landscapeCols(width, height, fits);
           cols.forEach((n, i) => {
-            expect(cardHeight(width, n, fits[i])).toBeLessThanOrEqual(height - 2 * LANDSCAPE_MARGIN + 0.01);
+            const fit = fits[i];
+            if (rowHeight - fit.caption - 2 * LANDSCAPE_MARGIN > 0) {
+              expect(cardHeight(width, n, fit)).toBeLessThanOrEqual(rowHeight - 2 * LANDSCAPE_MARGIN + 0.01);
+            } else {
+              expect(n).toBe(i === 0 ? LANDSCAPE_MIN_COLS : cols[i - 1] + 1);
+            }
             if (i > 0) expect(n).toBeGreaterThan(cols[i - 1]);
           });
-          const fit0 = colsToFit(width, height, fits[0]);
-          if (fit0 > LANDSCAPE_MIN_COLS) expect(cardHeight(width, fit0 - 1, fits[0])).toBeGreaterThan(height - 2 * LANDSCAPE_MARGIN);
+          const fit0 = colsToFit(width, rowHeight, fits[0]);
+          if (fit0 > LANDSCAPE_MIN_COLS) expect(cardHeight(width, fit0 - 1, fits[0])).toBeGreaterThan(rowHeight - 2 * LANDSCAPE_MARGIN);
         }
       }
     }
   });
 
-  it('the biggest size keeps at least three per row on a tall landscape screen (a tablet)', () => {
-    expect(landscapeCols(1280 - 32, 800 - 48, DISCOVER_FITS)[0]).toBe(LANDSCAPE_MIN_COLS);
-    expect(discoverLandscapeCols(2, 1248, 752)).toBe(3);
-    expect(discoverLandscapeCols(3, 1248, 752)).toBe(4);
-    expect(discoverLandscapeCols(4, 1248, 752)).toBe(5);
+  it('the biggest size keeps at least three per row when two tall rows leave extra room', () => {
+    expect(landscapeCols(1280 - 32, 1600, DISCOVER_FITS)[0]).toBe(LANDSCAPE_MIN_COLS);
+    expect(discoverLandscapeCols(2, 1248, 1600)).toBe(3);
+    expect(discoverLandscapeCols(3, 1248, 1600)).toBe(4);
+    expect(discoverLandscapeCols(4, 1248, 1600)).toBe(5);
+  });
+
+  it('measures free height from the actual grid top to the tab bar', () => {
+    const grid = document.createElement('div');
+    const nav = document.createElement('nav');
+    nav.className = 'm-nav';
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 800, width: 800, x: 0, y: top, toJSON() {} }) as DOMRect;
+    grid.getBoundingClientRect = () => rect(120, 500);
+    nav.getBoundingClientRect = () => rect(360, 48);
+    document.body.append(grid, nav);
+    try {
+      expect(visibleHeight({ current: grid })).toBe(240);
+    } finally {
+      grid.remove();
+      nav.remove();
+    }
+  });
+
+  it('clamps inverted bounds and keeps a grid that starts above the viewport measurable', () => {
+    const grid = document.createElement('div');
+    const nav = document.createElement('nav');
+    nav.className = 'm-nav';
+    const rect = (top: number) => ({ top, bottom: top + 48, height: 48, left: 0, right: 800, width: 800, x: 0, y: top, toJSON() {} }) as DOMRect;
+    nav.getBoundingClientRect = () => rect(360);
+    document.body.append(grid, nav);
+    try {
+      grid.getBoundingClientRect = () => rect(400);
+      expect(visibleHeight({ current: grid })).toBe(0);
+      grid.getBoundingClientRect = () => rect(-20);
+      expect(visibleHeight({ current: grid })).toBe(380);
+    } finally {
+      grid.remove();
+      nav.remove();
+    }
+  });
+
+  it('fits two complete rows with compact captions in 240px', () => {
+    const fits: CardFit[] = [
+      { aspect: 1.5, caption: 48, gap: 12 },
+      { aspect: 1.5, caption: 42, gap: 8 },
+      { aspect: 1.5, caption: 36, gap: 6 },
+    ];
+    const height = 240;
+    for (let width = 560; width <= 1400; width += 37) {
+      const cols = landscapeCols(width, height, fits);
+      cols.forEach((n, i) => {
+        expect(LANDSCAPE_ROWS * cardHeight(width, n, fits[i])).toBeLessThanOrEqual(height - LANDSCAPE_ROWS * 2 * LANDSCAPE_MARGIN + 0.01);
+        if (i > 0) expect(n).toBeGreaterThan(cols[i - 1]);
+      });
+      const fit0 = colsToFit(width, height / LANDSCAPE_ROWS, fits[0]);
+      if (fit0 > LANDSCAPE_MIN_COLS) {
+        expect(LANDSCAPE_ROWS * cardHeight(width, fit0 - 1, fits[0])).toBeGreaterThan(height - LANDSCAPE_ROWS * 2 * LANDSCAPE_MARGIN);
+      }
+    }
   });
 
   it('a screen too short for any poster still gives a sane number', () => {
@@ -131,7 +191,7 @@ describe('«Обзор» on its side', () => {
     expect(grid().getAttribute('style') || '').toBe('');
   });
 
-  for (const [cols, want] of [[2, 6], [3, 7], [4, 8]] as [DiscoverCols, number][]) {
+  for (const [cols, want] of [[2, 17], [3, 18], [4, 19]] as [DiscoverCols, number][]) {
     it(`landscape 800x360, size ${cols}: ${want} posters per row`, async () => {
       saveDiscoverCols(cols);
       windowSize(800, 360, 768);
@@ -254,8 +314,8 @@ describe('«Мои» on its side', () => {
     act(() => updateSettings({ libraryView: 'small' }));
     await flush();
     expect(g().style.gridTemplateColumns).toBe(`repeat(${large[1]}, minmax(0, 1fr))`);
-    // the S21 with its tab bar: 7 large, 8 small (was 2 and 3)
-    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([7, 8]);
+    // without compact captions the large view keeps its safe minimum on a short screen
+    expect(landscapeCols(768, 312, LIBRARY_FITS)).toEqual([3, 27]);
     act(() => render(null, el));
     windowSize(360, 800, 328);
     updateSettings({ libraryView: 'large' });
