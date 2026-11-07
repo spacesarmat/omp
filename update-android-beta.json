@@ -1,29 +1,28 @@
 {
-  "version": "0.20.9-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.4/OMP-0.20.9-beta.4.apk",
-  "ipkHash": "ffb51562ec2606948aac493f0c53af9c53f0207f2742d27bf58cd762c8f2dbc3",
-  "ipkSize": 93150944,
+  "version": "0.20.9-beta.5",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.5/OMP-0.20.9-beta.5.apk",
+  "ipkHash": "892d6e9b1f8b8126852ea6ebe39ad6a9318b41b8a03d3e6ae6778683ca1682cb",
+  "ipkSize": 93152754,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.4/OMP-0.20.9-beta.4-arm64.apk",
-      "sha256": "4f9a1db3d3594c6d2a37a890adbff6c7e2b015fd4f26830845170943dcedd6b4",
-      "size": 58602678
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.5/OMP-0.20.9-beta.5-arm64.apk",
+      "sha256": "91cf0daca9d3cf60da15b8486b2b9032dd9bf19db9295348a9dfd71795f08430",
+      "size": 58604488
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.4/OMP-0.20.9-beta.4-armv7.apk",
-      "sha256": "440b82989004015643237781c7ca613ab390b176b1e8104d3f6c2c32833dd2e4",
-      "size": 54421706
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.5/OMP-0.20.9-beta.5-armv7.apk",
+      "sha256": "39c3f0f274f8713d0fa9cdc86ed526d5d6aabbecbbe1a3c086dbe344d81393cb",
+      "size": 54423516
     }
   },
   "notes": [
-    "Встроенный TorrServer обновлён до MatriX.150"
+    "Исправления и улучшения"
   ],
-  "notesTv": [
-    "Встроенный TorrServer обновлён до MatriX.150"
-  ],
+  "notesTv": [],
   "notesPhone": [
-    "Встроенный TorrServer обновлён до MatriX.150",
-    "В ландшафтном положении «Мои», «Обзор» и фильмография показывают две полные строки карточек с компактными подписями. Высота сетки учитывает заголовки и фильтры, портретный режим не изменился"
+    "В ландшафтном режиме масштаб карточек в «Мои» и «Обзоре» меняется мгновенно, без наложения карточек и рывков прокрутки. Размер подбирается по свободной высоте экрана вместе с подписями",
+    "Скачанный APK автоматически удаляется после подтверждённой установки. При отмене файл сохраняется для повторной попытки",
+    "В списке серий пульта показываются номер и название эпизода из TMDB. Если название недоступно, остаётся имя файла"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.4"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.5"
 }

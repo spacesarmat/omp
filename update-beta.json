@@ -1,17 +1,16 @@
 {
-  "version": "0.20.9-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.4/OMP-0.20.9-beta.4-webOS.ipk",
-  "ipkHash": "212f833328a34cd799222c5fd78ddbed870958860d84c293c2d08f672ea80ff1",
-  "ipkSize": 544606,
+  "version": "0.20.9-beta.5",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.5/OMP-0.20.9-beta.5-webOS.ipk",
+  "ipkHash": "0ee18cb5e0aadb31db0d70d5f1178856f58005cad33f734d03352eff3361a1b8",
+  "ipkSize": 544956,
   "notes": [
-    "Встроенный TorrServer обновлён до MatriX.150"
+    "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.4",
-  "notesTv": [
-    "Встроенный TorrServer обновлён до MatriX.150"
-  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.5",
+  "notesTv": [],
   "notesPhone": [
-    "Встроенный TorrServer обновлён до MatriX.150",
-    "В ландшафтном положении «Мои», «Обзор» и фильмография показывают две полные строки карточек с компактными подписями. Высота сетки учитывает заголовки и фильтры, портретный режим не изменился"
+    "В ландшафтном режиме масштаб карточек в «Мои» и «Обзоре» меняется мгновенно, без наложения карточек и рывков прокрутки. Размер подбирается по свободной высоте экрана вместе с подписями",
+    "Скачанный APK автоматически удаляется после подтверждённой установки. При отмене файл сохраняется для повторной попытки",
+    "В списке серий пульта показываются номер и название эпизода из TMDB. Если название недоступно, остаётся имя файла"
   ]
 }
