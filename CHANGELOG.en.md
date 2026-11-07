@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] In landscape, card zoom in Library and Discover now applies instantly, without overlapping cards or scroll jumps. Cards and their captions are sized to the available screen height
+
 ## 0.20.9-beta.4
 
 - The built-in TorrServer is updated to MatriX.150
