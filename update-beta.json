@@ -1,12 +1,17 @@
 {
-  "version": "0.20.9-beta.3",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.3/OMP-0.20.9-beta.3-webOS.ipk",
-  "ipkHash": "3cd70e0b64d76e8e3375b4d655369e1598a81aa699e81d9d0222660a0fcb381d",
-  "ipkSize": 544368,
+  "version": "0.20.9-beta.4",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.9-beta.4/OMP-0.20.9-beta.4-webOS.ipk",
+  "ipkHash": "212f833328a34cd799222c5fd78ddbed870958860d84c293c2d08f672ea80ff1",
+  "ipkSize": 544606,
   "notes": [
-    "Исправления и улучшения"
+    "Встроенный TorrServer обновлён до MatriX.150"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.3",
-  "notesTv": [],
-  "notesPhone": []
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.9-beta.4",
+  "notesTv": [
+    "Встроенный TorrServer обновлён до MatriX.150"
+  ],
+  "notesPhone": [
+    "Встроенный TorrServer обновлён до MatriX.150",
+    "В ландшафтном положении «Мои», «Обзор» и фильмография показывают две полные строки карточек с компактными подписями. Высота сетки учитывает заголовки и фильтры, портретный режим не изменился"
+  ]
 }
