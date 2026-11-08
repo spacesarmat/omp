@@ -5,9 +5,9 @@ import { Sheet } from '../ui/Sheet';
 import { showToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
 import { LOCAL_URL, localName } from '../server/localServer';
-import { client, activeServer } from '../../../src/store/servers';
+import { client, activeServer, servers } from '../../../src/store/servers';
 import { torrents, findPosters } from '../../../src/store/library';
-import { TorrServerClient } from '../../../src/api/torrserver';
+import { TorrServerClient, normalizeServerUrl } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import type { ServerSettings as Sets, TmdbConfig } from '../../../src/api/types';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent, type NumOption } from '../../../src/lib/serverSettingsOptions';
@@ -33,11 +33,31 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
   );
 }
 
+function savedByUrl(url: string) {
+  let want = url;
+  try {
+    want = normalizeServerUrl(url);
+  } catch (e) {
+    /* keep the typed address */
+  }
+  return servers.value.find((s) => {
+    try {
+      return normalizeServerUrl(s.url) === want;
+    } catch (e) {
+      return false;
+    }
+  });
+}
+
 export function ServerSettings({ url }: { url?: string } = {}) {
   const active = client.value;
-  // an explicit url edits that server without switching the active one
-  const c = useMemo(() => (url ? new TorrServerClient({ url }) : active), [url, active ? active.baseUrl : '']);
-  const server = url ? { name: url === LOCAL_URL ? localName() : url } : activeServer.value;
+  const saved = url ? savedByUrl(url) : undefined;
+  // an explicit url edits that server without switching the active one, with its own saved login
+  const c = useMemo(
+    () => (url ? new TorrServerClient(saved ? { url: saved.url, user: saved.user, password: saved.password } : { url }) : active),
+    [url, saved ? saved.url + ':' + (saved.user || '') + ':' + (saved.password || '') : '', active ? active.baseUrl : ''],
+  );
+  const server = url ? { name: saved ? saved.name : url === LOCAL_URL ? localName() : url } : activeServer.value;
   const [srv, setSrv] = useState<Sets | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<NumField | null>(null);

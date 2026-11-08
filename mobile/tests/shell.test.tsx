@@ -5,7 +5,7 @@ import { App } from '../src/app';
 import { currentRoute, routeStack, resetTo, navigate, goBack } from '../src/nav';
 import { activeServer, setActiveServer, addServer, removeServer, servers } from '../../src/store/servers';
 import { saveTv, forgetTv, tvs } from '../src/tv/tvStore';
-import { wifiPrompt } from '../src/servers/wifiRun';
+import { loadWifiPrefs, wifiPrompt } from '../src/servers/wifiRun';
 
 function mount(): HTMLElement {
   document.body.innerHTML = '<div id="app"></div>';
@@ -83,15 +83,17 @@ describe('mobile shell', () => {
     }
   });
 
-  it('accepting a server immediately shows its saved profile on the connect screen', () => {
+  it('accepting a server remembers the network and leaves the connect form alone', () => {
     resetTo({ name: 'connect' });
     wifiPrompt.value = { kind: 'confirm', ssid: 'home', hosts: [{ url: 'http://10.0.0.9:8090', name: 'Other' }] };
     const el = mount();
     try {
+      expect(el.textContent).not.toContain('Сервер по сети');
       const accept = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => (b.textContent || '').includes('Использовать'))!;
       act(() => accept.click());
-      expect(el.textContent).toContain('Запомнено: home');
-      expect(el.textContent).toContain('Забыть');
+      expect(loadWifiPrefs().profiles.some((p) => p.ssid === 'home')).toBe(true);
+      expect(el.textContent).toContain('Адрес сервера');
+      expect(el.textContent).not.toContain('Запомнено');
     } finally {
       wifiPrompt.value = null;
     }

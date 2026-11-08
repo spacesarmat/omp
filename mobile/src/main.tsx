@@ -13,7 +13,7 @@ import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { scanLan } from './screens/Connect';
-import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWifiPrefs } from './servers/wifiRun';
+import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWifiPrefs, watchPlaybackEnd } from './servers/wifiRun';
 import { reloadSourcePrefs } from '../../src/sources/store';
 
 import { ensureFirstRun } from './donate';
@@ -67,6 +67,7 @@ bindWifiRuntime({
   apply: (id) => setActiveServer(id),
 });
 activeServerId.subscribe(ensureWifiPrimary);
+watchPlaybackEnd();
 void considerWifi();
 // Ads and the monitoring cap: /v1/me on resume (if the last answer is older than 15 minutes) and about every 6 hours.
 startPremiumRecheck(phoneSourceContext);

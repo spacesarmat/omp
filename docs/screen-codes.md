@@ -865,6 +865,14 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P34.6 | Обзор | Browse | Фильмы | Movies |
 | P34.7 | Обзор | Browse | Сериалы | Series |
 | P34.8 | Обзор | Browse | Фильтры | Filters |
+| P35 | Откуда смотреть | Where to watch |  |  |
+| P35.1 | Откуда смотреть | Where to watch | Назад | Back |
+| P35.2 | Откуда смотреть | Where to watch | Использовать текущую сеть | Use the current network |
+| P35.3 | Откуда смотреть | Where to watch | По сети | By network |
+| P35.4 | Откуда смотреть | Where to watch | Всегда один сервер | Always one server |
+| P35.5 | Откуда смотреть | Where to watch | Запомнить имя | Remember the name |
+| P35.6 | Откуда смотреть | Where to watch | Добавить сервер | Add a server |
+| P35.7 | Откуда смотреть | Where to watch | Найти в сети | Find on the network |
 | PD01 | Язык | Language |  |  |
 | PD01.1 | Язык | Language | Как в системе | Follow the system |
 | PD01.2 | Язык | Language | Русский | Russian |

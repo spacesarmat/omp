@@ -77,6 +77,7 @@ const NowPlaying = lazyScreen(() => import('./screens/NowPlaying'), 'NowPlaying'
 const Account = lazyScreen(() => import('./screens/Account'), 'Account');
 const Advanced = lazyScreen(() => import('./screens/Advanced'), 'Advanced');
 const VideoPlayer = lazyScreen(() => import('./screens/VideoPlayer'), 'VideoPlayer');
+const WatchFrom = lazyScreen(() => import('./screens/WatchFrom'), 'WatchFrom');
 const ServerSettings = lazyScreen(() => import('./screens/ServerSettings'), 'ServerSettings');
 const News = lazyScreen(() => import('./screens/News'), 'News');
 const SubFindings = lazyScreen(() => import('./screens/SubFindings'), 'SubFindings');
@@ -453,6 +454,8 @@ export function App() {
         <ServerSettings url={route.url} />
       ) : route.name === 'videoPlayer' ? (
         <VideoPlayer />
+      ) : route.name === 'watchFrom' ? (
+        <WatchFrom />
       ) : route.name === 'account' ? (
         <Account />
       ) : route.name === 'advanced' ? (

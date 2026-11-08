@@ -112,8 +112,8 @@ describe('Settings', () => {
     const el = mount();
     expect(el.textContent).toContain(APP_VERSION);
     expect(el.textContent).toContain('Home');
-    await act(async () => btn(el, 'Сменить').click());
-    expect(currentRoute.value.name).toBe('connect');
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-row="watch-from"]')!.click());
+    expect(currentRoute.value.name).toBe('watchFrom');
     resetTo({ name: 'settings' });
     await act(async () => btn(el, 'Выбрать').click());
     expect(currentRoute.value.name).toBe('tv');
@@ -678,7 +678,7 @@ describe('Settings in English', () => {
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
     expect(labels).toEqual(['OMP account', 'TV', 'Viewing', 'Search', 'App']);
     const text = el.textContent!;
-    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'Change', 'Choose', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
+    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'by network', 'Choose', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
       expect(text, w).toContain(w);
     }
     expect(text).not.toContain('Server settings');
