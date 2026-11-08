@@ -12,7 +12,13 @@ export function WifiPrompt() {
 }
 
 function WifiAsk({ plan, onDone = () => undefined }: { plan: Extract<WifiPlan, { kind: 'confirm' | 'choose' }>; onDone?: () => void }) {
-  const title = plan.kind === 'choose' ? t('connect.wifiChoose', { ssid: plan.ssid }) : t('connect.wifiConfirm', { name: plan.hosts[0].name || plan.hosts[0].url, ssid: plan.ssid });
+  const title = plan.search
+    ? plan.kind === 'choose'
+      ? t('connect.foundInNet')
+      : t('settings.watchFromFoundOne', { name: plan.hosts[0].name || plan.hosts[0].url })
+    : plan.kind === 'choose'
+      ? t('connect.wifiChoose', { ssid: plan.ssid })
+      : t('connect.wifiConfirm', { name: plan.hosts[0].name || plan.hosts[0].url, ssid: plan.ssid });
   return (
     <Sheet label={title} onClose={() => laterWifi(plan)}>
       <div class="m-wifi-ask" role="menu">

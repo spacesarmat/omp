@@ -159,6 +159,8 @@ export const en: EnDict<typeof ru> = {
     watchFromFind: 'Find on the network',
     watchFromRemoveAsk: 'Remove server {name}?',
     watchFromRemove: 'Remove',
+    watchFromRemoveLater: 'The server is removed after playback stops.',
+    watchFromFoundOne: 'Use {name}?',
     watchFromPermit: 'Allow',
     watchFromPermitAsk: 'To name the network this phone is on, Android asks for permission. OMP does not scan other networks and does not place you on a map. The name can be typed instead.',
     watchFromPermitLater: 'The name was not read. Type it.',

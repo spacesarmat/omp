@@ -2,7 +2,10 @@
 // A scan is one call the caller supplies. Cancelling drops the result. Playback freezes the choice.
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
+import { removeServer, servers, setActiveServer } from '../../../src/store/servers';
+import { nowPlaying } from '../tv/playerLink';
 import {
+  dedupeHosts,
   dismissWifiPrompt,
   emptyWifiPrefs,
   forgetProfile,
@@ -142,6 +145,18 @@ export async function considerWifi(over?: Partial<WifiRunDeps>, force = false): 
   return plan;
 }
 
+function playingNow(): boolean {
+  if (bound) return bound.playback();
+  const n = nowPlaying.peek();
+  return !!(n && n.hash);
+}
+
+function applyServer(id: string): void {
+  if (playingNow()) return;
+  if (bound) bound.apply(id);
+  else setActiveServer(id);
+}
+
 /** The user accepted one host. A new host is saved with no borrowed password. */
 export function acceptWifiHost(plan: Extract<WifiPlan, { kind: 'confirm' | 'choose' }>, url: string, addBare: (url: string, name?: string) => KnownServer): WifiPrefs | null {
   const d = bound;
@@ -149,6 +164,18 @@ export function acceptWifiHost(plan: Extract<WifiPlan, { kind: 'confirm' | 'choo
   const saved = d ? d.saved() : [];
   const known = serverForHost(saved, url);
   const server = known || addBare(url, plan.hosts.filter((h) => hostOf(h.url) === hostOf(url))[0]?.name);
+  // An explicit search does not invent a network binding and does not copy another server's password.
+  if (plan.search) {
+    const next = prefs.overrideId ? { ...prefs, overrideId: server.id } : prefs;
+    if (next !== prefs) {
+      if (d) d.save(next);
+      else saveWifiPrefs(next);
+    }
+    if (playingNow()) queueAfterPlayback({ kind: 'select', id: server.id, lock: !!next.overrideId });
+    else applyServer(server.id);
+    wifiPrompt.value = null;
+    return next;
+  }
   const next = rememberProfile(prefs, plan.ssid, server.id, url);
   if (d) {
     d.save(next);
@@ -206,4 +233,81 @@ export function dropWifiProfile(ssid: string): WifiPrefs {
   const next = forgetProfile(loadWifiPrefs(), ssid);
   saveWifiPrefs(next);
   return next;
+}
+
+export type AfterPlayback =
+  | { kind: 'select'; id: string; lock: boolean }
+  | { kind: 'remove'; id: string }
+  | { kind: 'wifi' };
+
+let afterPlayback: AfterPlayback | null = null;
+let watchingPlayback = false;
+let lanSearch: ((cancel: () => boolean) => Promise<FoundHost[]>) | null = null;
+
+/** Tests replace the one-shot LAN search. Production uses the bound discover. */
+export function setLanSearch(fn: ((cancel: () => boolean) => Promise<FoundHost[]>) | null): void {
+  lanSearch = fn;
+}
+
+export function queueAfterPlayback(job: AfterPlayback): void {
+  afterPlayback = job;
+}
+
+export function clearAfterPlayback(): void {
+  afterPlayback = null;
+}
+
+export function pendingAfterPlayback(): AfterPlayback | null {
+  return afterPlayback;
+}
+
+/** Applies the choice that was saved while something was playing. Does nothing mid-playback. */
+export function applyAfterPlayback(): void {
+  if (playingNow()) return;
+  const job = afterPlayback;
+  afterPlayback = null;
+  if (!job) return;
+  if (job.kind === 'wifi') {
+    void considerWifi(undefined, true);
+    return;
+  }
+  if (!servers.peek().some((s) => s.id === job.id)) return;
+  if (job.kind === 'remove') {
+    removeServer(job.id);
+    return;
+  }
+  setActiveServer(job.id);
+  if (job.lock) setWifiOverride(job.id);
+}
+
+export function watchPlaybackEnd(): void {
+  if (watchingPlayback) return;
+  watchingPlayback = true;
+  nowPlaying.subscribe((n) => {
+    if (n && n.hash) return;
+    applyAfterPlayback();
+  });
+}
+
+/**
+ * One search, even with no network name and even when a server is locked.
+ * Does not scan again on its own. A password is not part of this result.
+ */
+export async function searchLan(): Promise<'defer' | 'none' | 'ask'> {
+  if (playingNow()) return 'defer';
+  const discover = lanSearch || (bound && bound.discover);
+  if (!discover) return 'none';
+  let found: FoundHost[] = [];
+  try {
+    found = await discover(() => playingNow());
+  } catch (e) {
+    return 'none';
+  }
+  if (playingNow()) return 'defer';
+  const hosts = dedupeHosts(found);
+  if (!hosts.length) return 'none';
+  wifiPrompt.value = hosts.length > 1
+    ? { kind: 'choose', ssid: '', hosts: hosts, search: true }
+    : { kind: 'confirm', ssid: '', hosts: hosts, search: true };
+  return 'ask';
 }

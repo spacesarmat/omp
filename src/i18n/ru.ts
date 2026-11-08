@@ -161,6 +161,8 @@ export const ru = {
     watchFromFind: 'Найти в сети',
     watchFromRemoveAsk: 'Удалить сервер {name}?',
     watchFromRemove: 'Удалить',
+    watchFromRemoveLater: 'Сервер удалится после остановки просмотра.',
+    watchFromFoundOne: 'Использовать {name}?',
     watchFromPermit: 'Разрешить',
     watchFromPermitAsk: 'Чтобы назвать сеть, к которой подключен телефон, Android просит разрешение. OMP не сканирует другие сети и не определяет место на карте. Имя можно ввести вручную.',
     watchFromPermitLater: 'Имя не прочитано. Введите его вручную.',

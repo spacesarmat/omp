@@ -45,8 +45,8 @@ export type WifiPlan =
   | { kind: 'defer'; reason: 'playback' }
   | { kind: 'skip'; reason: 'disabled' | 'no-hint' }
   | { kind: 'use'; serverId: string; reason: 'override' | 'profile' | 'primary' }
-  | { kind: 'confirm'; ssid: string; hosts: FoundHost[] }
-  | { kind: 'choose'; ssid: string; hosts: FoundHost[] }
+  | { kind: 'confirm'; ssid: string; hosts: FoundHost[]; search?: boolean }
+  | { kind: 'choose'; ssid: string; hosts: FoundHost[]; search?: boolean }
   | { kind: 'fallback'; serverId: string | null; reason: 'unhealthy' | 'none' };
 
 export function emptyWifiPrefs(): WifiPrefs {

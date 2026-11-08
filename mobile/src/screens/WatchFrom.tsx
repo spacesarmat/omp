@@ -26,15 +26,22 @@ import {
 } from '../servers/currentNetwork';
 import { normalizeSsid } from '../servers/wifiSelect';
 import {
+  clearAfterPlayback,
   considerWifi,
   dropWifiProfile,
   loadWifiPrefs,
+  pendingAfterPlayback,
+  queueAfterPlayback,
+  searchLan,
   setWifiEnabled,
   setWifiManual,
   setWifiOverride,
   setWifiPrimary,
+  watchPlaybackEnd,
   wifiPrefsVersion,
 } from '../servers/wifiRun';
+
+watchPlaybackEnd();
 
 const BACK = 'M15 5l-7 7 7 7';
 
@@ -123,12 +130,13 @@ export function WatchFrom() {
         return;
       }
       remember(nextManualSsid(loadWifiPrefs().manualSsid, read));
-      if (playingNow()) {
-        setNote(t('settings.watchFromDefer'));
-        return;
-      }
       if (!modeIsAuto()) {
         setNote(t('settings.watchFromLocked'));
+        return;
+      }
+      if (playingNow()) {
+        queueAfterPlayback({ kind: 'wifi' });
+        setNote(t('settings.watchFromDefer'));
         return;
       }
       await considerWifi(undefined, true);
@@ -145,11 +153,16 @@ export function WatchFrom() {
       setNote(t('settings.watchFromNone'));
       return;
     }
+    if (!modeIsAuto()) {
+      setNote(t('settings.watchFromUsing', { name: normalizeSsid(name) }));
+      return;
+    }
     if (playingNow()) {
+      queueAfterPlayback({ kind: 'wifi' });
       setNote(t('settings.watchFromDefer'));
       return;
     }
-    if (prefs.enabled && !prefs.overrideId) void considerWifi(undefined, true);
+    void considerWifi(undefined, true);
     setNote(t('settings.watchFromUsing', { name: normalizeSsid(name) }));
   }
 
@@ -162,9 +175,11 @@ export function WatchFrom() {
 
   function select(id: string) {
     if (selectDecision(playingNow()) === 'defer') {
+      queueAfterPlayback({ kind: 'select', id: id, lock: !modeIsAuto() });
       setNote(t('settings.watchFromSwitchLater'));
       return;
     }
+    clearAfterPlayback();
     setActiveServer(id);
     if (!auto) setWifiOverride(id);
   }
@@ -180,15 +195,29 @@ export function WatchFrom() {
       destructive: true,
     });
     if (removeDecision(ok) === 'cancel') return;
+    if (playingNow() && activeServerId.peek() === s.id) {
+      queueAfterPlayback({ kind: 'remove', id: s.id });
+      setNote(t('settings.watchFromRemoveLater'));
+      return;
+    }
     removeServer(s.id);
+    const pending = pendingAfterPlayback();
+    if (pending && pending.kind !== 'wifi' && pending.id === s.id) clearAfterPlayback();
   }
 
-  function find() {
+  async function find() {
     if (playingNow()) {
       setNote(t('settings.watchFromSwitchLater'));
       return;
     }
-    void considerWifi(undefined, true);
+    setNote(t('connect.searchingLan'));
+    const result = await searchLan();
+    if (result === 'defer' || playingNow()) {
+      setNote(t('settings.watchFromSwitchLater'));
+      return;
+    }
+    if (result === 'none') setNote(t('connect.nothingOnNet'));
+    else setNote('');
   }
 
   const modeLine = auto ? t('settings.watchFromModeAuto') : t('settings.watchFromModeAlways');

@@ -14,7 +14,7 @@ import {
   setCurrentNetworkReader,
   type WifiRead,
 } from '../src/servers/currentNetwork';
-import { loadWifiPrefs, saveWifiPrefs, setWifiManual, setWifiOverride } from '../src/servers/wifiRun';
+import { acceptWifiHost, clearAfterPlayback, loadWifiPrefs, pendingAfterPlayback, saveWifiPrefs, setLanSearch, setWifiManual, setWifiOverride, wifiPrompt } from '../src/servers/wifiRun';
 import { emptyWifiPrefs, rememberProfile } from '../src/servers/wifiSelect';
 import { activeServerId, addServer, removeServer, servers, setActiveServer } from '../../src/store/servers';
 import { currentRoute, resetTo } from '../src/nav';
@@ -60,6 +60,9 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = origFetch;
   setCurrentNetworkReader(null);
+  setLanSearch(null);
+  clearAfterPlayback();
+  wifiPrompt.value = null;
   nowPlaying.value = null;
   forgetPhoneLink();
   const el = document.getElementById('app');
@@ -222,7 +225,9 @@ describe('WatchFrom', () => {
     expect(el.querySelector('[data-net-note]')!.textContent).toContain('после остановки');
     await click(el, '[data-action="discover"]');
     expect(activeServerId.value).toBe(a.id);
+    expect(pendingAfterPlayback()).toEqual({ kind: 'select', id: b.id, lock: false });
     nowPlaying.value = null;
+    expect(activeServerId.value).toBe(b.id);
     await click(el, '[data-edit="' + b.id + '"]');
     expect(currentRoute.value).toEqual({ name: 'serverSettings', url: b.url });
     resetTo({ name: 'watchFrom' });
@@ -251,6 +256,76 @@ describe('WatchFrom', () => {
     expect(activeServerId.value).toBe(a.id);
     expect(el.querySelector('[data-net-note]')!.textContent).toContain('всегда один сервер');
     setWifiOverride(null);
+  });
+
+  it('searches without a network name or a locked server, and does not copy a password', async () => {
+    const home = addServer({ url: 'http://10.0.0.2:8090', name: 'Home', user: 'u', password: 'pw' });
+    setActiveServer(home.id);
+    setWifiOverride(home.id);
+    setWifiManual('');
+    let calls = 0;
+    setLanSearch(async () => {
+      calls += 1;
+      return [{ url: 'http://10.0.0.9:8090', name: 'Other' }];
+    });
+    const el = mount();
+    await click(el, '[data-action="discover"]');
+    expect(calls).toBe(1);
+    const plan = wifiPrompt.value;
+    expect(plan && plan.kind).toBe('confirm');
+    if (!plan || (plan.kind !== 'confirm' && plan.kind !== 'choose')) throw new Error('search did not ask');
+    acceptWifiHost(plan, 'http://10.0.0.9:8090', (url, name) => addServer({ url: url, name: name }));
+    const added = servers.value.filter((s) => s.url.indexOf('10.0.0.9') >= 0)[0];
+    expect(added.password).toBeUndefined();
+    expect(added.user).toBeUndefined();
+    expect(servers.value.filter((s) => s.id === home.id)[0].password).toBe('pw');
+    expect(activeServerId.value).toBe(added.id);
+    expect(loadWifiPrefs().profiles).toEqual([]);
+    expect(loadWifiPrefs().overrideId).toBe(added.id);
+    expect(el.querySelector('[data-net-note]')!.textContent).not.toContain('Ищу');
+  });
+
+  it('says so when the search finds no server', async () => {
+    setLanSearch(async () => []);
+    const el = mount();
+    await click(el, '[data-action="discover"]');
+    expect(wifiPrompt.value).toBeNull();
+    expect(el.querySelector('[data-net-note]')!.textContent).toContain('не нашлось');
+  });
+
+  it('removes another server during playback and the active one only after it stops', async () => {
+    const a = addServer({ url: 'http://10.0.0.2:8090', name: 'Home' });
+    const b = addServer({ url: 'http://10.0.0.3:8090', name: 'Other' });
+    setActiveServer(a.id);
+    nowPlaying.value = { hash: 'playing' } as never;
+    const el = mount();
+    await click(el, '[data-remove="' + b.id + '"]');
+    await acceptConfirm();
+    expect(servers.value.some((s) => s.id === b.id)).toBe(false);
+    expect(activeServerId.value).toBe(a.id);
+    await click(el, '[data-remove="' + a.id + '"]');
+    await acceptConfirm();
+    expect(activeServerId.value).toBe(a.id);
+    expect(servers.value.some((s) => s.id === a.id)).toBe(true);
+    expect(el.querySelector('[data-net-note]')!.textContent).toContain('удалится после остановки');
+    nowPlaying.value = null;
+    expect(servers.value.some((s) => s.id === a.id)).toBe(false);
+    expect(activeServerId.value).toBeNull();
+  });
+
+  it('runs the saved network choice after playback stops', async () => {
+    const el = mount();
+    nowPlaying.value = { hash: 'playing' } as never;
+    const input = el.querySelector('[data-manual]') as HTMLInputElement;
+    await act(async () => {
+      input.value = 'cabin';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(el, '[data-action="save-name"]');
+    expect(loadWifiPrefs().manualSsid).toBe('cabin');
+    expect(pendingAfterPlayback()).toEqual({ kind: 'wifi' });
+    nowPlaying.value = null;
+    expect(pendingAfterPlayback()).toBeNull();
   });
 
   it('does not write the TV link and does not scan for a network list', () => {
