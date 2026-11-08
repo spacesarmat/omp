@@ -8,13 +8,28 @@ export interface SeasonSpan {
   files: TorrentFile[];
   /** Index of the chosen file. Always 0 when the file is an episode: earlier ones are left out. */
   start: number;
+  /** Null when the episode name has no season and no season folder. */
   season: number | null;
+  /** True when the start file is an episode. A film stays false, so its queue is not rebuilt. */
+  episodic: boolean;
   /**
    * The next episode number that this release does not have.
    * Null at the end of a contiguous run when no later episode of the season is known
    * (`total` reached, or nothing past the last file and no hole before it).
    */
   missing: number | null;
+}
+
+/** Episode numbers, and the season they belong to. A folder season counts when the file name states none. */
+function placed(path: string): { season: number | null; episodes: number[] } | null {
+  if (isExtraFile(path)) return null;
+  const info = fileEpisodes(path);
+  const parsed = parseEpisode(path);
+  const episodes = info && info.episodes.length ? info.episodes : parsed.episode !== null ? [parsed.episode] : [];
+  if (!episodes.length) return null;
+  // S01E02 in the name wins over a Season 2 folder. The folder is used only when the name has no season.
+  const season = info && info.season !== null ? info.season : parsed.season;
+  return { season: season, episodes: episodes };
 }
 
 /**
@@ -24,22 +39,17 @@ export interface SeasonSpan {
 export function seasonSpan(all: TorrentFile[], startId: number, total?: number): SeasonSpan {
   const playable = playableFiles(all);
   const start = playable.filter((f) => f.id === startId)[0];
-  if (!start) return { files: [], start: 0, season: null, missing: null };
-  const pe = parseEpisode(start.path);
-  const season = pe.season;
-  const episode = pe.episode;
-  if (season === null || episode === null || isExtraFile(start.path)) {
-    return { files: [start], start: 0, season: null, missing: null };
-  }
-  const covered = fileEpisodes(start.path);
-  const startEps = covered && (covered.season === null || covered.season === season) ? covered.episodes : [episode];
+  const none = { files: [] as TorrentFile[], start: 0, season: null, episodic: false, missing: null };
+  if (!start) return none;
+  const startPlace = placed(start.path);
+  if (!startPlace) return { files: [start], start: 0, season: null, episodic: false, missing: null };
+  const season = startPlace.season;
+  const startEps = startPlace.episodes.filter((e) => e > 0);
   const from = startEps.reduce((m, n) => (n < m ? n : m), startEps[0]);
   const covers: { id: number; file: TorrentFile; episodes: number[] }[] = [];
   playable.forEach((f) => {
-    if (isExtraFile(f.path)) return;
-    const info = fileEpisodes(f.path);
-    if (!info) return;
-    if (info.season !== null && info.season !== season) return;
+    const info = placed(f.path);
+    if (!info || info.season !== season) return;
     const eps = info.episodes.filter((e) => e >= from);
     if (!eps.length) return;
     covers.push({ id: f.id, file: f, episodes: eps });
@@ -74,13 +84,13 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
     const later = covers.some((c) => c.episodes.some((e) => e > n));
     if (later || (knownEnd && n <= knownEnd)) missing = n;
   }
-  return { files: files.length ? files : [start], start: 0, season: season, missing: missing };
+  return { files: files.length ? files : [start], start: 0, season: season, episodic: true, missing: missing };
 }
 
 /** File ids to send to the TV. Undefined when the start file is not an episode, so a film's queue stays as it was. */
 export function seasonFileIds(all: TorrentFile[], startId: number, total?: number): number[] | undefined {
   const span = seasonSpan(all, startId, total);
-  if (span.season === null || !span.files.length) return undefined;
+  if (!span.episodic || !span.files.length) return undefined;
   return span.files.map((f) => f.id);
 }
 

@@ -93,6 +93,53 @@ describe('season queue', () => {
     expect(step.go).toBe('next');
   });
 
+  it('an episode with no season number still stops on a gap, and the chosen copy stays', () => {
+    const files = [
+      file(1, 'Show.E01.mkv'),
+      file(8, 'Show.E01.Director.mkv'),
+      file(3, 'Show.E03.mkv'),
+      file(9, 'Show/Extras/interview.mkv'),
+    ];
+    const span = seasonSpan(files, 8);
+    expect(span.episodic).toBe(true);
+    expect(span.season).toBeNull();
+    expect(span.files.map((f) => f.id)).toEqual([8]);
+    expect(span.missing).toBe(2);
+    expect(seasonFileIds(files, 8)).toEqual([8]);
+  });
+
+  it('a file from another season folder does not fill this season, and an explicit season wins over the folder', () => {
+    const files = [
+      file(1, 'Season 1/Show.E01.mkv'),
+      file(2, 'Season 2/Show - 02.mkv'),
+      file(3, 'Season 1/Show.E03.mkv'),
+      file(4, 'Season 2/Show.S01E02.mkv'),
+    ];
+    const season1 = seasonSpan(files, 1);
+    expect(season1.season).toBe(1);
+    expect(season1.files.map((f) => f.id)).toEqual([1, 4, 3]);
+    expect(season1.missing).toBeNull();
+    expect(seasonFileIds(files, 1)).toEqual([1, 4, 3]);
+    expect(season1.files.some((f) => f.id === 2)).toBe(false);
+    const chosen = seasonSpan(files, 4);
+    expect(chosen.files[0].id).toBe(4);
+    expect(chosen.files.map((f) => f.id)).toEqual([4, 3]);
+    const gapped = [
+      file(1, 'Season 1/Show.E01.mkv'),
+      file(2, 'Season 2/Show - 02.mkv'),
+      file(3, 'Season 1/Show.E03.mkv'),
+    ];
+    const hole = seasonSpan(gapped, 1);
+    expect(hole.files.map((f) => f.id)).toEqual([1]);
+    expect(hole.missing).toBe(2);
+    expect(seasonFileIds(gapped, 1)).toEqual([1]);
+    const season2 = seasonSpan(files, 2);
+    expect(season2.season).toBe(2);
+    expect(season2.files.map((f) => f.id)).toEqual([2]);
+    expect(season2.missing).toBeNull();
+    expect(season2.files.some((f) => f.id === 4)).toBe(false);
+  });
+
   it('a film is one file and does not send a season list', () => {
     const span = seasonSpan([file(1, 'Movie.2020.mkv'), file(2, 'Movie.2020.extra.mkv')], 1);
     expect(span.season).toBeNull();

@@ -194,9 +194,13 @@ export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: T
           </span>
         </button>
       )}
-      {span.missing !== null && span.season !== null && (
+      {span.missing !== null && span.episodic && (
         <div class="m-hint-warn">
-          <div>{t('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) })}</div>
+          <div>
+            {span.season !== null
+              ? t('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) })
+              : t('torrent.screen.seasonGapLoose', { episode: String(span.missing) })}
+          </div>
           <button
             type="button"
             class="m-btn m-btn-secondary m-btn-sm"
@@ -204,10 +208,11 @@ export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: T
               const season = span.season;
               const episode = span.missing;
               onClose();
-              if (season === null || episode === null) return;
+              if (episode === null) return;
+              const seasonPart = season !== null ? ' ' + t('catalog.querySeason', { n: season }) : '';
               navigate({
                 name: 'add',
-                query: libraryTitle(torrent).title + ' ' + t('catalog.querySeason', { n: season }) + ' ' + t('catalog.queryEpisode', { n: episode }),
+                query: libraryTitle(torrent).title + seasonPart + ' ' + t('catalog.queryEpisode', { n: episode }),
                 run: true,
               });
             }}

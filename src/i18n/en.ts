@@ -1909,6 +1909,7 @@ export const en: EnDict<typeof ru> = {
       onPhone: 'On the phone',
       onPhoneSub: 'In VLC, MX Player or another player',
       seasonGap: 'This release has no episode {episode} of season {season}. The next season does not start on its own.',
+      seasonGapLoose: 'This release has no episode {episode}. The next season does not start on its own.',
       seasonGapFind: 'Find episode {episode}',
       seasonExternal: 'The system player plays one episode and does not start the next one.',
       copyLink: 'Copy the stream link',

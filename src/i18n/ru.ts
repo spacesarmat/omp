@@ -1954,6 +1954,7 @@ export const ru = {
       onPhone: 'На телефоне',
       onPhoneSub: 'В VLC, MX Player или другом плеере',
       seasonGap: 'В этой раздаче нет {episode} серии {season} сезона. Следующий сезон сам не включится.',
+      seasonGapLoose: 'В этой раздаче нет {episode} серии. Следующий сезон сам не включится.',
       seasonGapFind: 'Найти {episode} серию',
       seasonExternal: 'Системный плеер включает одну серию и не переходит к следующей.',
       copyLink: 'Скопировать ссылку на поток',

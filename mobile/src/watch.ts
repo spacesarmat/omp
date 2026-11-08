@@ -165,7 +165,7 @@ export interface PhoneWatch {
   /** Catalog episode count of this season, when known. */
   total?: number;
   /** The release has no later episode of this season. The caller can offer a search. */
-  onMissing?: (season: number, episode: number) => void;
+  onMissing?: (season: number | null, episode: number) => void;
 }
 
 export interface PhonePlayEnd {
@@ -182,8 +182,9 @@ export interface PhonePlayEnd {
 const nonePlayed = (): PhonePlayEnd => ({ missing: null, season: null });
 
 function reportMissing(w: PhoneWatch, season: number | null, missing: number | null): void {
-  if (missing === null || season === null) return;
+  if (missing === null) return;
   if (w.onMissing) w.onMissing(season, missing);
+  else if (season === null) showToast(tr('torrent.screen.seasonGapLoose', { episode: String(missing) }));
   else showToast(tr('torrent.screen.seasonGap', { season: String(season), episode: String(missing) }));
 }
 
@@ -200,7 +201,7 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160({ ...o, background: settings.value.backgroundAudio });
   else if (mode === 'p2160' && (await actions.player2160().catch(() => null))) open = (o) => actions.open2160(o);
   if (open) {
-    const files = span.season === null ? playableFiles(filesOf(t)) : span.files.slice();
+    const files = span.episodic ? span.files.slice() : playableFiles(filesOf(t));
     let start = files.findIndex((f) => f.id === w.file.id);
     if (start < 0) {
       files.unshift(w.file);
@@ -249,7 +250,7 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   }
   // an outside player tells us nothing back (did it play, where did it stop), so no journal entry at 0:00
   // and it cannot start the next episode. Say so when this release still has later episodes of the season.
-  if (span.season !== null && span.files.length > 1) showToast(tr('torrent.screen.seasonExternal'));
+  if (span.episodic && span.files.length > 1) showToast(tr('torrent.screen.seasonExternal'));
   reportMissing(w, span.season, span.missing);
   await actions.openExternal(streamUrlFor(c, t, w.file), 'video/*');
   return { missing: span.missing, season: span.season };
@@ -434,9 +435,12 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>
         const tor = torrents.peek().filter((x) => x.hash.toLowerCase() === o.hash.toLowerCase())[0];
         if (tor) {
           const span = seasonSpan(filesOf(tor), o.file, o.seasonTotal);
-          seasonFiles = span.season === null ? undefined : span.files.map((f) => f.id);
-          if (span.missing !== null && span.season !== null) {
-            showToast(tr('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) }));
+          seasonFiles = span.episodic ? span.files.map((f) => f.id) : undefined;
+          if (span.missing !== null) {
+            const text = span.season === null
+              ? tr('torrent.screen.seasonGapLoose', { episode: String(span.missing) })
+              : tr('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) });
+            showToast(text);
           }
         }
       }
