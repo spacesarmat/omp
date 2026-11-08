@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { Readable } from 'node:stream';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
@@ -551,35 +553,103 @@ function privateIp(raw) {
   if (isIP(ip) === 4) return privateV4(ip.split('.').map(Number));
   if (isIP(ip) !== 6) return true;
   if (ip === '::' || ip === '::1') return true;
-  if (ip.startsWith('::ffff:')) {
-    const tail = ip.slice(7);
-    if (isIP(tail) === 4) return privateV4(tail.split('.').map(Number));
-  }
+  if (ip.startsWith('::ffff:')) return true;
   const first = parseInt(ip.split(':')[0] || '0', 16);
   return (first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00 || (first & 0xff00) === 0xff00;
 }
 
-async function assertExternalRedirect(target, lookup) {
+function abortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+async function assertExternalRedirect(target, lookup, signal) {
   if (target.protocol !== 'https:' || target.username || target.password) throw downloadError('bad_redirect');
   const host = target.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) {
     if (privateIp(host)) throw downloadError('bad_redirect');
-    return;
+    return [{ address: host, family: isIP(host) }];
   }
   let rows;
   try {
-    rows = await lookup(host, { all: true });
+    rows = await abortable(lookup(host, { all: true }), signal);
   } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
     throw downloadError('bad_redirect');
   }
   if (!Array.isArray(rows) || !rows.length || rows.some((row) => privateIp(row && row.address))) throw downloadError('bad_redirect');
+  return rows;
+}
+
+function pinnedHttpsRequest(url, init, addresses, requestImpl) {
+  const target = new URL(url);
+  const address = addresses[0];
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  return new Promise((resolve, reject) => {
+    const req = requestImpl(
+      {
+        protocol: 'https:',
+        hostname: host,
+        servername: host,
+        port: target.port || 443,
+        path: target.pathname + target.search,
+        method: init.method || 'GET',
+        headers: { ...(init.headers || {}), Host: target.host },
+        lookup: (_hostname, _options, cb) => cb(null, address.address, address.family),
+        agent: false,
+      },
+      (res) => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          headers: res.headers,
+          body: Readable.toWeb(res),
+          arrayBuffer: async () => {
+            const chunks = [];
+            for await (const chunk of res) chunks.push(chunk);
+            return Buffer.concat(chunks).buffer;
+          },
+        });
+      },
+    );
+    req.on('error', reject);
+    if (init.signal) {
+      if (init.signal.aborted) req.destroy(new DOMException('aborted', 'AbortError'));
+      else init.signal.addEventListener('abort', () => req.destroy(new DOMException('aborted', 'AbortError')), { once: true });
+    }
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
+function requestExternal(net, url, init, addresses, requestImpl) {
+  if (requestImpl) return pinnedHttpsRequest(url, init, addresses, requestImpl);
+  if (net === fetch) return pinnedHttpsRequest(url, init, addresses, httpsRequest);
+  return net(url, init);
 }
 
 /**
  * Jackett sometimes answers a download with a redirect to a magnet. Follow one http(s) hop,
  * and stop when Location is a magnet so the phone can add it. Credentials stay on the indexer's origin.
  */
-async function fetchDownload(net, url, headers, signal, lookup) {
+async function fetchDownload(net, url, headers, signal, lookup, requestImpl) {
   const first = await net(url, { headers, redirect: 'manual', signal });
   const status = first.status || 0;
   const loc = headerValue(first, 'location');
@@ -590,8 +660,10 @@ async function fetchDownload(net, url, headers, signal, lookup) {
     const from = new URL(url);
     const target = new URL(loc, from);
     const sameOrigin = target.origin === from.origin;
-    if (!sameOrigin) await assertExternalRedirect(target, lookup || dnsLookup);
-    const second = await net(target.href, { headers: redirectHeaders(headers, sameOrigin), redirect: 'manual', signal });
+    const addresses = sameOrigin ? [] : await assertExternalRedirect(target, lookup || dnsLookup, signal);
+    const second = sameOrigin
+      ? await net(target.href, { headers, redirect: 'manual', signal })
+      : await requestExternal(net, target.href, { headers: redirectHeaders(headers, false), redirect: 'manual', signal }, addresses, requestImpl);
     const status2 = second.status || 0;
     const loc2 = headerValue(second, 'location');
     if (status2 >= 300 && status2 < 400 && /^magnet:/i.test(loc2)) {
@@ -2227,7 +2299,7 @@ export function createApp(file, fetchImpl, opts) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const upstream = await fetchDownload(net, remote, headers, controller.signal, opts && opts.downloadLookup);
+          const upstream = await fetchDownload(net, remote, headers, controller.signal, opts && opts.downloadLookup, opts && opts.downloadRequest);
           process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
           if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
           // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.

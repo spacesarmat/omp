@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
+import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { activate, createSubscription, openAccount } from '../src/logic.mjs';
 import {
@@ -1319,6 +1320,8 @@ describe('POST /v1/torrent magnet redirect', () => {
     'https://192.168.1.1/file.torrent',
     'https://169.254.1.1/file.torrent',
     'https://[::1]/file.torrent',
+    'https://[::ffff:127.0.0.1]/file.torrent',
+    'https://[::ffff:7f00:1]/file.torrent',
     'https://[fc00::1]/file.torrent',
     'https://[fe80::1]/file.torrent',
   ])('rejects an internal redirect target: %s', async (location) => {
@@ -1359,4 +1362,41 @@ describe('POST /v1/torrent magnet redirect', () => {
     expect(res.status).toBe(502);
     expect(JSON.parse(res.body)).toEqual({ error: 'bad_redirect' });
   });
+
+  it('pins the redirect connection to the checked address and original hostname', async () => {
+    const { file, device, token } = await subscriber();
+    let options: { servername?: string; lookup?: (host: string, opts: unknown, cb: (err: Error | null, address?: string, family?: number) => void) => void } | null = null;
+    const fetchImpl = () => Promise.resolve({
+      status: 302,
+      headers: { location: 'https://internal.example/file.torrent' },
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    const downloadRequest = (opts: typeof options, cb: (res: unknown) => void) => {
+      options = opts;
+      const response = Object.assign(Readable.from([]), { statusCode: 200, headers: {} });
+      cb(response);
+      return { on: () => {}, write: () => {}, end: () => {}, destroy: () => {} };
+    };
+    const app = createApp(file, fetchImpl, { downloadLookup: PUBLIC_DNS, downloadRequest });
+    const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
+    expect(res.status).toBe(200);
+    expect(options).not.toBeNull();
+    expect(options!.servername).toBe('internal.example');
+    expect(options!.lookup).toBeTypeOf('function');
+    const resolved = options!.lookup!('', {}, (_err, address, family) => ({ address, family }));
+    expect(resolved).toEqual({ address: '93.184.216.34', family: 4 });
+  });
+
+  it('aborts a stalled DNS lookup and returns a timeout', async () => {
+    const { file, device, token } = await subscriber();
+    const fetchImpl = () => Promise.resolve({
+      status: 302,
+      headers: { location: 'https://slow.example/file.torrent' },
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    const app = createApp(file, fetchImpl, { downloadLookup: () => new Promise(() => {}), torrentTimeoutMs: 10 });
+    const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
+    expect(res.status).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({ error: 'timeout' });
+  }, 1000);
 });
