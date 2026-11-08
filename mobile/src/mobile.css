@@ -2145,6 +2145,12 @@ html.m-hint-hold .m-hint { display: none; }
   font-weight: 700;
   vertical-align: 1px;
 }
+@media (max-width: 374px) {
+  .m-screen[data-route='news'] .m-seg { gap: 2px; }
+  .m-screen[data-route='news'] .m-seg button { min-width: 0; padding: 0 2px; font-size: 12px; }
+  .m-screen[data-route='news'] .m-seg-count { min-width: 18px; margin-left: 4px; padding: 0 4px; }
+  .m-cal-tools { flex-direction: column; }
+}
 /* «Мои» → the sort button names the order that is on (QA B13): a small tag at its bottom edge */
 .m-icon-btn.m-sort { position: relative; }
 .m-icon-tag {
