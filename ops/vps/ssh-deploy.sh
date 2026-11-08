@@ -25,6 +25,10 @@ require_secrets() {
     printf 'Secret VPS_SSH_KEY is not set.\n' >&2
     missing=1
   fi
+  if [[ -z "${VPS_KNOWN_HOSTS:-}" ]]; then
+    printf 'Secret VPS_KNOWN_HOSTS is not set.\n' >&2
+    missing=1
+  fi
   if [[ "$missing" -ne 0 ]]; then
     printf 'Add VPS_HOST and VPS_SSH_KEY under repository Actions secrets, then re-run.\n' >&2
     exit 1
@@ -83,21 +87,23 @@ main() {
   touch "$WORKDIR/.ssh-deploy-work"
   printf '%s\n' "$VPS_SSH_KEY" >"$WORKDIR/key"
   chmod 600 "$WORKDIR/key"
-  printf '%s\n' "${GH_TOKEN:-}" >"$WORKDIR/token"
-  chmod 600 "$WORKDIR/token"
+  printf '%s\n' "$VPS_KNOWN_HOSTS" >"$WORKDIR/known_hosts"
+  chmod 600 "$WORKDIR/known_hosts"
   trap cleanup EXIT
 
   SSH_OPTS=(
     -i "$WORKDIR/key"
     -o IdentitiesOnly=yes
     -o BatchMode=yes
-    -o StrictHostKeyChecking=accept-new
+    -o StrictHostKeyChecking=yes
     -o "UserKnownHostsFile=${WORKDIR}/known_hosts"
     -o ConnectTimeout=20
   )
 
   REMOTE_DIR="$(ssh "${SSH_OPTS[@]}" "$TARGET" 'umask 077 && mktemp -d /tmp/omp-deploy.XXXXXX')"
   [[ "$REMOTE_DIR" =~ ^/tmp/omp-deploy\.[A-Za-z0-9]+$ ]] || die "unexpected remote directory"
+  printf '%s\n' "${GH_TOKEN:-}" >"$WORKDIR/token"
+  chmod 600 "$WORKDIR/token"
 
   scp "${SSH_OPTS[@]}" "$deploy_script" "${TARGET}:${REMOTE_DIR}/deploy.sh"
   scp "${SSH_OPTS[@]}" "$WORKDIR/token" "${TARGET}:${REMOTE_DIR}/token"

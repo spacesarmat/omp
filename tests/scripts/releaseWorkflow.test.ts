@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtin, no @types/node in this project
 import { readFileSync } from 'node:fs';
 
-const yml = readFileSync('.github/workflows/release.yml', 'utf8');
+const yml = readFileSync('.github/workflows/release.yml', 'utf8').replace(/\r\n/g, '\n');
 
 describe('release workflow asset names', () => {
   it('uses OMP- names for every apk/ipk path', () => {
@@ -66,6 +66,19 @@ describe('CI workflow', () => {
     const at = ci.indexOf('assembleDebug');
     expect(at).toBeGreaterThan(0);
     expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
+  });
+});
+
+describe('release billing gate', () => {
+  it('installs billing dependencies and requires the full Postgres suite', () => {
+    expect(yml).toMatch(/services:\s*\n\s+postgres:\s*\n\s+image: postgres:17-alpine/);
+    const install = yml.indexOf('run: npm --prefix ops/billing ci');
+    const test = yml.indexOf('run: npm test');
+    expect(install).toBeGreaterThan(-1);
+    expect(install).toBeLessThan(test);
+    const testStep = yml.slice(test, yml.indexOf('Require the TMDB API key'));
+    expect(testStep).toContain('BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test');
+    expect(testStep).toContain("BILLING_TEST_REQUIRE_PG: '1'");
   });
 });
 

@@ -71,6 +71,8 @@ npm run dev
 npm run build
 ```
 
+Полный `npm test` запускайте в Linux или WSL: deploy-проверки требуют POSIX, `shellcheck`, `rsync`, `flock`, а billing - Postgres 17. В Git Bash на Windows запускайте только точечные JS-тесты, полный набор идёт в CI. Текстовые файлы checkout приводятся к LF через `.gitattributes`. Проверка мобильной вёрстки: `npm run check:overflow`.
+
 `npm run dev` поднимает интерфейс телевизора. Сборка Android (`npm run android:sync`) требует подмодуль `android/vendor/2160player`: `git submodule update --init --recursive`. CI на pull request и на push в `main` запускает тесты, сборку и упаковку. Выпуск собирается по тегу `vX.Y.Z` после того, как версия в `package.json` обновлена.
 
 ## Ссылки

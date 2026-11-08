@@ -11,8 +11,9 @@
 - `ops/billing/`: биллинг и админ-панель (`src/*.mjs` сервер и бот @OMPBILLINGBOT, `admin/` React-панель, Postgres).
 - `ops/vps/`: сервер (NUC): `docker-compose.yml` + `docker-compose.nuc.yml`, `Caddyfile.nuc`, `deploy.sh`, `jacred/`, `jackett-monitor/`, `site/`.
 - `scripts/`: релиз, CHANGELOG, Telegram-посты, TorrServer, проверки (`npm run check:boot`, `check:changelog`, `check:torrserver`,
-  `node scripts/overflow-check.mjs`, `npm run screenshots`).
+  `npm run check:overflow`, `npm run screenshots`).
 - Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`. Node 24.
+  Полный `npm test` запускать в Linux или WSL: нужны `shellcheck`, `rsync`, `flock` и Postgres 17. Git Bash на Windows - только точечные JS-тесты.
 - CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Релиз по тегу `v*` (`release.yml`), образ биллинга `billing-image.yml`,
   `torrserver-update.yml` (обновление TorrServer), `telegram-post.yml` (пост для уже выпущенного релиза), `vps-deploy.yml` (ручной деплой).
 - `main` защищён: изменения только через PR.
