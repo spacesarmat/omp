@@ -1329,6 +1329,10 @@ describe('POST /v1/torrent magnet redirect', () => {
     'https://[::ffff:7f00:1]/file.torrent',
     'https://[fc00::1]/file.torrent',
     'https://[fe80::1]/file.torrent',
+    'https://192.0.0.1/file.torrent',
+    'https://192.0.2.1/file.torrent',
+    'https://198.51.100.1/file.torrent',
+    'https://203.0.113.1/file.torrent',
   ])('rejects an internal redirect target: %s', async (location) => {
     const { file, device, token } = await subscriber();
     const fetchImpl = () => Promise.resolve({
@@ -1340,6 +1344,27 @@ describe('POST /v1/torrent magnet redirect', () => {
     const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
     expect(res.status).toBe(502);
     expect(JSON.parse(res.body)).toEqual({ error: 'bad_redirect' });
+  });
+
+  it.each(['192.0.3.1', '198.51.101.1', '203.0.114.1'])('allows a public address outside reserved ranges: %s', async (ip) => {
+    for (const location of [`https://${ip}/file.torrent`, 'https://external.example/file.torrent']) {
+      const { file, device, token } = await subscriber();
+      const fetchImpl = () => Promise.resolve({
+        status: 302,
+        headers: { location },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      });
+      const downloadRequest = (_opts: unknown, cb: (res: unknown) => void) => {
+        cb(Object.assign(Readable.from([]), { statusCode: 200, headers: {} }));
+        return { on: () => {}, write: () => {}, end: () => {}, destroy: () => {} };
+      };
+      const app = createApp(file, fetchImpl, {
+        downloadLookup: async () => [{ address: ip, family: 4 }],
+        downloadRequest,
+      });
+      const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
+      expect(res.status).toBe(200);
+    }
   });
 
   it('rejects a hostname that resolves to a private address', async () => {
