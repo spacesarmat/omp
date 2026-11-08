@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] In landscape, Discover puts the catalog title and the view, sort and search buttons on the same row as Mine / Discover. Filters stay below. The TV button stays. Portrait is unchanged
+
 ## 0.20.10
 
 - The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode

@@ -35,6 +35,7 @@ import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloa
 import { displayTitle } from '../../../src/lib/torrentName';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
+import { setDiscoverHeadSlot, useCompactCatalogBar } from './catalog/compactBar';
 import { usePinchStep } from '../ui/usePinchStep';
 import { cardWidth, gridCols, gridTemplate, useContentWidth, type GridMode } from '../ui/landscapeCols';
 import { useHint } from '../ui/Hint';
@@ -126,6 +127,7 @@ export function Library() {
   const view = settings.value.libraryView;
   const hfilter = settings.value.historyFilter;
   const mode = catalogMode.value;
+  const compactBar = useCompactCatalogBar();
   const mine = mode === 'mine';
   const [loaded, setLoaded] = useState(list.length > 0);
   const [error, setError] = useState('');
@@ -532,8 +534,9 @@ export function Library() {
           </button>
         </div>
       ) : (
-      <div class="m-lib-head">
-        {/* compact: the small logo and the «Мои | Обзор» switch share the row with the icon buttons */}
+      <div class={'m-lib-head' + (mode === 'discover' && compactBar ? ' m-lib-head-discover' : '')}>
+        {/* compact: the small logo and the «Мои | Обзор» switch share the row with the icon buttons.
+            In phone landscape the discover title and its tools join this row; the TV chip stays at the end. */}
         <div class="m-lib-brand">
           <Logo size={24} />
           <span class="m-sr">OMP</span>
@@ -559,6 +562,7 @@ export function Library() {
             </button>
           ))}
         </div>
+        {mode === 'discover' && compactBar && <div class="m-disc-slot" ref={setDiscoverHeadSlot} />}
         <TvChip />
         {mine && (
           <button

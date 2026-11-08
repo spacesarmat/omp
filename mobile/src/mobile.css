@@ -423,10 +423,37 @@ button, .m-btn {
 .m-disc-head h2 { margin: 0; font-size: 18px; font-weight: 700; white-space: nowrap; }
 .m-disc-head .m-grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-disc-tools { display: flex; flex: 0 0 auto; align-items: center; }
+/* Phone landscape only: the discover title and its tools sit in the top bar, beside «Мои / Обзор».
+   The TV chip stays the last control. The title shrinks before the 44px buttons do. Portrait has no slot. */
+.m-library .m-lib-head.m-lib-head-discover { min-width: 0; }
+.m-library .m-lib-head.m-lib-head-discover .m-seg { margin-right: 4px; }
+.m-disc-slot {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-right: 2px;
+}
+.m-disc-slot .m-disc-head { flex: 1 1 auto; min-width: 0; width: 100%; overflow: hidden; }
+.m-disc-slot .m-disc-head h2 { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.m-disc-slot .m-disc-head .m-grow { flex: 1 1 auto; min-width: 0; }
+.m-disc-slot .m-disc-tools { flex: 0 0 auto; }
+.m-disc-slot .m-disc-tools .m-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
 @media (orientation: landscape) and (max-height: 520px) {
   .m-discover { gap: 6px; }
   .m-disc-head h2 { font-size: 16px; }
-  .m-library { padding-top: calc(env(safe-area-inset-top) + 8px); }
+  .m-library {
+    padding-top: calc(env(safe-area-inset-top) + 8px);
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 640px) {
+  .m-disc-slot .m-disc-head .m-grow { display: none; }
 }
 .m-disc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .m-disc-chips::-webkit-scrollbar { display: none; }
