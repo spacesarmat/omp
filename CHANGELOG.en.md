@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Billing accepts a YooMoney wallet notice signed with sign (HMAC-SHA256). An empty test notice and test_notification answer 200 and do not turn a subscription on. The amount is checked against the order, currency 643 and the documented fee. A browser return does not turn a subscription on. The secret is still BILLING_YOOMONEY_SECRET
+- [tech] The YooMoney payment link opens the button form, with wallet (PC) and card (AC) chosen separately. The amount due is the subscription price plus the YooMoney fee from the form docs: wallet 1% borne by the recipient from the amount due, card 3% borne by the recipient from the charged sum. A 10% markup is not used. The targets field is not in the link
+- [tech] Admin confirmation of a held payment checks the same amount as the notice. An old hold without a charged sum keeps the previous check
+
 ## 0.20.9
 
 - [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen

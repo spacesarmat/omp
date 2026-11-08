@@ -103,7 +103,7 @@ describe('P1-1: an old renewal link never drops a slot bought later', () => {
     const screen = say(dev.state, 'Устройства', NOW + MIN);
     const offer = screen.messages[1] as Msg;
     expect(offer.text).toContain('Ещё одно устройство - 100 ₽: 50 ₽ за новое и 50 ₽ × 1 за доп. устройство, не продлённое вместе с подпиской.');
-    expect(urls(offer)[0]).toContain('Оплатить 100 ₽');
+    expect(urls(offer)[0]).toContain('Кошелёк - 101 ₽');
     // 50 ₽ is not enough for that link.
     expect(pay(dev.state, dev.result.label, '50', NOW + MIN, 'op-short').result.error).toBe('amount');
     const ok = pay(dev.state, dev.result.label, '100', NOW + MIN, 'op-dev2');
@@ -134,7 +134,7 @@ describe('P1-2: an extra-slot payment after the end becomes a credit', () => {
     const offer = say(paid.state, 'Оплатить', ended).messages[0] as Msg;
     expect(offer.text).toContain('• зачёт - −50 ₽');
     expect(offer.text).toContain('Итого: 100 ₽');
-    expect(urls(offer)[0]).toContain('Оплатить 100 ₽');
+    expect(urls(offer)[0]).toContain('Кошелёк - 101 ₽');
     expect(renewalPrice(paid.state, sub, ended)).toMatchObject({ gross: 150, credit: 50, total: 100 });
     // Applied: the renewal at 100 ₽ uses the credit up.
     const q = quotePurchase(paid.state, { kind: 'sub', accountId: f.account, subscriptionId: f.sub, now: ended });
@@ -173,10 +173,20 @@ describe('P1-3: grace sells «Продлить + устройство» only', (
     expect(texts).toContain('Продление на 30 дней, до 18.12.2026 12:00 МСК:');
     expect(texts).toContain('• доп. устройство × 1 - 50 ₽');
     const offer = screen.messages[1] as Msg;
-    expect(urls(offer)).toEqual([expect.stringContaining('Продлить + устройство - 200 ₽ → https://yoomoney.ru/')]);
-    const quote = screen.state.purchases[screen.state.purchases.length - 1];
-    expect(quote).toMatchObject({ kind: 'sub', price: 200, extras: 1, addExtra: 1 });
-    const paid = pay(screen.state, 'buy:' + quote.id, '200', grace, 'op-plus');
+    expect(urls(offer)[0]).toContain('Кошелёк - 202 ₽');
+    expect(urls(offer)[1]).toContain('Карта - 206,19 ₽');
+    const quote = screen.state.purchases.find((p: { method?: string; price: number }) => p.method === 'PC' && p.price === 200);
+    expect(quote).toMatchObject({ kind: 'sub', price: 200, extras: 1, addExtra: 1, gross: '202.00', fee: '2.00' });
+    const paid = applyPayment(screen.state, {
+      operationId: 'op-plus',
+      label: 'buy:' + quote.id,
+      amount: '200.00',
+      withdrawAmount: '202.00',
+      notificationType: 'p2p-incoming',
+      requireWithdraw: true,
+      currency: '643',
+      now: grace,
+    });
     const sub = subOf(paid.state, f.sub);
     expect(sub.paidUntil).toBe(NOW + 60 * DAY);
     expect(sub).toMatchObject({ extraSlots: 1, extraUntil: NOW + 60 * DAY });
@@ -189,7 +199,8 @@ describe('P1-3: grace sells «Продлить + устройство» only', (
   it('with an extra slot already, the grace offer is 250 ₽', () => {
     const f = setup({ bound: 3, extras: 1 });
     const screen = say(f.state, 'Устройства', NOW + 31 * DAY);
-    expect(urls(screen.messages[1] as Msg)[0]).toContain('Продлить + устройство - 250 ₽');
+    expect(urls(screen.messages[1] as Msg)[0]).toContain('Кошелёк - 252,50 ₽');
+    expect((screen.messages[1] as Msg).text).toContain('250 ₽ + 2,50 ₽ = 252,50 ₽');
   });
 });
 
