@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
+- [atv] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
 - [phone] New tabs and the calendar filter no longer spill past a 320 px screen. Horizontal chip scrolling in search is preserved
 - [tech] The mobile overflow check recognizes horizontal `.m-chips` without false failures and runs through `npm run check:overflow` in CI
 - [tech] The release workflow runs the full billing suite on Postgres 17. Text checkouts use LF, and the full local test suite is documented for Linux and WSL
