@@ -140,6 +140,15 @@ export interface AudioPlayState {
   error?: string;
 }
 
+/** One read of the connected network. No list of nearby networks. */
+export interface WifiCurrentRaw {
+  unsupported?: boolean;
+  permission?: string | null;
+  location?: string | null;
+  transport?: string | null;
+  ssid?: string | null;
+}
+
 export interface OmpNativeApi {
   available: boolean;
   discoverTvs(timeoutMs: number): Promise<FoundTv[]>;
@@ -231,10 +240,17 @@ export interface OmpNativeApi {
   /** Wi-Fi IPv4 of the phone; null without Wi-Fi or off-device. */
   localIpv4(): Promise<string | null>;
   /**
-   * SSID of the connected Wi-Fi when the app already has the permission. Never starts a scan.
+   * SSID of the connected Wi-Fi when the app already has the permission. Never starts a scan and never asks.
    * `{ available: false }` when the name cannot be read (no permission, browser, or unknown).
    */
   wifiHint(): Promise<{ available: boolean; ssid: string | null }>;
+  /**
+   * The connected network only. Does not scan and does not ask for permission.
+   * `unsupported` in a browser. A missing name stays null.
+   */
+  wifiCurrent(): Promise<WifiCurrentRaw>;
+  /** Asks for the SSID permission, then reads the connected network. Call only after the person agrees. */
+  requestWifiName(): Promise<WifiCurrentRaw>;
   /** TV search on (foreground service) or off (stops it and revokes the token); null off-device or when off. */
   rpcSetEnabled(on: boolean): Promise<RpcInfo | null>;
   /** The TV search address; null off-device or when off. */
@@ -360,6 +376,8 @@ interface OmpNativePlugin {
   clearLocalServerCache(): Promise<{ usedBytes?: number }>;
   localIpv4(): Promise<{ ip?: string | null }>;
   wifiHint?(): Promise<{ available?: boolean; ssid?: string | null }>;
+  wifiCurrent?(): Promise<{ permission?: unknown; location?: unknown; transport?: unknown; ssid?: unknown }>;
+  requestWifiName?(): Promise<{ permission?: unknown; location?: unknown; transport?: unknown; ssid?: unknown }>;
   rpcSetEnabled(o: { on: boolean }): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
   rpcInfo(): Promise<Partial<RpcInfo> & { enabled?: boolean }>;
   http(o: NativeHttpRequest): Promise<Partial<HttpResponse>>;
@@ -454,6 +472,27 @@ function parse(json: string): any {
 
 function text(v: unknown): string | undefined {
   return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+function word(v: unknown): string | null {
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+
+/** Browser and a missing plugin say unsupported. They do not invent an SSID. */
+async function readWifiCurrent(ask: boolean): Promise<WifiCurrentRaw> {
+  const call = ask ? plugin && plugin.requestWifiName : plugin && plugin.wifiCurrent;
+  if (!plugin || !call) return { unsupported: true };
+  try {
+    const r = await call.call(plugin);
+    return {
+      permission: word(r.permission),
+      location: word(r.location),
+      transport: word(r.transport),
+      ssid: word(r.ssid),
+    };
+  } catch (e) {
+    return { unsupported: true };
+  }
 }
 
 function num(v: unknown): number {
@@ -878,6 +917,14 @@ export const native: OmpNativeApi = {
     } catch (e) {
       return { available: false, ssid: null };
     }
+  },
+
+  async wifiCurrent() {
+    return readWifiCurrent(false);
+  },
+
+  async requestWifiName() {
+    return readWifiCurrent(true);
   },
 
   async rpcSetEnabled(on) {

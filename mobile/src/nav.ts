@@ -32,6 +32,8 @@ export type MRoute =
   | { name: 'advanced' }
   /** «Настройки» → «Плеер для видео». */
   | { name: 'videoPlayer' }
+  /** «Настройки» → «Откуда смотреть»: phone TorrServer, not the TV. */
+  | { name: 'watchFrom' }
   | { name: 'serverSettings'; url?: string }
   | { name: 'localServer' }
   /** `q` opens that question. */

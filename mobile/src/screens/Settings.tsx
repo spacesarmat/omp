@@ -34,6 +34,7 @@ import { friendsShare } from '../share/text';
 import { sendShare } from '../share/send';
 import { phonePlayerName } from './videoPlayerSettings';
 import { localServer, canRun } from '../server/localServer';
+import { loadWifiPrefs, wifiPrefsVersion } from '../servers/wifiRun';
 
 function testLabelPhone(): number {
   return clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX);
@@ -365,7 +366,10 @@ export function Settings() {
   }
 
   const where = server ? chosenName(server) || t('tvSettings.server') : t('settings.notChosen');
-  const whereLine = server ? where + ' · ' + reachText(reach) : where;
+  const wifi = loadWifiPrefs();
+  void wifiPrefsVersion.value;
+  const mode = wifi.enabled && !wifi.overrideId ? t('settings.watchFromModeAuto') : t('settings.watchFromModeAlways');
+  const whereLine = (server ? where + ' · ' + reachText(reach) : where) + ' · ' + mode;
 
   return (
     <div class="m-screen" data-route="settings">
@@ -399,15 +403,13 @@ export function Settings() {
 
       <section class="m-set-group" data-section="watch">
         <div class="m-set-label">{t('settings.watch')}</div>
-        <div class="m-set-row tm" data-code="P11.5" data-row="watch-from">
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.5" data-row="watch-from" onClick={() => navigate({ name: 'watchFrom' })}>
           <div class="m-set-text" style="flex-grow: 1">
             <span>{t('settings.watchFrom')}</span>
             <span class="m-muted m-small">{whereLine}</span>
           </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'connect' })}>
-            {t('settings.change')}
-          </button>
-        </div>
+          <Icon d={CHEVRON} size={20} />
+        </button>
         <PhoneServerRow />
         <VideoPlayerRow />
         <LanguageRow />

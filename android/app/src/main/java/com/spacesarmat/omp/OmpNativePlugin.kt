@@ -115,7 +115,11 @@ import org.json.JSONObject
  */
 @CapacitorPlugin(
     name = "OmpNative",
-    permissions = [Permission(alias = "notifications", strings = [Manifest.permission.POST_NOTIFICATIONS])],
+    permissions = [
+        Permission(alias = "notifications", strings = [Manifest.permission.POST_NOTIFICATIONS]),
+        Permission(alias = "wifiLocation", strings = [Manifest.permission.ACCESS_FINE_LOCATION]),
+        Permission(alias = "wifiNearby", strings = [Manifest.permission.NEARBY_WIFI_DEVICES]),
+    ],
 )
 class OmpNativePlugin : Plugin() {
     internal val io: ExecutorService = Executors.newCachedThreadPool()
@@ -710,6 +714,17 @@ class OmpNativePlugin : Plugin() {
     /** Connected Wi-Fi name when a location or nearby-wifi permission is already granted. Does not scan or prompt. */
     @PluginMethod
     fun wifiHint(call: PluginCall) = wifiHintOp(call)
+
+    /** Connected network only. Does not scan and does not ask. */
+    @PluginMethod
+    fun wifiCurrent(call: PluginCall) = wifiCurrentOp(call)
+
+    /** Asks for the SSID permission, then reads the connected network. */
+    @PluginMethod
+    fun requestWifiName(call: PluginCall) = requestWifiNameOp(call)
+
+    @PermissionCallback
+    private fun wifiNameDone(call: PluginCall) = wifiNameDoneOp(call)
 
     /**
      * { active }: OMP's own traffic goes through a VPN (the active network has TRANSPORT_VPN). An app excluded from the

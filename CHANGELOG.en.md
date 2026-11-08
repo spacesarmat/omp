@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Where to watch shows the server, the network and the rule. The phone's current Wi-Fi can be used: Android asks for permission only from that button. If the name is unavailable, it is typed. The TV server stays, and playback is not switched
 - [tech] Billing accepts a YooMoney wallet notice signed with sign (HMAC-SHA256). An empty test notice and test_notification answer 200 and do not turn a subscription on. The amount is checked against the order, currency 643 and the documented fee. A browser return does not turn a subscription on. The secret is still BILLING_YOOMONEY_SECRET
 - [tech] The YooMoney payment link opens the button form, with wallet (PC) and card (AC) chosen separately. The amount due is the subscription price plus the YooMoney fee from the form docs: wallet 1% borne by the recipient from the amount due, card 3% borne by the recipient from the charged sum. A 10% markup is not used. The targets field is not in the link
 - [tech] Admin confirmation of a held payment checks the same amount as the notice. An old hold without a charged sum keeps the previous check

@@ -189,6 +189,12 @@ export function setWifiManual(ssid: string): WifiPrefs {
   return next;
 }
 
+export function setWifiPrimary(id: string | null): WifiPrefs {
+  const next = { ...loadWifiPrefs(), primaryId: id };
+  saveWifiPrefs(next);
+  return next;
+}
+
 export function setWifiOverride(id: string | null): WifiPrefs {
   wifiPrompt.value = null;
   const next = { ...loadWifiPrefs(), overrideId: id };
