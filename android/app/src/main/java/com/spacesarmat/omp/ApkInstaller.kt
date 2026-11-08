@@ -33,6 +33,7 @@ class ApkInstallTracker() : BroadcastReceiver() {
         (apk ?: File(context.cacheDir, "updates/omp.apk")).delete()
         runCatching { context.unregisterReceiver(this) }
         onInstalled?.invoke()
+        UpdateRelaunch.open(context)
     }
 }
 
