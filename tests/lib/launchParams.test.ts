@@ -38,6 +38,10 @@ describe('parseLaunchParams', () => {
   });
   it('parses torrent with file and start time', () => {
     expect(parseLaunchParams({ torrent: HASH, file: 3, t: 1394 })!.action).toEqual({ kind: 'torrent', hash: HASH.toLowerCase(), file: 3, t: 1394 });
+    const long = Array.from({ length: 81 }, (_, i) => i + 1);
+    const kept = parseLaunchParams({ torrent: HASH, file: 1, files: long })!.action as { files?: number[] };
+    expect(kept.files).toEqual(long);
+    expect(parseLaunchParams({ torrent: HASH, file: 1, files: [2, 3] })!.action).toEqual({ kind: 'torrent', hash: HASH.toLowerCase(), file: 1 });
     expect(parseLaunchParams({ torrent: HASH, file: '2' })!.action).toEqual({ kind: 'torrent', hash: HASH.toLowerCase(), file: 2 });
     expect(parseLaunchParams({ torrent: HASH, file: -1 })!.invalid).toBe(true);
     expect(parseLaunchParams({ torrent: HASH, file: 1, t: 'x' })!.invalid).toBe(true);

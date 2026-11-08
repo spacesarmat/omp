@@ -128,6 +128,15 @@ class PlayerFlowTest {
         PlayerSnapshot(0, time, 100.0, paused, false, emptyList(), -1, emptyList(), "off")
 
     @Test
+    fun immediateNextStartsTheNextItemOnceAndIgnoresASecondEnd() {
+        assertEquals(PlayerFlow.End.NEXT, flow.itemEnded(hasNext = true, autoNext = true, immediate = true))
+        assertEquals(-1, flow.countdown)
+        assertEquals(PlayerFlow.End.NONE, flow.itemEnded(hasNext = true, autoNext = true, immediate = true))
+        flow.entered()
+        assertEquals(PlayerFlow.End.CLOSE, flow.itemEnded(hasNext = false, autoNext = true, immediate = true))
+    }
+
+    @Test
     fun identicalStatesWithinHalfASecondAreDropped() {
         val d = StateDeduper()
         assertTrue(d.shouldEmit(snap(1.0), 0))

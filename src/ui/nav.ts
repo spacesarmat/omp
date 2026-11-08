@@ -8,7 +8,7 @@ export type Route =
   | { name: 'library' }
   | { name: 'torrent'; hash: string }
   | { name: 'series'; key: string; season?: number }
-  | { name: 'player'; queue: PlayItem[]; index: number; startAt?: number; from?: string }
+  | { name: 'player'; queue: PlayItem[]; index: number; startAt?: number; from?: string; seasonNext?: boolean }
   | { name: 'add'; query?: string; run?: boolean }
   | { name: 'playlist'; url?: string; title?: string }
   | { name: 'settings' }

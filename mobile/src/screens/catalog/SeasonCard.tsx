@@ -137,7 +137,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
     setLaunchError('');
     // no TV chosen: the main action plays on this phone
     if (!activeTv.value) {
-      playOnPhone(spot.hash, spot.file, spot.at).catch((e) => setLaunchError(errorMessage(e)));
+      playOnPhone(spot.hash, spot.file, spot.at, meta && meta.episodes > 0 ? meta.episodes : undefined).catch((e) => setLaunchError(errorMessage(e)));
       return;
     }
     void launch.start({
@@ -146,6 +146,8 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
       at: spot.at,
       duration: getLocalProgress(spot.hash, spot.file.id)?.duration || undefined,
       label: [episodeLabel(spot.file.path), stripExt(baseName(spot.file.path))].filter(Boolean).join(' · '),
+      seasonTotal: meta && meta.episodes > 0 ? meta.episodes : undefined,
+      season: season,
       onError: setLaunchError,
     });
   };

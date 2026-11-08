@@ -230,7 +230,10 @@ export interface P2160Saved {
   /** Seconds where the user stopped. */
   time: number;
   duration: number;
+  /** Near the end of the file: progress counts as watched. Not a reason to open the next episode. */
   ended: boolean;
+  /** The player itself said the item finished (`ended` or `watched`). Back near the end does not set this. */
+  completed: boolean;
 }
 
 /**
@@ -269,16 +272,19 @@ export function saveP2160Result(
   // must not mark it watched. An older player omits the flag and the ratio still decides.
   const explicitOpen = r.watched === false;
   const nearEnd = !explicitOpen && pos >= 0 && dur > 0 && pos / dur >= WATCHED_RATIO;
+  // A position past 90% saves progress. Opening the next episode needs the player's own finish signal.
+  // An older 2160 Player omits `watched`; Back at 95% must not look like the episode ended.
+  const completed = r.watched === true || (r.watched !== false && r.ended === true);
   if (nearEnd) {
     const time = pos > dur ? dur : pos;
     saveItemProgress(c, item, time, dur, true);
-    return { item, time: time, duration: dur, ended: true };
+    return { item, time: time, duration: dur, ended: true, completed };
   }
-  if (!hasPos || pos < MIN_RESUME) return { item, time: 0, duration: dur, ended: false };
+  if (!hasPos || pos < MIN_RESUME) return { item, time: 0, duration: dur, ended: false, completed: false };
   if (dur > 0) saveItemProgress(c, item, pos, dur, true, explicitOpen);
   // no duration anywhere: only the server's resume point can be kept
   else if (c) c.setViewed(hash, idx, Math.floor(pos)).catch(() => undefined);
-  return { item, time: pos, duration: dur, ended: false };
+  return { item, time: pos, duration: dur, ended: false, completed: false };
 }
 
 let busy = false;

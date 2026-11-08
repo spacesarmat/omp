@@ -440,7 +440,7 @@ describe('Library', () => {
     expect(el.querySelector('[role=dialog]')!.textContent).toContain('Осталось 38 мин');
     act(() => byText('Продолжить с 23:14')!.click());
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 1394, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 1394, from: 'Телефон', files: [2] });
     expect(toast.value).toContain('Запустил на LG OLED');
   });
 
@@ -588,7 +588,7 @@ describe('Library', () => {
     act(() => byText('Сначала')!.click());
     await flush();
     expect(launch).toHaveBeenCalledTimes(1);
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 0, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'h1', file: 2, t: 0, from: 'Телефон', files: [2] });
     release();
     await flush();
   });

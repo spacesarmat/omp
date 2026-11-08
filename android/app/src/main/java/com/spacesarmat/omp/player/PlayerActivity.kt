@@ -1071,7 +1071,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             showMessage(I18n.s("player.res.creditsSkipped"), false)
             return
         }
-        if (flow.countdown < 0 && skips.countdownDue(i, pos, dur) && flow.creditsDue(hasNext(), req.autoNext, engine.playWhenReady)) {
+        if (flow.countdown < 0 && skips.countdownDue(i, pos, dur) && flow.creditsDue(hasNext(), req.autoNext, engine.playWhenReady, req.immediateNext)) {
             handler.removeCallbacks(countdownTick)
             handler.postDelayed(countdownTick, 1000)
         }
@@ -1301,7 +1301,8 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
 
     private fun onItemEnd() {
         if (isFinishing) return
-        when (flow.itemEnded(hasNext(), req.autoNext)) {
+        when (flow.itemEnded(hasNext(), req.autoNext, req.immediateNext)) {
+            PlayerFlow.End.NEXT -> playNext()
             PlayerFlow.End.COUNTDOWN -> {
                 handler.removeCallbacks(countdownTick)
                 handler.postDelayed(countdownTick, 1000)

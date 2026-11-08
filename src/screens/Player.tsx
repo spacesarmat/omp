@@ -37,6 +37,7 @@ import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
+import { seasonVisit, type SeasonVisit } from '../player/seasonQueue';
 import { useCacheStats } from '../player/useCacheStats';
 import { infoPanel, bufferedAhead } from '../player/infoPanel';
 import { Controls } from '../player/Controls';
@@ -61,9 +62,11 @@ interface Props {
   startAt?: number;
   /** Name of the phone that launched the player (watch journal source). */
   from?: string;
+  /** Season queue from the phone: the next episode starts at once, with no countdown. */
+  seasonNext?: boolean;
 }
 
-export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props) {
+export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNext }: Props) {
   const c = client.value;
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -157,9 +160,10 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
   const chapterIdx = chapterIndexAt(chapters, vs.time);
   const segs = skipSegments(probe, prefs, vs.duration);
 
+  const immediate = !!seasonNext;
   const next = useNextEpisode({
     itemKey: index,
-    enabled: settings.value.autoNext,
+    enabled: immediate ? false : settings.value.autoNext,
     hasNext,
     time: vs.time,
     duration: vs.duration,
@@ -168,7 +172,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from }: Props)
     creditsStart: segs.credits ? segs.credits.start : null,
     onNext: goNext,
     onEnd: () => goBack(),
+    holdEnd: immediate,
   });
+  const visit = useRef<SeasonVisit>({ index: -1, ended: 0, advanced: false });
+  useEffect(() => {
+    if (!immediate) return;
+    const step = seasonVisit(visit.current, index, vs.ended, index < queue.length - 1);
+    visit.current = step.state;
+    if (step.go === 'next') setIndex(index + 1);
+    else if (step.go === 'end') goBack();
+  }, [immediate, vs.ended, index, queue.length]);
 
   useEffect(() => { if (ready && !vs.paused && !blocked) setStarted(true); }, [ready, vs.paused, blocked]);
   const donate = donateMode({

@@ -19,6 +19,8 @@ import { posterImageSize } from '../../src/catalog/tmdb';
 import type { Torrent as T } from '../../src/api/types';
 import { addFindings, findingsOf } from '../../src/monitor/subs';
 import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { rememberSeasonTotals, resetSeasonTotals } from '../../src/lib/episodesOutOf';
+import { seriesKey } from '../../src/lib/seriesGroups';
 
 const EPS = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.S02E03.mkv', 'Show.S02E04.mkv'];
 const tor: T = {
@@ -128,7 +130,7 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 23:14'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394, from: 'Телефон', files: [3, 4] });
     // watch journal: one entry for this phone after the launch, with the chosen position
     expect(record).toHaveBeenCalledTimes(1);
     expect(record.mock.calls[0][2]).toEqual({ f: 3, t: 1394, d: 3600, src: 'phone', name: 'Телефон' });
@@ -241,6 +243,32 @@ describe('Torrent', () => {
     expect(opts[2].textContent).toContain('Скопировать ссылку на поток');
   });
 
+  it('continuing another season uses that season count, not the one on screen', async () => {
+    const paths = [1, 2, 3, 4, 5, 6].map((n) => 'Show.S01E0' + n + '.mkv').concat([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => 'Show.S02E' + (n < 10 ? '0' : '') + n + '.mkv'));
+    const pack: T = {
+      hash: 'abc',
+      title: 'Starbound Frontier S01-S02 1080p WEB-DL',
+      category: 'tv',
+      stat: 3,
+      file_stats: paths.map((p, i) => ({ id: i + 1, path: p, length: 1 })),
+    };
+    torrents.value = [pack];
+    rememberSeasonTotals(seriesKey(pack), { 1: 6, 2: 10 });
+    saveProgress('abc', 9, 100, 2000);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    expect(el.textContent).toContain('из 6');
+    click(el.querySelector('.m-btn-primary')!);
+    await flush();
+    click(byText('Продолжить с '));
+    await flush();
+    const sent = launch.mock.calls[0][0];
+    expect(sent.file).toBe(9);
+    expect(sent.files).toEqual([9, 10, 11, 12, 13, 14, 15, 16]);
+    resetSeasonTotals();
+  });
+
   it('«На телевизоре» launches with watch params and then opens the remote', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     saveProgress('abc', 4, 500, 3000);
@@ -251,7 +279,7 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон', files: [4] });
     expect(el.querySelector('.m-status-ok')!.textContent).toBe('Запустил на LG OLED');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -578,6 +606,27 @@ describe('Torrent «Сменить постер»', () => {
 });
 
 describe('Torrent not in the list yet', () => {
+  it('sends the season queue to the TV, and does not cross a gap or the next season', async () => {
+    torrents.value = [];
+    const pack: T = {
+      ...tor,
+      file_stats: [
+        { id: 1, path: 'Show.S02E01.mkv', length: 1 },
+        { id: 2, path: 'Show.S02E02.mkv', length: 1 },
+        { id: 4, path: 'Show.S02E04.mkv', length: 1 },
+        { id: 5, path: 'Show.S03E01.mkv', length: 1 },
+      ],
+    };
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(pack);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[0]);
+    click(el.querySelectorAll('.m-opt')[0]);
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 1, t: 0, from: 'Телефон', files: [1, 2] });
+  });
+
   it('asks the server and shows it', async () => {
     torrents.value = [];
     const get = vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);
@@ -625,7 +674,7 @@ describe('TV launch flow', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     setWatchActions({ recordWatch: record, ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
     await open1();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p', from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p', from: 'Телефон', files: [4] });
     expect(el.textContent).not.toContain('Откуда смотреть');
     expect(launchedAt.value).toBeGreaterThan(0);
     expect(launching.value).toBe(true);
@@ -645,7 +694,7 @@ describe('TV launch flow', () => {
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон', files: [4] });
   });
 
   it('omits «Осталось» when the duration is unknown', async () => {
@@ -675,7 +724,7 @@ describe('TV launch flow', () => {
     expect(launch).not.toHaveBeenCalled();
     click(byText('Всё равно запустить'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон', files: [4] });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
     });
@@ -704,7 +753,7 @@ describe('TV launch flow', () => {
     expect(el.textContent).toContain('Откуда смотреть');
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон', files: [4] });
   });
 
   it('«Переименовать»: the sheet starts with the shown title, saves the trimmed one and updates the list', async () => {

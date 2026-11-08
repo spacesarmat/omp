@@ -147,8 +147,10 @@ describe('watchOnPhone', () => {
     a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
     await watchOnPhone(c, tor as any, w(2, 125.7));
     const o = a.playEmbedded2160.mock.calls[0][0];
-    expect(o.items).toHaveLength(3);
-    expect(o.start).toBe(1);
+    expect(o.items).toHaveLength(2);
+    expect(o.start).toBe(0);
+    expect(o.items[0].url).toContain('S01E02');
+    expect(o.items[1].url).toContain('S01E03');
     expect(o).toMatchObject({ positionMs: 125000, fromStart: false, background: true });
     expect(a.open2160).not.toHaveBeenCalled();
     expect(a.player2160).not.toHaveBeenCalled();
@@ -216,8 +218,8 @@ describe('watchOnPhone', () => {
     a.open2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
     await watchOnPhone(c, tor as any, w(2, 125.7));
     const o = a.open2160.mock.calls[0][0];
-    expect(o.items).toHaveLength(3);
-    expect(o.start).toBe(1);
+    expect(o.items).toHaveLength(2);
+    expect(o.start).toBe(0);
     expect(o).toMatchObject({ positionMs: 125000, fromStart: false });
     expect(a.openExternal).not.toHaveBeenCalled();
     expect(a.playEmbedded2160).not.toHaveBeenCalled();
@@ -256,6 +258,104 @@ describe('watchOnPhone', () => {
     expect(a.open2160).not.toHaveBeenCalled();
     expect(a.playEmbedded2160).not.toHaveBeenCalled();
     expect(a.openExternal).toHaveBeenCalledTimes(2);
+    done();
+  });
+
+  it('a finished episode opens the next one of the same season, and a second end does not skip ahead', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    const url = (ep: number) => 'http://h:8090/stream/Show.S01E0' + ep + '.mkv?link=abc&index=' + ep + '&play';
+    a.playEmbedded2160
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 2300000, durationMs: 2400000, url: url(2) })
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 2300000, durationMs: 2400000, url: url(2) });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(2);
+    expect(a.playEmbedded2160.mock.calls[1][0].start).toBe(1);
+    expect(a.playEmbedded2160.mock.calls[1][0].items[1].url).toContain('S01E03');
+    done();
+  });
+
+  it('Back near the end does not open the next episode when the player did not say it finished', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 2280000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E02.mkv?link=abc&index=2&play' });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(1);
+    expect(getLocalProgress('abc', 2)?.time).toBeGreaterThan(2000);
+    done();
+  });
+
+  it('stopping before the end does not open the next episode', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 20000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E02.mkv?link=abc&index=2&play' });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(1);
+    done();
+  });
+
+  it('a hole in the season is not skipped, and the missing episode is reported', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    const pack = {
+      hash: 'abc',
+      title: 'TNG',
+      file_stats: [
+        { id: 5, path: 'TNG.S06E05.mkv', length: 1 },
+        { id: 6, path: 'TNG.S06E06.mkv', length: 1 },
+        { id: 8, path: 'TNG.S06E08.mkv', length: 1 },
+        { id: 11, path: 'TNG.S07E01.mkv', length: 1 },
+      ],
+    };
+    const seen: number[] = [];
+    const url = (name: string, id: number) => 'http://h:8090/stream/' + name + '.mkv?link=abc&index=' + id + '&play';
+    a.playEmbedded2160
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E05', 5) })
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E06', 6) });
+    await watchOnPhone(c, pack as any, {
+      hash: 'abc',
+      file: pack.file_stats[0],
+      title: '5',
+      at: 0,
+      duration: 1,
+      onMissing: (_s, ep) => seen.push(ep),
+    });
+    const items = a.playEmbedded2160.mock.calls[0][0].items.map((i: { url: string }) => i.url);
+    expect(items.some((u: string) => u.indexOf('S06E05') >= 0)).toBe(true);
+    expect(items.some((u: string) => u.indexOf('S06E06') >= 0)).toBe(true);
+    expect(items.some((u: string) => u.indexOf('S06E08') >= 0 || u.indexOf('S07E01') >= 0)).toBe(false);
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(2);
+    expect(seen).toEqual([7]);
+    done();
+  });
+
+  it('a film with extras plays once and does not open the next file', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    const film = {
+      hash: 'abc',
+      title: 'Movie',
+      file_stats: [
+        { id: 1, path: 'Movie.2020.mkv', length: 1e9 },
+        { id: 2, path: 'Movie.2020.extra.mkv', length: 1e8 },
+      ],
+    };
+    a.playEmbedded2160.mockResolvedValue({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: 'http://h:8090/stream/Movie.2020.mkv?link=abc&index=1&play' });
+    await watchOnPhone(c, film as any, { hash: 'abc', file: film.file_stats[0], title: 'Movie', at: 0, duration: 1 });
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(1);
+    const items = a.playEmbedded2160.mock.calls[0][0].items;
+    expect(items).toHaveLength(1);
+    expect(items[0].url).toContain('Movie.2020.mkv');
     done();
   });
 
