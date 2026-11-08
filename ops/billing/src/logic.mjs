@@ -1838,6 +1838,14 @@ export function takeCliAdminLogin(state, { token, now }) {
   return { state: next, result: { status: 'ok' } };
 }
 
+export function pendingDeviceLink(state, { token, now }) {
+  const key = String(token || '').trim().toLowerCase();
+  if (!key) return { state, result: { error: 'bad_link' } };
+  const link = (state.links || []).find((l) => l.token === key && !l.usedAt && l.expiresAt > now);
+  if (!link) return { state, result: { error: 'bad_link' } };
+  return { state, result: { token: link.token, deviceId: link.deviceId, callback: 'ly:' + link.token.slice(0, 32) } };
+}
+
 export function confirmDeviceLink(state, { token, telegramId, now }) {
   const key = String(token || '').trim().toLowerCase();
   if (!key) return { state, result: { error: 'bad_link' } };

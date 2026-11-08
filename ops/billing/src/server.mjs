@@ -1866,6 +1866,12 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
+        const deviceId = String(req.headers['x-device-id'] || body.deviceId || '');
+        const wait = claimLimit.check(clientIp(req), deviceId);
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
         const result = await store.update((state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
         if (result.error) return json(res, 400, result);
         const state = (await store.read());
