@@ -305,7 +305,7 @@ async function go(name: string): Promise<void> {
 // screen-wide boxes that hide what sticks out: content cut by them is lost, not scrolled, so it still counts
 const SCREEN_BOXES = '.m-screen, .m-library, .m-torrent, .m-remote, .m-rb, .m-rt, .m-now, .m-lib-pull, .m-lib-body, .m-sheet, .m-sheet-scroll';
 // rows meant to scroll sideways (chips, cast): what sticks out of them is reachable
-const ROW_SCROLLERS = '.m-tabs, .m-hfilters, .m-disc-chips, .m-tc-cast, .m-tc-chips, .m-scroll-x';
+const ROW_SCROLLERS = '.m-chips, .m-tabs, .m-hfilters, .m-disc-chips, .m-tc-cast, .m-tc-chips, .m-scroll-x';
 
 /**
  * Elements whose right edge is past the window (the outermost one of each overflowing subtree). An element inside a

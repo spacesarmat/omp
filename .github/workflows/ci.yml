@@ -30,6 +30,7 @@ jobs:
       - run: npm run build:mobile
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      - run: npm run check:overflow
       - run: node scripts/package.mjs
       - run: npm run check:boot
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
