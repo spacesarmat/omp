@@ -1,16 +1,14 @@
 {
-  "version": "0.20.11",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-webOS.ipk",
-  "ipkHash": "4465de98e01c1ff607a9144fda2a53a491b88a393a75c05975d3773fd8051632",
-  "ipkSize": 553110,
+  "version": "0.20.12-beta.1",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-webOS.ipk",
+  "ipkHash": "77fc2f7f22f91f813ed95d256dcbae2ea2b8e750c2aaf4151a4470c406bb44bc",
+  "ipkSize": 554126,
   "notes": [
     "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.11",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1",
   "notesTv": [],
   "notesPhone": [
-    "В ландшафте «Обзор» название каталога и кнопки вида, сортировки и поиска стоят в одной строке с «Мои / Обзор». Фильтры остаются ниже. Кнопка телевизора на месте. Портрет не меняется",
-    "Встроенный плеер 2160 обновлён до 0.2.24. В AVI поддержаны WMV и VC-1. При застое сети плеер сообщает об отсутствии соединения с источником, а не о повреждении файла",
-    "Вкладки «Новое» и фильтр календаря не выходят за край экрана на ширине 320 px. Горизонтальная прокрутка чипов в поиске сохраняется"
+    "После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия"
   ]
 }

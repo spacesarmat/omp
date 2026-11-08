@@ -1,30 +1,28 @@
 {
-  "version": "0.20.11",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11.apk",
-  "ipkHash": "00572921749d9d4031e4b72b4379a626f0fc599d31112c7d61c7e0644e95a67b",
-  "ipkSize": 93182122,
+  "version": "0.20.12-beta.1",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1.apk",
+  "ipkHash": "876b0c4b5932d4f5efd80ca36a8c48857b65b24a9ecbfa410b0edd9b3c7f50f5",
+  "ipkSize": 93190222,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-arm64.apk",
-      "sha256": "35dba59938f105cf788ca4aa73270590db480e6b03a6ac8f02a75c86ed57c6e8",
-      "size": 58633856
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-arm64.apk",
+      "sha256": "a5038b54bba01c8234b6187a0fff724cef984a912600624232044fdc820bd597",
+      "size": 58641956
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-armv7.apk",
-      "sha256": "3c2fda97e73508d5c4e8ad4f42dc36ec35e79e3837293f8fe17e997682b7e05f",
-      "size": 54452884
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-armv7.apk",
+      "sha256": "c2263ab04ed1b9cfa61ae84f8fc438c081746a5526f306d3eaacfd650a31bdb1",
+      "size": 54460984
     }
   },
   "notes": [
-    "На Android TV плеер 2160 обновлён до 0.2.24. В AVI появились WMV и VC-1, а при сетевом застое теперь показывается ошибка соединения, а не повреждённый файл"
+    "После обновления Android TV приложение открывается снова или предлагает открыть себя уведомлением"
   ],
   "notesTv": [
-    "На Android TV плеер 2160 обновлён до 0.2.24. В AVI появились WMV и VC-1, а при сетевом застое теперь показывается ошибка соединения, а не повреждённый файл"
+    "После обновления Android TV приложение открывается снова или предлагает открыть себя уведомлением"
   ],
   "notesPhone": [
-    "В ландшафте «Обзор» название каталога и кнопки вида, сортировки и поиска стоят в одной строке с «Мои / Обзор». Фильтры остаются ниже. Кнопка телевизора на месте. Портрет не меняется",
-    "Встроенный плеер 2160 обновлён до 0.2.24. В AVI поддержаны WMV и VC-1. При застое сети плеер сообщает об отсутствии соединения с источником, а не о повреждении файла",
-    "Вкладки «Новое» и фильтр календаря не выходят за край экрана на ширине 320 px. Горизонтальная прокрутка чипов в поиске сохраняется"
+    "После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.11"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1"
 }
