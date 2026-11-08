@@ -2196,6 +2196,7 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, 502, { error: code });
         } finally {
           clearTimeout(timer);
+          controller.abort();
         }
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {

@@ -1261,6 +1261,24 @@ describe('POST /v1/torrent magnet redirect', () => {
     expect(released).toBe(true);
   });
 
+  it('aborts the upstream after rejecting a declared oversized body', async () => {
+    const { file, device, token } = await subscriber();
+    let signal: AbortSignal | undefined;
+    const fetchImpl = (_url: string, opts?: FetchOpts) => {
+      signal = opts && opts.signal;
+      return Promise.resolve({
+        status: 200,
+        headers: { 'content-length': '32' },
+        arrayBuffer: async () => new ArrayBuffer(0),
+      });
+    };
+    const app = createApp(file, fetchImpl, { torrentMaxBytes: 16 });
+    const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
+    expect(res.status).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({ error: 'too_large' });
+    expect(signal && signal.aborted).toBe(true);
+  });
+
   it('aborts a stalled upstream and returns a timeout', async () => {
     const { file, device, token } = await subscriber();
     let aborted = false;
