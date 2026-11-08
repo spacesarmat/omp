@@ -58,6 +58,10 @@ The three files share one version and one signature. In-app updates and the inst
 
 The phone connects to the TV like this: on LG, a QR code under Settings → “Connect phone”; on Android TV, a 6-digit code on the same screen. Until a TV is chosen, Library, Remote and Settings list TVs found on the network: an LG connects on a tap, an Android TV asks for that code.
 
+## Development
+
+Run the full `npm test` in Linux or WSL. Deploy tests require POSIX, `shellcheck`, `rsync` and `flock`; billing tests require Postgres 17. Git Bash on Windows is suitable only for focused JS tests, not for the full suite. Text files are checked out with LF through `.gitattributes`. The mobile layout check is `npm run check:overflow`.
+
 ## Links
 
 - Site: https://omp-player.online
