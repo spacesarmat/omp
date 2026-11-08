@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
-import { adminLoginFailureLine, botReply } from '../src/bot.mjs';
+import { adminLoginFailureLine, botCallback, botReply } from '../src/bot.mjs';
 import { restoreJackett, stripJackett } from '../src/jackett.mjs';
 import {
   createRateLimit,
@@ -268,8 +268,10 @@ describe('bot', () => {
       text: '/start link_' + started.result.token,
       now: NOW + 1000,
     });
-    expect(out.messages[0].text).toContain('привязан');
-    const acc = out.state.accounts.find((a: { telegramId: string }) => a.telegramId === '55');
+    expect(out.messages[0].text).toContain('Привязать к этому Telegram устройство');
+    const confirmed = botCallback(out.state, { chatId: '55', data: 'ly:' + started.result.token.slice(0, 32), now: NOW + 1000 });
+    expect(confirmed.messages[0].text).toContain('привязан');
+    const acc = confirmed.state.accounts.find((a: { telegramId: string }) => a.telegramId === '55');
     expect(acc.linkedDevices).toContain(device);
   });
 
