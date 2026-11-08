@@ -285,7 +285,7 @@ describe('admin http', () => {
     const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));
     expect(once.status).toBe(302);
     const cookie = String(once.headers['set-cookie'] || '');
-    expect(cookie).toContain('omp_admin=');
+    expect(cookie).toContain('__Host-omp_admin=');
     const reuse = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(link.token));
     expect(reuse.status).toBe(403);
     const home = await call(app, 'GET', '/admin/api/home', { cookie });

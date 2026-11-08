@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readCappedBody } from './httpBody.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -221,22 +222,15 @@ function cookie(req, name) {
   return '';
 }
 
-/** Admin session cookie: HttpOnly + SameSite=Lax; Secure when the request (or public origin) is HTTPS. */
+/** Host-prefixed admin session cookie: HttpOnly, Secure and SameSite=Lax. */
 function adminSetCookie(req, id, maxAge) {
-  const proto = String(req.headers['x-forwarded-proto'] || '')
-    .split(',')[0]
-    .trim()
-    .toLowerCase();
-  const origin = String(process.env.BILLING_PUBLIC_ORIGIN || '');
-  const secure = proto === 'https' || origin.indexOf('https://') === 0;
-  let value = 'omp_admin=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/';
-  if (secure) value += '; Secure';
+  let value = '__Host-omp_admin=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/; Secure';
   if (maxAge !== undefined) value += '; Max-Age=' + maxAge;
   return value;
 }
 
 function adminOf(req) {
-  const id = cookie(req, 'omp_admin');
+  const id = cookie(req, '__Host-omp_admin');
   const row = sessions.get(id);
   if (!row || row.exp < Date.now()) {
     if (row) sessions.delete(id);
@@ -314,20 +308,62 @@ function audit(file, action, detail, admin) {
 }
 
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
+const JSON_BODY_LIMIT_BYTES = 256 * 1024;
 
-async function readBody(req) {
+async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
   const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > BODY_LIMIT_BYTES) {
-      const err = new Error('body too large');
-      err.code = 'BODY_TOO_LARGE';
-      throw err;
+  let raw;
+  if (typeof req.on === 'function' && typeof req.resume === 'function') {
+    raw = await new Promise((resolve, reject) => {
+      let size = 0;
+      const cleanup = () => {
+        req.removeListener('data', onData);
+        req.removeListener('end', onEnd);
+        req.removeListener('error', onError);
+        req.removeListener('aborted', onAborted);
+      };
+      const onData = (chunk) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          cleanup();
+          req.resume();
+          const err = new Error('body too large');
+          err.code = 'BODY_TOO_LARGE';
+          reject(err);
+          return;
+        }
+        chunks.push(chunk);
+      };
+      const onEnd = () => {
+        cleanup();
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      };
+      const onError = (err) => {
+        cleanup();
+        reject(err);
+      };
+      const onAborted = () => {
+        cleanup();
+        reject(new Error('request aborted'));
+      };
+      req.on('data', onData);
+      req.on('end', onEnd);
+      req.on('error', onError);
+      req.on('aborted', onAborted);
+    });
+  } else {
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > maxBytes) {
+        const err = new Error('body too large');
+        err.code = 'BODY_TOO_LARGE';
+        throw err;
+      }
+      chunks.push(chunk);
     }
-    chunks.push(chunk);
+    raw = Buffer.concat(chunks).toString('utf8');
   }
-  const raw = Buffer.concat(chunks).toString('utf8');
   const type = String(req.headers['content-type'] || '');
   if (type.indexOf('application/json') >= 0) {
     try {
@@ -921,6 +957,13 @@ export function createApp(file, fetchImpl, opts) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
     try {
+      if (path === '/admin' || path.indexOf('/admin/') === 0) {
+        res.setHeader('cache-control', 'no-store');
+        res.setHeader(
+          'content-security-policy',
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+        );
+      }
       // Phone calls are native HTTP. The admin SPA is same-origin.
       // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
       // to call bearer or cookie routes.
@@ -993,7 +1036,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/home') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const sid = cookie(req, 'omp_admin');
+        const sid = cookie(req, '__Host-omp_admin');
         const flash = takeFlash(admin, sid);
         return json(
           res,
@@ -1126,7 +1169,7 @@ export function createApp(file, fetchImpl, opts) {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const id = url.searchParams.get('id') || '';
-        const sid = cookie(req, 'omp_admin');
+        const sid = cookie(req, '__Host-omp_admin');
         const flash = takeFlash(admin, sid);
         const state = await store.read();
         const devices = await accountDevices(store, state, id);
@@ -1272,7 +1315,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       const admin = adminOf(req);
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
-        const body = await readBody(req);
+        const body = await readBody(req, path === '/admin/ads/image' ? BODY_LIMIT_BYTES : JSON_BODY_LIMIT_BYTES);
         if (path === '/admin/api/dht/probe') {
           if (!admin) return json(res, 401, { auth: false });
           if (body.csrf !== admin.csrf) return json(res, 403, { ok: false, error: 'forbidden' });
@@ -1703,7 +1746,7 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=security';
         }
         if (path === '/admin/logout') {
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, '__Host-omp_admin');
           sessions.delete(sid);
           await audit(file, 'logout', 'ok', admin);
           res.setHeader('set-cookie', adminSetCookie(req, '', 0));
@@ -1713,7 +1756,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/session-revoke') {
           const target = body.sessionId || '';
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, '__Host-omp_admin');
           if (target && target !== sid) {
             sessions.delete(target);
             await audit(file, 'session_revoke', 'ok', admin);
@@ -1771,7 +1814,7 @@ export function createApp(file, fetchImpl, opts) {
           await audit(file, 'support_close', body.telegramId || '', admin);
         }
         if (flashed || flashPromo || flashText || flashError) {
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, '__Host-omp_admin');
           const cur = sessions.get(sid) || admin;
           sessions.set(sid, {
             ...cur,
@@ -2130,7 +2173,13 @@ export function createApp(file, fetchImpl, opts) {
         // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
         // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
         if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
-        const buf = Buffer.from(await upstream.res.arrayBuffer());
+        let buf;
+        try {
+          buf = await readCappedBody(upstream.res, 5 * 1024 * 1024);
+        } catch (e) {
+          if (e && e.code === 'too_large') return json(res, 502, { error: 'too_large' });
+          throw e;
+        }
         return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {

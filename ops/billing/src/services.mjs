@@ -256,7 +256,7 @@ export async function probeAllServices(settings, fetchImpl) {
 /** Sliding-window rate limit: max hits per windowMs per key. */
 /**
  * Sliding-window limiter kept in memory. `opts.now` replaces the clock in tests.
- * Keys whose hits all fell out of the window are dropped once the map grows past `opts.maxKeys`.
+ * Keys whose hits all fell out of the window are dropped once the map reaches `opts.maxKeys`.
  */
 export function createRateLimit(maxHits, windowMs, opts) {
   const hits = new Map();
@@ -271,8 +271,9 @@ export function createRateLimit(maxHits, windowMs, opts) {
     allow(key) {
       const now = clock();
       const id = String(key || '');
-      if (hits.size > maxKeys) prune(now);
+      if (hits.size >= maxKeys) prune(now);
       let arr = hits.get(id) || [];
+      if (!arr.length && hits.size >= maxKeys) return false;
       arr = arr.filter((t) => now - t < windowMs);
       if (arr.length >= maxHits) {
         hits.set(id, arr);

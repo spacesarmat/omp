@@ -69,9 +69,9 @@ async function login(app: App, file: unknown) {
   const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(issued.token));
   expect(once.status).toBe(302);
   const cookie = String(once.headers['set-cookie'] || '');
-  const m = /omp_admin=([^;]+)/.exec(cookie);
+  const m = /__Host-omp_admin=([^;]+)/.exec(cookie);
   expect(m).toBeTruthy();
-  return 'omp_admin=' + m![1];
+  return '__Host-omp_admin=' + m![1];
 }
 
 describe('GET /admin/api/changelog', () => {
@@ -82,7 +82,7 @@ describe('GET /admin/api/changelog', () => {
     const res = await call(app, '/admin/api/changelog');
     expect(res.status).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ auth: false });
-    const forged = await call(app, '/admin/api/changelog', { cookie: 'omp_admin=forged' });
+    const forged = await call(app, '/admin/api/changelog', { cookie: '__Host-omp_admin=forged' });
     expect(forged.status).toBe(401);
     expect(calls.filter((u) => u.includes('CHANGELOG'))).toEqual([]);
   });

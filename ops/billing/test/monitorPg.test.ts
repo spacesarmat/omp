@@ -477,8 +477,8 @@ async function call(app: App, method: string, path: string, headers: Record<stri
 async function login(app: App, store: unknown) {
   const issued = await toStore(store).update((cur: any) => issueCliAdminLogin(cur, { now: Date.now() }));
   const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
-  const m = /omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
-  const cookie = 'omp_admin=' + m![1];
+  const m = /__Host-omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
+  const cookie = '__Host-omp_admin=' + m![1];
   const home = JSON.parse((await call(app, 'GET', '/admin/api/home', { cookie })).body);
   return { cookie, csrf: home.csrf as string };
 }

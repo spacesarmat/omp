@@ -533,7 +533,7 @@ describe('admin http: devices and payments', () => {
       expect(anon.status).toBe(403);
       const forged = await call(t.app, 'POST', path, { cookie, body: { ...body, csrf: 'wrong' } });
       expect(forged.status).toBe(403);
-      const fake = await call(t.app, 'POST', path, { cookie: 'omp_admin=not-a-session', body: { ...body, csrf: 'x' } });
+      const fake = await call(t.app, 'POST', path, { cookie: '__Host-omp_admin=not-a-session', body: { ...body, csrf: 'x' } });
       expect(fake.status).toBe(403);
     }
     expect(JSON.stringify((await readState(t.file)).subscriptions)).toBe(before);
