@@ -598,7 +598,7 @@ async function assertExternalRedirect(target, lookup, signal) {
   return rows;
 }
 
-function pinnedHttpsRequest(url, init, addresses, requestImpl) {
+export function pinnedHttpsRequest(url, init, addresses, requestImpl) {
   const target = new URL(url);
   const address = addresses[0];
   const host = target.hostname.replace(/^\[|\]$/g, '');
@@ -612,7 +612,10 @@ function pinnedHttpsRequest(url, init, addresses, requestImpl) {
         path: target.pathname + target.search,
         method: init.method || 'GET',
         headers: { ...(init.headers || {}), Host: target.host },
-        lookup: (_hostname, _options, cb) => cb(null, address.address, address.family),
+        lookup: (_hostname, options, cb) => {
+          if (options && options.all) cb(null, addresses);
+          else cb(null, address.address, address.family);
+        },
         agent: false,
       },
       (res) => {
@@ -624,7 +627,8 @@ function pinnedHttpsRequest(url, init, addresses, requestImpl) {
           arrayBuffer: async () => {
             const chunks = [];
             for await (const chunk of res) chunks.push(chunk);
-            return Buffer.concat(chunks).buffer;
+            const buf = Buffer.concat(chunks);
+            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
           },
         });
       },

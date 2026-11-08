@@ -19,7 +19,12 @@ import {
   searchJackett,
   searchJacRed,
 } from '../src/jackett.mjs';
-import { createApp, listen } from '../src/server.mjs';
+import { createApp, listen, pinnedHttpsRequest } from '../src/server.mjs';
+import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { emptyState } from '../src/state.mjs';
 import { writeState, testStore } from './pg';
 
@@ -1383,9 +1388,35 @@ describe('POST /v1/torrent magnet redirect', () => {
     expect(options).not.toBeNull();
     expect(options!.servername).toBe('internal.example');
     expect(options!.lookup).toBeTypeOf('function');
-    const resolved = options!.lookup!('', {}, (_err, address, family) => ({ address, family }));
+    let resolved: { address?: string; family?: number } | undefined;
+    options!.lookup!('', {}, (_err, address, family) => {
+      resolved = { address, family };
+    });
     expect(resolved).toEqual({ address: '93.184.216.34', family: 4 });
   });
+
+  it('completes a real Node https.request with the pinned address', async () => {
+    const previousTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    const dir = mkdtempSync(join(tmpdir(), 'omp-pin-'));
+    const key = join(dir, 'server.key');
+    const cert = join(dir, 'server.pem');
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-subj', '/CN=localhost', '-days', '1']);
+    const server = createHttpsServer({ key: readFileSync(key), cert: readFileSync(cert) }, (_req, res) => res.end('ok'));
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    try {
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('no test port');
+      const res = await pinnedHttpsRequest(`https://localhost:${address.port}/`, {}, [{ address: '127.0.0.1', family: 4 }], httpsRequest);
+      expect(res.status).toBe(200);
+      expect(new TextDecoder().decode(await res.arrayBuffer())).toBe('ok');
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+      if (previousTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTls;
+    }
+  }, 5000);
 
   it('aborts a stalled DNS lookup and returns a timeout', async () => {
     const { file, device, token } = await subscriber();
