@@ -9,7 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] New tabs and the calendar filter no longer spill past a 320 px screen. Horizontal chip scrolling in search is preserved
 - [tech] The mobile overflow check recognizes horizontal `.m-chips` without false failures and runs through `npm run check:overflow` in CI
 - [tech] The release workflow runs the full billing suite on Postgres 17. Text checkouts use LF, and the full local test suite is documented for Linux and WSL
-- [tech] Billing no longer sends the indexer's Basic auth to an external HTTPS redirect when downloading a torrent. Insecure HTTP and userinfo in a redirect are refused. The response is capped at 5 MiB, and both requests plus the body read share a 20 second timeout
+- [tech] Billing no longer sends the indexer's Basic auth to an external HTTPS redirect when downloading a torrent. Insecure HTTP and userinfo in a redirect are refused. External loopback, private and link-local targets are blocked both for literal IPs and after DNS lookup. The response is capped at 5 MiB, and both requests plus the body read share a 20 second timeout
 
 ## 0.20.10
 

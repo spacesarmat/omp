@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -529,11 +531,55 @@ function redirectHeaders(headers, sameOrigin) {
   return out;
 }
 
+function privateV4(parts) {
+  const a = parts[0];
+  const b = parts[1];
+  return (
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && (b === 0 || b === 2 || b === 168)) ||
+    (a === 198 && (b === 18 || b === 19 || b === 51)) ||
+    (a === 203 && b === 0)
+  );
+}
+
+function privateIp(raw) {
+  let ip = String(raw || '').toLowerCase();
+  if (ip.startsWith('[') && ip.endsWith(']')) ip = ip.slice(1, -1);
+  if (isIP(ip) === 4) return privateV4(ip.split('.').map(Number));
+  if (isIP(ip) !== 6) return true;
+  if (ip === '::' || ip === '::1') return true;
+  if (ip.startsWith('::ffff:')) {
+    const tail = ip.slice(7);
+    if (isIP(tail) === 4) return privateV4(tail.split('.').map(Number));
+  }
+  const first = parseInt(ip.split(':')[0] || '0', 16);
+  return (first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00 || (first & 0xff00) === 0xff00;
+}
+
+async function assertExternalRedirect(target, lookup) {
+  if (target.protocol !== 'https:' || target.username || target.password) throw downloadError('bad_redirect');
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host)) {
+    if (privateIp(host)) throw downloadError('bad_redirect');
+    return;
+  }
+  let rows;
+  try {
+    rows = await lookup(host, { all: true });
+  } catch (e) {
+    throw downloadError('bad_redirect');
+  }
+  if (!Array.isArray(rows) || !rows.length || rows.some((row) => privateIp(row && row.address))) throw downloadError('bad_redirect');
+}
+
 /**
  * Jackett sometimes answers a download with a redirect to a magnet. Follow one http(s) hop,
  * and stop when Location is a magnet so the phone can add it. Credentials stay on the indexer's origin.
  */
-async function fetchDownload(net, url, headers, signal) {
+async function fetchDownload(net, url, headers, signal, lookup) {
   const first = await net(url, { headers, redirect: 'manual', signal });
   const status = first.status || 0;
   const loc = headerValue(first, 'location');
@@ -544,7 +590,7 @@ async function fetchDownload(net, url, headers, signal) {
     const from = new URL(url);
     const target = new URL(loc, from);
     const sameOrigin = target.origin === from.origin;
-    if (!sameOrigin && (target.protocol !== 'https:' || target.username || target.password)) throw downloadError('bad_redirect');
+    if (!sameOrigin) await assertExternalRedirect(target, lookup || dnsLookup);
     const second = await net(target.href, { headers: redirectHeaders(headers, sameOrigin), redirect: 'manual', signal });
     const status2 = second.status || 0;
     const loc2 = headerValue(second, 'location');
@@ -2181,7 +2227,7 @@ export function createApp(file, fetchImpl, opts) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          const upstream = await fetchDownload(net, remote, headers, controller.signal);
+          const upstream = await fetchDownload(net, remote, headers, controller.signal, opts && opts.downloadLookup);
           process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
           if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
           // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
