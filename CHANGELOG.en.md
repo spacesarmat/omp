@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Billing accepts a YooMoney wallet notice signed with sign (HMAC-SHA256). An empty test notice and test_notification answer 200 and do not turn a subscription on. The amount is checked against the order, currency 643 and the documented fee. A browser return does not turn a subscription on. The secret is still BILLING_YOOMONEY_SECRET
+
 ## 0.20.9
 
 - [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen

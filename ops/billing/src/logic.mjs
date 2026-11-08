@@ -1,4 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
+import { transferCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const ATTEMPT_CAP = 200;
@@ -1036,17 +1037,11 @@ export function enrichActors(state) {
 }
 
 /**
- * YooMoney credits `amount` after its own fee. A card payment can leave about 3% with YooMoney,
- * so a credited sum a little under the price is still that purchase. Anything lower is not.
+ * YooMoney credits `amount` after its own fee. The form sum is `withdraw_amount`.
+ * Card fee is 3% of that sum, wallet fee is amount_due = sum / 1.01. See transferCovers.
  */
-const PAYMENT_FEE = 0.03;
-
-/** True when `amount` is rubles (currency 643) and covers `price` after the fee allowance. */
 export function paymentCovers(amount, currency, price) {
-  const expected = Number(price) || 0;
-  if (!(expected > 0)) return false;
-  if (String(currency || '') !== '643') return false;
-  return money(amount) + 1e-9 >= expected * (1 - PAYMENT_FEE) - 0.01;
+  return transferCovers(amount, currency, price);
 }
 
 function priceOf(state, mark) {
@@ -1164,7 +1159,12 @@ export function lapsingExtras(state, sub, now) {
   return (Number(sub.extraUntil) || 0) < (Number(sub.paidUntil) || 0) ? active : 0;
 }
 
-export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now }) {
+function withdrawField(withdrawAmount) {
+  if (withdrawAmount === undefined || withdrawAmount === null || String(withdrawAmount) === '') return {};
+  return { withdrawAmount: String(withdrawAmount) };
+}
+
+export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw }) {
   if (!operationId || seenPayment(input, operationId)) {
     return {
       state: logWebhook(input, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
@@ -1188,6 +1188,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       at: now || Date.now(),
       error: 'unaccepted',
       pending: true,
+      ...withdrawField(withdrawAmount),
     });
     return {
       state: { ...input, payments: input.payments.concat([held]) },
@@ -1198,7 +1199,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
   const state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
-  const row = { operationId, label: mark, amount, at: now || Date.now() };
+  const row = { operationId, label: mark, amount, at: now || Date.now(), ...withdrawField(withdrawAmount) };
   // The accepted row takes the held row's id: it is the same payment, settled.
   const heldId = hadPending ? (input.payments.find((p) => p.operationId === operationId && p.pending) || {}).id : '';
   if (heldId) row.id = heldId;
@@ -1222,7 +1223,8 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
   }
-  const covers = (kindMark) => paymentCovers(amount, currency, quoted !== null ? quoted : priceOf(state, kindMark));
+  const coversNeed = (need) => transferCovers(amount, currency, need, { withdrawAmount, notificationType, requireWithdraw });
+  const covers = (kindMark) => coversNeed(quoted !== null ? quoted : priceOf(state, kindMark));
 
   if (act.indexOf('sub:') === 0) {
     const id = act.slice(4);
@@ -1236,7 +1238,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     const haveCredit = creditOf(sub);
     const missing = Math.max(0, usedCredit - haveCredit);
     const need = (quoted !== null ? quoted : priceOf(state, act)) + missing;
-    if (!paymentCovers(amount, currency, need)) return rejectAmount(state, row);
+    if (!coversNeed(need)) return rejectAmount(state, row);
     const next = extendPaid(state, sub, days, now, quotedExtras);
     const took = Math.min(usedCredit, haveCredit);
     if (took > 0) next.creditRub = haveCredit - took;
