@@ -1,8 +1,9 @@
 # Manual deploy of the landing page, Caddyfile, and billing source.
 # Does not run on push. Required repository secrets (not created here):
-#   VPS_HOST    — hostname or user@host (user defaults to root, port 22)
-#   VPS_SSH_KEY — private key authorized on the VPS
-# The job stops before SSH when either secret is missing.
+#   VPS_HOST        — hostname or user@host (user defaults to root, port 22)
+#   VPS_SSH_KEY     — private key authorized on the VPS
+#   VPS_KNOWN_HOSTS — pinned public host key from ssh-keyscan or the server's public host key
+# The job stops before SSH when any required secret is missing.
 name: Deploy VPS
 
 on:
@@ -40,6 +41,7 @@ jobs:
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
           REF: ${{ inputs.ref }}
           DRY_RUN: ${{ inputs.dry_run }}
           GH_TOKEN: ${{ github.token }}

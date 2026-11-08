@@ -13,6 +13,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The release workflow runs the full billing suite on Postgres 17. Text checkouts use LF, and the full local test suite is documented for Linux and WSL
 - [tech] Billing no longer sends the indexer's Basic auth to an external HTTPS redirect when downloading a torrent. Insecure HTTP and userinfo in a redirect are refused. External loopback, private and link-local targets are blocked both for literal IPs and after DNS lookup. The connection is pinned to the checked IP while the original hostname is used for TLS, and mapped IPv6 is refused. The response is capped at 5 MiB, and both requests plus the body read share a 20 second timeout
 - [tech] Linking a device to Telegram now requires explicit confirmation with its identifier and a Link button. Cancel and repeated clicks do not grant access. `/v1/link/start` and `/v1/link/claim` are rate limited
+- [tech] SSH deploy requires `VPS_KNOWN_HOSTS` and uses `StrictHostKeyChecking=yes`. The GitHub token is written only after the server is verified and is never copied when that check fails
 
 ## 0.20.10
 
