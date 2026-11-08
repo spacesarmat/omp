@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [phone] [tv] The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode
+- The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode
 - [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen
 - [phone] The Discover title and search sit on one row, with less empty space. In landscape the list scrolls clear of the mini-player and the bottom bar. The four views and the width-based grid stay
 - [phone] An episode in the list, the remote, the mini-player and the calendar reads "episode 1 · Title". The season is added when the release or the show has more than one. Order and playback stay the same

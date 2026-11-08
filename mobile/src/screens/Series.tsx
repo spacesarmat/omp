@@ -354,6 +354,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
+      seasonTotal: info && info.episodes > 0 ? info.episodes : undefined,
       onError: setError,
     });
   };
@@ -422,7 +423,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const watchHere = () => {
     if (!main || !mainFile) return;
     setError('');
-    playOnPhone(main, mainFile, mainAt).catch((e) => setError(errorMessage(e)));
+    playOnPhone(main, mainFile, mainAt, info && info.episodes > 0 ? info.episodes : undefined).catch((e) => setError(errorMessage(e)));
   };
   const dead = !!main && isDeadRelease(main.hash);
   const canFind = !!main && canUpgrade(main, files);
@@ -592,7 +593,14 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           canDelete={(x) => rows.length > 1 && onlyThisSeason(group, season, x)}
         />
       )}
-      {episode && main && <WatchSheet torrent={main} file={episode} onClose={() => setEpisode(null)} />}
+      {episode && main && (
+        <WatchSheet
+          torrent={main}
+          file={episode}
+          seasonTotal={info && info.episodes > 0 ? info.episodes : undefined}
+          onClose={() => setEpisode(null)}
+        />
+      )}
       {better && <BetterSheet torrent={better} files={filesOf(better)} onClose={() => setBetter(null)} />}
       {launch.sheet}
     </>

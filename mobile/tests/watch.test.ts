@@ -268,12 +268,24 @@ describe('watchOnPhone', () => {
     updateSettings({ phonePlayer: 'embedded' });
     const url = (ep: number) => 'http://h:8090/stream/Show.S01E0' + ep + '.mkv?link=abc&index=' + ep + '&play';
     a.playEmbedded2160
-      .mockResolvedValueOnce({ returned: true, positionMs: 2300000, durationMs: 2400000, url: url(2) })
-      .mockResolvedValueOnce({ returned: true, positionMs: 2300000, durationMs: 2400000, url: url(2) });
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 2300000, durationMs: 2400000, url: url(2) })
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 2300000, durationMs: 2400000, url: url(2) });
     await watchOnPhone(c, tor as any, w(2, 0));
     expect(a.playEmbedded2160).toHaveBeenCalledTimes(2);
     expect(a.playEmbedded2160.mock.calls[1][0].start).toBe(1);
     expect(a.playEmbedded2160.mock.calls[1][0].items[1].url).toContain('S01E03');
+    done();
+  });
+
+  it('Back near the end does not open the next episode when the player did not say it finished', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 2280000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E02.mkv?link=abc&index=2&play' });
+    await watchOnPhone(c, tor as any, w(2, 0));
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(1);
+    expect(getLocalProgress('abc', 2)?.time).toBeGreaterThan(2000);
     done();
   });
 
@@ -306,8 +318,8 @@ describe('watchOnPhone', () => {
     const seen: number[] = [];
     const url = (name: string, id: number) => 'http://h:8090/stream/' + name + '.mkv?link=abc&index=' + id + '&play';
     a.playEmbedded2160
-      .mockResolvedValueOnce({ returned: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E05', 5) })
-      .mockResolvedValueOnce({ returned: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E06', 6) });
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E05', 5) })
+      .mockResolvedValueOnce({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: url('TNG.S06E06', 6) });
     await watchOnPhone(c, pack as any, {
       hash: 'abc',
       file: pack.file_stats[0],

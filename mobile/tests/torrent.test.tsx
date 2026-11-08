@@ -128,7 +128,7 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 23:14'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 3, t: 1394, from: 'Телефон', files: [3, 4] });
     // watch journal: one entry for this phone after the launch, with the chosen position
     expect(record).toHaveBeenCalledTimes(1);
     expect(record.mock.calls[0][2]).toEqual({ f: 3, t: 1394, d: 3600, src: 'phone', name: 'Телефон' });
@@ -251,7 +251,7 @@ describe('Torrent', () => {
     await flush();
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон', files: [4] });
     expect(el.querySelector('.m-status-ok')!.textContent).toBe('Запустил на LG OLED');
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -625,7 +625,7 @@ describe('TV launch flow', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     setWatchActions({ recordWatch: record, ompVersion: async () => '0.8.0', reportUrl: async () => 'http://192.168.1.9:8123/p', launchOnTv: launch, remoteDelayMs: 0 });
     await open1();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p', from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, report: 'http://192.168.1.9:8123/p', from: 'Телефон', files: [4] });
     expect(el.textContent).not.toContain('Откуда смотреть');
     expect(launchedAt.value).toBeGreaterThan(0);
     expect(launching.value).toBe(true);
@@ -645,7 +645,7 @@ describe('TV launch flow', () => {
     expect(dlg.textContent).toContain('Осталось 42 мин');
     click(byText('Сначала'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон', files: [4] });
   });
 
   it('omits «Осталось» when the duration is unknown', async () => {
@@ -675,7 +675,7 @@ describe('TV launch flow', () => {
     expect(launch).not.toHaveBeenCalled();
     click(byText('Всё равно запустить'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 0, from: 'Телефон', files: [4] });
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
     });
@@ -704,7 +704,7 @@ describe('TV launch flow', () => {
     expect(el.textContent).toContain('Откуда смотреть');
     click(byText('Продолжить с 8:20'));
     await flush();
-    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон' });
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 4, t: 500, from: 'Телефон', files: [4] });
   });
 
   it('«Переименовать»: the sheet starts with the shown title, saves the trimmed one and updates the list', async () => {

@@ -86,7 +86,7 @@ function fileTitle(f: TorrentFile): string {
 }
 
 
-export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
+export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: TorrentT; file: TorrentFile; onClose: () => void; seasonTotal?: number }) {
   const c = client.value!;
   const tv = activeTv.value;
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -102,7 +102,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
   );
 
   const code = fileCode(file);
-  const span = seasonSpan(filesOf(torrent), file.id);
+  const span = seasonSpan(filesOf(torrent), file.id, seasonTotal && seasonTotal > 0 ? seasonTotal : undefined);
   // the episode code (a film: its short name) and the size, never the file name
   const head = [code || libraryTitle(torrent).title, fmtSize(file.length)].filter(Boolean);
 
@@ -119,6 +119,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
       at: sharedResume(torrent.hash, file.id),
       duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
+      seasonTotal: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
       onLaunched: (name) => setStatus({ kind: 'ok', text: t('add.launchedOn', { name: name }) }),
@@ -133,6 +134,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
         title: fileTitle(file),
         at: sharedResume(torrent.hash, file.id),
         duration: getLocalProgress(torrent.hash, file.id)?.duration || 0,
+        total: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
       });
       if (alive.v) onClose();
     } catch (e) {
@@ -688,6 +690,7 @@ export function Torrent({ hash }: { hash: string }) {
       at,
       duration: getLocalProgress(hash, target.id)?.duration || undefined,
       label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
+      seasonTotal: headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined,
       onBusy: setBusy,
       onError: setStatus,
     });
@@ -702,6 +705,7 @@ export function Torrent({ hash }: { hash: string }) {
         title: fileTitle(target),
         at,
         duration: getLocalProgress(hash, target.id)?.duration || 0,
+        total: headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined,
       });
     } catch (e) {
       setStatus(errorMessage(e));
@@ -914,7 +918,14 @@ export function Torrent({ hash }: { hash: string }) {
         />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
-      {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
+      {sheet && (
+        <WatchSheet
+          torrent={tor}
+          file={sheet}
+          seasonTotal={headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {launch.sheet}
     </div>
   );

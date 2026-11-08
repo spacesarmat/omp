@@ -1,5 +1,6 @@
 // One season, from the episode the person chose, using only files of the current release.
 // The next season is never added. A hole in the numbering stops the queue: another torrent is not chosen.
+import { fileEpisodes } from '../lib/categoryCheck';
 import { isExtraFile, parseEpisode, playableFiles, type TorrentFile } from '../lib/episodes';
 
 export interface SeasonSpan {
@@ -30,25 +31,46 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
   if (season === null || episode === null || isExtraFile(start.path)) {
     return { files: [start], start: 0, season: null, missing: null };
   }
-  const byEp: { [n: number]: TorrentFile } = {};
+  const covered = fileEpisodes(start.path);
+  const startEps = covered && (covered.season === null || covered.season === season) ? covered.episodes : [episode];
+  const from = startEps.reduce((m, n) => (n < m ? n : m), startEps[0]);
+  const covers: { id: number; file: TorrentFile; episodes: number[] }[] = [];
   playable.forEach((f) => {
     if (isExtraFile(f.path)) return;
-    const p = parseEpisode(f.path);
-    if (p.season !== season || p.episode === null || p.episode < episode) return;
-    if (!byEp[p.episode] || f.id === startId) byEp[p.episode] = f;
+    const info = fileEpisodes(f.path);
+    if (!info) return;
+    if (info.season !== null && info.season !== season) return;
+    const eps = info.episodes.filter((e) => e >= from);
+    if (!eps.length) return;
+    covers.push({ id: f.id, file: f, episodes: eps });
   });
   const files: TorrentFile[] = [];
-  let n = episode;
-  const knownEnd = total !== undefined && total >= episode ? total : 0;
-  while (byEp[n] && (!knownEnd || n <= knownEnd)) {
-    files.push(byEp[n]);
-    n++;
+  const used: { [id: number]: boolean } = {};
+  let n = from;
+  const knownEnd = total !== undefined && total >= from ? total : 0;
+  while (!knownEnd || n <= knownEnd) {
+    let hit: { id: number; file: TorrentFile; episodes: number[] } | undefined;
+    for (let i = 0; i < covers.length; i++) {
+      if (covers[i].episodes.indexOf(n) >= 0) {
+        hit = covers[i];
+        break;
+      }
+    }
+    if (!hit) break;
+    if (!used[hit.id]) {
+      files.push(hit.file);
+      used[hit.id] = true;
+    }
+    let max = n;
+    for (let i = 0; i < hit.episodes.length; i++) if (hit.episodes[i] > max) max = hit.episodes[i];
+    n = max + 1;
+    if (n > from + 10000) break;
   }
   let missing: number | null = null;
-  if (!byEp[n]) {
-    const later = Object.keys(byEp).some((k) => +k > n);
-    if (later) missing = n;
-    else if (knownEnd && n <= knownEnd) missing = n;
+  const coversN = covers.some((c) => c.episodes.indexOf(n) >= 0);
+  if (!coversN) {
+    const later = covers.some((c) => c.episodes.some((e) => e > n));
+    if (later || (knownEnd && n <= knownEnd)) missing = n;
   }
   return { files: files.length ? files : [start], start: 0, season: season, missing: missing };
 }
@@ -82,4 +104,23 @@ export function seasonStep(o: {
   const seen = o.index;
   if (o.index + 1 < o.length) return { step: { kind: 'next', index: o.index + 1 }, seen: seen };
   return { step: { kind: 'done', missing: o.missing }, seen: seen };
+}
+
+/** One visit to a queue item on the TV player. A new index starts a fresh visit, so going back can advance again. */
+export interface SeasonVisit {
+  index: number;
+  ended: number;
+  advanced: boolean;
+}
+
+export function seasonVisit(
+  prev: SeasonVisit,
+  index: number,
+  ended: number,
+  hasNext: boolean,
+): { state: SeasonVisit; go: 'stay' | 'next' | 'end' } {
+  if (index !== prev.index) return { state: { index, ended, advanced: false }, go: 'stay' };
+  if (!ended || ended === prev.ended) return { state: prev, go: 'stay' };
+  if (prev.advanced) return { state: { index, ended, advanced: true }, go: 'stay' };
+  return { state: { index, ended, advanced: true }, go: hasNext ? 'next' : 'end' };
 }

@@ -226,11 +226,12 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
       }
       const hit = saved ? queue.findIndex((q) => q.fileIndex === saved.item.fileIndex) : -1;
       const cur = hit >= 0 ? hit : index;
+      const done = !!(saved && saved.completed);
       const decision = seasonStep({
         length: queue.length,
         index: cur,
-        ended: !!(saved && saved.ended),
-        cancel: !saved || !saved.ended,
+        ended: done,
+        cancel: !done,
         seen,
         missing: span.missing,
       });

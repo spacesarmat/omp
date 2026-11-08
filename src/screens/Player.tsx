@@ -37,6 +37,7 @@ import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { getLocalProgress } from '../store/progress';
 import { useNextEpisode } from '../player/useNextEpisode';
+import { seasonVisit, type SeasonVisit } from '../player/seasonQueue';
 import { useCacheStats } from '../player/useCacheStats';
 import { infoPanel, bufferedAhead } from '../player/infoPanel';
 import { Controls } from '../player/Controls';
@@ -173,14 +174,14 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     onEnd: () => goBack(),
     holdEnd: immediate,
   });
-  const advanced = useRef(-1);
+  const visit = useRef<SeasonVisit>({ index: -1, ended: 0, advanced: false });
   useEffect(() => {
-    if (!immediate || !vs.ended) return;
-    if (advanced.current === index) return;
-    advanced.current = index;
-    if (index < queue.length - 1) setIndex(index + 1);
-    else goBack();
-  }, [immediate, vs.ended]);
+    if (!immediate) return;
+    const step = seasonVisit(visit.current, index, vs.ended, index < queue.length - 1);
+    visit.current = step.state;
+    if (step.go === 'next') setIndex(index + 1);
+    else if (step.go === 'end') goBack();
+  }, [immediate, vs.ended, index, queue.length]);
 
   useEffect(() => { if (ready && !vs.paused && !blocked) setStarted(true); }, [ready, vs.paused, blocked]);
   const donate = donateMode({

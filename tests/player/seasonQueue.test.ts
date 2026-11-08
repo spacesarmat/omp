@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seasonFileIds, seasonSpan, seasonStep } from '../../src/player/seasonQueue';
+import { seasonFileIds, seasonSpan, seasonStep, seasonVisit } from '../../src/player/seasonQueue';
 import type { TorrentFile } from '../../src/lib/episodes';
 
 const file = (id: number, path: string): TorrentFile => ({ id, path, length: 1 });
@@ -34,6 +34,40 @@ describe('season queue', () => {
     const span = seasonSpan([file(1, 'TNG.S06E01.mkv'), file(2, 'TNG.S06E02.mkv')], 1, 26);
     expect(span.files.map((f) => f.id)).toEqual([1, 2]);
     expect(span.missing).toBe(3);
+  });
+
+  it('a combined file covers every episode in its name and is queued once', () => {
+    const files = [
+      file(1, 'Show.S01E01.mkv'),
+      file(2, 'Show.S01E02-E03.mkv'),
+      file(4, 'Show.S01E04.mkv'),
+    ];
+    const span = seasonSpan(files, 1);
+    expect(span.files.map((f) => f.id)).toEqual([1, 2, 4]);
+    expect(span.missing).toBeNull();
+    expect(seasonSpan(files, 2).files.map((f) => f.id)).toEqual([2, 4]);
+  });
+
+  it('a known season length shows the episodes the release does not have', () => {
+    const files = [1, 2, 3, 4, 5, 6].map((n) => file(n, 'Show.S06E0' + n + '.mkv'));
+    expect(seasonSpan(files, 1).missing).toBeNull();
+    expect(seasonSpan(files, 1, 8).missing).toBe(7);
+    expect(seasonSpan(files, 1, 8).files).toHaveLength(6);
+  });
+
+  it('going back to an episode can advance again, a second end of the same visit cannot', () => {
+    let state = { index: -1, ended: 0, advanced: false };
+    state = seasonVisit(state, 0, 0, true).state;
+    let step = seasonVisit(state, 0, 10, true);
+    expect(step.go).toBe('next');
+    state = step.state;
+    step = seasonVisit(state, 0, 11, true);
+    expect(step.go).toBe('stay');
+    state = seasonVisit(step.state, 1, 10, true).state;
+    expect(state.advanced).toBe(false);
+    state = seasonVisit(state, 0, 0, true).state;
+    step = seasonVisit(state, 0, 20, true);
+    expect(step.go).toBe('next');
   });
 
   it('a film is one file and does not send a season list', () => {

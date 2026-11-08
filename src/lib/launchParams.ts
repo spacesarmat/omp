@@ -88,17 +88,28 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
         if (t === null || action.file === undefined) plan.invalid = true;
         else action.t = t;
       }
-      // Season queue from the phone. A bad list is ignored: an older TV still plays the one file.
+      // Season queue from the phone. A bad id drops the list (the TV then plays the one file).
+      // A long valid list is kept from the chosen file forward, so it never falls back to the whole torrent.
       if (action.file !== undefined && Array.isArray(o.files)) {
-        const ids: number[] = [];
+        const all: number[] = [];
         const list = o.files as unknown[];
-        let ok = list.length > 0 && list.length <= 80;
-        for (let i = 0; ok && i < list.length; i++) {
+        let bad = false;
+        for (let i = 0; i < list.length; i++) {
           const id = num(list[i]);
-          if (id === null) ok = false;
-          else ids.push(id);
+          if (id === null) {
+            bad = true;
+            break;
+          }
+          all.push(id);
+          if (all.length > 5000) {
+            bad = true;
+            break;
+          }
         }
-        if (ok && ids.indexOf(action.file) >= 0) action.files = ids;
+        if (!bad) {
+          const at = all.indexOf(action.file);
+          if (at >= 0) action.files = all.slice(at, at + 2000);
+        }
       }
       plan.action = action;
     } else plan.invalid = true;
