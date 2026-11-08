@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Billing no longer sends the indexer's Basic auth to an external HTTPS redirect when downloading a torrent. Insecure HTTP and userinfo in a redirect are refused. The response is capped at 5 MiB, and both requests plus the body read share a 20 second timeout
+
 ## 0.20.10
 
 - The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode
