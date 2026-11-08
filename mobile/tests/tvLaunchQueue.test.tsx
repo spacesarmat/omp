@@ -8,6 +8,7 @@ import { torrents } from '../../src/store/library';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import { TorrServerClient } from '../../src/api/torrserver';
 import type { TorrentFile } from '../../src/lib/episodes';
+import { toast } from '../src/ui/toast';
 
 const launch = vi.fn().mockResolvedValue(undefined);
 
@@ -41,6 +42,7 @@ beforeEach(() => {
   torrents.value = [];
   saveTv({ ip: '192.168.1.5', name: 'LG' });
   launch.mockClear().mockResolvedValue(undefined);
+  toast.value = '';
   setWatchActions({
     ompVersion: async () => null,
     reportUrl: async () => null,
@@ -89,6 +91,33 @@ describe('TV launch queue', () => {
       files: file_stats,
     });
     expect(sent.files).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('keeps a known season count for episode names that do not state a season', async () => {
+    const files: TorrentFile[] = [1, 2, 3, 4, 5, 6].map((n) => ({ id: n, path: 'Show.E0' + n + '.mkv', length: 1 }));
+    const sent = await launchOf({ hash: 'abc', file: 1, label: 'E01', season: 1, seasonTotal: 8, files: files, onLaunched: () => undefined });
+    expect(sent.files).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(toast.value).toContain('7');
+  });
+
+  it('does not use another season count when the file or its folder names a different season', async () => {
+    const named: TorrentFile[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+      id: n,
+      path: 'Show.S02E' + (n < 10 ? '0' : '') + n + '.mkv',
+      length: 1,
+    }));
+    const byName = await launchOf({ hash: 'abc', file: 1, label: 'S02', season: 1, seasonTotal: 6, files: named, onLaunched: () => undefined });
+    expect(byName.files).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(toast.value).not.toContain('7');
+    const folder: TorrentFile[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+      id: n,
+      path: 'Season 2/E' + (n < 10 ? '0' : '') + n + '.mkv',
+      length: 1,
+    }));
+    toast.value = '';
+    const byFolder = await launchOf({ hash: 'abc', file: 1, label: 'folder', season: 1, seasonTotal: 6, files: folder, onLaunched: () => undefined });
+    expect(byFolder.files).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(toast.value).not.toContain('7');
   });
 
   it('a film is sent as that one file, so extras do not follow', async () => {

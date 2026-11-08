@@ -11,6 +11,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - An episode with no season number, such as E01, still queues until a gap. A file from another season's folder does not fill that gap. A season written in the file name wins over the folder
 - A fractional episode, such as E02.5 or S01E02.5, is not episode 2 and does not fill the gap. A normal E02.mkv, including a quality tag such as E02.1080p, is still episode 2
 - A film with extras returns to the card when it ends, instead of opening the next file. A TV launch from a card that is not in the list yet sends the same season queue
+- When the file names leave out the season and the card knows the season and its episode count, the TV is told about the missing episode too. Another season's count still does not cut the queue
 - [phone] Where to watch shows the server, the network and the rule. The phone's current Wi-Fi can be used: Android asks for permission only from that button. If the name is unavailable, it is typed. The TV server stays, and playback is not switched
 - [phone] Finding a server in Where to watch runs without a network name, and when one server is locked. A choice or removal of the current server during playback is applied after it stops. Settings of a password-protected server open with the saved login
 - [phone] A confirmed server removal stays if another server is chosen or a network name is saved during playback. Switching to by network does not turn always-one-server back on

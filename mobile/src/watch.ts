@@ -309,14 +309,16 @@ export async function releaseFiles(c: TorrServerClient, hash: string, given?: To
   }
 }
 
-/** `total` applies only to the file's own season. Another season, or no season, does not inherit it. */
+/**
+ * `total` is the card's count for `season`. A file that names another season does not use it.
+ * A file that names no season does not conflict, so the card's count still applies.
+ */
 export function totalForFile(files: TorrentFile[], fileId: number, total?: number, season?: number): number | undefined {
   if (!total || total <= 0) return undefined;
   const f = files.filter((x) => x.id === fileId)[0];
   if (!f) return undefined;
   const s = parseEpisode(f.path).season;
-  if (s === null) return undefined;
-  if (season !== undefined && season !== s) return undefined;
+  if (s !== null && season !== undefined && season !== s) return undefined;
   return total;
 }
 
