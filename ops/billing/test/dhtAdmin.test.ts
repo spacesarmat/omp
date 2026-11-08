@@ -62,7 +62,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, path: st
   const req = {
     method: 'GET',
     url: path,
-    headers: { accept: 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {},
   };
@@ -128,7 +128,7 @@ async function post(app: (req: unknown, res: unknown) => Promise<void>, path: st
   const req = {
     method: 'POST',
     url: path,
-    headers: { accept: 'application/json', 'content-type': 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', 'content-type': 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(payload);

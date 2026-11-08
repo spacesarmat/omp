@@ -460,6 +460,7 @@ async function call(
     method,
     url: path,
     headers: {
+      'x-forwarded-proto': 'https',
       cookie: opts.cookie || '',
       accept: 'application/json',
       'content-type': opts.body === undefined ? '' : 'application/json',
@@ -503,7 +504,7 @@ async function adminCookie(app: (req: unknown, res: unknown) => Promise<void>, f
     {
       method: 'GET',
       url: '/admin/login/once?token=' + encodeURIComponent(link.token),
-      headers: {},
+      headers: { 'x-forwarded-proto': 'https' },
       async *[Symbol.asyncIterator]() {},
     },
     res,

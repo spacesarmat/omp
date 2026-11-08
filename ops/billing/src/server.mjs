@@ -222,15 +222,29 @@ function cookie(req, name) {
   return '';
 }
 
-/** Host-prefixed admin session cookie: HttpOnly, Secure and SameSite=Lax. */
+function adminHttps(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const origin = String(process.env.BILLING_PUBLIC_ORIGIN || '');
+  return proto === 'https' || origin.indexOf('https://') === 0;
+}
+
+function adminCookieName(req) {
+  return adminHttps(req) ? '__Host-omp_admin' : 'omp_admin';
+}
+
+/** HTTPS uses a host-prefixed cookie. Documented HTTP LAN access keeps the compatible cookie. */
 function adminSetCookie(req, id, maxAge) {
-  let value = '__Host-omp_admin=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/; Secure';
+  let value = adminCookieName(req) + '=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/';
+  if (adminHttps(req)) value += '; Secure';
   if (maxAge !== undefined) value += '; Max-Age=' + maxAge;
   return value;
 }
 
 function adminOf(req) {
-  const id = cookie(req, '__Host-omp_admin');
+  const id = cookie(req, adminCookieName(req));
   const row = sessions.get(id);
   if (!row || row.exp < Date.now()) {
     if (row) sessions.delete(id);
@@ -1036,7 +1050,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/home') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const sid = cookie(req, '__Host-omp_admin');
+        const sid = cookie(req, adminCookieName(req));
         const flash = takeFlash(admin, sid);
         return json(
           res,
@@ -1169,7 +1183,7 @@ export function createApp(file, fetchImpl, opts) {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const id = url.searchParams.get('id') || '';
-        const sid = cookie(req, '__Host-omp_admin');
+        const sid = cookie(req, adminCookieName(req));
         const flash = takeFlash(admin, sid);
         const state = await store.read();
         const devices = await accountDevices(store, state, id);
@@ -1746,7 +1760,7 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=security';
         }
         if (path === '/admin/logout') {
-          const sid = cookie(req, '__Host-omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           sessions.delete(sid);
           await audit(file, 'logout', 'ok', admin);
           res.setHeader('set-cookie', adminSetCookie(req, '', 0));
@@ -1756,7 +1770,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/session-revoke') {
           const target = body.sessionId || '';
-          const sid = cookie(req, '__Host-omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           if (target && target !== sid) {
             sessions.delete(target);
             await audit(file, 'session_revoke', 'ok', admin);
@@ -1814,7 +1828,7 @@ export function createApp(file, fetchImpl, opts) {
           await audit(file, 'support_close', body.telegramId || '', admin);
         }
         if (flashed || flashPromo || flashText || flashError) {
-          const sid = cookie(req, '__Host-omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           const cur = sessions.get(sid) || admin;
           sessions.set(sid, {
             ...cur,

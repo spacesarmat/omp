@@ -75,7 +75,7 @@
 - Modify: `ops/billing/src/server.mjs`, `ops/billing/src/services.mjs`, `ops/billing/src/jackett.mjs`, admin tests и `ops/billing/test/*`
 
 **Interfaces:**
-- Produces: `readCappedBody(res, maxBytes, code)`; `__Host-omp_admin`; JSON cap 256 KiB; indexer cap 2 MiB.
+- Produces: `readCappedBody(res, maxBytes, code)`; `__Host-omp_admin` по HTTPS и совместимый `omp_admin` по HTTP; JSON cap 256 KiB; indexer cap 2 MiB.
 
 - [ ] **Step 1:** Тесты no-store, CSP, cookie, old cookie rejection, small JSON, active keys и oversized XML.
 - [ ] **Step 2:** Проверить FAIL на старом cookie, отсутствии CSP и полном чтении.

@@ -463,7 +463,7 @@ async function call(app: App, method: string, path: string, headers: Record<stri
   const req = {
     method,
     url: path,
-    headers: { accept: 'application/json', 'content-type': 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', 'content-type': 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (raw) yield Buffer.from(raw);

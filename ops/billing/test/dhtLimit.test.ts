@@ -39,6 +39,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, method: 
     method,
     url: path,
     headers: {
+      'x-forwarded-proto': 'https',
       accept: 'application/json',
       'content-type': opts.body === undefined ? '' : 'application/json',
       ...(opts.headers || {}),

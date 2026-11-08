@@ -31,7 +31,7 @@ async function call(app: App, method: string, path: string, opts: { body?: unkno
   const req = {
     method,
     url: path,
-    headers: { accept: 'application/json', 'content-type': opts.body === undefined ? '' : 'application/json', ...(opts.headers || {}) },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', 'content-type': opts.body === undefined ? '' : 'application/json', ...(opts.headers || {}) },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);

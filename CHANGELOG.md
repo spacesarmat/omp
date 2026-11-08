@@ -4,7 +4,7 @@
 
 ## Не выпущено
 
-- [tech] Ответы админки отправляют `Cache-Control: no-store` и строгую CSP. Сессия использует cookie `__Host-omp_admin` с HttpOnly, Secure и SameSite=Lax. JSON-тела ограничены 256 КиБ, ответы индексаторов 2 МиБ, активные ключи rate limiter ограничены
+- [tech] Ответы админки отправляют `Cache-Control: no-store` и строгую CSP. По HTTPS сессия использует cookie `__Host-omp_admin` с HttpOnly, Secure и SameSite=Lax, для документированного HTTP LAN сохранён совместимый `omp_admin`. JSON-тела ограничены 256 КиБ, ответы индексаторов 2 МиБ, активные ключи rate limiter ограничены
 
 ## 0.20.10
 

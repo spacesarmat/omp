@@ -30,7 +30,7 @@ async function call(app: App, path: string, headers: Record<string, string> = {}
   const req = {
     method: 'GET',
     url: path,
-    headers: { accept: 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {},
   };

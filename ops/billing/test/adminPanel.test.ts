@@ -238,6 +238,7 @@ async function call(
     method,
     url: path,
     headers: {
+      'x-forwarded-proto': 'https',
       cookie: opts.cookie || '',
       accept: opts.form ? '' : 'application/json',
       'content-type': opts.form ? 'application/x-www-form-urlencoded' : opts.body === undefined ? '' : 'application/json',

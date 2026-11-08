@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [tech] Admin responses send `Cache-Control: no-store` and a strict CSP. Sessions use the `__Host-omp_admin` cookie with HttpOnly, Secure and SameSite=Lax. JSON bodies are capped at 256 KiB, indexer responses at 2 MiB, and active rate-limit keys are bounded
+- [tech] Admin responses send `Cache-Control: no-store` and a strict CSP. HTTPS sessions use the `__Host-omp_admin` cookie with HttpOnly, Secure and SameSite=Lax, while documented HTTP LAN access keeps the compatible `omp_admin` cookie. JSON bodies are capped at 256 KiB, indexer responses at 2 MiB, and active rate-limit keys are bounded
 
 ## 0.20.10
 

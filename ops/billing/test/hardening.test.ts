@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createAdminAuthMemory } from '../src/adminAuthMemory.mjs';
 import { createApp } from '../src/server.mjs';
-import { createRateLimit } from '../src/services.mjs';
+import { createActivateLimiter, createRateLimit } from '../src/services.mjs';
 import { searchJacRed } from '../src/jackett.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
@@ -33,12 +33,21 @@ function mockRes(): Response {
   };
 }
 
-async function call(app: (req: unknown, res: unknown) => Promise<void>, method: string, url: string, opts: { body?: unknown; cookie?: string } = {}) {
+async function call(
+  app: (req: unknown, res: unknown) => Promise<void>,
+  method: string,
+  url: string,
+  opts: { body?: unknown; cookie?: string; secure?: boolean } = {},
+) {
   const payload = opts.body === undefined ? '' : JSON.stringify(opts.body);
   const req = {
     method,
     url,
-    headers: { 'content-type': 'application/json', cookie: opts.cookie || '' },
+    headers: {
+      'content-type': 'application/json',
+      cookie: opts.cookie || '',
+      'x-forwarded-proto': opts.secure === false ? 'http' : 'https',
+    },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);
     },
@@ -81,6 +90,37 @@ describe('security hardening', () => {
     expect(csp).toContain("frame-ancestors 'none'");
     const old = await call(app, 'GET', '/admin/api/home', { cookie: 'omp_admin=' + id });
     expect(old.status).toBe(401);
+  });
+
+  it('keeps the compatible admin cookie on documented HTTP LAN access', async () => {
+    const file = await testStore();
+    const state = emptyState();
+    Object.assign(state.settings, { adminTelegramIds: '42', botToken: 'token', botUsername: 'omp_bot' });
+    await writeState(file, state);
+    const adminAuthMem = createAdminAuthMemory();
+    const app = createApp(file, undefined, { adminAuthMem });
+    const started = await call(app, 'POST', '/admin/login/telegram', { secure: false });
+    adminAuthMem.confirmPanel((await readState(file)).settings, { token: started.data.token, telegramId: '42', now: Date.now() });
+    const status = await call(app, 'GET', '/admin/login/telegram/status?token=' + encodeURIComponent(started.data.token), { secure: false });
+    const setCookie = String(status.headers['set-cookie'] || '');
+    expect(setCookie).toMatch(/^omp_admin=/);
+    expect(setCookie).not.toContain('__Host-omp_admin=');
+    expect(setCookie).not.toContain('Secure');
+    const id = /omp_admin=([^;]+)/.exec(setCookie)![1];
+    const home = await call(app, 'GET', '/admin/api/home', { cookie: 'omp_admin=' + id, secure: false });
+    expect(home.status).toBe(200);
+    const prefixed = await call(app, 'GET', '/admin/api/home', { cookie: '__Host-omp_admin=' + id, secure: false });
+    expect(prefixed.status).toBe(401);
+  });
+
+  it('fails closed when the activation limiter reaches key capacity', () => {
+    let now = 0;
+    const limit = createActivateLimiter({ ipMax: 1, codeMax: 0, windowMs: 60_000 }, { maxKeys: 1, now: () => now });
+    expect(limit.check('192.0.2.1', '')).toBe(0);
+    expect(limit.check('192.0.2.2', '')).toBe(60);
+    expect(limit.check('192.0.2.3', '')).toBe(60);
+    now = 60_001;
+    expect(limit.check('192.0.2.3', '')).toBe(0);
   });
 
   it('rejects a small JSON body above 256 KiB', async () => {
