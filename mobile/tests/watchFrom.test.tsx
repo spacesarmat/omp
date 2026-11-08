@@ -225,7 +225,7 @@ describe('WatchFrom', () => {
     expect(el.querySelector('[data-net-note]')!.textContent).toContain('после остановки');
     await click(el, '[data-action="discover"]');
     expect(activeServerId.value).toBe(a.id);
-    expect(pendingAfterPlayback()).toEqual({ kind: 'select', id: b.id, lock: false });
+    expect(pendingAfterPlayback()).toEqual({ removeId: null, choice: { kind: 'select', id: b.id } });
     nowPlaying.value = null;
     expect(activeServerId.value).toBe(b.id);
     await click(el, '[data-edit="' + b.id + '"]');
@@ -323,9 +323,85 @@ describe('WatchFrom', () => {
     });
     await click(el, '[data-action="save-name"]');
     expect(loadWifiPrefs().manualSsid).toBe('cabin');
-    expect(pendingAfterPlayback()).toEqual({ kind: 'wifi' });
+    expect(pendingAfterPlayback()).toEqual({ removeId: null, choice: { kind: 'wifi' } });
     nowPlaying.value = null;
     expect(pendingAfterPlayback()).toBeNull();
+  });
+
+  it('keeps a confirmed removal when another server is chosen or a network name is saved', async () => {
+    const a = addServer({ url: 'http://10.0.0.2:8090', name: 'Home' });
+    const b = addServer({ url: 'http://10.0.0.3:8090', name: 'Other' });
+    setActiveServer(a.id);
+    nowPlaying.value = { hash: 'playing' } as never;
+    const el = mount();
+    await click(el, '[data-remove="' + a.id + '"]');
+    await acceptConfirm();
+    await click(el, '[data-select="' + b.id + '"]');
+    expect(pendingAfterPlayback()).toEqual({ removeId: a.id, choice: { kind: 'select', id: b.id } });
+    nowPlaying.value = null;
+    expect(servers.value.some((s) => s.id === a.id)).toBe(false);
+    expect(activeServerId.value).toBe(b.id);
+    expect(loadWifiPrefs().overrideId).toBeNull();
+
+    const c = addServer({ url: 'http://10.0.0.4:8090', name: 'Third' });
+    setActiveServer(c.id);
+    nowPlaying.value = { hash: 'playing' } as never;
+    const again = mount();
+    await click(again, '[data-remove="' + c.id + '"]');
+    await acceptConfirm();
+    const input = again.querySelector('[data-manual]') as HTMLInputElement;
+    await act(async () => {
+      input.value = 'cabin';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(again, '[data-action="save-name"]');
+    expect(pendingAfterPlayback()).toEqual({ removeId: c.id, choice: { kind: 'wifi' } });
+    expect(loadWifiPrefs().manualSsid).toBe('cabin');
+    nowPlaying.value = null;
+    expect(servers.value.some((s) => s.id === c.id)).toBe(false);
+    expect(loadWifiPrefs().manualSsid).toBe('cabin');
+    expect(pendingAfterPlayback()).toBeNull();
+  });
+
+  it('keeps the latest network rule when a deferred selection is applied', async () => {
+    const a = addServer({ url: 'http://10.0.0.2:8090', name: 'Home' });
+    const b = addServer({ url: 'http://10.0.0.3:8090', name: 'Other' });
+    setActiveServer(a.id);
+    const el = mount();
+    await click(el, '[data-mode="always"]');
+    nowPlaying.value = { hash: 'playing' } as never;
+    await click(el, '[data-select="' + b.id + '"]');
+    await click(el, '[data-mode="auto"]');
+    expect(loadWifiPrefs().overrideId).toBeNull();
+    expect(pendingAfterPlayback()).toEqual({ removeId: null, choice: { kind: 'select', id: b.id } });
+    nowPlaying.value = null;
+    expect(activeServerId.value).toBe(b.id);
+    expect(loadWifiPrefs().overrideId).toBeNull();
+
+    setActiveServer(a.id);
+    await click(el, '[data-mode="always"]');
+    nowPlaying.value = { hash: 'playing' } as never;
+    await click(el, '[data-remove="' + a.id + '"]');
+    await acceptConfirm();
+    await click(el, '[data-select="' + b.id + '"]');
+    await click(el, '[data-mode="auto"]');
+    nowPlaying.value = null;
+    expect(servers.value.some((s) => s.id === a.id)).toBe(false);
+    expect(activeServerId.value).toBe(b.id);
+    expect(loadWifiPrefs().overrideId).toBeNull();
+  });
+
+  it('a deferred selection in always-one-server mode stays locked to the chosen server', async () => {
+    const a = addServer({ url: 'http://10.0.0.2:8090', name: 'Home' });
+    const b = addServer({ url: 'http://10.0.0.3:8090', name: 'Other' });
+    setActiveServer(a.id);
+    const el = mount();
+    await click(el, '[data-mode="always"]');
+    nowPlaying.value = { hash: 'playing' } as never;
+    await click(el, '[data-select="' + b.id + '"]');
+    nowPlaying.value = null;
+    expect(activeServerId.value).toBe(b.id);
+    expect(loadWifiPrefs().overrideId).toBe(b.id);
   });
 
   it('does not write the TV link and does not scan for a network list', () => {

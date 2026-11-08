@@ -171,7 +171,7 @@ export function acceptWifiHost(plan: Extract<WifiPlan, { kind: 'confirm' | 'choo
       if (d) d.save(next);
       else saveWifiPrefs(next);
     }
-    if (playingNow()) queueAfterPlayback({ kind: 'select', id: server.id, lock: !!next.overrideId });
+    if (playingNow()) queueAfterPlayback({ kind: 'select', id: server.id });
     else applyServer(server.id);
     wifiPrompt.value = null;
     return next;
@@ -236,11 +236,17 @@ export function dropWifiProfile(ssid: string): WifiPrefs {
 }
 
 export type AfterPlayback =
-  | { kind: 'select'; id: string; lock: boolean }
+  | { kind: 'select'; id: string }
   | { kind: 'remove'; id: string }
   | { kind: 'wifi' };
 
-let afterPlayback: AfterPlayback | null = null;
+export interface PlaybackWait {
+  removeId: string | null;
+  choice: { kind: 'select'; id: string } | { kind: 'wifi' } | null;
+}
+
+let pendingRemoveId: string | null = null;
+let pendingChoice: PlaybackWait['choice'] = null;
 let watchingPlayback = false;
 let lanSearch: ((cancel: () => boolean) => Promise<FoundHost[]>) | null = null;
 
@@ -250,34 +256,57 @@ export function setLanSearch(fn: ((cancel: () => boolean) => Promise<FoundHost[]
 }
 
 export function queueAfterPlayback(job: AfterPlayback): void {
-  afterPlayback = job;
+  if (job.kind === 'remove') {
+    pendingRemoveId = job.id;
+    if (pendingChoice && pendingChoice.kind === 'select' && pendingChoice.id === job.id) pendingChoice = null;
+    return;
+  }
+  if (job.kind === 'select') {
+    pendingChoice = { kind: 'select', id: job.id };
+    if (pendingRemoveId === job.id) pendingRemoveId = null;
+    return;
+  }
+  pendingChoice = { kind: 'wifi' };
 }
 
 export function clearAfterPlayback(): void {
-  afterPlayback = null;
+  pendingRemoveId = null;
+  pendingChoice = null;
 }
 
-export function pendingAfterPlayback(): AfterPlayback | null {
-  return afterPlayback;
+/** Drops a queued select or removal of this server. A queued network check stays. */
+export function forgetPendingServer(id: string): void {
+  if (pendingRemoveId === id) pendingRemoveId = null;
+  if (pendingChoice && pendingChoice.kind === 'select' && pendingChoice.id === id) pendingChoice = null;
 }
 
-/** Applies the choice that was saved while something was playing. Does nothing mid-playback. */
+export function pendingAfterPlayback(): PlaybackWait | null {
+  if (!pendingRemoveId && !pendingChoice) return null;
+  return { removeId: pendingRemoveId, choice: pendingChoice };
+}
+
+/**
+ * Applies what was saved during playback. Removal is kept apart from the latest
+ * server choice. The rule in force now decides whether that choice is locked.
+ * Does nothing while playback is still going.
+ */
 export function applyAfterPlayback(): void {
   if (playingNow()) return;
-  const job = afterPlayback;
-  afterPlayback = null;
-  if (!job) return;
-  if (job.kind === 'wifi') {
+  const removeId = pendingRemoveId;
+  const choice = pendingChoice;
+  pendingRemoveId = null;
+  pendingChoice = null;
+  if (!removeId && !choice) return;
+  if (removeId && servers.peek().some((s) => s.id === removeId)) removeServer(removeId);
+  if (!choice) return;
+  if (choice.kind === 'wifi') {
     void considerWifi(undefined, true);
     return;
   }
-  if (!servers.peek().some((s) => s.id === job.id)) return;
-  if (job.kind === 'remove') {
-    removeServer(job.id);
-    return;
-  }
-  setActiveServer(job.id);
-  if (job.lock) setWifiOverride(job.id);
+  if (!servers.peek().some((s) => s.id === choice.id)) return;
+  const lock = !!loadWifiPrefs().overrideId;
+  setActiveServer(choice.id);
+  if (lock) setWifiOverride(choice.id);
 }
 
 export function watchPlaybackEnd(): void {

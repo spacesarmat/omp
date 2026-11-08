@@ -28,9 +28,9 @@ import { normalizeSsid } from '../servers/wifiSelect';
 import {
   clearAfterPlayback,
   considerWifi,
+  forgetPendingServer,
   dropWifiProfile,
   loadWifiPrefs,
-  pendingAfterPlayback,
   queueAfterPlayback,
   searchLan,
   setWifiEnabled,
@@ -175,7 +175,7 @@ export function WatchFrom() {
 
   function select(id: string) {
     if (selectDecision(playingNow()) === 'defer') {
-      queueAfterPlayback({ kind: 'select', id: id, lock: !modeIsAuto() });
+      queueAfterPlayback({ kind: 'select', id: id });
       setNote(t('settings.watchFromSwitchLater'));
       return;
     }
@@ -201,8 +201,7 @@ export function WatchFrom() {
       return;
     }
     removeServer(s.id);
-    const pending = pendingAfterPlayback();
-    if (pending && pending.kind !== 'wifi' && pending.id === s.id) clearAfterPlayback();
+    forgetPendingServer(s.id);
   }
 
   async function find() {
