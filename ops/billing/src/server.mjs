@@ -1,4 +1,8 @@
 import { createServer } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { Readable } from 'node:stream';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -511,19 +515,160 @@ function indexerLabel(link, fallback) {
   return fallback || 'jackett';
 }
 
+const TORRENT_TIMEOUT_MS = 20000;
+const TORRENT_MAX_BYTES = 5 * 1024 * 1024;
+
+function downloadError(code) {
+  const err = new Error(code);
+  err.code = code;
+  return err;
+}
+
+function redirectHeaders(headers, sameOrigin) {
+  if (sameOrigin) return headers;
+  const out = { ...(headers || {}) };
+  for (const name of Object.keys(out)) {
+    if (name.toLowerCase() === 'authorization') delete out[name];
+  }
+  return out;
+}
+
+function privateV4(parts) {
+  const a = parts[0];
+  const b = parts[1];
+  const c = parts[2];
+  return (
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && ((b === 0 && (c === 0 || c === 2)) || b === 168)) ||
+    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+    (a === 203 && b === 0 && c === 113)
+  );
+}
+
+function privateIp(raw) {
+  let ip = String(raw || '').toLowerCase();
+  if (ip.startsWith('[') && ip.endsWith(']')) ip = ip.slice(1, -1);
+  if (isIP(ip) === 4) return privateV4(ip.split('.').map(Number));
+  if (isIP(ip) !== 6) return true;
+  if (ip === '::' || ip === '::1') return true;
+  if (ip.startsWith('::ffff:')) return true;
+  const first = parseInt(ip.split(':')[0] || '0', 16);
+  return (first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00 || (first & 0xff00) === 0xff00;
+}
+
+function abortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+async function assertExternalRedirect(target, lookup, signal) {
+  if (target.protocol !== 'https:' || target.username || target.password) throw downloadError('bad_redirect');
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host)) {
+    if (privateIp(host)) throw downloadError('bad_redirect');
+    return [{ address: host, family: isIP(host) }];
+  }
+  let rows;
+  try {
+    rows = await abortable(lookup(host, { all: true }), signal);
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
+    throw downloadError('bad_redirect');
+  }
+  if (!Array.isArray(rows) || !rows.length || rows.some((row) => privateIp(row && row.address))) throw downloadError('bad_redirect');
+  return rows;
+}
+
+export function pinnedHttpsRequest(url, init, addresses, requestImpl) {
+  const target = new URL(url);
+  const address = addresses[0];
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  return new Promise((resolve, reject) => {
+    const req = requestImpl(
+      {
+        protocol: 'https:',
+        hostname: host,
+        servername: host,
+        port: target.port || 443,
+        path: target.pathname + target.search,
+        method: init.method || 'GET',
+        headers: { ...(init.headers || {}), Host: target.host },
+        lookup: (_hostname, options, cb) => {
+          if (options && options.all) cb(null, addresses);
+          else cb(null, address.address, address.family);
+        },
+        agent: false,
+      },
+      (res) => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          headers: res.headers,
+          body: Readable.toWeb(res),
+          arrayBuffer: async () => {
+            const chunks = [];
+            for await (const chunk of res) chunks.push(chunk);
+            const buf = Buffer.concat(chunks);
+            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+          },
+        });
+      },
+    );
+    req.on('error', reject);
+    if (init.signal) {
+      if (init.signal.aborted) req.destroy(new DOMException('aborted', 'AbortError'));
+      else init.signal.addEventListener('abort', () => req.destroy(new DOMException('aborted', 'AbortError')), { once: true });
+    }
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
+function requestExternal(net, url, init, addresses, requestImpl) {
+  if (requestImpl) return pinnedHttpsRequest(url, init, addresses, requestImpl);
+  if (net === fetch) return pinnedHttpsRequest(url, init, addresses, httpsRequest);
+  return net(url, init);
+}
+
 /**
  * Jackett sometimes answers a download with a redirect to a magnet. Follow one http(s) hop,
- * and stop when Location is a magnet so the phone can add it.
+ * and stop when Location is a magnet so the phone can add it. Credentials stay on the indexer's origin.
  */
-async function fetchDownload(net, url, headers) {
-  const first = await net(url, { headers, redirect: 'manual' });
+async function fetchDownload(net, url, headers, signal, lookup, requestImpl) {
+  const first = await net(url, { headers, redirect: 'manual', signal });
   const status = first.status || 0;
   const loc = headerValue(first, 'location');
   if (status >= 300 && status < 400 && /^magnet:/i.test(loc)) {
     return { kind: 'magnet', magnet: loc, status, res: first };
   }
   if (status >= 300 && status < 400 && /^https?:/i.test(loc)) {
-    const second = await net(loc, { headers, redirect: 'manual' });
+    const from = new URL(url);
+    const target = new URL(loc, from);
+    const sameOrigin = target.origin === from.origin;
+    const addresses = sameOrigin ? [] : await assertExternalRedirect(target, lookup || dnsLookup, signal);
+    const second = sameOrigin
+      ? await net(target.href, { headers, redirect: 'manual', signal })
+      : await requestExternal(net, target.href, { headers: redirectHeaders(headers, false), redirect: 'manual', signal }, addresses, requestImpl);
     const status2 = second.status || 0;
     const loc2 = headerValue(second, 'location');
     if (status2 >= 300 && status2 < 400 && /^magnet:/i.test(loc2)) {
@@ -532,6 +677,42 @@ async function fetchDownload(net, url, headers) {
     return { kind: 'file', status: status2, res: second };
   }
   return { kind: 'file', status, res: first };
+}
+
+async function readDownloadBody(res, maxBytes) {
+  const declared = Number(headerValue(res, 'content-length'));
+  if (declared > maxBytes) throw downloadError('too_large');
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const next = await reader.read();
+        if (next.done) break;
+        const chunk = next.value;
+        if (!chunk) continue;
+        size += chunk.byteLength;
+        if (size > maxBytes) {
+          await reader.cancel().catch(() => undefined);
+          throw downloadError('too_large');
+        }
+        chunks.push(chunk);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const out = Buffer.allocUnsafe(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return out;
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength > maxBytes) throw downloadError('too_large');
+  return buf;
 }
 
 /** getUpdates long-polls 25 s; the request as a whole gets 40 s. */
@@ -2118,20 +2299,28 @@ export function createApp(file, fetchImpl, opts) {
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
         const label = indexerLabel(body.link, indexer.name);
-        let upstream;
+        const timeoutMs = Number(opts && opts.torrentTimeoutMs) > 0 ? Number(opts.torrentTimeoutMs) : TORRENT_TIMEOUT_MS;
+        const maxBytes = Number(opts && opts.torrentMaxBytes) > 0 ? Number(opts.torrentMaxBytes) : TORRENT_MAX_BYTES;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          upstream = await fetchDownload(net, remote, headers);
+          const upstream = await fetchDownload(net, remote, headers, controller.signal, opts && opts.downloadLookup, opts && opts.downloadRequest);
+          process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
+          if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
+          // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
+          // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
+          if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
+          const buf = await readDownloadBody(upstream.res, maxBytes);
+          return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
         } catch (e) {
-          process.stderr.write('torrent upstream status=down indexer=' + label + '\n');
-          return json(res, 502, { error: 'down' });
+          const aborted = e && (e.name === 'AbortError' || e.code === 'ABORT_ERR' || e.code === 20);
+          const code = aborted ? 'timeout' : e && (e.code === 'too_large' || e.code === 'bad_redirect') ? e.code : 'down';
+          process.stderr.write('torrent upstream status=' + code + ' indexer=' + label + '\n');
+          return json(res, 502, { error: code });
+        } finally {
+          clearTimeout(timer);
+          controller.abort();
         }
-        process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
-        if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
-        // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
-        // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
-        if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
-        const buf = Buffer.from(await upstream.res.arrayBuffer());
-        return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);

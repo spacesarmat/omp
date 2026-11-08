@@ -29,6 +29,20 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: billing_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d billing_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     # TAG is read by later steps. TMDB_API_KEY is not job-wide: npm test must not see it,
     # or Vite bakes the secret into the built-in key and tests call live TMDB.
     env:
@@ -44,9 +58,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm --prefix ops/billing ci
       - name: Tag must match package.json version
         run: test "${TAG}" = "v$(node -p "require('./package.json').version")"
       - run: npm test
+        env:
+          BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test
+          BILLING_TEST_REQUIRE_PG: '1'
       - name: Require the TMDB API key
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
