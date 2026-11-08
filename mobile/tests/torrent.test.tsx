@@ -606,6 +606,27 @@ describe('Torrent «Сменить постер»', () => {
 });
 
 describe('Torrent not in the list yet', () => {
+  it('sends the season queue to the TV, and does not cross a gap or the next season', async () => {
+    torrents.value = [];
+    const pack: T = {
+      ...tor,
+      file_stats: [
+        { id: 1, path: 'Show.S02E01.mkv', length: 1 },
+        { id: 2, path: 'Show.S02E02.mkv', length: 1 },
+        { id: 4, path: 'Show.S02E04.mkv', length: 1 },
+        { id: 5, path: 'Show.S03E01.mkv', length: 1 },
+      ],
+    };
+    vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(pack);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    click(el.querySelectorAll('.m-ep')[0]);
+    click(el.querySelectorAll('.m-opt')[0]);
+    await flush();
+    expect(launch).toHaveBeenCalledWith({ server: 'http://srv:8090', torrent: 'abc', file: 1, t: 0, from: 'Телефон', files: [1, 2] });
+  });
+
   it('asks the server and shows it', async () => {
     torrents.value = [];
     const get = vi.spyOn(TorrServerClient.prototype, 'get').mockResolvedValue(tor);

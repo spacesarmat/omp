@@ -120,6 +120,7 @@ export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: T
       duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
       seasonTotal: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
+      files: filesOf(torrent),
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
       onLaunched: (name) => setStatus({ kind: 'ok', text: t('add.launchedOn', { name: name }) }),
@@ -704,6 +705,7 @@ export function Torrent({ hash }: { hash: string }) {
       duration: getLocalProgress(hash, target.id)?.duration || undefined,
       label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
       seasonTotal: continuationTotal(target),
+      files: filesOf(tor),
       onBusy: setBusy,
       onError: setStatus,
     });

@@ -23,8 +23,8 @@ import { MIN_RESUME, getLocalProgress } from '../../src/store/progress';
 import { settings } from '../../src/store/settings';
 import type { Torrent } from '../../src/api/types';
 import { isAudiobookTorrent } from '../../src/lib/audiobookRoute';
-import { baseName, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
-import { seasonFileIds, seasonSpan, seasonStep } from '../../src/player/seasonQueue';
+import { baseName, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../../src/lib/episodes';
+import { seasonSpan, seasonStep } from '../../src/player/seasonQueue';
 import { torrents } from '../../src/store/library';
 import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
@@ -201,7 +201,8 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   if (mode === 'embedded' && (await actions.embedded2160().catch(() => false))) open = (o) => actions.playEmbedded2160({ ...o, background: settings.value.backgroundAudio });
   else if (mode === 'p2160' && (await actions.player2160().catch(() => null))) open = (o) => actions.open2160(o);
   if (open) {
-    const files = span.episodic ? span.files.slice() : playableFiles(filesOf(t));
+    // A film, or any file that is not an episode, plays once. Extras are not the next episode.
+    const files = span.episodic ? span.files.slice() : [w.file];
     let start = files.findIndex((f) => f.id === w.file.id);
     if (start < 0) {
       files.unshift(w.file);
@@ -290,6 +291,35 @@ export async function watchAddedOnPhone(c: TorrServerClient, hash: string): Prom
   return 'played';
 }
 
+/**
+ * Files for a TV launch. The card's own list wins. Otherwise the library row, otherwise one read from the server.
+ * An empty list means the queue cannot be built.
+ */
+export async function releaseFiles(c: TorrServerClient, hash: string, given?: TorrentFile[]): Promise<TorrentFile[]> {
+  if (given && given.length) return given;
+  const listed = torrents.peek().filter((x) => x.hash.toLowerCase() === hash.toLowerCase())[0];
+  const cached = listed ? filesOf(listed) : [];
+  if (cached.length) return cached;
+  try {
+    let tor = await c.get(hash);
+    if (!filesOf(tor).length) tor = await c.loadInfo(hash);
+    return filesOf(tor);
+  } catch (e) {
+    return [];
+  }
+}
+
+/** `total` applies only to the file's own season. Another season, or no season, does not inherit it. */
+export function totalForFile(files: TorrentFile[], fileId: number, total?: number, season?: number): number | undefined {
+  if (!total || total <= 0) return undefined;
+  const f = files.filter((x) => x.id === fileId)[0];
+  if (!f) return undefined;
+  const s = parseEpisode(f.path).season;
+  if (s === null) return undefined;
+  if (season !== undefined && season !== s) return undefined;
+  return total;
+}
+
 /** TorrServer's file list, else the one kept in `data`, else the one this device saw last (a release not answering). */
 export function filesOf(t: Torrent): TorrentFile[] {
   if (t.file_stats && t.file_stats.length) return t.file_stats;
@@ -351,6 +381,10 @@ export interface TvLaunchOpts {
   label: string;
   /** Catalog episode count of the season, when the screen knows it. */
   seasonTotal?: number;
+  /** The season `seasonTotal` belongs to. A file from another season does not use that count. */
+  season?: number;
+  /** Files of this card. Used when the torrent is not in the library list yet. */
+  files?: TorrentFile[];
   /** True while the launch is in flight and until the post-launch jump has happened. */
   onBusy?: (busy: boolean) => void;
   onError?: (message: string) => void;
@@ -432,11 +466,12 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>
       const from = o.file !== undefined ? await phoneNameSafe() : undefined;
       let seasonFiles: number[] | undefined;
       if (o.file !== undefined) {
-        const tor = torrents.peek().filter((x) => x.hash.toLowerCase() === o.hash.toLowerCase())[0];
-        if (tor) {
-          const span = seasonSpan(filesOf(tor), o.file, o.seasonTotal);
-          seasonFiles = span.episodic ? span.files.map((f) => f.id) : undefined;
-          if (span.missing !== null) {
+        const list = await releaseFiles(c, o.hash, o.files);
+        if (list.length) {
+          const span = seasonSpan(list, o.file, totalForFile(list, o.file, o.seasonTotal, o.season));
+          // A film is one file, so the TV returns when it ends instead of counting down into extras.
+          seasonFiles = span.episodic ? span.files.map((f) => f.id) : [o.file];
+          if (span.episodic && span.missing !== null) {
             const text = span.season === null
               ? tr('torrent.screen.seasonGapLoose', { episode: String(span.missing) })
               : tr('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) });

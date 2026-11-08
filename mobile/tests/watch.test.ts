@@ -337,6 +337,28 @@ describe('watchOnPhone', () => {
     done();
   });
 
+  it('a film with extras plays once and does not open the next file', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    updateSettings({ phonePlayer: 'embedded' });
+    const film = {
+      hash: 'abc',
+      title: 'Movie',
+      file_stats: [
+        { id: 1, path: 'Movie.2020.mkv', length: 1e9 },
+        { id: 2, path: 'Movie.2020.extra.mkv', length: 1e8 },
+      ],
+    };
+    a.playEmbedded2160.mockResolvedValue({ returned: true, ended: true, positionMs: 1000, durationMs: 1000, url: 'http://h:8090/stream/Movie.2020.mkv?link=abc&index=1&play' });
+    await watchOnPhone(c, film as any, { hash: 'abc', file: film.file_stats[0], title: 'Movie', at: 0, duration: 1 });
+    expect(a.playEmbedded2160).toHaveBeenCalledTimes(1);
+    const items = a.playEmbedded2160.mock.calls[0][0].items;
+    expect(items).toHaveLength(1);
+    expect(items[0].url).toContain('Movie.2020.mkv');
+    done();
+  });
+
   it('an audiobook opens the book card and never starts 2160', async () => {
     reset();
     const a = mk();

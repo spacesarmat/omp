@@ -147,6 +147,7 @@ export function SeasonCard({ id, season }: { id: number; season: number }) {
       duration: getLocalProgress(spot.hash, spot.file.id)?.duration || undefined,
       label: [episodeLabel(spot.file.path), stripExt(baseName(spot.file.path))].filter(Boolean).join(' · '),
       seasonTotal: meta && meta.episodes > 0 ? meta.episodes : undefined,
+      season: season,
       onError: setLaunchError,
     });
   };

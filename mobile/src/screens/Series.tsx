@@ -355,6 +355,8 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
       seasonTotal: info && info.episodes > 0 ? info.episodes : undefined,
+      season: season !== NO_SEASON ? season : undefined,
+      files: filesOf(tor),
       onError: setError,
     });
   };
