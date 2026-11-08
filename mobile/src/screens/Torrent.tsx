@@ -21,6 +21,7 @@ import { routeForHash } from '../audiobooks/route';
 import { isAudiobookTorrent } from '../../../src/lib/audiobookRoute';
 import { activeTv } from '../tv/tvStore';
 import { actions, filesOf, streamUrlFor, tvServerUrl, useTvLaunch, watchOnPhone } from '../watch';
+import { seasonSpan } from '../../../src/player/seasonQueue';
 import { client, activeServer } from '../../../src/store/servers';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { torrents, refreshTorrents, repairTitles } from '../../../src/store/library';
@@ -85,7 +86,7 @@ function fileTitle(f: TorrentFile): string {
 }
 
 
-export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file: TorrentFile; onClose: () => void }) {
+export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: TorrentT; file: TorrentFile; onClose: () => void; seasonTotal?: number }) {
   const c = client.value!;
   const tv = activeTv.value;
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -101,6 +102,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
   );
 
   const code = fileCode(file);
+  const span = seasonSpan(filesOf(torrent), file.id, seasonTotal && seasonTotal > 0 ? seasonTotal : undefined);
   // the episode code (a film: its short name) and the size, never the file name
   const head = [code || libraryTitle(torrent).title, fmtSize(file.length)].filter(Boolean);
 
@@ -117,6 +119,8 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
       at: sharedResume(torrent.hash, file.id),
       duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
+      seasonTotal: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
+      files: filesOf(torrent),
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
       onLaunched: (name) => setStatus({ kind: 'ok', text: t('add.launchedOn', { name: name }) }),
@@ -131,6 +135,7 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
         title: fileTitle(file),
         at: sharedResume(torrent.hash, file.id),
         duration: getLocalProgress(torrent.hash, file.id)?.duration || 0,
+        total: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
       });
       if (alive.v) onClose();
     } catch (e) {
@@ -189,6 +194,33 @@ export function WatchSheet({ torrent, file, onClose }: { torrent: TorrentT; file
             <span class="m-opt-sub">{t('torrent.screen.copyNoPasswordSub')}</span>
           </span>
         </button>
+      )}
+      {span.missing !== null && span.episodic && (
+        <div class="m-hint-warn">
+          <div>
+            {span.season !== null
+              ? t('torrent.screen.seasonGap', { season: String(span.season), episode: String(span.missing) })
+              : t('torrent.screen.seasonGapLoose', { episode: String(span.missing) })}
+          </div>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-btn-sm"
+            onClick={() => {
+              const season = span.season;
+              const episode = span.missing;
+              onClose();
+              if (episode === null) return;
+              const seasonPart = season !== null ? ' ' + t('catalog.querySeason', { n: season }) : '';
+              navigate({
+                name: 'add',
+                query: libraryTitle(torrent).title + seasonPart + ' ' + t('catalog.queryEpisode', { n: episode }),
+                run: true,
+              });
+            }}
+          >
+            {t('torrent.screen.seasonGapFind', { episode: String(span.missing) })}
+          </button>
+        </div>
       )}
       {status && status.kind === 'error' && <LaunchError message={status.text} class="m-status-err" />}
       {status && status.kind === 'ok' && (
@@ -652,6 +684,14 @@ export function Torrent({ hash }: { hash: string }) {
     ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
     : t('news.watchOnTv') + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
 
+  // The continue button may resume a season other than the one on screen. Its count is that season's, or none.
+  const continuationTotal = (file: TorrentFile): number | undefined => {
+    const s = parseEpisode(file.path).season;
+    if (s === null) return undefined;
+    const n = Math.max(seasonEpisodeTotal(showNow, epsNow, s), gkey ? rememberedSeasonTotal(gkey, s) : 0);
+    return n > 0 ? n : undefined;
+  };
+
   const watchMain = async () => {
     if (!target) return;
     if (!tv) {
@@ -664,6 +704,8 @@ export function Torrent({ hash }: { hash: string }) {
       at,
       duration: getLocalProgress(hash, target.id)?.duration || undefined,
       label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
+      seasonTotal: continuationTotal(target),
+      files: filesOf(tor),
       onBusy: setBusy,
       onError: setStatus,
     });
@@ -678,6 +720,7 @@ export function Torrent({ hash }: { hash: string }) {
         title: fileTitle(target),
         at,
         duration: getLocalProgress(hash, target.id)?.duration || 0,
+        total: continuationTotal(target),
       });
     } catch (e) {
       setStatus(errorMessage(e));
@@ -890,7 +933,14 @@ export function Torrent({ hash }: { hash: string }) {
         />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
       {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
-      {sheet && <WatchSheet torrent={tor} file={sheet} onClose={() => setSheet(null)} />}
+      {sheet && (
+        <WatchSheet
+          torrent={tor}
+          file={sheet}
+          seasonTotal={headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {launch.sheet}
     </div>
   );

@@ -12,6 +12,8 @@ export interface NextEpisodeOptions {
   creditsStart?: number | null;
   onNext: () => void;
   onEnd: () => void;
+  /** The caller handles the end itself (no countdown and no automatic onEnd). */
+  holdEnd?: boolean;
 }
 
 /** Whether the «next episode» countdown is due: from the credits when known, else in the last 30 s. */
@@ -58,10 +60,10 @@ export function useNextEpisode(o: NextEpisodeOptions): { countdown: number | nul
   }, [show]);
 
   useEffect(() => {
-    if (!o.ended) return;
+    if (!o.ended || o.holdEnd) return;
     if (o.enabled && o.hasNext) onNext.current();
     else onEnd.current();
-  }, [o.ended]);
+  }, [o.ended, o.holdEnd]);
 
   return { countdown: show ? left : null, dismiss: () => setDismissed(true) };
 }

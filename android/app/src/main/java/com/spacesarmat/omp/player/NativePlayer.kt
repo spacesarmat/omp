@@ -20,7 +20,7 @@ data class QueueItem(
 )
 
 /**
- * playNative({ queue, index, startAt, session, seekStep, autoNext, audioLang, subLang, subtitlesOn, engine?, donate?,
+ * playNative({ queue, index, startAt, session, seekStep, autoNext, immediateNext?, audioLang, subLang, subtitlesOn, engine?, donate?,
  * audioPick?, subPick?, alwaysFfmpeg?, testMode? }) — the picks: [{ l?, g?, off? }].
  */
 data class PlayRequest(
@@ -54,6 +54,8 @@ data class PlayRequest(
     val testMode: Boolean = false,
     /** Test-mode label size in px (the page's «Размер меток» slider); 0 when the page sent none. */
     val testPx: Int = 0,
+    /** Next item starts at once, with no countdown. Older pages omit it. */
+    val immediateNext: Boolean = false,
 ) {
     companion object {
         const val LABEL_MAX = 200
@@ -92,6 +94,7 @@ data class PlayRequest(
                 startAtMs = (start * 1000).toLong(),
                 seekStep = o.optInt("seekStep", 10).coerceIn(1, 600),
                 autoNext = o.optBoolean("autoNext", true),
+                immediateNext = o.optBoolean("immediateNext", false),
                 audioLang = o.optString("audioLang"),
                 subLang = o.optString("subLang"),
                 subtitlesOn = o.optBoolean("subtitlesOn", false),

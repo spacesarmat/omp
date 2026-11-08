@@ -58,7 +58,7 @@ describe('saveP2160Result', () => {
     expect(isWatched(H, 1)).toBe(false);
     expect(getLocalProgress(H, 1)!.time).toBe(80);
     expect(getLocalProgress(H, 1)!.duration).toBe(1441);
-    expect(saved).toEqual({ item: queue[0], time: 0, duration: 1441, ended: false });
+    expect(saved).toEqual({ item: queue[0], time: 0, duration: 1441, ended: false, completed: false });
   });
   it('ended with position 0 and a duration does not mark watched', () => {
     saveProgress(H, 1, 80, 1441);
@@ -71,17 +71,20 @@ describe('saveP2160Result', () => {
     expect(isWatched(H, 1)).toBe(true);
     expect(getLocalProgress(H, 1)!.time).toBe(1441);
     expect(saved && saved.ended).toBe(true);
+    expect(saved && saved.completed).toBe(true);
   });
   it('a close near the end marks watched without an ended flag', () => {
-    saveP2160Result(null, queue, 0, { returned: true, positionMs: 1300000, durationMs: 1441000 }, 0);
+    const saved = saveP2160Result(null, queue, 0, { returned: true, positionMs: 1300000, durationMs: 1441000 }, 0);
     expect(isWatched(H, 1)).toBe(true);
     expect(getLocalProgress(H, 1)!.time).toBe(1300);
+    expect(saved && saved.completed).toBe(false);
   });
   it('an explicit not-watched flag keeps a near-end position and does not mark the file', () => {
     const saved = saveP2160Result(null, queue, 0, { returned: true, watched: false, positionMs: 1300000, durationMs: 1441000 }, 0);
     expect(isWatched(H, 1)).toBe(false);
     expect(getLocalProgress(H, 1)!.time).toBe(1300);
     expect(saved && saved.ended).toBe(false);
+    expect(saved && saved.completed).toBe(false);
   });
   it('a file url is ignored and the start item keeps the position', () => {
     saveP2160Result(null, queue, 0, { returned: true, positionMs: 300000, durationMs: 1000000, url: 'file:///tmp/a.mkv' }, 0);

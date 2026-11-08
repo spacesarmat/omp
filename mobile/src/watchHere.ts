@@ -19,7 +19,7 @@ export function tvFirst(): boolean {
  * Plays `file` of `tor` on this phone from where it was left (`at`, else the shared position). `tor` may be a hash of
  * the library. Rejects with the error to show.
  */
-export async function playOnPhone(tor: Torrent | string, file: TorrentFile, at?: number): Promise<void> {
+export async function playOnPhone(tor: Torrent | string, file: TorrentFile, at?: number, total?: number): Promise<void> {
   const c = client.peek();
   const it = typeof tor === 'string' ? torrents.peek().find((x) => x.hash === tor) : tor;
   if (!c || !it) return;
@@ -29,6 +29,7 @@ export async function playOnPhone(tor: Torrent | string, file: TorrentFile, at?:
     title: stripExt(baseName(file.path)),
     at: at !== undefined ? at : sharedResume(it.hash, file.id),
     duration: getLocalProgress(it.hash, file.id)?.duration || 0,
+    total: total && total > 0 ? total : undefined,
   });
 }
 
