@@ -732,7 +732,8 @@ export function botCallback(state, { chatId, data, now, info }) {
 
   if (raw.indexOf('ly:') === 0) {
     const prefix = raw.slice(3);
-    const link = (cur.links || []).find((l) => l.token.startsWith(prefix) && !l.usedAt && l.expiresAt > now);
+    if (!/^[a-f0-9]{32}$/.test(prefix)) return { state, messages, answer: stale, clearMarkup: true };
+    const link = (cur.links || []).find((l) => l.token.slice(0, 32) === prefix && !l.usedAt && l.expiresAt > now);
     if (!link) return { state, messages, answer: stale, clearMarkup: true };
     const out = confirmDeviceLink(cur, { token: link.token, telegramId: chatId, now });
     cur = out.state;

@@ -512,6 +512,17 @@ describe('device link confirmation', () => {
     expect(again.state.accounts[0].linkedDevices).toEqual([DEV_C]);
   });
 
+  it('rejects empty and malformed link callbacks', () => {
+    const f = setup({ bound: 0 });
+    const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });
+    const prompted = say(started.state, '/start link_' + started.result.token, NOW);
+    for (const data of ['ly:', 'ly:not-a-token', 'ly:' + started.result.token.slice(0, 31)]) {
+      const out = botCallback(prompted.state, { chatId: '42', data, now: NOW });
+      expect(out.answer).toContain('устарела');
+      expect(out.state.accounts[0].linkedDevices || []).toEqual([]);
+    }
+  });
+
   it('does not bind on cancel or an expired token', () => {
     const f = setup({ bound: 0 });
     const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });

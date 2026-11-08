@@ -14,7 +14,7 @@ import {
 import { claimLimitConfig } from '../src/services.mjs';
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
-import { testStore } from './pg';
+import { readState, testStore } from './pg';
 
 const NOW = Date.parse('2026-10-19T00:00:00Z');
 const DAY = 24 * 60 * 60 * 1000;
@@ -101,12 +101,12 @@ describe('claim by linked Telegram', () => {
   it('rate-limits /v1/link/start per IP', async () => {
     const file = await testStore();
     const app = createApp(file, undefined, { env: { BILLING_CLAIM_IP_MAX: '1' } });
-    const start = async () => {
-      const payload = JSON.stringify({ deviceId: DEV_A });
+    const start = async (bodyDevice = DEV_A, headerDevice = bodyDevice) => {
+      const payload = JSON.stringify({ deviceId: bodyDevice });
       const req = {
         method: 'POST',
         url: '/v1/link/start',
-        headers: { 'content-type': 'application/json', 'x-device-id': DEV_A },
+        headers: { 'content-type': 'application/json', 'x-device-id': headerDevice },
         async *[Symbol.asyncIterator]() {
           yield Buffer.from(payload);
         },
@@ -131,5 +131,75 @@ describe('claim by linked Telegram', () => {
     };
     expect((await start()).status).toBe(200);
     expect((await start()).status).toBe(429);
+  });
+
+  it('rejects conflicting device ids in the header and body', async () => {
+    const file = await testStore();
+    const app = createApp(file, undefined, { env: { BILLING_CLAIM_DEVICE_MAX: '1' } });
+    const start = async () => {
+      const payload = JSON.stringify({ deviceId: DEV_A });
+      const req = {
+        method: 'POST',
+        url: '/v1/link/start',
+        headers: { 'content-type': 'application/json', 'x-device-id': DEV_B },
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(payload);
+        },
+      };
+      const res = {
+        status: 0,
+        headers: {} as Record<string, unknown>,
+        body: '',
+        setHeader(name: string, value: unknown) {
+          this.headers[name] = value;
+        },
+        writeHead(status: number, headers?: Record<string, unknown>) {
+          this.status = status;
+          if (headers) Object.assign(this.headers, headers);
+        },
+        end(body?: Buffer | string) {
+          this.body = String(body || '');
+        },
+      };
+      await app(req, res);
+      return res;
+    };
+    expect((await start()).status).toBe(400);
+    expect((await readState(file)).links).toHaveLength(0);
+  });
+
+  it('counts the body device id when the header changes', async () => {
+    const file = await testStore();
+    const app = createApp(file, undefined, { env: { BILLING_CLAIM_DEVICE_MAX: '1' } });
+    const start = async (headerDevice: string) => {
+      const payload = JSON.stringify({ deviceId: DEV_A });
+      const req = {
+        method: 'POST',
+        url: '/v1/link/start',
+        headers: { 'content-type': 'application/json', 'x-device-id': headerDevice },
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(payload);
+        },
+      };
+      const res = {
+        status: 0,
+        headers: {} as Record<string, unknown>,
+        body: '',
+        setHeader(name: string, value: unknown) {
+          this.headers[name] = value;
+        },
+        writeHead(status: number, headers?: Record<string, unknown>) {
+          this.status = status;
+          if (headers) Object.assign(this.headers, headers);
+        },
+        end(body?: Buffer | string) {
+          this.body = String(body || '');
+        },
+      };
+      await app(req, res);
+      return res;
+    };
+    expect((await start(DEV_A)).status).toBe(200);
+    expect((await start('')).status).toBe(429);
   });
 });
