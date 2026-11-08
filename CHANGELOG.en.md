@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.11
 
 - [phone] In landscape, Discover puts the catalog title and the view, sort and search buttons on the same row as Mine / Discover. Filters stay below. The TV button stays. Portrait is unchanged
 - [phone] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
