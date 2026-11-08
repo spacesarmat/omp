@@ -31,7 +31,7 @@ async function call(app: App, method: string, path: string, opts: { body?: unkno
   const req = {
     method,
     url: path,
-    headers: { accept: 'application/json', 'content-type': opts.body === undefined ? '' : 'application/json', ...(opts.headers || {}) },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', 'content-type': opts.body === undefined ? '' : 'application/json', ...(opts.headers || {}) },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);
@@ -141,7 +141,7 @@ describe('BILLING_READONLY (cutover window)', () => {
 
     const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
     expect(once.status).toBe(302);
-    expect(String(once.headers['set-cookie'] || '')).toContain('omp_admin=');
+    expect(String(once.headers['set-cookie'] || '')).toContain('__Host-omp_admin=');
     // Redeeming must not write again (consumption is in memory).
     expect(JSON.stringify(await readState(s.file))).toBe(afterIssue);
 
@@ -172,7 +172,7 @@ describe('BILLING_READONLY (cutover window)', () => {
     const status = await call(app, 'GET', '/admin/login/telegram/status?token=' + encodeURIComponent(started.token));
     expect(status.status).toBe(200);
     expect(JSON.parse(status.body)).toMatchObject({ ok: true, status: 'ok' });
-    expect(String(status.headers['set-cookie'] || '')).toContain('omp_admin=');
+    expect(String(status.headers['set-cookie'] || '')).toContain('__Host-omp_admin=');
     expect(JSON.stringify(await readState(s.file))).toBe(frozen);
     // confirmAdminPanelLogin is only used above via memory; keep the import referenced for tree-shaking tools.
     expect(typeof confirmAdminPanelLogin).toBe('function');
@@ -245,7 +245,7 @@ describe('BILLING_READONLY (cutover window)', () => {
     });
     const again = await call(app2, 'GET', '/admin/login/once?token=' + encodeURIComponent(issued.token));
     expect(again.status).toBe(403);
-    expect(String(again.headers['set-cookie'] || '')).not.toContain('omp_admin=');
+    expect(String(again.headers['set-cookie'] || '')).not.toContain('__Host-omp_admin=');
     expect(JSON.stringify(await readState(s.file))).toBe(frozen);
   });
 

@@ -39,6 +39,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, method: 
     method,
     url: path,
     headers: {
+      'x-forwarded-proto': 'https',
       accept: 'application/json',
       'content-type': opts.body === undefined ? '' : 'application/json',
       ...(opts.headers || {}),
@@ -102,9 +103,9 @@ async function saveLimit(t: Awaited<ReturnType<typeof setup>>, value: string) {
   const issued = await t.file.update((cur: unknown) => issueCliAdminLogin(cur as never, { now }));
   const token = (issued as { token: string }).token;
   const once = await call(t.app, 'GET', '/admin/login/once?token=' + encodeURIComponent(token));
-  const m = /omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
+  const m = /__Host-omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
   expect(m).toBeTruthy();
-  const cookie = 'omp_admin=' + m![1];
+  const cookie = '__Host-omp_admin=' + m![1];
   const home = await call(t.app, 'GET', '/admin/api/home', { headers: { cookie } });
   const csrf = home.data.csrf as string;
   await call(t.app, 'POST', '/admin/settings', { headers: { cookie }, body: { csrf, dhtPerMinute: value } });
