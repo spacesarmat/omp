@@ -14,6 +14,7 @@ import { rejectPendingPayment } from '../src/deviceAdmin.mjs';
 import {
   activate,
   applyPayment,
+  claimLinkedDevice,
   createPromo,
   createSubscription,
   deviceCode,
@@ -22,6 +23,7 @@ import {
   redeemPromo,
   mskDateTime,
   renewalPrice,
+  startDeviceLink,
   subscriptionView,
 } from '../src/logic.mjs';
 import { createApp, pollBot } from '../src/server.mjs';
@@ -483,5 +485,52 @@ describe('«Устройства» from the device registry', () => {
     };
     await pollBot(file, net, { maxLoops: 1, sleep: async () => {} });
     expect(sent.join('\n')).toContain('1) Kitchen phone aaaaaaaa… · в сети ' + mskDateTime(seen));
+  });
+});
+
+describe('device link confirmation', () => {
+  it('shows the device and does not bind it or issue a code on Start', () => {
+    const f = setup({ bound: 0 });
+    const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });
+    const out = say(started.state, '/start link_' + started.result.token, NOW);
+    expect(out.state).toEqual(started.state);
+    expect(out.messages[0].text).toContain(DEV_C.slice(0, 8));
+    expect(urls(out.messages[0] as Msg).some((x) => x.includes('ly:' + started.result.token.slice(0, 32)))).toBe(true);
+    expect(claimLinkedDevice(out.state, { deviceId: DEV_C, now: NOW }).result.error).toBe('not_linked');
+  });
+
+  it('binds only after the explicit button and accepts it once', () => {
+    const f = setup({ bound: 0 });
+    const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });
+    const prompted = say(started.state, '/start link_' + started.result.token, NOW);
+    const data = 'ly:' + started.result.token.slice(0, 32);
+    const out = botCallback(prompted.state, { chatId: '42', data, now: NOW });
+    expect(out.state.accounts[0].linkedDevices).toEqual([DEV_C]);
+    expect(claimLinkedDevice(out.state, { deviceId: DEV_C, now: NOW }).result.error).toBeUndefined();
+    const again = botCallback(out.state, { chatId: '42', data, now: NOW });
+    expect(again.answer).toContain('устарела');
+    expect(again.state.accounts[0].linkedDevices).toEqual([DEV_C]);
+  });
+
+  it('rejects empty and malformed link callbacks', () => {
+    const f = setup({ bound: 0 });
+    const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });
+    const prompted = say(started.state, '/start link_' + started.result.token, NOW);
+    for (const data of ['ly:', 'ly:not-a-token', 'ly:' + started.result.token.slice(0, 31)]) {
+      const out = botCallback(prompted.state, { chatId: '42', data, now: NOW });
+      expect(out.answer).toContain('устарела');
+      expect(out.state.accounts[0].linkedDevices || []).toEqual([]);
+    }
+  });
+
+  it('does not bind on cancel or an expired token', () => {
+    const f = setup({ bound: 0 });
+    const started = startDeviceLink(f.state, { deviceId: DEV_C, now: NOW });
+    const prompted = say(started.state, '/start link_' + started.result.token, NOW);
+    const cancelled = botCallback(prompted.state, { chatId: '42', data: 'ux', now: NOW });
+    expect(cancelled.state.accounts[0].linkedDevices || []).toEqual([]);
+    const expired = say(started.state, '/start link_' + started.result.token, NOW + 11 * MIN);
+    expect(expired.messages[0].text).toContain('Ссылка устарела');
+    expect(claimLinkedDevice(expired.state, { deviceId: DEV_C, now: NOW + 11 * MIN }).result.error).toBe('not_linked');
   });
 });

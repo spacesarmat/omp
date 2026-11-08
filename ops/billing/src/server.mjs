@@ -2047,7 +2047,16 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
-        const result = await store.update((state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
+        const bodyDevice = String(body.deviceId || '');
+        const headerDevice = String(req.headers['x-device-id'] || '');
+        if (bodyDevice && headerDevice && bodyDevice !== headerDevice) return json(res, 400, { error: 'bad_device' });
+        const deviceId = bodyDevice || headerDevice;
+        const wait = claimLimit.check(clientIp(req), deviceId);
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const result = await store.update((state) => startDeviceLink(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, 400, result);
         const state = (await store.read());
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);

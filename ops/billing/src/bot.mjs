@@ -27,6 +27,7 @@ import {
   lapsingExtras,
   mainSubscription,
   openAppUrl,
+  pendingDeviceLink,
   priceText,
   quotePurchase,
   redeemPromo,
@@ -729,6 +730,18 @@ export function botCallback(state, { chatId, data, now, info }) {
 
   if (raw === 'ux') return { state, messages, answer: 'Отменено', clearMarkup: true };
 
+  if (raw.indexOf('ly:') === 0) {
+    const prefix = raw.slice(3);
+    if (!/^[a-f0-9]{32}$/.test(prefix)) return { state, messages, answer: stale, clearMarkup: true };
+    const link = (cur.links || []).find((l) => l.token.slice(0, 32) === prefix && !l.usedAt && l.expiresAt > now);
+    if (!link) return { state, messages, answer: stale, clearMarkup: true };
+    const out = confirmDeviceLink(cur, { token: link.token, telegramId: chatId, now });
+    cur = out.state;
+    if (out.result.error) return { state: cur, messages, answer: stale, clearMarkup: true };
+    say('Телефон привязан к этому Telegram.\n' + statusText(cur, subscriptionView(cur, account.id, now), account));
+    return { state: cur, messages, answer: 'Привязано', clearMarkup: true };
+  }
+
   if (raw.indexOf('u1:') === 0 || raw.indexOf('y1:') === 0) {
     const confirm = raw.indexOf('y1:') === 0;
     const bits = raw.slice(3).split(':');
@@ -979,10 +992,14 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   }
 
   if (action === 'link') {
-    const out = confirmDeviceLink(cur, { token: arg, telegramId: chatId, now });
+    const out = pendingDeviceLink(cur, { token: arg, now });
     cur = out.state;
     if (out.result.error) say('Ссылка устарела или уже использована. В OMP нажмите «Привязать Telegram» ещё раз.');
-    else say('Телефон привязан к этому Telegram.\n' + statusText(cur, subscriptionView(cur, account.id, now), account));
+    else {
+      say('Привязать к этому Telegram устройство ' + out.result.deviceId.slice(0, 8) + '…?\nКод и доступ к поиску появятся только после подтверждения.', {
+        inline: { inline_keyboard: [[{ text: 'Привязать', callback_data: out.result.callback }, { text: 'Отмена', callback_data: 'ux' }]] },
+      });
+    }
     return { state: cur, messages, pad: mode };
   }
 
