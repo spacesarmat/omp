@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.12-beta.1
 
 - [phone] The app opens again after an update. If Android blocks the activity start, an update notification offers to open it
 - [atv] The Android TV app opens again after an update or offers to open itself with a notification

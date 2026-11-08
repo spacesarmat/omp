@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.12-beta.1
 
 - [phone] После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия
 - [atv] После обновления Android TV приложение открывается снова или предлагает открыть себя уведомлением
