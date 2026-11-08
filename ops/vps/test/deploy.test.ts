@@ -1578,7 +1578,23 @@ exit 0
     const parent = path.join(tmpdir(), `omp-ssh-${Date.now()}-${Math.random().toString(16).slice(2)}`);
     const bin = path.join(parent, 'bin');
     mkdirSync(bin, { recursive: true });
-    writeExe(path.join(bin, 'ssh'), '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "${DEPLOY_TEST_SSH_LOG:?}"\nexit 1\n');
+    writeExe(
+      path.join(bin, 'ssh'),
+      `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "\${DEPLOY_TEST_SSH_LOG:?}"
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "-i" ]]; then
+    workdir="$(dirname "$2")"
+    if [[ -f "$workdir/token" ]]; then
+      printf '%s\\n' TOKEN_WRITTEN_BEFORE_HOST_CHECK >> "\${DEPLOY_TEST_SSH_LOG:?}"
+    fi
+    break
+  fi
+  shift
+done
+exit 1
+`,
+    );
     writeExe(path.join(bin, 'scp'), SCP);
     const sshLog = path.join(parent, 'ssh.log');
     const scpLog = path.join(parent, 'scp.log');
@@ -1594,6 +1610,7 @@ exit 0
       DEPLOY_TEST_SCP_LOG: scpLog,
     });
     expect(result.status).not.toBe(0);
+    expect(log(sshLog)).not.toContain('TOKEN_WRITTEN_BEFORE_HOST_CHECK');
     expect(log(scpLog)).toBe('');
   });
 });
