@@ -18,6 +18,7 @@ import type { CatalogTitle, Kind } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
 import { DEFAULT_DISCOVER_QUERY, type DiscoverQuery } from '../../src/catalog/discoverQuery';
 import { saveDiscoverQuery } from '../src/screens/catalog/discoverQueryStore';
+import { discoverHeadSlot } from '../src/screens/catalog/compactBar';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
 // @ts-ignore
@@ -857,5 +858,116 @@ describe('phoneCatalog', () => {
     const b = await phoneCatalog();
     expect(a).not.toBe(b);
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('landscape catalog bar', () => {
+  function installCompact(initial: boolean) {
+    const box = { matches: initial };
+    const listeners = new Set<(ev: { matches: boolean }) => void>();
+    vi.stubGlobal('matchMedia', (q: string) => {
+      const landscape = q.indexOf('max-height: 520px') >= 0;
+      return {
+        get matches() { return landscape ? box.matches : false; },
+        media: q,
+        addEventListener(_type: string, fn: (ev: { matches: boolean }) => void) {
+          if (landscape) listeners.add(fn);
+        },
+        removeEventListener(_type: string, fn: (ev: { matches: boolean }) => void) {
+          listeners.delete(fn);
+        },
+        addListener(fn: (ev: { matches: boolean }) => void) { if (landscape) listeners.add(fn); },
+        removeListener(fn: (ev: { matches: boolean }) => void) { listeners.delete(fn); },
+        dispatchEvent() { return false; },
+        onchange: null,
+      };
+    });
+    return {
+      set(next: boolean) {
+        box.matches = next;
+        act(() => listeners.forEach((fn) => fn({ matches: next })));
+      },
+    };
+  }
+
+  async function openDiscover() {
+    fake();
+    setCatalogMode('discover');
+    mount(<Library />);
+    await flush();
+  }
+
+  afterEach(() => {
+    discoverHeadSlot.value = null;
+  });
+
+  it('keeps the title and the tools under the filters in portrait', async () => {
+    installCompact(false);
+    await openDiscover();
+    const head = el.querySelector('.m-lib-head')!;
+    expect(head.querySelector('.m-disc-slot')).toBeNull();
+    expect(head.className).not.toContain('m-lib-head-discover');
+    const row = el.querySelector('.m-discover .m-disc-head')!;
+    expect(row.querySelector('h2')!.textContent).toBe('Новинки');
+    expect(row.textContent).toContain('из каталога TMDB');
+    expect(row.querySelector('[data-current-view]')).not.toBeNull();
+    expect(row.querySelector('[data-code="P34.3"]')).not.toBeNull();
+    expect(row.querySelector('[data-code="P34.4"]')).not.toBeNull();
+    expect(el.querySelector('.m-discover .m-disc-chips')).not.toBeNull();
+    expect(head.querySelector('.m-tvchip')).not.toBeNull();
+  });
+
+  it('moves the title and the tools into the top bar in landscape and leaves filters, views and the TV button', async () => {
+    installCompact(true);
+    await openDiscover();
+    const head = el.querySelector('.m-lib-head')!;
+    const kids = Array.from(head.children);
+    const slot = head.querySelector('.m-disc-slot')!;
+    const tv = head.querySelector('.m-tvchip')!;
+    expect(head.classList.contains('m-lib-head-discover')).toBe(true);
+    expect(slot.querySelector('h2')!.textContent).toBe('Новинки');
+    expect(slot.textContent).toContain('из каталога TMDB');
+    expect(el.querySelector('.m-discover .m-disc-head')).toBeNull();
+    expect(kids.indexOf(head.querySelector('.m-seg')!)).toBeLessThan(kids.indexOf(slot));
+    expect(kids.indexOf(slot)).toBeLessThan(kids.indexOf(tv));
+    expect(el.querySelector('.m-discover .m-disc-chips')).not.toBeNull();
+    expect(head.contains(el.querySelector('.m-disc-chips'))).toBe(false);
+    const viewBtn = slot.querySelector('[data-current-view]') as HTMLButtonElement;
+    const sortBtn = slot.querySelector('[data-code="P34.3"]') as HTMLButtonElement;
+    expect(slot.querySelector('[data-code="P34.4"]')).not.toBeNull();
+    act(() => viewBtn.click());
+    expect(viewBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('[data-sheet-view], [data-view]')).not.toBeNull();
+    act(() => sortBtn.click());
+    expect(el.textContent).toContain('По рейтингу');
+    act(() => (el.querySelector('[data-code="P34.6"]') as HTMLButtonElement).click());
+    await flush();
+    expect(el.querySelector('[data-code="P34.6"]')!.className).toContain('on');
+    act(() => (el.querySelector('[data-code="P34.1"]') as HTMLButtonElement).click());
+    await flush();
+    expect(el.querySelector('.m-disc-slot')).toBeNull();
+    expect(el.querySelector('.m-lib-head .m-tvchip')).not.toBeNull();
+    expect(el.querySelector('[data-lib-history]')).not.toBeNull();
+  });
+
+  it('follows a turn back to two rows, and a discover screen without the library slot stays put', async () => {
+    const media = installCompact(true);
+    await openDiscover();
+    expect(el.querySelector('.m-lib-head .m-disc-head h2')!.textContent).toBe('Новинки');
+    media.set(false);
+    await flush();
+    expect(el.querySelector('.m-disc-slot')).toBeNull();
+    expect(el.querySelector('.m-discover .m-disc-head h2')!.textContent).toBe('Новинки');
+    media.set(true);
+    await flush();
+    expect(el.querySelector('.m-lib-head .m-disc-slot h2')!.textContent).toBe('Новинки');
+    act(() => render(null, el));
+    discoverHeadSlot.value = null;
+    installCompact(true);
+    fake();
+    mount(<Discover />);
+    await flush();
+    expect(el.querySelector('.m-disc-slot')).toBeNull();
+    expect(el.querySelector('.m-discover .m-disc-head h2')!.textContent).toBe('Новинки');
   });
 });

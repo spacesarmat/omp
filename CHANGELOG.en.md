@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] In landscape, Discover puts the catalog title and the view, sort and search buttons on the same row as Mine / Discover. Filters stay below. The TV button stays. Portrait is unchanged
 - [phone] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
 - [atv] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
 - [phone] New tabs and the calendar filter no longer spill past a 320 px screen. Horizontal chip scrolling in search is preserved

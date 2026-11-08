@@ -1,5 +1,6 @@
 // «Обзор»: the TMDB feed (movies and series) with its sort and filters, marked when already in the library.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import { t } from '../../../../src/i18n';
 import { Icon, ICONS } from '../../ui/Icon';
 import { navigate, scrollToTop, switchTab } from '../../nav';
@@ -32,6 +33,7 @@ import type { TrendingWindow } from '../../../../src/catalog/tmdb';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
 import { PER_SCREEN, useAdSlots } from '../../ads/useAdSlots';
+import { discoverHeadSlot, useCompactCatalogBar } from './compactBar';
 
 export { DiscPoster, TileMeta, TileTitle, TileWhen } from './DiscoverTiles';
 
@@ -200,8 +202,10 @@ export function Discover() {
   }, [hasMore, moreFailed, feed]);
 
   const current = filter;
-  return (
-    <div class="m-discover" ref={rootRef}>
+  // Phone landscape: the title row moves into the library top bar. The slot is null in portrait, so the row stays here.
+  const compactBar = useCompactCatalogBar();
+  const headSlot = discoverHeadSlot.value;
+  const head = (
       <div class="m-disc-head">
         <h2>{home ? t('discover.browse') : t('discover.novelties')}</h2>
         <span class="m-muted m-small m-grow">{t('discover.fromTmdb')}</span>
@@ -232,6 +236,10 @@ export function Discover() {
         </button>
         </span>
       </div>
+  );
+  return (
+    <div class="m-discover" ref={rootRef}>
+      {compactBar && headSlot ? createPortal(head, headSlot) : head}
       <div class="m-disc-chips" role="group" aria-label={home ? t('discover.browse') : t('discover.novelties')}>
         {chips().map((c) => (
           <button
