@@ -109,9 +109,10 @@ describe('billing HTTP methods', () => {
     const head = await call(port, 'HEAD', '/v1/search');
     expect(head.status).toBe(404);
 
+    // An empty body is the wallet "Протестировать" notice: 200, and it does not grant.
     const post = await call(port, 'POST', '/v1/yoomoney', '');
-    expect(post.status).toBe(400);
-    expect(post.body).toBe('bad signature');
+    expect(post.status).toBe(200);
+    expect(post.body).toBe('ok');
   });
 
   it('refuses an oversized request body with 413', async () => {

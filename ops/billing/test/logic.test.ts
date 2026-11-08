@@ -219,15 +219,20 @@ describe('bot', () => {
     expect(out.messages[0].text).not.toContain('yoomoney.ru');
     expect(out.messages[0].text).toContain('На ТВ подписка не нужна.');
     const button = out.messages[0].inline.inline_keyboard[0][0];
-    expect(button.text).toBe('Оплатить 100 ₽');
+    expect(button.text).toBe('Кошелёк - 101 ₽');
+    expect(out.messages[0].text).toContain('100 ₽ + 1 ₽ = 101 ₽');
+    expect(out.messages[0].text).toContain('100 ₽ + 3,10 ₽ = 103,10 ₽');
     expect(button.url).toContain('https://yoomoney.ru/quickpay/confirm?');
+    expect(button.url).toContain('paymentType=PC');
+    expect(button.url).toContain('sum=101.00');
     expect(button.url).toContain('label=buy%3A');
-    expect(out.state.purchases).toHaveLength(1);
+    expect(out.state.purchases).toHaveLength(2);
     // The old button label does the same and a double tap reuses the unpaid link.
     const old = botReply(out.state, { chatId: 7, text: 'Подписка', now: NOW + 1000 });
     expect(old.messages[0].inline.inline_keyboard[0][0].url).toBe(button.url);
-    expect(old.state.purchases).toHaveLength(1);
+    expect(old.state.purchases).toHaveLength(2);
     expect(out.state.purchases[0].price).toBe(100);
+    expect(out.state.purchases[0].gross).toBe('101.00');
     expect(out.messages[0].keyboard.keyboard[0][0].text).toBe('Кабинет');
   });
 

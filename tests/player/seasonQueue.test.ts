@@ -36,6 +36,29 @@ describe('season queue', () => {
     expect(span.missing).toBe(3);
   });
 
+  it('keeps the chosen copy when another file has the same episode', () => {
+    const files = [
+      file(1, 'Show.S01E01.mkv'),
+      file(9, 'Show.S01E01.Director.mkv'),
+      file(3, 'Show.S01E02.mkv'),
+    ];
+    const span = seasonSpan(files, 9);
+    expect(span.files.map((f) => f.id)).toEqual([9, 3]);
+    expect(seasonFileIds(files, 9)).toEqual([9, 3]);
+    expect(span.files.filter((f) => f.id === 1)).toEqual([]);
+  });
+
+  it('a combined file that skips a number does not hide the gap or the episode in between', () => {
+    const withHole = [file(1, 'Show.S01E01E03.mkv'), file(4, 'Show.S01E04.mkv')];
+    const hole = seasonSpan(withHole, 1);
+    expect(hole.files.map((f) => f.id)).toEqual([1]);
+    expect(hole.missing).toBe(2);
+    const filled = [file(1, 'Show.S01E01E03.mkv'), file(2, 'Show.S01E02.mkv'), file(4, 'Show.S01E04.mkv')];
+    const span = seasonSpan(filled, 1);
+    expect(span.files.map((f) => f.id)).toEqual([1, 2, 4]);
+    expect(span.missing).toBeNull();
+  });
+
   it('a combined file covers every episode in its name and is queued once', () => {
     const files = [
       file(1, 'Show.S01E01.mkv'),

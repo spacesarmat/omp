@@ -51,19 +51,21 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
   while (!knownEnd || n <= knownEnd) {
     let hit: { id: number; file: TorrentFile; episodes: number[] } | undefined;
     for (let i = 0; i < covers.length; i++) {
-      if (covers[i].episodes.indexOf(n) >= 0) {
+      if (covers[i].episodes.indexOf(n) < 0) continue;
+      // The file the person chose wins when two copies share an episode number.
+      if (covers[i].id === startId) {
         hit = covers[i];
         break;
       }
+      if (!hit) hit = covers[i];
     }
     if (!hit) break;
     if (!used[hit.id]) {
       files.push(hit.file);
       used[hit.id] = true;
     }
-    let max = n;
-    for (let i = 0; i < hit.episodes.length; i++) if (hit.episodes[i] > max) max = hit.episodes[i];
-    n = max + 1;
+    // One number at a time. A combined name can skip a number (S01E01E03), and that hole still stops the queue.
+    n = n + 1;
     if (n > from + 10000) break;
   }
   let missing: number | null = null;

@@ -52,6 +52,17 @@ function rub(n) {
   return (Number(n) || 0).toFixed(0) + ' ₽';
 }
 
+/** Rubles with kopecks when they are not zero: 151,50 ₽ or 150 ₽. */
+function moneyRub(n) {
+  const kop = Math.round(Number(n) * 100);
+  if (!Number.isFinite(kop)) return '0 ₽';
+  const neg = kop < 0;
+  const v = Math.abs(kop);
+  const whole = Math.floor(v / 100);
+  const frac = v % 100;
+  return (neg ? '-' : '') + whole + (frac ? ',' + String(frac).padStart(2, '0') : '') + ' ₽';
+}
+
 /** Reply keyboard — personal cabinet (same for users and for admins in user mode). */
 export const BTN = {
   cabinet: 'Кабинет',
@@ -651,13 +662,13 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
     const subRow = state.subscriptions.find((s) => s.id === sub.id);
     if (sub.paid) {
       const lapsing = lapsingExtras(state, subRow, now);
-      const pay = checkout(state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id }, 'OMP, устройство');
-      state = pay.state;
+      const offers = payOffers(checkout, state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id });
+      state = offers.state;
       const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
       const text =
         lapsing > 0
           ? 'Ещё одно устройство - ' +
-            rub(pay.price) +
+            rub(offers.base) +
             ': ' +
             rub(prices.extra) +
             ' за новое и ' +
@@ -676,15 +687,15 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
             ' (конец оплаченного периода), дальше продлевается вместе с подпиской: продление станет ' +
             rub(nextRenewal) +
             '.';
-      out.push({ text, inline: rows([[urlButton('Оплатить ' + rub(pay.price), pay.url)]]) });
+      out.push({ text: text + '\n' + offers.text, inline: rows(offers.buttons) });
     } else {
       // Grace: a standalone slot would die with the grace period. Renewal + one more device, one purchase.
       const r = renewalText(state, subRow, sub, now, { addExtra: 1 });
-      const pay = checkout(state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 }, 'OMP, продление');
-      state = pay.state;
+      const offers = payOffers(checkout, state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 });
+      state = offers.state;
       out.push({
-        text: 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text,
-        inline: rows([[urlButton('Продлить + устройство - ' + rub(pay.price), pay.url)]]),
+        text: 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text + '\n' + offers.text,
+        inline: rows(offers.buttons),
       });
     }
   }
@@ -805,14 +816,44 @@ export function botCallback(state, { chatId, data, now, info }) {
 
 /** Quote + YooMoney link. `{ state, url, price }`; url is '' when the quote failed. */
 function makeCheckout(settings) {
-  return (state, opts, targets) => {
+  return (state, opts) => {
     const quoted = quotePurchase(state, { ...opts, now: opts.now });
-    if (quoted.result.error) return { state, url: '', price: 0 };
+    if (quoted.result.error) return { state, url: '', price: 0, base: 0, fee: '0.00', gross: '0.00', method: opts.method || '' };
+    const gross = quoted.result.gross || quoted.result.price;
     return {
       state: quoted.state,
-      url: payUrl(settings.yoomoneyWallet, { sum: quoted.result.price, label: quoted.result.label, targets }),
-      price: quoted.result.price,
+      url: payUrl(settings.yoomoneyWallet, {
+        sum: gross,
+        label: quoted.result.label,
+        paymentType: quoted.result.method === 'PC' ? 'PC' : 'AC',
+      }),
+      price: Number(gross),
+      base: quoted.result.price,
+      fee: quoted.result.fee || '0.00',
+      gross: String(gross),
+      method: quoted.result.method || '',
     };
+  };
+}
+
+/** Wallet and card links for one server-side quote. The fee is the documented YooMoney withholding, grossed up. */
+function payOffers(pay, state, opts) {
+  const pc = pay(state, { ...opts, method: 'PC' });
+  const ac = pay(pc.state, { ...opts, method: 'AC' });
+  const text =
+    'Комиссия ЮMoney удерживается с получателя и уже включена в сумму, чтобы после неё осталась цена подписки.\n' +
+    'Кошелёк: ' + moneyRub(pc.base) + ' + ' + moneyRub(pc.fee) + ' = ' + moneyRub(pc.gross) + '\n' +
+    'Карта: ' + moneyRub(ac.base) + ' + ' + moneyRub(ac.fee) + ' = ' + moneyRub(ac.gross);
+  return {
+    state: ac.state,
+    base: pc.base,
+    pc,
+    ac,
+    text,
+    buttons: [
+      [urlButton('Кошелёк - ' + moneyRub(pc.gross), pc.url)],
+      [urlButton('Карта - ' + moneyRub(ac.gross), ac.url)],
+    ],
   };
 }
 
@@ -1072,39 +1113,42 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'pay') {
     if (!wallet || !prices.price) say('Оплата ещё не настроена.' + trialLine(cur));
     else if (!sub) {
-      const p = checkout({ kind: 'new', accountId: account.id }, 'OMP Jackett и JacRed');
+      const offers = payOffers(pay, cur, { kind: 'new', accountId: account.id, now });
+      cur = offers.state;
       say(
-        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.',
-        { inline: rows([[urlButton('Оплатить ' + rub(p.price), p.url)]]) },
+        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\n' +
+          offers.text +
+          '\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.',
+        { inline: rows(offers.buttons) },
       );
     } else {
       const subRow = cur.subscriptions.find((s) => s.id === sub.id);
       const renewal = renewalText(cur, subRow, sub, now);
       const head = sub.active ? (sub.inGrace ? subscriptionHead(sub) + '\n\n' : '') : subscriptionHead(sub) + '\n\n';
-      const full = checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id }, 'OMP, продление');
-      const buttons = [[urlButton('Оплатить ' + rub(full.price), full.url)]];
-      let tail = '';
+      const full = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, now });
+      cur = full.state;
+      const buttons = full.buttons.slice();
+      let tail = '\n' + full.text;
       if (renewal.quote.extras > 0) {
-        const base = checkout({ kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, 'OMP, продление');
-        buttons.push([urlButton('Только подписка - ' + rub(base.price), base.url)]);
+        const base = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false, now });
+        cur = base.state;
+        buttons.push([urlButton('Только подписка, кошелёк - ' + moneyRub(base.pc.gross), base.pc.url)]);
+        buttons.push([urlButton('Только подписка, карта - ' + moneyRub(base.ac.gross), base.ac.url)]);
         const extraUntil = Number(subRow && subRow.extraUntil) || 0;
-        if (!sub.active) {
-          tail = '\nТолько подписка: доп. устройство останется отключённым (привязка сохранится).';
-        } else if (extraUntil > 0) {
-          tail =
+        let note = '\nТолько подписка: доп. устройство перестанет работать после окончания текущего периода (привязка сохранится).';
+        if (!sub.active) note = '\nТолько подписка: доп. устройство останется отключённым (привязка сохранится).';
+        else if (extraUntil > 0) {
+          note =
             '\nТолько подписка: доп. устройство перестанет работать после ' +
             mskDateTime(extraUntil + graceDays(cur.settings) * 86400000) +
             ' (привязка сохранится).';
-        } else {
-          // extras counted but no end date stored - still say when, using the paid period
-          const paidUntil = Number(sub.paidUntil) || 0;
-          tail =
-            paidUntil > 0
-              ? '\nТолько подписка: доп. устройство перестанет работать после ' +
-                mskDateTime(paidUntil + graceDays(cur.settings) * 86400000) +
-                ' (привязка сохранится).'
-              : '\nТолько подписка: доп. устройство перестанет работать после окончания текущего периода (привязка сохранится).';
+        } else if (Number(sub.paidUntil) > 0) {
+          note =
+            '\nТолько подписка: доп. устройство перестанет работать после ' +
+            mskDateTime(Number(sub.paidUntil) + graceDays(cur.settings) * 86400000) +
+            ' (привязка сохранится).';
         }
+        tail += note + '\n' + base.text;
       }
       say(head + renewal.text + tail, { inline: rows(buttons) });
     }

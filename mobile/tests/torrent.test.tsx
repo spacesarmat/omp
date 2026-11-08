@@ -19,6 +19,8 @@ import { posterImageSize } from '../../src/catalog/tmdb';
 import type { Torrent as T } from '../../src/api/types';
 import { addFindings, findingsOf } from '../../src/monitor/subs';
 import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { rememberSeasonTotals, resetSeasonTotals } from '../../src/lib/episodesOutOf';
+import { seriesKey } from '../../src/lib/seriesGroups';
 
 const EPS = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.S02E03.mkv', 'Show.S02E04.mkv'];
 const tor: T = {
@@ -239,6 +241,32 @@ describe('Torrent', () => {
     expect(opts[0].textContent).toContain('На телевизоре LG OLED');
     expect(opts[1].textContent).toContain('На телефоне');
     expect(opts[2].textContent).toContain('Скопировать ссылку на поток');
+  });
+
+  it('continuing another season uses that season count, not the one on screen', async () => {
+    const paths = [1, 2, 3, 4, 5, 6].map((n) => 'Show.S01E0' + n + '.mkv').concat([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => 'Show.S02E' + (n < 10 ? '0' : '') + n + '.mkv'));
+    const pack: T = {
+      hash: 'abc',
+      title: 'Starbound Frontier S01-S02 1080p WEB-DL',
+      category: 'tv',
+      stat: 3,
+      file_stats: paths.map((p, i) => ({ id: i + 1, path: p, length: 1 })),
+    };
+    torrents.value = [pack];
+    rememberSeasonTotals(seriesKey(pack), { 1: 6, 2: 10 });
+    saveProgress('abc', 9, 100, 2000);
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    await flush();
+    expect(el.textContent).toContain('из 6');
+    click(el.querySelector('.m-btn-primary')!);
+    await flush();
+    click(byText('Продолжить с '));
+    await flush();
+    const sent = launch.mock.calls[0][0];
+    expect(sent.file).toBe(9);
+    expect(sent.files).toEqual([9, 10, 11, 12, 13, 14, 15, 16]);
+    resetSeasonTotals();
   });
 
   it('«На телевизоре» launches with watch params and then opens the remote', async () => {

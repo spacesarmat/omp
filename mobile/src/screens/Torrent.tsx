@@ -678,6 +678,14 @@ export function Torrent({ hash }: { hash: string }) {
     ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
     : t('news.watchOnTv') + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
 
+  // The continue button may resume a season other than the one on screen. Its count is that season's, or none.
+  const continuationTotal = (file: TorrentFile): number | undefined => {
+    const s = parseEpisode(file.path).season;
+    if (s === null) return undefined;
+    const n = Math.max(seasonEpisodeTotal(showNow, epsNow, s), gkey ? rememberedSeasonTotal(gkey, s) : 0);
+    return n > 0 ? n : undefined;
+  };
+
   const watchMain = async () => {
     if (!target) return;
     if (!tv) {
@@ -690,7 +698,7 @@ export function Torrent({ hash }: { hash: string }) {
       at,
       duration: getLocalProgress(hash, target.id)?.duration || undefined,
       label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
-      seasonTotal: headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined,
+      seasonTotal: continuationTotal(target),
       onBusy: setBusy,
       onError: setStatus,
     });
@@ -705,7 +713,7 @@ export function Torrent({ hash }: { hash: string }) {
         title: fileTitle(target),
         at,
         duration: getLocalProgress(hash, target.id)?.duration || 0,
-        total: headerSeason !== null && seasonTotal > 0 ? seasonTotal : undefined,
+        total: continuationTotal(target),
       });
     } catch (e) {
       setStatus(errorMessage(e));

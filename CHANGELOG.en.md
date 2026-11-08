@@ -7,6 +7,13 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode
+- The chosen copy of an episode stays in the queue when the release has another. A file that skips a number, such as S01E01E03, does not jump over the missing episode. The episode count is the season being continued, not the season on screen
+- [tech] Billing accepts a YooMoney wallet notice signed with sign (HMAC-SHA256). An empty test notice and test_notification answer 200 and do not turn a subscription on. The amount is checked against the order, currency 643 and the documented fee. A browser return does not turn a subscription on. The secret is still BILLING_YOOMONEY_SECRET
+- [tech] The YooMoney payment link opens the button form, with wallet (PC) and card (AC) chosen separately. The amount due is the subscription price plus the YooMoney fee from the form docs: wallet 1% borne by the recipient from the amount due, card 3% borne by the recipient from the charged sum. A 10% markup is not used. The targets field is not in the link
+- [tech] Admin confirmation of a held payment checks the same amount as the notice. An old hold without a charged sum keeps the previous check
+
+## 0.20.9
+
 - [phone] Remote chapters show the name from the file metadata. A title that is only a timestamp becomes "Chapter N", and the row keeps a single time. The list sits under the controls instead of a blank screen
 - [phone] The Discover title and search sit on one row, with less empty space. In landscape the list scrolls clear of the mini-player and the bottom bar. The four views and the width-based grid stay
 - [phone] An episode in the list, the remote, the mini-player and the calendar reads "episode 1 · Title". The season is added when the release or the show has more than one. Order and playback stay the same

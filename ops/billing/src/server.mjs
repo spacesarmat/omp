@@ -135,8 +135,14 @@ import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSid
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
-import { notificationOk } from './yoomoney.mjs';
+import { isEmptyNotice, isTestNotification, noticeTypeOk, notificationAuthentic } from './yoomoney.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
+
+/** Browser return from the payment page. It never grants access: only a verified notice does. */
+const YOOMONEY_RETURN =
+  'OMP не включает подписку по переходу из браузера.\n' +
+  'Подписка появится в боте после уведомления ЮMoney о зачислении.\n' +
+  'Отмена или неоплаченная страница ничего не меняет.\n';
 import { adminAuthConsumedPath, createAdminAuthMemory, flushCliConsumedToStore } from './adminAuthMemory.mjs';
 import { backupConfig, startPgBackups, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 import {
@@ -925,6 +931,11 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'HEAD') {
         res.headOnly = true;
         req.method = 'GET';
+      }
+      // successURL / a cancelled checkout can only land here. No read, no write, no entitlement.
+      if (path === '/v1/yoomoney/return' && (req.method === 'GET' || req.method === 'POST')) {
+        if (req.method === 'POST') await readBody(req);
+        return send(res, 200, YOOMONEY_RETURN, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
       }
       if (req.method === 'GET' && path === '/health') {
         const settings = backups ? (await store.read()).settings : null;
@@ -2126,18 +2137,43 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const state = (await store.read());
         const now = Date.now();
-        if (!notificationOk(body, state.settings.yoomoneySecret)) {
-          await store.update((cur) => ({
+        const secret = state.settings.yoomoneySecret;
+        const noted = (kind) =>
+          store.update((cur) => ({
             state: logWebhook(cur, {
-              kind: 'bad_signature',
+              kind,
               operationId: body.operation_id || '',
               label: body.label || '',
               amount: body.amount || '',
               at: now,
             }),
           }));
+        // Empty body is the wallet "Протестировать" button. Ack it and grant nothing.
+        // test_notification is the same button when the flag is set: still no entitlement.
+        // A flag that also carries sign or sha1_hash must be authentic, so a tampered body is not acked.
+        if (isEmptyNotice(body) || isTestNotification(body)) {
+          const signed = !!(body && (body.sign || body.sha1_hash));
+          if (signed && !notificationAuthentic(body, secret)) {
+            await noted('bad_signature');
+            process.stderr.write('yoomoney bad signature\n');
+            return send(res, 400, 'bad signature');
+          }
+          await noted('test');
+          return send(res, 200, 'ok');
+        }
+        if (!notificationAuthentic(body, secret)) {
+          await noted('bad_signature');
           process.stderr.write('yoomoney bad signature\n');
           return send(res, 400, 'bad signature');
+        }
+        // A code-protected transfer is not spendable. Ack it so the delivery stops, and do not grant.
+        if (body.codepro === 'true' || body.codepro === true) {
+          await noted('codepro');
+          return send(res, 200, 'ok');
+        }
+        if (!noticeTypeOk(body.notification_type)) {
+          await noted('bad_type');
+          return send(res, 400, 'bad type');
         }
         const applied = await store.update((cur) =>
           applyPayment(cur, {
@@ -2146,6 +2182,10 @@ export function createApp(file, fetchImpl, opts) {
             amount: body.amount,
             currency: body.currency,
             unaccepted: body.unaccepted,
+            withdrawAmount: body.withdraw_amount,
+            notificationType: body.notification_type,
+            // `sign` is the current check. The gross (`withdraw_amount`) has to be in that notice.
+            requireWithdraw: !!body.sign,
             now,
           }),
         );
