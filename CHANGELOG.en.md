@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.10
 
 - The chosen episode starts a queue from that episode through the end of the same season, and the next one starts at once, with no countdown. The next season does not start on its own. If this release has no such episode, that is said and it can be searched for. Stop and a repeated end do not move the queue. The system player still opens one episode
 - The chosen copy of an episode stays in the queue when the release has another. A file that skips a number, such as S01E01E03, does not jump over the missing episode. The episode count is the season being continued, not the season on screen
