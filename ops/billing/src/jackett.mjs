@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readCappedBody } from './httpBody.mjs';
 
 export const JACKETT_MARK = 'omp-fetch:';
 export const JACRED_MARK = 'omp-jacred:';
@@ -432,15 +433,15 @@ function fetchText(url, options) {
   const request = Promise.resolve()
     .then(() => fetchImpl(url, { headers: options.headers || {}, signal: ctrl.signal }))
     .then((res) => {
-      if (!res || typeof res.text !== 'function') return { status: 0, text: '', aborted: false };
-      return Promise.resolve(res.text()).then((text) => ({
+      if (!res) return { status: 0, text: '', aborted: false };
+      return readCappedBody(res, MAX_BODY_CHARS).then((buf) => ({
         status: Number(res.status) || 0,
-        text: String(text || ''),
+        text: new TextDecoder().decode(buf),
         aborted: false,
       }));
     })
     .catch((err) => ({
-      status: 0,
+      status: err && err.code === 'too_large' ? 413 : 0,
       text: '',
       aborted: !!(ctrl.signal.aborted || (err && err.name === 'AbortError')),
     }));

@@ -460,6 +460,7 @@ async function call(
     method,
     url: path,
     headers: {
+      'x-forwarded-proto': 'https',
       cookie: opts.cookie || '',
       accept: 'application/json',
       'content-type': opts.body === undefined ? '' : 'application/json',
@@ -503,7 +504,7 @@ async function adminCookie(app: (req: unknown, res: unknown) => Promise<void>, f
     {
       method: 'GET',
       url: '/admin/login/once?token=' + encodeURIComponent(link.token),
-      headers: {},
+      headers: { 'x-forwarded-proto': 'https' },
       async *[Symbol.asyncIterator]() {},
     },
     res,
@@ -533,7 +534,7 @@ describe('admin http: devices and payments', () => {
       expect(anon.status).toBe(403);
       const forged = await call(t.app, 'POST', path, { cookie, body: { ...body, csrf: 'wrong' } });
       expect(forged.status).toBe(403);
-      const fake = await call(t.app, 'POST', path, { cookie: 'omp_admin=not-a-session', body: { ...body, csrf: 'x' } });
+      const fake = await call(t.app, 'POST', path, { cookie: '__Host-omp_admin=not-a-session', body: { ...body, csrf: 'x' } });
       expect(fake.status).toBe(403);
     }
     expect(JSON.stringify((await readState(t.file)).subscriptions)).toBe(before);

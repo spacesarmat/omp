@@ -256,12 +256,13 @@ export async function probeAllServices(settings, fetchImpl) {
 /** Sliding-window rate limit: max hits per windowMs per key. */
 /**
  * Sliding-window limiter kept in memory. `opts.now` replaces the clock in tests.
- * Keys whose hits all fell out of the window are dropped once the map grows past `opts.maxKeys`.
+ * Keys whose hits all fell out of the window are dropped once the map reaches `opts.maxKeys`.
  */
 export function createRateLimit(maxHits, windowMs, opts) {
   const hits = new Map();
   const clock = (opts && opts.now) || (() => Date.now());
   const maxKeys = (opts && opts.maxKeys) || 10000;
+  let capacityUntil = 0;
   const prune = (now) => {
     for (const [id, arr] of hits) {
       if (!arr.length || now - arr[arr.length - 1] >= windowMs) hits.delete(id);
@@ -271,8 +272,12 @@ export function createRateLimit(maxHits, windowMs, opts) {
     allow(key) {
       const now = clock();
       const id = String(key || '');
-      if (hits.size > maxKeys) prune(now);
+      if (hits.size >= maxKeys) prune(now);
       let arr = hits.get(id) || [];
+      if (!arr.length && hits.size >= maxKeys) {
+        capacityUntil = now + windowMs;
+        return false;
+      }
       arr = arr.filter((t) => now - t < windowMs);
       if (arr.length >= maxHits) {
         hits.set(id, arr);
@@ -280,13 +285,15 @@ export function createRateLimit(maxHits, windowMs, opts) {
       }
       arr.push(now);
       hits.set(id, arr);
+      capacityUntil = 0;
       return true;
     },
-    /** Seconds until the oldest hit of `key` leaves the window (0 when it is not limited). */
+    /** Seconds until the oldest hit or a capacity refusal leaves the window. */
     retryAfter(key) {
+      const now = clock();
       const arr = hits.get(String(key || '')) || [];
-      if (arr.length < maxHits) return 0;
-      return Math.max(1, Math.ceil((arr[0] + windowMs - clock()) / 1000));
+      if (arr.length >= maxHits) return Math.max(1, Math.ceil((arr[0] + windowMs - now) / 1000));
+      return Math.max(0, Math.ceil((capacityUntil - now) / 1000));
     },
     size() {
       return hits.size;

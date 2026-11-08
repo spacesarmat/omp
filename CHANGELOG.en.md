@@ -7,6 +7,15 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] In landscape, Discover puts the catalog title and the view, sort and search buttons on the same row as Mine / Discover. Filters stay below. The TV button stays. Portrait is unchanged
+- [phone] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
+- [atv] The embedded 2160 Player is updated to 0.2.24. AVI files with WMV and VC-1 are supported. A network stall now reports no connection to the source instead of a damaged file
+- [phone] New tabs and the calendar filter no longer spill past a 320 px screen. Horizontal chip scrolling in search is preserved
+- [tech] The mobile overflow check recognizes horizontal `.m-chips` without false failures and runs through `npm run check:overflow` in CI
+- [tech] The release workflow runs the full billing suite on Postgres 17. Text checkouts use LF, and the full local test suite is documented for Linux and WSL
+- [tech] Billing no longer sends the indexer's Basic auth to an external HTTPS redirect when downloading a torrent. Insecure HTTP and userinfo in a redirect are refused. External loopback, private and link-local targets are blocked both for literal IPs and after DNS lookup. The connection is pinned to the checked IP while the original hostname is used for TLS, and mapped IPv6 is refused. The response is capped at 5 MiB, and both requests plus the body read share a 20 second timeout
+- [tech] Linking a device to Telegram now requires explicit confirmation with its identifier and a Link button. Cancel and repeated clicks do not grant access. `/v1/link/start` and `/v1/link/claim` are rate limited
+- [tech] SSH deploy requires `VPS_KNOWN_HOSTS` and uses `StrictHostKeyChecking=yes`. The GitHub token is written only after the server is verified and is never copied when that check fails
+- [tech] Admin responses send `Cache-Control: no-store` and a strict CSP. HTTPS sessions use the `__Host-omp_admin` cookie with HttpOnly, Secure and SameSite=Lax, while documented HTTP LAN access keeps the compatible `omp_admin` cookie. JSON bodies are capped at 256 KiB, indexer responses at 2 MiB, and active rate-limit keys are bounded
 
 ## 0.20.10
 

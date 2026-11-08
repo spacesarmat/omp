@@ -1,7 +1,12 @@
 import { createServer } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { Readable } from 'node:stream';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readCappedBody } from './httpBody.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -221,22 +226,31 @@ function cookie(req, name) {
   return '';
 }
 
-/** Admin session cookie: HttpOnly + SameSite=Lax; Secure when the request (or public origin) is HTTPS. */
-function adminSetCookie(req, id, maxAge) {
+function adminHttps(req) {
   const proto = String(req.headers['x-forwarded-proto'] || '')
     .split(',')[0]
     .trim()
     .toLowerCase();
+  if (proto) return proto === 'https';
+  if (req.socket && req.socket.remoteAddress) return !!req.socket.encrypted;
   const origin = String(process.env.BILLING_PUBLIC_ORIGIN || '');
-  const secure = proto === 'https' || origin.indexOf('https://') === 0;
-  let value = 'omp_admin=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/';
-  if (secure) value += '; Secure';
+  return origin.indexOf('https://') === 0;
+}
+
+function adminCookieName(req) {
+  return adminHttps(req) ? '__Host-omp_admin' : 'omp_admin';
+}
+
+/** HTTPS uses a host-prefixed cookie. Documented HTTP LAN access keeps the compatible cookie. */
+function adminSetCookie(req, id, maxAge) {
+  let value = adminCookieName(req) + '=' + encodeURIComponent(id) + '; HttpOnly; SameSite=Lax; Path=/';
+  if (adminHttps(req)) value += '; Secure';
   if (maxAge !== undefined) value += '; Max-Age=' + maxAge;
   return value;
 }
 
 function adminOf(req) {
-  const id = cookie(req, 'omp_admin');
+  const id = cookie(req, adminCookieName(req));
   const row = sessions.get(id);
   if (!row || row.exp < Date.now()) {
     if (row) sessions.delete(id);
@@ -314,20 +328,62 @@ function audit(file, action, detail, admin) {
 }
 
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
+const JSON_BODY_LIMIT_BYTES = 256 * 1024;
 
-async function readBody(req) {
+async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
   const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > BODY_LIMIT_BYTES) {
-      const err = new Error('body too large');
-      err.code = 'BODY_TOO_LARGE';
-      throw err;
+  let raw;
+  if (typeof req.on === 'function' && typeof req.resume === 'function') {
+    raw = await new Promise((resolve, reject) => {
+      let size = 0;
+      const cleanup = () => {
+        req.removeListener('data', onData);
+        req.removeListener('end', onEnd);
+        req.removeListener('error', onError);
+        req.removeListener('aborted', onAborted);
+      };
+      const onData = (chunk) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          cleanup();
+          req.resume();
+          const err = new Error('body too large');
+          err.code = 'BODY_TOO_LARGE';
+          reject(err);
+          return;
+        }
+        chunks.push(chunk);
+      };
+      const onEnd = () => {
+        cleanup();
+        resolve(Buffer.concat(chunks).toString('utf8'));
+      };
+      const onError = (err) => {
+        cleanup();
+        reject(err);
+      };
+      const onAborted = () => {
+        cleanup();
+        reject(new Error('request aborted'));
+      };
+      req.on('data', onData);
+      req.on('end', onEnd);
+      req.on('error', onError);
+      req.on('aborted', onAborted);
+    });
+  } else {
+    let size = 0;
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > maxBytes) {
+        const err = new Error('body too large');
+        err.code = 'BODY_TOO_LARGE';
+        throw err;
+      }
+      chunks.push(chunk);
     }
-    chunks.push(chunk);
+    raw = Buffer.concat(chunks).toString('utf8');
   }
-  const raw = Buffer.concat(chunks).toString('utf8');
   const type = String(req.headers['content-type'] || '');
   if (type.indexOf('application/json') >= 0) {
     try {
@@ -511,19 +567,160 @@ function indexerLabel(link, fallback) {
   return fallback || 'jackett';
 }
 
+const TORRENT_TIMEOUT_MS = 20000;
+const TORRENT_MAX_BYTES = 5 * 1024 * 1024;
+
+function downloadError(code) {
+  const err = new Error(code);
+  err.code = code;
+  return err;
+}
+
+function redirectHeaders(headers, sameOrigin) {
+  if (sameOrigin) return headers;
+  const out = { ...(headers || {}) };
+  for (const name of Object.keys(out)) {
+    if (name.toLowerCase() === 'authorization') delete out[name];
+  }
+  return out;
+}
+
+function privateV4(parts) {
+  const a = parts[0];
+  const b = parts[1];
+  const c = parts[2];
+  return (
+    a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && ((b === 0 && (c === 0 || c === 2)) || b === 168)) ||
+    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+    (a === 203 && b === 0 && c === 113)
+  );
+}
+
+function privateIp(raw) {
+  let ip = String(raw || '').toLowerCase();
+  if (ip.startsWith('[') && ip.endsWith(']')) ip = ip.slice(1, -1);
+  if (isIP(ip) === 4) return privateV4(ip.split('.').map(Number));
+  if (isIP(ip) !== 6) return true;
+  if (ip === '::' || ip === '::1') return true;
+  if (ip.startsWith('::ffff:')) return true;
+  const first = parseInt(ip.split(':')[0] || '0', 16);
+  return (first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00 || (first & 0xff00) === 0xff00;
+}
+
+function abortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new DOMException('aborted', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+async function assertExternalRedirect(target, lookup, signal) {
+  if (target.protocol !== 'https:' || target.username || target.password) throw downloadError('bad_redirect');
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host)) {
+    if (privateIp(host)) throw downloadError('bad_redirect');
+    return [{ address: host, family: isIP(host) }];
+  }
+  let rows;
+  try {
+    rows = await abortable(lookup(host, { all: true }), signal);
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw e;
+    throw downloadError('bad_redirect');
+  }
+  if (!Array.isArray(rows) || !rows.length || rows.some((row) => privateIp(row && row.address))) throw downloadError('bad_redirect');
+  return rows;
+}
+
+export function pinnedHttpsRequest(url, init, addresses, requestImpl) {
+  const target = new URL(url);
+  const address = addresses[0];
+  const host = target.hostname.replace(/^\[|\]$/g, '');
+  return new Promise((resolve, reject) => {
+    const req = requestImpl(
+      {
+        protocol: 'https:',
+        hostname: host,
+        servername: host,
+        port: target.port || 443,
+        path: target.pathname + target.search,
+        method: init.method || 'GET',
+        headers: { ...(init.headers || {}), Host: target.host },
+        lookup: (_hostname, options, cb) => {
+          if (options && options.all) cb(null, addresses);
+          else cb(null, address.address, address.family);
+        },
+        agent: false,
+      },
+      (res) => {
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          headers: res.headers,
+          body: Readable.toWeb(res),
+          arrayBuffer: async () => {
+            const chunks = [];
+            for await (const chunk of res) chunks.push(chunk);
+            const buf = Buffer.concat(chunks);
+            return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+          },
+        });
+      },
+    );
+    req.on('error', reject);
+    if (init.signal) {
+      if (init.signal.aborted) req.destroy(new DOMException('aborted', 'AbortError'));
+      else init.signal.addEventListener('abort', () => req.destroy(new DOMException('aborted', 'AbortError')), { once: true });
+    }
+    if (init.body) req.write(init.body);
+    req.end();
+  });
+}
+
+function requestExternal(net, url, init, addresses, requestImpl) {
+  if (requestImpl) return pinnedHttpsRequest(url, init, addresses, requestImpl);
+  if (net === fetch) return pinnedHttpsRequest(url, init, addresses, httpsRequest);
+  return net(url, init);
+}
+
 /**
  * Jackett sometimes answers a download with a redirect to a magnet. Follow one http(s) hop,
- * and stop when Location is a magnet so the phone can add it.
+ * and stop when Location is a magnet so the phone can add it. Credentials stay on the indexer's origin.
  */
-async function fetchDownload(net, url, headers) {
-  const first = await net(url, { headers, redirect: 'manual' });
+async function fetchDownload(net, url, headers, signal, lookup, requestImpl) {
+  const first = await net(url, { headers, redirect: 'manual', signal });
   const status = first.status || 0;
   const loc = headerValue(first, 'location');
   if (status >= 300 && status < 400 && /^magnet:/i.test(loc)) {
     return { kind: 'magnet', magnet: loc, status, res: first };
   }
   if (status >= 300 && status < 400 && /^https?:/i.test(loc)) {
-    const second = await net(loc, { headers, redirect: 'manual' });
+    const from = new URL(url);
+    const target = new URL(loc, from);
+    const sameOrigin = target.origin === from.origin;
+    const addresses = sameOrigin ? [] : await assertExternalRedirect(target, lookup || dnsLookup, signal);
+    const second = sameOrigin
+      ? await net(target.href, { headers, redirect: 'manual', signal })
+      : await requestExternal(net, target.href, { headers: redirectHeaders(headers, false), redirect: 'manual', signal }, addresses, requestImpl);
     const status2 = second.status || 0;
     const loc2 = headerValue(second, 'location');
     if (status2 >= 300 && status2 < 400 && /^magnet:/i.test(loc2)) {
@@ -532,6 +729,10 @@ async function fetchDownload(net, url, headers) {
     return { kind: 'file', status: status2, res: second };
   }
   return { kind: 'file', status, res: first };
+}
+
+function readDownloadBody(res, maxBytes) {
+  return readCappedBody(res, maxBytes, 'too_large');
 }
 
 /** getUpdates long-polls 25 s; the request as a whole gets 40 s. */
@@ -921,6 +1122,13 @@ export function createApp(file, fetchImpl, opts) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
     try {
+      if (path === '/admin' || path.indexOf('/admin/') === 0) {
+        res.setHeader('cache-control', 'no-store');
+        res.setHeader(
+          'content-security-policy',
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+        );
+      }
       // Phone calls are native HTTP. The admin SPA is same-origin.
       // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
       // to call bearer or cookie routes.
@@ -993,7 +1201,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/admin/api/home') {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
-        const sid = cookie(req, 'omp_admin');
+        const sid = cookie(req, adminCookieName(req));
         const flash = takeFlash(admin, sid);
         return json(
           res,
@@ -1126,7 +1334,7 @@ export function createApp(file, fetchImpl, opts) {
         const admin = adminOf(req);
         if (!admin) return json(res, 401, { auth: false });
         const id = url.searchParams.get('id') || '';
-        const sid = cookie(req, 'omp_admin');
+        const sid = cookie(req, adminCookieName(req));
         const flash = takeFlash(admin, sid);
         const state = await store.read();
         const devices = await accountDevices(store, state, id);
@@ -1272,7 +1480,7 @@ export function createApp(file, fetchImpl, opts) {
       }
       const admin = adminOf(req);
       if (req.method === 'POST' && path.indexOf('/admin/') === 0) {
-        const body = await readBody(req);
+        const body = await readBody(req, path === '/admin/ads/image' ? BODY_LIMIT_BYTES : JSON_BODY_LIMIT_BYTES);
         if (path === '/admin/api/dht/probe') {
           if (!admin) return json(res, 401, { auth: false });
           if (body.csrf !== admin.csrf) return json(res, 403, { ok: false, error: 'forbidden' });
@@ -1703,7 +1911,7 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=security';
         }
         if (path === '/admin/logout') {
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           sessions.delete(sid);
           await audit(file, 'logout', 'ok', admin);
           res.setHeader('set-cookie', adminSetCookie(req, '', 0));
@@ -1713,7 +1921,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/session-revoke') {
           const target = body.sessionId || '';
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           if (target && target !== sid) {
             sessions.delete(target);
             await audit(file, 'session_revoke', 'ok', admin);
@@ -1771,7 +1979,7 @@ export function createApp(file, fetchImpl, opts) {
           await audit(file, 'support_close', body.telegramId || '', admin);
         }
         if (flashed || flashPromo || flashText || flashError) {
-          const sid = cookie(req, 'omp_admin');
+          const sid = cookie(req, adminCookieName(req));
           const cur = sessions.get(sid) || admin;
           sessions.set(sid, {
             ...cur,
@@ -1866,7 +2074,16 @@ export function createApp(file, fetchImpl, opts) {
       }
       if (req.method === 'POST' && path === '/v1/link/start') {
         const body = await readBody(req);
-        const result = await store.update((state) => startDeviceLink(state, { deviceId: body.deviceId, now: Date.now() }));
+        const bodyDevice = String(body.deviceId || '');
+        const headerDevice = String(req.headers['x-device-id'] || '');
+        if (bodyDevice && headerDevice && bodyDevice !== headerDevice) return json(res, 400, { error: 'bad_device' });
+        const deviceId = bodyDevice || headerDevice;
+        const wait = claimLimit.check(clientIp(req), deviceId);
+        if (wait) {
+          res.setHeader('retry-after', String(wait));
+          return json(res, 429, { error: 'rate' });
+        }
+        const result = await store.update((state) => startDeviceLink(state, { deviceId, now: Date.now() }));
         if (result.error) return json(res, 400, result);
         const state = (await store.read());
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);
@@ -2118,20 +2335,28 @@ export function createApp(file, fetchImpl, opts) {
         const auth = basicAuthHeader(state.settings);
         if (auth) headers.Authorization = auth;
         const label = indexerLabel(body.link, indexer.name);
-        let upstream;
+        const timeoutMs = Number(opts && opts.torrentTimeoutMs) > 0 ? Number(opts.torrentTimeoutMs) : TORRENT_TIMEOUT_MS;
+        const maxBytes = Number(opts && opts.torrentMaxBytes) > 0 ? Number(opts.torrentMaxBytes) : TORRENT_MAX_BYTES;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          upstream = await fetchDownload(net, remote, headers);
+          const upstream = await fetchDownload(net, remote, headers, controller.signal, opts && opts.downloadLookup, opts && opts.downloadRequest);
+          process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
+          if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
+          // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
+          // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
+          if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
+          const buf = await readDownloadBody(upstream.res, maxBytes);
+          return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
         } catch (e) {
-          process.stderr.write('torrent upstream status=down indexer=' + label + '\n');
-          return json(res, 502, { error: 'down' });
+          const aborted = e && (e.name === 'AbortError' || e.code === 'ABORT_ERR' || e.code === 20);
+          const code = aborted ? 'timeout' : e && (e.code === 'too_large' || e.code === 'bad_redirect') ? e.code : 'down';
+          process.stderr.write('torrent upstream status=' + code + ' indexer=' + label + '\n');
+          return json(res, 502, { error: code });
+        } finally {
+          clearTimeout(timer);
+          controller.abort();
         }
-        process.stderr.write('torrent upstream status=' + upstream.status + ' indexer=' + label + ' kind=' + upstream.kind + '\n');
-        if (upstream.kind === 'magnet') return json(res, 200, { magnet: upstream.magnet });
-        // A 401/403 here is Jackett or JacRed rejecting the download, not an expired phone session.
-        // The app reads 401/403 as «Подписка закончилась»; 502 upstream is «не отдал файл раздачи».
-        if (upstream.status === 401 || upstream.status === 403) return json(res, 502, { error: 'upstream' });
-        const buf = Buffer.from(await upstream.res.arrayBuffer());
-        return send(res, upstream.status, buf, { 'content-type': 'application/octet-stream' });
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);

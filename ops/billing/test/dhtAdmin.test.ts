@@ -62,7 +62,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, path: st
   const req = {
     method: 'GET',
     url: path,
-    headers: { accept: 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {},
   };
@@ -100,9 +100,9 @@ describe('GET /admin/api/dht', () => {
     const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(token));
     expect(once.status).toBe(302);
     const cookie = String(once.headers['set-cookie'] || '');
-    const m = /omp_admin=([^;]+)/.exec(cookie);
+    const m = /__Host-omp_admin=([^;]+)/.exec(cookie);
     expect(m).toBeTruthy();
-    const res = await call(app, '/admin/api/dht', { cookie: 'omp_admin=' + m![1] });
+    const res = await call(app, '/admin/api/dht', { cookie: '__Host-omp_admin=' + m![1] });
     expect(res.status).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.configured).toBe(true);
@@ -128,7 +128,7 @@ async function post(app: (req: unknown, res: unknown) => Promise<void>, path: st
   const req = {
     method: 'POST',
     url: path,
-    headers: { accept: 'application/json', 'content-type': 'application/json', ...headers },
+    headers: { 'x-forwarded-proto': 'https', accept: 'application/json', 'content-type': 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       yield Buffer.from(payload);
@@ -174,17 +174,17 @@ describe('POST /admin/api/dht/probe', () => {
       const token = (issued as { token: string }).token;
       const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(token));
       const cookie = String(once.headers['set-cookie'] || '');
-      const m = /omp_admin=([^;]+)/.exec(cookie);
+      const m = /__Host-omp_admin=([^;]+)/.exec(cookie);
       expect(m).toBeTruthy();
-      const home = await call(app, '/admin/api/home', { cookie: 'omp_admin=' + m![1] });
+      const home = await call(app, '/admin/api/home', { cookie: '__Host-omp_admin=' + m![1] });
       const csrf = JSON.parse(home.body).csrf as string;
       expect(csrf).toBeTruthy();
 
-      const bad = await post(app, '/admin/api/dht/probe', { cookie: 'omp_admin=' + m![1] }, { csrf: 'nope' });
+      const bad = await post(app, '/admin/api/dht/probe', { cookie: '__Host-omp_admin=' + m![1] }, { csrf: 'nope' });
       expect(bad.status).toBe(403);
       expect(peersCalls).toBe(0);
 
-      const ok = await post(app, '/admin/api/dht/probe', { cookie: 'omp_admin=' + m![1] }, { csrf });
+      const ok = await post(app, '/admin/api/dht/probe', { cookie: '__Host-omp_admin=' + m![1] }, { csrf });
       expect(ok.status).toBe(200);
       const body = JSON.parse(ok.body);
       expect(body).toMatchObject({ ok: true, status: 200, peers: 3 });
@@ -205,7 +205,7 @@ describe('POST /admin/api/dht/probe', () => {
         env: { BILLING_DHT_URL: 'http://dht-peers:8788', BILLING_DHT_TOKEN: TOKEN },
         monitor: { health: () => null },
       });
-      const fail = await post(boom, '/admin/api/dht/probe', { cookie: 'omp_admin=' + m![1] }, { csrf });
+      const fail = await post(boom, '/admin/api/dht/probe', { cookie: '__Host-omp_admin=' + m![1] }, { csrf });
       expect(fail.status).toBe(200);
       const failed = JSON.parse(fail.body);
       expect(failed.ok).toBe(false);
@@ -243,10 +243,10 @@ describe('POST /admin/api/dht/probe', () => {
     const issued = await store.update((cur) => issueCliAdminLogin(cur as never, { now }));
     const token = (issued as { token: string }).token;
     const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(token));
-    const m = /omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
-    const home = await call(app, '/admin/api/home', { cookie: 'omp_admin=' + m![1] });
+    const m = /__Host-omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
+    const home = await call(app, '/admin/api/home', { cookie: '__Host-omp_admin=' + m![1] });
     const csrf = JSON.parse(home.body).csrf as string;
-    const cookie = { cookie: 'omp_admin=' + m![1] };
+    const cookie = { cookie: '__Host-omp_admin=' + m![1] };
     for (let i = 0; i < 6; i++) {
       const res = await post(app, '/admin/api/dht/probe', cookie, { csrf });
       expect(res.status).toBe(200);
@@ -285,8 +285,8 @@ describe('POST /admin/api/dht/probe', () => {
     const issued = await store.update((cur) => issueCliAdminLogin(cur as never, { now }));
     const token = (issued as { token: string }).token;
     const once = await call(app, '/admin/login/once?token=' + encodeURIComponent(token));
-    const m = /omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
-    const cookie = { cookie: 'omp_admin=' + m![1] };
+    const m = /__Host-omp_admin=([^;]+)/.exec(String(once.headers['set-cookie'] || ''));
+    const cookie = { cookie: '__Host-omp_admin=' + m![1] };
     const home = await call(app, '/admin/api/home', cookie);
     const csrf = JSON.parse(home.body).csrf as string;
     const busy = JSON.parse((await post(app, '/admin/api/dht/probe', cookie, { csrf })).body);
