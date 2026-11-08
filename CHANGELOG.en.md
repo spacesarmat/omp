@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.10
 
 - [phone] Where to watch shows the server, the network and the rule. The phone's current Wi-Fi can be used: Android asks for permission only from that button. If the name is unavailable, it is typed. The TV server stays, and playback is not switched
 - [phone] Finding a server in Where to watch runs without a network name, and when one server is locked. A choice or removal of the current server during playback is applied after it stops. Settings of a password-protected server open with the saved login
