@@ -227,8 +227,10 @@ function adminHttps(req) {
     .split(',')[0]
     .trim()
     .toLowerCase();
+  if (proto) return proto === 'https';
+  if (req.socket && req.socket.remoteAddress) return !!req.socket.encrypted;
   const origin = String(process.env.BILLING_PUBLIC_ORIGIN || '');
-  return proto === 'https' || origin.indexOf('https://') === 0;
+  return origin.indexOf('https://') === 0;
 }
 
 function adminCookieName(req) {

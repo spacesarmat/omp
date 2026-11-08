@@ -37,7 +37,7 @@ async function call(
   app: (req: unknown, res: unknown) => Promise<void>,
   method: string,
   url: string,
-  opts: { body?: unknown; cookie?: string; secure?: boolean } = {},
+  opts: { body?: unknown; cookie?: string; secure?: boolean | null } = {},
 ) {
   const payload = opts.body === undefined ? '' : JSON.stringify(opts.body);
   const req = {
@@ -46,8 +46,9 @@ async function call(
     headers: {
       'content-type': 'application/json',
       cookie: opts.cookie || '',
-      'x-forwarded-proto': opts.secure === false ? 'http' : 'https',
+      ...(opts.secure === null ? {} : { 'x-forwarded-proto': opts.secure === false ? 'http' : 'https' }),
     },
+    socket: { remoteAddress: '127.0.0.1' },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);
     },
@@ -99,18 +100,25 @@ describe('security hardening', () => {
     await writeState(file, state);
     const adminAuthMem = createAdminAuthMemory();
     const app = createApp(file, undefined, { adminAuthMem });
-    const started = await call(app, 'POST', '/admin/login/telegram', { secure: false });
-    adminAuthMem.confirmPanel((await readState(file)).settings, { token: started.data.token, telegramId: '42', now: Date.now() });
-    const status = await call(app, 'GET', '/admin/login/telegram/status?token=' + encodeURIComponent(started.data.token), { secure: false });
-    const setCookie = String(status.headers['set-cookie'] || '');
-    expect(setCookie).toMatch(/^omp_admin=/);
-    expect(setCookie).not.toContain('__Host-omp_admin=');
-    expect(setCookie).not.toContain('Secure');
-    const id = /omp_admin=([^;]+)/.exec(setCookie)![1];
-    const home = await call(app, 'GET', '/admin/api/home', { cookie: 'omp_admin=' + id, secure: false });
-    expect(home.status).toBe(200);
-    const prefixed = await call(app, 'GET', '/admin/api/home', { cookie: '__Host-omp_admin=' + id, secure: false });
-    expect(prefixed.status).toBe(401);
+    const previousOrigin = process.env.BILLING_PUBLIC_ORIGIN;
+    process.env.BILLING_PUBLIC_ORIGIN = 'https://billing.example';
+    try {
+      const started = await call(app, 'POST', '/admin/login/telegram', { secure: null });
+      adminAuthMem.confirmPanel((await readState(file)).settings, { token: started.data.token, telegramId: '42', now: Date.now() });
+      const status = await call(app, 'GET', '/admin/login/telegram/status?token=' + encodeURIComponent(started.data.token), { secure: null });
+      const setCookie = String(status.headers['set-cookie'] || '');
+      expect(setCookie).toMatch(/^omp_admin=/);
+      expect(setCookie).not.toContain('__Host-omp_admin=');
+      expect(setCookie).not.toContain('Secure');
+      const id = /omp_admin=([^;]+)/.exec(setCookie)![1];
+      const home = await call(app, 'GET', '/admin/api/home', { cookie: 'omp_admin=' + id, secure: null });
+      expect(home.status).toBe(200);
+      const prefixed = await call(app, 'GET', '/admin/api/home', { cookie: '__Host-omp_admin=' + id, secure: null });
+      expect(prefixed.status).toBe(401);
+    } finally {
+      if (previousOrigin === undefined) delete process.env.BILLING_PUBLIC_ORIGIN;
+      else process.env.BILLING_PUBLIC_ORIGIN = previousOrigin;
+    }
   });
 
   it('fails closed when the activation limiter reaches key capacity', () => {
