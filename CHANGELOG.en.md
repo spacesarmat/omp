@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] The app opens again after an update. If Android blocks the activity start, an update notification offers to open it
+- [atv] The Android TV app opens again after an update or offers to open itself with a notification
+
 ## 0.20.11
 
 - [phone] In landscape, Discover puts the catalog title and the view, sort and search buttons on the same row as Mine / Discover. Filters stay below. The TV button stays. Portrait is unchanged

@@ -145,6 +145,8 @@ dependencies {
     // local HTTP server for the release download redirect tests (install/OkReleaseHttpTest)
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
     testImplementation 'org.robolectric:robolectric:4.16.1'
+    // UpdateRelaunch: schedule/inspect the deferred launch check (UpdateRelaunchTest)
+    testImplementation 'androidx.work:work-testing:2.10.3'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
