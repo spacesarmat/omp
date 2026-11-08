@@ -548,6 +548,7 @@ describe('ops/vps deploy', () => {
     expect(workflow).not.toContain('push:');
     expect(workflow).toContain('VPS_HOST');
     expect(workflow).toContain('VPS_SSH_KEY');
+    expect(workflow).toContain('VPS_KNOWN_HOSTS');
     expect(workflow).toContain('ops/vps/ssh-deploy.sh');
     expect(workflow).toContain('ref: ${{ github.sha }}');
     expect(workflow).not.toContain('ref: ${{ inputs.ref }}');
@@ -1525,6 +1526,7 @@ exit 0
       PATH: `${bin}:${process.env.PATH ?? ''}`,
       VPS_HOST: '203.0.113.10',
       VPS_SSH_KEY: 'SECRETKEYMATERIAL',
+      VPS_KNOWN_HOSTS: '203.0.113.10 ssh-ed25519 AAAATESTHOSTKEY',
       REF: 'feat/billing',
       DRY_RUN: 'true',
       GH_TOKEN: 'super-secret-token',
@@ -1544,5 +1546,54 @@ exit 0
     expect(scp).toContain('/token');
     expect(scp).not.toContain('super-secret-token');
     expect(scp).not.toContain('SECRETKEYMATERIAL');
+    expect(ssh).toContain('StrictHostKeyChecking=yes');
+    expect(ssh).not.toContain('StrictHostKeyChecking=accept-new');
+  });
+
+  it('refuses to deploy without a pinned host key before any SSH call', () => {
+    const parent = path.join(tmpdir(), `omp-ssh-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const bin = path.join(parent, 'bin');
+    mkdirSync(bin, { recursive: true });
+    writeExe(path.join(bin, 'ssh'), SSH);
+    writeExe(path.join(bin, 'scp'), SCP);
+    const sshLog = path.join(parent, 'ssh.log');
+    const scpLog = path.join(parent, 'scp.log');
+    const result = runSsh({
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      VPS_HOST: '203.0.113.10',
+      VPS_SSH_KEY: 'SECRETKEYMATERIAL',
+      REF: 'main',
+      GH_TOKEN: 'super-secret-token',
+      DEPLOY_TEST_SSH_LOG: sshLog,
+      DEPLOY_TEST_SCP_LOG: scpLog,
+    });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('VPS_KNOWN_HOSTS');
+    expect(log(sshLog)).toBe('');
+    expect(log(scpLog)).toBe('');
+  });
+
+  it('does not copy the GitHub token when the host key check fails', () => {
+    const parent = path.join(tmpdir(), `omp-ssh-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const bin = path.join(parent, 'bin');
+    mkdirSync(bin, { recursive: true });
+    writeExe(path.join(bin, 'ssh'), '#!/usr/bin/env bash\nprintf \'%s\\n\' "$*" >> "${DEPLOY_TEST_SSH_LOG:?}"\nexit 1\n');
+    writeExe(path.join(bin, 'scp'), SCP);
+    const sshLog = path.join(parent, 'ssh.log');
+    const scpLog = path.join(parent, 'scp.log');
+    const result = runSsh({
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH ?? ''}`,
+      VPS_HOST: '203.0.113.10',
+      VPS_SSH_KEY: 'SECRETKEYMATERIAL',
+      VPS_KNOWN_HOSTS: '203.0.113.10 ssh-ed25519 AAAABADHOSTKEY',
+      REF: 'main',
+      GH_TOKEN: 'super-secret-token',
+      DEPLOY_TEST_SSH_LOG: sshLog,
+      DEPLOY_TEST_SCP_LOG: scpLog,
+    });
+    expect(result.status).not.toBe(0);
+    expect(log(scpLog)).toBe('');
   });
 });

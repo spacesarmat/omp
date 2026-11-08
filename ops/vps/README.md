@@ -163,8 +163,9 @@ Needs bash 4.4+, curl, rsync, GNU diff, flock, node, and Docker Compose v2. A pr
 |--------|--------|
 | `VPS_HOST` | Hostname or `user@host`. User defaults to `root`. Port is 22. |
 | `VPS_SSH_KEY` | Private key in the VPS `authorized_keys`. No passphrase. |
+| `VPS_KNOWN_HOSTS` | The VPS public host key in `known_hosts` format, obtained from the server administrator or a trusted `ssh-keyscan` result. |
 
-The job checks out the workflow's own revision (`github.sha`, the branch selected as "Use workflow from") and passes `ref` only as the release to download. An older tag still deploys with these scripts. It copies `deploy.sh` over SSH and runs it. It forwards the Actions `GITHUB_TOKEN` only so the VPS can download a private tarball, then deletes that file during the session. The first connection accepts the host key (`StrictHostKeyChecking=accept-new`).
+The job checks out the workflow's own revision (`github.sha`, the branch selected as "Use workflow from") and passes `ref` only as the release to download. An older tag still deploys with these scripts. It copies `deploy.sh` over SSH and runs it. It forwards the Actions `GITHUB_TOKEN` only so the VPS can download a private tarball, then deletes that file during the session. The host key is pinned with `StrictHostKeyChecking=yes`; the token is written only after the first verified connection.
 
 ## First install
 
