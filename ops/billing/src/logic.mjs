@@ -1,5 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
-import { transferCovers } from './yoomoney.mjs';
+import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const ATTEMPT_CAP = 200;
@@ -1159,9 +1159,31 @@ export function lapsingExtras(state, sub, now) {
   return (Number(sub.extraUntil) || 0) < (Number(sub.paidUntil) || 0) ? active : 0;
 }
 
-function withdrawField(withdrawAmount) {
-  if (withdrawAmount === undefined || withdrawAmount === null || String(withdrawAmount) === '') return {};
-  return { withdrawAmount: String(withdrawAmount) };
+function moneyPresent(v) {
+  return v !== undefined && v !== null && String(v) !== '';
+}
+
+/** Fields a later confirm must replay. Absent fields stay absent: an old hold is not given a guessed fee. */
+function noticeMeta({ withdrawAmount, notificationType, requireWithdraw }) {
+  const out = {};
+  if (moneyPresent(withdrawAmount)) out.withdrawAmount = String(withdrawAmount);
+  if (notificationType === 'p2p-incoming' || notificationType === 'card-incoming') out.notificationType = notificationType;
+  if (requireWithdraw === true || requireWithdraw === 'true') out.requireWithdraw = true;
+  return out;
+}
+
+/**
+ * Admin confirm omits the live notice. Reuse what the hold stored.
+ * A signed notice that itself lacks withdraw_amount does not inherit one: that would hide a missing gross.
+ */
+function resolveNotice(passed, held) {
+  const explicitMust = passed.requireWithdraw === true || passed.requireWithdraw === 'true';
+  const explicitNot = passed.requireWithdraw === false || passed.requireWithdraw === 'false';
+  return {
+    requireWithdraw: explicitMust ? true : explicitNot ? false : !!(held && held.requireWithdraw),
+    withdrawAmount: moneyPresent(passed.withdrawAmount) ? passed.withdrawAmount : explicitMust ? '' : held && held.withdrawAmount,
+    notificationType: passed.notificationType || (held && held.notificationType) || '',
+  };
 }
 
 export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw }) {
@@ -1188,7 +1210,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       at: now || Date.now(),
       error: 'unaccepted',
       pending: true,
-      ...withdrawField(withdrawAmount),
+      ...noticeMeta({ withdrawAmount, notificationType, requireWithdraw }),
     });
     return {
       state: { ...input, payments: input.payments.concat([held]) },
@@ -1196,10 +1218,12 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     };
   }
   // The accepted notice replaces the held row for the same operation.
+  const heldRow = hadPending ? input.payments.find((p) => p.operationId === operationId && p.pending) : null;
+  const resolved = resolveNotice({ withdrawAmount, notificationType, requireWithdraw }, heldRow);
   const state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
-  const row = { operationId, label: mark, amount, at: now || Date.now(), ...withdrawField(withdrawAmount) };
+  const row = { operationId, label: mark, amount, at: now || Date.now(), ...noticeMeta(resolved) };
   // The accepted row takes the held row's id: it is the same payment, settled.
   const heldId = hadPending ? (input.payments.find((p) => p.operationId === operationId && p.pending) || {}).id : '';
   if (heldId) row.id = heldId;
@@ -1223,7 +1247,13 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
   }
-  const coversNeed = (need) => transferCovers(amount, currency, need, { withdrawAmount, notificationType, requireWithdraw });
+  const coversNeed = (need) => {
+    if (quote && (quote.method === 'PC' || quote.method === 'AC')) {
+      if (need > Number(quote.price) + 1e-9) return false;
+      return settledCovers(amount, currency, quote, resolved);
+    }
+    return transferCovers(amount, currency, need, resolved);
+  };
   const covers = (kindMark) => coversNeed(quoted !== null ? quoted : priceOf(state, kindMark));
 
   if (act.indexOf('sub:') === 0) {
@@ -2359,7 +2389,7 @@ const PURCHASE_CAP = 2000;
  * A renewal (`sub`) includes every extra slot that still counts (base + extra × slots) unless
  * `withExtras` is false. The quote keeps how many slots it paid for.
  */
-export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras, addExtra }) {
+export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras, addExtra, method }) {
   const at = now || Date.now();
   const prices = priceText(state.settings);
   if (kind !== 'new' && kind !== 'sub' && kind !== 'dev') return { state, result: { error: 'bad_label' } };
@@ -2381,11 +2411,25 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     extras = 1 + lapsingExtras(state, sub, at);
     price = prices.extra * extras;
   }
+  // No method: a legacy quote. The payer is asked for `price` and the old net check applies.
+  // PC or AC: freeze the documented gross-up. The caller cannot supply the fee.
+  let payMethod = '';
+  let fee = '';
+  let gross = '';
+  if (method === 'PC' || method === 'AC') {
+    const up = grossUp(price, method);
+    if (!up) return { state, result: { error: 'bad_method' } };
+    payMethod = method;
+    fee = up.fee;
+    gross = up.gross;
+  } else if (method) return { state, result: { error: 'bad_method' } };
   const same = (p) =>
     p.kind === kind &&
     (p.accountId || '') === (accountId || '') &&
     (p.subscriptionId || '') === (subscriptionId || '') &&
     Number(p.price) === price &&
+    (p.method || '') === payMethod &&
+    (p.gross || '') === gross &&
     (Number(p.extras) || 0) === extras &&
     (Number(p.credit) || 0) === credit &&
     (Number(p.addExtra) || 0) === add &&
@@ -2394,8 +2438,9 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     at >= (Number(p.at) || 0);
   // A double tap or a second look at the same screen reuses the unpaid link instead of piling up quotes.
   const paidIds = paidQuoteIds(state.payments);
+  const quoted = { price, gross, fee, method: payMethod, extras, credit, addExtra: add };
   const reuse = (state.purchases || []).find((p) => same(p) && !paidIds[p.id]);
-  if (reuse) return { state, result: { label: 'buy:' + reuse.id, price, id: reuse.id, extras, credit, addExtra: add } };
+  if (reuse) return { state, result: { label: 'buy:' + reuse.id, id: reuse.id, ...quoted, gross: reuse.gross || '', fee: reuse.fee || '', method: reuse.method || '' } };
   const row = {
     id: randomId(),
     kind,
@@ -2410,8 +2455,13 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     currency: '643',
     at,
   };
+  if (payMethod) {
+    row.method = payMethod;
+    row.fee = fee;
+    row.gross = gross;
+  }
   const purchases = trimPurchases((state.purchases || []).concat([row]), state.payments);
-  return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, price, id: row.id, extras, credit, addExtra: add } };
+  return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, id: row.id, ...quoted } };
 }
 
 /** An unpaid quote with the same terms is handed out again for this long. */

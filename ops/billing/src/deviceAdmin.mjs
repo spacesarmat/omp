@@ -350,6 +350,9 @@ export function confirmPendingPayment(state, { operationId, now, actor }) {
     currency: row.currency || '643',
     unaccepted: false,
     now,
+    withdrawAmount: row.withdrawAmount,
+    notificationType: row.notificationType,
+    requireWithdraw: row.requireWithdraw === true,
   });
   const idx = applied.state.payments.map((p) => String(p.operationId)).lastIndexOf(String(row.operationId));
   const payments = applied.state.payments.map((p, i) => (i === idx ? { ...p, confirmedBy: 'admin', heldAt: Number(row.at) || 0 } : p));

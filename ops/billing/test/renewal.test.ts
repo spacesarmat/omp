@@ -219,11 +219,16 @@ describe('monthly extra device', () => {
     expect(msg.text).toContain('Итого: 200 ₽');
     expect(msg.text).toContain('Только подписка: доп. устройство перестанет работать после 21.11.2026 03:00 МСК (привязка сохранится).');
     expect(msg.text).not.toContain('yoomoney');
-    const [full, base] = msg.inline.inline_keyboard.map((r: { text: string; url: string }[]) => r[0]);
-    expect(full.text).toBe('Оплатить 200 ₽');
-    expect(full.url).toContain('sum=200');
-    expect(base.text).toBe('Только подписка - 150 ₽');
-    expect(base.url).toContain('sum=150');
+    const rows = msg.inline.inline_keyboard.map((r: { text: string; url: string }[]) => r[0]);
+    expect(rows[0].text).toBe('Кошелёк - 202 ₽');
+    expect(rows[0].url).toContain('sum=202.00');
+    expect(rows[1].text).toBe('Карта - 206,19 ₽');
+    expect(rows[1].url).toContain('sum=206.19');
+    expect(rows[2].text).toBe('Только подписка, кошелёк - 151,50 ₽');
+    expect(rows[2].url).toContain('sum=151.50');
+    expect(rows[3].url).toContain('sum=154.64');
+    expect(msg.text).toContain('200 ₽ + 2 ₽ = 202 ₽');
+    expect(msg.text).toContain('150 ₽ + 1,50 ₽ = 151,50 ₽');
   });
 
   it('renewal with the extra slot moves it to the new paidUntil; 150 ₽ for a 200 ₽ quote is refused', () => {
@@ -346,8 +351,10 @@ describe('monthly extra device', () => {
       expect(msg.text).toContain('Итого: 200 ₽');
       expect(msg.text).toContain('Только подписка: доп. устройство останется отключённым (привязка сохранится).');
       const urls = msg.inline.inline_keyboard.map((r: { url: string }[]) => r[0].url);
-      expect(urls[0]).toContain('sum=200');
-      expect(urls[1]).toContain('sum=150');
+      expect(urls[0]).toContain('sum=202.00');
+      expect(urls[1]).toContain('sum=206.19');
+      expect(urls[2]).toContain('sum=151.50');
+      expect(urls[3]).toContain('sum=154.64');
     }
   });
 
@@ -367,7 +374,8 @@ describe('monthly extra device', () => {
       expect(text).toContain('Устройства: 3 из 3 (2 базовых + 1 купленный до 18.11.2026)');
       expect(text).toContain('Ещё одно устройство - 50 ₽ до 18.11.2026');
       expect(text).toContain('продление станет 250 ₽');
-      expect(reply.messages[1].inline.inline_keyboard[0][0].text).toBe('Оплатить 50 ₽');
+      expect(reply.messages[1].inline.inline_keyboard[0][0].text).toBe('Кошелёк - 50,50 ₽');
+      expect(reply.messages[1].text).toContain('50 ₽ + 0,50 ₽ = 50,50 ₽');
     }
     const price = botReply(f.state, { chatId: '42', text: 'Цены', now: NOW });
     expect(price.messages[0].text).toContain('Доп. устройство - 50 ₽ в месяц');

@@ -154,17 +154,98 @@ export function transferCovers(amount, currency, price, opts) {
 export const LABEL_MAX = 64;
 
 /**
- * Card payment link. `label` is returned on the notice and is the order id.
- * `quickpay-form=shop` keeps `targets` (the purpose the payer sees). The current
- * form doc lists `button` and does not document `targets`.
- * successURL is not set: a browser return is not a payment.
+ * Documented quickpay fees. The recipient bears them. `sum` is charged from the sender.
+ * https://yoomoney.ru/docs/payment-buttons/using-api/forms
+ * Wallet PC, a=0.01, from the amount due: 1000 -> 990.09 (kopecks truncated).
+ * Card AC, a=0.03, from the charged sum: 1000 -> 970.00.
+ * YooMoney does not add a second fee on top of `sum`.
  */
-export function payUrl(wallet, { sum, label, targets }) {
+export function kopOf(value) {
+  const n = Number(String(value == null ? '' : value).replace(',', '.'));
+  if (!Number.isFinite(n)) return NaN;
+  return Math.round(n * 100 + (n < 0 ? -1e-9 : 1e-9));
+}
+
+export function rubOf(kop) {
+  const neg = kop < 0;
+  const v = Math.abs(kop);
+  return (neg ? '-' : '') + Math.floor(v / 100) + '.' + String(v % 100).padStart(2, '0');
+}
+
+/** Credited kopecks for a charged sum, using the published formulas and the 1000 RUB examples. */
+export function netKop(sumKop, method) {
+  if (method === 'PC') return Math.floor((sumKop * 100) / 101);
+  if (method === 'AC') return Math.floor((sumKop * 97) / 100);
+  return NaN;
+}
+
+function ceilDiv(n, d) {
+  return Math.floor((n + d - 1) / d);
+}
+
+/**
+ * Smallest `sum` whose documented net is at least `baseRub`.
+ * The payer's extra is the YooMoney fee itself, solved so the wallet still receives the subscription price.
+ * Returns null for 0, a negative base, or an unknown method. No stand-in rate.
+ */
+export function grossUp(baseRub, method) {
+  const baseKop = kopOf(baseRub);
+  if (!Number.isFinite(baseKop) || baseKop <= 0) return null;
+  if (method !== 'PC' && method !== 'AC') return null;
+  let sumKop = method === 'PC' ? ceilDiv(baseKop * 101, 100) : ceilDiv(baseKop * 100, 97);
+  let guard = 0;
+  while (netKop(sumKop, method) < baseKop && guard < 3) {
+    sumKop += 1;
+    guard += 1;
+  }
+  const net = netKop(sumKop, method);
+  if (net < baseKop) return null;
+  return {
+    method,
+    notificationType: method === 'PC' ? 'p2p-incoming' : 'card-incoming',
+    base: rubOf(baseKop),
+    fee: rubOf(sumKop - baseKop),
+    gross: rubOf(sumKop),
+    net: rubOf(net),
+  };
+}
+
+/**
+ * A quote that froze method and gross. `quote.price` is the subscription base.
+ * Legacy quotes have no method: the older net check applies, and no fee is invented.
+ */
+export function settledCovers(amount, currency, quote, opts) {
+  const method = quote && quote.method;
+  if (method !== 'PC' && method !== 'AC') return transferCovers(amount, currency, quote && quote.price, opts);
+  if (String(currency || '') !== '643') return false;
+  const type = method === 'PC' ? 'p2p-incoming' : 'card-incoming';
+  const noticeType = opts && opts.notificationType;
+  if (noticeType !== type) return false;
+  const withdrawRaw = opts && opts.withdrawAmount;
+  if (withdrawRaw === undefined || withdrawRaw === null || String(withdrawRaw) === '') return false;
+  const grossKop = kopOf(quote.gross);
+  const baseKop = kopOf(quote.price);
+  const paidKop = kopOf(withdrawRaw);
+  const net = kopOf(amount);
+  if (![grossKop, baseKop, paidKop, net].every((n) => Number.isFinite(n))) return false;
+  if (Math.abs(paidKop - grossKop) > 1) return false;
+  if (net + 1 < baseKop) return false;
+  if (net > paidKop + 1) return false;
+  return true;
+}
+
+/**
+ * Payment link. `label` comes back on the notice and is the order id.
+ * quickpay-form is `button`. `paymentType` is PC (wallet) or AC (card).
+ * https://yoomoney.ru/docs/payment-buttons/using-api/forms
+ * successURL is not set: a browser return is not a payment.
+ * `targets` is ignored: the form doc does not send it.
+ */
+export function payUrl(wallet, { sum, label, paymentType }) {
   const q = new URLSearchParams();
   q.set('receiver', wallet);
-  q.set('quickpay-form', 'shop');
-  q.set('targets', targets);
-  q.set('paymentType', 'AC');
+  q.set('quickpay-form', 'button');
+  q.set('paymentType', paymentType === 'PC' ? 'PC' : 'AC');
   q.set('sum', Number(sum).toFixed(2));
   q.set('label', label);
   return 'https://yoomoney.ru/quickpay/confirm?' + q.toString();

@@ -126,9 +126,12 @@ describe('YooMoney amount, fee and form', () => {
     expect(q.get('sum')).toBe('150.00');
     expect(q.get('label')).toBe(label);
     expect(label.length).toBeLessThanOrEqual(LABEL_MAX);
-    expect(q.get('quickpay-form')).toBe('shop');
+    expect(q.get('quickpay-form')).toBe('button');
     expect(q.get('paymentType')).toBe('AC');
-    expect(q.get('targets')).toBe('OMP 30');
+    expect(q.get('targets')).toBeNull();
+    const wallet = new URL(payUrl('410011111111111', { sum: 151.5, label, paymentType: 'PC' })).searchParams;
+    expect(wallet.get('paymentType')).toBe('PC');
+    expect(wallet.get('sum')).toBe('151.50');
     expect(q.get('successURL')).toBeNull();
   });
 });
