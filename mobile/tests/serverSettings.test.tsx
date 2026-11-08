@@ -82,6 +82,26 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ServerSettings', () => {
+  it('uses the saved login when a protected server is opened by url', async () => {
+    const seen: { url: string; auth: string }[] = [];
+    mockFetch((url, init) => {
+      const headers = (init && init.headers) || {};
+      seen.push({ url: String(url), auth: String(headers.Authorization || '') });
+      return { body: JSON.stringify(BASE) };
+    });
+    const open = addServer({ url: 'http://10.0.0.2:8090', name: 'Open', password: 'other' });
+    const locked = addServer({ url: 'http://10.0.0.4:8090', name: 'Lock', user: 'u', password: 'secret' });
+    setActiveServer(open.id);
+    document.body.innerHTML = '<div id="app"></div>';
+    el = document.getElementById('app')!;
+    act(() => render(<ServerSettings url={locked.url} />, el));
+    await flush();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((s) => s.url.indexOf('10.0.0.4') >= 0)).toBe(true);
+    expect(atob(seen[0].auth.replace('Basic ', ''))).toBe('u:secret');
+    expect(el.textContent).toContain('Lock');
+  });
+
   it('edits the server given by url without touching the active one', async () => {
     setup('http://192.168.1.5:8090');
     const seen: string[] = [];

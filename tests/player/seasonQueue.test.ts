@@ -140,6 +140,56 @@ describe('season queue', () => {
     expect(season2.files.some((f) => f.id === 4)).toBe(false);
   });
 
+  it('a fractional episode does not stand in for the whole number, and a normal E02 still does', () => {
+    const prefixed = [
+      file(1, 'Show.S01E01.mkv'),
+      file(2, 'Show.S01E02.5.mkv'),
+      file(3, 'Show.S01E03.mkv'),
+    ];
+    const hole = seasonSpan(prefixed, 1);
+    expect(hole.files.map((f) => f.id)).toEqual([1]);
+    expect(hole.missing).toBe(2);
+    expect(seasonFileIds(prefixed, 1)).toEqual([1]);
+    const special = seasonSpan(prefixed, 2);
+    expect(special.episodic).toBe(true);
+    expect(special.season).toBe(1);
+    expect(special.files.map((f) => f.id)).toEqual([2]);
+    expect(special.missing).toBeNull();
+    expect(seasonFileIds(prefixed, 2)).toEqual([2]);
+    const loose = [
+      file(1, 'Show.E01.mkv'),
+      file(2, 'Show.E02.5.mkv'),
+      file(3, 'Season 1/E02.5.mkv'),
+      file(4, 'Show.E03.mkv'),
+    ];
+    expect(seasonSpan(loose, 1).files.map((f) => f.id)).toEqual([1]);
+    expect(seasonSpan(loose, 1).missing).toBe(2);
+    const whole = [
+      file(1, 'Show.E01.mkv'),
+      file(2, 'Show.E02.mkv'),
+      file(9, 'Show.E02.1080p.mkv'),
+      file(3, 'Show.E03.mkv'),
+    ];
+    const run = seasonSpan(whole, 1);
+    expect(run.missing).toBeNull();
+    expect(run.files.map((f) => f.id)).toContain(1);
+    expect(run.files.map((f) => f.id)).toContain(3);
+    expect(run.files.filter((f) => f.id === 2 || f.id === 9)).toHaveLength(1);
+    const picked = seasonSpan(whole, 9);
+    expect(picked.files[0].id).toBe(9);
+    expect(picked.files.some((f) => f.id === 2)).toBe(false);
+    expect(seasonSpan([file(1, 'Show.S01E02.mkv')], 1).missing).toBeNull();
+    expect(seasonSpan([file(1, 'Show.S01E02.x264.mkv')], 1).files).toHaveLength(1);
+    expect(seasonSpan([file(1, 'Season 1/02.mkv')], 1).season).toBe(1);
+    const otherFolder = [
+      file(1, 'Show.E01.mkv'),
+      file(2, 'Season 1/02.mkv'),
+      file(3, 'Show.E03.mkv'),
+    ];
+    expect(seasonSpan(otherFolder, 1).files.map((f) => f.id)).toEqual([1]);
+    expect(seasonSpan(otherFolder, 1).missing).toBe(2);
+  });
+
   it('a film is one file and does not send a season list', () => {
     const span = seasonSpan([file(1, 'Movie.2020.mkv'), file(2, 'Movie.2020.extra.mkv')], 1);
     expect(span.season).toBeNull();

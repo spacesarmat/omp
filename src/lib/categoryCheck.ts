@@ -49,6 +49,14 @@ const BRACKET_RANGE = /(?:\[|\s-\s)(\d{1,3})-(\d{1,3})(?=[\]\s.\[(]|$)/;
 const WORD_ONE = /(?:^|[^0-9-])(\d{1,3})[ ._]*серия/i;
 /** A fractional episode after an episode mark («E12.5», «Ep12.5», «- 12.5», «[12.5]»): not a whole episode. */
 const FRACTION = /(?:(?:^|[^a-z])(?:e|ep|episode)|s\d{1,2}e|\s-\s|\[)[ ._]?\d{1,3}\.\d(?![0-9])/i;
+/** «02.5.mkv» at the start of the name. «02.mkv» and «02.1080p.mkv» are not fractional. */
+const LEADING_FRACTION = /^\d{1,3}\.\d(?![0-9])/;
+
+/** True for a special like E02.5. A whole episode E02.mkv, or E02.1080p.mkv, is false. */
+export function isFractionalEpisode(path: string): boolean {
+  const name = baseName(path);
+  return FRACTION.test(name) || LEADING_FRACTION.test(name);
+}
 /** Bracketed numbers that are picture heights, not episodes. */
 const NOT_EPISODE = [480, 576, 720];
 /** A range in one file holds at most this many episodes (a wider one is something else). */
@@ -80,7 +88,7 @@ function moreEpisodes(first: number, tail: string): number[] {
  */
 export function fileEpisodes(path: string): { season: number | null; episodes: number[] } | null {
   const name = baseName(path);
-  if (FRACTION.test(name)) return null;
+  if (isFractionalEpisode(path)) return null;
   let m = CROSS_SEASON.exec(name);
   if (m && +m[1] !== +m[2]) return null;
   m = SE_RANGE.exec(name);

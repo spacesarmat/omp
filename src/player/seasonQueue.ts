@@ -1,6 +1,6 @@
 // One season, from the episode the person chose, using only files of the current release.
 // The next season is never added. A hole in the numbering stops the queue: another torrent is not chosen.
-import { fileEpisodes } from '../lib/categoryCheck';
+import { fileEpisodes, isFractionalEpisode } from '../lib/categoryCheck';
 import { isExtraFile, parseEpisode, playableFiles, type TorrentFile } from '../lib/episodes';
 
 export interface SeasonSpan {
@@ -23,6 +23,8 @@ export interface SeasonSpan {
 /** Episode numbers, and the season they belong to. A folder season counts when the file name states none. */
 function placed(path: string): { season: number | null; episodes: number[] } | null {
   if (isExtraFile(path)) return null;
+  // E02.5 is not episode 2. parseEpisode would keep only the digits before the dot.
+  if (isFractionalEpisode(path)) return null;
   const info = fileEpisodes(path);
   const parsed = parseEpisode(path);
   const episodes = info && info.episodes.length ? info.episodes : parsed.episode !== null ? [parsed.episode] : [];
@@ -41,6 +43,10 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
   const start = playable.filter((f) => f.id === startId)[0];
   const none = { files: [] as TorrentFile[], start: 0, season: null, episodic: false, missing: null };
   if (!start) return none;
+  // A special the person chose stays that one file. It is not a film, so the rest of the release is not played past the gap.
+  if (isFractionalEpisode(start.path)) {
+    return { files: [start], start: 0, season: parseEpisode(start.path).season, episodic: true, missing: null };
+  }
   const startPlace = placed(start.path);
   if (!startPlace) return { files: [start], start: 0, season: null, episodic: false, missing: null };
   const season = startPlace.season;

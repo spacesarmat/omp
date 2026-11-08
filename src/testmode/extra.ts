@@ -314,6 +314,21 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P34.8', 'Фильтры', 'Filters'),
     ],
   },
+  {
+    key: 'phone:watchFrom',
+    code: 'P35',
+    ru: 'Откуда смотреть',
+    en: 'Where to watch',
+    items: [
+      it('P35.1', 'Назад', 'Back'),
+      it('P35.2', 'Использовать текущую сеть', 'Use the current network'),
+      it('P35.3', 'По сети', 'By network'),
+      it('P35.4', 'Всегда один сервер', 'Always one server'),
+      it('P35.5', 'Запомнить имя', 'Remember the name'),
+      it('P35.6', 'Добавить сервер', 'Add a server'),
+      it('P35.7', 'Найти в сети', 'Find on the network'),
+    ],
+  },
 ];
 
 export const PHONE_DIALOGS: ExtraDialog[] = [

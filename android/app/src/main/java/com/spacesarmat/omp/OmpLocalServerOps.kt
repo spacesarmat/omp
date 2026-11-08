@@ -1,6 +1,10 @@
 package com.spacesarmat.omp
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
@@ -153,6 +157,93 @@ internal fun OmpNativePlugin.wifiHintOp(call: PluginCall) {
     out.put("available", true)
     out.put("ssid", if (known) raw else JSONObject.NULL)
     call.resolve(out)
+}
+
+private const val WIFI_ASKED = "omp.wifiName"
+
+private fun OmpNativePlugin.wifiAsked() = context.getSharedPreferences(WIFI_ASKED, Context.MODE_PRIVATE)
+
+private fun granted(context: Context, permission: String): Boolean {
+    return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * The connected network only. No scan and no dialog.
+ * API 33+ can use nearby-wifi. Older Android needs fine location, and only after the person asked.
+ */
+internal fun OmpNativePlugin.wifiCurrentOp(call: PluginCall) {
+    call.resolve(wifiCurrentObject())
+}
+
+internal fun OmpNativePlugin.requestWifiNameOp(call: PluginCall) {
+    if (wifiReadable()) {
+        call.resolve(wifiCurrentObject())
+        return
+    }
+    val nearby = Build.VERSION.SDK_INT >= 33
+    val permission = if (nearby) android.Manifest.permission.NEARBY_WIFI_DEVICES else android.Manifest.permission.ACCESS_FINE_LOCATION
+    val alias = if (nearby) "wifiNearby" else "wifiLocation"
+    wifiAsked().edit().putBoolean(permission, true).apply()
+    askPermission(alias, call, "wifiNameDone")
+}
+
+internal fun OmpNativePlugin.wifiNameDoneOp(call: PluginCall) {
+    call.resolve(wifiCurrentObject())
+}
+
+private fun OmpNativePlugin.wifiReadable(): Boolean {
+    val fine = granted(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
+    val nearby = Build.VERSION.SDK_INT >= 33 && granted(context, android.Manifest.permission.NEARBY_WIFI_DEVICES)
+    return fine || nearby
+}
+
+private fun OmpNativePlugin.wifiPermissionWord(): String {
+    if (wifiReadable()) return "granted"
+    val nearby = Build.VERSION.SDK_INT >= 33
+    val permission = if (nearby) android.Manifest.permission.NEARBY_WIFI_DEVICES else android.Manifest.permission.ACCESS_FINE_LOCATION
+    if (!wifiAsked().getBoolean(permission, false)) return "prompt"
+    val act = activity
+    if (act != null && act.shouldShowRequestPermissionRationale(permission)) return "denied"
+    if (act != null) return "blocked"
+    return "denied"
+}
+
+private fun OmpNativePlugin.locationWord(): String {
+    val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return "unknown"
+    return try {
+        val on = if (Build.VERSION.SDK_INT >= 28) {
+            lm.isLocationEnabled
+        } else {
+            lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+        if (on) "on" else "off"
+    } catch (_: Exception) {
+        "unknown"
+    }
+}
+
+private fun OmpNativePlugin.transportWord(): String {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return "unknown"
+    val net = cm.activeNetwork ?: return "none"
+    val caps = cm.getNetworkCapabilities(net) ?: return "unknown"
+    return if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) "wifi" else "other"
+}
+
+private fun OmpNativePlugin.wifiCurrentObject(): JSObject {
+    val out = JSObject()
+    val permission = wifiPermissionWord()
+    out.put("permission", permission)
+    out.put("location", locationWord())
+    out.put("transport", transportWord())
+    if (permission != "granted") {
+        out.put("ssid", JSONObject.NULL)
+        return out
+    }
+    val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+    val raw = wm?.connectionInfo?.ssid?.trim()?.trim('"')
+    val known = !raw.isNullOrEmpty() && raw != "<unknown ssid>" && !raw.startsWith("0x")
+    out.put("ssid", if (known) raw else JSONObject.NULL)
+    return out
 }
 
 internal fun OmpNativePlugin.vpnStateOp(call: PluginCall) {

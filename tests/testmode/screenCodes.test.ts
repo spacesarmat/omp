@@ -163,6 +163,7 @@ function phoneCode(name: MRoute['name']): string {
     case 'audiobookMine': return 'P30';
     case 'audiobook': return 'P31';
     case 'audiobookPlayer': return 'P32';
+    case 'watchFrom': return 'P35';
     default: {
       const n: never = name;
       return n;
@@ -174,7 +175,7 @@ const PHONE_NAMES: MRoute['name'][] = [
   'connect', 'library', 'news', 'subFindings', 'monitor', 'torrent', 'add', 'remote', 'nowPlaying', 'tv',
   'settings', 'account', 'advanced', 'videoPlayer', 'serverSettings', 'localServer', 'faq', 'install', 'log',
   'backup', 'sources', 'flaresolverr', 'sourceSite', 'title', 'seasonCard', 'series', 'person', 'audiobooks',
-  'audiobookSearch', 'audiobookMine', 'audiobook', 'audiobookPlayer',
+  'audiobookSearch', 'audiobookMine', 'audiobook', 'audiobookPlayer', 'watchFrom',
 ];
 
 function readTree(dir: string, out: string[]): void {

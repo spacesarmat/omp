@@ -1032,7 +1032,13 @@ button, .m-btn {
 .m-track-on .m-set-text > span:first-child { color: var(--accent); }
 .m-screen[data-route='advanced'],
 .m-screen[data-route='account'],
-.m-screen[data-route='serverSettings'] { display: flex; flex-direction: column; gap: 20px; }
+.m-screen[data-route='serverSettings'],
+.m-screen[data-route='watchFrom'] { display: flex; flex-direction: column; gap: 20px; }
+.m-watch-note { margin: 0; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.m-watch-choices { display: flex; flex-direction: column; gap: 10px; }
+.m-watch-server { flex-direction: column; align-items: stretch; }
+.m-watch-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.m-set-group .m-input { width: 100%; box-sizing: border-box; }
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
