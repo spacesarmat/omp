@@ -10,11 +10,13 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.work.workDataOf
 import com.spacesarmat.omp.boot.BootLaunch
 import com.spacesarmat.omp.boot.BootLaunchPrefs
+import com.spacesarmat.omp.control.AppForeground
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +42,12 @@ class UpdateRelaunchTest {
         context.getSystemService(NotificationManager::class.java).cancelAll()
         context.getSharedPreferences(BootLaunchPrefs.PREFS, Context.MODE_PRIVATE).edit().clear().commit()
         WorkManagerTestInitHelper.initializeTestWorkManager(context)
+    }
+
+    @After
+    fun resetForeground() {
+        AppForeground.main = false
+        AppForeground.player = false
     }
 
     @Test
@@ -117,5 +125,31 @@ class UpdateRelaunchTest {
 
         val nm = shadowOf(context.getSystemService(NotificationManager::class.java))
         assertEquals(1, nm.allNotifications.size)
+    }
+
+    @Test
+    fun foregroundAppDoesNotNotify() {
+        AppForeground.main = true
+        UpdateRelaunch.open(context)
+        val launch = shadowOf(context).nextStartedActivity
+
+        UpdateRelaunch.check(context, launch.getLongExtra(BootLaunch.EXTRA_ATTEMPT, 0L))
+
+        val nm = shadowOf(context.getSystemService(NotificationManager::class.java))
+        assertEquals(0, nm.allNotifications.size)
+    }
+
+    @Test
+    fun openingAppCancelsPendingWorkAndNotification() {
+        UpdateRelaunch.open(context)
+        val launch = shadowOf(context).nextStartedActivity
+        UpdateRelaunch.check(context, launch.getLongExtra(BootLaunch.EXTRA_ATTEMPT, 0L))
+
+        UpdateRelaunch.acknowledgeOpen(context)
+
+        val infos = WorkManager.getInstance(context).getWorkInfosForUniqueWork(UpdateRelaunch.WORK).get(5, TimeUnit.SECONDS)
+        assertEquals(WorkInfo.State.CANCELLED, infos.single().state)
+        val nm = shadowOf(context.getSystemService(NotificationManager::class.java))
+        assertEquals(0, nm.allNotifications.size)
     }
 }

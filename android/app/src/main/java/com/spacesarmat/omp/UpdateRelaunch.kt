@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.spacesarmat.omp.boot.BootLaunch
 import com.spacesarmat.omp.boot.BootLaunchPrefs
+import com.spacesarmat.omp.control.AppForeground
 import com.spacesarmat.omp.monitor.MonitorNotifier
 import java.util.concurrent.TimeUnit
 
@@ -66,9 +67,17 @@ object UpdateRelaunch {
         WorkManager.getInstance(context).enqueueUniqueWork(WORK, ExistingWorkPolicy.REPLACE, req)
     }
 
+    fun acknowledgeOpen(context: Context) {
+        try {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK)
+        } catch (_: RuntimeException) {
+        }
+        NotificationManagerCompat.from(context).cancel(ID)
+    }
+
     /** The deferred half of [open]: notify only when this attempt never got its [BootLaunch.acknowledge]. */
     internal fun check(context: Context, attempt: Long) {
-        if (attempt <= 0L) return
+        if (AppForeground.any || attempt <= 0L) return
         val state = try {
             BootLaunchPrefs(context).state()
         } catch (_: RuntimeException) {
