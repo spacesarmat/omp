@@ -1,0 +1,9 @@
+{
+  "version": "0.20.12-beta.1",
+  "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-setup.exe",
+  "sha256": "35834c451ab5ddda3eeff9bff3359c0e3dcce43738b65e02c7ab10c8d719c1a1",
+  "notes": [
+    "После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1"
+}
