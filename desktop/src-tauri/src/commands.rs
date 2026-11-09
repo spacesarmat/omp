@@ -1,3 +1,4 @@
+use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
 use std::sync::{Arc, Mutex};
@@ -104,4 +105,23 @@ mod tests {
         assert_eq!(workers.len(), 2);
         assert!(workers.iter().all(|worker| *worker != caller));
     }
+}
+
+#[tauri::command]
+pub async fn native_http(
+    request: NativeHttpRequest,
+    state: State<'_, HttpClient>,
+) -> Result<HttpResponse, String> {
+    let client = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.request(request))
+        .await
+        .map_err(|error| format!("HTTP worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn native_http_clear_cookies(state: State<'_, HttpClient>) -> Result<(), String> {
+    let client = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.clear_cookies())
+        .await
+        .map_err(|error| format!("HTTP worker failed: {error}"))
 }
