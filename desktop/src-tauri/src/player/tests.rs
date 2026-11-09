@@ -330,6 +330,23 @@ fn superseded_open_is_rejected_before_launch() {
     assert_eq!(launches.load(Ordering::SeqCst), 1);
 }
 
+#[test]
+fn newer_open_survives_an_older_queued_stop() {
+    let launches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let launches_in_launcher = Arc::clone(&launches);
+    let mut manager = PlayerManager::with_launcher(move |_| {
+        launches_in_launcher.fetch_add(1, Ordering::SeqCst);
+        launcher()(&request())
+    });
+    let cancellation = manager.cancellation();
+    let stop = cancellation.cancel();
+    let open = cancellation.cancel();
+
+    assert_eq!(manager.stop_at(stop).state, PlayerState::Idle);
+    assert_eq!(manager.open_at(request(), open).state, PlayerState::Playing);
+    assert_eq!(launches.load(Ordering::SeqCst), 1);
+}
+
 fn launcher() -> impl Fn(&PlayerOpenRequest) -> Result<Box<dyn PlayerProcess>, String> {
     |_| {
         Ok(Box::new(FakeProcess {

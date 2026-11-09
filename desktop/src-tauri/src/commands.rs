@@ -184,8 +184,11 @@ pub async fn player_stop(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
     cancellation: State<'_, PlayerCancellation>,
 ) -> Result<PlayerStatus, String> {
-    cancellation.cancel();
-    run_player(Arc::clone(state.inner()), |manager| manager.stop()).await
+    let generation = cancellation.cancel();
+    run_player(Arc::clone(state.inner()), move |manager| {
+        manager.stop_at(generation)
+    })
+    .await
 }
 
 #[tauri::command]

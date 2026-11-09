@@ -216,6 +216,13 @@ impl PlayerManager {
         self.stop_process()
     }
 
+    pub fn stop_at(&mut self, generation: u64) -> PlayerStatus {
+        if self.cancellation.is_cancelled(generation) {
+            return self.status.clone();
+        }
+        self.stop_process()
+    }
+
     fn stop_process(&mut self) -> PlayerStatus {
         if let Some(mut process) = self.process.take() {
             let _ = process.stop();
