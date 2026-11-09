@@ -42,6 +42,18 @@ fn echo_launcher(config: &ServerConfig) -> Result<std::process::Child, crate::se
         .map_err(crate::server::ServerError::Io)
 }
 
+fn silent_launcher(
+    config: &ServerConfig,
+) -> Result<std::process::Child, crate::server::ServerError> {
+    let executable = std::env::current_exe().expect("current test executable");
+    crate::process::command(&executable)
+        .args(["--exact", "server::tests::child_entrypoint", "--nocapture"])
+        .env("OMP_SERVER_TEST_CHILD", "silent")
+        .env("OMP_SERVER_TEST_PORT", config.port.to_string())
+        .spawn()
+        .map_err(crate::server::ServerError::Io)
+}
+
 fn port_open(port: u16) -> bool {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok()
@@ -107,6 +119,7 @@ fn exit_shutdown_stops_embedded_server_process() {
         config(temp.path(), port),
         echo_launcher,
     )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
     let player_stopped = Arc::new(AtomicBool::new(false));
     let player = Arc::new(Mutex::new(player_manager(&player_stopped)));
     let cancellation = PlayerCancellation::new();
@@ -122,7 +135,7 @@ fn exit_shutdown_stops_embedded_server_process() {
     );
     assert!(port_open(port));
 
-    stop_processes(&server, &player, &cancellation);
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
 
     wait_for(|| !port_open(port));
     assert!(!player_stopped.load(Ordering::SeqCst));
@@ -136,6 +149,7 @@ fn exit_shutdown_stops_player_process() {
         config(temp.path(), server_stopped_port),
         echo_launcher,
     )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
     let player_stopped = Arc::new(AtomicBool::new(false));
     let player = Arc::new(Mutex::new(player_manager(&player_stopped)));
     let cancellation = PlayerCancellation::new();
@@ -145,7 +159,7 @@ fn exit_shutdown_stops_player_process() {
     };
     assert_eq!(status.state, PlayerState::Playing);
 
-    stop_processes(&server, &player, &cancellation);
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
 
     assert!(player_stopped.load(Ordering::SeqCst));
 }
@@ -158,12 +172,57 @@ fn exit_shutdown_cancels_pending_player_open() {
         config(temp.path(), port),
         echo_launcher,
     )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
     let player_stopped = Arc::new(AtomicBool::new(false));
     let player = Arc::new(Mutex::new(player_manager(&player_stopped)));
     let cancellation = PlayerCancellation::new();
     let generation = cancellation.cancel();
 
-    stop_processes(&server, &player, &cancellation);
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
 
     assert!(cancellation.is_cancelled(generation));
+}
+
+#[test]
+fn exit_shutdown_cancels_pending_server_start_with_busy_lock() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let port = free_port();
+    let mut server_config = config(temp.path(), port);
+    server_config.startup_timeout = Duration::from_secs(30);
+    let server = Arc::new(Mutex::new(ServerManager::with_launcher(
+        server_config,
+        silent_launcher,
+    )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
+    let player_stopped = Arc::new(AtomicBool::new(false));
+    let player = Arc::new(Mutex::new(player_manager(&player_stopped)));
+    let cancellation = PlayerCancellation::new();
+    let worker = {
+        let server = Arc::clone(&server);
+        std::thread::spawn(move || {
+            let mut guard = server.lock().expect("server lock");
+            guard.start(embedded())
+        })
+    };
+    wait_for(|| port_open(port));
+
+    let began = std::time::Instant::now();
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
+    assert!(
+        began.elapsed() < Duration::from_secs(5),
+        "exit shutdown blocked on the server lock"
+    );
+
+    let handle = worker.join().expect("server start thread");
+    assert_eq!(handle.status, ServerStatus::Error);
+    assert!(
+        handle
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("cancelled")),
+        "{}",
+        handle.error.as_deref().unwrap_or("")
+    );
+    wait_for(|| !port_open(port));
+    assert!(!player_stopped.load(Ordering::SeqCst));
 }

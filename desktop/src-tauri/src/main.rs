@@ -10,9 +10,9 @@ fn main() {
     let app = tauri::Builder::default()
         .manage(HttpClient::new())
         .setup(|app| {
-            app.manage(Arc::new(Mutex::new(ServerManager::new(
-                ServerConfig::from_environment()?,
-            ))));
+            let server = ServerManager::new(ServerConfig::from_environment()?);
+            app.manage(server.cancellation());
+            app.manage(Arc::new(Mutex::new(server)));
             let player = PlayerManager::new(PlayerConfig::from_environment()?);
             app.manage(player.cancellation());
             app.manage(Arc::new(Mutex::new(player)));

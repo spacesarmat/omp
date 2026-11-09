@@ -7,6 +7,8 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process::Child;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use ureq::Agent;
@@ -51,6 +53,7 @@ pub enum ServerError {
     Download(DownloadError),
     Platform(String),
     Launch(String),
+    Cancelled,
     Io(io::Error),
 }
 
@@ -59,6 +62,7 @@ impl fmt::Display for ServerError {
         match self {
             Self::Download(error) => write!(f, "{error}"),
             Self::Platform(error) | Self::Launch(error) => write!(f, "{error}"),
+            Self::Cancelled => write!(f, "server start cancelled"),
             Self::Io(error) => write!(f, "{error}"),
         }
     }
@@ -114,6 +118,42 @@ impl ServerConfig {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ServerCancellation {
+    generation: Arc<AtomicU64>,
+    shutting_down: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl ServerCancellation {
+    pub fn new() -> Self {
+        Self {
+            generation: Arc::new(AtomicU64::new(0)),
+            shutting_down: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) -> u64 {
+        self.generation.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    pub fn shutdown(&self) {
+        self.shutting_down.store(true, Ordering::SeqCst);
+        self.cancel();
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::SeqCst)
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    pub fn is_cancelled(&self, generation: u64) -> bool {
+        self.generation() != generation
+    }
+}
+
 fn torrserver_args(config: &ServerConfig) -> Vec<std::ffi::OsString> {
     vec![
         "--port".into(),
@@ -136,24 +176,46 @@ pub struct ServerManager {
     handle: ServerHandle,
     child: Option<Child>,
     launcher: Box<Launcher>,
+    cancellation: ServerCancellation,
 }
 
 impl ServerManager {
     pub fn new(config: ServerConfig) -> Self {
-        Self::with_launcher(config, |config| {
-            let target = current().map_err(ServerError::Platform)?;
-            let binary = download_verified(asset_for(target)?)?;
-            fs::create_dir_all(&config.data_dir)?;
-            process::command(&binary)
-                .args(torrserver_args(config))
-                .current_dir(&config.data_dir)
-                .env("HOME", &config.data_dir)
-                .spawn()
-                .map_err(ServerError::Io)
-        })
+        let cancellation = ServerCancellation::new();
+        let cancellation_in_launcher = cancellation.clone();
+        Self::with_launcher_and_cancellation(
+            config,
+            move |config| {
+                let generation = cancellation_in_launcher.generation();
+                let target = current().map_err(ServerError::Platform)?;
+                let binary = download_verified(asset_for(target)?)?;
+                if cancellation_in_launcher.is_cancelled(generation) {
+                    return Err(ServerError::Cancelled);
+                }
+                fs::create_dir_all(&config.data_dir)?;
+                process::command(&binary)
+                    .args(torrserver_args(config))
+                    .current_dir(&config.data_dir)
+                    .env("HOME", &config.data_dir)
+                    .spawn()
+                    .map_err(ServerError::Io)
+            },
+            cancellation,
+        )
     }
 
     pub fn with_launcher<F>(config: ServerConfig, launcher: F) -> Self
+    where
+        F: Fn(&ServerConfig) -> Result<Child, ServerError> + Send + Sync + 'static,
+    {
+        Self::with_launcher_and_cancellation(config, launcher, ServerCancellation::new())
+    }
+
+    fn with_launcher_and_cancellation<F>(
+        config: ServerConfig,
+        launcher: F,
+        cancellation: ServerCancellation,
+    ) -> Self
     where
         F: Fn(&ServerConfig) -> Result<Child, ServerError> + Send + Sync + 'static,
     {
@@ -168,10 +230,19 @@ impl ServerManager {
             handle,
             child: None,
             launcher: Box::new(launcher),
+            cancellation,
         }
     }
 
+    pub fn cancellation(&self) -> ServerCancellation {
+        self.cancellation.clone()
+    }
+
     pub fn start(&mut self, request: ServerStartRequest) -> ServerHandle {
+        if self.cancellation.is_shutting_down() {
+            return self.fail(ServerError::Cancelled.to_string());
+        }
+        let generation = self.cancellation.cancel();
         self.refresh();
         if request.mode == ServerMode::Embedded
             && self.handle.mode == ServerMode::Embedded
@@ -181,18 +252,21 @@ impl ServerManager {
         }
         self.stop_process();
         match request.mode {
-            ServerMode::Embedded => self.start_embedded(),
-            ServerMode::External => self.start_external(request.origin),
+            ServerMode::Embedded => self.start_embedded(generation),
+            ServerMode::External => self.start_external(request.origin, generation),
         }
     }
 
-    fn start_embedded(&mut self) -> ServerHandle {
+    fn start_embedded(&mut self, generation: u64) -> ServerHandle {
         self.handle = ServerHandle {
             mode: ServerMode::Embedded,
             origin: self.config.origin.clone(),
             status: ServerStatus::Starting,
             error: None,
         };
+        if self.cancellation.is_cancelled(generation) {
+            return self.fail(ServerError::Cancelled.to_string());
+        }
         if health(&self.config.origin) {
             return self.fail("loopback port is already in use".to_string());
         }
@@ -201,7 +275,16 @@ impl ServerManager {
                 Ok(child) => child,
                 Err(error) => return self.fail(error.to_string()),
             };
-            match wait_for_health(&self.config, Some(&mut child)) {
+            match wait_for_health(
+                &self.config,
+                Some(&mut child),
+                &self.cancellation,
+                generation,
+            ) {
+                Ok(true) if self.cancellation.is_cancelled(generation) => {
+                    let _ = process::stop(&mut child);
+                    return self.fail(ServerError::Cancelled.to_string());
+                }
                 Ok(true) => {
                     self.child = Some(child);
                     self.handle.status = ServerStatus::Ready;
@@ -219,7 +302,7 @@ impl ServerManager {
         self.fail("server did not respond to /echo".to_string())
     }
 
-    fn start_external(&mut self, origin: Option<String>) -> ServerHandle {
+    fn start_external(&mut self, origin: Option<String>, generation: u64) -> ServerHandle {
         let Some(origin) = origin else {
             self.handle.mode = ServerMode::External;
             return self.fail("external origin is required".to_string());
@@ -240,7 +323,7 @@ impl ServerManager {
             origin,
             ..self.config.clone()
         };
-        match wait_for_health(&config, None) {
+        match wait_for_health(&config, None, &self.cancellation, generation) {
             Ok(true) => self.handle.status = ServerStatus::Ready,
             Ok(false) => {
                 self.handle.status = ServerStatus::Error;
@@ -322,15 +405,24 @@ impl Drop for ServerManager {
 fn wait_for_health(
     config: &ServerConfig,
     mut child: Option<&mut Child>,
+    cancellation: &ServerCancellation,
+    generation: u64,
 ) -> Result<bool, ServerError> {
     let deadline = Instant::now() + config.startup_timeout;
     loop {
+        if cancellation.is_cancelled(generation) {
+            return Err(ServerError::Cancelled);
+        }
         if let Some(process) = child.as_deref_mut() {
             if process.try_wait()?.is_some() {
                 return Ok(false);
             }
         }
-        if health(&config.origin) {
+        let healthy = health(&config.origin);
+        if cancellation.is_cancelled(generation) {
+            return Err(ServerError::Cancelled);
+        }
+        if healthy {
             return Ok(true);
         }
         if Instant::now() >= deadline {

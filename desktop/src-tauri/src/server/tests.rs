@@ -49,6 +49,25 @@ fn child_launcher(_port: u16) -> impl Fn(&ServerConfig) -> Result<Child, ServerE
     move |config| child_launcher_with_role(config, "echo")
 }
 
+fn child_launcher_silent(config: &ServerConfig) -> Result<Child, ServerError> {
+    child_launcher_with_role(config, "silent")
+}
+
+fn port_open(port: u16) -> bool {
+    let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    std::net::TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok()
+}
+
+fn wait_for(mut condition: impl FnMut() -> bool) {
+    for _ in 0..100 {
+        if condition() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    panic!("condition was not met in time");
+}
+
 #[test]
 fn child_entrypoint() {
     let Ok(role) = std::env::var("OMP_SERVER_TEST_CHILD") else {
@@ -66,6 +85,10 @@ fn child_entrypoint() {
         let Ok(mut stream) = stream else { continue };
         let mut request = [0_u8; 1024];
         let _ = stream.read(&mut request);
+        if role == "silent" {
+            std::thread::sleep(Duration::from_secs(30));
+            continue;
+        }
         let body = b"MatriX.test";
         let headers = format!(
             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -327,4 +350,87 @@ fn embedded_start_retries_early_process_exit() {
         handle.error.as_deref().unwrap_or("")
     );
     assert_eq!(attempts.load(Ordering::SeqCst), 3);
+}
+
+#[test]
+fn start_is_cancelled_while_waiting_for_health() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let port = free_port();
+    let mut slow = config(temp.path(), port);
+    slow.startup_timeout = Duration::from_secs(30);
+    let mut manager = ServerManager::with_launcher(slow, child_launcher_silent);
+    let cancellation = manager.cancellation();
+
+    let worker = std::thread::spawn(move || manager.start(embedded()));
+    wait_for(|| port_open(port));
+    cancellation.cancel();
+    let handle = worker.join().expect("server start thread");
+
+    assert_eq!(handle.status, ServerStatus::Error);
+    assert!(
+        handle
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("cancelled")),
+        "{}",
+        handle.error.as_deref().unwrap_or("")
+    );
+    wait_for(|| !port_open(port));
+}
+
+#[test]
+fn health_success_after_cancellation_is_rejected() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind delayed health server");
+    let port = listener.local_addr().expect("health server address").port();
+    let temp = tempfile::tempdir().expect("temp directory");
+    let config = config(temp.path(), port);
+    let (request_tx, request_rx) = std::sync::mpsc::channel();
+    let (response_tx, response_rx) = std::sync::mpsc::channel();
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("health request");
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request);
+        request_tx.send(()).expect("request signal");
+        response_rx.recv().expect("response permission");
+        let body = b"MatriX.test";
+        let headers = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream.write_all(headers.as_bytes());
+        let _ = stream.write_all(body);
+    });
+    let cancellation = super::ServerCancellation::new();
+    let generation = cancellation.generation();
+    let cancellation_in_worker = cancellation.clone();
+    let worker = std::thread::spawn(move || {
+        super::wait_for_health(&config, None, &cancellation_in_worker, generation)
+    });
+    request_rx.recv().expect("health request received");
+    cancellation.cancel();
+    response_tx.send(()).expect("allow delayed health response");
+
+    let result = worker.join().expect("health worker");
+    assert!(matches!(result, Err(ServerError::Cancelled)));
+    server.join().expect("health server");
+}
+
+#[test]
+fn start_after_shutdown_is_rejected_before_launch() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let port = free_port();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let attempts_in_launcher = Arc::clone(&attempts);
+    let mut manager = ServerManager::with_launcher(config(temp.path(), port), move |config| {
+        attempts_in_launcher.fetch_add(1, Ordering::SeqCst);
+        child_launcher_with_role(config, "echo")
+    });
+    let cancellation = manager.cancellation();
+    cancellation.shutdown();
+
+    let handle = manager.start(embedded());
+
+    assert_eq!(handle.status, ServerStatus::Error);
+    assert_eq!(handle.error.as_deref(), Some("server start cancelled"));
+    assert_eq!(attempts.load(Ordering::SeqCst), 0);
 }

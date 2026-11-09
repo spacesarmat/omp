@@ -233,10 +233,20 @@ export async function setupLocal(
   onStep(4, version);
 }
 
+/** The desktop app may know the embedded server by a loopback alias (localhost, [::1]) instead of 127.0.0.1. */
+function isEmbeddedUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' && u.port === String(LOCAL_PORT) && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** True when the chosen OMP server is a remote one: then the embedded server must not boot on its own. */
 function remoteServerActive(): boolean {
   const s = activeServer.value;
-  return typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ && !!s && s.url !== LOCAL_URL;
+  return typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ && !!s && !isEmbeddedUrl(s.url);
 }
 
 /** App start: refresh the status and, when enabled, start the server without any UI. */

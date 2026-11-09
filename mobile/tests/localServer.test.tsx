@@ -394,6 +394,28 @@ describe('local server store', () => {
     expect(f.calls).toContain('start');
   });
 
+  it('autostart treats the desktop localhost alias of the embedded server as local', async () => {
+    (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
+    setAutostart(true);
+    const alias = addServer({ name: 'Этот компьютер', url: 'http://localhost:8090' });
+    setActiveServer(alias.id);
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await autostartLocal();
+    expect(f.calls).toContain('start');
+  });
+
+  it('autostart keeps blocking a different port on the loopback host on desktop', async () => {
+    (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
+    setAutostart(true);
+    const other = addServer({ name: 'Другой', url: 'http://localhost:18090' });
+    setActiveServer(other.id);
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await autostartLocal();
+    expect(f.calls).not.toContain('start');
+  });
+
   it('installLocalUpdate does not boot a stopped embedded server when a remote one is active', async () => {
     (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
     setAutostart(true);
