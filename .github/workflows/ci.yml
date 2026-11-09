@@ -23,8 +23,36 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
-      - run: npm ci
-      - run: npm ci --prefix desktop
+      - name: Cache root node_modules
+        id: root-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node24-root-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-root-modules-
+      - name: Cache desktop node_modules
+        id: desktop-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node24-desktop-modules-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-desktop-modules-
+      - name: Install root dependencies
+        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: Install root dependencies exactly
+        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Install desktop dependencies
+        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
+      - name: Install desktop dependencies exactly
+        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefix desktop
+      - name: Verify lockfiles
+        run: git diff --exit-code -- package-lock.json desktop/package-lock.json
       - name: Install shellcheck
         run: sudo apt-get update && sudo apt-get install -y shellcheck rsync
       - run: npm test
@@ -58,8 +86,36 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             desktop/package-lock.json
-      - run: npm ci
-      - run: npm ci --prefix desktop
+      - name: Cache root node_modules
+        id: root-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node24-root-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-root-modules-
+      - name: Cache desktop node_modules
+        id: desktop-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node24-desktop-modules-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-desktop-modules-
+      - name: Install root dependencies
+        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: Install root dependencies exactly
+        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Install desktop dependencies
+        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
+      - name: Install desktop dependencies exactly
+        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefix desktop
+      - name: Verify lockfiles
+        run: git diff --exit-code -- package-lock.json desktop/package-lock.json
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
