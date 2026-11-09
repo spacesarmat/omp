@@ -175,13 +175,13 @@ Expected: артефакт собран, feed указывает на него. 
 **Interfaces:**
 - Consumes: все предыдущие интерфейсы без изменения.
 
-- [ ] **Step 1:** Задокументировать установку, WebView2, embedded/external, mpv, обновление, ограничения и способ добавления `DmgInstaller` и `AppImageInstaller`. Обновить `AGENTS.md` и CHANGELOG.
+- [x] **Step 1:** Задокументировать установку, WebView2, embedded/external, mpv, обновление, ограничения и способ добавления `DmgInstaller` и `AppImageInstaller`. Обновить `AGENTS.md` и CHANGELOG.
 Expected: команды build/test соответствуют коду, секретов нет, путь добавления ОС не требует переписывания UI.
 
 - [ ] **Step 2:** Запустить `npm test`, `npm run build`, `npm run build:mobile`, `npm run build:desktop`, `cargo test --manifest-path desktop/src-tauri/Cargo.toml` и Windows integration на всей CI-матрице.
 Expected: все проходят, Windows-only вызовы остаются только в разрешённых границах.
 
-- [ ] **Step 3:** Выполнить ручной чек-лист: каталог, оба сервера, поиск, mpv, кодеки и субтитры, выход процессов, обновление, подпись и сохранение данных. Снять 1280x720 и 1920x1080.
+- [ ] **Step 3:** Выполнить ручной чек-лист: каталог, оба сервера, поиск, mpv, кодеки и субтитры, выход процессов, обновление, установка и сохранение данных. Снять 1280x720 и 1920x1080.
 Expected: UI читается, ошибки понятны, процессы не остаются, настройки сохраняются.
 
 - [ ] **Step 4:** Открыть PR, запросить Greptile и дождаться `build`, `android`, `billing`, `desktop`. Не делать merge без разрешения Andy.

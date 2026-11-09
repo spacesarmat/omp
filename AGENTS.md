@@ -8,13 +8,19 @@
   (тот же `src/`, сборка `vite.tv-android.config.ts` кладётся в APK как `tv/`).
 - `mobile/`: телефонное приложение (Preact), `android/` проект Capacitor для телефона и Android TV
   (`npm run android:sync`, `npm run android:debug`). Встроенный плеер 2160 Player подключён сабмодулем `android/vendor/2160player` (репозиторий spacesarmat/2160player, общий с 2160 Ботя).
+- `desktop/`: Windows desktop (Tauri + Preact, экраны `mobile/src`). TypeScript адаптеры в `desktop/src/platform`, Rust-процессы,
+  загрузки, mpv и обновления в `desktop/src-tauri`, тесты в `desktop/tests`. NSIS-установщик собирается через `npm --prefix desktop run tauri -- build --bundles nsis`.
+  Установка и переносимость описаны в `docs/desktop-cross-platform.md`.
 - `ops/billing/`: биллинг и админ-панель (`src/*.mjs` сервер и бот @OMPBILLINGBOT, `admin/` React-панель, Postgres).
 - `ops/vps/`: сервер (NUC): `docker-compose.yml` + `docker-compose.nuc.yml`, `Caddyfile.nuc`, `deploy.sh`, `jacred/`, `jackett-monitor/`, `site/`.
 - `scripts/`: релиз, CHANGELOG, Telegram-посты, TorrServer, проверки (`npm run check:boot`, `check:changelog`, `check:torrserver`,
   `npm run check:overflow`, `npm run screenshots`).
-- Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`. Node 24.
+- Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`, `npm run build:desktop`.
+  Rust: `cargo test --manifest-path desktop/src-tauri/Cargo.toml`. Node 24.
   Полный `npm test` запускать в Linux или WSL: нужны `shellcheck`, `rsync`, `flock` и Postgres 17. Git Bash на Windows - только точечные JS-тесты.
-- CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Релиз по тегу `v*` (`release.yml`), образ биллинга `billing-image.yml`,
+- CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Desktop (`.github/workflows/desktop.yml`): smoke-матрица и `package-windows`.
+  Cargo и `node_modules` кешируются по ОС и lockfiles, при cache hit используется `npm install --prefer-offline`, при промахе `npm ci`, затем lockfiles проверяются.
+  Релиз по тегу `v*` (`release.yml`), образ биллинга `billing-image.yml`,
   `torrserver-update.yml` (обновление TorrServer), `telegram-post.yml` (пост для уже выпущенного релиза), `vps-deploy.yml` (ручной деплой).
 - `main` защищён: изменения только через PR.
 - NUC: только с ПК Andy по ssh (адрес в локальных заметках, не в репо), каталог `/opt/omp-vps`,
