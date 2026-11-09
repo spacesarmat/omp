@@ -10,7 +10,7 @@ function fixture(): void {
     <a data-download="${kind}" href="https://github.com/spacesarmat/omp/releases">fallback ${kind}</a>
     <a data-download="${kind}" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">arm64</a>
     <a data-download="${kind}" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">armv7</a>
-  `).join('') + '<span data-version="stable">Stable fallback</span><span data-version="beta">Beta fallback</span>';
+  `).join('') + '<span data-version="stable">Stable fallback</span><span data-version="beta">Beta fallback</span><span data-version="beta-windows">Windows fallback</span>';
 }
 
 function response(body: unknown): Response {
@@ -45,7 +45,7 @@ describe('download page feeds', () => {
         },
       },
       '/omp/update-beta.json': { version: '1.1.0-beta.2', ipkUrl: 'https://example.test/beta.ipk' },
-      '/omp/update-windows.json': { version: '1.1.0-beta.2', url: 'https://example.test/beta-setup.exe' },
+      '/omp/update-windows.json': { version: '0.20.12-beta.1', url: 'https://example.test/beta-setup.exe' },
     };
     const fetchImpl = vi.fn((url: string) => Promise.resolve(response(feeds[url])));
     await updateDownloads(document, fetchImpl as unknown as typeof fetch);
@@ -61,6 +61,7 @@ describe('download page feeds', () => {
     expect(link('beta-windows').href).toBe('https://example.test/beta-setup.exe');
     expect(document.querySelector('[data-version="stable"]')!.textContent).toBe('1.0.0');
     expect(document.querySelector('[data-version="beta"]')!.textContent).toBe('1.1.0-beta.2');
+    expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('0.20.12-beta.1');
     expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
       '/omp/update-android.json',
       '/omp/update.json',
@@ -81,6 +82,7 @@ describe('download page feeds', () => {
     }
     expect(document.querySelector('[data-version="stable"]')!.textContent).toBe('Stable fallback');
     expect(document.querySelector('[data-version="beta"]')!.textContent).toBe('Beta fallback');
+    expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('Windows fallback');
   });
 
   it('keeps ABI fallbacks when a feed has no per-ABI links', async () => {
@@ -138,6 +140,7 @@ describe('download page languages and fallbacks', () => {
       expect(doc.querySelector(`a[href="${page.guide}"]`)).not.toBeNull();
       expect(doc.querySelector('[data-version="stable"]')).not.toBeNull();
       expect(doc.querySelector('[data-version="beta"]')).not.toBeNull();
+      expect(doc.querySelector('[data-version="beta-windows"]')).not.toBeNull();
 
       const html = doc.documentElement.outerHTML;
       expect(html).not.toContain('fonts.googleapis.com');

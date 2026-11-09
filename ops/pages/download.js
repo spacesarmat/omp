@@ -3,13 +3,13 @@ const FEEDS = [
   { url: '/omp/update.json', kind: 'stable-webos', channel: 'stable' },
   { url: '/omp/update-android-beta.json', kind: 'beta-android', channel: 'beta' },
   { url: '/omp/update-beta.json', kind: 'beta-webos', channel: 'beta' },
-  { url: '/omp/update-windows.json', kind: 'beta-windows', channel: 'beta' },
+  { url: '/omp/update-windows.json', kind: 'beta-windows', channel: 'beta', versionKey: 'beta-windows' },
 ];
 
-function applyFeed(root, kind, channel, feed) {
+function applyFeed(root, kind, versionKey, feed) {
   if (!feed || typeof feed !== 'object') return;
   if (typeof feed.version === 'string' && feed.version) {
-    const label = root.querySelector(`[data-version="${channel}"]`);
+    const label = root.querySelector(`[data-version="${versionKey}"]`);
     if (label) label.textContent = feed.version;
   }
   if (typeof feed.ipkUrl === 'string' && feed.ipkUrl) {
@@ -29,11 +29,11 @@ function applyFeed(root, kind, channel, feed) {
 }
 
 export async function updateDownloads(root, fetchImpl) {
-  await Promise.all(FEEDS.map(async ({ url, kind, channel }) => {
+  await Promise.all(FEEDS.map(async ({ url, kind, channel, versionKey }) => {
     try {
       const response = await fetchImpl(url);
       if (!response.ok) return;
-      applyFeed(root, kind, channel, await response.json());
+      applyFeed(root, kind, versionKey || channel, await response.json());
     } catch {
       // The release-page fallback remains available when a feed cannot be loaded.
     }
