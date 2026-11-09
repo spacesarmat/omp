@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setTorrServerTransport, TorrServerClient } from '../../src/api/torrserver';
 import { createBridge, type BridgeTransport } from '../src/platform/bridge';
 import { createDesktopNative, rawPlugin } from '../src/platform/native';
 
@@ -13,6 +14,10 @@ function transportWith(calls: Array<{ command: string; args?: Record<string, unk
 describe('desktop native catalog adapter', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+  afterEach(() => {
+    setTorrServerTransport(null);
+    delete (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__;
   });
 
   it('provides the shared catalog dependencies without Capacitor', async () => {
@@ -81,5 +86,25 @@ describe('desktop native catalog adapter', () => {
 
     const output = [...log.mock.calls, ...error.mock.calls].flat().join(' ');
     expect(output).not.toContain('secret-value');
+  });
+
+  it('tracks the installed binary separately from the running process', async () => {
+    const desktop = createDesktopNative(createBridge(async (command) => {
+      if (command === 'server_status') return { mode: 'embedded', origin: 'http://127.0.0.1:8090', status: 'stopped' };
+      if (command === 'server_binary_installed') return true;
+      return {};
+    }));
+
+    await expect(desktop.native.localServerInfo()).resolves.toMatchObject({ running: false, binary: 'ready' });
+  });
+
+  it('routes TorrServer HTTP requests through the desktop transport', async () => {
+    (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
+    const send = vi.fn(async () => ({ status: 200, base64: btoa('MatriX.test') }));
+    setTorrServerTransport({ send });
+
+    const client = new TorrServerClient({ url: 'http://127.0.0.1:8090' });
+    await expect(client.echo()).resolves.toBe('MatriX.test');
+    expect(send).toHaveBeenCalledWith('http://127.0.0.1:8090/echo', expect.objectContaining({ method: 'GET' }));
   });
 });

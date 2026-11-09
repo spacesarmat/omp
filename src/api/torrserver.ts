@@ -78,6 +78,10 @@ function readUpload(res: FetchLike): Promise<Torrent> {
   });
 }
 
+declare global {
+  const __DESKTOP__: boolean | undefined;
+}
+
 export class TorrServerClient {
   readonly baseUrl: string;
   private readonly auth?: string;
@@ -93,9 +97,10 @@ export class TorrServerClient {
     return request<T>(this.baseUrl + path, { ...opts, auth: this.auth, transport: this.via(this.baseUrl) });
   }
 
-  /** The native transport for an https URL of this server (Android), undefined for the page's fetch(). */
+  /** The native transport for an https URL of this server (Android), or any own URL on desktop. */
   private via(url: string): HttpTransport | undefined {
-    return httpsTransport && /^https:\/\//i.test(url) && this.isOwnUrl(url) ? httpsTransport : undefined;
+    const desktop = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__;
+    return httpsTransport && (desktop || /^https:\/\//i.test(url)) && this.isOwnUrl(url) ? httpsTransport : undefined;
   }
 
   private isOwnUrl(url: string): boolean {

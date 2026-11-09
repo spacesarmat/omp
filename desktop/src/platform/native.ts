@@ -25,11 +25,11 @@ function secretsStorage(): SecretStorage {
   };
 }
 
-function localInfo(handle: ServerHandle): LocalServerInfo {
+function localInfo(handle: ServerHandle, installed: boolean): LocalServerInfo {
   return {
     supported: true,
     running: handle.status === 'ready',
-    binary: handle.status === 'ready' ? 'ready' : 'missing',
+    binary: installed ? 'ready' : 'missing',
     pinVersion: 'MatriX.150',
     ip: '127.0.0.1',
     error: handle.error,
@@ -42,7 +42,8 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
   const emit = (running: boolean, error?: string) => {
     for (const listener of stateListeners) listener({ running, error });
   };
-  const http = (request: NativeHttpRequest) => bridge.invoke('native_http', { request });
+  const http = (request: NativeHttpRequest & { bodyBase64?: string; contentType?: string }) =>
+    bridge.invoke<{ status: number; base64: string; url?: string; text?: string }>('native_http', { request });
   const clearCookies = (url: string) => bridge.invoke<void>('native_http_clear_cookies', { url });
   const sourceHttp = createSourceHttp(http, clearCookies);
   const storage = secretsStorage();
@@ -73,10 +74,16 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     localServerCache: async () => 0,
     rpcSetEnabled: async () => null,
     rpcInfo: async () => null,
-    localServerInfo: async () => localInfo(await serverApi.serverStatus()),
+    localServerInfo: async () => {
+      const [handle, installed] = await Promise.all([
+        serverApi.serverStatus(),
+        bridge.invoke<boolean>('server_binary_installed'),
+      ]);
+      return localInfo(handle, installed);
+    },
     startLocalServer: async () => {
       const handle = await serverApi.serverStart({ mode: 'embedded', origin: EMBEDDED_SERVER_ORIGIN });
-      const info = localInfo(handle);
+      const info = localInfo(handle, true);
       emit(info.running, info.error);
       return info;
     },
@@ -87,7 +94,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     downloadLocalServer: async (onProgress: (progress: LocalDownloadProgress) => void) => {
       onProgress({ phase: 'verify' });
       const handle = await serverApi.serverUpdate();
-      const info = localInfo(handle);
+      const info = localInfo(handle, true);
       emit(info.running, info.error);
       return info;
     },

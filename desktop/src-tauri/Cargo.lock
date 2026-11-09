@@ -2127,6 +2127,7 @@ dependencies = [
 name = "omp-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "dirs",
  "encoding_rs",
  "serde",

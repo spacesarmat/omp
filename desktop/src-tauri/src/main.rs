@@ -20,6 +20,7 @@ fn main() {
             commands::server_stop,
             commands::server_status,
             commands::server_update,
+            commands::server_binary_installed,
             commands::native_http,
             commands::native_http_clear_cookies
         ])

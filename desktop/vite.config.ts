@@ -10,6 +10,7 @@ export default defineConfig({
   root: '.',
   base: './',
   define: {
+    __DESKTOP__: 'true',
     __APP_VERSION__: JSON.stringify(pkg.version),
     __TORRSERVER_VERSION__: JSON.stringify(torrserverVersion),
     __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.TMDB_API_KEY || ''),

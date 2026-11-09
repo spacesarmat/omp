@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use encoding_rs::{Encoding, UTF_8};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,6 +25,10 @@ pub struct NativeHttpRequest {
     #[serde(default)]
     pub body: Option<String>,
     #[serde(default)]
+    pub content_type: Option<String>,
+    #[serde(default)]
+    pub body_base64: Option<String>,
+    #[serde(default)]
     pub timeout_ms: Option<u64>,
 }
 
@@ -37,6 +42,8 @@ impl Default for NativeHttpRequest {
             form_charset: None,
             response_charset: None,
             body: None,
+            content_type: None,
+            body_base64: None,
             timeout_ms: None,
         }
     }
@@ -51,18 +58,38 @@ pub struct HttpResponse {
     pub status: u16,
     pub url: String,
     pub text: String,
+    pub base64: String,
 }
 
 #[derive(Clone)]
 pub struct HttpClient {
-    agent: Agent,
+    agents: std::sync::Arc<std::sync::Mutex<HashMap<String, Agent>>>,
 }
 
 impl HttpClient {
     pub fn new() -> Self {
+        Self {
+            agents: Default::default(),
+        }
+    }
+
+    fn agent_for(&self, url: &str) -> Result<Agent, String> {
+        let host = url::Url::parse(url)
+            .map_err(|_| "Invalid HTTP URL".to_string())?
+            .host_str()
+            .ok_or_else(|| "HTTP URL must have a host".to_string())?
+            .to_ascii_lowercase();
+        let mut agents = self
+            .agents
+            .lock()
+            .map_err(|_| "HTTP client state is unavailable".to_string())?;
+        if let Some(agent) = agents.get(&host) {
+            return Ok(agent.clone());
+        }
         let agent =
             Agent::new_with_config(Agent::config_builder().http_status_as_error(false).build());
-        Self { agent }
+        agents.insert(host, agent.clone());
+        Ok(agent)
     }
 
     pub fn request(&self, request: NativeHttpRequest) -> Result<HttpResponse, String> {
@@ -79,26 +106,25 @@ impl HttpClient {
         });
         let headers = request.headers.unwrap_or_default();
         let timeout = Duration::from_millis(request.timeout_ms.unwrap_or(30_000).clamp(1, 120_000));
+        let agent = self.agent_for(&request.url)?;
         let mut response = match request.method.as_str() {
-            "GET" => prepare(
-                self.agent.get(&request.url),
-                headers,
-                has_user_agent,
-                timeout,
-            )
-            .call(),
+            "GET" => prepare(agent.get(&request.url), headers, has_user_agent, timeout).call(),
             "POST" => {
-                let builder = prepare(
-                    self.agent.post(&request.url),
-                    headers,
-                    has_user_agent,
-                    timeout,
-                );
+                let builder = prepare(agent.post(&request.url), headers, has_user_agent, timeout);
+                let builder = match request.content_type {
+                    Some(content_type) => builder.header("Content-Type", content_type),
+                    None => builder,
+                };
                 if let Some(form) = request.form {
                     let body = encode_form(&form, request.form_charset.as_deref());
                     builder
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .send(body.as_bytes())
+                } else if let Some(body_base64) = request.body_base64 {
+                    let body = STANDARD
+                        .decode(body_base64)
+                        .map_err(|_| "Invalid base64 request body".to_string())?;
+                    builder.send(body)
                 } else if let Some(body) = request.body {
                     builder.send(body.as_bytes())
                 } else {
@@ -139,12 +165,34 @@ impl HttpClient {
             }
             bytes.extend_from_slice(&buffer[..count]);
         }
-        let text = encoding.decode(&bytes).0.into_owned();
-        Ok(HttpResponse { status, url, text })
+        let base64 = STANDARD.encode(&bytes);
+        let text = if charset.is_some_and(|name| name.eq_ignore_ascii_case("iso-8859-1")) {
+            bytes.iter().map(|byte| char::from(*byte)).collect()
+        } else {
+            encoding.decode(&bytes).0.into_owned()
+        };
+        Ok(HttpResponse {
+            status,
+            url,
+            text,
+            base64,
+        })
     }
 
-    pub fn clear_cookies(&self) {
-        self.agent.cookie_jar_lock().clear();
+    pub fn clear_cookies(&self, url: &str) -> Result<(), String> {
+        let host = url::Url::parse(url)
+            .map_err(|_| "Invalid HTTP URL".to_string())?
+            .host_str()
+            .ok_or_else(|| "HTTP URL must have a host".to_string())?
+            .to_ascii_lowercase();
+        let agents = self
+            .agents
+            .lock()
+            .map_err(|_| "HTTP client state is unavailable".to_string())?;
+        if let Some(agent) = agents.get(&host) {
+            agent.cookie_jar_lock().clear();
+        }
+        Ok(())
     }
 }
 
