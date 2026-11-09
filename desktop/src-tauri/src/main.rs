@@ -12,9 +12,9 @@ fn main() {
             app.manage(Arc::new(Mutex::new(ServerManager::new(
                 ServerConfig::from_environment()?,
             ))));
-            app.manage(Arc::new(Mutex::new(PlayerManager::new(
-                PlayerConfig::from_environment()?,
-            ))));
+            let player = PlayerManager::new(PlayerConfig::from_environment()?);
+            app.manage(player.cancellation());
+            app.manage(Arc::new(Mutex::new(player)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

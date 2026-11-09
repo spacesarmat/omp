@@ -1,7 +1,7 @@
 use crate::download::installed_verified;
 use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
-use crate::player::{PlayerManager, PlayerOpenRequest, PlayerStatus};
+use crate::player::{PlayerCancellation, PlayerManager, PlayerOpenRequest, PlayerStatus};
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -163,7 +163,9 @@ where
 pub async fn player_open(
     request: PlayerOpenRequest,
     state: State<'_, Arc<Mutex<PlayerManager>>>,
+    cancellation: State<'_, PlayerCancellation>,
 ) -> Result<PlayerStatus, String> {
+    cancellation.cancel();
     run_player(Arc::clone(state.inner()), move |manager| {
         manager.open(request)
     })
@@ -180,7 +182,9 @@ pub async fn player_pause(
 #[tauri::command]
 pub async fn player_stop(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
+    cancellation: State<'_, PlayerCancellation>,
 ) -> Result<PlayerStatus, String> {
+    cancellation.cancel();
     run_player(Arc::clone(state.inner()), |manager| manager.stop()).await
 }
 

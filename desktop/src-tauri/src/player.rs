@@ -37,11 +37,41 @@ pub struct PlayerOpenRequest {
     pub start_ms: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+pub struct PlayerCancellation {
+    generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl PlayerCancellation {
+    pub fn new() -> Self {
+        Self {
+            generation: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    pub fn cancel(&self) -> u64 {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            + 1
+    }
+
+    pub fn is_cancelled(&self, generation: u64) -> bool {
+        self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
+    }
+}
+
 pub trait PlayerProcess: Send {
-    fn wait_until_loaded(&mut self) -> Result<(), String> {
+    fn wait_until_loaded(
+        &mut self,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<(), String> {
         Ok(())
     }
     fn pause(&mut self, paused: bool) -> Result<(), String>;
+    fn pause_state(&self) -> Result<Option<bool>, String> {
+        Ok(None)
+    }
     fn position(&self) -> Result<(u64, u64), String>;
     fn stop(&mut self) -> Result<(), String>;
     fn try_wait(&mut self) -> Result<Option<i32>, String>;
@@ -54,6 +84,7 @@ pub struct PlayerManager {
     status: PlayerStatus,
     process: Option<Box<dyn PlayerProcess>>,
     launcher: Box<Launcher>,
+    cancellation: PlayerCancellation,
 }
 
 impl PlayerManager {
@@ -70,25 +101,40 @@ impl PlayerManager {
             },
             process: None,
             launcher: Box::new(launcher),
+            cancellation: PlayerCancellation::new(),
         }
+    }
+
+    pub fn cancellation(&self) -> PlayerCancellation {
+        self.cancellation.clone()
     }
 
     pub fn open(&mut self, request: PlayerOpenRequest) -> PlayerStatus {
         self.stop();
+        let generation = self.cancellation.cancel();
         self.status.state = PlayerState::Starting;
         match (self.launcher)(&request) {
-            Ok(mut process) => match process.wait_until_loaded() {
+            Ok(mut process) => match process.wait_until_loaded(&self.cancellation, generation) {
                 Ok(()) => {
                     self.process = Some(process);
                     self.status.state = PlayerState::Playing;
                 }
                 Err(_) => {
                     let _ = process.stop();
+                    let cancelled = self.cancellation.is_cancelled(generation);
                     self.status = PlayerStatus {
-                        state: PlayerState::Error,
+                        state: if cancelled {
+                            PlayerState::Idle
+                        } else {
+                            PlayerState::Error
+                        },
                         position_ms: 0,
                         duration_ms: 0,
-                        error: Some("player launch failed".to_string()),
+                        error: if cancelled {
+                            None
+                        } else {
+                            Some("player launch failed".to_string())
+                        },
                     };
                 }
             },
@@ -108,6 +154,20 @@ impl PlayerManager {
         let Some(process) = self.process.as_mut() else {
             return self.status.clone();
         };
+        match process.pause_state() {
+            Ok(Some(actual)) => {
+                self.status.state = if actual {
+                    PlayerState::Paused
+                } else {
+                    PlayerState::Playing
+                };
+            }
+            Ok(None) => {}
+            Err(_) => {
+                self.status.error = Some("player pause failed".to_string());
+                return self.status.clone();
+            }
+        }
         let paused = match self.status.state {
             PlayerState::Playing => true,
             PlayerState::Paused => false,
@@ -127,6 +187,7 @@ impl PlayerManager {
     }
 
     pub fn stop(&mut self) -> PlayerStatus {
+        self.cancellation.cancel();
         if let Some(mut process) = self.process.take() {
             let _ = process.stop();
         }
@@ -154,13 +215,26 @@ impl PlayerManager {
                     self.status.error = Some("player process exited".to_string());
                 }
             }
-            Ok(None) => match process.position() {
-                Ok((position, duration)) => {
-                    self.status.position_ms = position;
-                    self.status.duration_ms = duration;
+            Ok(None) => {
+                match process.pause_state() {
+                    Ok(Some(actual)) => {
+                        self.status.state = if actual {
+                            PlayerState::Paused
+                        } else {
+                            PlayerState::Playing
+                        };
+                    }
+                    Ok(None) => {}
+                    Err(_) => self.status.error = Some("player status failed".to_string()),
                 }
-                Err(_) => self.status.error = Some("player status failed".to_string()),
-            },
+                match process.position() {
+                    Ok((position, duration)) => {
+                        self.status.position_ms = position;
+                        self.status.duration_ms = duration;
+                    }
+                    Err(_) => self.status.error = Some("player status failed".to_string()),
+                }
+            }
             Err(_) => self.status.error = Some("player status failed".to_string()),
         }
         self.status.clone()
@@ -208,7 +282,12 @@ impl PlayerManager {
             let child = command
                 .spawn()
                 .map_err(|_| "mpv launch failed".to_string())?;
-            Ok(Box::new(MpvProcess::new(child, ipc)?) as Box<dyn PlayerProcess>)
+            let mut process = MpvProcess::new(child, ipc)?;
+            if let Err(error) = process.load(&request.url) {
+                let _ = process.stop();
+                return Err(error);
+            }
+            Ok(Box::new(process) as Box<dyn PlayerProcess>)
         })
     }
 }
@@ -230,8 +309,6 @@ pub fn mpv_args(request: &PlayerOpenRequest, ipc: &str) -> Vec<OsString> {
     for (name, value) in request.headers.iter().flatten() {
         args.push(format!("--http-header-fields={name}: {value}").into());
     }
-    args.push("--".into());
-    args.push(request.url.clone().into());
     args
 }
 
@@ -301,12 +378,31 @@ impl MpvProcess {
         };
         Ok(Self { child, ipc })
     }
+
+    fn load(&self, url: &str) -> Result<(), String> {
+        self.ipc
+            .call(serde_json::json!(["loadfile", url]))
+            .map(|_| ())
+    }
 }
 
 impl PlayerProcess for MpvProcess {
-    fn wait_until_loaded(&mut self) -> Result<(), String> {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    fn wait_until_loaded(
+        &mut self,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<(), String> {
         loop {
+            if cancellation.is_cancelled(generation) {
+                return Err("player open cancelled".to_string());
+            }
+            if self
+                .ipc
+                .media_error
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err("mpv media load failed".to_string());
+            }
             if self
                 .child
                 .try_wait()
@@ -331,15 +427,16 @@ impl PlayerProcess for MpvProcess {
                 Err(error) if error == "mpv command failed" => {}
                 Err(error) => return Err(error),
             }
-            if std::time::Instant::now() >= deadline {
-                return Err("mpv media load timed out".to_string());
-            }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
 
     fn pause(&mut self, paused: bool) -> Result<(), String> {
         self.ipc.set_pause(paused)
+    }
+
+    fn pause_state(&self) -> Result<Option<bool>, String> {
+        self.ipc.boolean("pause").map(Some)
     }
 
     fn position(&self) -> Result<(u64, u64), String> {
@@ -368,6 +465,7 @@ impl PlayerProcess for MpvProcess {
 struct MpvIpcWorker {
     requests: std::sync::mpsc::Sender<IpcRequest>,
     timeout: std::time::Duration,
+    media_error: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 struct IpcRequest {
@@ -431,6 +529,7 @@ impl IpcCall for MpvIpcWorker {
 struct MpvIpc {
     stream: std::cell::RefCell<Box<dyn crate::process::IpcStream>>,
     next_request_id: std::cell::Cell<u64>,
+    media_error: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl MpvIpc {
@@ -442,6 +541,7 @@ impl MpvIpc {
                     return Ok(Self {
                         stream: std::cell::RefCell::new(stream),
                         next_request_id: std::cell::Cell::new(1),
+                        media_error: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                     });
                 }
                 Err(error) => last_error = Some(error),
@@ -456,13 +556,18 @@ impl MpvIpc {
 
     fn spawn(self, timeout: std::time::Duration) -> MpvIpcWorker {
         let (requests, receiver) = std::sync::mpsc::channel::<IpcRequest>();
+        let media_error = std::sync::Arc::clone(&self.media_error);
         std::thread::spawn(move || {
             while let Ok(request) = receiver.recv() {
                 let result = self.call(request.command);
                 let _ = request.response.send(result);
             }
         });
-        MpvIpcWorker { requests, timeout }
+        MpvIpcWorker {
+            requests,
+            timeout,
+            media_error,
+        }
     }
 }
 
@@ -501,6 +606,12 @@ impl IpcCall for MpvIpc {
                 .map_err(|_| "mpv IPC response encoding failed".to_string())?;
             let response: serde_json::Value =
                 serde_json::from_str(&line).map_err(|_| "mpv IPC response failed".to_string())?;
+            if response.get("event").and_then(serde_json::Value::as_str) == Some("end-file")
+                && response.get("reason").and_then(serde_json::Value::as_str) == Some("error")
+            {
+                self.media_error
+                    .store(true, std::sync::atomic::Ordering::SeqCst);
+            }
             if response
                 .get("request_id")
                 .and_then(serde_json::Value::as_u64)

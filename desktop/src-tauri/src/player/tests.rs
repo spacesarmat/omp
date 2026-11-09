@@ -87,6 +87,7 @@ fn ipc_ignores_events_and_matches_the_request_id() {
     let ipc = super::MpvIpc {
         stream: std::cell::RefCell::new(Box::new(stream)),
         next_request_id: std::cell::Cell::new(1),
+        media_error: Arc::new(AtomicBool::new(false)),
     };
 
     assert_eq!(
@@ -112,6 +113,7 @@ fn ipc_reply_has_a_deadline() {
     let ipc = super::MpvIpc {
         stream: std::cell::RefCell::new(Box::new(stream)),
         next_request_id: std::cell::Cell::new(1),
+        media_error: Arc::new(AtomicBool::new(false)),
     };
     let worker = ipc.spawn(std::time::Duration::from_millis(20));
 
@@ -146,7 +148,11 @@ impl PlayerProcess for FailingLoadProcess {
         Ok(None)
     }
 
-    fn wait_until_loaded(&mut self) -> Result<(), String> {
+    fn wait_until_loaded(
+        &mut self,
+        _cancellation: &super::PlayerCancellation,
+        _generation: u64,
+    ) -> Result<(), String> {
         Err("media load failed".to_string())
     }
 }
@@ -163,6 +169,128 @@ fn open_stops_the_process_when_media_cannot_load() {
 
     assert_eq!(manager.open(request()).state, PlayerState::Error);
     assert!(stopped.load(Ordering::SeqCst));
+}
+
+struct SlowLoadProcess {
+    stopped: Arc<AtomicBool>,
+}
+
+impl PlayerProcess for SlowLoadProcess {
+    fn pause(&mut self, _paused: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn position(&self) -> Result<(u64, u64), String> {
+        Ok((0, 0))
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        self.stopped.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn try_wait(&mut self) -> Result<Option<i32>, String> {
+        Ok(None)
+    }
+
+    fn wait_until_loaded(
+        &mut self,
+        cancellation: &super::PlayerCancellation,
+        generation: u64,
+    ) -> Result<(), String> {
+        while !cancellation.is_cancelled(generation) {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        Err("cancelled".to_string())
+    }
+}
+
+#[test]
+fn slow_load_can_be_cancelled_without_an_arbitrary_deadline() {
+    let stopped = Arc::new(AtomicBool::new(false));
+    let stopped_in_launcher = Arc::clone(&stopped);
+    let mut manager = PlayerManager::with_launcher(move |_| {
+        Ok(Box::new(SlowLoadProcess {
+            stopped: Arc::clone(&stopped_in_launcher),
+        }))
+    });
+    let cancellation = manager.cancellation();
+    let canceller = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        cancellation.cancel();
+    });
+
+    let started = std::time::Instant::now();
+    assert_eq!(manager.open(request()).state, PlayerState::Idle);
+    assert!(started.elapsed() < std::time::Duration::from_millis(200));
+    assert!(stopped.load(Ordering::SeqCst));
+    canceller.join().expect("cancellation thread");
+}
+
+#[test]
+fn ipc_records_end_file_errors() {
+    let media_error = Arc::new(AtomicBool::new(false));
+    let stream = ScriptedStream {
+        input: std::io::Cursor::new(
+            b"{\"event\":\"end-file\",\"reason\":\"error\"}\n{\"data\":12.5,\"request_id\":1,\"error\":\"success\"}\n".to_vec(),
+        ),
+        output: Arc::new(std::sync::Mutex::new(Vec::new())),
+        delay: std::time::Duration::ZERO,
+    };
+    let ipc = super::MpvIpc {
+        stream: std::cell::RefCell::new(Box::new(stream)),
+        next_request_id: std::cell::Cell::new(1),
+        media_error: Arc::clone(&media_error),
+    };
+
+    assert_eq!(
+        super::IpcCall::number(&ipc, "time-pos").expect("IPC response"),
+        12.5
+    );
+    assert!(media_error.load(Ordering::SeqCst));
+}
+
+struct ExternalPauseProcess {
+    paused: Arc<AtomicBool>,
+}
+
+impl PlayerProcess for ExternalPauseProcess {
+    fn pause(&mut self, paused: bool) -> Result<(), String> {
+        self.paused.store(paused, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn pause_state(&self) -> Result<Option<bool>, String> {
+        Ok(Some(self.paused.load(Ordering::SeqCst)))
+    }
+
+    fn position(&self) -> Result<(u64, u64), String> {
+        Ok((1_000, 2_000))
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn try_wait(&mut self) -> Result<Option<i32>, String> {
+        Ok(None)
+    }
+}
+
+#[test]
+fn status_and_toggle_reconcile_the_actual_pause_state() {
+    let paused = Arc::new(AtomicBool::new(true));
+    let paused_in_launcher = Arc::clone(&paused);
+    let mut manager = PlayerManager::with_launcher(move |_| {
+        Ok(Box::new(ExternalPauseProcess {
+            paused: Arc::clone(&paused_in_launcher),
+        }))
+    });
+    manager.open(request());
+
+    assert_eq!(manager.status().state, PlayerState::Paused);
+    assert_eq!(manager.pause().state, PlayerState::Playing);
+    assert!(!paused.load(Ordering::SeqCst));
 }
 
 fn launcher() -> impl Fn(&PlayerOpenRequest) -> Result<Box<dyn PlayerProcess>, String> {
@@ -282,7 +410,7 @@ fn launch_errors_do_not_leak_url_or_headers() {
 }
 
 #[test]
-fn mpv_arguments_include_ipc_start_title_headers_and_url() {
+fn mpv_arguments_defer_the_media_url_to_ipc() {
     let args = mpv_args(&request(), "ipc-test");
     let args = args
         .iter()
@@ -294,11 +422,7 @@ fn mpv_arguments_include_ipc_start_title_headers_and_url() {
     assert!(args
         .iter()
         .any(|arg| arg == "--http-header-fields=Authorization: Bearer secret-header"));
-    assert_eq!(args.get(args.len() - 2).map(String::as_str), Some("--"));
-    assert_eq!(
-        args.last().map(String::as_str),
-        Some("http://127.0.0.1:8090/stream/file?token=secret-query")
-    );
+    assert!(!args.iter().any(|arg| arg.contains("secret-query")));
 }
 
 #[test]
