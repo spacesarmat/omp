@@ -95,6 +95,48 @@ describe('beta feeds and titles', () => {
     expect(updateFeedUrl(false, false)).toBe(B + 'update.json');
     expect(updateFeedUrl(false, true)).toBe(B + 'update-beta.json');
   });
+  it('uses and sanitizes the Windows desktop feed', () => {
+    const target = window as unknown as { __TAURI_INTERNALS__?: object };
+    const previous = target.__TAURI_INTERNALS__;
+    target.__TAURI_INTERNALS__ = {};
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0', configurable: true });
+    try {
+      const B = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
+      expect(updateFeedUrl(false, false)).toBe(B + 'update-windows.json');
+      const update = sanitizeUpdateInfo({
+        version: '0.20.11',
+        url: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-setup.exe',
+        sha256: HASH,
+        notes: ['Windows'],
+      });
+      expect(update).toMatchObject({
+        version: '0.20.11',
+        ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-setup.exe',
+        ipkHash: HASH,
+        ipkSize: 0,
+        notes: ['Windows'],
+      });
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+      if (previous === undefined) delete target.__TAURI_INTERNALS__;
+      else target.__TAURI_INTERNALS__ = previous;
+    }
+  });
+  it('does not offer Windows updates to a non-Windows desktop', () => {
+    const target = window as unknown as { __TAURI_INTERNALS__?: object };
+    const previous = target.__TAURI_INTERNALS__;
+    target.__TAURI_INTERNALS__ = {};
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Mac OS X 14_0', configurable: true });
+    try {
+      expect(updateFeedUrl(false, false)).toBe('');
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+      if (previous === undefined) delete target.__TAURI_INTERNALS__;
+      else target.__TAURI_INTERNALS__ = previous;
+    }
+  });
   it('accepts a beta version in the feed', () => {
     const v = sanitizeUpdateInfo({ version: '0.16.0-beta.1', ipkUrl: 'https://x/a.ipk', ipkHash: 'a'.repeat(64) });
     expect(v && v.version).toBe('0.16.0-beta.1');

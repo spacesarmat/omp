@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- The first OMP desktop release for Windows: catalog, search, embedded or external TorrServer, external mpv and updates through an NSIS installer
+
 ## 0.20.12-beta.1
 
 - [phone] The app opens again after an update. If Android blocks the activity start, an update notification offers to open it

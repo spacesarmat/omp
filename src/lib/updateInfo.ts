@@ -9,9 +9,13 @@ export const ANDROID_UPDATE_URL = FEED_BASE + 'update-android.json';
 /** The beta channel: the newest beta, or the release when it is newer (a release rewrites them too). */
 export const BETA_UPDATE_URL = FEED_BASE + 'update-beta.json';
 export const ANDROID_BETA_UPDATE_URL = FEED_BASE + 'update-android-beta.json';
+export const WINDOWS_UPDATE_URL = FEED_BASE + 'update-windows.json';
 
-/** The feed this device reads: the APK one on Android, the ipk one on LG; the beta pair with «Получать бета-версии». */
+/** The feed this device reads: Android APK, LG ipk or Windows NSIS; Android and LG use the beta pair with «Получать бета-версии». */
 export function updateFeedUrl(android: boolean, beta: boolean): string {
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    return navigator.userAgent.toLowerCase().includes('windows') ? WINDOWS_UPDATE_URL : '';
+  }
   if (android) return beta ? ANDROID_BETA_UPDATE_URL : ANDROID_UPDATE_URL;
   return beta ? BETA_UPDATE_URL : UPDATE_URL;
 }
@@ -98,18 +102,21 @@ export function apkFor(info: UpdateInfo, key: ApkAbi | null): ApkFile {
   return e || { url: info.ipkUrl, sha256: info.ipkHash, size: info.ipkSize };
 }
 
-/** Validates update.json from the gh-pages feed; anything malformed means "no update". */
+/** Validates an Android, LG or Windows update feed; anything malformed means "no update". */
 export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
   if (typeof o.version !== 'string' || !VERSION.test(o.version)) return null;
-  if (!isHttps(o.ipkUrl)) return null;
-  if (typeof o.ipkHash !== 'string' || !SHA256.test(o.ipkHash)) return null;
+  const windows = isHttps(o.url) && typeof o.sha256 === 'string' && SHA256.test(o.sha256);
+  const packageUrl = windows ? o.url : o.ipkUrl;
+  const packageHash = windows ? o.sha256 : o.ipkHash;
+  if (!isHttps(packageUrl)) return null;
+  if (typeof packageHash !== 'string' || !SHA256.test(packageHash)) return null;
   const info: UpdateInfo = {
     version: o.version,
-    ipkUrl: o.ipkUrl,
-    ipkHash: o.ipkHash.toLowerCase(),
-    ipkSize: positiveSize(o.ipkSize),
+    ipkUrl: packageUrl,
+    ipkHash: packageHash.toLowerCase(),
+    ipkSize: windows ? positiveSize(o.size) : positiveSize(o.ipkSize),
     notes: noteList(o.notes),
     releaseUrl: isHttps(o.releaseUrl) ? o.releaseUrl : RELEASES_URL,
   };

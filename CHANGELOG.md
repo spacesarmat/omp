@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- Первая desktop-версия OMP для Windows: каталог, поиск, встроенный или внешний TorrServer, внешний mpv и обновление через NSIS-установщик
+
 ## 0.20.12-beta.1
 
 - [phone] После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия

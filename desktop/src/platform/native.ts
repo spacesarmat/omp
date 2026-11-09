@@ -1,6 +1,8 @@
 import { createBridge, type DesktopBridge } from './bridge';
 import { createServerApi, EMBEDDED_SERVER_ORIGIN, type ServerApi, type ServerHandle } from './server';
 import { createPlayerApi } from './player';
+import { createUpdateApi, updateInfoFromPackage } from './update';
+import { currentTargetPlatform, TargetPlatform } from './platform';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
@@ -40,6 +42,7 @@ function localInfo(handle: ServerHandle, installed: boolean): LocalServerInfo {
 export function createDesktopNative(bridge: DesktopBridge = createBridge()): DesktopNative {
   const serverApi = createServerApi(bridge);
   const playerApi = createPlayerApi(bridge);
+  const updateApi = createUpdateApi(bridge);
   const stateListeners = new Set<(state: LocalServerState) => void>();
   const emit = (running: boolean, error?: string) => {
     for (const listener of stateListeners) listener({ running, error });
@@ -71,8 +74,17 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     audioState: async () => null,
     takePendingAudioOpen: async () => null,
     takePendingMagnet: async () => null,
+    takePendingUpdateResult: () => updateApi.takePendingUpdateResult(),
     deviceAbiKey: async () => null,
-    canInstallApks: async () => false,
+    canInstallApks: async () => currentTargetPlatform() === TargetPlatform.WindowsX64,
+    downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
+      if (currentTargetPlatform() !== TargetPlatform.WindowsX64) throw new Error('unsupported update target');
+      const info = updateInfoFromPackage(url, sha256);
+      await updateApi.updateDownload(info);
+      onProgress(50);
+      await updateApi.updateApply(info);
+      onProgress(100);
+    },
     localServerCache: async () => 0,
     rpcSetEnabled: async () => null,
     rpcInfo: async () => null,

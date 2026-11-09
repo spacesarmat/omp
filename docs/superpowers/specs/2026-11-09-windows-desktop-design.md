@@ -4,7 +4,7 @@
 
 Полноценный desktop OMP: каталог, поиск, библиотека, торренты, плеер и настройки. Первая ОС - Windows 10/11 x64. Архитектура сразу допускает macOS и Linux без переписывания UI, каталога, серверной логики и процессов обновления.
 
-Оболочка - Tauri с Preact и TypeScript. Поддерживаются внешние TorrServer, Jackett, JacRed и billing, а также встроенный TorrServer. Видео воспроизводит внешний mpv. Первая дистрибуция - подписанный MSIX с автообновлением через GitHub Releases.
+Оболочка - Tauri с Preact и TypeScript. Поддерживаются внешние TorrServer, Jackett, JacRed и billing, а также встроенный TorrServer. Видео воспроизводит внешний mpv. Первая дистрибуция - NSIS installer с автообновлением через GitHub Releases. Подпись может быть добавлена позже без смены архитектуры.
 
 ## Не входит в первую версию
 
@@ -31,7 +31,7 @@
 - `desktop/src-tauri/src/process.rs`: единый жизненный цикл дочерних процессов, остановка и очистка. Платформенные команды выделены в этот файл.
 - `desktop/src-tauri/src/server.rs`: TorrServer и внешние адреса через общий процесс-менеджер.
 - `desktop/src-tauri/src/player.rs`: mpv через общий процесс-менеджер и общее состояние.
-- `desktop/src-tauri/src/update.rs`: `PackageInstaller` как граница пакетов и обновлений. Windows использует `MsixInstaller`; будущие `DmgInstaller` и `AppImageInstaller` подключаются без изменения `updateCheck`.
+- `desktop/src-tauri/src/update.rs`: `PackageInstaller` как граница пакетов и обновлений. Windows использует `NsisInstaller`; будущие `DmgInstaller` и `AppImageInstaller` подключаются без изменения `updateCheck`.
 - `desktop/src/platform/*`: общие TypeScript адаптеры. Специфичные для ОС действия проходят только через bridge и `TargetPlatform`.
 
 ## Интерфейсы
@@ -53,7 +53,7 @@
 
 ## Обновления и пакеты
 
-- Первая реализация: MSIX, SHA-256 и Authenticode. Клиент проверяет версию, скачивает MSIX, проверяет подпись и хеш, затем передаёт пакет Windows для установки.
+- Первая реализация: NSIS и SHA-256. Клиент проверяет версию, скачивает NSIS, проверяет хеш и запускает установку после выхода из приложения. Подпись может быть добавлена позже без изменения `PackageInstaller`.
 - Следующие реализации интерфейса: подписанный и нотаризованный DMG для macOS, AppImage и при необходимости deb/rpm для Linux. Они используют тот же `PackageInstaller` и не меняют проверку версий или пользовательский интерфейс.
 - Фиды разделены: `update-windows.json`, `update-macos.json`, `update-linux.json`, при необходимости отдельные ARM64-фиды. Клиент выбирает только свой `TargetPlatform`.
 - Обновление не удаляет настройки или историю. При ошибке остаётся текущая версия с возможностью повторить обновление. Downgrade блокируется без отдельного подтверждения.

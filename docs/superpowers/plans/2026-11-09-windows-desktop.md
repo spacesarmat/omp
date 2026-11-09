@@ -6,7 +6,7 @@
 
 **Architecture:** Preact UI переиспользуется из `mobile/src`, адаптеры desktop находятся в `desktop/`. Rust в `desktop/src-tauri` изолирует процессы, загрузки и пакеты. Windows реализуется первой, но платформенные различия ограничены `TargetPlatform`, `process.rs` и `PackageInstaller`.
 
-**Tech Stack:** Tauri, Preact, TypeScript, Vite, Rust, mpv, TorrServer, MSIX, будущие DMG и AppImage, GitHub Actions Windows/macOS/Linux, Vitest, cargo test.
+**Tech Stack:** Tauri, Preact, TypeScript, Vite, Rust, mpv, TorrServer, NSIS, будущие DMG и AppImage, GitHub Actions Windows/macOS/Linux, Vitest, cargo test.
 
 **Spec:** `docs/superpowers/specs/2026-11-09-windows-desktop-design.md`
 
@@ -28,7 +28,7 @@
 - Неверный hash, oversized download, HTTP URL и path traversal: загрузка отклоняется без запуска - Task 2.
 - Внешний сервер уже используется: не стартует встроенный и не меняет его адрес - Task 3.
 - mpv не запускается, падает или остаётся после выхода: состояние ошибки и отсутствие осиротевших процессов - Task 5.
-- Подпись отсутствует или не совпадает, downgrade, обновление с пользовательскими данными: отказ безопасно или обновление с сохранением данных - Task 6.
+- Неверный hash, downgrade, ошибка deferred install, обновление с пользовательскими данными: отказ безопасно или обновление с сохранением данных - Task 6.
 - Случайный Windows-only вызов в общем коде: тест совместимости и матрица ОС не пропускают его - Task 7.
 
 ---
@@ -143,28 +143,28 @@ Expected: файлы играют, pause/stop работают, процесс �
 
 - [ ] **Step 4:** Commit `feat: play desktop media through mpv`.
 
-### Task 6: Подпись MSIX и граница обновлений
+### Task 6: NSIS и граница обновлений
 
 **Files:**
-- Create: `desktop/src-tauri/src/update.rs`, `desktop/src-tauri/src/update/tests.rs`, `desktop/src/platform/update.ts`, `desktop/tests/update.test.ts`, `desktop/packaging/windows/Package.appxmanifest`, `desktop/packaging/macos/.gitkeep`, `desktop/packaging/linux/.gitkeep`
+- Create: `desktop/src-tauri/src/update.rs`, `desktop/src-tauri/src/update/tests.rs`, `desktop/src/platform/update.ts`, `desktop/tests/update.test.ts`, `desktop/packaging/macos/.gitkeep`, `desktop/packaging/linux/.gitkeep`
 - Modify: `.github/workflows/desktop.yml`, `scripts/hb-lib.mjs`, `CHANGELOG.md`, `CHANGELOG.en.md`
 
 **Interfaces:**
 - Consumes: `PlayerOpenRequest` и `ServerHandle` не меняются.
-- Produces: `UpdateInfo { version, url, sha256, notes }`, `PackageInstaller { downloadApply(info) }`, `MsixInstaller`, `updateCheck`, `updateDownload`, `updateApply`, `update-windows.json`.
+- Produces: `UpdateInfo { version, url, sha256, notes }`, `PackageInstaller { downloadApply(info) }`, `NsisInstaller`, `updateCheck`, `updateDownload`, `updateApply`, `update-windows.json`.
 - Future: `DmgInstaller` и `AppImageInstaller` через тот же `PackageInstaller`.
 
-- [ ] **Step 1:** Написать failing tests на проверку версии, неверный hash, отсутствие подписи, downgrade и сохранение настроек.
+- [ ] **Step 1:** Написать failing tests на проверку версии, неверный hash, downgrade и сохранение настроек.
 Run: `cargo test update::tests` и `npx vitest run desktop/tests/update.test.ts`.
 Expected: небезопасный пакет отклоняется.
 
-- [ ] **Step 2:** Реализовать `PackageInstaller` и `MsixInstaller`: скачивание MSIX по HTTPS, SHA-256 и Authenticode перед установкой, downgrade блокируется, данные сохраняются.
-Expected: старая версия получает обновление, неподписанный пакет не запускается.
+- [ ] **Step 2:** Реализовать `PackageInstaller` и `NsisInstaller`: скачивание NSIS по HTTPS, SHA-256 перед установкой, downgrade блокируется, данные сохраняются. Установка выполняется после выхода из приложения.
+Expected: старая версия получает обновление, ошибка установки видна после следующего запуска.
 
-- [ ] **Step 3:** Добавить Windows CI для сборки MSIX, подписи Authenticode секретами и публикации `update-windows.json`.
-Expected: артефакт подписан, feed указывает на него, проверка подписи проходит. Другие ОС используют свои файлы только через `PackageInstaller`.
+- [ ] **Step 3:** Добавить Windows CI для сборки NSIS и публикации `update-windows.json`.
+Expected: артефакт собран, feed указывает на него. Другие ОС используют свои файлы только через `PackageInstaller`.
 
-- [ ] **Step 4:** Commit `feat: sign and update Windows desktop`.
+- [ ] **Step 4:** Commit `feat: update Windows desktop through NSIS`.
 
 ### Task 7: Полная проверка и готовность к macOS и Linux
 
