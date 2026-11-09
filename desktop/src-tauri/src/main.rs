@@ -1,5 +1,6 @@
 use omp_desktop::commands;
 use omp_desktop::http::HttpClient;
+use omp_desktop::player::{PlayerConfig, PlayerManager};
 use omp_desktop::server::{ServerConfig, ServerManager};
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
@@ -11,6 +12,9 @@ fn main() {
             app.manage(Arc::new(Mutex::new(ServerManager::new(
                 ServerConfig::from_environment()?,
             ))));
+            let player = PlayerManager::new(PlayerConfig::from_environment()?);
+            app.manage(player.cancellation());
+            app.manage(Arc::new(Mutex::new(player)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -22,7 +26,11 @@ fn main() {
             commands::server_update,
             commands::server_binary_installed,
             commands::native_http,
-            commands::native_http_clear_cookies
+            commands::native_http_clear_cookies,
+            commands::player_open,
+            commands::player_pause,
+            commands::player_stop,
+            commands::player_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running OMP desktop");

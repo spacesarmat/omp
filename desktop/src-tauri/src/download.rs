@@ -111,7 +111,7 @@ fn final_path_for(asset: &BinaryAsset, root: &Path) -> PathBuf {
     root.join("bin")
         .join(asset.target.as_str())
         .join(&asset.version)
-        .join(asset.target.executable_name(&asset.id))
+        .join(asset.file_name())
 }
 
 fn download_verified_in(asset: BinaryAsset, root: &Path) -> Result<PathBuf, DownloadError> {

@@ -1,5 +1,6 @@
 import { createBridge, type DesktopBridge } from './bridge';
 import { createServerApi, EMBEDDED_SERVER_ORIGIN, type ServerApi, type ServerHandle } from './server';
+import { createPlayerApi } from './player';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
@@ -38,6 +39,7 @@ function localInfo(handle: ServerHandle, installed: boolean): LocalServerInfo {
 
 export function createDesktopNative(bridge: DesktopBridge = createBridge()): DesktopNative {
   const serverApi = createServerApi(bridge);
+  const playerApi = createPlayerApi(bridge);
   const stateListeners = new Set<(state: LocalServerState) => void>();
   const emit = (running: boolean, error?: string) => {
     for (const listener of stateListeners) listener({ running, error });
@@ -106,8 +108,13 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     },
     http,
     httpClearCookies: clearCookies,
-    openExternal: async (url: string) => {
-      window.open(url, '_blank', 'noopener');
+    openExternal: async (url: string, mime: string) => {
+      if (!mime.startsWith('video/')) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+      const status = await playerApi.playerOpen({ url });
+      if (status.state === 'error') throw new Error(status.error || 'player launch failed');
     },
     shareText: async ({ name, text }: { name: string; text: string }) => {
       const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
