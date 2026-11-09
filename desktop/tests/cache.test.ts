@@ -18,6 +18,18 @@ function field(step: string, name: string) {
   return step.match(new RegExp(`^ {8}(?: {2})?${name}: (.+)$`, 'm'))?.[1];
 }
 
+function stepName(step: string) {
+  return step.match(/^ {6}- name: (.+)$/m)?.[1];
+}
+
+function restoreKeys(step: string) {
+  const block = step.match(/^ {10}restore-keys: \|\n((?: {12}[^\n]*\n?)*)/m)?.[1] ?? '';
+  return block
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 describe('node_modules CI caching', () => {
   it.each(workflows)('%s selects the exact install command for each cache result', (file) => {
     const steps = workflowSteps(file);
@@ -62,5 +74,25 @@ describe('node_modules CI caching', () => {
       (step) => field(step, 'run') === 'git diff --exit-code -- package-lock.json desktop/package-lock.json',
     );
     expect(lockfileChecks).toHaveLength(2);
+  });
+});
+
+describe('cargo CI caching', () => {
+  it('desktop.yml keeps smoke and package-windows cargo caches separate', () => {
+    const steps = workflowSteps('desktop.yml');
+    const cargoCaches = steps.filter((step) => stepName(step) === 'Cache Cargo');
+    expect(cargoCaches).toHaveLength(2);
+
+    const cargoKey = (profile: string) =>
+      `\${{ runner.os }}-cargo-${profile}-\${{ steps.rust-version.outputs.version }}-\${{ hashFiles('desktop/src-tauri/Cargo.lock') }}`;
+    const cargoRestoreKey = (profile: string) =>
+      `\${{ runner.os }}-cargo-${profile}-\${{ steps.rust-version.outputs.version }}-`;
+
+    for (const [index, profile] of ['smoke', 'release'].entries()) {
+      const cache = cargoCaches[index];
+      expect(field(cache, 'key')).toBe(cargoKey(profile));
+      expect(restoreKeys(cache)).toEqual([cargoRestoreKey(profile)]);
+      expect(cache).not.toContain(`-cargo-${profile === 'smoke' ? 'release' : 'smoke'}-`);
+    }
   });
 });

@@ -47,9 +47,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             desktop/src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-smoke-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-
+            ${{ runner.os }}-cargo-smoke-${{ steps.rust-version.outputs.version }}-
       - name: Cache root node_modules
         id: root-node-modules
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -125,9 +125,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             desktop/src-tauri/target
-          key: ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-
+            ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-
       - name: Cache root node_modules
         id: root-node-modules
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
