@@ -261,6 +261,9 @@ fn take_pending_update_result_in(path: &Path) -> Option<UpdateResult> {
 }
 
 #[cfg(windows)]
+const NSIS_HELPER_SCRIPT: &str = "$ErrorActionPreference = 'Stop'; $result = @{status='success'}; try { while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; $process = Start-Process -FilePath $env:OMP_PACKAGE_PATH -ArgumentList '/S' -Wait -PassThru; if ($process.ExitCode -ne 0) { throw 'NSIS installation failed' } } catch { $result = @{status='error';message='NSIS installation failed'} }; [IO.File]::WriteAllText($env:OMP_UPDATE_RESULT, ($result | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))";
+
+#[cfg(windows)]
 fn add_nsis_package(path: &Path) -> Result<(), UpdateError> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -280,7 +283,7 @@ fn add_nsis_package(path: &Path) -> Result<(), UpdateError> {
             "-WindowStyle",
             "Hidden",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; $result = @{status='success'}; try { while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; $process = Start-Process -FilePath $env:OMP_PACKAGE_PATH -ArgumentList '/S' -Wait; if ($process.ExitCode -ne 0) { throw 'NSIS installation failed' } } catch { $result = @{status='error';message='NSIS installation failed'} }; [IO.File]::WriteAllText($env:OMP_UPDATE_RESULT, ($result | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))",
+            NSIS_HELPER_SCRIPT,
         ])
         .env("OMP_PACKAGE_PATH", path)
         .env("OMP_UPDATE_PID", std::process::id().to_string())

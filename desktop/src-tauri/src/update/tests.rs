@@ -134,3 +134,29 @@ fn pending_update_error_is_returned_once() {
     assert!(!path.exists());
     assert!(super::take_pending_update_result_in(&path).is_none());
 }
+
+#[cfg(windows)]
+#[test]
+fn nsis_helper_records_successful_exit_code() {
+    let temp = tempfile::tempdir().expect("temp NSIS helper");
+    let package = temp.path().join("success.cmd");
+    let result_path = temp.path().join("update-result.json");
+    std::fs::write(&package, b"@exit 0").expect("successful process fixture");
+
+    let status = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            super::NSIS_HELPER_SCRIPT,
+        ])
+        .env("OMP_PACKAGE_PATH", &package)
+        .env("OMP_UPDATE_PID", "999999")
+        .env("OMP_UPDATE_RESULT", &result_path)
+        .status()
+        .expect("run NSIS helper");
+    assert!(status.success());
+
+    let result = super::take_pending_update_result_in(&result_path).expect("helper result");
+    assert_eq!(result.status, UpdateResultStatus::Success);
+}
