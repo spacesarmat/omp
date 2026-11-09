@@ -210,6 +210,8 @@ export interface OmpNativeApi {
   downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
   deviceAbiKey(): Promise<ApkAbi | null>;
+  /** Deferred desktop update result, read once after the app restarts. */
+  takePendingUpdateResult?(): Promise<{ status: 'success' | 'error'; message?: string } | null>;
   /** «Установка неизвестных приложений» is allowed for OMP (true when it cannot be told: nothing to explain). */
   canInstallApks(): Promise<boolean>;
   takePendingMagnet(): Promise<string | null>;

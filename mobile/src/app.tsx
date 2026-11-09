@@ -159,6 +159,16 @@ export function syncNativeLanguage(set: (l: Lang) => Promise<void> = (l) => nati
 export function App() {
   // the native copy (notifications, install assistant…) follows the page's language
   useEffect(() => syncNativeLanguage(), []);
+  useEffect(() => {
+    if (typeof native.takePendingUpdateResult !== 'function') return;
+    let active = true;
+    native.takePendingUpdateResult().then((result) => {
+      if (active && result?.status === 'error') showToast(t('update.installFailed'));
+    }).catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let remove: (() => void) | undefined;

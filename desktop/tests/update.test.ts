@@ -53,6 +53,20 @@ describe('desktop update API', () => {
     Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
   });
 
+  it('reads a pending update result through typed IPC', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const api = createUpdateApi(createBridge(async (command, args) => {
+      calls.push({ command, args });
+      return { status: 'error', message: 'MSIX installation failed' };
+    }));
+
+    await expect(api.takePendingUpdateResult()).resolves.toEqual({
+      status: 'error',
+      message: 'MSIX installation failed',
+    });
+    expect(calls).toEqual([{ command: 'update_pending_result', args: undefined }]);
+  });
+
   it.skipIf(process.platform !== 'win32')('maps beta and stable versions to increasing MSIX versions', () => {
     const script = path.resolve('desktop/packaging/windows/build.ps1');
     const versions = {

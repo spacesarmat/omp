@@ -1,4 +1,6 @@
-use super::{MsixInstaller, PackageInstaller, UpdateError, UpdateInfo, UpdateManager};
+use super::{
+    MsixInstaller, PackageInstaller, UpdateError, UpdateInfo, UpdateManager, UpdateResultStatus,
+};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -157,4 +159,22 @@ fn signature_is_verified_before_install_and_settings_survive() {
         std::fs::read(settings).expect("settings after update"),
         b"{\"language\":\"ru\"}"
     );
+}
+
+#[test]
+fn pending_update_error_is_returned_once() {
+    let temp = tempfile::tempdir().expect("temp update result");
+    let path = temp.path().join("update-result.json");
+    std::fs::write(
+        &path,
+        b"{\"status\":\"error\",\"message\":\"MSIX installation failed\"}",
+    )
+    .expect("update result fixture");
+
+    let result = super::take_pending_update_result_in(&path).expect("pending update result");
+
+    assert_eq!(result.status, UpdateResultStatus::Error);
+    assert_eq!(result.message.as_deref(), Some("MSIX installation failed"));
+    assert!(!path.exists());
+    assert!(super::take_pending_update_result_in(&path).is_none());
 }

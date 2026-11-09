@@ -35,7 +35,8 @@ fn main() {
             commands::player_status,
             commands::update_check,
             commands::update_download,
-            commands::update_apply
+            commands::update_apply,
+            commands::update_pending_result
         ])
         .run(tauri::generate_context!())
         .expect("error while running OMP desktop");

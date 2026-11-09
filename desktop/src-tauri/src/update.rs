@@ -18,6 +18,21 @@ pub struct UpdateInfo {
     pub release_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateResultStatus {
+    Success,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateResult {
+    pub status: UpdateResultStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
 #[derive(Debug)]
 pub enum UpdateError {
     InvalidInfo,
@@ -245,6 +260,31 @@ fn compare_versions(candidate: &str, current: &str) -> Result<Ordering, UpdateEr
     })
 }
 
+fn update_result_path() -> Result<PathBuf, UpdateError> {
+    let root = dirs::data_local_dir().ok_or(UpdateError::Install)?;
+    Ok(root
+        .join("com.spacesarmat.omp.desktop")
+        .join("update-result.json"))
+}
+
+pub fn take_pending_update_result() -> Option<UpdateResult> {
+    update_result_path()
+        .ok()
+        .and_then(|path| read_pending_update_result(&path))
+}
+
+fn read_pending_update_result(path: &Path) -> Option<UpdateResult> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let result = serde_json::from_str(&text).ok();
+    let _ = std::fs::remove_file(path);
+    result
+}
+
+#[cfg(test)]
+fn take_pending_update_result_in(path: &Path) -> Option<UpdateResult> {
+    read_pending_update_result(path)
+}
+
 #[cfg(windows)]
 fn authenticode_thumbprint(path: &Path) -> Result<String, UpdateError> {
     let output = std::process::Command::new("powershell.exe")
@@ -276,6 +316,15 @@ fn authenticode_thumbprint(_path: &Path) -> Result<String, UpdateError> {
 fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let result_path = update_result_path()?;
+    if let Some(parent) = result_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| UpdateError::Install)?;
+    }
+    match std::fs::remove_file(&result_path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(UpdateError::Install),
+    }
     std::process::Command::new("powershell.exe")
         .args([
             "-NoProfile",
@@ -283,10 +332,11 @@ fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
             "-WindowStyle",
             "Hidden",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; Add-AppxPackage -Path $env:OMP_PACKAGE_PATH",
+            "$ErrorActionPreference = 'Stop'; $result = @{status='success'}; try { while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; Add-AppxPackage -Path $env:OMP_PACKAGE_PATH } catch { $result = @{status='error';message='MSIX installation failed'} }; [IO.File]::WriteAllText($env:OMP_UPDATE_RESULT, ($result | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))",
         ])
         .env("OMP_PACKAGE_PATH", path)
         .env("OMP_UPDATE_PID", std::process::id().to_string())
+        .env("OMP_UPDATE_RESULT", result_path)
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|_| UpdateError::Install)?;

@@ -3,7 +3,7 @@ use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
 use crate::player::{PlayerCancellation, PlayerManager, PlayerOpenRequest, PlayerStatus};
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
-use crate::update::{UpdateInfo, UpdateManager};
+use crate::update::{take_pending_update_result, UpdateInfo, UpdateManager, UpdateResult};
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
@@ -250,4 +250,11 @@ pub async fn update_apply(
         app.exit(0);
     }
     result
+}
+
+#[tauri::command]
+pub async fn update_pending_result() -> Result<Option<UpdateResult>, String> {
+    tauri::async_runtime::spawn_blocking(take_pending_update_result)
+        .await
+        .map_err(|error| format!("update result worker failed: {error}"))
 }
