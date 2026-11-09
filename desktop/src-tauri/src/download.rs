@@ -155,6 +155,13 @@ fn download_verified_in(asset: BinaryAsset, root: &Path) -> Result<PathBuf, Down
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o755))?;
     }
+    if final_path.exists() {
+        return if hash_file(&final_path)? == asset.sha256.to_ascii_lowercase() {
+            Ok(final_path)
+        } else {
+            Err(DownloadError::HashMismatch)
+        };
+    }
     fs::rename(&temp_path, &final_path)?;
     pending.disarm();
     Ok(final_path)

@@ -114,6 +114,21 @@ impl ServerConfig {
     }
 }
 
+fn torrserver_args(config: &ServerConfig) -> Vec<std::ffi::OsString> {
+    vec![
+        "--port".into(),
+        config.port.to_string().into(),
+        "--ip".into(),
+        "127.0.0.1".into(),
+        "--torrentaddr".into(),
+        "127.0.0.1:0".into(),
+        "--path".into(),
+        config.data_dir.clone().into_os_string(),
+        "--logpath".into(),
+        config.data_dir.join("server.log").into_os_string(),
+    ]
+}
+
 type Launcher = dyn Fn(&ServerConfig) -> Result<Child, ServerError> + Send + Sync + 'static;
 
 pub struct ServerManager {
@@ -129,14 +144,8 @@ impl ServerManager {
             let target = current().map_err(ServerError::Platform)?;
             let binary = download_verified(asset_for(target)?)?;
             fs::create_dir_all(&config.data_dir)?;
-            let log_path = config.data_dir.join("server.log");
             process::command(&binary)
-                .arg("--port")
-                .arg(config.port.to_string())
-                .arg("--path")
-                .arg(&config.data_dir)
-                .arg("--logpath")
-                .arg(log_path)
+                .args(torrserver_args(config))
                 .current_dir(&config.data_dir)
                 .env("HOME", &config.data_dir)
                 .spawn()
@@ -187,27 +196,27 @@ impl ServerManager {
         if health(&self.config.origin) {
             return self.fail("loopback port is already in use".to_string());
         }
-        let mut child = match (self.launcher)(&self.config) {
-            Ok(child) => child,
-            Err(error) => return self.fail(error.to_string()),
-        };
-        match wait_for_health(&self.config, Some(&mut child)) {
-            Ok(true) => {
-                self.child = Some(child);
-                self.handle.status = ServerStatus::Ready;
-            }
-            Ok(false) => {
-                let _ = process::stop(&mut child);
-                self.handle.status = ServerStatus::Error;
-                self.handle.error = Some("server did not respond to /echo".to_string());
-            }
-            Err(error) => {
-                let _ = process::stop(&mut child);
-                self.handle.status = ServerStatus::Error;
-                self.handle.error = Some(error.to_string());
+        for _ in 0..3 {
+            let mut child = match (self.launcher)(&self.config) {
+                Ok(child) => child,
+                Err(error) => return self.fail(error.to_string()),
+            };
+            match wait_for_health(&self.config, Some(&mut child)) {
+                Ok(true) => {
+                    self.child = Some(child);
+                    self.handle.status = ServerStatus::Ready;
+                    return self.handle.clone();
+                }
+                Ok(false) => {
+                    let _ = process::stop(&mut child);
+                }
+                Err(error) => {
+                    let _ = process::stop(&mut child);
+                    return self.fail(error.to_string());
+                }
             }
         }
-        self.handle.clone()
+        self.fail("server did not respond to /echo".to_string())
     }
 
     fn start_external(&mut self, origin: Option<String>) -> ServerHandle {

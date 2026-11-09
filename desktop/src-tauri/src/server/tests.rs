@@ -1,9 +1,11 @@
 use super::{
-    health, ServerConfig, ServerError, ServerManager, ServerMode, ServerStartRequest, ServerStatus,
+    health, torrserver_args, ServerConfig, ServerError, ServerManager, ServerMode,
+    ServerStartRequest, ServerStatus,
 };
 use crate::http_test;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::path::Path;
 use std::process::Child;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -33,21 +35,26 @@ fn embedded() -> ServerStartRequest {
     }
 }
 
+fn child_launcher_with_role(config: &ServerConfig, role: &str) -> Result<Child, ServerError> {
+    let executable = std::env::current_exe().expect("current test executable");
+    crate::process::command(&executable)
+        .args(["--exact", "server::tests::child_entrypoint", "--nocapture"])
+        .env("OMP_SERVER_TEST_CHILD", role)
+        .env("OMP_SERVER_TEST_PORT", config.port.to_string())
+        .spawn()
+        .map_err(ServerError::Io)
+}
+
 fn child_launcher(_port: u16) -> impl Fn(&ServerConfig) -> Result<Child, ServerError> {
-    move |config| {
-        let executable = std::env::current_exe().expect("current test executable");
-        crate::process::command(&executable)
-            .args(["--exact", "server::tests::child_entrypoint", "--nocapture"])
-            .env("OMP_SERVER_TEST_CHILD", "1")
-            .env("OMP_SERVER_TEST_PORT", config.port.to_string())
-            .spawn()
-            .map_err(ServerError::Io)
-    }
+    move |config| child_launcher_with_role(config, "echo")
 }
 
 #[test]
 fn child_entrypoint() {
-    if std::env::var("OMP_SERVER_TEST_CHILD").is_err() {
+    let Ok(role) = std::env::var("OMP_SERVER_TEST_CHILD") else {
+        return;
+    };
+    if role == "exit" {
         return;
     }
     let port = std::env::var("OMP_SERVER_TEST_PORT")
@@ -193,12 +200,23 @@ fn server_start_health_stop() {
     let mut manager = ServerManager::new(config);
 
     let handle = manager.start(embedded());
-
+    let log = std::fs::read_to_string(temp.path().join("torrserver/server.log"))
+        .unwrap_or_else(|error| format!("server.log unavailable: {error}"));
+    let log_tail = log
+        .lines()
+        .rev()
+        .take(30)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n");
     assert_eq!(
         handle.status,
         ServerStatus::Ready,
-        "{}",
-        handle.error.as_deref().unwrap_or("")
+        "error: {:?}\n{}",
+        handle.error,
+        log_tail
     );
     assert!(health(&origin));
     assert_eq!(manager.stop().status, ServerStatus::Stopped);
@@ -230,4 +248,83 @@ fn external_status_rechecks_health_and_preserves_explicit_stop() {
     assert_eq!(manager.status().status, ServerStatus::Error);
     assert_eq!(manager.stop().status, ServerStatus::Stopped);
     assert_eq!(manager.status().status, ServerStatus::Stopped);
+}
+
+#[test]
+fn torrserver_arguments_bind_http_and_peer_listeners_to_loopback() {
+    let config = ServerConfig::new("data");
+    let args = torrserver_args(&config);
+    let args = args
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let has_pair = |flag: &str, value: &str| {
+        args.windows(2)
+            .any(|pair| pair[0] == flag && pair[1] == value)
+    };
+
+    assert!(has_pair("--ip", "127.0.0.1"));
+    assert!(has_pair("--torrentaddr", "127.0.0.1:0"));
+}
+
+#[cfg(windows)]
+#[test]
+fn server_peer_download() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let port = free_port();
+    let mut config = ServerConfig::from_environment().expect("server config");
+    config.origin = format!("http://127.0.0.1:{port}");
+    config.port = port;
+    config.data_dir = temp.path().join("torrserver");
+    config.startup_timeout = Duration::from_secs(60);
+    let origin = config.origin.clone();
+    let mut manager = ServerManager::new(config);
+    let handle = manager.start(embedded());
+    assert_eq!(
+        handle.status,
+        ServerStatus::Ready,
+        "{}",
+        handle.error.as_deref().unwrap_or("")
+    );
+
+    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/peer_download.py")
+        .canonicalize()
+        .expect("peer helper path");
+    let python = std::env::var("OMP_TEST_PYTHON").unwrap_or_else(|_| "python".to_string());
+    let output = std::process::Command::new(python)
+        .arg(script)
+        .arg("--origin")
+        .arg(origin)
+        .output()
+        .expect("run controlled peer helper");
+    manager.stop();
+    assert!(
+        output.status.success(),
+        "peer helper failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn embedded_start_retries_early_process_exit() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let port = free_port();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let attempts_in_launcher = Arc::clone(&attempts);
+    let mut manager = ServerManager::with_launcher(config(temp.path(), port), move |config| {
+        let attempt = attempts_in_launcher.fetch_add(1, Ordering::SeqCst);
+        child_launcher_with_role(config, if attempt < 2 { "exit" } else { "echo" })
+    });
+
+    let handle = manager.start(embedded());
+
+    assert_eq!(
+        handle.status,
+        ServerStatus::Ready,
+        "{}",
+        handle.error.as_deref().unwrap_or("")
+    );
+    assert_eq!(attempts.load(Ordering::SeqCst), 3);
 }
