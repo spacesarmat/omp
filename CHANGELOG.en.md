@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - The first OMP desktop release for Windows: catalog, search, embedded or external TorrServer, external mpv and updates through an NSIS installer
+- The OMP download page offers the Windows beta: a direct NSIS installer link and the version from the update feed
 - Desktop: the embedded TorrServer stops on exit and no longer starts automatically when an external server is selected
 
 ## 0.20.12-beta.1

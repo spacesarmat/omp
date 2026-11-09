@@ -3,6 +3,7 @@ const FEEDS = [
   { url: '/omp/update.json', kind: 'stable-webos', channel: 'stable' },
   { url: '/omp/update-android-beta.json', kind: 'beta-android', channel: 'beta' },
   { url: '/omp/update-beta.json', kind: 'beta-webos', channel: 'beta' },
+  { url: '/omp/update-windows.json', kind: 'beta-windows', channel: 'beta' },
 ];
 
 function applyFeed(root, kind, channel, feed) {
@@ -14,6 +15,10 @@ function applyFeed(root, kind, channel, feed) {
   if (typeof feed.ipkUrl === 'string' && feed.ipkUrl) {
     const link = root.querySelector(`[data-download="${kind}"]:not([data-abi])`);
     if (link) link.href = feed.ipkUrl;
+  }
+  if (typeof feed.url === 'string' && feed.url) {
+    const link = root.querySelector(`[data-download="${kind}"]:not([data-abi])`);
+    if (link) link.href = feed.url;
   }
   for (const abi of ['arm64', 'armv7']) {
     const url = feed.apks && feed.apks[abi] && feed.apks[abi].url;
