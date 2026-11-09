@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import path from 'node:path';
 import { createBridge } from '../src/platform/bridge';
 import { createDesktopNative } from '../src/platform/native';
-import { createUpdateApi, type UpdateInfo } from '../src/platform/update';
+import { createUpdateApi, updateInfoFromPackage, type UpdateInfo } from '../src/platform/update';
 
 const candidate: UpdateInfo = {
   version: '0.20.11',
-  url: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11.msix',
+  url: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-setup.exe',
   sha256: 'a'.repeat(64),
   notes: ['Desktop update'],
 };
@@ -31,7 +29,7 @@ describe('desktop update API', () => {
     ]);
   });
 
-  it('connects the existing update sheet to the MSIX installer', async () => {
+  it('connects the existing update sheet to the NSIS installer', async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const progress: number[] = [];
     const userAgent = navigator.userAgent;
@@ -57,28 +55,24 @@ describe('desktop update API', () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const api = createUpdateApi(createBridge(async (command, args) => {
       calls.push({ command, args });
-      return { status: 'error', message: 'MSIX installation failed' };
+      return { status: 'error', message: 'NSIS installation failed' };
     }));
 
     await expect(api.takePendingUpdateResult()).resolves.toEqual({
       status: 'error',
-      message: 'MSIX installation failed',
+      message: 'NSIS installation failed',
     });
     expect(calls).toEqual([{ command: 'update_pending_result', args: undefined }]);
   });
 
-  it.skipIf(process.platform !== 'win32')('maps beta and stable versions to increasing MSIX versions', () => {
-    const script = path.resolve('desktop/packaging/windows/build.ps1');
-    const versions = {
-      '0.2.0-beta.1': '0.2.0.1',
-      '0.2.0-beta.2': '0.2.0.2',
-      '0.2.0': '0.2.0.65535',
-    };
-    for (const [version, expected] of Object.entries(versions)) {
-      const actual = execFileSync('powershell.exe', [
-        '-NoProfile', '-File', script, '-VersionOverride', version, '-PrintVersionOnly',
-      ], { encoding: 'utf8' }).trim();
-      expect(actual).toBe(expected);
-    }
+  it('parses a versioned NSIS package and rejects another package type', () => {
+    expect(updateInfoFromPackage(candidate.url, candidate.sha256)).toEqual({
+      version: '0.20.11',
+      url: candidate.url,
+      sha256: candidate.sha256,
+      notes: [],
+    });
+    expect(() => updateInfoFromPackage('https://example.com/OMP-0.20.11.msix', candidate.sha256))
+      .toThrow('invalid update package version');
   });
 });

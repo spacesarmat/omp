@@ -161,10 +161,10 @@ export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes,
 }
 
 
-export function buildWindowsUpdate({ tag, version, msixName, sha256, notes }) {
+export function buildWindowsUpdate({ tag, version, nsisName, sha256, notes }) {
   return {
     version,
-    url: `https://github.com/${REPO}/releases/download/${tag}/${msixName}`,
+    url: `https://github.com/${REPO}/releases/download/${tag}/${nsisName}`,
     sha256,
     notes,
     releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,

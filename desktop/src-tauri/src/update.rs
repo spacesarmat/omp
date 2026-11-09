@@ -39,7 +39,6 @@ pub enum UpdateError {
     InsecureUrl,
     Downgrade,
     Download(DownloadError),
-    Signature,
     Install,
 }
 
@@ -50,7 +49,6 @@ impl fmt::Display for UpdateError {
             Self::InsecureUrl => write!(f, "update URL must use HTTPS"),
             Self::Downgrade => write!(f, "update downgrade is blocked"),
             Self::Download(_) => write!(f, "update download or hash verification failed"),
-            Self::Signature => write!(f, "update signature verification failed"),
             Self::Install => write!(f, "update installation failed"),
         }
     }
@@ -69,48 +67,36 @@ pub trait PackageInstaller: Send {
     fn download_apply(&self, info: &UpdateInfo) -> Result<(), UpdateError>;
 }
 
-type SignatureHook = dyn Fn(&Path) -> Result<String, UpdateError> + Send + Sync;
 type InstallHook = dyn Fn(&Path) -> Result<(), UpdateError> + Send + Sync;
 
-pub struct MsixInstaller {
-    expected_thumbprint: String,
-    signature: Box<SignatureHook>,
+pub struct NsisInstaller {
     install: Box<InstallHook>,
 }
 
-impl MsixInstaller {
-    pub fn new(expected_thumbprint: impl Into<String>) -> Self {
+impl NsisInstaller {
+    pub fn new() -> Self {
         Self {
-            expected_thumbprint: expected_thumbprint.into(),
-            signature: Box::new(authenticode_thumbprint),
-            install: Box::new(add_appx_package),
+            install: Box::new(add_nsis_package),
         }
     }
 
-    pub fn from_environment() -> Self {
-        Self::new(option_env!("OMP_MSIX_THUMBPRINT").unwrap_or(""))
-    }
-
     #[cfg(test)]
-    pub fn with_hooks<F, G>(expected_thumbprint: &str, signature: F, install: G) -> Self
+    pub fn with_install<F>(install: F) -> Self
     where
-        F: Fn(&Path) -> Result<String, UpdateError> + Send + Sync + 'static,
-        G: Fn(&Path) -> Result<(), UpdateError> + Send + Sync + 'static,
+        F: Fn(&Path) -> Result<(), UpdateError> + Send + Sync + 'static,
     {
         Self {
-            expected_thumbprint: expected_thumbprint.to_string(),
-            signature: Box::new(signature),
             install: Box::new(install),
         }
     }
 }
 
-impl PackageInstaller for MsixInstaller {
+impl PackageInstaller for NsisInstaller {
     fn download(&self, info: &UpdateInfo) -> Result<PathBuf, UpdateError> {
         validate_info(info)?;
         let asset = BinaryAsset {
             target: TargetPlatform::WindowsX64,
-            id: "msix".to_string(),
+            id: "nsis".to_string(),
             version: info.version.clone(),
             url: info.url.clone(),
             sha256: info.sha256.clone(),
@@ -121,14 +107,6 @@ impl PackageInstaller for MsixInstaller {
 
     fn download_apply(&self, info: &UpdateInfo) -> Result<(), UpdateError> {
         let package = self.download(info)?;
-        let thumbprint = (self.signature)(&package)?;
-        if self.expected_thumbprint.is_empty()
-            || !thumbprint
-                .trim()
-                .eq_ignore_ascii_case(self.expected_thumbprint.trim())
-        {
-            return Err(UpdateError::Signature);
-        }
         (self.install)(&package)
     }
 }
@@ -152,10 +130,7 @@ impl UpdateManager {
     }
 
     pub fn from_environment() -> Self {
-        Self::with_installer(
-            env!("CARGO_PKG_VERSION"),
-            Box::new(MsixInstaller::from_environment()),
-        )
+        Self::with_installer(env!("CARGO_PKG_VERSION"), Box::new(NsisInstaller::new()))
     }
 
     pub fn check(&self, info: &UpdateInfo) -> Result<Option<UpdateInfo>, UpdateError> {
@@ -286,34 +261,7 @@ fn take_pending_update_result_in(path: &Path) -> Option<UpdateResult> {
 }
 
 #[cfg(windows)]
-fn authenticode_thumbprint(path: &Path) -> Result<String, UpdateError> {
-    let output = std::process::Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            "$signature = Get-AuthenticodeSignature -LiteralPath $env:OMP_PACKAGE_PATH; if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) { exit 2 }; $signature.SignerCertificate.Thumbprint",
-        ])
-        .env("OMP_PACKAGE_PATH", path)
-        .output()
-        .map_err(|_| UpdateError::Signature)?;
-    if !output.status.success() {
-        return Err(UpdateError::Signature);
-    }
-    let thumbprint = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if thumbprint.is_empty() {
-        return Err(UpdateError::Signature);
-    }
-    Ok(thumbprint)
-}
-
-#[cfg(not(windows))]
-fn authenticode_thumbprint(_path: &Path) -> Result<String, UpdateError> {
-    Err(UpdateError::Signature)
-}
-
-#[cfg(windows)]
-fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
+fn add_nsis_package(path: &Path) -> Result<(), UpdateError> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let result_path = update_result_path()?;
@@ -332,7 +280,7 @@ fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
             "-WindowStyle",
             "Hidden",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; $result = @{status='success'}; try { while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; Add-AppxPackage -Path $env:OMP_PACKAGE_PATH } catch { $result = @{status='error';message='MSIX installation failed'} }; [IO.File]::WriteAllText($env:OMP_UPDATE_RESULT, ($result | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))",
+            "$ErrorActionPreference = 'Stop'; $result = @{status='success'}; try { while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; $process = Start-Process -FilePath $env:OMP_PACKAGE_PATH -ArgumentList '/S' -Wait; if ($process.ExitCode -ne 0) { throw 'NSIS installation failed' } } catch { $result = @{status='error';message='NSIS installation failed'} }; [IO.File]::WriteAllText($env:OMP_UPDATE_RESULT, ($result | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))",
         ])
         .env("OMP_PACKAGE_PATH", path)
         .env("OMP_UPDATE_PID", std::process::id().to_string())
@@ -344,7 +292,7 @@ fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
 }
 
 #[cfg(not(windows))]
-fn add_appx_package(_path: &Path) -> Result<(), UpdateError> {
+fn add_nsis_package(_path: &Path) -> Result<(), UpdateError> {
     Err(UpdateError::Install)
 }
 

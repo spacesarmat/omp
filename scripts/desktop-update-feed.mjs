@@ -12,11 +12,11 @@ function argument(name) {
 
 const tag = argument('tag');
 const version = argument('version');
-const msix = argument('msix');
+const nsis = argument('nsis');
 const output = argument('output');
 if (!/^[a-z0-9._-]+$/i.test(tag)) throw new Error('unsafe release tag');
 if (!/^[0-9]+(\.[0-9]+){1,3}(-beta\.[0-9]+)?$/.test(version)) throw new Error('invalid version');
-if (path.extname(msix).toLowerCase() !== '.msix') throw new Error('an .msix package is required');
+if (path.extname(nsis).toLowerCase() !== '.exe') throw new Error('an NSIS .exe installer is required');
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const changelog = readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
@@ -24,8 +24,8 @@ const { notesPhone } = feedNotes(changelog, version, 'phone');
 const update = buildWindowsUpdate({
   tag,
   version,
-  msixName: path.basename(msix),
-  sha256: createHash('sha256').update(readFileSync(msix)).digest('hex'),
+  nsisName: path.basename(nsis),
+  sha256: createHash('sha256').update(readFileSync(nsis)).digest('hex'),
   notes: notesPhone,
 });
 mkdirSync(path.dirname(output), { recursive: true });

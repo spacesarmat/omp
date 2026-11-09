@@ -106,13 +106,13 @@ describe('beta feeds and titles', () => {
       expect(updateFeedUrl(false, false)).toBe(B + 'update-windows.json');
       const update = sanitizeUpdateInfo({
         version: '0.20.11',
-        url: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11.msix',
+        url: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-setup.exe',
         sha256: HASH,
         notes: ['Windows'],
       });
       expect(update).toMatchObject({
         version: '0.20.11',
-        ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11.msix',
+        ipkUrl: 'https://github.com/spacesarmat/omp/releases/download/v0.20.11/OMP-0.20.11-setup.exe',
         ipkHash: HASH,
         ipkSize: 0,
         notes: ['Windows'],

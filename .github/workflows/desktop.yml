@@ -10,11 +10,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag for the signed MSIX and feed
+        description: Existing release tag for the NSIS installer and feed
         required: false
         type: string
       publish:
-        description: Sign and publish the release asset and update feed
+        description: Publish the release asset and update feed
         required: true
         default: false
         type: boolean
@@ -103,10 +103,18 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix desktop
       - run: npm run build:desktop
-      - name: Build desktop executable
-        env:
-          OMP_MSIX_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
-        run: npm --prefix desktop run tauri -- build --no-bundle
+      - run: npm --prefix desktop run tauri -- build --bundles nsis
+      - name: Prepare NSIS artifact
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = Get-ChildItem -LiteralPath desktop/src-tauri/target/release/bundle/nsis -Filter "*-setup.exe" | Select-Object -First 1
+          if (-not $installer) {
+            throw "NSIS installer was not produced"
+          }
+          $output = "desktop/dist-desktop"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $output "OMP-$version-setup.exe") -Force
       - name: Validate publication input
         if: github.event.inputs.publish == 'true'
         shell: pwsh
@@ -116,52 +124,20 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:RELEASE_TAG)) {
             throw "An existing release tag is required for publication"
           }
-      - name: Prepare signing certificate
-        if: github.event.inputs.publish == 'true'
-        shell: pwsh
-        env:
-          MSIX_CERTIFICATE_BASE64: ${{ secrets.MSIX_CERTIFICATE_BASE64 }}
-        run: |
-          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\omp-msix.pfx", [Convert]::FromBase64String($env:MSIX_CERTIFICATE_BASE64))
-      - name: Build MSIX
-        shell: pwsh
-        env:
-          PUBLISH: ${{ github.event.inputs.publish }}
-          MSIX_CERTIFICATE_PASSWORD: ${{ secrets.MSIX_CERTIFICATE_PASSWORD }}
-          MSIX_CERTIFICATE_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
-        run: |
-          $publish = $env:PUBLISH -eq 'true'
-          $certificate = $publish ? "$env:RUNNER_TEMP\omp-msix.pfx" : ""
-          & desktop/packaging/windows/build.ps1 -CertificatePath $certificate -RequireSignature:$publish
-      - name: Verify MSIX signature
-        shell: pwsh
-        env:
-          PUBLISH: ${{ github.event.inputs.publish }}
-          MSIX_CERTIFICATE_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
-        run: |
-          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
-          $signature = Get-AuthenticodeSignature -LiteralPath $package.FullName
-          if ($env:PUBLISH -eq 'true') {
-            if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ne $env:MSIX_CERTIFICATE_THUMBPRINT) {
-              throw "MSIX signature verification failed"
-            }
-          } elseif ($signature.Status -ne 'NotSigned') {
-            throw "Preview MSIX must be unsigned"
-          }
       - name: Build update feed
         if: github.event.inputs.publish == 'true'
         shell: pwsh
         env:
           RELEASE_TAG: ${{ github.event.inputs.tag }}
         run: |
-          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
+          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-setup.exe" | Select-Object -First 1
           $version = (Get-Content -LiteralPath desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          node scripts/desktop-update-feed.mjs --tag $env:RELEASE_TAG --version $version --msix $package.FullName --output desktop/dist-desktop/update-windows.json
-      - name: Upload MSIX
+          node scripts/desktop-update-feed.mjs --tag $env:RELEASE_TAG --version $version --nsis $package.FullName --output desktop/dist-desktop/update-windows.json
+      - name: Upload NSIS installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: omp-msix-${{ github.event.inputs.tag || 'preview' }}
-          path: desktop/dist-desktop/OMP-*.msix
+          name: omp-nsis-${{ github.event.inputs.tag || 'preview' }}
+          path: desktop/dist-desktop/OMP-*-setup.exe
           if-no-files-found: error
       - name: Upload update feed
         if: github.event.inputs.publish == 'true'
@@ -178,7 +154,7 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
+          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-setup.exe" | Select-Object -First 1
           gh release upload $env:RELEASE_TAG $package.FullName --clobber
           $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
           $sha = $null
@@ -194,8 +170,3 @@ jobs:
           } else {
             gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Add Windows desktop feed" -f content="$content" -f branch="gh-pages"
           }
-
-      - name: Remove signing certificate
-        if: always() && github.event.inputs.publish == 'true'
-        shell: pwsh
-        run: Remove-Item -LiteralPath "$env:RUNNER_TEMP\omp-msix.pfx" -Force -ErrorAction SilentlyContinue

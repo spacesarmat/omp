@@ -45,7 +45,7 @@ export function buildAndroidUpdate(p: {
 export function buildWindowsUpdate(p: {
   tag: string;
   version: string;
-  msixName: string;
+  nsisName: string;
   sha256: string;
   notes: string[];
 }): {

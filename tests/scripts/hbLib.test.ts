@@ -95,12 +95,12 @@ describe('hb-lib', () => {
   it('builds the Windows desktop update feed', () => {
     const sha = 'c'.repeat(64);
     const update = buildWindowsUpdate({
-      tag: 'desktop-v0.20.11', version: '0.20.11', msixName: 'OMP-0.20.11.msix', sha256: sha, notes: ['Windows'],
+      tag: 'desktop-v0.20.11', version: '0.20.11', nsisName: 'OMP-0.20.11-setup.exe', sha256: sha, notes: ['Windows'],
     });
 
     expect(update).toEqual({
       version: '0.20.11',
-      url: 'https://github.com/spacesarmat/omp/releases/download/desktop-v0.20.11/OMP-0.20.11.msix',
+      url: 'https://github.com/spacesarmat/omp/releases/download/desktop-v0.20.11/OMP-0.20.11-setup.exe',
       sha256: sha,
       notes: ['Windows'],
       releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/desktop-v0.20.11',

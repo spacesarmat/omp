@@ -22,7 +22,7 @@ export interface UpdateApi {
 
 export function updateInfoFromPackage(url: string, sha256: string): UpdateInfo {
   const name = new URL(url).pathname.split('/').pop() || '';
-  const match = /^OMP-(.+)\.msix$/i.exec(name);
+  const match = /^OMP-(.+)-setup\.exe$/i.exec(name);
   if (!match) throw new Error('invalid update package version');
   return {
     version: decodeURIComponent(match[1]),

@@ -47,7 +47,7 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
     return Promise.resolve<CheckResult>('skipped');
   }
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
-  // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the MSIX (update-windows.json)
+  // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the NSIS installer (update-windows.json)
   // the beta feed with «Получать бета-версии»; without it a beta waits for a release newer than itself
   const url = opts.url || updateFeedUrl(platformKind() === 'androidtv', settings.value.betaUpdates);
   if (!url) return Promise.resolve<CheckResult>('skipped');

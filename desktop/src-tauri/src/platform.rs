@@ -45,8 +45,8 @@ impl BinaryAsset {
     pub fn file_name(&self) -> String {
         if self.id == "mpv" {
             "mpv.7z".to_string()
-        } else if self.id == "msix" {
-            "OMP.msix".to_string()
+        } else if self.id == "nsis" {
+            "OMP-setup.exe".to_string()
         } else {
             self.target.executable_name(&self.id)
         }
