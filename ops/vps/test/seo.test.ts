@@ -110,6 +110,23 @@ describe('landing SEO', () => {
     expect(robots.match(/^Clean-param: /gm)).toHaveLength(1);
   });
 
+  it('links the Windows beta and states its processor requirement on both pages', () => {
+    for (const p of PAGES) {
+      const d = doc(p.file);
+      const betaRelease = 'https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1';
+      const betaInstaller = 'https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-setup.exe';
+      expect(d.querySelectorAll(`a[href="${betaRelease}"]`)).toHaveLength(2);
+      expect(d.querySelectorAll(`a[href="${betaInstaller}"]`)).toHaveLength(2);
+
+      const card = [...d.querySelectorAll('article h3')].find((h) => h.textContent?.startsWith('Windows'));
+      expect(card?.parentElement?.textContent).toContain('x86_64-v3');
+      const installFaq = [...d.querySelectorAll('#faq details')].find((details) =>
+        /Как установить|How do I install/.test(details.querySelector('summary')?.textContent ?? ''),
+      );
+      expect(installFaq?.querySelector(`a[href="${betaRelease}"]`)).not.toBeNull();
+    }
+  });
+
   it('points robots.txt at a sitemap that lists both pages with hreflang', () => {
     const robots = readFileSync(`${SITE}/robots.txt`, 'utf8');
     expect(robots).toMatch(/^User-agent: \*$/m);
