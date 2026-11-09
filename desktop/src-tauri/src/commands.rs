@@ -1,4 +1,24 @@
 use crate::platform;
+use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
+use std::sync::{Arc, Mutex};
+use tauri::State;
+
+async fn run_server<F>(
+    state: Arc<Mutex<ServerManager>>,
+    operation: F,
+) -> Result<ServerHandle, String>
+where
+    F: FnOnce(&mut ServerManager) -> ServerHandle + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut manager = state
+            .lock()
+            .map_err(|_| "server state lock failed".to_string())?;
+        Ok(operation(&mut manager))
+    })
+    .await
+    .map_err(|error| format!("server worker failed: {error}"))?
+}
 
 #[tauri::command]
 pub fn health() -> &'static str {
@@ -8,4 +28,80 @@ pub fn health() -> &'static str {
 #[tauri::command]
 pub fn target_platform() -> Result<platform::TargetPlatform, String> {
     platform::current()
+}
+
+#[tauri::command]
+pub async fn server_start(
+    request: ServerStartRequest,
+    state: State<'_, Arc<Mutex<ServerManager>>>,
+) -> Result<ServerHandle, String> {
+    run_server(Arc::clone(state.inner()), move |manager| {
+        manager.start(request)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn server_stop(
+    state: State<'_, Arc<Mutex<ServerManager>>>,
+) -> Result<ServerHandle, String> {
+    run_server(Arc::clone(state.inner()), |manager| manager.stop()).await
+}
+
+#[tauri::command]
+pub async fn server_status(
+    state: State<'_, Arc<Mutex<ServerManager>>>,
+) -> Result<ServerHandle, String> {
+    run_server(Arc::clone(state.inner()), |manager| manager.status()).await
+}
+
+#[tauri::command]
+pub async fn server_update(
+    state: State<'_, Arc<Mutex<ServerManager>>>,
+) -> Result<ServerHandle, String> {
+    run_server(Arc::clone(state.inner()), |manager| manager.update()).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{run_server, ServerManager};
+    use crate::server::{ServerConfig, ServerError, ServerMode, ServerStartRequest, ServerStatus};
+    use std::sync::{Arc, Mutex};
+    use std::thread::{self, ThreadId};
+
+    #[test]
+    fn start_and_update_work_runs_off_calling_thread() {
+        let caller = thread::current().id();
+        let workers = Arc::new(Mutex::new(Vec::<ThreadId>::new()));
+        let workers_in_launcher = Arc::clone(&workers);
+        let temp = tempfile::tempdir().expect("temp directory");
+        let manager = ServerManager::with_launcher(ServerConfig::new(temp.path()), move |_| {
+            workers_in_launcher
+                .lock()
+                .expect("worker IDs")
+                .push(thread::current().id());
+            Err(ServerError::Launch("stop after thread check".to_string()))
+        });
+        let state = Arc::new(Mutex::new(manager));
+
+        let handles = tauri::async_runtime::block_on(async {
+            let started = run_server(Arc::clone(&state), |manager| {
+                manager.start(ServerStartRequest {
+                    mode: ServerMode::Embedded,
+                    origin: None,
+                })
+            })
+            .await?;
+            let updated = run_server(state, |manager| manager.update()).await?;
+            Ok::<Vec<_>, String>(vec![started, updated])
+        })
+        .expect("worker results");
+
+        assert!(handles
+            .iter()
+            .all(|handle| handle.status == ServerStatus::Error));
+        let workers = workers.lock().expect("worker IDs");
+        assert_eq!(workers.len(), 2);
+        assert!(workers.iter().all(|worker| *worker != caller));
+    }
 }
