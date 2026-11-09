@@ -288,6 +288,13 @@ impl ServerManager {
             self.handle.status = ServerStatus::Error;
             self.handle.error = Some("server process exited".to_string());
         }
+        if self.handle.mode == ServerMode::External
+            && self.handle.status == ServerStatus::Ready
+            && !health(&self.handle.origin)
+        {
+            self.handle.status = ServerStatus::Error;
+            self.handle.error = Some("external server did not respond to /echo".to_string());
+        }
     }
 
     fn stop_process(&mut self) {

@@ -204,3 +204,30 @@ fn server_start_health_stop() {
     assert_eq!(manager.stop().status, ServerStatus::Stopped);
     assert!(!health(&origin));
 }
+
+#[test]
+fn external_status_rechecks_health_and_preserves_explicit_stop() {
+    let server = http_test::serve(b"MatriX.test".to_vec());
+    let origin = server
+        .url()
+        .strip_suffix("/payload")
+        .expect("server origin")
+        .to_string();
+    let temp = tempfile::tempdir().expect("temp directory");
+    let mut manager = ServerManager::with_launcher(config(temp.path(), free_port()), |_| {
+        panic!("external status checks must not launch a binary")
+    });
+    assert_eq!(
+        manager
+            .start(ServerStartRequest {
+                mode: ServerMode::External,
+                origin: Some(origin),
+            })
+            .status,
+        ServerStatus::Ready
+    );
+
+    assert_eq!(manager.status().status, ServerStatus::Error);
+    assert_eq!(manager.stop().status, ServerStatus::Stopped);
+    assert_eq!(manager.status().status, ServerStatus::Stopped);
+}

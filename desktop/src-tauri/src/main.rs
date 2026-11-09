@@ -1,14 +1,14 @@
 use omp_desktop::commands;
 use omp_desktop::server::{ServerConfig, ServerManager};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
-            app.manage(Mutex::new(ServerManager::new(
+            app.manage(Arc::new(Mutex::new(ServerManager::new(
                 ServerConfig::from_environment()?,
-            )));
+            ))));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
