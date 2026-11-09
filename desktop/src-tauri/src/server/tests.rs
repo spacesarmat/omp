@@ -1,5 +1,6 @@
 use super::{
-    health, ServerConfig, ServerError, ServerManager, ServerMode, ServerStartRequest, ServerStatus,
+    health, torrserver_args, ServerConfig, ServerError, ServerManager, ServerMode,
+    ServerStartRequest, ServerStatus,
 };
 use crate::http_test;
 use std::io::{Read, Write};
@@ -193,12 +194,23 @@ fn server_start_health_stop() {
     let mut manager = ServerManager::new(config);
 
     let handle = manager.start(embedded());
-
+    let log = std::fs::read_to_string(temp.path().join("torrserver/server.log"))
+        .unwrap_or_else(|error| format!("server.log unavailable: {error}"));
+    let log_tail = log
+        .lines()
+        .rev()
+        .take(30)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n");
     assert_eq!(
         handle.status,
         ServerStatus::Ready,
-        "{}",
-        handle.error.as_deref().unwrap_or("")
+        "error: {:?}\n{}",
+        handle.error,
+        log_tail
     );
     assert!(health(&origin));
     assert_eq!(manager.stop().status, ServerStatus::Stopped);
@@ -230,4 +242,21 @@ fn external_status_rechecks_health_and_preserves_explicit_stop() {
     assert_eq!(manager.status().status, ServerStatus::Error);
     assert_eq!(manager.stop().status, ServerStatus::Stopped);
     assert_eq!(manager.status().status, ServerStatus::Stopped);
+}
+
+#[test]
+fn torrserver_arguments_bind_http_and_peer_listeners_to_loopback() {
+    let config = ServerConfig::new("data");
+    let args = torrserver_args(&config);
+    let args = args
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let has_pair = |flag: &str, value: &str| {
+        args.windows(2)
+            .any(|pair| pair[0] == flag && pair[1] == value)
+    };
+
+    assert!(has_pair("--ip", "127.0.0.1"));
+    assert!(has_pair("--torrentaddr", "127.0.0.1:0"));
 }
