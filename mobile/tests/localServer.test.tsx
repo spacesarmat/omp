@@ -23,7 +23,7 @@ import {
   LOCAL_URL,
 } from '../src/server/localServer';
 import { logEntries } from '../../src/lib/log';
-import { activeServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
+import { activeServer, addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import type { LocalServerInfo } from '../src/platform/native';
 
 function fakeNative(over: Partial<{ info: LocalServerInfo; startError: string }> = {}) {
@@ -58,7 +58,10 @@ beforeEach(() => {
   localUpdatePrompt.value = null;
 });
 
-afterEach(() => setLocalServerDeps(null));
+afterEach(() => {
+  setLocalServerDeps(null);
+  delete (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__;
+});
 
 describe('local server store', () => {
   it('refresh copies the plugin state', async () => {
@@ -357,5 +360,57 @@ describe('local server store', () => {
     setLocalServerDeps({ native: f.native as any });
     await autostartLocal();
     expect(localServer.value.error).toBe('плохо');
+  });
+
+  it('autostart preserves Android behavior when a remote server is active', async () => {
+    delete (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__;
+    setAutostart(true);
+    const ext = addServer({ name: 'Дом', url: 'http://192.168.1.50:18090' });
+    setActiveServer(ext.id);
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await autostartLocal();
+    expect(f.calls).toContain('start');
+  });
+
+  it('autostart skips the embedded server when a remote one is active', async () => {
+    (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
+    setAutostart(true);
+    const ext = addServer({ name: 'Дом', url: 'http://192.168.1.50:18090' });
+    setActiveServer(ext.id);
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await autostartLocal();
+    expect(f.calls).not.toContain('start');
+  });
+
+  it('autostart still starts when the local server is active', async () => {
+    setAutostart(true);
+    const local = addServer({ name: 'Этот телефон', url: LOCAL_URL });
+    setActiveServer(local.id);
+    const f = fakeNative();
+    setLocalServerDeps({ native: f.native as any });
+    await autostartLocal();
+    expect(f.calls).toContain('start');
+  });
+
+  it('installLocalUpdate does not boot a stopped embedded server when a remote one is active', async () => {
+    (globalThis as { __DESKTOP__?: boolean }).__DESKTOP__ = true;
+    setAutostart(true);
+    const ext = addServer({ name: 'Дом', url: 'http://192.168.1.50:18090' });
+    setActiveServer(ext.id);
+    const f = withBinary('outdated');
+    setLocalServerDeps({ native: f.native });
+    await installLocalUpdate();
+    expect(f.calls).toEqual(['info', 'download', 'info']);
+  });
+
+  it('installLocalUpdate still restarts an embedded server that was running when a remote one is active', async () => {
+    const ext = addServer({ name: 'Дом', url: 'http://192.168.1.50:18090' });
+    setActiveServer(ext.id);
+    const f = withBinary('outdated', true);
+    setLocalServerDeps({ native: f.native });
+    await installLocalUpdate();
+    expect(f.calls).toEqual(['info', 'download', 'stop', 'start', 'info']);
   });
 });

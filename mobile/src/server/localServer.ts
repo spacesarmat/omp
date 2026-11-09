@@ -2,7 +2,7 @@
 import { signal } from '@preact/signals';
 import { native, type OmpNativeApi, type LocalServerInfo, type LocalDownloadProgress } from '../platform/native';
 import { loadJson, saveJson, isObject } from '../../../src/store/storage';
-import { addServer, setActiveServer } from '../../../src/store/servers';
+import { addServer, setActiveServer, activeServer } from '../../../src/store/servers';
 import { TorrServerClient } from '../../../src/api/torrserver';
 import { errorMessage } from '../../../src/api/http';
 import { log } from '../../../src/lib/log';
@@ -233,13 +233,19 @@ export async function setupLocal(
   onStep(4, version);
 }
 
+/** True when the chosen OMP server is a remote one: then the embedded server must not boot on its own. */
+function remoteServerActive(): boolean {
+  const s = activeServer.value;
+  return typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ && !!s && s.url !== LOCAL_URL;
+}
+
 /** App start: refresh the status and, when enabled, start the server without any UI. */
 export async function autostartLocal(): Promise<void> {
   await refreshLocalServer();
   const st = localServer.value;
   // never downloads on its own: without a binary the user starts it from the screen;
   // an outdated pin is offered by checkLocalServerUpdate / LocalUpdateSheet
-  if (localAutostart.value && canRun(st) && !st.running) await startLocal();
+  if (localAutostart.value && canRun(st) && !st.running && !remoteServerActive()) await startLocal();
 }
 
 /**
@@ -295,7 +301,7 @@ export async function installLocalUpdate(onProgress: (p: LocalDownloadProgress) 
   if (wasRunning) {
     await deps.native.stopLocalServer();
     await deps.native.startLocalServer();
-  } else if (localAutostart.value) {
+  } else if (localAutostart.value && !remoteServerActive()) {
     await deps.native.startLocalServer();
   }
   await refreshLocalServer();

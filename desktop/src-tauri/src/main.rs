@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(HttpClient::new())
         .setup(|app| {
             app.manage(Arc::new(Mutex::new(ServerManager::new(
@@ -38,6 +38,7 @@ fn main() {
             commands::update_apply,
             commands::update_pending_result
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running OMP desktop");
+        .build(tauri::generate_context!())
+        .expect("error while building OMP desktop");
+    app.run(omp_desktop::lifecycle::on_run_event);
 }
