@@ -93,6 +93,51 @@ impl PlayerProcess for FakeProcess {
     }
 }
 
+struct StalledStatusProcess {
+    stopped: Arc<AtomicBool>,
+    stalled: Arc<AtomicBool>,
+}
+
+impl PlayerProcess for StalledStatusProcess {
+    fn pause(&mut self, _paused: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn pause_state(&self) -> Result<Option<bool>, String> {
+        self.stalled.store(true, Ordering::SeqCst);
+        // Without cancellation this sleep mimics mpv that never answers the
+        // IPC request, so the manager lock stays busy past the shutdown lock wait.
+        std::thread::sleep(Duration::from_secs(30));
+        Ok(Some(false))
+    }
+
+    fn pause_state_cancelled(
+        &self,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<Option<bool>, String> {
+        self.stalled.store(true, Ordering::SeqCst);
+        if cancellation.wait_cancelled(generation, Duration::from_secs(30)) {
+            Err("player status cancelled".to_string())
+        } else {
+            Ok(Some(false))
+        }
+    }
+
+    fn position(&self) -> Result<(u64, u64), String> {
+        Ok((0, 0))
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        self.stopped.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn try_wait(&mut self) -> Result<Option<i32>, String> {
+        Ok(None)
+    }
+}
+
 fn player_manager(stopped: &Arc<AtomicBool>) -> PlayerManager {
     let stopped_in_launcher = Arc::clone(stopped);
     PlayerManager::with_launcher(move |_| {
@@ -165,6 +210,55 @@ fn exit_shutdown_stops_player_process() {
 }
 
 #[test]
+fn exit_shutdown_stops_player_while_status_waits_for_mpv_ipc() {
+    let server_stopped_port = free_port();
+    let temp = tempfile::tempdir().expect("temp directory");
+    let server = Arc::new(Mutex::new(ServerManager::with_launcher(
+        config(temp.path(), server_stopped_port),
+        echo_launcher,
+    )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
+    let player_stopped = Arc::new(AtomicBool::new(false));
+    let stalled = Arc::new(AtomicBool::new(false));
+    let manager = {
+        let stopped = Arc::clone(&player_stopped);
+        let stalled = Arc::clone(&stalled);
+        PlayerManager::with_launcher(move |_| {
+            Ok(Box::new(StalledStatusProcess {
+                stopped: Arc::clone(&stopped),
+                stalled: Arc::clone(&stalled),
+            }))
+        })
+    };
+    let cancellation = manager.cancellation();
+    let player = Arc::new(Mutex::new(manager));
+    let status = {
+        let mut guard = player.lock().expect("player lock");
+        guard.open(player_request())
+    };
+    assert_eq!(status.state, PlayerState::Playing);
+    let status_worker = {
+        let player = Arc::clone(&player);
+        std::thread::spawn(move || player.lock().expect("player lock").status())
+    };
+    wait_for(|| stalled.load(Ordering::SeqCst));
+
+    let began = std::time::Instant::now();
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
+
+    assert!(
+        began.elapsed() < Duration::from_secs(1),
+        "exit shutdown blocked on the player status holding the lock"
+    );
+    assert!(
+        player_stopped.load(Ordering::SeqCst),
+        "mpv child was not stopped while player_status waited for the IPC reply"
+    );
+    wait_for(|| status_worker.is_finished());
+    let _ = status_worker.join().expect("status worker");
+}
+
+#[test]
 fn exit_shutdown_cancels_pending_player_open() {
     let temp = tempfile::tempdir().expect("temp directory");
     let port = free_port();
@@ -225,4 +319,53 @@ fn exit_shutdown_cancels_pending_server_start_with_busy_lock() {
     );
     wait_for(|| !port_open(port));
     assert!(!player_stopped.load(Ordering::SeqCst));
+}
+
+#[test]
+fn exit_shutdown_stops_player_while_pause_waits_for_mpv_ipc() {
+    let server_stopped_port = free_port();
+    let temp = tempfile::tempdir().expect("temp directory");
+    let server = Arc::new(Mutex::new(ServerManager::with_launcher(
+        config(temp.path(), server_stopped_port),
+        echo_launcher,
+    )));
+    let server_cancellation = server.lock().expect("server lock").cancellation();
+    let player_stopped = Arc::new(AtomicBool::new(false));
+    let stalled = Arc::new(AtomicBool::new(false));
+    let manager = {
+        let stopped = Arc::clone(&player_stopped);
+        let stalled = Arc::clone(&stalled);
+        PlayerManager::with_launcher(move |_| {
+            Ok(Box::new(StalledStatusProcess {
+                stopped: Arc::clone(&stopped),
+                stalled: Arc::clone(&stalled),
+            }))
+        })
+    };
+    let cancellation = manager.cancellation();
+    let player = Arc::new(Mutex::new(manager));
+    let status = {
+        let mut guard = player.lock().expect("player lock");
+        guard.open(player_request())
+    };
+    assert_eq!(status.state, PlayerState::Playing);
+    let pause_worker = {
+        let player = Arc::clone(&player);
+        std::thread::spawn(move || player.lock().expect("player lock").pause())
+    };
+    wait_for(|| stalled.load(Ordering::SeqCst));
+
+    let began = std::time::Instant::now();
+    stop_processes(&server, &player, &server_cancellation, &cancellation);
+
+    assert!(
+        began.elapsed() < Duration::from_secs(1),
+        "exit shutdown blocked on the player pause holding the lock"
+    );
+    assert!(
+        player_stopped.load(Ordering::SeqCst),
+        "mpv child was not stopped while player_pause waited for the IPC reply"
+    );
+    wait_for(|| pause_worker.is_finished());
+    let _ = pause_worker.join().expect("pause worker");
 }
