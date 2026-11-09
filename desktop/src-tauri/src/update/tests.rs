@@ -64,10 +64,12 @@ fn newer_version_is_offered_and_downgrade_is_rejected() {
 }
 
 fn package_server() -> (crate::http_test::MockServer, UpdateInfo) {
+    static NEXT_VERSION: AtomicUsize = AtomicUsize::new(100);
     let payload = b"test msix payload";
     let server = crate::http_test::serve(payload.to_vec());
+    let version = format!("0.20.{}", NEXT_VERSION.fetch_add(1, Ordering::SeqCst));
     let info = info(
-        "0.20.11",
+        &version,
         server.url().to_string(),
         format!("{:x}", Sha256::digest(payload)),
     );

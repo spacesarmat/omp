@@ -2,6 +2,7 @@ import { createBridge, type DesktopBridge } from './bridge';
 import { createServerApi, EMBEDDED_SERVER_ORIGIN, type ServerApi, type ServerHandle } from './server';
 import { createPlayerApi } from './player';
 import { createUpdateApi, updateInfoFromPackage } from './update';
+import { currentTargetPlatform, TargetPlatform } from './platform';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
@@ -74,8 +75,9 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     takePendingAudioOpen: async () => null,
     takePendingMagnet: async () => null,
     deviceAbiKey: async () => null,
-    canInstallApks: async () => true,
+    canInstallApks: async () => currentTargetPlatform() === TargetPlatform.WindowsX64,
     downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
+      if (currentTargetPlatform() !== TargetPlatform.WindowsX64) throw new Error('unsupported update target');
       const info = updateInfoFromPackage(url, sha256);
       await updateApi.updateDownload(info);
       onProgress(50);

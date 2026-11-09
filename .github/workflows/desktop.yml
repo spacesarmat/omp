@@ -181,7 +181,14 @@ jobs:
           $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
           gh release upload $env:RELEASE_TAG $package.FullName --clobber
           $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
-          $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>$null
+          $sha = $null
+          try {
+            $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>$null
+          } catch {
+            if ($_.Exception.Message -notmatch '404|Not Found') {
+              throw
+            }
+          }
           if ($sha) {
             gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Update Windows desktop feed" -f content="$content" -f sha="$sha" -f branch="gh-pages"
           } else {

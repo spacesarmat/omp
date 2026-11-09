@@ -240,9 +240,14 @@ pub async fn update_download(
 pub async fn update_apply(
     info: UpdateInfo,
     state: State<'_, Arc<Mutex<UpdateManager>>>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
-    run_update(Arc::clone(state.inner()), move |manager| {
+    let result = run_update(Arc::clone(state.inner()), move |manager| {
         manager.apply(&info)
     })
-    .await
+    .await;
+    if result.is_ok() {
+        app.exit(0);
+    }
+    result
 }

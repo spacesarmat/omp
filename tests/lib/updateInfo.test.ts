@@ -99,6 +99,8 @@ describe('beta feeds and titles', () => {
     const target = window as unknown as { __TAURI_INTERNALS__?: object };
     const previous = target.__TAURI_INTERNALS__;
     target.__TAURI_INTERNALS__ = {};
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0', configurable: true });
     try {
       const B = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
       expect(updateFeedUrl(false, false)).toBe(B + 'update-windows.json');
@@ -116,6 +118,21 @@ describe('beta feeds and titles', () => {
         notes: ['Windows'],
       });
     } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+      if (previous === undefined) delete target.__TAURI_INTERNALS__;
+      else target.__TAURI_INTERNALS__ = previous;
+    }
+  });
+  it('does not offer Windows updates to a non-Windows desktop', () => {
+    const target = window as unknown as { __TAURI_INTERNALS__?: object };
+    const previous = target.__TAURI_INTERNALS__;
+    target.__TAURI_INTERNALS__ = {};
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Mac OS X 14_0', configurable: true });
+    try {
+      expect(updateFeedUrl(false, false)).toBe('');
+    } finally {
+      Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
       if (previous === undefined) delete target.__TAURI_INTERNALS__;
       else target.__TAURI_INTERNALS__ = previous;
     }

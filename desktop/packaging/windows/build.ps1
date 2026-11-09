@@ -2,27 +2,50 @@
 param(
     [string]$Configuration = "release",
     [string]$CertificatePath = "",
+    [string]$VersionOverride = "",
+    [switch]$PrintVersionOnly,
     [switch]$RequireSignature
 )
 
+function ConvertTo-MsixVersion([string]$version) {
+    if ($version -notmatch '^[0-9]+(\.[0-9]+){1,2}(-beta\.[0-9]+)?$') {
+        throw "Invalid desktop version: $version"
+    }
+    $coreVersion = $version.Split("-")[0]
+    $parts = @($coreVersion.Split(".") | ForEach-Object { [int]$_ })
+    while ($parts.Count -lt 3) {
+        $parts += 0
+    }
+    if ($parts | Where-Object { $_ -lt 0 -or $_ -gt 65535 }) {
+        throw "MSIX version component is out of range: $version"
+    }
+    $revision = 65535
+    if ($version -match '-beta\.([0-9]+)$') {
+        $revision = [int]$Matches[1]
+        if ($revision -lt 1 -or $revision -gt 65534) {
+            throw "MSIX beta revision is out of range: $version"
+        }
+    }
+    return "$($parts[0]).$($parts[1]).$($parts[2]).$revision"
+}
+
 $ErrorActionPreference = "Stop"
 $desktop = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "../.."))
+$version = if ($VersionOverride) {
+    $VersionOverride
+} else {
+    (Get-Content -LiteralPath (Join-Path $desktop "src-tauri/tauri.conf.json") -Raw | ConvertFrom-Json).version
+}
+if ($PrintVersionOnly) {
+    ConvertTo-MsixVersion $version
+    exit 0
+}
+$manifestVersion = ConvertTo-MsixVersion $version
 $targetDir = Join-Path $desktop "src-tauri/target/$Configuration"
 $executable = Join-Path $targetDir "omp-desktop.exe"
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "Desktop executable not found: $executable"
 }
-
-$version = (Get-Content -LiteralPath (Join-Path $desktop "src-tauri/tauri.conf.json") -Raw | ConvertFrom-Json).version
-$coreVersion = $version.Split("-")[0]
-$parts = @($coreVersion.Split("."))
-if ($parts.Count -lt 2 -or $parts.Count -gt 4) {
-    throw "Invalid desktop version: $version"
-}
-while ($parts.Count -lt 4) {
-    $parts += "0"
-}
-$manifestVersion = $parts -join "."
 $outputDir = [IO.Path]::GetFullPath((Join-Path $desktop "dist-desktop"))
 $staging = Join-Path $outputDir "msix-staging"
 $package = Join-Path $outputDir "OMP-$version.msix"
@@ -91,7 +114,7 @@ function Find-WindowsSdkTool([string]$name) {
 }
 
 $makeappx = Find-WindowsSdkTool "makeappx.exe"
-& $makeappx build /o /d $staging /p $package
+& $makeappx pack /o /d $staging /p $package
 if ($LASTEXITCODE -ne 0) {
     throw "makeappx failed with exit code $LASTEXITCODE"
 }

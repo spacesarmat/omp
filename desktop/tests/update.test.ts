@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { createBridge } from '../src/platform/bridge';
 import { createDesktopNative } from '../src/platform/native';
 import { createUpdateApi, type UpdateInfo } from '../src/platform/update';
@@ -32,6 +34,8 @@ describe('desktop update API', () => {
   it('connects the existing update sheet to the MSIX installer', async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const progress: number[] = [];
+    const userAgent = navigator.userAgent;
+    Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0', configurable: true });
     const desktop = createDesktopNative(createBridge(async (command, args) => {
       calls.push({ command, args });
       return command === 'update_download' ? candidate : undefined;
@@ -46,5 +50,21 @@ describe('desktop update API', () => {
       { command: 'update_apply', args: { info: installInfo } },
     ]);
     expect(progress).toEqual([50, 100]);
+    Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
+  });
+
+  it.skipIf(process.platform !== 'win32')('maps beta and stable versions to increasing MSIX versions', () => {
+    const script = path.resolve('desktop/packaging/windows/build.ps1');
+    const versions = {
+      '0.2.0-beta.1': '0.2.0.1',
+      '0.2.0-beta.2': '0.2.0.2',
+      '0.2.0': '0.2.0.65535',
+    };
+    for (const [version, expected] of Object.entries(versions)) {
+      const actual = execFileSync('powershell.exe', [
+        '-NoProfile', '-File', script, '-VersionOverride', version, '-PrintVersionOnly',
+      ], { encoding: 'utf8' }).trim();
+      expect(actual).toBe(expected);
+    }
   });
 });

@@ -50,6 +50,7 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the MSIX (update-windows.json)
   // the beta feed with «Получать бета-версии»; without it a beta waits for a release newer than itself
   const url = opts.url || updateFeedUrl(platformKind() === 'androidtv', settings.value.betaUpdates);
+  if (!url) return Promise.resolve<CheckResult>('skipped');
   return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000, quiet: true }).then(
     (raw): CheckResult => {
       state = { ...state, lastCheck: now };

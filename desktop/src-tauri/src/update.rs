@@ -252,9 +252,9 @@ fn authenticode_thumbprint(path: &Path) -> Result<String, UpdateError> {
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$signature = Get-AuthenticodeSignature -LiteralPath $args[0]; if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) { exit 2 }; $signature.SignerCertificate.Thumbprint",
+            "$signature = Get-AuthenticodeSignature -LiteralPath $env:OMP_PACKAGE_PATH; if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate) { exit 2 }; $signature.SignerCertificate.Thumbprint",
         ])
-        .arg(path)
+        .env("OMP_PACKAGE_PATH", path)
         .output()
         .map_err(|_| UpdateError::Signature)?;
     if !output.status.success() {
@@ -274,21 +274,23 @@ fn authenticode_thumbprint(_path: &Path) -> Result<String, UpdateError> {
 
 #[cfg(windows)]
 fn add_appx_package(path: &Path) -> Result<(), UpdateError> {
-    let status = std::process::Command::new("powershell.exe")
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    std::process::Command::new("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; Add-AppxPackage -LiteralPath $args[0]",
+            "$ErrorActionPreference = 'Stop'; while (Get-Process -Id $env:OMP_UPDATE_PID -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }; Add-AppxPackage -Path $env:OMP_PACKAGE_PATH",
         ])
-        .arg(path)
-        .status()
+        .env("OMP_PACKAGE_PATH", path)
+        .env("OMP_UPDATE_PID", std::process::id().to_string())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
         .map_err(|_| UpdateError::Install)?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(UpdateError::Install)
-    }
+    Ok(())
 }
 
 #[cfg(not(windows))]

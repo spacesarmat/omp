@@ -13,7 +13,9 @@ export const WINDOWS_UPDATE_URL = FEED_BASE + 'update-windows.json';
 
 /** The feed this device reads: Android APK, LG ipk or Windows MSIX; Android and LG use the beta pair with «Получать бета-версии». */
 export function updateFeedUrl(android: boolean, beta: boolean): string {
-  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) return WINDOWS_UPDATE_URL;
+  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+    return navigator.userAgent.toLowerCase().includes('windows') ? WINDOWS_UPDATE_URL : '';
+  }
   if (android) return beta ? ANDROID_BETA_UPDATE_URL : ANDROID_UPDATE_URL;
   return beta ? BETA_UPDATE_URL : UPDATE_URL;
 }
