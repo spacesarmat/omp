@@ -175,3 +175,60 @@ fn corrupt_cached_binary_is_replaced_by_verified_download() {
     assert_eq!(fs::read(&path).expect("read replaced payload"), PAYLOAD);
     assert_eq!(files(cached.path()), vec![path]);
 }
+
+#[cfg(windows)]
+#[test]
+fn concurrent_downloads_accept_the_other_verified_file() {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let temp = tempfile::tempdir().expect("temp directory");
+    let root = temp.path();
+    let final_path = root
+        .join("bin")
+        .join("windows-x64")
+        .join("1.0.0")
+        .join("torrserver.exe");
+    let file_lock = std::sync::Arc::new(std::sync::Mutex::new(None::<fs::File>));
+    let lock_in_hook = std::sync::Arc::clone(&file_lock);
+    let path_in_hook = final_path.clone();
+    let (first_url, second_url) = http_test::serve_pair_with_hook(PAYLOAD.to_vec(), move || {
+        fs::create_dir_all(path_in_hook.parent().expect("final parent"))
+            .expect("create final directory");
+        fs::write(&path_in_hook, PAYLOAD).expect("write verified file");
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&path_in_hook)
+            .expect("lock verified file");
+        *lock_in_hook.lock().expect("file lock") = Some(file);
+    });
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+
+    let results = std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for url in [first_url, second_url] {
+            let barrier = std::sync::Arc::clone(&barrier);
+            let asset = asset(url, PAYLOAD_SHA256, 26);
+            handles.push(scope.spawn(move || {
+                barrier.wait();
+                download_verified_in(asset, root)
+            }));
+        }
+        handles
+            .into_iter()
+            .map(|handle| handle.join().expect("download thread"))
+            .collect::<Vec<_>>()
+    });
+
+    file_lock.lock().expect("file lock").take();
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    assert_eq!(
+        results[0].as_ref().expect("first path"),
+        results[1].as_ref().expect("second path")
+    );
+    assert_eq!(
+        fs::read(results[0].as_ref().expect("payload path")).expect("read payload"),
+        PAYLOAD
+    );
+    assert_eq!(files(root).len(), 1);
+}
