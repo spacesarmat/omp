@@ -40,23 +40,54 @@ pub struct PlayerOpenRequest {
 #[derive(Clone, Debug)]
 pub struct PlayerCancellation {
     generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    notify: std::sync::Arc<(std::sync::Mutex<()>, std::sync::Condvar)>,
 }
 
 impl PlayerCancellation {
     pub fn new() -> Self {
         Self {
             generation: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            notify: std::sync::Arc::new((std::sync::Mutex::new(()), std::sync::Condvar::new())),
         }
     }
 
     pub fn cancel(&self) -> u64 {
-        self.generation
+        let generation = self
+            .generation
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-            + 1
+            + 1;
+        let (lock, condition) = &*self.notify;
+        let _guard = lock.lock().expect("cancellation lock");
+        condition.notify_all();
+        generation
+    }
+
+    pub fn current(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn is_cancelled(&self, generation: u64) -> bool {
-        self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
+        self.current() != generation
+    }
+
+    pub fn wait_cancelled(&self, generation: u64, timeout: std::time::Duration) -> bool {
+        let (lock, condition) = &*self.notify;
+        let mut guard = lock.lock().expect("cancellation lock");
+        let deadline = std::time::Instant::now() + timeout;
+        while !self.is_cancelled(generation) {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return false;
+            }
+            let (next, wait) = condition
+                .wait_timeout(guard, remaining)
+                .expect("cancellation wait");
+            guard = next;
+            if wait.timed_out() {
+                return self.is_cancelled(generation);
+            }
+        }
+        true
     }
 }
 
@@ -69,12 +100,41 @@ pub trait PlayerProcess: Send {
         Ok(())
     }
     fn pause(&mut self, paused: bool) -> Result<(), String>;
+    fn pause_cancelled(
+        &mut self,
+        paused: bool,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<(), String> {
+        self.pause(paused)
+    }
     fn pause_state(&self) -> Result<Option<bool>, String> {
         Ok(None)
     }
+    fn pause_state_cancelled(
+        &self,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<Option<bool>, String> {
+        self.pause_state()
+    }
     fn position(&self) -> Result<(u64, u64), String>;
+    fn position_cancelled(
+        &self,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<(u64, u64), String> {
+        self.position()
+    }
     fn stop(&mut self) -> Result<(), String>;
     fn try_wait(&mut self) -> Result<Option<i32>, String>;
+    fn try_wait_cancelled(
+        &mut self,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<Option<i32>, String> {
+        self.try_wait()
+    }
 }
 
 type Launcher =
@@ -170,6 +230,7 @@ impl PlayerManager {
     }
 
     pub fn pause(&mut self) -> PlayerStatus {
+        let generation = self.cancellation.current();
         let Some(process) = self.process.as_mut() else {
             return self.status.clone();
         };
@@ -179,7 +240,7 @@ impl PlayerManager {
         ) {
             return self.status.clone();
         }
-        match process.pause_state() {
+        match process.pause_state_cancelled(&self.cancellation, generation) {
             Ok(Some(actual)) => {
                 self.status.state = if actual {
                     PlayerState::Paused
@@ -188,6 +249,9 @@ impl PlayerManager {
                 };
             }
             Ok(None) => {}
+            Err(_) if self.cancellation.is_cancelled(generation) => {
+                return self.status.clone();
+            }
             Err(_) => {
                 self.status.error = Some("player pause failed".to_string());
                 return self.status.clone();
@@ -198,7 +262,7 @@ impl PlayerManager {
             PlayerState::Paused => false,
             _ => return self.status.clone(),
         };
-        match process.pause(paused) {
+        match process.pause_cancelled(paused, &self.cancellation, generation) {
             Ok(()) => {
                 self.status.state = if paused {
                     PlayerState::Paused
@@ -206,6 +270,7 @@ impl PlayerManager {
                     PlayerState::Playing
                 };
             }
+            Err(_) if self.cancellation.is_cancelled(generation) => {}
             Err(_) => self.status.error = Some("player pause failed".to_string()),
         }
         self.status.clone()
@@ -237,10 +302,11 @@ impl PlayerManager {
     }
 
     pub fn status(&mut self) -> PlayerStatus {
+        let generation = self.cancellation.current();
         let Some(process) = self.process.as_mut() else {
             return self.status.clone();
         };
-        match process.try_wait() {
+        match process.try_wait_cancelled(&self.cancellation, generation) {
             Ok(Some(code)) => {
                 self.status.state = if code == 0 {
                     PlayerState::Ended
@@ -252,7 +318,7 @@ impl PlayerManager {
                 }
             }
             Ok(None) => {
-                match process.pause_state() {
+                match process.pause_state_cancelled(&self.cancellation, generation) {
                     Ok(Some(actual)) => {
                         self.status.state = if actual {
                             PlayerState::Paused
@@ -261,16 +327,23 @@ impl PlayerManager {
                         };
                     }
                     Ok(None) => {}
+                    Err(_) if self.cancellation.is_cancelled(generation) => {
+                        return self.status.clone();
+                    }
                     Err(_) => self.status.error = Some("player status failed".to_string()),
                 }
-                match process.position() {
+                match process.position_cancelled(&self.cancellation, generation) {
                     Ok((position, duration)) => {
                         self.status.position_ms = position;
                         self.status.duration_ms = duration;
                     }
+                    Err(_) if self.cancellation.is_cancelled(generation) => {
+                        return self.status.clone();
+                    }
                     Err(_) => self.status.error = Some("player status failed".to_string()),
                 }
             }
+            Err(_) if self.cancellation.is_cancelled(generation) => return self.status.clone(),
             Err(_) => self.status.error = Some("player status failed".to_string()),
         }
         self.status.clone()
@@ -471,12 +544,46 @@ impl PlayerProcess for MpvProcess {
         self.ipc.set_pause(paused)
     }
 
+    fn pause_cancelled(
+        &mut self,
+        paused: bool,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<(), String> {
+        self.ipc
+            .set_pause_cancelled(paused, cancellation, generation)
+    }
+
     fn pause_state(&self) -> Result<Option<bool>, String> {
         self.ipc.boolean("pause").map(Some)
     }
 
+    fn pause_state_cancelled(
+        &self,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<Option<bool>, String> {
+        self.ipc
+            .boolean_cancelled("pause", cancellation, generation)
+            .map(Some)
+    }
+
     fn position(&self) -> Result<(u64, u64), String> {
         self.ipc.position()
+    }
+
+    fn position_cancelled(
+        &self,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<(u64, u64), String> {
+        let position = self
+            .ipc
+            .number_cancelled("time-pos", cancellation, generation)?;
+        let duration = self
+            .ipc
+            .number_cancelled("duration", cancellation, generation)?;
+        Ok(((position * 1000.0) as u64, (duration * 1000.0) as u64))
     }
 
     fn stop(&mut self) -> Result<(), String> {
@@ -492,6 +599,27 @@ impl PlayerProcess for MpvProcess {
             return Ok(status.code());
         }
         if self.ipc.eof_reached()? {
+            return Ok(Some(0));
+        }
+        Ok(None)
+    }
+
+    fn try_wait_cancelled(
+        &mut self,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<Option<i32>, String> {
+        if let Some(status) = self
+            .child
+            .try_wait()
+            .map_err(|_| "mpv status failed".to_string())?
+        {
+            return Ok(status.code());
+        }
+        if self
+            .ipc
+            .boolean_cancelled("eof-reached", cancellation, generation)?
+        {
             return Ok(Some(0));
         }
         Ok(None)
@@ -512,8 +640,34 @@ struct IpcRequest {
 trait IpcCall {
     fn call(&self, command: serde_json::Value) -> Result<serde_json::Value, String>;
 
+    fn call_cancelled(
+        &self,
+        command: serde_json::Value,
+        _cancellation: &PlayerCancellation,
+        _generation: u64,
+    ) -> Result<serde_json::Value, String> {
+        self.call(command)
+    }
+
     fn number(&self, property: &str) -> Result<f64, String> {
         let response = self.call(serde_json::json!(["get_property", property]))?;
+        response
+            .get("data")
+            .and_then(serde_json::Value::as_f64)
+            .ok_or_else(|| "mpv property is unavailable".to_string())
+    }
+
+    fn number_cancelled(
+        &self,
+        property: &str,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<f64, String> {
+        let response = self.call_cancelled(
+            serde_json::json!(["get_property", property]),
+            cancellation,
+            generation,
+        )?;
         response
             .get("data")
             .and_then(serde_json::Value::as_f64)
@@ -528,6 +682,23 @@ trait IpcCall {
             .ok_or_else(|| "mpv property is unavailable".to_string())
     }
 
+    fn boolean_cancelled(
+        &self,
+        property: &str,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<bool, String> {
+        let response = self.call_cancelled(
+            serde_json::json!(["get_property", property]),
+            cancellation,
+            generation,
+        )?;
+        response
+            .get("data")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| "mpv property is unavailable".to_string())
+    }
+
     fn eof_reached(&self) -> Result<bool, String> {
         self.boolean("eof-reached")
     }
@@ -535,6 +706,20 @@ trait IpcCall {
     fn set_pause(&self, paused: bool) -> Result<(), String> {
         self.call(serde_json::json!(["set_property", "pause", paused]))
             .map(|_| ())
+    }
+
+    fn set_pause_cancelled(
+        &self,
+        paused: bool,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<(), String> {
+        self.call_cancelled(
+            serde_json::json!(["set_property", "pause", paused]),
+            cancellation,
+            generation,
+        )
+        .map(|_| ())
     }
 
     fn position(&self) -> Result<(u64, u64), String> {
@@ -557,6 +742,35 @@ impl IpcCall for MpvIpcWorker {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 Err("mpv IPC closed".to_string())
+            }
+        }
+    }
+
+    fn call_cancelled(
+        &self,
+        command: serde_json::Value,
+        cancellation: &PlayerCancellation,
+        generation: u64,
+    ) -> Result<serde_json::Value, String> {
+        let (response, receiver) = std::sync::mpsc::channel();
+        self.requests
+            .send(IpcRequest { command, response })
+            .map_err(|_| "mpv IPC closed".to_string())?;
+        let deadline = std::time::Instant::now() + self.timeout;
+        loop {
+            if cancellation.is_cancelled(generation) {
+                return Err("mpv IPC cancelled".to_string());
+            }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err("mpv IPC reply timeout".to_string());
+            }
+            match receiver.recv_timeout(remaining.min(std::time::Duration::from_millis(25))) {
+                Ok(result) => return result,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err("mpv IPC closed".to_string());
+                }
             }
         }
     }

@@ -126,6 +126,43 @@ fn ipc_reply_has_a_deadline() {
     std::thread::sleep(std::time::Duration::from_millis(300));
 }
 
+#[test]
+fn ipc_call_can_be_cancelled_while_waiting_for_the_reply() {
+    let stream = ScriptedStream {
+        input: std::io::Cursor::new(Vec::new()),
+        output: Arc::new(std::sync::Mutex::new(Vec::new())),
+        delay: std::time::Duration::from_secs(2),
+    };
+    let ipc = super::MpvIpc {
+        stream: std::cell::RefCell::new(Box::new(stream)),
+        next_request_id: std::cell::Cell::new(1),
+        media_error: Arc::new(AtomicBool::new(false)),
+    };
+    let worker = ipc.spawn(std::time::Duration::from_secs(5));
+    let cancellation = super::PlayerCancellation::new();
+    let generation = cancellation.current();
+    let cancellation_in_thread = cancellation.clone();
+
+    let caller = std::thread::spawn(move || {
+        super::IpcCall::call_cancelled(
+            &worker,
+            serde_json::json!(["get_property", "time-pos"]),
+            &cancellation_in_thread,
+            generation,
+        )
+    });
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    cancellation.cancel();
+
+    let began = std::time::Instant::now();
+    let error = caller
+        .join()
+        .expect("cancelled IPC caller")
+        .expect_err("cancelled IPC call must fail");
+    assert_eq!(error, "mpv IPC cancelled");
+    assert!(began.elapsed() < std::time::Duration::from_secs(1));
+}
+
 struct FailingLoadProcess {
     stopped: Arc<AtomicBool>,
 }
