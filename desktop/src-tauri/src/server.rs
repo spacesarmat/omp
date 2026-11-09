@@ -196,27 +196,27 @@ impl ServerManager {
         if health(&self.config.origin) {
             return self.fail("loopback port is already in use".to_string());
         }
-        let mut child = match (self.launcher)(&self.config) {
-            Ok(child) => child,
-            Err(error) => return self.fail(error.to_string()),
-        };
-        match wait_for_health(&self.config, Some(&mut child)) {
-            Ok(true) => {
-                self.child = Some(child);
-                self.handle.status = ServerStatus::Ready;
-            }
-            Ok(false) => {
-                let _ = process::stop(&mut child);
-                self.handle.status = ServerStatus::Error;
-                self.handle.error = Some("server did not respond to /echo".to_string());
-            }
-            Err(error) => {
-                let _ = process::stop(&mut child);
-                self.handle.status = ServerStatus::Error;
-                self.handle.error = Some(error.to_string());
+        for _ in 0..3 {
+            let mut child = match (self.launcher)(&self.config) {
+                Ok(child) => child,
+                Err(error) => return self.fail(error.to_string()),
+            };
+            match wait_for_health(&self.config, Some(&mut child)) {
+                Ok(true) => {
+                    self.child = Some(child);
+                    self.handle.status = ServerStatus::Ready;
+                    return self.handle.clone();
+                }
+                Ok(false) => {
+                    let _ = process::stop(&mut child);
+                }
+                Err(error) => {
+                    let _ = process::stop(&mut child);
+                    return self.fail(error.to_string());
+                }
             }
         }
-        self.handle.clone()
+        self.fail("server did not respond to /echo".to_string())
     }
 
     fn start_external(&mut self, origin: Option<String>) -> ServerHandle {
