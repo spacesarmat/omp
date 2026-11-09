@@ -110,8 +110,18 @@ impl PlayerManager {
     }
 
     pub fn open(&mut self, request: PlayerOpenRequest) -> PlayerStatus {
-        self.stop();
         let generation = self.cancellation.cancel();
+        self.open_at(request, generation)
+    }
+
+    pub fn open_at(&mut self, request: PlayerOpenRequest, generation: u64) -> PlayerStatus {
+        if self.cancellation.is_cancelled(generation) {
+            return self.status.clone();
+        }
+        self.stop_process();
+        if self.cancellation.is_cancelled(generation) {
+            return self.status.clone();
+        }
         self.status.state = PlayerState::Starting;
         match (self.launcher)(&request) {
             Ok(mut process) => match process.wait_until_loaded(&self.cancellation, generation) {
@@ -139,11 +149,20 @@ impl PlayerManager {
                 }
             },
             Err(_) => {
+                let cancelled = self.cancellation.is_cancelled(generation);
                 self.status = PlayerStatus {
-                    state: PlayerState::Error,
+                    state: if cancelled {
+                        PlayerState::Idle
+                    } else {
+                        PlayerState::Error
+                    },
                     position_ms: 0,
                     duration_ms: 0,
-                    error: Some("player launch failed".to_string()),
+                    error: if cancelled {
+                        None
+                    } else {
+                        Some("player launch failed".to_string())
+                    },
                 }
             }
         }
@@ -154,6 +173,12 @@ impl PlayerManager {
         let Some(process) = self.process.as_mut() else {
             return self.status.clone();
         };
+        if !matches!(
+            self.status.state,
+            PlayerState::Playing | PlayerState::Paused
+        ) {
+            return self.status.clone();
+        }
         match process.pause_state() {
             Ok(Some(actual)) => {
                 self.status.state = if actual {
@@ -188,6 +213,10 @@ impl PlayerManager {
 
     pub fn stop(&mut self) -> PlayerStatus {
         self.cancellation.cancel();
+        self.stop_process()
+    }
+
+    fn stop_process(&mut self) -> PlayerStatus {
         if let Some(mut process) = self.process.take() {
             let _ = process.stop();
         }

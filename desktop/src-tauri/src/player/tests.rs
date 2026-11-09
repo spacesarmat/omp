@@ -252,6 +252,7 @@ fn ipc_records_end_file_errors() {
 
 struct ExternalPauseProcess {
     paused: Arc<AtomicBool>,
+    exit: Option<i32>,
 }
 
 impl PlayerProcess for ExternalPauseProcess {
@@ -273,7 +274,7 @@ impl PlayerProcess for ExternalPauseProcess {
     }
 
     fn try_wait(&mut self) -> Result<Option<i32>, String> {
-        Ok(None)
+        Ok(self.exit)
     }
 }
 
@@ -284,6 +285,7 @@ fn status_and_toggle_reconcile_the_actual_pause_state() {
     let mut manager = PlayerManager::with_launcher(move |_| {
         Ok(Box::new(ExternalPauseProcess {
             paused: Arc::clone(&paused_in_launcher),
+            exit: None,
         }))
     });
     manager.open(request());
@@ -291,6 +293,41 @@ fn status_and_toggle_reconcile_the_actual_pause_state() {
     assert_eq!(manager.status().state, PlayerState::Paused);
     assert_eq!(manager.pause().state, PlayerState::Playing);
     assert!(!paused.load(Ordering::SeqCst));
+}
+
+#[test]
+fn pause_preserves_the_ended_state() {
+    let mut manager = PlayerManager::with_launcher(|_| {
+        Ok(Box::new(ExternalPauseProcess {
+            paused: Arc::new(AtomicBool::new(false)),
+            exit: Some(0),
+        }))
+    });
+    manager.open(request());
+
+    assert_eq!(manager.status().state, PlayerState::Ended);
+    assert_eq!(manager.pause().state, PlayerState::Ended);
+}
+
+#[test]
+fn superseded_open_is_rejected_before_launch() {
+    let launches = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let launches_in_launcher = Arc::clone(&launches);
+    let mut manager = PlayerManager::with_launcher(move |_| {
+        launches_in_launcher.fetch_add(1, Ordering::SeqCst);
+        launcher()(&request())
+    });
+    let cancellation = manager.cancellation();
+    let stale = cancellation.cancel();
+    let current = cancellation.cancel();
+
+    assert_eq!(manager.open_at(request(), stale).state, PlayerState::Idle);
+    assert_eq!(launches.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        manager.open_at(request(), current).state,
+        PlayerState::Playing
+    );
+    assert_eq!(launches.load(Ordering::SeqCst), 1);
 }
 
 fn launcher() -> impl Fn(&PlayerOpenRequest) -> Result<Box<dyn PlayerProcess>, String> {

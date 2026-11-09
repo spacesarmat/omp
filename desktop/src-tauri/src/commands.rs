@@ -165,9 +165,9 @@ pub async fn player_open(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
     cancellation: State<'_, PlayerCancellation>,
 ) -> Result<PlayerStatus, String> {
-    cancellation.cancel();
+    let generation = cancellation.cancel();
     run_player(Arc::clone(state.inner()), move |manager| {
-        manager.open(request)
+        manager.open_at(request, generation)
     })
     .await
 }
