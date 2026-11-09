@@ -2,6 +2,7 @@ name: Desktop
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -19,6 +20,19 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Cache Cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       - run: npm ci
       - run: npm ci --prefix desktop
       - run: npx vitest run desktop/tests

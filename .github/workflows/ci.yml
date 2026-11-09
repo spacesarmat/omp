@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, 'feat/**', 'exp/**']
+    branches: [main]
   pull_request:
   # the TorrServer update workflow starts CI on its chore/torrserver-* branch this way (GITHUB_TOKEN pushes trigger nothing)
   workflow_dispatch:
@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
       - run: npm ci
       - run: npm ci --prefix desktop
       - name: Install shellcheck
@@ -52,6 +55,9 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
       - run: npm ci
       - run: npm ci --prefix desktop
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
