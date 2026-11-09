@@ -41,6 +41,16 @@ impl TargetPlatform {
     }
 }
 
+impl BinaryAsset {
+    pub fn file_name(&self) -> String {
+        if self.id == "mpv" {
+            "mpv.7z".to_string()
+        } else {
+            self.target.executable_name(&self.id)
+        }
+    }
+}
+
 pub fn asset_for(target: TargetPlatform) -> Result<BinaryAsset, DownloadError> {
     match target {
         TargetPlatform::WindowsX64 => Ok(BinaryAsset {
@@ -50,6 +60,20 @@ pub fn asset_for(target: TargetPlatform) -> Result<BinaryAsset, DownloadError> {
             url: "https://github.com/YouROK/TorrServer/releases/download/MatriX.150/TorrServer-windows-amd64.exe".to_string(),
             sha256: "3a96b97a24d86a90c0712a6ec47d4ed52edc7eabac1bce6a0d9bbc8fd30de5bb".to_string(),
             max_bytes: 63_884_288,
+        }),
+        unsupported => Err(DownloadError::UnsupportedTarget(unsupported)),
+    }
+}
+
+pub fn mpv_asset_for(target: TargetPlatform) -> Result<BinaryAsset, DownloadError> {
+    match target {
+        TargetPlatform::WindowsX64 => Ok(BinaryAsset {
+            target,
+            id: "mpv".to_string(),
+            version: "2026-11-08-git-8bc468896e".to_string(),
+            url: "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-11-08-8bc468896e/mpv-x86_64-v3-20261108-git-8bc468896e.7z".to_string(),
+            sha256: "7f42790ece058d91ebf036db97347da84fe685e87c5dd34af6fee6edb57c3e85".to_string(),
+            max_bytes: 35_029_818,
         }),
         unsupported => Err(DownloadError::UnsupportedTarget(unsupported)),
     }

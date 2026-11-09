@@ -1,6 +1,7 @@
 use crate::download::installed_verified;
 use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
+use crate::player::{PlayerManager, PlayerOpenRequest, PlayerStatus};
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
 use std::sync::{Arc, Mutex};
 use tauri::State;
@@ -139,4 +140,53 @@ pub async fn server_binary_installed() -> Result<bool, String> {
     })
     .await
     .map_err(|error| format!("binary state worker failed: {error}"))?
+}
+
+async fn run_player<F>(
+    state: Arc<Mutex<PlayerManager>>,
+    operation: F,
+) -> Result<PlayerStatus, String>
+where
+    F: FnOnce(&mut PlayerManager) -> PlayerStatus + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut manager = state
+            .lock()
+            .map_err(|_| "player state lock failed".to_string())?;
+        Ok(operation(&mut manager))
+    })
+    .await
+    .map_err(|error| format!("player worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn player_open(
+    request: PlayerOpenRequest,
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), move |manager| {
+        manager.open(request)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn player_pause(
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), |manager| manager.pause()).await
+}
+
+#[tauri::command]
+pub async fn player_stop(
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), |manager| manager.stop()).await
+}
+
+#[tauri::command]
+pub async fn player_status(
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), |manager| manager.status()).await
 }

@@ -1,6 +1,6 @@
 import { currentTargetPlatform, desktopRuntimeInstructions } from './platform';
 
-export type DesktopCommand = 'health' | 'target_platform' | 'server_start' | 'server_stop' | 'server_status' | 'server_update' | 'server_binary_installed' | 'native_http' | 'native_http_clear_cookies' | 'serverStatus' | 'playerOpen';
+export type DesktopCommand = 'health' | 'target_platform' | 'server_start' | 'server_stop' | 'server_status' | 'server_update' | 'server_binary_installed' | 'native_http' | 'native_http_clear_cookies' | 'serverStatus' | 'playerOpen' | 'player_open' | 'player_pause' | 'player_stop' | 'player_status';
 export type BridgeTransport = (command: DesktopCommand, args?: Record<string, unknown>) => Promise<unknown>;
 
 export interface DesktopBridge {
