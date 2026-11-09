@@ -1,12 +1,13 @@
 import { currentTargetPlatform, desktopRuntimeInstructions } from './platform';
 
-export type BridgeTransport = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+export type DesktopCommand = 'health' | 'target_platform' | 'server_start' | 'server_stop' | 'server_status' | 'server_update' | 'server_binary_installed' | 'native_http' | 'native_http_clear_cookies' | 'serverStatus' | 'playerOpen';
+export type BridgeTransport = (command: DesktopCommand, args?: Record<string, unknown>) => Promise<unknown>;
 
 export interface DesktopBridge {
-  invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
+  invoke<T>(command: DesktopCommand, args?: Record<string, unknown>): Promise<T>;
 }
 
-async function defaultTransport(command: string, args?: Record<string, unknown>): Promise<unknown> {
+async function defaultTransport(command: DesktopCommand, args?: Record<string, unknown>): Promise<unknown> {
   if (command === 'health') return { status: 'ok' };
   if (command === 'target_platform') return currentTargetPlatform();
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
@@ -19,6 +20,6 @@ async function defaultTransport(command: string, args?: Record<string, unknown>)
 export function createBridge(transport?: BridgeTransport): DesktopBridge {
   const call = transport || defaultTransport;
   return {
-    invoke: async <T>(command: string, args?: Record<string, unknown>): Promise<T> => call(command, args) as Promise<T>,
+    invoke: async <T>(command: DesktopCommand, args?: Record<string, unknown>): Promise<T> => call(command, args) as Promise<T>,
   };
 }

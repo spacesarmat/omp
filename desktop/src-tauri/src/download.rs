@@ -91,13 +91,32 @@ pub fn download_verified(asset: BinaryAsset) -> Result<PathBuf, DownloadError> {
     download_verified_in(asset, &root)
 }
 
-fn download_verified_in(asset: BinaryAsset, root: &Path) -> Result<PathBuf, DownloadError> {
+pub fn installed_verified(asset: BinaryAsset) -> Result<bool, DownloadError> {
+    let root = dirs::data_local_dir()
+        .ok_or(DownloadError::StorageUnavailable)?
+        .join("com.spacesarmat.omp.desktop");
+    installed_verified_in(asset, &root)
+}
+
+fn installed_verified_in(asset: BinaryAsset, root: &Path) -> Result<bool, DownloadError> {
     validate_asset(&asset)?;
-    let final_path = root
-        .join("bin")
+    let path = final_path_for(&asset, root);
+    if !path.exists() {
+        return Ok(false);
+    }
+    Ok(hash_file(&path)? == asset.sha256.to_ascii_lowercase())
+}
+
+fn final_path_for(asset: &BinaryAsset, root: &Path) -> PathBuf {
+    root.join("bin")
         .join(asset.target.as_str())
         .join(&asset.version)
-        .join(asset.target.executable_name(&asset.id));
+        .join(asset.target.executable_name(&asset.id))
+}
+
+fn download_verified_in(asset: BinaryAsset, root: &Path) -> Result<PathBuf, DownloadError> {
+    validate_asset(&asset)?;
+    let final_path = final_path_for(&asset, root);
     if final_path.exists() {
         if hash_file(&final_path)? == asset.sha256.to_ascii_lowercase() {
             return Ok(final_path);

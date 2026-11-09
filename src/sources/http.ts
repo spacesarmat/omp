@@ -15,6 +15,8 @@ export interface NativeHttpRequest {
   formCharset?: string;
   responseCharset?: string;
   body?: string;
+  bodyBase64?: string;
+  contentType?: string;
   timeoutMs?: number;
   /** Pass a Cloudflare check on the way (the site's switch is on). */
   cloudflare?: boolean;

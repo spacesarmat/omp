@@ -11,7 +11,7 @@ import { ensureLinkedBilling } from '../../src/sources/ompJackett';
 import { setDhtPeersContext } from '../../src/sources/dhtPeers';
 import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
-import { TorrServerClient } from '../../src/api/torrserver';
+import { setTorrServerTransport, TorrServerClient } from '../../src/api/torrserver';
 import { scanLan } from './screens/Connect';
 import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWifiPrefs, watchPlaybackEnd } from './servers/wifiRun';
 import { reloadSourcePrefs } from '../../src/sources/store';
@@ -32,6 +32,23 @@ installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
   () => tvs.value.map((tv) => tv.ip),
 );
+
+if (typeof __DESKTOP__ !== 'undefined' && __DESKTOP__) {
+  setTorrServerTransport({
+    send: async (url, req) => {
+      const response = await native.http({
+        url,
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        bodyBase64: req.bodyBase64,
+        contentType: req.contentType,
+        timeoutMs: req.timeoutMs,
+      });
+      return { status: response.status, base64: response.base64 || '' };
+    },
+  });
+}
 
 // a failed https connect asks the native http whether the certificate was the reason (a page's fetch cannot tell)
 if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));

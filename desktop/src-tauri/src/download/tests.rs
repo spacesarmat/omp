@@ -1,4 +1,4 @@
-use super::{download_verified, download_verified_in, DownloadError};
+use super::{download_verified, download_verified_in, installed_verified_in, DownloadError};
 use crate::http_test;
 use crate::platform::{asset_for, BinaryAsset, TargetPlatform};
 use std::fs;
@@ -231,4 +231,28 @@ fn concurrent_downloads_accept_the_other_verified_file() {
         PAYLOAD
     );
     assert_eq!(files(root).len(), 1);
+}
+
+#[test]
+fn installed_verified_checks_existing_binary_without_downloading() {
+    let temp = tempfile::tempdir().expect("temp directory");
+    let asset = asset(
+        "https://example.com/payload".to_string(),
+        PAYLOAD_SHA256,
+        26,
+    );
+    let final_path = temp
+        .path()
+        .join("bin")
+        .join("windows-x64")
+        .join("1.0.0")
+        .join("torrserver.exe");
+
+    assert!(!installed_verified_in(asset.clone(), temp.path()).expect("missing binary"));
+    fs::create_dir_all(final_path.parent().expect("binary parent"))
+        .expect("create binary directory");
+    fs::write(&final_path, PAYLOAD).expect("write verified binary");
+    assert!(installed_verified_in(asset.clone(), temp.path()).expect("verified binary"));
+    fs::write(&final_path, b"corrupt").expect("write corrupt binary");
+    assert!(!installed_verified_in(asset, temp.path()).expect("corrupt binary"));
 }

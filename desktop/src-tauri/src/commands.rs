@@ -1,3 +1,5 @@
+use crate::download::installed_verified;
+use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
 use std::sync::{Arc, Mutex};
@@ -104,4 +106,37 @@ mod tests {
         assert_eq!(workers.len(), 2);
         assert!(workers.iter().all(|worker| *worker != caller));
     }
+}
+
+#[tauri::command]
+pub async fn native_http(
+    request: NativeHttpRequest,
+    state: State<'_, HttpClient>,
+) -> Result<HttpResponse, String> {
+    let client = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.request(request))
+        .await
+        .map_err(|error| format!("HTTP worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn native_http_clear_cookies(
+    url: String,
+    state: State<'_, HttpClient>,
+) -> Result<(), String> {
+    let client = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.clear_cookies(&url))
+        .await
+        .map_err(|error| format!("HTTP worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn server_binary_installed() -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let target = platform::current()?;
+        let asset = platform::asset_for(target).map_err(|error| error.to_string())?;
+        installed_verified(asset).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("binary state worker failed: {error}"))?
 }

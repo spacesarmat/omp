@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod download;
+pub mod http;
 #[cfg(test)]
 mod http_test;
 pub mod platform;
