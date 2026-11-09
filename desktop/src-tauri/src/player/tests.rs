@@ -50,10 +50,12 @@ impl PlayerProcess for FakeProcess {
 struct ScriptedStream {
     input: std::io::Cursor<Vec<u8>>,
     output: Arc<std::sync::Mutex<Vec<u8>>>,
+    delay: std::time::Duration,
 }
 
 impl std::io::Read for ScriptedStream {
     fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        std::thread::sleep(self.delay);
         self.input.read(buffer)
     }
 }
@@ -80,13 +82,17 @@ fn ipc_ignores_events_and_matches_the_request_id() {
             b"{\"event\":\"file-loaded\"}\n{\"data\":12.5,\"request_id\":1,\"error\":\"success\"}\n".to_vec(),
         ),
         output: Arc::clone(&output),
+        delay: std::time::Duration::ZERO,
     };
     let ipc = super::MpvIpc {
         stream: std::cell::RefCell::new(Box::new(stream)),
         next_request_id: std::cell::Cell::new(1),
     };
 
-    assert_eq!(ipc.number("time-pos").expect("IPC response"), 12.5);
+    assert_eq!(
+        super::IpcCall::number(&ipc, "time-pos").expect("IPC response"),
+        12.5
+    );
     let request: serde_json::Value =
         serde_json::from_slice(&output.lock().expect("output lock")).expect("IPC request");
     assert_eq!(
@@ -94,6 +100,69 @@ fn ipc_ignores_events_and_matches_the_request_id() {
         serde_json::json!(["get_property", "time-pos"])
     );
     assert_eq!(request["request_id"], 1);
+}
+
+#[test]
+fn ipc_reply_has_a_deadline() {
+    let stream = ScriptedStream {
+        input: std::io::Cursor::new(Vec::new()),
+        output: Arc::new(std::sync::Mutex::new(Vec::new())),
+        delay: std::time::Duration::from_millis(250),
+    };
+    let ipc = super::MpvIpc {
+        stream: std::cell::RefCell::new(Box::new(stream)),
+        next_request_id: std::cell::Cell::new(1),
+    };
+    let worker = ipc.spawn(std::time::Duration::from_millis(20));
+
+    let started = std::time::Instant::now();
+    let error =
+        super::IpcCall::number(&worker, "time-pos").expect_err("unresponsive IPC must fail");
+    assert_eq!(error, "mpv IPC reply timeout");
+    assert!(started.elapsed() < std::time::Duration::from_millis(200));
+    drop(worker);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+}
+
+struct FailingLoadProcess {
+    stopped: Arc<AtomicBool>,
+}
+
+impl PlayerProcess for FailingLoadProcess {
+    fn pause(&mut self, _paused: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn position(&self) -> Result<(u64, u64), String> {
+        Ok((0, 0))
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        self.stopped.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    fn try_wait(&mut self) -> Result<Option<i32>, String> {
+        Ok(None)
+    }
+
+    fn wait_until_loaded(&mut self) -> Result<(), String> {
+        Err("media load failed".to_string())
+    }
+}
+
+#[test]
+fn open_stops_the_process_when_media_cannot_load() {
+    let stopped = Arc::new(AtomicBool::new(false));
+    let stopped_in_launcher = Arc::clone(&stopped);
+    let mut manager = PlayerManager::with_launcher(move |_| {
+        Ok(Box::new(FailingLoadProcess {
+            stopped: Arc::clone(&stopped_in_launcher),
+        }))
+    });
+
+    assert_eq!(manager.open(request()).state, PlayerState::Error);
+    assert!(stopped.load(Ordering::SeqCst));
 }
 
 fn launcher() -> impl Fn(&PlayerOpenRequest) -> Result<Box<dyn PlayerProcess>, String> {
@@ -256,6 +325,19 @@ fn windows_ipc_uses_a_short_pipe_name() {
     assert!(!path.contains(['/', '\\']));
 }
 
+#[cfg(not(windows))]
+#[test]
+fn unix_ipc_uses_a_socket_in_the_data_directory() {
+    let config = super::PlayerConfig::new("player-data");
+
+    assert_eq!(
+        super::ipc_path(&config),
+        std::path::Path::new("player-data")
+            .join("mpv-ipc.sock")
+            .to_string_lossy()
+    );
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "requires downloaded mpv and local sample media"]
@@ -288,4 +370,15 @@ fn player_smoke_codecs() {
         assert_eq!(manager.pause().state, PlayerState::Playing, "{file}");
         assert_eq!(manager.stop().state, PlayerState::Idle, "{file}");
     }
+
+    let status = manager.open(PlayerOpenRequest {
+        url: std::path::Path::new(&root)
+            .join("missing.mkv")
+            .to_string_lossy()
+            .into_owned(),
+        title: Some("missing.mkv".to_string()),
+        headers: None,
+        start_ms: Some(0),
+    });
+    assert_eq!(status.state, PlayerState::Error);
 }

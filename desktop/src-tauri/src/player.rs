@@ -38,6 +38,9 @@ pub struct PlayerOpenRequest {
 }
 
 pub trait PlayerProcess: Send {
+    fn wait_until_loaded(&mut self) -> Result<(), String> {
+        Ok(())
+    }
     fn pause(&mut self, paused: bool) -> Result<(), String>;
     fn position(&self) -> Result<(u64, u64), String>;
     fn stop(&mut self) -> Result<(), String>;
@@ -74,10 +77,21 @@ impl PlayerManager {
         self.stop();
         self.status.state = PlayerState::Starting;
         match (self.launcher)(&request) {
-            Ok(process) => {
-                self.process = Some(process);
-                self.status.state = PlayerState::Playing;
-            }
+            Ok(mut process) => match process.wait_until_loaded() {
+                Ok(()) => {
+                    self.process = Some(process);
+                    self.status.state = PlayerState::Playing;
+                }
+                Err(_) => {
+                    let _ = process.stop();
+                    self.status = PlayerStatus {
+                        state: PlayerState::Error,
+                        position_ms: 0,
+                        duration_ms: 0,
+                        error: Some("player launch failed".to_string()),
+                    };
+                }
+            },
             Err(_) => {
                 self.status = PlayerStatus {
                     state: PlayerState::Error,
@@ -221,9 +235,10 @@ pub fn mpv_args(request: &PlayerOpenRequest, ipc: &str) -> Vec<OsString> {
     args
 }
 
-fn ipc_path(_config: &PlayerConfig) -> String {
+fn ipc_path(config: &PlayerConfig) -> String {
     #[cfg(windows)]
     {
+        let _ = config;
         format!("omp-mpv-{}", std::process::id())
     }
     #[cfg(not(windows))]
@@ -272,13 +287,13 @@ fn extract_mpv(archive: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String>
 
 struct MpvProcess {
     child: std::process::Child,
-    ipc: MpvIpc,
+    ipc: MpvIpcWorker,
 }
 
 impl MpvProcess {
     fn new(mut child: std::process::Child, ipc: String) -> Result<Self, String> {
         let ipc = match MpvIpc::connect(&ipc) {
-            Ok(ipc) => ipc,
+            Ok(ipc) => ipc.spawn(std::time::Duration::from_secs(2)),
             Err(error) => {
                 let _ = crate::process::stop(&mut child);
                 return Err(error);
@@ -289,6 +304,40 @@ impl MpvProcess {
 }
 
 impl PlayerProcess for MpvProcess {
+    fn wait_until_loaded(&mut self) -> Result<(), String> {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if self
+                .child
+                .try_wait()
+                .map_err(|_| "mpv status failed".to_string())?
+                .is_some()
+            {
+                return Err("mpv media load failed".to_string());
+            }
+            match self
+                .ipc
+                .call(serde_json::json!(["get_property", "playback-time"]))
+            {
+                Ok(response)
+                    if response
+                        .get("data")
+                        .and_then(serde_json::Value::as_f64)
+                        .is_some() =>
+                {
+                    return Ok(());
+                }
+                Ok(_) => {}
+                Err(error) if error == "mpv command failed" => {}
+                Err(error) => return Err(error),
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err("mpv media load timed out".to_string());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
     fn pause(&mut self, paused: bool) -> Result<(), String> {
         self.ipc.set_pause(paused)
     }
@@ -313,6 +362,69 @@ impl PlayerProcess for MpvProcess {
             return Ok(Some(0));
         }
         Ok(None)
+    }
+}
+
+struct MpvIpcWorker {
+    requests: std::sync::mpsc::Sender<IpcRequest>,
+    timeout: std::time::Duration,
+}
+
+struct IpcRequest {
+    command: serde_json::Value,
+    response: std::sync::mpsc::Sender<Result<serde_json::Value, String>>,
+}
+
+trait IpcCall {
+    fn call(&self, command: serde_json::Value) -> Result<serde_json::Value, String>;
+
+    fn number(&self, property: &str) -> Result<f64, String> {
+        let response = self.call(serde_json::json!(["get_property", property]))?;
+        response
+            .get("data")
+            .and_then(serde_json::Value::as_f64)
+            .ok_or_else(|| "mpv property is unavailable".to_string())
+    }
+
+    fn boolean(&self, property: &str) -> Result<bool, String> {
+        let response = self.call(serde_json::json!(["get_property", property]))?;
+        response
+            .get("data")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| "mpv property is unavailable".to_string())
+    }
+
+    fn eof_reached(&self) -> Result<bool, String> {
+        self.boolean("eof-reached")
+    }
+
+    fn set_pause(&self, paused: bool) -> Result<(), String> {
+        self.call(serde_json::json!(["set_property", "pause", paused]))
+            .map(|_| ())
+    }
+
+    fn position(&self) -> Result<(u64, u64), String> {
+        let position = self.number("time-pos")?;
+        let duration = self.number("duration")?;
+        Ok(((position * 1000.0) as u64, (duration * 1000.0) as u64))
+    }
+}
+
+impl IpcCall for MpvIpcWorker {
+    fn call(&self, command: serde_json::Value) -> Result<serde_json::Value, String> {
+        let (response, receiver) = std::sync::mpsc::channel();
+        self.requests
+            .send(IpcRequest { command, response })
+            .map_err(|_| "mpv IPC closed".to_string())?;
+        match receiver.recv_timeout(self.timeout) {
+            Ok(result) => result,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err("mpv IPC reply timeout".to_string())
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err("mpv IPC closed".to_string())
+            }
+        }
     }
 }
 
@@ -342,6 +454,19 @@ impl MpvIpc {
         ))
     }
 
+    fn spawn(self, timeout: std::time::Duration) -> MpvIpcWorker {
+        let (requests, receiver) = std::sync::mpsc::channel::<IpcRequest>();
+        std::thread::spawn(move || {
+            while let Ok(request) = receiver.recv() {
+                let result = self.call(request.command);
+                let _ = request.response.send(result);
+            }
+        });
+        MpvIpcWorker { requests, timeout }
+    }
+}
+
+impl IpcCall for MpvIpc {
     fn call(&self, command: serde_json::Value) -> Result<serde_json::Value, String> {
         use std::io::{Read, Write};
         let request_id = self.next_request_id.get();
@@ -388,37 +513,6 @@ impl MpvIpc {
             }
             return Ok(response);
         }
-    }
-
-    fn number(&self, property: &str) -> Result<f64, String> {
-        let response = self.call(serde_json::json!(["get_property", property]))?;
-        response
-            .get("data")
-            .and_then(serde_json::Value::as_f64)
-            .ok_or_else(|| "mpv property is unavailable".to_string())
-    }
-
-    fn boolean(&self, property: &str) -> Result<bool, String> {
-        let response = self.call(serde_json::json!(["get_property", property]))?;
-        response
-            .get("data")
-            .and_then(serde_json::Value::as_bool)
-            .ok_or_else(|| "mpv property is unavailable".to_string())
-    }
-
-    fn eof_reached(&self) -> Result<bool, String> {
-        self.boolean("eof-reached")
-    }
-
-    fn set_pause(&mut self, paused: bool) -> Result<(), String> {
-        self.call(serde_json::json!(["set_property", "pause", paused]))
-            .map(|_| ())
-    }
-
-    fn position(&self) -> Result<(u64, u64), String> {
-        let position = self.number("time-pos")?;
-        let duration = self.number("duration")?;
-        Ok(((position * 1000.0) as u64, (duration * 1000.0) as u64))
     }
 }
 
