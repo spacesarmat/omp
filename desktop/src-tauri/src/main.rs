@@ -1,9 +1,11 @@
-mod commands;
-mod platform;
+use omp_desktop::commands;
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![commands::health, commands::target_platform])
+        .invoke_handler(tauri::generate_handler![
+            commands::health,
+            commands::target_platform
+        ])
         .run(tauri::generate_context!())
         .expect("error while running OMP desktop");
 }
