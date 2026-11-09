@@ -7,3 +7,4 @@ pub mod platform;
 pub mod player;
 pub mod process;
 pub mod server;
+pub mod update;

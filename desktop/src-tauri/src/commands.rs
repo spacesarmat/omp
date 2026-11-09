@@ -3,6 +3,7 @@ use crate::http::{HttpClient, HttpResponse, NativeHttpRequest};
 use crate::platform;
 use crate::player::{PlayerCancellation, PlayerManager, PlayerOpenRequest, PlayerStatus};
 use crate::server::{ServerHandle, ServerManager, ServerStartRequest};
+use crate::update::{UpdateInfo, UpdateManager};
 use std::sync::{Arc, Mutex};
 use tauri::State;
 
@@ -196,4 +197,52 @@ pub async fn player_status(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
 ) -> Result<PlayerStatus, String> {
     run_player(Arc::clone(state.inner()), |manager| manager.status()).await
+}
+
+async fn run_update<R, F>(state: Arc<Mutex<UpdateManager>>, operation: F) -> Result<R, String>
+where
+    R: Send + 'static,
+    F: FnOnce(&mut UpdateManager) -> Result<R, crate::update::UpdateError> + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut manager = state
+            .lock()
+            .map_err(|_| "update state lock failed".to_string())?;
+        Ok(operation(&mut manager).map_err(|error| error.to_string())?)
+    })
+    .await
+    .map_err(|error| format!("update worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn update_check(
+    info: UpdateInfo,
+    state: State<'_, Arc<Mutex<UpdateManager>>>,
+) -> Result<Option<UpdateInfo>, String> {
+    run_update(Arc::clone(state.inner()), move |manager| {
+        manager.check(&info)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_download(
+    info: UpdateInfo,
+    state: State<'_, Arc<Mutex<UpdateManager>>>,
+) -> Result<UpdateInfo, String> {
+    run_update(Arc::clone(state.inner()), move |manager| {
+        manager.download(&info)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn update_apply(
+    info: UpdateInfo,
+    state: State<'_, Arc<Mutex<UpdateManager>>>,
+) -> Result<(), String> {
+    run_update(Arc::clone(state.inner()), move |manager| {
+        manager.apply(&info)
+    })
+    .await
 }

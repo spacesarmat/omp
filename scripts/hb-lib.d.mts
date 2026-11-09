@@ -42,3 +42,16 @@ export function buildAndroidUpdate(p: {
   notesPhone?: string[];
   abis?: Partial<Record<'arm64' | 'armv7', AbiApk>>;
 }): object;
+export function buildWindowsUpdate(p: {
+  tag: string;
+  version: string;
+  msixName: string;
+  sha256: string;
+  notes: string[];
+}): {
+  version: string;
+  url: string;
+  sha256: string;
+  notes: string[];
+  releaseUrl: string;
+};

@@ -1,10 +1,23 @@
 name: Desktop
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag for the signed MSIX and feed
+        required: false
+        type: string
+      publish:
+        description: Sign and publish the release asset and update feed
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   smoke:
@@ -55,3 +68,127 @@ jobs:
         run: python -m pip install -r desktop/tests/requirements.txt
       - name: Rust tests
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+
+
+  package-windows:
+    needs: smoke
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Check Rust
+        id: rust-version
+        shell: bash
+        run: echo "version=$(rustc --version | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+      - name: Cache Cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ steps.rust-version.outputs.version }}-
+      - run: npm ci
+      - run: npm ci --prefix desktop
+      - run: npm run build:desktop
+      - name: Build desktop executable
+        env:
+          OMP_MSIX_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
+        run: npm --prefix desktop run tauri -- build --no-bundle
+      - name: Validate publication input
+        if: github.event.inputs.publish == 'true'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_TAG)) {
+            throw "An existing release tag is required for publication"
+          }
+      - name: Prepare signing certificate
+        if: github.event.inputs.publish == 'true'
+        shell: pwsh
+        env:
+          MSIX_CERTIFICATE_BASE64: ${{ secrets.MSIX_CERTIFICATE_BASE64 }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\omp-msix.pfx", [Convert]::FromBase64String($env:MSIX_CERTIFICATE_BASE64))
+      - name: Build MSIX
+        shell: pwsh
+        env:
+          PUBLISH: ${{ github.event.inputs.publish }}
+          MSIX_CERTIFICATE_PASSWORD: ${{ secrets.MSIX_CERTIFICATE_PASSWORD }}
+          MSIX_CERTIFICATE_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $publish = $env:PUBLISH -eq 'true'
+          $certificate = $publish ? "$env:RUNNER_TEMP\omp-msix.pfx" : ""
+          & desktop/packaging/windows/build.ps1 -CertificatePath $certificate -RequireSignature:$publish
+      - name: Verify MSIX signature
+        shell: pwsh
+        env:
+          PUBLISH: ${{ github.event.inputs.publish }}
+          MSIX_CERTIFICATE_THUMBPRINT: ${{ secrets.MSIX_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
+          $signature = Get-AuthenticodeSignature -LiteralPath $package.FullName
+          if ($env:PUBLISH -eq 'true') {
+            if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ne $env:MSIX_CERTIFICATE_THUMBPRINT) {
+              throw "MSIX signature verification failed"
+            }
+          } elseif ($signature.Status -ne 'NotSigned') {
+            throw "Preview MSIX must be unsigned"
+          }
+      - name: Build update feed
+        if: github.event.inputs.publish == 'true'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
+          $version = (Get-Content -LiteralPath desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          node scripts/desktop-update-feed.mjs --tag $env:RELEASE_TAG --version $version --msix $package.FullName --output desktop/dist-desktop/update-windows.json
+      - name: Upload MSIX
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: omp-msix-${{ github.event.inputs.tag || 'preview' }}
+          path: desktop/dist-desktop/OMP-*.msix
+          if-no-files-found: error
+      - name: Upload update feed
+        if: github.event.inputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: update-windows-${{ github.event.inputs.tag }}
+          path: desktop/dist-desktop/update-windows.json
+          if-no-files-found: error
+      - name: Publish release asset and feed
+        if: github.event.inputs.publish == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*.msix" | Select-Object -First 1
+          gh release upload $env:RELEASE_TAG $package.FullName --clobber
+          $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
+          $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>$null
+          if ($sha) {
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Update Windows desktop feed" -f content="$content" -f sha="$sha" -f branch="gh-pages"
+          } else {
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Add Windows desktop feed" -f content="$content" -f branch="gh-pages"
+          }
+
+      - name: Remove signing certificate
+        if: always() && github.event.inputs.publish == 'true'
+        shell: pwsh
+        run: Remove-Item -LiteralPath "$env:RUNNER_TEMP\omp-msix.pfx" -Force -ErrorAction SilentlyContinue

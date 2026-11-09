@@ -159,3 +159,14 @@ export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes,
   out.releaseUrl = `https://github.com/${REPO}/releases/tag/${tag}`;
   return out;
 }
+
+
+export function buildWindowsUpdate({ tag, version, msixName, sha256, notes }) {
+  return {
+    version,
+    url: `https://github.com/${REPO}/releases/download/${tag}/${msixName}`,
+    sha256,
+    notes,
+    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
+  };
+}

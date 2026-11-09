@@ -1,6 +1,7 @@
 import { createBridge, type DesktopBridge } from './bridge';
 import { createServerApi, EMBEDDED_SERVER_ORIGIN, type ServerApi, type ServerHandle } from './server';
 import { createPlayerApi } from './player';
+import { createUpdateApi, updateInfoFromPackage } from './update';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
@@ -40,6 +41,7 @@ function localInfo(handle: ServerHandle, installed: boolean): LocalServerInfo {
 export function createDesktopNative(bridge: DesktopBridge = createBridge()): DesktopNative {
   const serverApi = createServerApi(bridge);
   const playerApi = createPlayerApi(bridge);
+  const updateApi = createUpdateApi(bridge);
   const stateListeners = new Set<(state: LocalServerState) => void>();
   const emit = (running: boolean, error?: string) => {
     for (const listener of stateListeners) listener({ running, error });
@@ -72,7 +74,14 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     takePendingAudioOpen: async () => null,
     takePendingMagnet: async () => null,
     deviceAbiKey: async () => null,
-    canInstallApks: async () => false,
+    canInstallApks: async () => true,
+    downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
+      const info = updateInfoFromPackage(url, sha256);
+      await updateApi.updateDownload(info);
+      onProgress(50);
+      await updateApi.updateApply(info);
+      onProgress(100);
+    },
     localServerCache: async () => 0,
     rpcSetEnabled: async () => null,
     rpcInfo: async () => null,

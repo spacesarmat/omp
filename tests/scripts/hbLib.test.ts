@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, isTech, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, isTech, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, buildWindowsUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -91,6 +91,20 @@ describe('hb-lib', () => {
       ipkHash: sha, ipkSize: 456, notes: ['Android'], releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.7.0',
     });
     expect(sanitizeUpdateInfo(u)).toEqual(u);
+  });
+  it('builds the Windows desktop update feed', () => {
+    const sha = 'c'.repeat(64);
+    const update = buildWindowsUpdate({
+      tag: 'desktop-v0.20.11', version: '0.20.11', msixName: 'OMP-0.20.11.msix', sha256: sha, notes: ['Windows'],
+    });
+
+    expect(update).toEqual({
+      version: '0.20.11',
+      url: 'https://github.com/spacesarmat/omp/releases/download/desktop-v0.20.11/OMP-0.20.11.msix',
+      sha256: sha,
+      notes: ['Windows'],
+      releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/desktop-v0.20.11',
+    });
   });
   it('builds per-ABI entries and keeps the universal APK in the legacy fields', () => {
     const [a, b, c] = ['a', 'b', 'c'].map((x) => x.repeat(64));
