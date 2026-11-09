@@ -215,7 +215,7 @@ jobs:
           $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
           $sha = $null
           try {
-            $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>$null
+            $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>&1
           } catch {
             if ($_.Exception.Message -notmatch '404|Not Found') {
               throw
