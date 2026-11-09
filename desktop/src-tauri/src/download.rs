@@ -99,11 +99,10 @@ fn download_verified_in(asset: BinaryAsset, root: &Path) -> Result<PathBuf, Down
         .join(&asset.version)
         .join(asset.target.executable_name(&asset.id));
     if final_path.exists() {
-        return if hash_file(&final_path)? == asset.sha256.to_ascii_lowercase() {
-            Ok(final_path)
-        } else {
-            Err(DownloadError::HashMismatch)
-        };
+        if hash_file(&final_path)? == asset.sha256.to_ascii_lowercase() {
+            return Ok(final_path);
+        }
+        fs::remove_file(&final_path)?;
     }
 
     let https = has_scheme(&asset.url, "https://");

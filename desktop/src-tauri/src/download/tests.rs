@@ -150,3 +150,28 @@ fn windows_asset_matches_the_official_release_pin() {
     );
     assert_eq!(asset.max_bytes, 63_884_288);
 }
+
+#[test]
+fn corrupt_cached_binary_is_replaced_by_verified_download() {
+    let cached = tempfile::tempdir().expect("temp directory");
+    let cached_path = cached
+        .path()
+        .join("bin")
+        .join("windows-x64")
+        .join("1.0.0")
+        .join("torrserver.exe");
+    fs::create_dir_all(cached_path.parent().expect("cache parent"))
+        .expect("create cache directory");
+    fs::write(&cached_path, b"corrupt cached payload").expect("write corrupt cache");
+    let server = http_test::serve(PAYLOAD.to_vec());
+
+    let path = download_verified_in(
+        asset(server.url().to_string(), PAYLOAD_SHA256, 26),
+        cached.path(),
+    )
+    .expect("corrupt cache must be replaced by a verified download");
+
+    assert_eq!(path, cached_path);
+    assert_eq!(fs::read(&path).expect("read replaced payload"), PAYLOAD);
+    assert_eq!(files(cached.path()), vec![path]);
+}
