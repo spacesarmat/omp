@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../design/interaction.ts';
 import type { DesktopDesignTarget, DesignFormat } from '../../design/schema.ts';
 import { createDefaultTheme } from '../../design/defaults';
-import type { DesktopRouteId } from '../../desktop/src/shell/routes';
+import { DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from '../../desktop/src/shell/routes';
 import { createDefaultDraft, type EditorDraft } from '../shared/draft';
 import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
@@ -11,6 +11,9 @@ import { createSessionId } from './preview/protocol';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
 import { ThemeInspector } from './components/ThemeInspector';
+import { LogicEditor } from './components/LogicEditor';
+import { FlowMap } from './components/FlowMap';
+import { SimulationPanel } from './components/SimulationPanel';
 
 export interface AppProps {
   controller?: DraftController;
@@ -34,11 +37,12 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
   const draft = useDraftController(controller);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
-  const [mode] = useState<'design' | 'logic' | 'simulate'>('design');
-  const [serverConnected] = useState(false);
+  const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
+  const [serverConnected, setServerConnected] = useState(false);
   const [previewMode, setPreviewMode] = useState<'before' | 'after'>('after');
   const [trace, setTrace] = useState<InteractionTrace[]>([]);
   const setView = (view: Partial<Pick<EditorDraft, 'target' | 'screenId' | 'format' | 'language'>>) => {
+    if (view.screenId && DESKTOP_SCREEN_SUPPORT[view.screenId] === 'preview') setMode('design');
     controller.setView({
       target: view.target || draft.target,
       screenId: view.screenId || draft.screenId,
@@ -47,6 +51,7 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
     });
   };
   const previewTheme = previewMode === 'before' ? createDefaultTheme(draft.baseCommit) : draft.theme;
+  const canEditLogic = DESKTOP_SCREEN_SUPPORT[draft.screenId] === 'logic';
 
   return (
     <main class="editor-app">
@@ -59,6 +64,9 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
         <button type="button" data-action="undo" disabled={!controller.canUndo} onClick={() => controller.undo()}>Отменить</button>
         <button type="button" data-action="redo" disabled={!controller.canRedo} onClick={() => controller.redo()}>Повторить</button>
         <button type="button" data-action="snapshot" onClick={() => controller.snapshot(`Snapshot ${new Date().toISOString()}`)}>Snapshot</button>
+        <button type="button" data-testid="mode-design" disabled={mode === 'design'} onClick={() => setMode('design')}>Дизайн</button>
+        <button type="button" data-testid="mode-logic" disabled={!canEditLogic || mode === 'logic'} onClick={() => setMode('logic')}>Логика</button>
+        <button type="button" data-testid="mode-simulate" disabled={!canEditLogic || mode === 'simulate'} onClick={() => setMode('simulate')}>Симуляция</button>
       </header>
       <TargetBar
         target={draft.target}
@@ -86,8 +94,10 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
           onTrace={setTrace}
         />
         <aside class="editor-inspector">
-          <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />
-          <span>{trace.length ? `Действий: ${trace.length}` : 'Дизайн'}</span>
+          {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />}
+          {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
+          {mode === 'simulate' && <SimulationPanel flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
+          <span>{trace.length ? `Действий: ${trace.length}` : mode}</span>
         </aside>
       </section>
     </main>
