@@ -8,7 +8,7 @@ export interface EditorState {
 export interface EditorClient {
   state(): Promise<EditorState>;
   getDraft(id: string): Promise<EditorDraft | null>;
-  putDraft(draft: EditorDraft): Promise<EditorDraft>;
+  putDraft(draft: EditorDraft, options?: { keepalive?: boolean }): Promise<EditorDraft>;
 }
 
 export interface EditorClientOptions {
@@ -60,11 +60,12 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
       if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
       return parseEditorDraft(await response.json());
     },
-    putDraft: async (draft) => {
+    putDraft: async (draft, options) => {
       const response = await request(`/api/drafts/${encodeURIComponent(draft.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(draft),
+        keepalive: options?.keepalive,
       });
       if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
       return parseEditorDraft(await response.json());
