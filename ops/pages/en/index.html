@@ -11,53 +11,61 @@
   <link rel="alternate" hreflang="en" href="/omp/en/">
   <title>Download OMP - Android, webOS and Windows</title>
   <style>
-    :root { color-scheme: dark; --bg: #111310; --panel: #181a15; --text: #f2f2e9; --muted: #b3b8a8; --yellow: #f9c400; --line: #34382d; }
+    :root { color-scheme: dark; --bg: #111310; --panel: #181a15; --text: #f2f2e9; --muted: #b3b8a8; --subtle: #8d927f; --yellow: #f9c400; --line: #31342c; }
+    @font-face { font-family: Manrope; font-style: normal; font-weight: 400 800; font-display: swap; src: url("../assets/manrope-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: Manrope; font-style: normal; font-weight: 400 800; font-display: swap; src: url("../assets/manrope-cyrillic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Manrope, "Segoe UI", sans-serif; line-height: 1.55; }
     a { color: inherit; text-decoration: none; }
-    a:focus-visible { outline: .15rem solid var(--yellow); outline-offset: .3rem; border-radius: .2rem; }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
     a:hover { color: var(--yellow); }
-    .wrap { width: min(70rem, calc(100% - 2rem)); margin-inline: auto; }
-    .header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-block: 1.5rem; }
-    .brand { display: flex; align-items: center; font-size: 1.65rem; font-weight: 800; letter-spacing: .04em; }
-    .brand-logo { display: block; width: 2.5rem; height: 2.5rem; margin-right: .65rem; }
-    .header nav { display: flex; align-items: center; flex-wrap: wrap; }
-    .header nav a { padding: .45rem .7rem; color: var(--muted); }
+    .wrap { width: min(1200px, calc(100% - 40px)); margin-inline: auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 28px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 800; letter-spacing: -0.8px; }
+    .brand:hover { color: inherit; }
+    .brand-logo { display: block; width: 40px; height: 40px; }
+    .header nav { display: flex; align-items: center; gap: 20px; }
+    .header nav a { color: var(--muted); font-size: 13px; font-weight: 500; }
     .header nav a[aria-current="page"] { color: var(--yellow); }
-    .hero { padding-block: clamp(2.5rem, 1.5rem + 5vw, 6rem) clamp(1.5rem, 1rem + 3vw, 3.5rem); text-align: center; }
-    .eyebrow { color: var(--yellow); font-size: .8rem; font-weight: 700; letter-spacing: .16em; }
-    h1 { margin: .8rem 0 1rem; font-size: clamp(2.35rem, 1.65rem + 4vw, 4.8rem); line-height: 1.08; letter-spacing: -.04em; overflow-wrap: anywhere; }
-    .hero p { max-width: 44rem; margin: 0 auto 1.6rem; color: var(--muted); font-size: clamp(1rem, .95rem + .3vw, 1.2rem); }
-    .main-site { display: inline-block; border-bottom: .1rem solid var(--yellow); padding-bottom: .15rem; font-weight: 650; }
-    .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr)); gap: 1.25rem; padding-bottom: 2rem; }
-    .panel { min-width: 0; padding: clamp(1.2rem, 1rem + 1vw, 2rem); border: .0625rem solid var(--line); border-radius: 1rem; background: var(--panel); }
-    .panel.beta { border-color: #62581f; }
-    .panel-head { display: grid; grid-template-columns: minmax(min-content, 1fr) minmax(0, max-content); align-items: start; column-gap: .8rem; margin-bottom: 1.4rem; }
-    .panel-head > div { display: contents; }
-    .panel h2 { margin: 0 0 .35rem; font-size: 1.45rem; }
-    .panel-head h2 { grid-column: 1; grid-row: 1; overflow-wrap: anywhere; }
-    .panel-head p { grid-column: 1 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: .9rem; }
-    .version { grid-column: 2; grid-row: 1; min-width: 0; margin-left: 0; white-space: normal; overflow-wrap: anywhere; padding: .3rem .55rem; border: .0625rem solid var(--line); border-radius: .4rem; color: var(--yellow); font-size: .8rem; font-weight: 700; }
-    .platform + .platform { margin-top: 1.25rem; padding-top: 1.25rem; border-top: .0625rem solid var(--line); }
-    .platform h3 { margin: 0 0 .25rem; font-size: 1.05rem; }
-    .platform p { margin: 0 0 .85rem; color: var(--muted); font-size: .9rem; }
-    .button { display: block; padding: .8rem 1rem; border-radius: .5rem; text-align: center; font-weight: 750; overflow-wrap: anywhere; }
-    .button.primary { background: var(--yellow); color: #171710; }
-    .button.primary:hover { background: #ffd84d; color: #171710; }
-    .button.secondary { border: .0625rem solid var(--line); color: var(--text); }
-    .abis { display: flex; flex-wrap: wrap; margin-top: .65rem; }
-    .abis a { margin-right: 1rem; padding-block: .25rem; color: var(--muted); font-size: .85rem; text-decoration: underline; text-underline-offset: .2rem; }
-    .fallback { margin: .7rem 0 0; color: var(--muted); font-size: .78rem; }
-    .fallback a { text-decoration: underline; text-underline-offset: .15rem; }
-    footer { padding-block: 1.5rem 2.5rem; border-top: .0625rem solid var(--line); color: var(--muted); }
-    footer nav { display: flex; justify-content: center; flex-wrap: wrap; }
-    footer a { margin: .4rem .8rem; text-decoration: underline; text-underline-offset: .2rem; }
+    .hero { padding-block: 56px 32px; }
+    .eyebrow { color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 2px; line-height: 16px; }
+    h1 { margin: 16px 0; font-size: 56px; font-weight: 500; line-height: 62px; letter-spacing: -2px; overflow-wrap: anywhere; }
+    .hero p { max-width: 40rem; margin: 0 0 24px; color: var(--muted); font-size: 18px; line-height: 30px; }
+    .main-site { display: inline-block; border-bottom: 1px solid var(--yellow); padding-bottom: 2px; color: var(--yellow); font-weight: 600; }
+    .main-site:hover { color: var(--yellow); }
+    .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 28px; }
+    .tile { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+    .tile.is-yours { order: -1; border-color: var(--yellow); }
+    .tile-top { display: flex; gap: 14px; align-items: flex-start; }
+    .icon { flex: 0 0 36px; width: 36px; height: 36px; color: var(--yellow); }
+    .icon svg { display: block; width: 36px; height: 36px; }
+    .tile h2 { margin: 0; font-size: 20px; line-height: 28px; letter-spacing: -0.3px; font-weight: 600; }
+    .lead { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 22px; }
+    .you { margin: 0 0 4px; color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 2px; line-height: 16px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 0; align-items: baseline; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+    .button { display: block; padding: 14px 22px; border-radius: 6px; text-align: center; font-weight: 600; overflow-wrap: anywhere; }
+    .button.primary { background: var(--yellow); color: #111310; }
+    .button.primary:hover { background: #ffd24a; color: #111310; }
+    .button.secondary { border: 1px solid var(--line); color: var(--text); }
+    .button.secondary:hover { border-color: var(--yellow); color: var(--text); }
+    .hash { align-self: flex-start; max-width: 100%; margin: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; cursor: pointer; }
+    .hash:hover { border-color: var(--yellow); color: var(--text); }
+    .abis { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .chip:hover { border-color: var(--yellow); color: var(--text); }
+    .beta { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .beta summary { cursor: pointer; color: var(--yellow); font-size: 13px; font-weight: 600; }
+    .fallback { margin: 0 0 40px; color: var(--subtle); font-size: 13px; line-height: 20px; }
+    .fallback a { text-decoration: underline; text-underline-offset: 3px; }
+    footer { padding-block: 32px 40px; border-top: 1px solid var(--line); color: var(--muted); }
+    footer nav { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+    footer a { font-size: 13px; font-weight: 500; }
     @media (max-width: 40em) {
-      .header { justify-content: center; }
-      .header nav { justify-content: center; }
-      .downloads { grid-template-columns: 1fr; }
-      .panel-head { display: grid; }
-      .version { grid-column: 2; grid-row: 1; margin: 0; }
+      h1 { font-size: 36px; line-height: 42px; letter-spacing: -1.2px; }
+      .header { padding-block: 16px; }
+      .tiles { display: grid; grid-template-columns: 1fr; }
+      .tile { padding: 20px; }
     }
   </style>
 </head>
@@ -77,64 +85,131 @@
       <h1>Download OMP</h1>
       <p>Movies and series on Android, Android TV, Windows and LG webOS. Choose the stable release or try the latest improvements in beta.</p>
       <a class="main-site" href="https://omp-player.online/en/">Visit the main website</a>
+      <span data-version="stable" hidden>Current release</span>
+      <span data-version="beta" hidden>Latest beta</span>
     </section>
 
-    <div class="downloads">
-      <section class="panel" aria-labelledby="stable-title">
-        <div class="panel-head">
+    <div class="tiles">
+      <article class="tile" data-platform="android">
+        <div class="tile-top">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="11" y="3" width="14" height="30" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="28" r="1.3" fill="currentColor"/></svg></span>
           <div>
-            <h2 id="stable-title">Stable release</h2>
-            <p>The tested version for everyday use</p>
-          </div>
-          <span class="version" data-version="stable">Current release</span>
-        </div>
-        <div class="platform">
-          <h3>Android and Android TV</h3>
-          <p>Universal APK for most devices.</p>
-          <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Download for Android</a>
-          <div class="abis" aria-label="Android architecture builds">
-            <a data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64 APK</a>
-            <a data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7 APK</a>
+            <p class="you" hidden>THIS DEVICE</p>
+            <h2>Android</h2>
+            <p class="lead">Phone: remote and catalog. The same universal APK as Android TV.</p>
           </div>
         </div>
-        <div class="platform">
-          <h3>LG webOS</h3>
-          <p>IPK package for your LG TV.</p>
-          <a class="button secondary" data-download="stable-webos" href="https://github.com/spacesarmat/omp/releases/latest">Download for webOS</a>
+        <p class="meta">
+          <span class="mono" data-version="stable-android">Current release</span>
+          <span class="mono" data-date="stable-android" hidden></span>
+          <span class="mono" data-size="stable-android" hidden></span>
+        </p>
+        <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Download APK</a>
+        <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Copied" hidden>sha256</button>
+        <div class="abis" aria-label="Android architecture builds">
+          <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
+          <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
         </div>
-        <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases/latest">open the stable release page</a>.</p>
-      </section>
-
-      <section class="panel beta" aria-labelledby="beta-title">
-        <div class="panel-head">
-          <div>
-            <h2 id="beta-title">Beta release</h2>
-            <p>New features and fixes before the next stable release</p>
-          </div>
-          <span class="version" data-version="beta">Latest beta</span>
-        </div>
-        <div class="platform">
-          <h3>Android and Android TV</h3>
-          <p>Universal beta APK and separate architecture builds.</p>
-          <a class="button primary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Download beta for Android</a>
+        <details class="beta">
+          <summary>Beta</summary>
+          <p class="meta">
+            <span class="mono" data-version="beta-android">Latest beta</span>
+            <span class="mono" data-date="beta-android" hidden></span>
+            <span class="mono" data-size="beta-android" hidden></span>
+          </p>
+          <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Download beta</a>
+          <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Copied" hidden>sha256</button>
           <div class="abis" aria-label="Beta Android architecture builds">
-            <a data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64 APK</a>
-            <a data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7 APK</a>
+            <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
+            <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+          </div>
+        </details>
+      </article>
+
+      <article class="tile" data-platform="android-tv">
+        <div class="tile-top">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 29h12M18 25v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
+          <div>
+            <p class="you" hidden>THIS DEVICE</p>
+            <h2>Android TV</h2>
+            <p class="lead">The same universal APK as the phone. ARM64 and ARMv7 are separate files.</p>
           </div>
         </div>
-        <div class="platform">
-          <h3>LG webOS</h3>
-          <p>Beta IPK package for your LG TV.</p>
-          <a class="button secondary" data-download="beta-webos" href="https://github.com/spacesarmat/omp/releases">Download beta for webOS</a>
+        <p class="meta">
+          <span class="mono" data-version="stable-android">Current release</span>
+          <span class="mono" data-date="stable-android" hidden></span>
+          <span class="mono" data-size="stable-android" hidden></span>
+        </p>
+        <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Download APK</a>
+        <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Copied" hidden>sha256</button>
+        <div class="abis" aria-label="Android TV architecture builds">
+          <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
+          <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
         </div>
-        <div class="platform">
-          <h3>Windows <span class="version" data-version="beta-windows">Windows beta</span></h3>
-          <p>NSIS installer for Windows 10 and 11 (x64). Beta channel only for now.</p>
-          <a class="button secondary" data-download="beta-windows" href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe">Download beta for Windows</a>
+        <details class="beta">
+          <summary>Beta</summary>
+          <p class="meta">
+            <span class="mono" data-version="beta-android">Latest beta</span>
+            <span class="mono" data-date="beta-android" hidden></span>
+            <span class="mono" data-size="beta-android" hidden></span>
+          </p>
+          <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Download beta</a>
+          <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Copied" hidden>sha256</button>
+          <div class="abis" aria-label="Beta Android TV architecture builds">
+            <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
+            <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+          </div>
+        </details>
+      </article>
+
+      <article class="tile" data-platform="webos">
+        <div class="tile-top">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15 12l8 4-8 4z" fill="currentColor"/></svg></span>
+          <div>
+            <p class="you" hidden>THIS DEVICE</p>
+            <h2>LG webOS</h2>
+            <p class="lead">IPK package for your LG TV.</p>
+          </div>
         </div>
-        <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases">open the release list</a>.</p>
-      </section>
+        <p class="meta">
+          <span class="mono" data-version="stable-webos">Current release</span>
+          <span class="mono" data-date="stable-webos" hidden></span>
+          <span class="mono" data-size="stable-webos" hidden></span>
+        </p>
+        <a class="button primary" data-download="stable-webos" href="https://github.com/spacesarmat/omp/releases/latest">Download IPK</a>
+        <button type="button" class="hash" data-sha-for="stable-webos" data-label-copied="Copied" hidden>sha256</button>
+        <details class="beta">
+          <summary>Beta</summary>
+          <p class="meta">
+            <span class="mono" data-version="beta-webos">Latest beta</span>
+            <span class="mono" data-date="beta-webos" hidden></span>
+            <span class="mono" data-size="beta-webos" hidden></span>
+          </p>
+          <a class="button secondary" data-download="beta-webos" href="https://github.com/spacesarmat/omp/releases">Download beta</a>
+          <button type="button" class="hash" data-sha-for="beta-webos" data-label-copied="Copied" hidden>sha256</button>
+        </details>
+      </article>
+
+      <article class="tile" data-platform="windows">
+        <div class="tile-top">
+          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M5 8l11-1.6V17H5zm13-1.9L31 4v13H18zM5 19h11v10.6L5 28zm13 0h13v14l-13-1.8z"/></svg></span>
+          <div>
+            <p class="you" hidden>THIS DEVICE</p>
+            <h2>Windows</h2>
+            <p class="lead">NSIS installer for Windows 10 and 11 (x64). Beta channel only for now.</p>
+          </div>
+        </div>
+        <p class="meta">
+          <span class="mono" data-version="beta-windows">Windows beta</span>
+          <span class="mono" data-date="beta-windows" hidden></span>
+          <span class="mono" data-size="beta-windows" hidden></span>
+        </p>
+        <a class="button primary" data-download="beta-windows" href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe">Download installer</a>
+        <button type="button" class="hash" data-sha-for="beta-windows" data-label-copied="Copied" hidden>sha256</button>
+      </article>
     </div>
+
+    <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases/latest">open the stable release page</a> or <a href="https://github.com/spacesarmat/omp/releases">the release list</a>.</p>
   </main>
 
   <footer class="wrap">

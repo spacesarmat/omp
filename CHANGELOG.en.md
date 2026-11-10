@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
+- [tech] The download page has one tile each for Android, Android TV, LG webOS and Windows. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl. There is no macOS build
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
 - Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
 - If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
