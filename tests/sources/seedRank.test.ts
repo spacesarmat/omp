@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { freshnessScore, orderSearch, rankSearchResults, seasonScore } from '../../src/sources/seedRank';
+import { lang } from '../../src/i18n';
+import { freshnessScore, orderSearch, rankSearchResults, seasonScore, seedStatusLine, visibleSeedLine } from '../../src/sources/seedRank';
 import type { SourceResult } from '../../src/sources/types';
 
 const NOW = 1_700_000_000_000;
@@ -73,5 +74,42 @@ describe('seed ranking', () => {
       row({ Title: 'B', Seed: 9, date: 5, seedCheck: 'unverified' }),
     ];
     expect(orderSearch(list, 'date', 'a', NOW).map((r) => r.Title)).toEqual(['B', 'A']);
+  });
+});
+
+describe('one seed status', () => {
+  const HASH = 'ab'.repeat(20);
+  const magnet = 'magnet:?xt=urn:btih:' + HASH + '&tr=' + encodeURIComponent('udp://tracker.example:6969/announce');
+
+  it('puts the mark first and keeps a missing tracker address with the DHT count', () => {
+    lang.value = 'ru';
+    expect(seedStatusLine(row({ Title: 'A', Seed: 4, seedCheck: 'unverified' }))).toBe('не проверено · 4 сида · по данным трекера');
+    expect(seedStatusLine(row({ Title: 'B', Seed: 0, seedCheck: 'unverified' }))).toBe('не проверено');
+    expect(seedStatusLine(row({ Title: 'C', Seed: 2, Peer: 1, seedCheck: 'live' }))).toBe('2 сида · 1 лич · сейчас');
+    expect(seedStatusLine(row({ Title: 'D', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 8 }))).toBe(
+      '≈8 пиров онлайн · по DHT · Нет адреса трекера',
+    );
+    expect(seedStatusLine(row({ Title: 'E', hash: HASH, Magnet: magnet, seedCheck: 'dht', dhtPeers: 8 }))).toBe('≈8 пиров онлайн · по DHT');
+    expect(seedStatusLine(row({ Title: 'F', Seed: 9 }))).toBe('');
+  });
+
+  it('does not let a device scrape or a busy check replace the round', () => {
+    lang.value = 'ru';
+    const unverified = row({ Title: 'A', Seed: 4, seedCheck: 'unverified' });
+    const opts = {
+      indexerText: '4 сида · по данным трекера',
+      liveText: '0 сидов · 0 личей',
+      liveMode: 'live',
+      probe: { phase: 'idle', line: '' },
+      trackers: true,
+      canCheck: true,
+    };
+    expect(visibleSeedLine(unverified, opts)).toBe('не проверено · 4 сида · по данным трекера');
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 4 }), { ...opts, probe: { phase: 'busy', line: '' } })).toBe('4 сида · по данным трекера');
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 4 }), { ...opts, probe: { phase: 'done', line: '≈0 пиров онлайн · по DHT · Нет адреса трекера' } })).toBe(
+      '≈0 пиров онлайн · по DHT · Нет адреса трекера',
+    );
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 3 }), { ...opts, trackers: false, canCheck: false, liveMode: 'search' })).toBe('Нет адреса трекера');
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 3 }), { ...opts, trackers: false, canCheck: true, liveMode: 'search' })).toBe('4 сида · по данным трекера');
   });
 });

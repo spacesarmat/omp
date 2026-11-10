@@ -194,11 +194,13 @@ export function watchSeedVerify(opts: {
     ask(rows, opts.query, opts.ctx as SourceContext).then(
       (list) => {
         if (dead) return;
-        if (list) opts.onApply(list);
+        // A miss (timeout, rate limit, bad answer) still finishes the round: every row becomes «не проверено».
+        opts.onApply(list || []);
         if (opts.onSettled) opts.onSettled(list);
       },
       () => {
         if (dead) return;
+        opts.onApply([]);
         if (opts.onSettled) opts.onSettled(null);
       },
     );

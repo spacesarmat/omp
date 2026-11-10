@@ -255,7 +255,7 @@ describe('rpc handler: states, handles and failures', () => {
     const end = (await rpc.dispatch('searchPoll', { handle: started.handle, rev: 0 })) as { done: boolean; results: { Seed: number; seedCheck?: string }[] };
     expect(end.done).toBe(true);
     expect(end.results[0].Seed).toBe(1);
-    expect(end.results[0].seedCheck).toBeUndefined();
+    expect(end.results[0].seedCheck).toBe('unverified');
     saveBillingSession(null);
     rpc.dispose();
   });
