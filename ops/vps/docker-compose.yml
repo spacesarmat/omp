@@ -71,6 +71,7 @@ services:
       BILLING_SMTP_PASS: ${BILLING_SMTP_PASS:-}
       BILLING_JACKETT_API_KEY: ${BILLING_JACKETT_API_KEY:-}
       BILLING_JACRED_API_KEY: ${BILLING_JACRED_API_KEY:-}
+      BILLING_BITMAGNET_API_KEY: ${BILLING_BITMAGNET_API_KEY:-}
       BILLING_INDEXER_PASS: ${BILLING_INDEXER_PASS:-}
       # 0 (default since 27.10.2026) = refuse the old long-lived device tokens (apps before the token update); 1 = accept them again
       BILLING_LEGACY_TOKENS: ${BILLING_LEGACY_TOKENS:-0}

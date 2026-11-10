@@ -411,8 +411,8 @@ function noteAccessDenied(status: number, text: string, startedFor: string): voi
   if (status !== 403 || !sameLogin(startedFor, bindingKey())) return;
   const code = errorOf(text);
   if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
-  saveBillingAccess({ active: false, accessUntil: 0 });
-  syncOmpJackett({ jackett: false, jacred: false });
+  saveBillingAccess({ active: false, accessUntil: 0, bitmagnet: false });
+  syncOmpJackett({ jackett: false, jacred: false, bitmagnet: false });
   emitBillingChange();
 }
 
@@ -518,7 +518,9 @@ export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean; bi
   if (!flags) return;
   if (flags.jackett) registerSource(ompJackettSource());
   if (flags.jacred) registerSource(ompJacredSource());
-  const bitmagnet = flags.bitmagnet === true || flags.bitmagnet === false ? flags.bitmagnet === true : bitmagnetSourceOn();
+  // Clearing the paid sources clears bitmagnet too. An omitted flag must not revive it from the old access row.
+  const clearing = flags.jackett === false && flags.jacred === false;
+  const bitmagnet = flags.bitmagnet === true ? true : flags.bitmagnet === false || clearing ? false : bitmagnetSourceOn();
   if (bitmagnet) registerSource(ompBitmagnetSource());
 }
 
@@ -573,7 +575,7 @@ export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
         return;
       }
       if (!acc || !acc.active) {
-        syncOmpJackett({ jackett: false, jacred: false });
+        syncOmpJackett({ jackett: false, jacred: false, bitmagnet: false });
         return;
       }
       syncOmpJackett(acc.sources || { jackett: true, jacred: true });

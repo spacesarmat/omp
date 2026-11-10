@@ -22,6 +22,7 @@ const ENV = {
   BILLING_SMTP_PASS: 'smtp-env-pass-CCCC',
   BILLING_JACKETT_API_KEY: 'jackett-env-key-DDDD',
   BILLING_JACRED_API_KEY: 'jacred-env-key-EEEE',
+  BILLING_BITMAGNET_API_KEY: 'bitmagnet-env-key-FFFF',
   BILLING_INDEXER_PASS: 'short',
 };
 
@@ -33,6 +34,7 @@ function oldState() {
   st.settings.smtpPass = 'db-smtp';
   st.settings.jackettApiKey = 'db-jackett';
   st.settings.jacredApiKey = 'db-jacred';
+  st.settings.bitmagnetApiKey = 'db-bitmagnet';
   st.settings.indexerPass = 'db-pass';
   st.settings.adminTelegramIds = '99';
   st.settings.adminNotify = true;
@@ -253,7 +255,7 @@ describe('secretsToEnv: the .env lines for the move', () => {
     const st = oldState().settings;
     st.smtpPass = '';
     const out = envLinesFor(st, 'short', { BILLING_BOT_TOKEN: 'x:env', BILLING_TOKEN_SECRET: 'b'.repeat(40) });
-    expect(out.names).toEqual(['BILLING_YOOMONEY_SECRET', 'BILLING_JACKETT_API_KEY', 'BILLING_JACRED_API_KEY', 'BILLING_INDEXER_PASS']);
+    expect(out.names).toEqual(['BILLING_YOOMONEY_SECRET', 'BILLING_JACKETT_API_KEY', 'BILLING_JACRED_API_KEY', 'BILLING_BITMAGNET_API_KEY', 'BILLING_INDEXER_PASS']);
     expect(envLinesFor(st, KV, { BILLING_TOKEN_SECRET: 'too-short' }).names).toContain('BILLING_TOKEN_SECRET');
   });
 
@@ -277,6 +279,7 @@ describe('secretsToEnv: the .env lines for the move', () => {
       BILLING_SMTP_PASS: 'none',
       BILLING_JACKETT_API_KEY: 'db only',
       BILLING_JACRED_API_KEY: 'env only',
+      BILLING_BITMAGNET_API_KEY: 'db only',
       BILLING_INDEXER_PASS: 'db only',
       BILLING_TOKEN_SECRET: 'same',
     });

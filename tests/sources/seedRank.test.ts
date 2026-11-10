@@ -91,6 +91,7 @@ describe('one seed status', () => {
     );
     expect(seedStatusLine(row({ Title: 'E', hash: HASH, Magnet: magnet, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }))).toBe('~8 сидов по DHT');
     expect(seedStatusLine(row({ Title: 'P', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 8 }))).toBe('Нет адреса трекера');
+    expect(seedStatusLine(row({ Title: 'U', hash: HASH, Seed: 4, seedCheck: 'unverified', noTracker: true }))).toBe('Нет адреса трекера');
     expect(seedStatusLine(row({ Title: 'F', Seed: 9 }))).toBe('');
   });
 

@@ -13,6 +13,8 @@ describe('test bitmagnet compose', () => {
     expect(file).toContain('container_name: omp-bitmagnet-postgres');
     expect(file).toContain('mem_limit: 512m');
     expect(file).toContain('mem_limit: 1g');
+    expect(file).toContain('pg_isready -U postgres -d bitmagnet');
+    expect(file).toContain('condition: service_healthy');
     expect(file).toContain('${BITMAGNET_BIND:-127.0.0.1}:3333:3333');
     expect(file).toContain('--keys=http_server');
     expect(file).not.toContain('dht_crawler');

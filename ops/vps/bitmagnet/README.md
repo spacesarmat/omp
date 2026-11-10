@@ -18,7 +18,7 @@ docker compose --env-file .env up -d
 
 Torznab is `http://127.0.0.1:3333/torznab`. Nothing is added to Caddy. To reach it from another machine on the home LAN, set `BITMAGNET_BIND` to the NUC LAN address and recreate the bitmagnet service. Do not bind `0.0.0.0` and do not publish port 3334 or Postgres.
 
-OMP billing does not see this container until the admin URL is set (for example `http://172.17.0.1:3333` from the billing container to a loopback publish on the host). The switch `bitmagnet` stays off until that is saved. Seed and leech counts from the feed go through the same `/v1/seed-check` as other results. Rows with the same infohash are merged.
+`127.0.0.1:3333` is only the NUC itself. The billing container cannot open that address. Set `BITMAGNET_BIND` to an address billing can route to, and put the same host in the admin URL. For the docker bridge that is often `BITMAGNET_BIND=172.17.0.1` and `http://172.17.0.1:3333`. A home LAN test uses the NUC LAN address for both. Do not point billing at `172.17.0.1` while the port is still bound to `127.0.0.1`. The switch stays off until that URL is saved. Seed and leech counts from the feed go through the same `/v1/seed-check`. Rows with the same infohash are merged. An optional API key is `BILLING_BITMAGNET_API_KEY` in the billing `.env` (empty when bitmagnet has no key).
 
 ## Rollback
 

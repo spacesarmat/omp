@@ -114,7 +114,7 @@ export function seedStatusLine(r: SourceResult): string {
     return seedCheckLine({ ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0 }, null);
   }
   if (r.seedCheck === 'dht') {
-    const reason = trackerListed(r) ? 'timeout' : 'notrackers';
+    const reason = r.noTracker || !trackerListed(r) ? 'notrackers' : 'timeout';
     const dht =
       r.dhtEstimate && typeof r.dhtSeeds === 'number'
         ? { ok: true as const, peers: r.dhtPeers || 0, estimate: true, seedsEstimate: r.dhtSeeds }
@@ -124,6 +124,8 @@ export function seedStatusLine(r: SourceResult): string {
     return trackerListed(r) ? t('sources.seedUnverified') : t('sources.seedsNoTracker');
   }
   if (r.seedCheck === 'unverified') {
+    // The server found no announce URL. Say that, including when DHT returned addresses but no bloom estimate.
+    if (r.noTracker || (infohashOf(r) && !trackerListed(r))) return t('sources.seedsNoTracker');
     const base = indexerSeedLine(r);
     const mark = t('sources.seedUnverified');
     return base ? mark + ' · ' + base : mark;
