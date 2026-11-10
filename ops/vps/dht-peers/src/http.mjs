@@ -75,7 +75,13 @@ export function createDhtApp(opts) {
       return sendJson(res, 502, { error: 'down' });
     }
     const peers = found.peers > 0 ? Math.floor(found.peers) : 0;
-    cache.put(hash, peers);
-    return sendJson(res, 200, peersBody(peers, false));
+    const row = {
+      peers: peers,
+      seedsEstimate: found.seedsEstimate > 0 ? Math.floor(found.seedsEstimate) : 0,
+      peerEstimate: found.peerEstimate > 0 ? Math.floor(found.peerEstimate) : 0,
+      scraped: !!found.scraped,
+    };
+    cache.put(hash, row.scraped ? row : peers);
+    return sendJson(res, 200, peersBody(row, false));
   }
 }

@@ -45,7 +45,7 @@ export interface BillingAccount {
   /** This phone is bound but over the device limit (an extra slot was not renewed). */
   overLimit?: boolean;
   /** Which paid indexers the server currently exposes for this subscription. */
-  sources?: { jackett: boolean; jacred: boolean };
+  sources?: { jackett: boolean; jacred: boolean; bitmagnet?: boolean };
 }
 
 function hex(bytes: Uint8Array): string {

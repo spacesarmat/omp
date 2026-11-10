@@ -36,6 +36,10 @@ export function emptyState() {
       jacredUrl: '',
       jacredApiKey: '',
       jacredEnabled: true,
+      /** Optional Torznab indexer. Off until an admin sets the URL and the switch. */
+      bitmagnetUrl: '',
+      bitmagnetApiKey: '',
+      bitmagnetEnabled: false,
       /** Internal docker URL of VPS TorrServer (ops health only, never sent to phones). */
       torrserverUrl: '',
       /** Shared basic-auth for Jackett and JacRed when they sit behind the panel proxy. */

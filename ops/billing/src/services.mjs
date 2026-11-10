@@ -3,6 +3,7 @@ import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
 import { secretText } from './envSecrets.mjs';
+import { bitmagnetCapsUrl } from './jackett.mjs';
 
 /** settings.baseDevices from the form: a whole number 1-20. */
 export function validBase(v) {
@@ -60,6 +61,9 @@ export function publicAdminSettings(settings, env) {
     jacredUrl: s.jacredUrl || '',
     jacredApiKey: secretText(s.jacredApiKey),
     jacredEnabled: s.jacredEnabled !== false,
+    bitmagnetUrl: s.bitmagnetUrl || '',
+    bitmagnetApiKey: secretText(s.bitmagnetApiKey),
+    bitmagnetEnabled: s.bitmagnetEnabled === true,
     torrserverUrl: s.torrserverUrl || '',
     indexerUser: s.indexerUser || '',
     indexerPass: secretText(s.indexerPass),
@@ -117,6 +121,9 @@ export function mergeSettings(prev, body) {
     jacredUrl: String(b.jacredUrl !== undefined ? b.jacredUrl : cur.jacredUrl || '').replace(/\/+$/, ''),
     jacredApiKey: String(cur.jacredApiKey || ''),
     jacredEnabled: bool(b.jacredEnabled, cur.jacredEnabled !== false),
+    bitmagnetUrl: String(b.bitmagnetUrl !== undefined ? b.bitmagnetUrl : cur.bitmagnetUrl || '').replace(/\/+$/, ''),
+    bitmagnetApiKey: String(cur.bitmagnetApiKey || ''),
+    bitmagnetEnabled: bool(b.bitmagnetEnabled, cur.bitmagnetEnabled === true),
     torrserverUrl: String(b.torrserverUrl !== undefined ? b.torrserverUrl : cur.torrserverUrl || '').replace(
       /\/+$/,
       '',
@@ -151,6 +158,7 @@ export function mergeSettings(prev, body) {
 }
 
 export function sourceEnabled(settings, source) {
+  if (source === 'bitmagnet') return !!(settings && settings.bitmagnetEnabled === true);
   if (source === 'jacred') return settings.jacredEnabled !== false;
   return settings.jackettEnabled !== false;
 }
@@ -181,6 +189,11 @@ export async function probeService(kind, settings, fetchImpl) {
       if (!s.torrserverUrl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'url_empty', checkedAt: started };
       }
+    } else if (kind === 'bitmagnet') {
+      if (!s.bitmagnetUrl) {
+        return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
+      }
+      url = bitmagnetCapsUrl(s.bitmagnetUrl, s.bitmagnetApiKey);
     } else {
       const indexer = kind === 'jacred'
         ? { url: s.jacredUrl, key: s.jacredApiKey }
@@ -189,6 +202,8 @@ export async function probeService(kind, settings, fetchImpl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
       }
       url = capsUrl(indexer.url, indexer.key);
+    }
+    if (kind !== 'torrserver') {
       const user = String(s.indexerUser || '');
       if (user) {
         headers.Authorization =
@@ -224,10 +239,11 @@ export async function probeService(kind, settings, fetchImpl) {
 }
 
 export async function probeAllServices(settings, fetchImpl) {
-  const [jackett, jacred, torrserver] = await Promise.all([
+  const [jackett, jacred, torrserver, bitmagnet] = await Promise.all([
     probeService('jackett', settings, fetchImpl),
     probeService('jacred', settings, fetchImpl),
     probeService('torrserver', settings, fetchImpl),
+    probeService('bitmagnet', settings, fetchImpl),
   ]);
   return {
     jackett: {
@@ -241,6 +257,12 @@ export async function probeAllServices(settings, fetchImpl) {
       enabled: settings.jacredEnabled !== false,
       configured: secretConfigured(settings.jacredApiKey) && !!settings.jacredUrl,
       url: settings.jacredUrl || '',
+    },
+    bitmagnet: {
+      ...bitmagnet,
+      enabled: settings.bitmagnetEnabled === true,
+      configured: !!settings.bitmagnetUrl,
+      url: settings.bitmagnetUrl || '',
     },
     torrserver: {
       ...torrserver,

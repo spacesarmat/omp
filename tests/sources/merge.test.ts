@@ -29,6 +29,18 @@ describe('mergeResults', () => {
     expect(out[1].sources).toBeUndefined();
   });
 
+  it('dedups bitmagnet against another source by infohash', () => {
+    const hash = 'ab'.repeat(20);
+    const out = mergeResults([
+      r({ source: 'omp-jackett', Title: 'From Jackett', hash, Seed: 2, Peer: 1, Magnet: 'magnet:?xt=urn:btih:' + hash }),
+      r({ source: 'omp-bitmagnet', Title: 'From bitmagnet', hash, Seed: 9, Peer: 3, Magnet: 'magnet:?xt=urn:btih:' + hash }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe('omp-bitmagnet');
+    expect(out[0].Seed).toBe(9);
+    expect(out[0].sources).toEqual(['omp-jackett']);
+  });
+
   it('merges by normalized title and size within ±1%', () => {
     const out = mergeResults([
       r({ source: 'rutor', Title: 'Фильм (2026) 1080p', sizeBytes: 10 * GB, Seed: 3 }),

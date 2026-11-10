@@ -6,8 +6,11 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line
 - [tech] Added a local preview editor for themes and interaction rules with independent Windows, macOS and Linux styling, simulation, drafts and protected export
 - [tech] The theme editor shows an autosave error and offers a retry. The error text is not stored in the saved draft and does not return on undo. A background save does not leave an unhandled rejection
+- [tech] omp-dht-peers sends get_peers with scrape=1 (BEP 33), merges the BFsd and BFpe filters, and estimates seeds and peers. POST /v1/seed-check uses that for a release with no tracker (one lookup per batch, seed_probes cache, migration 006_seed_probe_dht). A new billing image and an omp-dht-peers rebuild are required. Nothing was deployed to the NUC
+- [tech] bitmagnet is an extra Torznab source next to Jackett and JacRed. It stays off until the settings have a URL and the switch is on. Its seed and leech counts go through the same check, and the same infohash is merged. The test compose in ops/vps/bitmagnet is not part of deploy.sh
 
 ## 0.20.12-beta.4
 

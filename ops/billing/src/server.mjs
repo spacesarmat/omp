@@ -118,6 +118,7 @@ import {
   safeTorznabCat,
   searchJackett,
   searchJacRed,
+  searchBitmagnet,
   stripJackett,
 } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
@@ -488,7 +489,7 @@ export function formatSearchLog(row) {
   const r = row || {};
   const at =
     typeof r.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ? r.at : new Date().toISOString();
-  const source = r.source === 'jacred' || r.source === 'jackett' ? r.source : '-';
+  const source = r.source === 'jacred' || r.source === 'jackett' || r.source === 'bitmagnet' ? r.source : '-';
   const device = typeof r.device === 'string' && /^[0-9a-f]{8}$/.test(r.device) ? r.device : '-';
   return (
     'search route=/v1/search' +
@@ -2211,6 +2212,7 @@ export function createApp(file, fetchImpl, opts) {
           sources: {
             jackett: isActive && sourceEnabled(state.settings, 'jackett') && !!state.settings.jackettUrl && !!state.settings.jackettApiKey,
             jacred: isActive && sourceEnabled(state.settings, 'jacred') && !!state.settings.jacredUrl && !!state.settings.jacredApiKey,
+            bitmagnet: isActive && sourceEnabled(state.settings, 'bitmagnet') && !!state.settings.bitmagnetUrl,
           },
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
@@ -2302,7 +2304,13 @@ export function createApp(file, fetchImpl, opts) {
             dht: cfg.enabled
               ? async (hash) => {
                 const found = await queryDhtPeers(cfg, hash, net);
-                return found.status === 200 && found.body ? found.body.peers : 0;
+                if (found.status !== 200 || !found.body) return 0;
+                return {
+                  peers: found.body.peers,
+                  seedsEstimate: found.body.seedsEstimate,
+                  peerEstimate: found.body.peerEstimate,
+                  estimate: found.body.estimate === true,
+                };
               }
               : null,
           });
@@ -2339,7 +2347,7 @@ export function createApp(file, fetchImpl, opts) {
           const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
           row.device = deviceLogId(deviceId);
           row.qlen = String((body && body.q) || '').length;
-          row.source = body && body.source === 'jacred' ? 'jacred' : 'jackett';
+          row.source = body && body.source === 'jacred' ? 'jacred' : body && body.source === 'bitmagnet' ? 'bitmagnet' : 'jackett';
           const state = (await store.read());
           const now = Date.now();
           const caller = await deviceCaller(state, token, deviceId, now);
@@ -2352,7 +2360,7 @@ export function createApp(file, fetchImpl, opts) {
           const rateKey = String(deviceId || token || '').slice(0, 64);
           if (!searchRate.allow(rateKey)) return replyJson(429, { error: 'rate' });
           const indexer = indexerOf(state.settings, source);
-          if (!indexer.url || !indexer.key) return replyJson(403, { error: 'disabled' });
+          if (!indexer.url || (source !== 'bitmagnet' && !indexer.key)) return replyJson(403, { error: 'disabled' });
           const q = String((body && body.q) || '');
           const cat = safeTorznabCat(body && body.cat);
           const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
@@ -2363,6 +2371,21 @@ export function createApp(file, fetchImpl, opts) {
           if (auth) headers.Authorization = auth;
           // One slow indexer on /indexers/all/results used to run past the phone's 25s limit.
           // Jackett is queried per configured indexer; JacRed stays on the aggregate route.
+          if (source === 'bitmagnet') {
+            const found = await searchBitmagnet({
+              origin: indexer.url,
+              apiKey: indexer.key,
+              query: q,
+              cat,
+              headers,
+              fetchImpl: net,
+              deadlineMs: jackettSearchDeadlineMs(),
+            });
+            if (!found.ok) return replyJson(502, { error: 'down' });
+            const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
+            searchCache.set(cacheKey, xml);
+            return replyXml(xml);
+          }
           if (source === 'jackett') {
             const found = await searchJackett({
               origin: indexer.url,

@@ -20,6 +20,11 @@ export interface SeedMeasure {
   seedersMax: number;
   seedersMedian: number;
   peers: number;
+  /** BEP 33 seed estimate. Absent on an older server answer. */
+  dhtSeeds?: number;
+  peerEstimate?: number;
+  estimate?: boolean;
+  noTracker?: boolean;
   samples: number;
   measuredAt: number;
 }
@@ -88,6 +93,10 @@ export function parseSeedResponse(text: string): SeedMeasure[] | null {
       seedersMax: num('seedersMax'),
       seedersMedian: num('seedersMedian'),
       peers: num('peers'),
+      dhtSeeds: num('dhtSeeds'),
+      peerEstimate: num('peerEstimate'),
+      estimate: it.estimate === true,
+      noTracker: it.noTracker === true,
       samples: num('samples'),
       measuredAt: num('measuredAt'),
     });
@@ -115,12 +124,24 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
         seedersMax: m.seedersMax,
         seedersMedian: m.seedersMedian,
         dhtPeers: m.peers,
+        dhtSeeds: m.dhtSeeds,
+        dhtEstimate: m.estimate,
+        noTracker: m.noTracker,
       };
     }
-    if (m && m.verified && m.peers > 0) {
-      return { ...r, hash: r.hash || hash, seedCheck: 'dht' as const, seedCheckAt: m.measuredAt, dhtPeers: m.peers };
+    if (m && m.estimate) {
+      return {
+        ...r,
+        hash: r.hash || hash,
+        seedCheck: 'dht' as const,
+        seedCheckAt: m.measuredAt,
+        dhtPeers: m.peers,
+        dhtSeeds: m.dhtSeeds,
+        dhtEstimate: true,
+        noTracker: m.noTracker,
+      };
     }
-    return { ...r, hash: r.hash || hash, seedCheck: 'unverified' as const };
+    return { ...r, hash: r.hash || hash, seedCheck: 'unverified' as const, noTracker: !!(m && m.noTracker) };
   });
 }
 

@@ -36,6 +36,8 @@ export interface AccessInput {
   checkedAt?: number;
   jackett?: boolean;
   jacred?: boolean;
+  /** Optional bitmagnet Torznab source. Omitted or false: off. */
+  bitmagnet?: boolean;
   /** 0: no monitoring cap. Omitted: this answer did not say. */
   monitorMax?: number;
 }
@@ -51,6 +53,7 @@ interface AccessRecord {
   checkedAt: number;
   jackett?: boolean;
   jacred?: boolean;
+  bitmagnet?: boolean;
   monitorMax?: number;
 }
 
@@ -70,6 +73,7 @@ function parseAccess(v: unknown): AccessRecord | null {
   };
   if (v.jackett === true || v.jackett === false) rec.jackett = v.jackett;
   if (v.jacred === true || v.jacred === false) rec.jacred = v.jacred;
+  if (v.bitmagnet === true || v.bitmagnet === false) rec.bitmagnet = v.bitmagnet;
   const cap = finite(v.monitorMax);
   if (cap !== null && cap >= 0 && cap <= 10000) rec.monitorMax = Math.floor(cap);
   return rec;
@@ -103,6 +107,7 @@ export function saveBillingAccess(acc: AccessInput | null): void {
   };
   if (acc.jackett === true || acc.jackett === false) row.jackett = acc.jackett;
   if (acc.jacred === true || acc.jacred === false) row.jacred = acc.jacred;
+  if (acc.bitmagnet === true || acc.bitmagnet === false) row.bitmagnet = acc.bitmagnet;
   if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && acc.monitorMax >= 0) row.monitorMax = Math.floor(acc.monitorMax);
   saveJson(ACCESS_KEY, row);
 }
@@ -119,6 +124,8 @@ export function billingAccessMatches(acc: AccessInput): boolean {
   if (rec.active !== !!acc.active || rec.accessUntil !== until) return false;
   if ((acc.jackett === true || acc.jackett === false) && rec.jackett !== acc.jackett) return false;
   if ((acc.jacred === true || acc.jacred === false) && rec.jacred !== acc.jacred) return false;
+  // Missing and false are both off. Only turning the source on or off emits.
+  if ((acc.bitmagnet === true) !== (rec.bitmagnet === true)) return false;
   if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && rec.monitorMax !== Math.floor(acc.monitorMax)) return false;
   return true;
 }
@@ -146,30 +153,38 @@ export function premiumCheckedAt(): number {
  * Null: do not turn paid sources on (no confirmation, or it is older than the window).
  * A fresh active answer that did not name sources turns both on, matching an old server.
  */
-export function freshPremiumSources(now?: number): { jackett: boolean; jacred: boolean } | null {
+export function freshPremiumSources(now?: number): { jackett: boolean; jacred: boolean; bitmagnet: boolean } | null {
   const at = now === undefined ? Date.now() : now;
   if (!ompSubscribed(at)) return null;
   const row = accessForSession();
   if (!row || !row.rec.checkedAt) return null;
   if (row.rec.checkedAt > at + 60000) return null;
   if (at - row.rec.checkedAt > PREMIUM_FRESH_MS) return null;
+  const bitmagnet = row.rec.bitmagnet === true;
   if (row.rec.jackett !== true && row.rec.jackett !== false && row.rec.jacred !== true && row.rec.jacred !== false) {
-    return { jackett: true, jacred: true };
+    return { jackett: true, jacred: true, bitmagnet };
   }
-  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true };
+  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true, bitmagnet };
 }
 
 /**
  * Source flags from the last /v1/me while the server date still counts, even when that check is older than
  * PREMIUM_FRESH_MS. Null when the answer named no sources: do not guess both on.
  */
-export function confirmedPremiumSources(now?: number): { jackett: boolean; jacred: boolean } | null {
+/** bitmagnet is off unless a fresh-enough /v1/me named it. Missing means disabled. */
+export function bitmagnetSourceOn(now?: number): boolean {
+  if (!ompSubscribed(now)) return false;
+  const row = accessForSession();
+  return !!(row && row.rec.bitmagnet === true);
+}
+
+export function confirmedPremiumSources(now?: number): { jackett: boolean; jacred: boolean; bitmagnet: boolean } | null {
   const at = now === undefined ? Date.now() : now;
   if (!ompSubscribed(at)) return null;
   const row = accessForSession();
   if (!row) return null;
   if (row.rec.jackett !== true && row.rec.jackett !== false && row.rec.jacred !== true && row.rec.jacred !== false) return null;
-  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true };
+  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true, bitmagnet: row.rec.bitmagnet === true };
 }
 
 /**

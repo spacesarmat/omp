@@ -33,6 +33,9 @@ export interface RpcResult {
   seedCheck?: 'live' | 'dht' | 'unverified';
   seedCheckAt?: number;
   dhtPeers?: number;
+  dhtSeeds?: number;
+  dhtEstimate?: boolean;
+  noTracker?: boolean;
 }
 
 export interface RpcFailure {

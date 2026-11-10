@@ -135,7 +135,7 @@ describe('seed check on a result card', () => {
     const http: SourceHttp = {
       get: (url) => {
         seen = url;
-        return Promise.resolve({ status: 200, url, text: JSON.stringify({ peers: 4, source: 'dht', approx: true }) });
+        return Promise.resolve({ status: 200, url, text: JSON.stringify({ peers: 4, source: 'dht', approx: true, estimate: true, seedsEstimate: 4 }) });
       },
       post: () => Promise.resolve({ status: 200, url: '', text: '' }),
       clearCookies: () => Promise.resolve(),
@@ -165,15 +165,17 @@ describe('seed check on a result card', () => {
     });
     const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(seen).toContain('/v1/dht-peers?infohash=' + HASH);
-    expect(meta).toContain('4 пира онлайн');
     expect(meta).toContain('Нет адреса трекера');
-    expect(meta.indexOf('4 пира онлайн')).toBeLessThan(meta.indexOf('Нет адреса трекера'));
+    expect(meta).toContain('~4 сида по DHT');
+    expect(meta.indexOf('Нет адреса трекера')).toBeLessThan(meta.indexOf('~4 сида по DHT'));
+    expect(meta).not.toContain('пир');
     expect(meta).not.toContain('сейчас');
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
     const sheet = el.querySelector('.m-rc-sheet-actions .m-sheet-row .seed-check') as HTMLButtonElement;
     expect(sheet).toBe(el.querySelector('.m-rc-sheet-actions .m-sheet-row')!.firstElementChild);
     expect(sheet.getAttribute('data-code')).toBe('PD31.1');
-    expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('Нет адреса трекера');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('~4 сида по DHT');
   });
 
   it('shows the tracker count before the DHT estimate arrives', async () => {
@@ -216,7 +218,7 @@ describe('seed check on a result card', () => {
     expect(meta).not.toContain('по DHT');
 
     await act(async () => {
-      releaseDht({ status: 200, url: '', text: JSON.stringify({ peers: 9, source: 'dht', approx: true }) });
+      releaseDht({ status: 200, url: '', text: JSON.stringify({ peers: 9, source: 'dht', approx: true, estimate: true, seedsEstimate: 6 }) });
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -224,8 +226,9 @@ describe('seed check on a result card', () => {
     });
     meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(meta).toContain('12 сидов');
-    expect(meta).toContain('9 пиров онлайн');
-    expect(meta).toContain('по DHT');
+    expect(meta).toContain('сейчас');
+    expect(meta).not.toContain('по DHT');
+    expect(meta).not.toContain('пир');
   });
 
   it('says DHT needs an OMP subscription when the tracker fails and there is no session', async () => {
@@ -280,7 +283,7 @@ describe('seed check on a result card', () => {
 
   it('drops the live dot when a later manual check is not a tracker count', async () => {
     const http: SourceHttp = {
-      get: () => Promise.resolve({ status: 200, url: '', text: JSON.stringify({ peers: 4, source: 'dht', approx: true }) }),
+      get: () => Promise.resolve({ status: 200, url: '', text: JSON.stringify({ peers: 4, source: 'dht', approx: true, estimate: true, seedsEstimate: 4 }) }),
       post: () => Promise.resolve({ status: 200, url: '', text: '' }),
       clearCookies: () => Promise.resolve(),
     };
@@ -295,12 +298,13 @@ describe('seed check on a result card', () => {
       for (let i = 0; i < 8; i++) await Promise.resolve();
     });
     const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
-    expect(meta).toContain('4 пира онлайн');
+    expect(meta).toContain('~4 сида по DHT');
+    expect(meta).not.toContain('пир');
     expect(meta).not.toContain('сейчас');
     expect(el.querySelector('.seed-live')).toBeNull();
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
     expect(el.querySelector('[data-result-details] .seed-live')).toBeNull();
-    expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('~4 сида по DHT');
   });
 
   it('shows the server round instead of a raw zero and keeps one manual line', () => {
@@ -315,7 +319,7 @@ describe('seed check on a result card', () => {
     expect(again).toContain('4 сида');
     expect(again).toContain('1 лич');
     expect(again).toContain('сейчас');
-    expect(again).toContain('2 пира онлайн');
+    expect(again).not.toContain('пир');
     expect(again).not.toContain('по данным трекера');
     expect(el.querySelector('.seed-live')).toBeTruthy();
   });

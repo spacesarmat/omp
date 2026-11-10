@@ -47,9 +47,9 @@ export function stripKey(url: string): string {
   return rest.slice(0, q) + (kept.length ? '?' + kept.join('&') : '') + hash;
 }
 
-type Kind = 'jackett' | 'prowlarr';
+type Kind = 'jackett' | 'prowlarr' | 'bitmagnet';
 
-const KIND_LABEL: { [k in Kind]: string } = { jackett: 'Jackett', prowlarr: 'Prowlarr' };
+const KIND_LABEL: { [k in Kind]: string } = { jackett: 'Jackett', prowlarr: 'Prowlarr', bitmagnet: 'bitmagnet' };
 
 function num(v: string | null | undefined): number | undefined {
   if (v === null || v === undefined || !/^\s*\d+\s*$/.test(v)) return undefined;
@@ -91,7 +91,7 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   // omp-fetch: / omp-jacred: stand in for a billing download URL (no host, no key)
   const remote =
     !!f.torrent &&
-    (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0);
+    (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0 || f.torrent.indexOf('omp-bitmagnet:') === 0);
   // kept even when a magnet exists: add prefers the file so its announce-list reaches TorrServer
   const torrentUrl = remote ? stripKey(f.torrent!) : '';
   const link = !magnet && torrentUrl ? torrentUrl : '';

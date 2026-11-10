@@ -1,0 +1,65 @@
+# Test bitmagnet next to the NUC, not part of deploy.sh and not part of the omp stack.
+# Own Postgres and own network. Does not mount billing data, the omp .env, or Caddy.
+# Torznab stays on the host loopback unless BITMAGNET_BIND is a LAN address.
+# Do not publish this port through Caddy or Cloudflare.
+
+name: omp-bitmagnet-test
+
+services:
+  bitmagnet:
+    image: ghcr.io/bitmagnet-io/bitmagnet:v0.10.0
+    container_name: omp-bitmagnet-test
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${BITMAGNET_PG_PASSWORD:?set BITMAGNET_PG_PASSWORD}
+    # HTTP and the queue only. Leave the DHT crawler off so the disk stays small.
+    command:
+      - worker
+      - run
+      - --keys=http_server
+      - --keys=queue_server
+    ports:
+      - "${BITMAGNET_BIND:-127.0.0.1}:3333:3333"
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 256
+    volumes:
+      - bitmagnet_config:/root/.config/bitmagnet
+    networks:
+      - bitmagnet
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: omp-bitmagnet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${BITMAGNET_PG_PASSWORD:?set BITMAGNET_PG_PASSWORD}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: bitmagnet
+      PGUSER: postgres
+    volumes:
+      - bitmagnet_pg:/var/lib/postgresql/data
+    shm_size: 256mb
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bitmagnet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - bitmagnet
+
+networks:
+  bitmagnet:
+    driver: bridge
+
+volumes:
+  bitmagnet_pg:
+  bitmagnet_config:
