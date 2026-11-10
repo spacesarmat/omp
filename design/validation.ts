@@ -43,7 +43,7 @@ function fail(path: string, message: string): never {
 function plain(value: unknown, path: string, keys: readonly string[]): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) fail(path, 'object required');
   const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) fail(path, 'plain object required');
+  if (prototype !== Object.prototype && prototype !== null && Object.getPrototypeOf(prototype) !== null) fail(path, 'plain object required');
   if (Object.prototype.hasOwnProperty.call(value, '__proto__')) fail(path, '__proto__ is not allowed');
   for (const key of Object.keys(value)) {
     if (!keys.includes(key)) fail(`${path}.${key}`, 'unknown field');
