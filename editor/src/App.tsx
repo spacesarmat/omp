@@ -14,6 +14,7 @@ import { ThemeInspector } from './components/ThemeInspector';
 import { LogicEditor } from './components/LogicEditor';
 import { FlowMap } from './components/FlowMap';
 import { SimulationPanel } from './components/SimulationPanel';
+import { ExportPanel } from './components/ExportPanel';
 
 export interface AppProps {
   controller?: DraftController;
@@ -30,11 +31,15 @@ function offlineClient(initial: EditorDraft): EditorClient {
       current = draft;
       return current;
     },
+    exportDraft: async () => {
+      throw new Error('OFFLINE_EXPORT_UNAVAILABLE');
+    },
   };
 }
 
-function EditorWorkspace({ controller }: { controller: DraftController }) {
+function EditorWorkspace({ controller, client }: { controller: DraftController; client?: EditorClient }) {
   const draft = useDraftController(controller);
+  const workspaceClient = client || offlineClient(draft);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
@@ -97,6 +102,7 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
           {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />}
           {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
           {mode === 'simulate' && <SimulationPanel flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
+          <ExportPanel controller={controller} client={workspaceClient} />
           <span>{trace.length ? `Действий: ${trace.length}` : mode}</span>
         </aside>
       </section>
@@ -106,12 +112,14 @@ function EditorWorkspace({ controller }: { controller: DraftController }) {
 
 export function App(props: AppProps = {}) {
   const [controller, setController] = useState<DraftController | null>(props.controller || null);
+  const [apiClient, setApiClient] = useState<EditorClient | undefined>(props.client);
   const [error, setError] = useState('');
   const [ownsController] = useState(!props.controller);
   useEffect(() => {
     if (props.controller) return;
     let active = true;
     const client = props.client || (props.draft ? offlineClient(props.draft) : createEditorClient());
+    setApiClient(client);
     const load = async () => {
       try {
         if (props.draft) {
@@ -145,5 +153,5 @@ export function App(props: AppProps = {}) {
 
   if (error) return <p role="alert">{error}</p>;
   if (!controller) return <p>Loading editor...</p>;
-  return <EditorWorkspace controller={controller} />;
+  return <EditorWorkspace controller={controller} client={apiClient} />;
 }

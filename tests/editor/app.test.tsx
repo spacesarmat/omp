@@ -27,6 +27,7 @@ beforeEach(() => {
       state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     },
   });
   act(() => render(h(App, { controller }), host));

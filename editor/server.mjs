@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parseEditorDraft } from './shared/draft.ts';
+import { exportDraft } from './export.mjs';
 
 const execute = promisify(execFile);
 const MAX_BODY = 1024 * 1024;
@@ -146,6 +147,10 @@ export async function startEditorServer({ root, token = randomBytes(32).toString
         json(response, 200, await gitState(root));
         return;
       }
+      if (url.pathname === '/api/export' && request.method === 'POST') {
+        json(response, 200, await exportDraft({ root, draft: await draftFrom(request) }));
+        return;
+      }
       const match = url.pathname.match(/^\/api\/drafts\/([^/]+)$/);
       if (match) {
         const id = decodeURIComponent(match[1]);
@@ -162,8 +167,9 @@ export async function startEditorServer({ root, token = randomBytes(32).toString
       }
       json(response, 404, { error: 'NOT_FOUND' });
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
-      json(response, status, { error: error instanceof HttpError ? error.code : 'INTERNAL_ERROR' });
+      const status = error instanceof HttpError ? error.status : error && typeof error.status === 'number' ? error.status : 500;
+      const code = error instanceof HttpError ? error.code : error && typeof error.code === 'string' ? error.code : 'INTERNAL_ERROR';
+      json(response, status, { error: code, ...(error && error.issues ? { issues: error.issues } : {}) });
     }
   });
 

@@ -28,6 +28,7 @@ function createController(): DraftController {
       saved.push(draft);
       return draft;
     },
+    exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
   return createDraftController({ draft: createDefaultDraft('draft-1', BASE), client, autosaveMs: 20 });
 }

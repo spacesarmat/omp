@@ -1,4 +1,5 @@
 import { parseEditorDraft, type EditorDraft } from '../shared/draft';
+import type { ExportResult } from '../export.mjs';
 
 export interface EditorState {
   baseCommit: string;
@@ -9,6 +10,7 @@ export interface EditorClient {
   state(): Promise<EditorState>;
   getDraft(id: string): Promise<EditorDraft | null>;
   putDraft(draft: EditorDraft, options?: { keepalive?: boolean }): Promise<EditorDraft>;
+  exportDraft(draft: EditorDraft): Promise<ExportResult>;
 }
 
 export interface EditorClientOptions {
@@ -69,6 +71,15 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
       });
       if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
       return parseEditorDraft(await response.json());
+    },
+    exportDraft: async (draft) => {
+      const response = await request('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      return response.json() as Promise<ExportResult>;
     },
   };
 }

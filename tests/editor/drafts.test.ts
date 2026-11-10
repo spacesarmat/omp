@@ -21,6 +21,7 @@ function fakeClient(saved: EditorDraft[], onPut?: OnPut): EditorClient {
       saved.push(draft);
       return draft;
     }),
+    exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
 }
 
