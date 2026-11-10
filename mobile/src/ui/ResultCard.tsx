@@ -6,6 +6,7 @@ import type { SourceResult } from '../../../src/sources/types';
 import { dhtSeedCheckAvailable } from '../../../src/sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
 import { rowNeedsMagnet } from '../../../src/sources/rowMagnet';
+import { applyLiveCounts, seedSuffix } from '../../../src/sources/seedRank';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
@@ -88,19 +89,24 @@ export function ResultCard(p: {
   const [, setBillingTick] = useState(0);
   useEffect(() => onBillingChange(() => setBillingTick((n) => n + 1)), []);
   const live = useSeedRow(r);
-  const seeds = phoneSeedBits(live.view);
+  const view = applyLiveCounts(r, live.view);
+  const seeds = phoneSeedBits(view);
+  const suffix = view.mode === 'live' ? '' : seedSuffix(r);
   const probe = useSeedProbe(r);
   const trackers = trackerListed(r);
   const topic = rowNeedsMagnet(r);
   const checkable = seedCheckable(r) || topic;
   const answered = probe.phase === 'done' || probe.phase === 'err';
   // A topic page can still supply the announce URL. Until that check runs, keep the site's own seed count.
-  const seedText =
-    answered
-      ? probe.text(seeds.text)
-      : !trackers && !topic && (seeds.text || probe.phase !== 'idle')
-        ? t('sources.seedsNoTracker')
-        : seeds.text;
+  const seedBase =
+    r.seedCheck === 'live'
+      ? seeds.text
+      : answered
+        ? probe.text(seeds.text)
+        : !trackers && !topic && (seeds.text || probe.phase !== 'idle')
+          ? t('sources.seedsNoTracker')
+          : seeds.text;
+  const seedText = suffix ? (seedBase ? seedBase + ' · ' + suffix : suffix) : seedBase;
   const showCheck = trackers ? checkable && (!!seeds.text || probe.phase !== 'idle') : checkable;
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(false);
@@ -145,7 +151,7 @@ export function ResultCard(p: {
               ) : date ? (
                 <span class="m-rc-date">{(sizeText(r) || seedText ? ' · ' : '') + date}</span>
               ) : null}
-              {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+              {seeds.mode === 'live' || probe.phase === 'done' || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
           <div class="m-rc-bottom">
@@ -236,7 +242,7 @@ export function ResultCard(p: {
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
                 {[sizeText(r), seedText, date].filter(Boolean).join(' · ')}
                 {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
-                {seeds.mode === 'live' || probe.phase === 'done' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+                {seeds.mode === 'live' || probe.phase === 'done' || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
               </span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>

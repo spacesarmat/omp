@@ -876,6 +876,7 @@ export const ru = {
     tvFileOnly: 'Эта раздача есть только файлом .torrent: добавьте её с телефона',
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'по данным трекера',
+    seedUnverified: 'не проверено',
     checkSeeds: 'Проверить сиды',
     checkSeedsShort: 'Сиды',
     seedsNow: 'сейчас',

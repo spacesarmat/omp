@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../i18n';
 import { settings } from '../store/settings';
 import { infohashOf, phoneSeedBits, seedDisplay, trackerTargets, tvSeedLabel, type SeedDisplay } from '../sources/liveSeeds';
+import { applyLiveCounts, seedSuffix } from '../sources/seedRank';
 import { SeedCheck } from './SeedCheck';
 import { liveSeeds } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
@@ -71,8 +72,11 @@ export function useSeedRow(r: SourceResult): { bind: (el: HTMLElement | null) =>
 /** TV search / news size line. The seed text stays «↑N» until a tracker answers. */
 export function TvSearchSize(p: { r: SourceResult; size: string; seedCode?: string }) {
   const live = useSeedRow(p.r);
-  const mode = live.view.mode;
-  const label = tvSeedLabel(live.view);
+  const view = applyLiveCounts(p.r, live.view);
+  const mode = view.mode;
+  const suffix = mode === 'live' ? '' : seedSuffix(p.r);
+  const base = tvSeedLabel(view);
+  const label = suffix ? (base ? base + ' · ' + suffix : suffix) : base;
   const hash = infohashOf(p.r) || 'row';
   return (
     <div class="search-size" ref={live.bind} data-seeds={mode}>

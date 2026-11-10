@@ -235,6 +235,31 @@ describe('rpc handler: states, handles and failures', () => {
     resetHealth();
   });
 
+  it('keeps the TV poll open until the seed check settles, including a failed check', async () => {
+    const hash = 'ab'.repeat(20);
+    saveBillingSession({ token: 'tok', paidUntil: 1, access: 'a', accessExp: Date.now() + 6 * 60 * 60 * 1000 });
+    let release: (v: { status: number; text: string; url: string }) => void = () => undefined;
+    const post = vi.fn(() => new Promise<{ status: number; text: string; url: string }>((resolve) => { release = resolve; }));
+    const row = { Title: 'Dune', Categories: '', Size: '1 GB', CreateDate: '', Tracker: 'x', Link: '', Magnet: 'magnet:?xt=urn:btih:' + hash + '&tr=' + encodeURIComponent('udp://tracker.example:6969/announce'), Hash: hash, Peer: 0, Seed: 1, source: 'rutor', hash };
+    const h = { sourceIds: ['rutor'], results: () => [row], pending: () => [] as string[], answered: () => ['rutor'], failed: () => [] as string[], done: Promise.resolve(), cancel: vi.fn() };
+    const rpc = createRpcHandler(deps({
+      ctx: () => ({ http: { post, get: () => Promise.reject(new Error('no')), clearCookies: () => Promise.resolve() }, client: null }) as never,
+      search: () => h,
+    }));
+    const started = (await rpc.dispatch('search', { query: 'Dune' })) as { handle: string };
+    const mid = (await rpc.dispatch('searchPoll', { handle: started.handle })) as { done: boolean };
+    expect(mid.done).toBe(false);
+    expect(post).toHaveBeenCalled();
+    release({ status: 500, text: '', url: '' });
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    const end = (await rpc.dispatch('searchPoll', { handle: started.handle, rev: 0 })) as { done: boolean; results: { Seed: number; seedCheck?: string }[] };
+    expect(end.done).toBe(true);
+    expect(end.results[0].Seed).toBe(1);
+    expect(end.results[0].seedCheck).toBeUndefined();
+    saveBillingSession(null);
+    rpc.dispose();
+  });
+
   it('setSourceEnabled keeps the changes the app made after the page read the switches', async () => {
     reloadSourcePrefs(); // the page's copy: what the store held when it loaded
     // the app (another WebView) changes switches meanwhile

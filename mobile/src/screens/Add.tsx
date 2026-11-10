@@ -44,6 +44,8 @@ import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
+import { orderSearch } from '../../../src/sources/seedRank';
+import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
 import { TextField } from '../ui/TextField';
@@ -247,6 +249,8 @@ export function Add({
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
+  const seedWatch = useRef<ReturnType<typeof watchSeedVerify> | null>(null);
+  const seedMeasures = useRef<SeedMeasure[] | null>(null);
   const pendingRef = useRef<Map<string, RowBusy>>(memo.busy);
   const launch = useTvLaunch();
   const tv = activeTv.value;
@@ -286,7 +290,9 @@ export function Add({
 
   const sync = (h: SearchHandle) => {
     if (!alive.v || memo.handle !== h) return;
-    setRows(h.results());
+    const raw = h.results();
+    setRows(seedMeasures.current ? applySeedRound(raw, seedMeasures.current, true) : raw);
+    if (seedWatch.current) seedWatch.current.notify();
     setProg(progOf(h));
     setSearching(h.pending().length > 0);
   };
@@ -299,6 +305,7 @@ export function Add({
     const offPrefs = onSourcePrefsChange(bump);
     return () => {
       alive.v = false;
+      if (seedWatch.current) seedWatch.current.cancel();
       if (listener === sync) listener = null;
       offSources();
       offPrefs();
@@ -396,6 +403,9 @@ export function Add({
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
   const runSearch = (q: string, asked: CheckedHosts, kind: KindFilter = getKindFilter()) => {
     if (memo.handle) memo.handle.cancel();
+    if (seedWatch.current) seedWatch.current.cancel();
+    seedWatch.current = null;
+    seedMeasures.current = null;
     setSearchError('');
     // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
     const notify = () => {
@@ -425,6 +435,16 @@ export function Add({
     memo.server = server;
     memo.order = [];
     memo.similarOrder = [];
+    seedWatch.current = watchSeedVerify({
+      query: q,
+      ctx,
+      getRows: () => h.results(),
+      getPending: () => h.pending().length,
+      onApply: (list) => {
+        seedMeasures.current = list;
+        if (memo.handle === h) sync(h);
+      },
+    });
     sync(h);
   };
 
@@ -517,7 +537,7 @@ export function Add({
   const kindEmpty = kindF !== 'all' && matching.length > 0;
   // the search settled and not one source answered (no network, or every site down)
   const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
-  const ordered = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
   memo.order = visible.map(resultKey);

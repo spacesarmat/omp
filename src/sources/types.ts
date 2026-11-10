@@ -62,6 +62,17 @@ export interface SourceResult extends SearchResult {
   torrentUrl?: string;
   /** Lowercase 40-hex infohash when known. */
   hash?: string;
+  /**
+   * Server seed check for this search. `live`: scrape answered. `dht`: only a DHT peer count.
+   * `unverified`: the round finished and this hash was not confirmed. Absent until that round ends.
+   */
+  seedCheck?: 'live' | 'dht' | 'unverified';
+  /** Unix ms of the server measurement. */
+  seedCheckAt?: number;
+  seedersMax?: number;
+  seedersMedian?: number;
+  /** DHT peers seen beside the scrape. Not a seeder count. */
+  dhtPeers?: number;
   /** Unix ms. */
   date?: number;
   sizeBytes?: number;
