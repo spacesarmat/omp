@@ -144,6 +144,9 @@ export function toRpcResult(r: SourceResult, key: string): RpcResult {
   if (r.seedCheck) out.seedCheck = r.seedCheck;
   if (typeof r.seedCheckAt === 'number') out.seedCheckAt = r.seedCheckAt;
   if (typeof r.dhtPeers === 'number') out.dhtPeers = r.dhtPeers;
+  if (typeof r.dhtSeeds === 'number') out.dhtSeeds = r.dhtSeeds;
+  if (r.dhtEstimate === true) out.dhtEstimate = true;
+  if (r.noTracker === true) out.noTracker = true;
   return out;
 }
 

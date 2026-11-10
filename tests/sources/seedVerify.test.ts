@@ -43,7 +43,7 @@ describe('seed check apply', () => {
     const text = JSON.stringify({
       items: [
         { infohash: HASH, verified: true, live: true, seeders: 12, leechers: 3, seedersMax: 20, seedersMedian: 12, peers: 0, samples: 2, measuredAt: 50 },
-        { infohash: OTHER, verified: true, live: false, seeders: 0, leechers: 0, peers: 4, samples: 0, measuredAt: 50 },
+        { infohash: OTHER, verified: false, live: false, seeders: 0, leechers: 0, peers: 9, dhtSeeds: 4, estimate: true, noTracker: true, samples: 0, measuredAt: 50 },
         { infohash: 'nope', verified: true, live: true, seeders: 1 },
       ],
     });
@@ -59,7 +59,7 @@ describe('seed check apply', () => {
       true,
     );
     expect(rows[0]).toMatchObject({ Seed: 12, Peer: 3, seedCheck: 'live', seedCheckAt: 50, seedersMedian: 12 });
-    expect(rows[1]).toMatchObject({ Seed: 9, seedCheck: 'dht', dhtPeers: 4 });
+    expect(rows[1]).toMatchObject({ Seed: 9, seedCheck: 'dht', dhtSeeds: 4, dhtEstimate: true, noTracker: true });
     expect(rows[2].seedCheck).toBe('unverified');
     expect(applySeedRound(rows, measures, false)[0].Seed).toBe(12);
   });

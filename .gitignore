@@ -36,6 +36,7 @@ monitor-out/
 ops/billing/.tunnel-bin/
 # VPS / NAS runtime secrets (templates stay as *.example)
 ops/vps/.env
+ops/vps/bitmagnet/.env
 ops/nas/**/init.yaml
 ops/nas/**/.env
 graphify-out/

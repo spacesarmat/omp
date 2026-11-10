@@ -1,7 +1,7 @@
 // Order of a finished search once the server has checked seeds. Until that round finishes, the list
 // stays in the ordinary seed order. Chromium 53 safe: no ?., no ??, no regex u flag.
 import { qualityRank } from '../monitor/quality';
-import { t, tp } from '../i18n';
+import { t } from '../i18n';
 import { seedCheckLine } from './dhtPeers';
 import { parseRelease } from './filters';
 import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
@@ -53,8 +53,8 @@ export function rankScore(r: SourceResult, query: string, now: number): number {
   if (r.seedCheck === 'live' && (r.Seed || 0) > 0) {
     const age = typeof r.seedCheckAt === 'number' ? now - r.seedCheckAt : FRESH_WINDOW_MS;
     score += LIVE_BASE + Math.min(r.Seed, 20000) * 1000 + freshnessScore(age);
-  } else if (r.seedCheck === 'dht' && (r.dhtPeers || 0) > 0) {
-    score += DHT_BASE + Math.min(r.dhtPeers || 0, 500) * 20;
+  } else if (r.seedCheck === 'dht' && r.dhtEstimate && (r.dhtSeeds || 0) > 0) {
+    score += DHT_BASE + Math.min(r.dhtSeeds || 0, 500) * 20;
   } else if (r.seedCheck === 'live') {
     // The scrape answered and nobody is seeding. Still above a row we could not check.
     score += 100000;
@@ -88,10 +88,9 @@ export function applyLiveCounts(r: SourceResult, view: SeedDisplay): SeedDisplay
   return view;
 }
 
-/** «не проверено», or a DHT peer count when scrape did not answer. Empty when the row is checked or not yet asked. */
+/** «не проверено». A DHT address count is not a seed status. */
 export function seedSuffix(r: SourceResult): string {
   if (r.seedCheck === 'unverified') return t('sources.seedUnverified');
-  if (r.seedCheck === 'dht' && (r.dhtPeers || 0) > 0) return tp('sources.dhtPeers', r.dhtPeers || 0);
   return '';
 }
 
@@ -112,16 +111,17 @@ export function indexerSeedLine(r: SourceResult): string {
  */
 export function seedStatusLine(r: SourceResult): string {
   if (r.seedCheck === 'live') {
-    const peers = r.dhtPeers || 0;
-    return seedCheckLine(
-      { ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0 },
-      peers > 0 ? { ok: true, peers: peers } : null,
-    );
+    return seedCheckLine({ ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0 }, null);
   }
   if (r.seedCheck === 'dht') {
-    // A listed tracker that did not answer uses the same line as a manual timeout: the DHT sample only.
     const reason = trackerListed(r) ? 'timeout' : 'notrackers';
-    return seedCheckLine({ ok: false, reason: reason }, { ok: true, peers: r.dhtPeers || 0 });
+    const dht =
+      r.dhtEstimate && typeof r.dhtSeeds === 'number'
+        ? { ok: true as const, peers: r.dhtPeers || 0, estimate: true, seedsEstimate: r.dhtSeeds }
+        : null;
+    const line = seedCheckLine({ ok: false, reason: reason }, dht);
+    if (line) return line;
+    return trackerListed(r) ? t('sources.seedUnverified') : t('sources.seedsNoTracker');
   }
   if (r.seedCheck === 'unverified') {
     const base = indexerSeedLine(r);

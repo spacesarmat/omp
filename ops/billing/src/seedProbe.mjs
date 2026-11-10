@@ -1,7 +1,8 @@
 // Fresh seeder counts for the top search rows. The app sends infohashes and announce URLs.
 // This process scrapes those trackers (HTTP BEP 48, UDP BEP 15) from the NUC address, with a
 // shared cap so one search cannot stampede a tracker. DHT is one extra lookup per batch when the
-// sidecar is configured: peers are not seeders, they only mark a swarm that scrape missed.
+// sidecar is configured: one lookup per batch, preferably a hash with no tracker address.
+// BEP 33 seed estimates are labeled estimates. The get_peers address count is not a seed count.
 // A background refresh of popular hashes is not here. Next step: one hash a minute, same gate,
 // only when hits are high and the row is past half its TTL.
 import { isIP } from 'node:net';
@@ -312,9 +313,24 @@ export function median(nums) {
   return Math.round((s[mid - 1] + s[mid]) / 2);
 }
 
+/** A DHT callback may return a peer count or a BEP 33 sample. Address counts are never seed estimates. */
+export function dhtSample(raw) {
+  if (typeof raw === 'number') return { peers: capCount(raw) || 0, dhtSeeds: 0, peerEstimate: 0, estimate: false };
+  if (!raw || typeof raw !== 'object') return { peers: 0, dhtSeeds: 0, peerEstimate: 0, estimate: false };
+  const seeds = capCount(raw.seedsEstimate !== undefined ? raw.seedsEstimate : raw.dhtSeeds);
+  const swarm = capCount(raw.peerEstimate);
+  return {
+    peers: capCount(raw.peers) || 0,
+    dhtSeeds: seeds === null ? 0 : seeds,
+    peerEstimate: swarm === null ? 0 : swarm,
+    estimate: raw.estimate === true || raw.scraped === true,
+  };
+}
+
 /**
  * Chosen seeders: the median when two or more trackers answered, otherwise the max.
- * Leechers come from the sample closest to that choice. DHT peers stay a separate field.
+ * Leechers come from the sample closest to that choice.
+ * `peers` is the DHT address sample. `dhtSeeds` is the BEP 33 estimate. Only a tracker answer is verified.
  */
 export function mergeMeasurements(samples, dhtPeers, now) {
   const list = Array.isArray(samples) ? samples.filter((s) => s && capCount(s.seeders) !== null && capCount(s.leechers) !== null) : [];
@@ -335,25 +351,29 @@ export function mergeMeasurements(samples, dhtPeers, now) {
     }
     leechers = best.leechers;
   }
-  const peers = capCount(dhtPeers) || 0;
+  const dht = dhtSample(dhtPeers);
   const live = list.length > 0;
   return {
     seeders: chosen,
     leechers,
     seedersMax,
     seedersMedian,
-    peers,
+    peers: dht.peers,
+    dhtSeeds: dht.dhtSeeds,
+    peerEstimate: dht.peerEstimate,
+    estimate: dht.estimate,
     samples: list.length,
     live,
-    verified: live || peers > 0,
+    verified: live,
     measuredAt: now,
   };
 }
 
 /** Popular rows (many seeds, or asked often) expire in 20 minutes. A rare live row lasts 4 hours. A miss lasts 10 minutes. */
 export function ttlMs(row) {
-  if (!row || (!row.live && !(row.peers > 0))) return TTL_MISS_MS;
-  if ((row.seeders || 0) >= POPULAR_SEEDS || (row.hits || 0) >= POPULAR_HITS) return TTL_POPULAR_MS;
+  const useful = row && (row.live || (row.dhtSeeds || 0) > 0 || (row.peers || 0) > 0);
+  if (!useful) return TTL_MISS_MS;
+  if ((row.seeders || 0) >= POPULAR_SEEDS || (row.dhtSeeds || 0) >= POPULAR_SEEDS || (row.hits || 0) >= POPULAR_HITS) return TTL_POPULAR_MS;
   return TTL_RARE_MS;
 }
 
@@ -431,6 +451,9 @@ export function createMemorySeedCache() {
           seedersMax: row.seedersMax,
           seedersMedian: row.seedersMedian,
           peers: row.peers,
+          dhtSeeds: row.dhtSeeds || 0,
+          peerEstimate: row.peerEstimate || 0,
+          estimate: !!row.estimate,
           samples: row.samples,
           measuredAt: row.measuredAt,
           live: !!row.live,
@@ -497,6 +520,10 @@ function publicItem(hash, merged, cached) {
     seedersMax: merged.seedersMax || 0,
     seedersMedian: merged.seedersMedian || 0,
     peers: merged.peers || 0,
+    dhtSeeds: merged.dhtSeeds || 0,
+    peerEstimate: merged.peerEstimate || 0,
+    estimate: !!merged.estimate,
+    noTracker: !!merged.noTracker,
     samples: merged.samples || 0,
     measuredAt: merged.measuredAt || 0,
     cached: !!cached,
@@ -505,13 +532,17 @@ function publicItem(hash, merged, cached) {
 
 function fromCache(row) {
   return publicItem(row.infohash, {
-    verified: !!row.live || (row.peers || 0) > 0,
+    verified: !!row.live,
     live: !!row.live,
     seeders: row.seeders || 0,
     leechers: row.leechers || 0,
     seedersMax: row.seedersMax || 0,
     seedersMedian: row.seedersMedian || 0,
     peers: row.peers || 0,
+    dhtSeeds: row.dhtSeeds || 0,
+    peerEstimate: row.peerEstimate || 0,
+    estimate: !!row.estimate,
+    noTracker: !row.trackerKey,
     samples: row.samples || 0,
     measuredAt: row.measuredAt || 0,
   }, true);
@@ -609,18 +640,26 @@ export async function runSeedCheck(opts) {
   for (let wave = 0; wave < SEED_MAX_TRACKERS; wave++) {
     for (let i = 0; i < planned.length; i++) if (planned[i][wave]) jobs.push(planned[i][wave]);
   }
-  let dhtPeers = 0;
+  let dhtHit = dhtSample(0);
   let dhtHash = '';
-  const dhtTarget = stale.length ? stale[0].infohash : '';
+  // One lookup per batch. A hash with no usable tracker goes first: that row has nothing else to show.
+  let dhtTarget = '';
+  for (let i = 0; i < stale.length; i++) {
+    if (!dhtTarget) dhtTarget = stale[i].infohash;
+    if (!trackerJobs(stale[i]).length) {
+      dhtTarget = stale[i].infohash;
+      break;
+    }
+  }
   const dhtTask = o.dht && dhtTarget
     ? Promise.race([
       Promise.resolve()
         .then(() => o.dht(dhtTarget))
-        .then((n) => (capCount(n) === null ? 0 : capCount(n)))
-        .catch(() => 0),
-      delay(DHT_WAIT_MS).then(() => 0),
+        .then((n) => dhtSample(n))
+        .catch(() => dhtSample(0)),
+      delay(DHT_WAIT_MS).then(() => dhtSample(0)),
     ])
-    : Promise.resolve(0);
+    : Promise.resolve(dhtSample(0));
   const samples = await scrapeJobs(jobs, {
     deadline: now + deadlineMs,
     gate,
@@ -628,15 +667,17 @@ export async function runSeedCheck(opts) {
     transport,
   });
   if (dhtTarget) {
-    dhtPeers = await dhtTask;
-    if (dhtPeers > 0) dhtHash = dhtTarget;
+    dhtHit = await dhtTask;
+    const useful = dhtHit.peers > 0 || dhtHit.estimate || dhtHit.dhtSeeds > 0;
+    if (useful) dhtHash = dhtTarget;
   }
   const measuredAt = nowFn();
   const saved = [];
   const measured = Object.create(null);
   for (let i = 0; i < stale.length; i++) {
     const hash = stale[i].infohash;
-    const merged = mergeMeasurements(samples[hash] || [], hash === dhtHash ? dhtPeers : 0, measuredAt);
+    const merged = mergeMeasurements(samples[hash] || [], hash === dhtHash ? dhtHit : 0, measuredAt);
+    merged.noTracker = trackerJobs(stale[i]).length === 0;
     measured[hash] = merged;
     saved.push({
       infohash: hash,
@@ -646,6 +687,9 @@ export async function runSeedCheck(opts) {
       seedersMax: merged.seedersMax,
       seedersMedian: merged.seedersMedian,
       peers: merged.peers,
+      dhtSeeds: merged.dhtSeeds,
+      peerEstimate: merged.peerEstimate,
+      estimate: merged.estimate,
       samples: merged.samples,
       measuredAt: merged.measuredAt,
       live: merged.live,

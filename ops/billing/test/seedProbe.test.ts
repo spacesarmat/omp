@@ -93,7 +93,9 @@ describe('merge, ttl, and the tracker gate', () => {
     const one = mergeMeasurements([{ seeders: 3, leechers: 1 }], 0, 100);
     expect(one.seeders).toBe(3);
     const dhtOnly = mergeMeasurements([], 6, 100);
-    expect(dhtOnly).toMatchObject({ seeders: 0, peers: 6, live: false, verified: true });
+    expect(dhtOnly).toMatchObject({ seeders: 0, peers: 6, live: false, verified: false, estimate: false });
+    const estimated = mergeMeasurements([], { peers: 6, seedsEstimate: 4, peerEstimate: 9, estimate: true }, 100);
+    expect(estimated).toMatchObject({ peers: 6, dhtSeeds: 4, peerEstimate: 9, estimate: true, verified: false, live: false });
   });
 
   it('keeps popular rows for 20 minutes, rare rows for 4 hours, and a miss for 10 minutes', () => {
@@ -160,8 +162,8 @@ describe('runSeedCheck', () => {
       timeoutMs: 500,
     });
     expect(calls).toHaveLength(2);
-    expect(first.items[0]).toMatchObject({ infohash: HASH, verified: true, live: true, seeders: 7, peers: 5, cached: false });
-    expect(first.items[1]).toMatchObject({ infohash: HASH_B, verified: false, live: false, cached: false });
+    expect(first.items[0]).toMatchObject({ infohash: HASH, verified: true, live: true, seeders: 7, peers: 0, estimate: false, cached: false });
+    expect(first.items[1]).toMatchObject({ infohash: HASH_B, verified: false, live: false, peers: 5, estimate: false, noTracker: true, cached: false });
     expect(first.stats).toMatchObject({ asked: 2, cache: 0, live: 1, dht: 1 });
     calls.length = 0;
     const second = await runSeedCheck({
@@ -202,6 +204,46 @@ describe('runSeedCheck', () => {
       timeoutMs: 5000,
     });
     expect(out.items[0]).toMatchObject({ verified: false, live: false, cached: false });
+  });
+
+  it('estimates seeds from DHT for a hash with no tracker and does not treat peer addresses as seeds', async () => {
+    const seen: string[] = [];
+    const out = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        { infohash: HASH_B, trackers: [] },
+      ],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      dht: async (hash: string) => {
+        seen.push(hash);
+        return { peers: 40, seedsEstimate: 12, peerEstimate: 30, estimate: true };
+      },
+      deadlineMs: 1000,
+      timeoutMs: 500,
+    });
+    expect(seen).toEqual([HASH_B]);
+    expect(out.items[0]).toMatchObject({ verified: true, live: true, seeders: 3, estimate: false });
+    expect(out.items[1]).toMatchObject({
+      verified: false,
+      live: false,
+      estimate: true,
+      dhtSeeds: 12,
+      peerEstimate: 30,
+      peers: 40,
+      noTracker: true,
+    });
+    const again = await runSeedCheck({
+      items: [{ infohash: HASH_B, trackers: [] }],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => null, udp: async () => null },
+      dht: async () => 9,
+      deadlineMs: 500,
+      timeoutMs: 200,
+    });
+    expect(again.items[0]).toMatchObject({ verified: false, estimate: false, peers: 9, dhtSeeds: 0 });
   });
 });
 

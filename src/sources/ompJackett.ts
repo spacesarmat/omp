@@ -14,7 +14,7 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { billingAccessMatches, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
+import { billingAccessMatches, bitmagnetSourceOn, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
 import { audiobookSearch, parseTorznab } from './indexer';
@@ -23,6 +23,7 @@ import type { Source, SourceContext, SourceResult } from './types';
 
 export const OMP_JACKETT_ID = 'omp-jackett';
 export const OMP_JACRED_ID = 'omp-jacred';
+export const OMP_BITMAGNET_ID = 'omp-bitmagnet';
 
 interface LinkStartBody {
   error?: string;
@@ -39,7 +40,7 @@ interface MeBody {
   accessUntil?: number;
   overLimit?: boolean;
   deviceLimit?: number;
-  sources?: { jackett?: boolean; jacred?: boolean };
+  sources?: { jackett?: boolean; jacred?: boolean; bitmagnet?: boolean };
   /** 0: no monitoring cap. Omitted by a server from before this field. */
   monitorMax?: number;
 }
@@ -328,16 +329,16 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           overLimit: !!body.overLimit,
           deviceLimit: body.deviceLimit || 0,
           sources: body.sources
-            ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred }
-            : { jackett: !!body.active, jacred: !!body.active },
+            ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
+            : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
       if (!(signedOut && !session)) saveSeenAccount({ paidUntil });
       const listed = body.sources;
       const flags = listed
-        ? { jackett: !!listed.jackett, jacred: !!listed.jacred }
-        : { jackett: !!body.active, jacred: !!body.active };
+        ? { jackett: !!listed.jackett, jacred: !!listed.jacred, bitmagnet: listed.bitmagnet === true }
+        : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false };
       // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
       let changed = false;
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
@@ -352,13 +353,14 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           accessUntil: body.accessUntil || 0,
           jackett: flags.jackett,
           jacred: flags.jacred,
+          bitmagnet: flags.bitmagnet === true,
           monitorMax: cap,
         };
         // The account screen refetches on this event. An unchanged answer must not emit, or the two call each other.
         if (!billingAccessMatches(next)) changed = true;
         saveBillingAccess(next);
         // A denial cleared both sources. This answer is the same binding, so put back what the server allows.
-        syncOmpJackett(body.active ? flags : { jackett: false, jacred: false });
+        syncOmpJackett(body.active ? flags : { jackett: false, jacred: false, bitmagnet: false });
       }
       if (changed) emitBillingChange();
       return {
@@ -385,7 +387,7 @@ function bytesOf(s: string): Uint8Array {
 }
 
 function isProxyLink(link: string): boolean {
-  return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0;
+  return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0 || link.indexOf('omp-bitmagnet:') === 0;
 }
 
 /** `{ "magnet": "magnet:..." }` from the billing proxy, when Jackett redirected the download. */
@@ -426,7 +428,7 @@ function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, qu
       if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       if (type.charAt(0) === '{') throw billingError(res.status, res.text);
-      return parseTorznab(res.text, id);
+      return parseTorznab(res.text, id, source === 'bitmagnet' ? 'bitmagnet' : 'jackett');
     },
     (e) => {
       throw failure(e);
@@ -486,17 +488,22 @@ export function ompJacredSource(): Source {
   return paidSource(OMP_JACRED_ID, t('sources.billing.jacred'), 'jacred');
 }
 
+export function ompBitmagnetSource(): Source {
+  return paidSource(OMP_BITMAGNET_ID, t('sources.billing.bitmagnet'), 'bitmagnet');
+}
+
 let watching = false;
 /**
  * Flags already applied in this process. Null until a confirmation: a cold start does not turn both sources on.
  * A /v1/me from the last PREMIUM_FRESH_MS (freshPremiumSources) fills it. While this process is open and the
  * server date is still in the future, a failed recheck keeps these flags (the search itself needs the network).
  */
-let lastSources: { jackett: boolean; jacred: boolean } | null = null;
+let lastSources: { jackett: boolean; jacred: boolean; bitmagnet?: boolean } | null = null;
 
-export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } | null): void {
+export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean; bitmagnet?: boolean } | null): void {
   unregisterSource(OMP_JACKETT_ID);
   unregisterSource(OMP_JACRED_ID);
+  unregisterSource(OMP_BITMAGNET_ID);
   if (!billingSession()) {
     lastSources = null;
     return;
@@ -511,6 +518,8 @@ export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } |
   if (!flags) return;
   if (flags.jackett) registerSource(ompJackettSource());
   if (flags.jacred) registerSource(ompJacredSource());
+  const bitmagnet = flags.bitmagnet === true || flags.bitmagnet === false ? flags.bitmagnet === true : bitmagnetSourceOn();
+  if (bitmagnet) registerSource(ompBitmagnetSource());
 }
 
 export function startOmpJackett(): void {

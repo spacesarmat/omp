@@ -724,6 +724,7 @@ type ServiceProbe = {
 type ServicesPayload = {
   jackett: ServiceProbe;
   jacred: ServiceProbe;
+  bitmagnet?: ServiceProbe;
   torrserver: ServiceProbe;
 };
 
@@ -752,6 +753,8 @@ export function ServicesCard({
     jackettEnabled: settings.jackettEnabled !== false,
     jacredUrl: String(settings.jacredUrl ?? ''),
     jacredEnabled: settings.jacredEnabled !== false,
+    bitmagnetUrl: String(settings.bitmagnetUrl ?? ''),
+    bitmagnetEnabled: settings.bitmagnetEnabled === true,
     torrserverUrl: String(settings.torrserverUrl ?? ''),
     indexerUser: String(settings.indexerUser ?? ''),
   });
@@ -767,6 +770,8 @@ export function ServicesCard({
       jackettEnabled: settings.jackettEnabled !== false,
       jacredUrl: String(settings.jacredUrl ?? ''),
       jacredEnabled: settings.jacredEnabled !== false,
+      bitmagnetUrl: String(settings.bitmagnetUrl ?? ''),
+      bitmagnetEnabled: settings.bitmagnetEnabled === true,
       torrserverUrl: String(settings.torrserverUrl ?? ''),
       indexerUser: String(settings.indexerUser ?? ''),
     });
@@ -808,6 +813,7 @@ export function ServicesCard({
         ...form,
         jackettEnabled: form.jackettEnabled ? 'true' : 'false',
         jacredEnabled: form.jacredEnabled ? 'true' : 'false',
+        bitmagnetEnabled: form.bitmagnetEnabled ? 'true' : 'false',
       });
       if (res.auth === false) {
         setErr('Нужен вход');
@@ -851,6 +857,7 @@ export function ServicesCard({
               <>
                 <ServiceBox title="Jackett" row={services?.jackett} fallback={form.jackettUrl} note={'подписчикам: ' + (form.jackettEnabled ? 'вкл' : 'выкл')} checking={busy} />
                 <ServiceBox title="JacRed" row={services?.jacred} fallback={form.jacredUrl} note={'подписчикам: ' + (form.jacredEnabled ? 'вкл' : 'выкл')} checking={busy} />
+                <ServiceBox title="bitmagnet" row={services?.bitmagnet} fallback={form.bitmagnetUrl} note={'подписчикам: ' + (form.bitmagnetEnabled ? 'вкл' : 'выкл')} checking={busy} />
                 <ServiceBox title="TorrServer" row={services?.torrserver} fallback={form.torrserverUrl} note="только мониторинг" checking={busy} />
               </>
             )}
@@ -871,6 +878,9 @@ export function ServicesCard({
               <Field id="jacredUrl" label="Адрес JacRed" value={form.jacredUrl} onChange={(v) => setForm({ ...form, jacredUrl: v })} placeholder="http://jacred:9117" />
               <SecretField name="jacredApiKey" label="Ключ API JacRed" view={secretView('jacredApiKey')} fallback={String(settings.jacredApiKey ?? '')} />
               <Check label="JacRed доступен подписчикам" checked={form.jacredEnabled} onChange={(v) => setForm({ ...form, jacredEnabled: v })} />
+              <Field id="bitmagnetUrl" label="Адрес bitmagnet" value={form.bitmagnetUrl} onChange={(v) => setForm({ ...form, bitmagnetUrl: v })} placeholder="http://127.0.0.1:3333" />
+              <SecretField name="bitmagnetApiKey" label="Ключ API bitmagnet" view={secretView('bitmagnetApiKey')} fallback={String(settings.bitmagnetApiKey ?? '')} />
+              <Check label="bitmagnet доступен подписчикам" checked={form.bitmagnetEnabled} onChange={(v) => setForm({ ...form, bitmagnetEnabled: v })} />
               <Field id="torrserverUrl" label="Адрес TorrServer (только мониторинг)" value={form.torrserverUrl} onChange={(v) => setForm({ ...form, torrserverUrl: v })} placeholder="http://torrserver:8090" wide />
               <Field id="indexerUser" label="Логин basic-авторизации" value={form.indexerUser} onChange={(v) => setForm({ ...form, indexerUser: v })} placeholder="omp" />
               <SecretField name="indexerPass" label="Пароль basic-авторизации" view={secretView('indexerPass')} fallback={String(settings.indexerPass ?? '')} />

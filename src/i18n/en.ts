@@ -1000,6 +1000,7 @@ export const en: EnDict<typeof ru> = {
       text: 'Jackett and JacRed with the subscription. Search goes through the OMP server; add releases to your own TorrServer.',
       jackett: 'OMP Jackett',
       jacred: 'OMP JacRed',
+      bitmagnet: 'OMP bitmagnet',
       serverTitle: 'OMP server · Jackett, JacRed',
       serverNone: 'no subscription',
       serverDown: 'not responding',

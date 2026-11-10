@@ -11,7 +11,9 @@ import type { SourceContext } from './types';
 
 export const DHT_TIMEOUT_MS = 15000;
 
-export type DhtPeersResult = { ok: true; peers: number } | { ok: false; reason: 'skip' | 'bad' };
+export type DhtPeersResult =
+  | { ok: true; peers: number; estimate?: boolean; seedsEstimate?: number }
+  | { ok: false; reason: 'skip' | 'bad' };
 
 function defaultDhtContext(): SourceContext | null {
   const http = nativeSourceHttp();
@@ -47,18 +49,29 @@ export function withDhtSubscriptionHint(line: string): string {
   return line ? line + '. ' + hint : hint;
 }
 
-/** `{ peers, source: "dht", approx: true }` or null. Anything else is not shown. */
-export function parseDhtPeersBody(text: string): { peers: number } | null {
-  let v: { peers?: unknown; source?: unknown; approx?: unknown };
+/** `{ peers, source: "dht", approx: true }` or null. A BEP 33 seed estimate is optional and is not the address count. */
+export function parseDhtPeersBody(text: string): { peers: number; estimate?: boolean; seedsEstimate?: number } | null {
+  let v: { peers?: unknown; source?: unknown; approx?: unknown; estimate?: unknown; seedsEstimate?: unknown };
   try {
-    v = JSON.parse(text) as { peers?: unknown; source?: unknown; approx?: unknown };
+    v = JSON.parse(text) as { peers?: unknown; source?: unknown; approx?: unknown; estimate?: unknown; seedsEstimate?: unknown };
   } catch (e) {
     return null;
   }
   if (!v || typeof v.peers !== 'number') return null;
   if (v.peers < 0 || v.peers !== Math.floor(v.peers) || v.peers > 100000) return null;
   if (v.source !== 'dht' || v.approx !== true) return null;
-  return { peers: v.peers };
+  const out: { peers: number; estimate?: boolean; seedsEstimate?: number } = { peers: v.peers };
+  const seeds = v.seedsEstimate;
+  if (v.estimate === true && typeof seeds === 'number' && seeds >= 0 && seeds === Math.floor(seeds) && seeds <= 1000000) {
+    out.estimate = true;
+    out.seedsEstimate = seeds;
+  }
+  return out;
+}
+
+/** «~12 сидов по DHT». A BEP 33 estimate, not a verified scrape and not a count of addresses. */
+export function dhtSeedLine(n: number): string {
+  return '~' + tp('sources.seeds', n) + ' ' + t('sources.dhtVia');
 }
 
 /** «≈12 пиров онлайн · по DHT». The count is a sample, so it stays approximate. */
@@ -66,22 +79,23 @@ export function dhtPeerLine(peers: number): string {
   return '≈' + tp('sources.dhtPeers', peers) + ' · ' + t('sources.dhtVia');
 }
 
+function estimateText(dht: DhtPeersResult | null): string {
+  if (!dht || !dht.ok || !dht.estimate || typeof dht.seedsEstimate !== 'number') return '';
+  return dhtSeedLine(dht.seedsEstimate);
+}
+
 /**
- * Tracker line, DHT line beside it, or the DHT line alone when the tracker did not answer.
- * A skipped DHT call leaves the tracker text as it was.
+ * One status. A tracker scrape stands alone: DHT address counts are not seeds and are not appended.
+ * No announce URL keeps that reason and, when BEP 33 answered, the seed estimate on the same line.
  */
 export function seedCheckLine(tracker: ProbeResult, dht: DhtPeersResult | null): string {
-  const dhtText = dht && dht.ok ? dhtPeerLine(dht.peers) : '';
-  if (tracker.ok && dhtText) {
-    return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow') + ' · ' + dhtText;
-  }
+  const est = estimateText(dht);
   if (tracker.ok) return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow');
-  // No announce URL: the missing address and the DHT sample are one line, not two statuses that replace each other.
   if (!tracker.ok && (tracker.reason === 'notrackers' || tracker.reason === 'nohash')) {
     const why = tracker.note || t('sources.seedsNoTracker');
-    return dhtText ? dhtText + ' · ' + why : why;
+    return est ? why + ' · ' + est : why;
   }
-  if (dhtText) return dhtText;
+  if (est) return est;
   if (!tracker.ok && tracker.note) return tracker.note;
   if (!tracker.ok && tracker.reason === 'timeout') return t('sources.seedsTimeout');
   return t('sources.seedsNoTracker');
@@ -99,7 +113,12 @@ export function askDhtPeers(infohash: string): Promise<DhtPeersResult> {
       if (res.status !== 200) return { ok: false, reason: 'skip' };
       const parsed = parseDhtPeersBody(res.text);
       if (!parsed) return { ok: false, reason: 'bad' };
-      return { ok: true, peers: parsed.peers };
+      const out: { ok: true; peers: number; estimate?: boolean; seedsEstimate?: number } = { ok: true, peers: parsed.peers };
+      if (parsed.estimate) {
+        out.estimate = true;
+        out.seedsEstimate = parsed.seedsEstimate;
+      }
+      return out;
     },
     () => ({ ok: false, reason: 'skip' }),
   );

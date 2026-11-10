@@ -414,6 +414,17 @@ CREATE TABLE seed_probes (
 CREATE INDEX seed_probes_measured ON seed_probes (measured_at);
 `,
   },
+  {
+    version: '006_seed_probe_dht',
+    sql: `
+-- BEP 33 estimates next to the address sample in peers.
+-- dht_seeds is the seed estimate. peer_estimate is the peer bloom estimate.
+-- dht_estimate is true only when filters were merged. A plain peer count is not a seed count.
+ALTER TABLE seed_probes ADD COLUMN dht_seeds integer NOT NULL DEFAULT 0;
+ALTER TABLE seed_probes ADD COLUMN peer_estimate integer NOT NULL DEFAULT 0;
+ALTER TABLE seed_probes ADD COLUMN dht_estimate boolean NOT NULL DEFAULT false;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

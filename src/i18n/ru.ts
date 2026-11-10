@@ -1027,6 +1027,7 @@ export const ru = {
       text: 'Jackett и JacRed по подписке. Поиск идёт через сервер OMP; раздачи добавляйте в свой TorrServer.',
       jackett: 'OMP Jackett',
       jacred: 'OMP JacRed',
+      bitmagnet: 'OMP bitmagnet',
       serverTitle: 'Сервер OMP · Jackett, JacRed',
       serverNone: 'нет подписки',
       serverDown: 'не отвечает',

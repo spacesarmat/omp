@@ -89,7 +89,10 @@ export function createPeerCache(opts) {
     },
     put(hash, peers) {
       map.delete(hash);
-      map.set(hash, { peers: peers, at: now(), ttl: peers > 0 ? ttlMs : missTtlMs });
+      const n = typeof peers === 'number' ? peers : peers && typeof peers.peers === 'number' ? peers.peers : 0;
+      const seeds = peers && typeof peers === 'object' && typeof peers.seedsEstimate === 'number' ? peers.seedsEstimate : 0;
+      const hot = n > 0 || seeds > 0;
+      map.set(hash, { peers: peers, at: now(), ttl: hot ? ttlMs : missTtlMs });
       while (map.size > max) {
         const first = map.keys().next().value;
         map.delete(first);
@@ -124,7 +127,21 @@ export function waitForReady(target, timeoutMs, schedule, clearTimer) {
   });
 }
 
-/** Body the app is allowed to see: a count, never peer addresses. */
-export function peersBody(peers, cached) {
-  return { peers: peers, source: 'dht', approx: true, cached: !!cached };
+/**
+ * Body the app is allowed to see: a count, never peer addresses.
+ * `peers` is the address sample. It is not a seed count.
+ * `estimate` is set only when BEP 33 filters were merged. Those numbers are the seed and peer estimates.
+ */
+export function peersBody(result, cached) {
+  const row = typeof result === 'number' ? { peers: result } : result || {};
+  const peers = typeof row.peers === 'number' && row.peers > 0 ? Math.floor(row.peers) : 0;
+  const body = { peers: peers, source: 'dht', approx: true, cached: !!cached };
+  if (row.scraped || row.estimate === true) {
+    const seeds = typeof row.seedsEstimate === 'number' && row.seedsEstimate > 0 ? Math.floor(row.seedsEstimate) : 0;
+    const swarm = typeof row.peerEstimate === 'number' && row.peerEstimate > 0 ? Math.floor(row.peerEstimate) : 0;
+    body.seedsEstimate = seeds;
+    body.peerEstimate = swarm;
+    body.estimate = true;
+  }
+  return body;
 }

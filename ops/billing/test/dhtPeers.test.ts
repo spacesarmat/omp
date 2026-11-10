@@ -55,6 +55,14 @@ describe('billing DHT peer contract', () => {
       source: 'dht',
       approx: true,
     });
+    expect(publicDhtBody({ peers: 4, source: 'dht', approx: true, estimate: true, seedsEstimate: 12, peerEstimate: 30, ips: ['1.2.3.4:1'] })).toEqual({
+      peers: 4,
+      source: 'dht',
+      approx: true,
+      estimate: true,
+      seedsEstimate: 12,
+      peerEstimate: 30,
+    });
     expect(publicDhtBody({ peers: 4, source: 'dht' })).toBe(null);
     expect(publicDhtBody({ peers: 1.5, source: 'dht', approx: true })).toBe(null);
 

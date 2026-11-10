@@ -63,7 +63,7 @@ export interface SourceResult extends SearchResult {
   /** Lowercase 40-hex infohash when known. */
   hash?: string;
   /**
-   * Server seed check for this search. `live`: scrape answered. `dht`: only a DHT peer count.
+   * Server seed check for this search. `live`: scrape answered. `dht`: a BEP 33 seed estimate, not a verified count.
    * `unverified`: the round finished and this hash was not confirmed. Absent until that round ends.
    */
   seedCheck?: 'live' | 'dht' | 'unverified';
@@ -71,8 +71,14 @@ export interface SourceResult extends SearchResult {
   seedCheckAt?: number;
   seedersMax?: number;
   seedersMedian?: number;
-  /** DHT peers seen beside the scrape. Not a seeder count. */
+  /** DHT get_peers address sample. Not a seeder count. */
   dhtPeers?: number;
+  /** BEP 33 seed estimate. Shown as «~N сидов по DHT», never as a verified scrape. */
+  dhtSeeds?: number;
+  /** True when dhtSeeds came from merged bloom filters. */
+  dhtEstimate?: boolean;
+  /** The server found no usable tracker address for this hash. */
+  noTracker?: boolean;
   /** Unix ms. */
   date?: number;
   sizeBytes?: number;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lang } from '../../src/i18n';
-import { askDhtPeers, dhtNeedsSubscriptionHint, dhtPeerLine, parseDhtPeersBody, seedCheckLine, setDhtPeersContext, withDhtSubscriptionHint } from '../../src/sources/dhtPeers';
+import { askDhtPeers, dhtNeedsSubscriptionHint, dhtPeerLine, dhtSeedLine, parseDhtPeersBody, seedCheckLine, setDhtPeersContext, withDhtSubscriptionHint } from '../../src/sources/dhtPeers';
 import type { ProbeResult } from '../../src/sources/liveSeedsRun';
 
 const trackerOk: ProbeResult = { ok: true, seeders: 152, leechers: 3 };
@@ -11,22 +11,32 @@ const noHash: ProbeResult = { ok: false, reason: 'nohash' };
 describe('DHT peer line', () => {
   it('parses only an approximate DHT count', () => {
     expect(parseDhtPeersBody(JSON.stringify({ peers: 12, source: 'dht', approx: true }))).toEqual({ peers: 12 });
+    expect(parseDhtPeersBody(JSON.stringify({ peers: 12, source: 'dht', approx: true, estimate: true, seedsEstimate: 4 }))).toEqual({
+      peers: 12,
+      estimate: true,
+      seedsEstimate: 4,
+    });
+    expect(parseDhtPeersBody(JSON.stringify({ peers: 12, source: 'dht', approx: true, estimate: true, seedsEstimate: 1.5 }))).toEqual({ peers: 12 });
     expect(parseDhtPeersBody(JSON.stringify({ peers: 12, source: 'dht' }))).toBe(null);
     expect(parseDhtPeersBody(JSON.stringify({ peers: 12, source: 'tracker', approx: true }))).toBe(null);
     expect(parseDhtPeersBody('nope')).toBe(null);
     expect(parseDhtPeersBody(JSON.stringify({ peers: -1, source: 'dht', approx: true }))).toBe(null);
   });
 
-  it('puts the estimate beside a tracker answer and uses it when the tracker missed', () => {
+  it('keeps a tracker scrape as the only status and labels a DHT seed estimate', () => {
     lang.value = 'ru';
+    expect(dhtSeedLine(8)).toBe('~8 сидов по DHT');
     expect(dhtPeerLine(1)).toBe('≈1 пир онлайн · по DHT');
     expect(dhtPeerLine(2)).toBe('≈2 пира онлайн · по DHT');
     expect(dhtPeerLine(5)).toBe('≈5 пиров онлайн · по DHT');
-    expect(seedCheckLine(trackerOk, { ok: true, peers: 40 })).toBe('152 сида · 3 лича · сейчас · ≈40 пиров онлайн · по DHT');
+    expect(seedCheckLine(trackerOk, { ok: true, peers: 40 })).toBe('152 сида · 3 лича · сейчас');
+    expect(seedCheckLine(trackerOk, { ok: true, peers: 40, estimate: true, seedsEstimate: 7 })).toBe('152 сида · 3 лича · сейчас');
     expect(seedCheckLine(trackerOk, { ok: false, reason: 'skip' })).toBe('152 сида · 3 лича · сейчас');
-    expect(seedCheckLine(timeout, { ok: true, peers: 0 })).toBe('≈0 пиров онлайн · по DHT');
-    expect(seedCheckLine(noTrackers, { ok: true, peers: 8 })).toBe('≈8 пиров онлайн · по DHT · Нет адреса трекера');
-    expect(seedCheckLine(noTrackers, { ok: true, peers: 0 })).toBe('≈0 пиров онлайн · по DHT · Нет адреса трекера');
+    expect(seedCheckLine(timeout, { ok: true, peers: 0 })).toBe('Трекер не ответил');
+    expect(seedCheckLine(timeout, { ok: true, peers: 9, estimate: true, seedsEstimate: 3 })).toBe('~3 сида по DHT');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 8 })).toBe('Нет адреса трекера');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 8, estimate: true, seedsEstimate: 8 })).toBe('Нет адреса трекера · ~8 сидов по DHT');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 0, estimate: true, seedsEstimate: 0 })).toBe('Нет адреса трекера · ~0 сидов по DHT');
     expect(seedCheckLine(timeout, null)).toBe('Трекер не ответил');
     expect(seedCheckLine(noHash, null)).toBe('Нет адреса трекера');
   });
@@ -34,7 +44,8 @@ describe('DHT peer line', () => {
   it('uses the English labels', () => {
     lang.value = 'en';
     expect(dhtPeerLine(1)).toBe('≈1 peer online · via DHT');
-    expect(seedCheckLine(trackerOk, { ok: true, peers: 40 })).toBe('152 seeds · 3 leechers · now · ≈40 peers online · via DHT');
+    expect(seedCheckLine(trackerOk, { ok: true, peers: 40 })).toBe('152 seeds · 3 leechers · now');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 8, estimate: true, seedsEstimate: 8 })).toBe('No tracker address · ~8 seeds via DHT');
     lang.value = 'ru';
   });
 

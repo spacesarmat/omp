@@ -17,6 +17,9 @@ function rowOf(r) {
     seedersMax: num(r.seeders_max),
     seedersMedian: num(r.seeders_median),
     peers: num(r.peers),
+    dhtSeeds: num(r.dht_seeds),
+    peerEstimate: num(r.peer_estimate),
+    estimate: r.dht_estimate === true,
     samples: num(r.samples),
     measuredAt: num(r.measured_at),
     hits: num(r.hits),
@@ -37,7 +40,7 @@ export async function loadSeedProbes(query, keys) {
   const k = keysOf(keys);
   if (!k.hashes.length) return [];
   const res = await query(
-    'SELECT s.infohash, s.tracker_key, s.seeders, s.leechers, s.seeders_max, s.seeders_median, s.peers, s.samples, s.measured_at, s.hits, s.last_hit_at, s.live' +
+    'SELECT s.infohash, s.tracker_key, s.seeders, s.leechers, s.seeders_max, s.seeders_median, s.peers, s.dht_seeds, s.peer_estimate, s.dht_estimate, s.samples, s.measured_at, s.hits, s.last_hit_at, s.live' +
       ' FROM seed_probes s' +
       ' JOIN unnest($1::text[], $2::text[]) AS k(infohash, tracker_key)' +
       ' ON s.infohash = k.infohash AND s.tracker_key = k.tracker_key',
@@ -61,10 +64,11 @@ export async function saveSeedProbes(query, list, now) {
   for (let i = 0; i < list.length; i++) {
     const row = list[i];
     await query(
-      'INSERT INTO seed_probes (infohash, tracker_key, seeders, leechers, seeders_max, seeders_median, peers, samples, measured_at, hits, last_hit_at, live)' +
-        ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $9, $10)' +
+      'INSERT INTO seed_probes (infohash, tracker_key, seeders, leechers, seeders_max, seeders_median, peers, dht_seeds, peer_estimate, dht_estimate, samples, measured_at, hits, last_hit_at, live)' +
+        ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1, $12, $13)' +
         ' ON CONFLICT (infohash, tracker_key) DO UPDATE SET seeders = EXCLUDED.seeders, leechers = EXCLUDED.leechers,' +
         ' seeders_max = EXCLUDED.seeders_max, seeders_median = EXCLUDED.seeders_median, peers = EXCLUDED.peers,' +
+        ' dht_seeds = EXCLUDED.dht_seeds, peer_estimate = EXCLUDED.peer_estimate, dht_estimate = EXCLUDED.dht_estimate,' +
         ' samples = EXCLUDED.samples, measured_at = EXCLUDED.measured_at, live = EXCLUDED.live,' +
         ' hits = seed_probes.hits + 1, last_hit_at = EXCLUDED.measured_at',
       [
@@ -75,6 +79,9 @@ export async function saveSeedProbes(query, list, now) {
         num(row.seedersMax),
         num(row.seedersMedian),
         num(row.peers),
+        num(row.dhtSeeds),
+        num(row.peerEstimate),
+        !!row.estimate,
         num(row.samples),
         num(row.measuredAt),
         !!row.live,
