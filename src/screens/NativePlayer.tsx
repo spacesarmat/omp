@@ -123,6 +123,8 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
             (cache) => {
               fb.busy = false;
               if (cancelled || fb.switched) return;
+              const live = run.state;
+              if (!live || live.index !== st.index || live.time >= 1 || !live.buffering) return;
               const swarm = swarmFromCache(cache ? 'ok' : 'down', cache, true);
               const bytes = swarm.kind === 'ok' ? Math.max(swarm.stats.preloadedBytes, swarm.stats.loadedBytes) : 0;
               const speed = swarm.kind === 'ok' ? swarm.stats.downloadSpeed : 0;

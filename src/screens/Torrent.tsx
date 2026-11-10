@@ -40,7 +40,7 @@ import { asWarm } from '../viewer/warmClient';
 import { useContinue } from '../viewer/useContinue';
 import { useTrackChoice } from '../viewer/useTracks';
 import { stashedResume, takeAutoplay } from '../viewer/alternates';
-import { episodeProgressKey, titleMemoryKey } from '../viewer/tracks';
+import { episodeProgressKey, progressTitleKey } from '../viewer/tracks';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { knownSwarmText } from '../lib/torrentStatus';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
@@ -292,13 +292,17 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const titleForKey = tor ? displayTitle(tor) : '';
   const film = !!tor && !isSeries(tor);
   const remote = useContinue(titleForKey, playPath, film, localPos);
+  let jumped = false;
   if (localPos <= 0 && remote.episodeKey) {
     for (let i = 0; i < queue.length; i++) {
-      if (episodeProgressKey(queue[i].title, film) === remote.episodeKey) target = i;
+      if (episodeProgressKey(queue[i].title, film) === remote.episodeKey) {
+        target = i;
+        jumped = true;
+      }
     }
   }
-  const stashed = stashedResume(titleMemoryKey(titleForKey), episodeProgressKey(playPath, film));
-  const targetPos = Math.max(localPos, remote.sec, stashed);
+  const stashed = stashedResume(progressTitleKey(titleForKey), episodeProgressKey(queue[target] ? queue[target].title : playPath, film));
+  const targetPos = jumped ? remote.remoteSec : Math.max(localPos, remote.sec, stashed);
   const fileForWarm = queue[target] ? files.filter((f) => f.id === queue[target].fileIndex)[0] : null;
   const tracks = useTrackChoice(c, hash, titleForKey, fileForWarm ? fileForWarm.id : null);
   useEffect(() => {
@@ -335,7 +339,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       if (next && next !== tor.hash) replaceRoute({ name: 'torrent', hash: next });
     });
   };
-  const playLabel = remote.other
+  const playLabel = (jumped || remote.other)
     ? t('viewer.continueOther', { time: formatDuration(targetPos) })
     : book
     ? (targetPos > 0

@@ -714,13 +714,17 @@ export function Torrent({ hash }: { hash: string }) {
   // where to continue: the latest started file of this torrent, else the first one
   let target = watchTarget(hash, files);
   const localAt = target ? sharedResume(hash, target.id) : 0;
+  let jumped = false;
   if (localAt <= 0 && remote.episodeKey) {
     for (let i = 0; i < files.length; i++) {
-      if (episodeProgressKey(files[i].path, !episodeLabel(files[i].path)) === remote.episodeKey) target = files[i];
+      if (episodeProgressKey(files[i].path, !episodeLabel(files[i].path)) === remote.episodeKey) {
+        target = files[i];
+        jumped = true;
+      }
     }
   }
-  const at = Math.max(localAt, remote.sec);
-  const fromOther = remote.other && remote.sec > localAt;
+  const at = jumped ? remote.remoteSec : Math.max(localAt, remote.sec);
+  const fromOther = jumped || (remote.other && remote.sec > localAt);
   const targetCode = target ? fileCode(target) : '';
   const mainLabel = fromOther
     ? t('viewer.continueOther', { time: formatDuration(at) })

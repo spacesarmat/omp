@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { fetchProgress, pickContinue, progressIdentity, type RemoteProgress } from './progressSync';
 
-export function useContinue(title: string, path: string, film: boolean, localSec: number): { sec: number; other: boolean; episodeKey: string } {
+export function useContinue(title: string, path: string, film: boolean, localSec: number): { sec: number; other: boolean; episodeKey: string; remoteSec: number } {
   const id = progressIdentity(title, path, film);
   const [remote, setRemote] = useState<RemoteProgress | null>(null);
   useEffect(() => {
@@ -18,7 +18,9 @@ export function useContinue(title: string, path: string, film: boolean, localSec
   }, [id.titleKey]);
   const remoteKey = remote && remote.episodeKey ? remote.episodeKey : '';
   const same = !remoteKey || remoteKey === id.episodeKey;
-  const sec = same ? pickContinue(localSec, remote) : localSec > 0 ? localSec : remote ? remote.positionSec : 0;
-  const other = !!(remote && remote.otherDevice && sec === remote.positionSec && (same ? sec > localSec : localSec <= 0));
-  return { sec: sec, other: other, episodeKey: other && !same ? remoteKey : '' };
+  // A different episode's seconds stay off this file until the screen finds that episode in this release.
+  const sec = same ? pickContinue(localSec, remote) : localSec;
+  const other = !!(same && remote && remote.otherDevice && sec === remote.positionSec && sec > localSec);
+  const offerEpisode = !!(!same && remote && remote.otherDevice && remote.positionSec >= 15);
+  return { sec: sec, other: other, episodeKey: offerEpisode ? remoteKey : '', remoteSec: offerEpisode ? remote.positionSec : 0 };
 }

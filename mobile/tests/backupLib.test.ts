@@ -76,6 +76,7 @@ describe('collectBackup', () => {
     put('tsp.localServer', { autostart: true });
     put('tsp.playlists', [{ url: 'http://x/p.m3u', title: 'P' }]);
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
+    put('tsp.titleTracks', { dune: { audioLang: 'ru' } });
     put('tsp.support', { until: 1798934400000 });
     put('tsp.catalogMode', 'discover');
     put('tsp.catalogArt', { 'tv:21': 'https://img.test/a.jpg' });
