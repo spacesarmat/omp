@@ -2377,6 +2377,17 @@ body.test-labels [data-code]::after {
 .m-library[data-collapsed='1'] .m-disc-head .m-grow { display: none; }
 .m-library[data-collapsed='1'] .m-disc-head h2 { font-size: 16px; }
 .m-library[data-collapsed='1'] .m-lib-sticky { padding-bottom: 4px; }
+/* «Обзор»: title and chips stick under the switch, so a scroll never slices the header in half. */
+.m-discover .m-disc-head,
+.m-discover .m-disc-chips {
+  position: sticky;
+  z-index: 5;
+  background: var(--bg);
+}
+.m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 52px); }
+.m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 104px); }
+.m-library[data-collapsed='1'] .m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 48px); }
+.m-library[data-collapsed='1'] .m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 92px); }
 .m-tv-steps { white-space: pre-line; }
 .m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-ep-fold { align-self: flex-start; }
@@ -2388,6 +2399,8 @@ body.test-labels [data-code]::after {
 .m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }
 .m-result-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--panel); }
 .m-result-group-title { font-weight: 700; }
+.m-srch-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.m-srch-group-title { font-weight: 700; }
 .m-sub-menu { flex-shrink: 0; }
 
 @media (orientation: landscape) and (max-height: 560px) {
@@ -2414,6 +2427,10 @@ body.test-labels [data-code]::after {
   }
   .m-library { padding-top: 4px; gap: 8px; }
   .m-lib-head { min-height: 40px; }
+  .m-screen-head { margin-top: 0; min-height: 36px; }
+  .m-head-text { flex-direction: row; align-items: center; gap: 8px; }
+  .m-head-title { font-size: 16px; }
+  .m-head-sub { font-size: 12px; }
   .m-bar-title, .m-screen h1 { font-size: 18px; }
   .m-mini {
     left: calc(var(--m-rail) + 8px);
