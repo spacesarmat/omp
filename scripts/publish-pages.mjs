@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PAGE_FILES = ['index.html', 'download.js', 'en/index.html', 'assets/logo.svg'];
+const PAGE_FILES = ['index.html', 'download.js', 'en/index.html', 'assets/logo.svg', 'assets/manrope-latin.woff2', 'assets/manrope-cyrillic.woff2'];
 
 export function copyDownloadPages(sourceDir, destinationDir) {
   for (const file of PAGE_FILES) {
