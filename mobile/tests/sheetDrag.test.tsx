@@ -188,6 +188,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/ui/BoxCodeSheet.tsx',
       'mobile/src/ui/CertChangedSheet.tsx',
       'mobile/src/ui/CodeSheet.tsx',
+      'mobile/src/ui/ComponentUpdateSheet.tsx',
       'mobile/src/ui/DonateSheet.tsx',
       'mobile/src/ui/FiltersSheet.tsx',
       'mobile/src/ui/LocalUpdateSheet.tsx',
