@@ -52,6 +52,30 @@ describe('theme resolver and generator', () => {
     expect(resolveThemeTokens(theme, { ...context, componentId: 'button' })['--omp-size-radius']).toBe('8px');
   });
 
+  it('emits state overrides only for their actual interaction state', () => {
+    const theme = createDefaultTheme(BASE);
+    const states = ['hover', 'focus', 'active', 'disabled', 'error'] as const;
+    for (const state of states) {
+      theme.overrides.push({
+        id: `button-${state}`,
+        scope: 'state',
+        target: 'desktop-windows',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        format: 'landscape',
+        state,
+        tokens: { '--omp-color-accent': '#112233' },
+      });
+    }
+    const css = generateThemeCss(theme, 'desktop-windows');
+    expect(css).toContain('[data-design-overrides~="button-hover"]:hover');
+    expect(css).toContain('[data-design-overrides~="button-focus"]:focus-visible');
+    expect(css).toContain('[data-design-overrides~="button-active"]:active');
+    expect(css).toContain('[data-design-overrides~="button-disabled"]:disabled');
+    expect(css).toContain('[data-design-overrides~="button-error"][data-design-error="true"]');
+    expect(css).not.toContain('[data-design-overrides~="button-hover"] {');
+  });
+
   it('reports contrast and font size errors with their context', () => {
     const theme = createDefaultTheme(BASE);
     expect(checkTheme(theme, [context])).toEqual([]);

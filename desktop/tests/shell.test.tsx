@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { h, render } from 'preact';
 import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -103,6 +104,32 @@ describe('desktop preview shell', () => {
     theme.overrides.push({ id: 'win', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
     const context = { target: 'desktop-windows' as DesktopDesignTarget, screenId: 'settings', elementId: 'sidebar', format: 'landscape' as DesignFormat, state: 'default' as const };
     expect(designOverrideAttrs(theme, context)['data-design-overrides']).toBe(activeOverrideIds(theme, context).join(' '));
+  });
+
+  it('attaches state overrides and reflects the server error state', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.overrides.push(
+      { id: 'button-hover', scope: 'state', target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape', state: 'hover', tokens: { '--omp-color-accent': '#112233' } },
+      { id: 'button-error', scope: 'state', target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape', state: 'error', tokens: { '--omp-color-danger': '#E5484D' } },
+    );
+    mount(previewProps({ theme, serverConnected: false }));
+    const button = host.querySelector<HTMLButtonElement>('[data-design-id="settings-continue"]')!;
+    expect(button.dataset.designOverrides).toContain('button-hover');
+    expect(button.dataset.designOverrides).toContain('button-error');
+    expect(button.dataset.designError).toBe('true');
+    mount(previewProps({ theme, serverConnected: true }));
+    expect(host.querySelector<HTMLButtonElement>('[data-design-id="settings-continue"]')!.dataset.designError).toBe('false');
+  });
+
+  it('uses the editable spacing token for the primary button', async () => {
+    const style = document.createElement('style');
+    style.textContent = await readFile('desktop/src/shell/shell.css', 'utf8');
+    document.head.appendChild(style);
+    const rules = Array.from(style.sheet?.cssRules || []) as CSSStyleRule[];
+    const primary = rules.find((rule) => rule.selectorText === '.desktop-primary');
+    expect(primary?.style.getPropertyValue('padding')).toContain('var(--omp-size-space');
+    expect(primary?.style.getPropertyValue('color')).toContain('var(--omp-color-background');
+    style.remove();
   });
 
   it('restores stores and blocks real HTTP during fixture use', async () => {

@@ -122,6 +122,19 @@ describe('ThemeInspector', () => {
     click('[data-action="reset"]');
     expect(controller.draft.theme.overrides).toEqual([]);
   });
+  it('offers only states that exist on the selected control', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape' }));
+    change('[data-testid="scope"]', 'state');
+    const states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover', 'focus', 'active', 'error']);
+    expect(host.querySelector('[data-token="--omp-color-background"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-text"]')).toBeNull();
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'nav-library', format: 'landscape' }), host));
+    expect(host.querySelector('[data-token="--omp-color-muted"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-background"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-text"]')).toBeNull();
+  });
 });
 
 describe('editor before and after', () => {
