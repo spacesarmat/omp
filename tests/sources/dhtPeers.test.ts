@@ -25,7 +25,8 @@ describe('DHT peer line', () => {
     expect(seedCheckLine(trackerOk, { ok: true, peers: 40 })).toBe('152 сида · 3 лича · сейчас · ≈40 пиров онлайн · по DHT');
     expect(seedCheckLine(trackerOk, { ok: false, reason: 'skip' })).toBe('152 сида · 3 лича · сейчас');
     expect(seedCheckLine(timeout, { ok: true, peers: 0 })).toBe('≈0 пиров онлайн · по DHT');
-    expect(seedCheckLine(noTrackers, { ok: true, peers: 8 })).toBe('≈8 пиров онлайн · по DHT');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 8 })).toBe('≈8 пиров онлайн · по DHT · Нет адреса трекера');
+    expect(seedCheckLine(noTrackers, { ok: true, peers: 0 })).toBe('≈0 пиров онлайн · по DHT · Нет адреса трекера');
     expect(seedCheckLine(timeout, null)).toBe('Трекер не ответил');
     expect(seedCheckLine(noHash, null)).toBe('Нет адреса трекера');
   });

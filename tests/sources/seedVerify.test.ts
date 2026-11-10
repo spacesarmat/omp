@@ -146,4 +146,25 @@ describe('seed check apply', () => {
     expect(asked).toBe(0);
     watch.cancel();
   });
+
+  it('finishes the round as unverified when the server does not answer', async () => {
+    saveBillingSession({ token: 'tok', paidUntil: 1, access: 'a', accessExp: Date.now() + 60_000 });
+    let applied: SeedMeasure[] | null = null;
+    const plain = row({ Title: 'Film', hash: HASH, Seed: 4 });
+    const watch = watchSeedVerify({
+      query: 'film',
+      ctx: ctx(),
+      getRows: () => [plain],
+      getPending: () => 0,
+      request: () => Promise.resolve(null),
+      onApply: (list) => {
+        applied = list;
+      },
+    });
+    watch.notify();
+    await Promise.resolve();
+    expect(applied).toEqual([]);
+    expect(applySeedRound([plain], applied, true)[0].seedCheck).toBe('unverified');
+    watch.cancel();
+  });
 });

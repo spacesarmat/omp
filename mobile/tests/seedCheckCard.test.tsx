@@ -151,7 +151,8 @@ describe('seed check on a result card', () => {
     expect(btn.getAttribute('data-code')).toBe('P07.6');
     expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
     expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
-    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('Нет адреса трекера');
     act(() => btn.click());
     expect(probeSeeds).not.toHaveBeenCalled();
     await act(async () => {
@@ -163,7 +164,8 @@ describe('seed check on a result card', () => {
     const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(seen).toContain('/v1/dht-peers?infohash=' + HASH);
     expect(meta).toContain('4 пира онлайн');
-    expect(meta).not.toContain('Нет адреса трекера');
+    expect(meta).toContain('Нет адреса трекера');
+    expect(meta.indexOf('4 пира онлайн')).toBeLessThan(meta.indexOf('Нет адреса трекера'));
     expect(meta).not.toContain('сейчас');
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
     const sheet = el.querySelector('.m-rc-sheet-actions .m-sheet-row .seed-check') as HTMLButtonElement;
@@ -207,8 +209,8 @@ describe('seed check on a result card', () => {
       await Promise.resolve();
     });
     let meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
-    expect(meta).toContain('12 сидов');
-    expect(meta).toContain('сейчас');
+    expect(meta).toContain('по данным трекера');
+    expect(meta).not.toContain('сейчас');
     expect(meta).not.toContain('по DHT');
 
     await act(async () => {
@@ -258,6 +260,23 @@ describe('seed check on a result card', () => {
     const webos = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(webos).toContain('Трекер не ответил');
     expect(webos).not.toContain('Проверка по DHT');
+  });
+
+  it('shows the server round instead of a raw zero and keeps one manual line', () => {
+    const checked = { ...row, Seed: 0, Peer: 0, seedCheck: 'unverified' as const };
+    act(() => render(<ResultCard r={checked} category="tv" round onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('не проверено');
+    expect(meta).not.toContain('0 сидов');
+    const live = { ...row, Seed: 4, Peer: 1, seedCheck: 'live' as const, dhtPeers: 2 };
+    act(() => render(<ResultCard r={live} category="tv" round onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const again = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(again).toContain('4 сида');
+    expect(again).toContain('1 лич');
+    expect(again).toContain('сейчас');
+    expect(again).toContain('2 пира онлайн');
+    expect(again).not.toContain('по данным трекера');
+    expect(el.querySelector('.seed-live')).toBeTruthy();
   });
 
   it('English short label is Seeds', () => {

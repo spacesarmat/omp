@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../i18n';
 import { settings } from '../store/settings';
 import { infohashOf, phoneSeedBits, seedDisplay, trackerTargets, tvSeedLabel, type SeedDisplay } from '../sources/liveSeeds';
-import { applyLiveCounts, seedSuffix } from '../sources/seedRank';
+import { seedStatusLine, seedSuffix } from '../sources/seedRank';
 import { SeedCheck } from './SeedCheck';
 import { liveSeeds } from '../sources/liveSeedsRun';
 import type { SourceResult } from '../sources/types';
@@ -69,14 +69,24 @@ export function useSeedRow(r: SourceResult): { bind: (el: HTMLElement | null) =>
   return { bind: bind, view: seedDisplay({ Seed: r.Seed, Peer: r.Peer }, enabled, entry) };
 }
 
-/** TV search / news size line. The seed text stays «↑N» until a tracker answers. */
-export function TvSearchSize(p: { r: SourceResult; size: string; seedCode?: string }) {
+/** TV search / news size line. Search passes `round`: tracker numbers first, then one checked status. */
+export function TvSearchSize(p: { r: SourceResult; size: string; seedCode?: string; round?: boolean }) {
   const live = useSeedRow(p.r);
-  const view = applyLiveCounts(p.r, live.view);
-  const mode = view.mode;
-  const suffix = mode === 'live' ? '' : seedSuffix(p.r);
-  const base = tvSeedLabel(view);
-  const label = suffix ? (base ? base + ' · ' + suffix : suffix) : base;
+  const marked = seedStatusLine(p.r);
+  let label = '';
+  let mode = 'search';
+  if (marked) {
+    label = marked;
+    mode = p.r.seedCheck === 'live' ? 'live' : 'search';
+  } else if (p.round) {
+    label = tvSeedLabel({ mode: 'search', seeders: p.r.Seed || 0, leechers: p.r.Peer || 0 });
+  } else {
+    const view = live.view;
+    mode = view.mode;
+    const suffix = view.mode === 'live' ? '' : seedSuffix(p.r);
+    const base = tvSeedLabel(view);
+    label = suffix ? (base ? base + ' · ' + suffix : suffix) : base;
+  }
   const hash = infohashOf(p.r) || 'row';
   return (
     <div class="search-size" ref={live.bind} data-seeds={mode}>

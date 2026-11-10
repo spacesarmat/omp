@@ -736,6 +736,7 @@ export function Add({
               onWatch={() => void addResult(r, 'tv')}
               onPhone={() => void addResult(r, 'phone')}
               seedCode="P07.6"
+              round
             />
           );
         })}
@@ -757,6 +758,7 @@ export function Add({
                   onWatch={() => void addResult(r, 'tv')}
                   onPhone={() => void addResult(r, 'phone')}
                   seedCode="P07.6"
+                  round
                 />
               );
             })}

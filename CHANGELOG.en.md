@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Search shows checked seeds or "not checked" on its own and reorders the list. A row no longer jumps between "0 seeds", "No tracker address" and DHT peers: that is one result, the same for the automatic check and the Seeds button
 - [tech] The release workflow installs desktop dependencies before npm test, so the build can resolve @tauri-apps/api
 
 ## 0.20.12-beta.3

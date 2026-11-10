@@ -30,7 +30,7 @@ import { ipBanTvHint } from '../sources/ipBan';
 import { ipBanNote, cloudflareTvNote, isCloudflare, progressText, resultDate, resultKey, sortLabels, sourceBadge, sourceName, type SortKey } from '../sources/view';
 import { isHotChip, kindFilterOptions, releaseChips, releaseTitle, resultKindLabel } from '../sources/releaseRow';
 import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../lib/releaseKind';
-import { orderSearch } from '../sources/seedRank';
+import { orderSearch, seedStatusLine } from '../sources/seedRank';
 import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
@@ -42,7 +42,7 @@ import { relevantRows } from '../sources/relevance';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
-import { useSeedRow, TvSearchSize } from '../ui/LiveSeeds';
+import { TvSearchSize } from '../ui/LiveSeeds';
 
 /** Rows whose posters are asked for at once; the rest only near the cursor. */
 const POSTER_FIRST = 12;
@@ -136,11 +136,10 @@ function DetailsDialog({ r, onAdd, onClose }: { r: TvResult; onAdd: () => void; 
     setFocus('search-details-add');
   }, []);
   const names = [r.source].concat(r.sources || []).filter(Boolean).map(sourceName).join(', ');
-  const live = useSeedRow(r);
-  const seedN = live.view.mode === 'live' ? live.view.seeders : r.Seed || 0;
-  const peerN = live.view.mode === 'live' ? live.view.leechers : r.Peer || 0;
-  const seedLabel = (live.view.mode === 'approx' ? '~' : '') + t('add.seeds', { n: seedN });
-  const meta = [resultSizeText(r), seedLabel, t('add.peers', { n: peerN }), resultDate(r), names].filter(Boolean).join(' · ');
+  const status = seedStatusLine(r);
+  const seedLabel = status || (r.Seed > 0 ? t('add.seeds', { n: r.Seed }) : '');
+  const peerLabel = status ? '' : t('add.peers', { n: r.Peer || 0 });
+  const meta = [resultSizeText(r), seedLabel, peerLabel, resultDate(r), names].filter(Boolean).join(' · ');
   return (
     <div
       class="dialog-backdrop search-details-backdrop"
@@ -613,7 +612,7 @@ export function AddScreen() {
                   {rowErr[key] && <div class="search-row-error" role="alert">{rowErr[key]}</div>}
                 </div>
                 <div class="search-side">
-                  <TvSearchSize r={r} size={resultSizeText(r)} seedCode="S07.10" />
+                  <TvSearchSize r={r} size={resultSizeText(r)} seedCode="S07.10" round />
                   <div class="search-src">
                     <span class="src-badge">{tvGlyphs(sourceBadge(r))}</span>
                     {also && <span class="search-also">{also}</span>}

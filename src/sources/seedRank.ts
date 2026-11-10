@@ -2,10 +2,11 @@
 // stays in the ordinary seed order. Chromium 53 safe: no ?., no ??, no regex u flag.
 import { qualityRank } from '../monitor/quality';
 import { t, tp } from '../i18n';
+import { seedCheckLine } from './dhtPeers';
 import { parseRelease } from './filters';
+import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
 import { matchCount, queryWords } from './relevance';
 import { sortResults, type SortKey } from './view';
-import type { SeedDisplay } from './liveSeeds';
 import type { SourceResult } from './types';
 
 const LIVE_BASE = 2000000;
@@ -92,4 +93,65 @@ export function seedSuffix(r: SourceResult): string {
   if (r.seedCheck === 'unverified') return t('sources.seedUnverified');
   if (r.seedCheck === 'dht' && (r.dhtPeers || 0) > 0) return tp('sources.dhtPeers', r.dhtPeers || 0);
   return '';
+}
+
+function trackerListed(r: SourceResult): boolean {
+  const hash = infohashOf(r);
+  return !!hash && trackerTargets(r.Magnet || '', hash).length > 0;
+}
+
+/** Indexer counts, as the row shows them before a check. Empty when the feed had no seeds. */
+export function indexerSeedLine(r: SourceResult): string {
+  return phoneSeedBits({ mode: 'search', seeders: r.Seed || 0, leechers: r.Peer || 0 }).text;
+}
+
+/**
+ * The one line of a finished check. Empty until the row is marked.
+ * «не проверено» comes first so a clipped card still shows it.
+ * A DHT sample and a missing tracker address stay in the same line.
+ */
+export function seedStatusLine(r: SourceResult): string {
+  if (r.seedCheck === 'live') {
+    const peers = r.dhtPeers || 0;
+    return seedCheckLine(
+      { ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0 },
+      peers > 0 ? { ok: true, peers: peers } : null,
+    );
+  }
+  if (r.seedCheck === 'dht') {
+    // A listed tracker that did not answer uses the same line as a manual timeout: the DHT sample only.
+    const reason = trackerListed(r) ? 'timeout' : 'notrackers';
+    return seedCheckLine({ ok: false, reason: reason }, { ok: true, peers: r.dhtPeers || 0 });
+  }
+  if (r.seedCheck === 'unverified') {
+    const base = indexerSeedLine(r);
+    const mark = t('sources.seedUnverified');
+    return base ? mark + ' · ' + base : mark;
+  }
+  return '';
+}
+
+export interface SeedLineProbe {
+  phase: string;
+  line: string;
+}
+
+/**
+ * One status for the row. A settled manual check wins, then the server round.
+ * A device scrape must not cover either of those. «Нет адреса трекера» is only for a row that cannot be checked.
+ */
+export function visibleSeedLine(
+  r: SourceResult,
+  opts: { indexerText: string; liveText: string; liveMode: string; probe: SeedLineProbe; trackers: boolean; canCheck: boolean },
+): string {
+  const probe = opts.probe;
+  if ((probe.phase === 'done' || probe.phase === 'err') && probe.line) return probe.line;
+  if (r.seedCheck) return seedStatusLine(r);
+  // While a manual check runs, keep the tracker numbers. Do not flash «Нет адреса» or a failed scrape.
+  if (probe.phase === 'busy') return opts.indexerText;
+  // A row that cannot be checked keeps the old note, and only when the tracker published a count.
+  // A feed row with no seed data stays quiet.
+  if (!opts.trackers && !opts.canCheck) return opts.indexerText ? t('sources.seedsNoTracker') : '';
+  if (opts.liveMode === 'live') return opts.liveText;
+  return opts.indexerText;
 }

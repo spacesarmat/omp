@@ -6,7 +6,7 @@ import type { SourceResult } from '../../../src/sources/types';
 import { dhtSeedCheckAvailable } from '../../../src/sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
 import { rowNeedsMagnet } from '../../../src/sources/rowMagnet';
-import { applyLiveCounts, seedSuffix } from '../../../src/sources/seedRank';
+import { indexerSeedLine, visibleSeedLine } from '../../../src/sources/seedRank';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
@@ -84,30 +84,34 @@ export function ResultCard(p: {
    * Search cards keep the details sheet.
    */
   menu?: boolean;
+  /**
+   * Search: show the tracker's own numbers until the server round (or a manual check) replaces them.
+   * A device scrape must not cover that round.
+   */
+  round?: boolean;
 }) {
   const { r } = p;
   const [, setBillingTick] = useState(0);
   useEffect(() => onBillingChange(() => setBillingTick((n) => n + 1)), []);
   const live = useSeedRow(r);
-  const view = applyLiveCounts(r, live.view);
-  const seeds = phoneSeedBits(view);
-  const suffix = view.mode === 'live' ? '' : seedSuffix(r);
   const probe = useSeedProbe(r);
   const trackers = trackerListed(r);
   const topic = rowNeedsMagnet(r);
   const checkable = seedCheckable(r) || topic;
-  const answered = probe.phase === 'done' || probe.phase === 'err';
-  // A topic page can still supply the announce URL. Until that check runs, keep the site's own seed count.
-  const seedBase =
-    r.seedCheck === 'live'
-      ? seeds.text
-      : answered
-        ? probe.text(seeds.text)
-        : !trackers && !topic && (seeds.text || probe.phase !== 'idle')
-          ? t('sources.seedsNoTracker')
-          : seeds.text;
-  const seedText = suffix ? (seedBase ? seedBase + ' · ' + suffix : suffix) : seedBase;
-  const showCheck = trackers ? checkable && (!!seeds.text || probe.phase !== 'idle') : checkable;
+  const canDht = !!infohashOf(r) && dhtSeedCheckAvailable();
+  const indexer = indexerSeedLine(r);
+  // Search ignores a device scrape: it was painting «0 сидов · 0 личей» over the server round and hiding «не проверено».
+  const device = p.round ? { mode: 'search' as const, seeders: r.Seed || 0, leechers: r.Peer || 0 } : live.view;
+  const seeds = phoneSeedBits(device);
+  const seedText = visibleSeedLine(r, {
+    indexerText: indexer,
+    liveText: seeds.text,
+    liveMode: p.round ? 'search' : device.mode,
+    probe: probe,
+    trackers: trackers || topic,
+    canCheck: trackers || topic || canDht,
+  });
+  const showCheck = trackers ? checkable && (!!indexer || probe.phase !== 'idle' || !!r.seedCheck) : checkable;
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(false);
   const link = pageLink(r);
@@ -151,7 +155,7 @@ export function ResultCard(p: {
               ) : date ? (
                 <span class="m-rc-date">{(sizeText(r) || seedText ? ' · ' : '') + date}</span>
               ) : null}
-              {seeds.mode === 'live' || probe.phase === 'done' || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+              {(!p.round && seeds.mode === 'live') || probe.live || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
           <div class="m-rc-bottom">
@@ -242,7 +246,7 @@ export function ResultCard(p: {
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
                 {[sizeText(r), seedText, date].filter(Boolean).join(' · ')}
                 {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
-                {seeds.mode === 'live' || probe.phase === 'done' || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+                {(!p.round && seeds.mode === 'live') || probe.live || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
               </span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>
