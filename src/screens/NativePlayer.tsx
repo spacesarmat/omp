@@ -20,6 +20,7 @@ import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
 import { seriesTracksFor } from '../store/seriesTracks';
 import { nativeTrackStart } from '../player/trackPrefs';
+import { communityVoiceFor } from '../viewer/communityRank';
 import { p2160Package, play2160 } from '../player/player2160';
 import { getLocalProgress } from '../store/progress';
 import { engineFor, knownProbe } from '../player/nativeEngine';
@@ -119,7 +120,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
       run.start({
         index, startAt: pos, seekStep: s.seekStep, autoNext: seasonNext ? true : s.autoNext, immediateNext: !!seasonNext,
         // «Озвучка» of the series (else the torrent's own choice, else the settings): by title, then language
-        ...nativeTrackStart(seriesTracksFor(firstHash), firstHash ? getTrackPref(firstHash) : null, s),
+        ...nativeTrackStart(seriesTracksFor(firstHash), firstHash ? getTrackPref(firstHash) : null, s, communityVoiceFor(firstHash, queue[index].torrentTitle || queue[index].title)),
         donate,
         // «Плеер»: the torrent's choice from the player menu wins over the setting
         engine: engineFor(s.playerEngine, queue[index].hash ? getTrackPref(queue[index].hash!) : null),

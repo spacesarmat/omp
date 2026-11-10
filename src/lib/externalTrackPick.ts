@@ -19,6 +19,8 @@ export interface ExternalStartSettings {
   subLang: string;
   /** «Субтитры» on by default (settings.subtitlesOn). */
   subtitlesOn: boolean;
+  /** Popular voice-over for this title, used when the viewer has not chosen one. */
+  communityVoice?: string;
 }
 
 /** A track of the video itself (from ffprobe or the player), when known. */
@@ -68,7 +70,7 @@ function embeddedLang(embedded: EmbeddedTrack[] | undefined, g: string, skipForc
 export function pickExternalAudio(
   tracks: ExternalTrack[],
   series: SeriesTracks | null,
-  s: Pick<ExternalStartSettings, 'audioLang'>,
+  s: Pick<ExternalStartSettings, 'audioLang' | 'communityVoice'>,
   embedded?: EmbeddedTrack[],
 ): string | null {
   const rec = series && !isReset(series) ? series : null;
@@ -77,6 +79,10 @@ export function pickExternalAudio(
   if (rec && rec.l) {
     if (embeddedDub(embedded, rec.l, rec.g)) return null;
     for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), rec.l) && langOk(tracks[i].lang, rec.g)) return tracks[i].id;
+  }
+  if (s.communityVoice && !(rec && rec.l)) {
+    if (embeddedDub(embedded, s.communityVoice, undefined)) return null;
+    for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), s.communityVoice)) return tracks[i].id;
   }
   const langs: string[] = [];
   if (rec && rec.g) langs.push(rec.g);

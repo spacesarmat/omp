@@ -20,6 +20,7 @@ import { tvCatalog } from './catalog/tvCatalog';
 import { ensureFirstRun } from './ads/firstRun';
 import { installTvAds } from './ads/tvAds';
 import { tvSourceContext } from './sources/tvContext';
+import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -54,6 +55,8 @@ if (platformKind() === 'androidtv') {
 }
 
 installErrorHooks();
+setWatchDeviceClass('tv');
+setWatchContext(() => tvSourceContext());
 setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 

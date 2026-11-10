@@ -142,6 +142,9 @@ import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
+import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db/pg/watchSql.mjs';
+import { scoreOf, watchRankEnabled } from './watchRank.mjs';
+import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -1014,6 +1017,8 @@ export function createApp(file, fetchImpl, opts) {
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
   const cacheRepo = typeof store.query === 'function' ? createCacheRepo((sql, params) => store.query(sql, params)) : null;
+  const watchRepo = typeof store.query === 'function' ? createWatchRepo(store) : null;
+  const watchRate = createRateLimit(30, 10 * 60 * 1000);
   const cacheNodeRate = createRateLimit(60, 60 * 1000);
   const cacheSourceRate = createRateLimit(30, 60 * 1000);
   const cacheInterestRate = createRateLimit(30, 60 * 1000);
@@ -1180,6 +1185,15 @@ export function createApp(file, fetchImpl, opts) {
       // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
       // to call bearer or cookie routes.
       if (req.method === 'OPTIONS') {
+        if (path === '/v1/watch-signals' || path === '/v1/watch-best') {
+          res.writeHead(204, {
+            allow: 'GET, POST, OPTIONS',
+            'access-control-allow-origin': '*',
+            'access-control-allow-headers': 'authorization, x-device-id, content-type',
+            'access-control-allow-methods': 'GET, POST, OPTIONS',
+          });
+          return res.end();
+        }
         res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });
         return res.end();
       }
@@ -1313,6 +1327,36 @@ export function createApp(file, fetchImpl, opts) {
           sidecar,
           limit: { perMinute: dhtPerMinute(settings, env), windowSec: DHT_WINDOW_MS / 1000 },
           stats: dhtStatsView(Date.now()),
+        });
+      }
+      if (req.method === 'GET' && path === '/admin/api/watch-rank') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        if (!watchRepo) return json(res, 200, { ok: false, error: 'unavailable' });
+        const settings = (await store.read()).settings;
+        const view = await watchRepo.adminRows(url.searchParams.get('q') || '');
+        const rows = view.rows.map((r) => {
+          const mod = { pinned: r.pinned, banned: r.banned };
+          const st = {
+            samples: r.samples,
+            completed: r.completed,
+            switched: r.switched,
+            ttffMs: r.ttffMs,
+            rebufferN: r.rebufferN,
+            rebufferMs: r.rebufferMs,
+            watchedSum: r.watchedSum,
+            codecOk: r.codecOk,
+            codecFail: r.codecFail,
+          };
+          const scored = scoreOf(st, 0, r.deviceClass, r.title, mod);
+          return Object.assign({}, r, { score: scored.score, reason: scored.reason });
+        });
+        return json(res, 200, {
+          ok: true,
+          enabled: watchRankEnabled(settings),
+          rows,
+          voices: view.voices,
+          codecs: view.codecs,
         });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
@@ -1553,6 +1597,25 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, probed.http, probed.body);
         }
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        if (path === '/admin/watch-rank') {
+          if (!watchRepo) return json(res, 200, { ok: false, error: 'unavailable' });
+          if (body.infohash) {
+            const saved = await watchRepo.setMod(
+              { infohash: body.infohash, pinned: body.pinned === true || body.pinned === 'true', banned: body.banned === true || body.banned === 'true', note: body.note },
+              Date.now(),
+            );
+            if (!saved) return json(res, 200, { ok: false, error: 'bad_request' });
+            await audit(file, 'watch_rank_mod', String(body.infohash).slice(0, 40), admin);
+            return json(res, 200, { ok: true });
+          }
+          if (body.enabled !== undefined) {
+            const enabled = body.enabled === true || body.enabled === 'true';
+            await store.update((state) => ({ state: { ...state, settings: { ...state.settings, watchRankEnabled: enabled } } }));
+            await audit(file, 'watch_rank_flag', enabled ? 'on' : 'off', admin);
+            return json(res, 200, { ok: true, enabled });
+          }
+          return json(res, 200, { ok: false, error: 'bad_request' });
+        }
         if (path === '/admin/monitor/run' || path === '/admin/monitor/config') {
           if (!monitor) return json(res, 200, { ok: false, error: 'Мониторинг недоступен на этом экземпляре' });
           if (path === '/admin/monitor/run') {
@@ -2370,6 +2433,42 @@ export function createApp(file, fetchImpl, opts) {
           process.stderr.write(formatSeedLog(status, Date.now() - started, device, counts));
         }
       }
+      if ((req.method === 'GET' && path === '/v1/watch-best') || (req.method === 'POST' && path === '/v1/watch-signals')) {
+        res.setHeader('access-control-allow-origin', '*');
+        if (!watchRepo) return json(res, 503, { error: 'unavailable' });
+        const deviceId = String(req.headers['x-device-id'] || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const state = await store.read();
+        const now = Date.now();
+        const caller = await deviceCaller(state, token, deviceId, now);
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const session = codeAccess(state, caller.code, now);
+        if (!session) return json(res, 403, { error: denyReason(state, caller.code, now, caller.legacy) });
+        const rateKey = deviceId.slice(0, 64) || String(caller.rowId || '').slice(0, 64);
+        if (!watchRate.allow(rateKey)) {
+          res.setHeader('retry-after', String(watchRate.retryAfter(rateKey) || 1));
+          return json(res, 429, { error: 'rate' });
+        }
+        if (req.method === 'GET') {
+          const best = await watchRepo.readBest({
+            titleKey: url.searchParams.get('titleKey') || '',
+            season: url.searchParams.get('season') || 0,
+            episode: url.searchParams.get('episode') || 0,
+            deviceClass: url.searchParams.get('deviceClass') || 'phone',
+          });
+          return json(res, 200, best || { infohash: '', score: 0, reason: '', voice: '' });
+        }
+        const body = await readBody(req);
+        const parsed = parseSignalBody(body);
+        if (!parsed.ok) return json(res, 400, { error: 'bad_request' });
+        if (!parsed.help || !parsed.items.length) return json(res, 200, { ok: true, accepted: 0 });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : String(caller.code.id || '');
+        const voter = voterHash(accountId, deviceId);
+        if (!voter) return json(res, 400, { error: 'bad_request' });
+        const accepted = await watchRepo.saveSignals(voter, parsed.items, now);
+        return json(res, 200, { ok: true, accepted });
+      }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();
         const searchLog = attachSearchLog(req, res);
@@ -2406,8 +2505,23 @@ export function createApp(file, fetchImpl, opts) {
           const q = String((body && body.q) || '');
           const cat = safeTorznabCat(body && body.cat);
           const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
+          const deliver = async (xml) => {
+            let out = xml;
+            if (watchRepo && watchRankEnabled(state.settings)) {
+              try {
+                out = await rankSearchXml(watchRepo, xml, {
+                  deviceClass: body && body.deviceClass === 'tv' ? 'tv' : 'phone',
+                  now,
+                  readOnly,
+                });
+              } catch (e) {
+                out = xml;
+              }
+            }
+            return replyXml(out);
+          };
           const cached = searchCache.get(cacheKey);
-          if (cached !== null) return replyXml(cached);
+          if (cached !== null) return await deliver(cached);
           const headers = {};
           const auth = basicAuthHeader(state.settings);
           if (auth) headers.Authorization = auth;
@@ -2426,7 +2540,7 @@ export function createApp(file, fetchImpl, opts) {
             if (!found.ok) return replyJson(502, { error: 'down' });
             const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
             searchCache.set(cacheKey, xml);
-            return replyXml(xml);
+            return await deliver(xml);
           }
           if (source === 'jackett') {
             const found = await searchJackett({
@@ -2443,7 +2557,7 @@ export function createApp(file, fetchImpl, opts) {
             if (!found.ok) return replyJson(502, { error: 'down' });
             const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
             searchCache.set(cacheKey, xml);
-            return replyXml(xml);
+            return await deliver(xml);
           }
           const found = await searchJacRed({
             origin: indexer.url,
@@ -2456,7 +2570,7 @@ export function createApp(file, fetchImpl, opts) {
           if (!found.ok) return replyJson(502, { error: 'down' });
           const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
           searchCache.set(cacheKey, xml);
-          return replyXml(xml);
+          return await deliver(xml);
         } catch (e) {
           if (!row.status) row.status = 500;
           throw e;
@@ -3204,6 +3318,11 @@ if (started) {
       pollBot(store);
       startReminders(store);
       startRetention(store);
+      if (typeof store.query === 'function') {
+        const watchRepo = createWatchRepo(store);
+        const cacheRepo = createCacheRepo((sql, params) => store.query(sql, params));
+        startWatchFollow(watchRepo, cacheRepo, async () => (await store.read()).settings);
+      }
     })
     .catch((e) => {
       // Never the connection string: the error code and message only (pg puts no password in them).

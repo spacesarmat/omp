@@ -15,6 +15,8 @@ import { releaseTracks } from '../lib/externalTracks';
 import type { ExternalStartSettings } from '../lib/externalTrackPick';
 import { torrents } from '../store/library';
 import { settings } from '../store/settings';
+import { communityVoiceFor } from '../viewer/communityRank';
+import { reportPlayResult } from '../viewer/watchReport';
 import { rememberSeriesTracks, seriesTracksFor } from '../store/seriesTracks';
 import {
   externalTracksForItem,
@@ -335,7 +337,13 @@ function open2160(
   const s = settings.peek();
   let tracks: ExternalTracksForItem[] = [];
   try {
-    tracks = queueExternalTracks(c, queue, { audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn });
+    const current = queue[index];
+    tracks = queueExternalTracks(c, queue, {
+      audioLang: s.audioLang,
+      subLang: s.subLang,
+      subtitlesOn: s.subtitlesOn,
+      communityVoice: communityVoiceFor(current && current.hash, current && (current.torrentTitle || current.title)),
+    });
   } catch (e) {
     tracks = [];
   }
@@ -355,6 +363,16 @@ function open2160(
   return Promise.resolve().then(() => open.call(plugin, o)).then((raw) => {
     const r = sanitizeP2160(raw);
     const saved = saveP2160Result(c, queue, index, r, knownDuration);
+    if (saved && saved.item.hash && saved.item.fileIndex !== undefined && (saved.time >= 1 || saved.completed)) {
+      const pct = saved.duration > 0 ? Math.round((Math.min(saved.time, saved.duration) / saved.duration) * 100) : 0;
+      reportPlayResult({
+        infohash: saved.item.hash,
+        file: saved.item.fileIndex,
+        title: saved.item.torrentTitle || saved.item.title,
+        watchedPct: pct,
+        completed: saved.completed,
+      });
+    }
     if (r.returned) rememberP2160Tracks(c, saved ? saved.item : queue[index], queue, tracks, r, index);
     return saved;
   });

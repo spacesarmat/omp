@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- Search puts first the release viewers finish without stalls. A short label explains the pick, and a popular voice-over is suggested until you choose your own. Settings include "Help improve picks", on by default, and you can turn it off
+- [tech] Billing learns from playback: POST /v1/watch-signals, GET /v1/watch-best, migration 009_watch_quality. One vote per account and device. Shared tables keep hashes and counters only. The score blends seeds and DHT with real signals. watchRankEnabled is on: with no signals the search order does not change. The Picks admin tab shows scores and can pin or ban a release. Every 15 minutes the best release of an active series is stored, and when cache nodes are on it is sent once a day into cache_interest (noteInterest). The billing image was not deployed
 - [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
 
 ## 0.20.12-beta.5

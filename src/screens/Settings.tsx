@@ -294,6 +294,8 @@ export function SettingsScreen() {
       </div>
       <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} onArrow={nav('set-live-seeds')} />
       <div class="muted">{t('settings.liveSeedsHint')}</div>
+      <ChoiceRow focusKey="set-help-rank" label={t('settings.helpRank')} value={s.helpRank !== false} options={onOff()} onChange={(v) => updateSettings({ helpRank: v })} onArrow={nav('set-help-rank')} />
+      <div class="muted">{t('settings.helpRankHint')}</div>
 
       <h2>{t('settings.app')}</h2>
       {platformKind() === 'androidtv' && <OpenOnStartupSection />}
