@@ -26,5 +26,7 @@ export default defineConfig({
     environment: 'node',
     include: include(),
     passWithNoTests: true,
+    // Schema cleanup drops every test schema. A busy CI Postgres can hold that past the 10s default.
+    hookTimeout: 30000,
   },
 });
