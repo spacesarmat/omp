@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDefaultFlow } from '../../design/defaults';
+import type { InteractionCondition } from '../../design/schema';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { LogicEditor } from '../../editor/src/components/LogicEditor';
 import { FlowMap } from '../../editor/src/components/FlowMap';
@@ -88,6 +89,30 @@ describe('LogicEditor', () => {
     expect(host.textContent).toContain('SHADOWED_RULE');
   });
 
+  it('preserves a complex condition when only the action changes', () => {
+    controller = createController();
+    const condition: InteractionCondition = {
+      kind: 'all',
+      conditions: [
+        { kind: 'eq', path: 'target', value: 'desktop-macos' },
+        { kind: 'not', condition: { kind: 'eq', path: 'screen.current', value: 'library' } },
+      ],
+    };
+    controller.replaceFlow({
+      ...controller.draft.flow,
+      rules: controller.draft.flow.rules.map((rule) => rule.id === 'settings-continue-connected' ? { ...rule, condition } : rule),
+    });
+    mount(h(LogicEditor, { controller, screenId: 'settings', elementId: 'settings-continue' }));
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="condition"]')!.value).toBe('custom');
+    change('[data-testid="condition"]', 'server-true');
+    expect(host.querySelector('[data-testid="condition"] option[value="custom"]')).not.toBeNull();
+    change('[data-testid="condition"]', 'custom');
+    change('[data-testid="action"]', 'toast');
+    change('[data-testid="toast-message"]', 'Preserved');
+    click('[data-action="save-rule"]');
+    expect(controller.draft.flow.rules.find((rule) => rule.id === 'settings-continue-connected')?.condition).toEqual(condition);
+  });
+
   it('rejects unknown routes and empty toasts without changing the flow', () => {
     controller = createController();
     const original = controller.draft.flow;
@@ -120,9 +145,19 @@ describe('FlowMap and simulation', () => {
     expect(connected.trace).toHaveLength(1);
   });
 
+  it('simulates the selected target instead of always using Windows', async () => {
+    const flow = createDefaultFlow(BASE);
+    for (const rule of flow.rules) {
+      if (rule.id === 'settings-continue-connected') rule.condition = { kind: 'eq', path: 'target', value: 'desktop-macos' };
+      if (rule.id === 'settings-continue-disconnected') rule.condition = { kind: 'eq', path: 'target', value: 'desktop-windows' };
+    }
+    const result = await simulatePreviewClick({ flow, serverConnected: true, target: 'desktop-macos' });
+    expect(result.route).toBe('library');
+  });
+
   it('runs the same scenarios through the simulation panel', async () => {
     controller = createController();
-    mount(h(SimulationPanel, { flow: controller.draft.flow, serverConnected: false, onServerConnected: () => undefined }));
+    mount(h(SimulationPanel, { target: 'desktop-windows', flow: controller.draft.flow, serverConnected: false, onServerConnected: () => undefined }));
     await act(async () => {
       host.querySelector<HTMLButtonElement>('[data-action="simulate"]')!.click();
       await Promise.resolve();
@@ -132,7 +167,7 @@ describe('FlowMap and simulation', () => {
   });
 
   it('shows preview errors instead of hiding them', () => {
-    mount(h(SimulationPanel, { flow: createDefaultFlow(BASE), serverConnected: false, onServerConnected: () => undefined, error: 'Preview failed' }));
+    mount(h(SimulationPanel, { target: 'desktop-windows', flow: createDefaultFlow(BASE), serverConnected: false, onServerConnected: () => undefined, error: 'Preview failed' }));
     expect(host.textContent).toContain('Preview failed');
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
   });

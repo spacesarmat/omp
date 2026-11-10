@@ -14,3 +14,4 @@ export class ExportError extends Error {
 }
 
 export function exportDraft(options: { root: string; draft: EditorDraft }): Promise<ExportResult>;
+export function withRepositoryLock<T>(root: string, operation: () => Promise<T>): Promise<T>;
