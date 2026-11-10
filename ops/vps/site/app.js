@@ -93,8 +93,9 @@ if (menuBtn && nav) {
     });
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
+    if (event.key !== "Escape" || !nav.classList.contains("is-open")) return;
     nav.classList.remove("is-open");
     menuBtn.setAttribute("aria-expanded", "false");
+    menuBtn.focus();
   });
 }
