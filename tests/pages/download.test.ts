@@ -151,11 +151,12 @@ describe('download page platform highlight', () => {
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 12; Android TV) AppleWebKit')).toBe('android-tv');
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit')).toBe('android');
     expect(detectPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('windows');
-    expect(highlightPlatform(document, 'Mozilla/5.0 (Linux; Android 14; Pixel 8)')).toBe('android');
-    const yours = document.querySelector('[data-platform="android"]')!;
+    expect(highlightPlatform(document, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('windows');
+    const yours = document.querySelector('[data-platform="windows"]')!;
+    expect(document.body.firstElementChild).toBe(yours);
     expect(yours.classList.contains('is-yours')).toBe(true);
     expect((yours.querySelector('.you') as HTMLElement).hidden).toBe(false);
-    expect(document.querySelector('[data-platform="windows"]')!.classList.contains('is-yours')).toBe(false);
+    expect(document.querySelector('[data-platform="android"]')!.classList.contains('is-yours')).toBe(false);
   });
 });
 

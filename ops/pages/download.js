@@ -135,6 +135,7 @@ export function highlightPlatform(root, ua) {
   if (!id) return '';
   const tile = root.querySelector(`[data-platform="${id}"]`);
   if (!tile) return id;
+  if (tile.parentNode) tile.parentNode.prepend(tile);
   tile.classList.add('is-yours');
   const mark = tile.querySelector('.you');
   if (mark) mark.hidden = false;
