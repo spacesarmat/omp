@@ -126,4 +126,17 @@ describe('desktop preview shell', () => {
     expect(activeServerId.value).toBe(originalActive);
     expect(lang.value).toBe(originalLanguage);
   });
+
+  it('blocks real LAN probes from the actual Connect screen', async () => {
+    cleanupFixture?.();
+    const openSpy = vi.spyOn(XMLHttpRequest.prototype, 'open');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    cleanupFixture = installPreviewFixture({ serverConnected: false, language: 'ru' });
+    mount(previewProps({ route: 'connect', mode: 'simulate' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

@@ -1,6 +1,7 @@
 import { lang, type Lang } from '../../../src/i18n';
 import { setTorrServerTransport } from '../../../src/api/torrserver';
 import { activeServerId, servers } from '../../../src/store/servers';
+import { setServerScanner } from '../../../mobile/src/screens/Connect';
 
 export interface PreviewFixtureOptions {
   serverConnected: boolean;
@@ -14,6 +15,7 @@ export function installPreviewFixture({ serverConnected, language }: PreviewFixt
   servers.value = serverConnected ? [{ id: 'fixture-server', name: 'Fixture TorrServer', url: 'http://fixture.invalid:8090' }] : [];
   activeServerId.value = serverConnected ? 'fixture-server' : null;
   lang.value = language;
+  setServerScanner(async () => []);
   setTorrServerTransport({
     send: async () => ({ status: 503, base64: '' }),
   });
@@ -21,6 +23,7 @@ export function installPreviewFixture({ serverConnected, language }: PreviewFixt
     servers.value = previousServers;
     activeServerId.value = previousActive;
     lang.value = previousLanguage;
+    setServerScanner(null);
     setTorrServerTransport(null);
   };
 }

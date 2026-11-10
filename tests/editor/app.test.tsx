@@ -82,4 +82,65 @@ describe('editor app', () => {
     const command = send.mock.calls[send.mock.calls.length - 1][1];
     expect(command).toMatchObject({ type: 'navigate', route: 'library' });
   });
+
+  it('shows a failed save and retries it successfully', async () => {
+    let attempts = 0;
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('offline');
+          return draft;
+        },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    await act(async () => {
+      await expect(controller.flush()).rejects.toThrow('offline');
+    });
+    expect(controller.lastError).toBe('offline');
+    expect(controller.draft.lastError).toBe('offline');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('offline');
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="retry-save"]')!.click();
+      await Promise.resolve();
+    });
+    expect(attempts).toBe(2);
+    expect(host.textContent).not.toContain('offline');
+  });
+
+  it('ignores a failed save while the page is closing', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      controller = createDraftController({
+        draft: createDefaultDraft('draft-1', BASE),
+        client: {
+          state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+          getDraft: async () => null,
+          putDraft: async () => { throw new Error('offline'); },
+          exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        },
+      });
+      act(() => render(h(App, { controller }), host));
+      act(() => { window.dispatchEvent(new Event('beforeunload')); });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(controller.lastError).toBe('offline');
+      expect(host.textContent).toContain('offline');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });

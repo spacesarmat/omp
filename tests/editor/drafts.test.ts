@@ -125,9 +125,67 @@ describe('DraftController', () => {
       throw new Error('offline');
     } });
     controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
-    await controller.flush();
+    await expect(controller.flush()).rejects.toThrow('offline');
     expect(controller.lastError).toBe('offline');
+    expect(controller.draft.lastError).toBe('offline');
     expect(controller.draft.theme.overrides[0].id).toBe('local');
+  });
+
+  it('clears a save error on retry and does not persist it', async () => {
+    const saved: EditorDraft[] = [];
+    let attempts = 0;
+    const controller = create(saved, {
+      onPut: async (draft) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('offline');
+        saved.push(draft);
+        return draft;
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('offline');
+    await controller.flush();
+    expect(attempts).toBe(2);
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.lastError).toBeNull();
+    expect(saved).toHaveLength(1);
+    expect(saved[0].lastError).toBeUndefined();
+    expect(saved[0].theme.overrides[0].id).toBe('local');
+  });
+
+  it('does not bring a cleared save error back with undo', async () => {
+    let attempts = 0;
+    const controller = create([], {
+      onPut: async (draft) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('offline');
+        return draft;
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('offline');
+    controller.upsertOverride({ id: 'next', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    await controller.flush();
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.lastError ?? null).toBeNull();
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+  });
+
+  it('does not leave a failed autosave as an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const controller = create([], { onPut: async () => { throw new Error('offline'); } });
+      controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(controller.lastError).toBe('offline');
+      expect(controller.draft.lastError).toBe('offline');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 
   it('changes view and language without replacing theme or flow', () => {
@@ -169,5 +227,17 @@ describe('useDraftController', () => {
     act(() => render(null, host));
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('rerenders when the controller notifies a change', () => {
+    const controller = create();
+    function View() {
+      const draft = useDraftController(controller);
+      return h('span', null, draft.theme.overrides.length);
+    }
+    const host = document.createElement('div');
+    act(() => render(h(View, {}), host));
+    act(() => controller.upsertOverride({ id: 'win', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } }));
+    expect(host.textContent).toBe('1');
   });
 });
