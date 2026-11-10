@@ -420,7 +420,7 @@ button, .m-btn {
 }
 /* chips: 36px, tighter padding, still a horizontal scroller */
 .m-library .m-tab { min-height: 36px; height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; }
-.m-discover { display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-x: hidden; }
+.m-discover { display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-x: clip; }
 .m-disc-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 .m-disc-head h2 { margin: 0; font-size: 18px; font-weight: 700; white-space: nowrap; }
 .m-disc-head .m-grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2249,6 +2249,86 @@ html.m-hint-hold .m-hint { display: none; }
 .m-rel-line > .m-rel-del { color: #FF9EA2; }
 
 
+/* Catalog header: one sticky bar. On scroll the subtitle drops out whole, it is not clipped in half. */
+.m-lib-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--bg);
+  margin-left: -16px;
+  margin-right: -16px;
+  padding: 0 16px 8px;
+}
+.m-disc-sticky-slot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.m-library[data-collapsed='1'] .m-disc-head .m-grow { display: none; }
+.m-library[data-collapsed='1'] .m-disc-head h2 { font-size: 16px; }
+.m-library[data-collapsed='1'] .m-lib-sticky { padding-bottom: 4px; }
+/* «Обзор»: title and chips stick under the switch, so a scroll never slices the header in half. */
+.m-discover .m-disc-head,
+.m-discover .m-disc-chips {
+  position: sticky;
+  z-index: 5;
+  background: var(--bg);
+}
+.m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 52px); }
+.m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 104px); }
+.m-library[data-collapsed='1'] .m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 48px); }
+.m-library[data-collapsed='1'] .m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 92px); }
+.m-tv-steps { white-space: pre-line; }
+.m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
+.m-ep-fold { align-self: flex-start; }
+.m-feed-banner { display: flex; flex-direction: column; gap: 8px; }
+.m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
+.m-rc-bottom > .m-rc-btn { display: none; }
+.m-rc-watch, .m-rc-more { position: relative; z-index: 1; }
+.m-rc-watch { flex: 1 1 auto; min-width: 0; }
+.m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }
+.m-result-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--panel); }
+.m-result-group-title { font-weight: 700; }
+.m-srch-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.m-srch-group-title { font-weight: 700; }
+.m-sub-menu { flex-shrink: 0; }
+
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --m-nav-h: 0px; --m-nav-reserve: 0px; --m-mini-h: 44px; --m-rail: 72px; }
+  .m-nav {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--m-rail);
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    border-top: none;
+    border-right: 1px solid var(--panel-2);
+    padding: 8px 4px;
+  }
+  .m-nav-item { flex-direction: column; justify-content: center; gap: 2px; min-height: 0; padding-top: 2px; font-size: 10px; }
+  .m-nav-pill { width: 44px; height: 26px; }
+  .m-screen {
+    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-left: calc(var(--m-rail) + 10px + env(safe-area-inset-left));
+    padding-bottom: calc(12px + var(--m-mini-h) + env(safe-area-inset-bottom));
+  }
+  .m-library { padding-top: 4px; gap: 8px; }
+  .m-lib-head { min-height: 40px; }
+  .m-screen-head { margin-top: 0; min-height: 36px; }
+  .m-head-text { flex-direction: row; align-items: center; gap: 8px; }
+  .m-head-title { font-size: 16px; }
+  .m-head-sub { font-size: 12px; }
+  .m-bar-title, .m-screen h1 { font-size: 18px; }
+  .m-mini {
+    left: calc(var(--m-rail) + 8px);
+    height: var(--m-mini-h);
+    bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  .m-now-body { margin-top: 0; padding-top: 8px; }
+  .m-now-bleed .m-now-head { position: relative; background: var(--bg); }
+  .m-now-bleed .m-now-head::before { display: none; }
+  .m-now-title { text-shadow: 0 1px 2px #000; background: rgba(15, 17, 21, 0.72); padding: 2px 8px; border-radius: 8px; }
+}
+
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.
    .tm is only for controls that are not already positioned: forcing position on an
@@ -2364,83 +2444,3 @@ body.test-labels [data-code]::after {
 .m-ad-rail-text > *:last-child { margin-bottom: 0; }
 .m-ad-rail-text .m-card-title { min-height: 0; margin-top: 0; }
 .m-ad-more { align-self: flex-start; margin-top: 4px; }
-
-/* Catalog header: one sticky bar. On scroll the subtitle drops out whole, it is not clipped in half. */
-.m-lib-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  background: var(--bg);
-  margin-left: -16px;
-  margin-right: -16px;
-  padding: 0 16px 8px;
-}
-.m-disc-sticky-slot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.m-library[data-collapsed='1'] .m-disc-head .m-grow { display: none; }
-.m-library[data-collapsed='1'] .m-disc-head h2 { font-size: 16px; }
-.m-library[data-collapsed='1'] .m-lib-sticky { padding-bottom: 4px; }
-/* «Обзор»: title and chips stick under the switch, so a scroll never slices the header in half. */
-.m-discover .m-disc-head,
-.m-discover .m-disc-chips {
-  position: sticky;
-  z-index: 5;
-  background: var(--bg);
-}
-.m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 52px); }
-.m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 104px); }
-.m-library[data-collapsed='1'] .m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 48px); }
-.m-library[data-collapsed='1'] .m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 92px); }
-.m-tv-steps { white-space: pre-line; }
-.m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
-.m-ep-fold { align-self: flex-start; }
-.m-feed-banner { display: flex; flex-direction: column; gap: 8px; }
-.m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
-.m-rc-bottom > .m-rc-btn { display: none; }
-.m-rc-watch, .m-rc-more { position: relative; z-index: 1; }
-.m-rc-watch { flex: 1 1 auto; min-width: 0; }
-.m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }
-.m-result-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--panel); }
-.m-result-group-title { font-weight: 700; }
-.m-srch-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.m-srch-group-title { font-weight: 700; }
-.m-sub-menu { flex-shrink: 0; }
-
-@media (orientation: landscape) and (max-height: 560px) {
-  :root { --m-nav-h: 0px; --m-nav-reserve: 0px; --m-mini-h: 44px; --m-rail: 72px; }
-  .m-nav {
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: auto;
-    width: var(--m-rail);
-    height: 100%;
-    flex-direction: column;
-    justify-content: center;
-    border-top: none;
-    border-right: 1px solid var(--panel-2);
-    padding: 8px 4px;
-  }
-  .m-nav-item { flex-direction: column; justify-content: center; gap: 2px; min-height: 0; padding-top: 2px; font-size: 10px; }
-  .m-nav-pill { width: 44px; height: 26px; }
-  .m-screen {
-    padding-top: calc(env(safe-area-inset-top) + 6px);
-    padding-left: calc(var(--m-rail) + 10px + env(safe-area-inset-left));
-    padding-bottom: calc(12px + var(--m-mini-h) + env(safe-area-inset-bottom));
-  }
-  .m-library { padding-top: 4px; gap: 8px; }
-  .m-lib-head { min-height: 40px; }
-  .m-screen-head { margin-top: 0; min-height: 36px; }
-  .m-head-text { flex-direction: row; align-items: center; gap: 8px; }
-  .m-head-title { font-size: 16px; }
-  .m-head-sub { font-size: 12px; }
-  .m-bar-title, .m-screen h1 { font-size: 18px; }
-  .m-mini {
-    left: calc(var(--m-rail) + 8px);
-    height: var(--m-mini-h);
-    bottom: calc(6px + env(safe-area-inset-bottom));
-  }
-  .m-now-body { margin-top: 0; padding-top: 8px; }
-  .m-now-bleed .m-now-head { position: relative; background: var(--bg); }
-  .m-now-bleed .m-now-head::before { display: none; }
-  .m-now-title { text-shadow: 0 1px 2px #000; background: rgba(15, 17, 21, 0.72); padding: 2px 8px; border-radius: 8px; }
-}

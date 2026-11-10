@@ -784,7 +784,7 @@ export function Library() {
                       <span class="m-resume-text">
                         <span class="m-resume-name"><ShortTitle tor={tor} /></span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
-                        <span class="m-muted m-small">{phoneRemainingLabel(time, duration) || (time > 0 ? positionLabel(time, duration) : '')}</span>
+                        <span class="m-muted m-small">{phoneRemainingLabel(time, duration, e.progress.open) || (time > 0 ? positionLabel(time, duration) : '')}</span>
                         <span class="m-bar-track thin">
                           <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
                         </span>

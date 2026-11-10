@@ -952,7 +952,7 @@ export function Torrent({ hash }: { hash: string }) {
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
         {!book && files.length > 0 && (
-          <div class="m-skip" data-block="skip">
+          <div class="m-skip" data-block={film && !series ? 'monitoring' : 'skip'}>
             <button type="button" class="m-skip-row m-skip-open m-skip-toggle" aria-expanded={skipOpen} onClick={toggleSkipOpen}>
               <span class="m-skip-text">
                 <span class="m-skip-title">{film && !series ? t('torrent.viewSettings') : t('torrent.skip')}</span>
@@ -979,19 +979,19 @@ export function Torrent({ hash }: { hash: string }) {
                   </span>
                   <Icon d={CHEVRON} size={20} />
                 </button>
-                {film && !series && (
-                  <div class="m-skip-row" data-block="watch-quality">
-                    <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
-                    <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
-                  </div>
-                )}
-                {film && !series && upgrade && (
-                  <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
-                    <span class="m-skip-text">{t('torrent.better.find')}</span>
-                    <Icon d={CHEVRON} size={20} />
-                  </button>
-                )}
               </>
+            )}
+            {film && !series && (
+              <div class="m-skip-row" data-block="watch-quality">
+                <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+                <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
+              </div>
+            )}
+            {film && !series && upgrade && (
+              <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
+                <span class="m-skip-text">{t('torrent.better.find')}</span>
+                <Icon d={CHEVRON} size={20} />
+              </button>
             )}
           </div>
         )}
