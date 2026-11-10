@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Релизный workflow ставит зависимости desktop перед npm test, иначе сборка не находит @tauri-apps/api
+
 ## 0.20.12-beta.3
 
 - [phone] Проверенные сиды поиска остаются, если уйти с экрана и вернуться

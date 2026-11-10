@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The release workflow installs desktop dependencies before npm test, so the build can resolve @tauri-apps/api
+
 ## 0.20.12-beta.3
 
 - [phone] Checked search seeds stay when you leave the screen and come back
