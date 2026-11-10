@@ -229,7 +229,9 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       delete snapshot.lastError;
       pendingWrites += 1;
       try {
-        const saved = await options.client.putDraft(snapshot, {});
+        const saved = options.client.copyDraft
+          ? await options.client.copyDraft(snapshot, sourceId)
+          : await options.client.putDraft(snapshot, {});
         if (current.id === sourceId) {
           past = [];
           future = [];

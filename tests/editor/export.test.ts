@@ -7,6 +7,8 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { exportDraft } from '../../editor/export.mjs';
 import { startEditorServer, type RunningEditorServer } from '../../editor/server.mjs';
+import { createEditorClient } from '../../editor/src/client';
+import { createDraftController } from '../../editor/src/drafts';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { checkGeneratedThemes } from '../../design/generate';
 
@@ -76,6 +78,31 @@ describe('design export', () => {
     await writeFile(windows, initial + '\n/* user edit */\n');
     await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DIRTY_DESIGN' });
     expect(await readFile(windows, 'utf8')).toBe(initial + '\n/* user edit */\n');
+  });
+
+  it('preserves only verified export ownership for a recovered copy', async () => {
+    const { root, head } = await makeRepo();
+    const running = await startEditorServer({ root, token: 'test-token', port: 0, withVite: false });
+    servers.push(running);
+    const client = createEditorClient({ origin: running.origin, token: 'test-token' });
+    const original = await client.putDraft(createDefaultDraft('draft-1', head));
+    await client.exportDraft(original);
+    const controller = createDraftController({ draft: original, client });
+    try {
+      controller.update((draft) => {
+        draft.theme.name = 'Recovered local edit';
+      });
+      await controller.saveAsNewDraft();
+      await expect(client.exportDraft(controller.draft)).resolves.toMatchObject({ baseCommit: head });
+      const manifest = JSON.parse(await readFile(join(root, '.omp-editor', 'exports', `${controller.draft.id}.json`), 'utf8'));
+      expect(manifest.draftId).toBe(controller.draft.id);
+      const windows = join(root, 'design', 'generated', 'desktop-windows.css');
+      await writeFile(windows, await readFile(windows, 'utf8') + '\n/* another tab */\n');
+      await expect(client.exportDraft(controller.draft)).rejects.toMatchObject({ code: 'DIRTY_DESIGN' });
+      expect(await readFile(windows, 'utf8')).toContain('/* another tab */');
+    } finally {
+      controller.dispose();
+    }
   });
 
   it('rejects staged design changes without overwriting them', async () => {

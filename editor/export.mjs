@@ -65,6 +65,24 @@ async function manifestFor(root, draftId) {
   }
 }
 
+export async function inheritExportManifest(root, sourceId, targetId) {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(sourceId) || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(targetId) || sourceId === targetId) {
+    throw new ExportError('INVALID_EXPORT_COPY', 400);
+  }
+  const manifest = await manifestFor(root, sourceId);
+  if (!manifest) return null;
+  const path = join(root, '.omp-editor', 'exports', `${targetId}.json`);
+  try {
+    await writeFile(path, json({ schemaVersion: 1, draftId: targetId, files: manifest.files }), { mode: 0o600, flag: 'wx' });
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'EEXIST') throw new ExportError('EXPORT_MANIFEST_EXISTS', 409);
+    throw error;
+  }
+  return async () => {
+    await rm(path, { force: true });
+  };
+}
+
 async function verifyDirty(root, manifest) {
   const dirty = [...new Set([
     ...await gitLines(root, ['diff', '--name-only', '--', 'design']),
