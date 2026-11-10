@@ -93,7 +93,7 @@ export function ResultCard(p: {
   const { r } = p;
   const [, setBillingTick] = useState(0);
   useEffect(() => onBillingChange(() => setBillingTick((n) => n + 1)), []);
-  const live = useSeedRow(r);
+  const live = useSeedRow(r, !p.round);
   const probe = useSeedProbe(r);
   const trackers = trackerListed(r);
   const topic = rowNeedsMagnet(r);
@@ -112,6 +112,9 @@ export function ResultCard(p: {
     canCheck: trackers || topic || canDht,
   });
   const showCheck = trackers ? checkable && (!!indexer || probe.phase !== 'idle' || !!r.seedCheck) : checkable;
+  // The dot follows the line on screen. A later manual result replaces the server dot.
+  const probeSettled = probe.phase === 'done' || probe.phase === 'err';
+  const showLiveDot = probeSettled ? probe.live : r.seedCheck === 'live' || (!p.round && seeds.mode === 'live');
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(false);
   const link = pageLink(r);
@@ -155,7 +158,7 @@ export function ResultCard(p: {
               ) : date ? (
                 <span class="m-rc-date">{(sizeText(r) || seedText ? ' · ' : '') + date}</span>
               ) : null}
-              {(!p.round && seeds.mode === 'live') || probe.live || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+              {showLiveDot ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
             </span>
           </div>
           <div class="m-rc-bottom">
@@ -246,7 +249,7 @@ export function ResultCard(p: {
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
                 {[sizeText(r), seedText, date].filter(Boolean).join(' · ')}
                 {r.sources && r.sources.length ? ' · ' + t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : ''}
-                {(!p.round && seeds.mode === 'live') || probe.live || r.seedCheck === 'live' ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
+                {showLiveDot ? <span class="seed-live" aria-label={t('settings.liveSeedsLive')} /> : null}
               </span>
             </div>
             <div class="m-rc-sheet-label m-small m-muted">{t('add.category')}</div>

@@ -16,18 +16,21 @@ function underTest(): boolean {
   }
 }
 
-/** Binds the row element and reads the cached scrape for its infohash. */
-export function useSeedRow(r: SourceResult): { bind: (el: HTMLElement | null) => void; view: SeedDisplay } {
-  const enabled = settings.value.liveSeeds !== false;
+/**
+ * Binds the row element and reads the cached scrape for its infohash.
+ * `active` false (a search round) does not scrape and does not read the cache: those requests share the manual-check queue.
+ */
+export function useSeedRow(r: SourceResult, active?: boolean): { bind: (el: HTMLElement | null) => void; view: SeedDisplay } {
+  const enabled = settings.value.liveSeeds !== false && active !== false;
   const hash = infohashOf(r);
   const magnet = r.Magnet || '';
   const [, setTick] = useState(0);
   const [node, setNode] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!hash) return;
+    if (!enabled || !hash) return;
     return liveSeeds().subscribe(hash, () => setTick((n) => n + 1));
-  }, [hash]);
+  }, [enabled, hash]);
 
   useEffect(() => {
     if (!node || !enabled || !hash || underTest()) return;
@@ -71,7 +74,7 @@ export function useSeedRow(r: SourceResult): { bind: (el: HTMLElement | null) =>
 
 /** TV search / news size line. Search passes `round`: tracker numbers first, then one checked status. */
 export function TvSearchSize(p: { r: SourceResult; size: string; seedCode?: string; round?: boolean }) {
-  const live = useSeedRow(p.r);
+  const live = useSeedRow(p.r, !p.round);
   const marked = seedStatusLine(p.r);
   let label = '';
   let mode = 'search';
