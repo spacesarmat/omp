@@ -101,8 +101,9 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
     const snapshot = structuredClone(current);
     delete snapshot.lastError;
     const write = async () => {
-      snapshot.revision = current.revision;
       try {
+        if (current.id !== snapshot.id) return;
+        snapshot.revision = current.revision;
         const saved = await options.client.putDraft(snapshot, flushOptions);
         if (current.id === snapshot.id) {
           error = null;
@@ -230,8 +231,12 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       try {
         const saved = await options.client.putDraft(snapshot, {});
         if (current.id === sourceId) {
+          past = [];
+          future = [];
           error = null;
           current = { ...current, id: saved.id, revision: saved.revision, lastError: null };
+          notify();
+          await flush();
         }
       } catch (reason) {
         if (current.id === sourceId) {
