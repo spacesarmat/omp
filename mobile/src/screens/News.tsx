@@ -358,6 +358,7 @@ function removeSub(s: Subscription): void {
 function SubLine(p: { s: Subscription; off: boolean; n: number }) {
   const [menu, setMenu] = useState(false);
   return (
+    <>
     <SubSwipeCard id={p.s.id} onCheck={() => void checkSubNow(p.s.id)} onDelete={() => removeSub(p.s)}>
       <div class="m-sub-card">
         {p.s.catalog ? <WantSub s={p.s} off={p.off} n={p.n} /> : <PlainSub s={p.s} off={p.off} n={p.n} />}
@@ -373,21 +374,22 @@ function SubLine(p: { s: Subscription; off: boolean; n: number }) {
           <Icon d="M5 12h.01M12 12h.01M19 12h.01" size={18} />
         </button>
       </div>
-      {menu && (
-        <Sheet label={t('library.actions')} onClose={() => setMenu(false)}>
-          <button
-            type="button"
-            class="m-btn m-btn-secondary m-danger"
-            onClick={() => {
-              setMenu(false);
-              removeSub(p.s);
-            }}
-          >
-            {t('common.delete')}
-          </button>
-        </Sheet>
-      )}
     </SubSwipeCard>
+    {menu && (
+      <Sheet label={t('library.actions')} onClose={() => setMenu(false)}>
+        <button
+          type="button"
+          class="m-btn m-btn-secondary m-danger"
+          onClick={() => {
+            setMenu(false);
+            removeSub(p.s);
+          }}
+        >
+          {t('common.delete')}
+        </button>
+      </Sheet>
+    )}
+    </>
   );
 }
 

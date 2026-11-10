@@ -566,6 +566,22 @@ describe('Add unified search', () => {
     await flush();
   });
 
+  it('a second release of the same title keeps the open actions sheet', async () => {
+    let late: (v: SourceResult[]) => void = () => {};
+    registerSource(fake('fake', [row({ Title: 'Аниме [HWP]', detailUrl: 'https://f.example/1' })]));
+    registerSource({ id: 'fake2', name: 'Фейк-2', kind: 'builtin', search: () => new Promise((r) => (late = r)) });
+    mount();
+    search('аниме');
+    await flush();
+    click(el.querySelector('.m-rc-more')!);
+    expect(el.querySelector('.m-sheet')).toBeTruthy();
+    late([row({ source: 'fake2', Title: 'Аниме [HWP]', Size: '3 GB', detailUrl: 'https://f.example/2' })]);
+    await flush();
+    expect(el.querySelectorAll('.m-result').length).toBe(2);
+    expect(el.querySelector('.m-result-group')).toBeTruthy();
+    expect(el.querySelector('.m-sheet')).toBeTruthy();
+  });
+
   it('results stream in with the progress line', async () => {
     let late: (v: SourceResult[]) => void = () => {};
     registerSource(fake('fake', [row({ Title: 'A 1080p', detailUrl: 'https://f.example/a' })]));

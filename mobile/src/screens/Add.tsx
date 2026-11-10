@@ -638,10 +638,9 @@ export function Add({
           />
         );
       });
-      if (!many) return cards[0];
       return (
-        <div class="m-result-group" key={g.key}>
-          <div class="m-result-group-title">{g.label}</div>
+        <div class={many ? 'm-result-group' : ''} key={g.key}>
+          {many && <div class="m-result-group-title">{g.label}</div>}
           {cards}
         </div>
       );

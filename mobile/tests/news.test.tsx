@@ -375,6 +375,29 @@ describe('«Новое» · Подписки', () => {
     expect(loadSubs()).toEqual([]);
   });
 
+  it('the subscription menu sits outside the swipe, so a sideways gesture does not delete', async () => {
+    const s = addSubscription({ query: 'Меню', quality: '', sources: null, notify: true }, 1)!;
+    await mount({ seg: 'subs' });
+    mountConfirmHost();
+    click(el.querySelector('[data-sub-remove="' + s.id + '"]')!);
+    const sheet = el.querySelector('.m-sheet-host')!;
+    const swipe = el.querySelector('[data-sub-swipe="' + s.id + '"]')!;
+    expect(sheet).toBeTruthy();
+    expect(swipe.contains(sheet)).toBe(false);
+    const touch = (type: string, x: number, y: number) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      const point = { clientX: x, clientY: y, identifier: 1 };
+      Object.defineProperty(ev, 'touches', { value: type === 'touchend' ? [] : [point] });
+      Object.defineProperty(ev, 'changedTouches', { value: [point] });
+      act(() => sheet.dispatchEvent(ev));
+    };
+    touch('touchstart', 200, 40);
+    touch('touchmove', 40, 44);
+    touch('touchend', 40, 44);
+    expect(document.getElementById('m-confirm-msg')).toBeNull();
+    expect(loadSubs().map((x) => x.id)).toEqual([s.id]);
+  });
+
   it('a poster looked up after the subscription was added stays on the row', async () => {
     installSubPosters(async () => ({ poster: 'https://img.test/found.jpg' }));
     addSubscription({ query: 'Дюна 2021', quality: '', sources: null, notify: true }, 1);
