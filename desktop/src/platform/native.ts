@@ -70,6 +70,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     wifiCurrent: async () => ({ kind: 'unsupported', ssid: null }),
     requestWifiName: async () => ({ kind: 'unsupported', ssid: null }),
     player2160: async () => null,
+    player2160Version: async () => null,
     embedded2160: async () => false,
     audioState: async () => null,
     takePendingAudioOpen: async () => null,

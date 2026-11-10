@@ -265,7 +265,7 @@ describe('Tv screen in English', () => {
     const el = mount();
     expect(el.querySelector('h1')!.textContent).toBe('TV');
     expect(el.textContent).toContain('Looking for TVs…');
-    expect(el.textContent).toContain('The phone and the TV must be on the same Wi-Fi network. OMP must be installed on the TV.');
+    expect(el.textContent).toContain('1. Phone and TV on the same Wi-Fi.');
     expect(btn(el, 'No OMP on the TV? Install assistant')).toBeTruthy();
     await flush();
     expect(el.textContent).toContain('192.168.1.9 · saved');

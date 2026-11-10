@@ -18,6 +18,7 @@ import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
 import { releaseKind } from '../../../src/lib/releaseKind';
 import { resultKindLabel } from '../../../src/sources/releaseRow';
+import { activeTv } from '../tv/tvStore';
 
 /** The size in the one format («1,5 ГБ» / «1.5 GB»), whatever the tracker wrote («1.45 GB»); as written when unreadable. */
 export function sizeText(r: SourceResult): string {
@@ -90,6 +91,8 @@ export function ResultCard(p: {
    * A device scrape must not cover that round.
    */
   round?: boolean;
+  /** Under a shared title: the release row, without repeating the name. */
+  nested?: boolean;
 }) {
   const { r } = p;
   const [, setBillingTick] = useState(0);
@@ -147,13 +150,13 @@ export function ResultCard(p: {
         />
         <ResultThumb title={r.Title} />
         <div class="m-rc-text">
-          <ReleaseName raw={r.Title} />
+          {!p.nested && <ReleaseName raw={r.Title} />}
           <ReleaseChips raw={r.Title} kind={kind} />
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
-            <span class="m-rc-meta-text">
-              {[sizeText(r), seedText].filter(Boolean).join(' · ')}
+            <span class="m-rc-meta-text m-rc-prominent">
+              {[sizeText(r), seedText || (r.Seed > 0 ? knownSeeds(r) : '')].filter(Boolean).join(' · ')}
               {p.busy === 'link' ? (
                 <span class="m-rc-date" role="status">{(sizeText(r) || seedText ? ' · ' : '') + t('add.gettingLink')}</span>
               ) : date ? (
@@ -204,6 +207,32 @@ export function ResultCard(p: {
                 <Icon d={TV_PLAY} size={22} />
               </button>
             )}
+            <button
+              type="button"
+              class="m-btn m-btn-primary m-btn-sm m-rc-watch"
+              aria-label={(book ? t('torrent.listen') : t('torrent.watch')) + ': ' + r.Title}
+              disabled={!!p.busy || (!showPhone && !showTv)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (activeTv.value && showTv) p.onWatch();
+                else if (showPhone && p.onPhone) p.onPhone();
+                else p.onWatch();
+              }}
+            >
+              {book ? t('torrent.listen') : t('torrent.watch')}
+            </button>
+            <button
+              type="button"
+              class="m-icon-btn m-rc-more"
+              aria-label={t('library.actions') + ': ' + r.Title}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDetails(false);
+                setOpen(true);
+              }}
+            >
+              <Icon d="M5 12h.01M12 12h.01M19 12h.01" size={20} />
+            </button>
           </div>
         </div>
       </div>
