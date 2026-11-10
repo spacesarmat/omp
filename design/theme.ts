@@ -52,6 +52,15 @@ function declarations(tokens: TokenMap): string {
     .join('\n');
 }
 
+const STATE_SELECTORS: Record<DesignState, string> = {
+  default: '',
+  hover: ':where(:hover)',
+  focus: ':where(:focus-visible)',
+  active: ':where(:active)',
+  disabled: ':where(:disabled)',
+  error: ':where([data-design-error="true"])',
+};
+
 export function generateThemeCss(theme: ThemeDocument, target: DesktopDesignTarget): string {
   const blocks = [`:root {\n${declarations(theme.tokens)}\n}`];
   const overrides = theme.overrides
@@ -59,7 +68,7 @@ export function generateThemeCss(theme: ThemeDocument, target: DesktopDesignTarg
     .filter(({ override }) => override.target === undefined || override.target === target)
     .sort((a, b) => RANK[a.override.scope] - RANK[b.override.scope] || a.index - b.index);
   for (const { override } of overrides) {
-    blocks.push(`[data-design-overrides~="${override.id}"] {\n${declarations(override.tokens)}\n}`);
+    blocks.push(`[data-design-overrides~="${override.id}"]${STATE_SELECTORS[override.state || 'default']} {\n${declarations(override.tokens)}\n}`);
   }
   return `${blocks.join('\n\n')}\n`;
 }

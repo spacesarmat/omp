@@ -21,6 +21,8 @@ function fakeClient(saved: EditorDraft[], onPut?: OnPut): EditorClient {
       saved.push(draft);
       return draft;
     }),
+    getDesign: async () => null,
+    rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
 }
@@ -87,6 +89,20 @@ describe('DraftController', () => {
     const controller = create();
     expect(() => controller.update((draft) => ({ ...draft, baseCommit: '1111111111111111111111111111111111111111' }))).toThrow('BASE_COMMIT_IMMUTABLE');
     expect(controller.draft.baseCommit).toBe(BASE);
+  });
+
+  it('applies a reviewed rebase and clears history from the old base', () => {
+    const controller = create();
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    expect(controller.canUndo).toBe(true);
+    const rebased = createDefaultDraft('draft-1', '1111111111111111111111111111111111111111');
+    rebased.theme.name = 'Reviewed merge';
+    controller.rebase(rebased);
+    expect(controller.draft.baseCommit).toBe('1111111111111111111111111111111111111111');
+    expect(controller.draft.theme.name).toBe('Reviewed merge');
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(false);
+    expect(() => controller.rebase(createDefaultDraft('other', '1111111111111111111111111111111111111111'))).toThrow('REBASE_DRAFT_MISMATCH');
   });
 
   it('cancels autosave after dispose', () => {

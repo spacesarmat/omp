@@ -24,6 +24,7 @@ export function DesktopSettingsScreen({ target, format, language, theme }: Deskt
         class="desktop-primary"
         data-design-id="settings-continue"
         data-design-component="button"
+        data-design-error={server ? 'false' : 'true'}
         {...designOverrideAttrs(theme, { ...context, componentId: 'button', elementId: 'settings-continue' })}
       >
         {language === 'ru' ? 'Продолжить' : 'Continue'}

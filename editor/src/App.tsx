@@ -15,6 +15,8 @@ import { LogicEditor } from './components/LogicEditor';
 import { FlowMap } from './components/FlowMap';
 import { SimulationPanel } from './components/SimulationPanel';
 import { ExportPanel } from './components/ExportPanel';
+import { BaseReviewPanel } from './components/BaseReviewPanel';
+import { SnapshotPanel } from './components/SnapshotPanel';
 
 export interface AppProps {
   controller?: DraftController;
@@ -31,6 +33,8 @@ function offlineClient(initial: EditorDraft): EditorClient {
       current = draft;
       return current;
     },
+    getDesign: async () => ({ baseCommit: current.baseCommit, theme: current.theme, flow: current.flow }),
+    rebaseDraft: async () => { throw new Error('OFFLINE_REBASE_UNAVAILABLE'); },
     exportDraft: async () => {
       throw new Error('OFFLINE_EXPORT_UNAVAILABLE');
     },
@@ -68,7 +72,6 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         </button>
         <button type="button" data-action="undo" disabled={!controller.canUndo} onClick={() => controller.undo()}>Отменить</button>
         <button type="button" data-action="redo" disabled={!controller.canRedo} onClick={() => controller.redo()}>Повторить</button>
-        <button type="button" data-action="snapshot" onClick={() => controller.snapshot(`Snapshot ${new Date().toISOString()}`)}>Snapshot</button>
         {draft.lastError && (
           <span class="editor-save-error" role="alert">
             {draft.lastError}
@@ -105,6 +108,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           onTrace={setTrace}
         />
         <aside class="editor-inspector">
+          <BaseReviewPanel controller={controller} client={workspaceClient} />
+          <SnapshotPanel controller={controller} />
           {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />}
           {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
           {mode === 'simulate' && <SimulationPanel flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
@@ -136,7 +141,13 @@ export function App(props: AppProps = {}) {
         }
         const state = await client.state();
         const saved = await client.getDraft('default');
-        if (active) setCreatedController(createDraftController({ draft: saved || createDefaultDraft('default', state.baseCommit), client }));
+        const committed = saved ? null : await client.getDesign();
+        const draft = saved || createDefaultDraft('default', committed?.baseCommit || state.baseCommit);
+        if (!saved && committed) {
+          draft.theme = committed.theme;
+          draft.flow = committed.flow;
+        }
+        if (active) setCreatedController(createDraftController({ draft, client }));
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
       }

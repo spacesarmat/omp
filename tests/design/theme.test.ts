@@ -52,6 +52,42 @@ describe('theme resolver and generator', () => {
     expect(resolveThemeTokens(theme, { ...context, componentId: 'button' })['--omp-size-radius']).toBe('8px');
   });
 
+  it('emits state overrides only for their actual interaction state', () => {
+    const theme = createDefaultTheme(BASE);
+    const states = ['hover', 'focus', 'active', 'disabled', 'error'] as const;
+    for (const state of states) {
+      theme.overrides.push({
+        id: `button-${state}`,
+        scope: 'state',
+        target: 'desktop-windows',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        format: 'landscape',
+        state,
+        tokens: { '--omp-color-accent': '#112233' },
+      });
+    }
+    const css = generateThemeCss(theme, 'desktop-windows');
+    expect(css).toContain('[data-design-overrides~="button-hover"]:where(:hover)');
+    expect(css).toContain('[data-design-overrides~="button-focus"]:where(:focus-visible)');
+    expect(css).toContain('[data-design-overrides~="button-active"]:where(:active)');
+    expect(css).toContain('[data-design-overrides~="button-disabled"]:where(:disabled)');
+    expect(css).toContain('[data-design-overrides~="button-error"]:where([data-design-error="true"])');
+    expect(css).not.toContain('[data-design-overrides~="button-hover"] {');
+  });
+
+  it('keeps state and default override specificity equal', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.overrides.push(
+      { id: 'component-hover', scope: 'component', componentId: 'button', state: 'hover', tokens: { '--omp-color-accent': '#111111' } },
+      { id: 'element-default', scope: 'element', elementId: 'settings-continue', tokens: { '--omp-color-accent': '#222222' } },
+    );
+    const css = generateThemeCss(theme, 'desktop-windows');
+    expect(css).toContain('[data-design-overrides~="component-hover"]:where(:hover)');
+    expect(css.indexOf('component-hover')).toBeLessThan(css.indexOf('element-default'));
+    expect(resolveThemeTokens(theme, { ...context, componentId: 'button', state: 'hover' })['--omp-color-accent']).toBe('#222222');
+  });
+
   it('reports contrast and font size errors with their context', () => {
     const theme = createDefaultTheme(BASE);
     expect(checkTheme(theme, [context])).toEqual([]);

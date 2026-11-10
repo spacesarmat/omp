@@ -107,6 +107,45 @@ describe('editor loopback server', () => {
     expect(await (await request(running, '/api/drafts/draft-1')).json()).toEqual(draft);
   });
 
+  it('serves committed designs and rebases drafts through authorized API routes', async () => {
+    const { root, head: initialHead } = await makeRepo();
+    const running = await openServer(root);
+    await expect((await request(running, '/api/design')).json()).resolves.toEqual({ design: null });
+    expect((await fetch(running.origin + '/api/design')).status).toBe(401);
+
+    const saved = createDefaultDraft('draft-1', initialHead);
+    saved.theme.name = 'From Git';
+    await mkdir(join(root, 'design/themes'), { recursive: true });
+    await mkdir(join(root, 'design/flows'), { recursive: true });
+    await writeFile(join(root, 'design/themes/default.json'), JSON.stringify(saved.theme));
+    await writeFile(join(root, 'design/flows/desktop-default.json'), JSON.stringify(saved.flow));
+    await execute('git', ['add', 'design'], { cwd: root });
+    await execute('git', ['-c', 'user.name=OMP Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'design'], { cwd: root });
+    const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
+    const designHead = stdout.trim();
+
+    const designResponse = await request(running, '/api/design');
+    expect(designResponse.status).toBe(200);
+    expect(await designResponse.json()).toMatchObject({ design: { baseCommit: designHead, theme: { name: 'From Git' } } });
+    const local = createDefaultDraft('draft-1', initialHead);
+    local.theme.overrides.push({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    const rebaseResponse = await request(running, '/api/rebase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(local),
+    });
+    expect(rebaseResponse.status).toBe(200);
+    expect(await rebaseResponse.json()).toMatchObject({
+      draft: { baseCommit: designHead, theme: { name: 'From Git', overrides: [{ id: 'local' }] } },
+      changes: ['design/flows/desktop-default.json', 'design/themes/default.json'],
+    });
+    expect((await fetch(running.origin + '/api/rebase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(local),
+    })).status).toBe(401);
+  });
+
   it('returns not found for missing drafts, env files and command endpoints', async () => {
     const { root } = await makeRepo();
     const running = await openServer(root);

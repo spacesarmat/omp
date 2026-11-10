@@ -13,6 +13,7 @@ export interface DraftController {
   removeOverride(id: string): void;
   replaceFlow(flow: FlowDocument): void;
   setView(view: Pick<EditorDraft, 'target' | 'screenId' | 'format' | 'language'>): void;
+  rebase(draft: EditorDraft): void;
   snapshot(name: string): DraftSnapshot;
   restore(snapshotId: string): boolean;
   undo(): boolean;
@@ -152,6 +153,17 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
     },
     setView(view) {
       update((draft) => ({ ...draft, ...view }));
+    },
+    rebase(draft) {
+      if (disposed) return;
+      const rebased = parseEditorDraft(draft);
+      if (rebased.id !== current.id) throw new Error('REBASE_DRAFT_MISMATCH');
+      current = { ...rebased, lastError: null };
+      past = [];
+      future = [];
+      error = null;
+      notify();
+      schedule();
     },
     snapshot(name) {
       if (current.snapshots.length >= 10) throw new Error('SNAPSHOT_LIMIT');

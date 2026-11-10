@@ -37,6 +37,35 @@ describe('editor client', () => {
     expect(await client.getDraft('missing')).toBeNull();
   });
 
+  it('loads committed designs and validates rebase results', async () => {
+    const draft = createDefaultDraft('draft-1', BASE);
+    const nextBase = '1111111111111111111111111111111111111111';
+    const rebased = createDefaultDraft('draft-1', nextBase);
+    rebased.theme.name = 'From Git';
+    const responses = [
+      new Response(JSON.stringify({ design: { baseCommit: nextBase, theme: rebased.theme, flow: rebased.flow } }), { status: 200 }),
+      new Response(JSON.stringify({ draft: rebased, changes: ['design/themes/default.json'] }), { status: 200 }),
+    ];
+    const fetchMock = vi.fn(async () => responses.shift()!);
+    const client = createEditorClient({ origin: 'http://127.0.0.1:4173', token: 'test-token', fetch: fetchMock as typeof fetch });
+
+    const design = await client.getDesign();
+    expect(design?.baseCommit).toBe(nextBase);
+    expect(design?.theme.name).toBe('From Git');
+    const result = await client.rebaseDraft(draft);
+    expect(result.draft.baseCommit).toBe(nextBase);
+    expect(result.changes).toEqual(['design/themes/default.json']);
+    expect((fetchMock.mock.calls[1] as unknown as [string])[0]).toBe('http://127.0.0.1:4173/api/rebase');
+  });
+
+  it('preserves the API error code and issue details', async () => {
+    const issue = { code: 'CONTRAST', target: 'desktop-windows', elementId: 'nav-library', token: '--omp-color-muted', message: 'Contrast is 2.1:1' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'DESIGN_ISSUES', issues: [issue] }), { status: 422 }));
+    const client = createEditorClient({ origin: 'http://127.0.0.1:4173', token: 'test-token', fetch: fetchMock as typeof fetch });
+    const reason = await client.exportDraft(createDefaultDraft('draft-1', BASE)).catch((error: unknown) => error);
+    expect(reason).toMatchObject({ message: 'DESIGN_ISSUES', code: 'DESIGN_ISSUES', status: 422, issues: [issue] });
+  });
+
   it('rejects token forwarding to a non-loopback origin', () => {
     expect(() => createEditorClient({ origin: 'https://attacker.invalid', token: 'test-token' })).toThrow();
   });

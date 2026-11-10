@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parseEditorDraft } from './shared/draft.ts';
 import { exportDraft } from './export.mjs';
+import { getCommittedDesign, rebaseDraft } from './design.mjs';
 
 const execute = promisify(execFile);
 const MAX_BODY = 1024 * 1024;
@@ -145,6 +146,14 @@ export async function startEditorServer({ root, token = randomBytes(32).toString
       }
       if (url.pathname === '/api/state' && request.method === 'GET') {
         json(response, 200, await gitState(root));
+        return;
+      }
+      if (url.pathname === '/api/design' && request.method === 'GET') {
+        json(response, 200, { design: await getCommittedDesign(root) });
+        return;
+      }
+      if (url.pathname === '/api/rebase' && request.method === 'POST') {
+        json(response, 200, await rebaseDraft({ root, draft: await draftFrom(request) }));
         return;
       }
       if (url.pathname === '/api/export' && request.method === 'POST') {
