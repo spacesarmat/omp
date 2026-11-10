@@ -28,6 +28,8 @@ function createController(): DraftController {
       saved.push(draft);
       return draft;
     },
+    getDesign: async () => null,
+    rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
   return createDraftController({ draft: createDefaultDraft('draft-1', BASE), client, autosaveMs: 20 });

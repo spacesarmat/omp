@@ -27,6 +27,8 @@ beforeEach(() => {
       state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
       exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     },
   });
@@ -95,7 +97,9 @@ describe('editor app', () => {
           if (attempts === 1) throw new Error('offline');
           return draft;
         },
-        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
       },
     });
     act(() => render(h(App, { controller }), host));
@@ -127,7 +131,9 @@ describe('editor app', () => {
           state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
           getDraft: async () => null,
           putDraft: async () => { throw new Error('offline'); },
-          exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+          getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
         },
       });
       act(() => render(h(App, { controller }), host));

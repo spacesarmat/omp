@@ -19,6 +19,8 @@ beforeEach(() => {
       state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
       exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     },
   });
@@ -42,6 +44,8 @@ describe('ExportPanel', () => {
       state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
       exportDraft,
     };
     act(() => render(h(ExportPanel, { controller, client }), host));

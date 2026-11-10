@@ -1,5 +1,7 @@
 import { parseEditorDraft, type EditorDraft } from '../shared/draft';
+import { parseFlowDocument, parseThemeDocument } from '../../design/validation';
 import type { ExportResult } from '../export.mjs';
+import type { CommittedDesign, RebaseResult } from '../design.mjs';
 
 export interface EditorState {
   baseCommit: string;
@@ -10,6 +12,8 @@ export interface EditorClient {
   state(): Promise<EditorState>;
   getDraft(id: string): Promise<EditorDraft | null>;
   putDraft(draft: EditorDraft, options?: { keepalive?: boolean }): Promise<EditorDraft>;
+  getDesign(): Promise<CommittedDesign | null>;
+  rebaseDraft(draft: EditorDraft): Promise<RebaseResult>;
   exportDraft(draft: EditorDraft): Promise<ExportResult>;
 }
 
@@ -36,6 +40,26 @@ function loopbackOrigin(value: string): string {
   const url = new URL(value);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== value) throw new Error('Editor API requires a loopback origin');
   return value;
+}
+
+function committedDesign(value: unknown): CommittedDesign {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('INVALID_DESIGN_RESPONSE');
+  const source = value as Record<string, unknown>;
+  if (typeof source.baseCommit !== 'string' || !/^[0-9a-f]{40}$/.test(source.baseCommit)) throw new Error('INVALID_DESIGN_RESPONSE');
+  const theme = parseThemeDocument(source.theme);
+  const flow = parseFlowDocument(source.flow);
+  if (theme.baseCommit !== source.baseCommit || flow.baseCommit !== source.baseCommit) throw new Error('INVALID_DESIGN_RESPONSE');
+  return { baseCommit: source.baseCommit, theme, flow };
+}
+
+function rebaseResult(value: unknown): RebaseResult {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('INVALID_REBASE_RESPONSE');
+  const source = value as Record<string, unknown>;
+  const allowed = ['design/flows/desktop-default.json', 'design/themes/default.json'];
+  if (!Array.isArray(source.changes) || source.changes.some((path) => typeof path !== 'string' || !allowed.includes(path))) {
+    throw new Error('INVALID_REBASE_RESPONSE');
+  }
+  return { draft: parseEditorDraft(source.draft), changes: [...source.changes] };
 }
 
 export function createEditorClient(options: EditorClientOptions = {}): EditorClient {
@@ -71,6 +95,21 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
       });
       if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
       return parseEditorDraft(await response.json());
+    },
+    getDesign: async () => {
+      const response = await request('/api/design');
+      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      const body = await response.json() as { design?: unknown };
+      return body.design === null ? null : committedDesign(body.design);
+    },
+    rebaseDraft: async (draft) => {
+      const response = await request('/api/rebase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
+      });
+      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      return rebaseResult(await response.json());
     },
     exportDraft: async (draft) => {
       const response = await request('/api/export', {

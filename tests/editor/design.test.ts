@@ -1,0 +1,122 @@
+// @vitest-environment node
+import { execFile } from 'node:child_process';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+import { afterEach, describe, expect, it } from 'vitest';
+import { getCommittedDesign, rebaseDraft } from '../../editor/design.mjs';
+import { createDefaultDraft } from '../../editor/shared/draft';
+
+const execute = promisify(execFile);
+const roots: string[] = [];
+
+async function head(root: string): Promise<string> {
+  const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
+  return stdout.trim();
+}
+
+async function commit(root: string, message: string): Promise<string> {
+  await execute('git', ['add', 'design'], { cwd: root });
+  await execute('git', ['-c', 'user.name=OMP Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', message], { cwd: root });
+  return head(root);
+}
+
+async function makeRepo(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'omp-editor-design-'));
+  roots.push(root);
+  await execute('git', ['init', '--quiet'], { cwd: root });
+  await mkdir(join(root, 'design'), { recursive: true });
+  await execute('git', ['-c', 'user.name=OMP Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '--quiet', '-m', 'initial'], { cwd: root });
+  return root;
+}
+
+async function writeDesign(root: string, draft: ReturnType<typeof createDefaultDraft>): Promise<void> {
+  const baseCommit = await head(root);
+  draft.baseCommit = baseCommit;
+  draft.theme.baseCommit = baseCommit;
+  draft.flow.baseCommit = baseCommit;
+  for (const snapshot of draft.snapshots) {
+    snapshot.theme.baseCommit = baseCommit;
+    snapshot.flow.baseCommit = baseCommit;
+  }
+  await mkdir(join(root, 'design/themes'), { recursive: true });
+  await mkdir(join(root, 'design/flows'), { recursive: true });
+  await writeFile(join(root, 'design/themes/default.json'), JSON.stringify(draft.theme), 'utf8');
+  await writeFile(join(root, 'design/flows/desktop-default.json'), JSON.stringify(draft.flow), 'utf8');
+}
+
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
+
+describe('committed editor designs', () => {
+  it('loads the checked-in theme and flow instead of hardcoded defaults', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.theme.name = 'Saved in Git';
+    initial.theme.tokens['--omp-color-accent'] = '#112233';
+    initial.flow.rules.push({ id: 'saved-rule', screenId: 'library', elementId: 'saved-button', event: 'click', action: { type: 'toast', message: 'Saved' } });
+    await writeDesign(root, initial);
+    const designHead = await commit(root, 'commit design');
+
+    const design = await getCommittedDesign(root);
+    expect(design).toMatchObject({ baseCommit: designHead });
+    expect(design?.theme.name).toBe('Saved in Git');
+    expect(design?.theme.tokens['--omp-color-accent']).toBe('#112233');
+    expect(design?.flow.rules.slice(-1)[0]?.id).toBe('saved-rule');
+  });
+
+  it('returns null before any design has been committed', async () => {
+    const root = await makeRepo();
+    await expect(getCommittedDesign(root)).resolves.toBeNull();
+  });
+
+  it('rebases local edits over nonconflicting committed theme and flow changes', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.snapshots = [{ id: 'snapshot-1', name: 'Before', createdAt: '2026-11-10T10:00:00.000Z', theme: structuredClone(local.theme), flow: structuredClone(local.flow) }];
+    local.theme.overrides.push({ id: 'local-accent', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.theme.name = 'Incoming name';
+    incoming.theme.tokens['--omp-color-muted'] = '#A0A0A0';
+    incoming.flow.rules.push({ id: 'incoming-rule', screenId: 'library', elementId: 'incoming-button', event: 'click', action: { type: 'toast', message: 'Incoming' } });
+    await writeDesign(root, incoming);
+    const nextHead = await commit(root, 'incoming design');
+
+    const result = await rebaseDraft({ root, draft: local });
+    expect(result.changes).toEqual(['design/flows/desktop-default.json', 'design/themes/default.json']);
+    expect(result.draft.baseCommit).toBe(nextHead);
+    expect(result.draft.theme.name).toBe('Incoming name');
+    expect(result.draft.theme.tokens['--omp-color-muted']).toBe('#A0A0A0');
+    expect(result.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local-accent']);
+    expect(result.draft.flow.rules.slice(-1)[0]?.id).toBe('incoming-rule');
+    expect(result.draft.snapshots).toHaveLength(1);
+    expect(result.draft.snapshots[0].theme.baseCommit).toBe(nextHead);
+  });
+
+  it('reports a conflicting field without changing the local draft', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.theme.name = 'Local name';
+    const before = JSON.stringify(local);
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.theme.name = 'Incoming name';
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'theme.name' }],
+    });
+    expect(JSON.stringify(local)).toBe(before);
+  });
+});
