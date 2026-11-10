@@ -55,6 +55,12 @@ if (platformKind() === 'androidtv') {
 
 installErrorHooks();
 import('./report/presence').then((m) => m.startPresence(tvSourceContext, platformKind() === 'androidtv' ? 'androidtv' : 'webos')).catch(() => undefined);
+import('./report/rollout').then((m) => m.installRollout(tvSourceContext)).catch(() => undefined);
+import('./report/crash').then((m) => {
+  const platform = platformKind() === 'androidtv' ? 'androidtv' : 'webos';
+  m.installCrashHooks(platform);
+  m.flushCrashes(tvSourceContext);
+}).catch(() => undefined);
 setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 

@@ -19,6 +19,7 @@ class MainActivity : BridgeActivity() {
     private var tvMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashWatch.install(application)
         BootLaunch.acknowledge(this, intent)
         I18n.load(this)
         CertPins.attach(getSharedPreferences(CertPins.PREFS, MODE_PRIVATE))

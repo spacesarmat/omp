@@ -88,6 +88,8 @@ function promoRows(state) {
       maxUses: p.maxUses,
       revoked: !!p.revoked,
       createdAt: p.createdAt || 0,
+      expiresAt: p.expiresAt || 0,
+      discountPercent: p.discountPercent || 0,
     }));
 }
 

@@ -30,7 +30,8 @@ import {
   sourceStats,
   usersFrom,
 } from './desk.mjs';
-import { dailySeries } from './logic.mjs';
+import { dailySeries, redeemPromo } from './logic.mjs';
+import { betaCohort, broadcastAudience, crashDraft, crashLogText, ingestCrash, setCrashStatus, versionSummary } from './crashIn.mjs';
 import { monitorEnv } from './monitorChecks.mjs';
 import { probeAllServices } from './services.mjs';
 
@@ -76,7 +77,17 @@ function want(path) {
     path === '/admin/api/credit' ||
     path === '/admin/api/rollback' ||
     path === '/admin/api/rank/pin' ||
-    path === '/v1/presence'
+    path === '/admin/api/crashes' ||
+    path === '/admin/api/crashes/status' ||
+    path === '/admin/api/crashes/log' ||
+    path === '/admin/api/crashes/draft' ||
+    path === '/admin/api/broadcast/preview' ||
+    path === '/admin/api/broadcast/send' ||
+    path === '/admin/api/logins' ||
+    path === '/v1/presence' ||
+    path === '/v1/crash' ||
+    path === '/v1/promo' ||
+    path === '/v1/rollout'
   );
 }
 
@@ -86,6 +97,8 @@ export async function handleDesk(ctx) {
   const { req, res } = ctx;
   if (path === '/admin/api/events' && req.method === 'GET') return openEvents(ctx);
   if (path === '/v1/presence' && req.method === 'POST') return presence(ctx);
+  if (path === '/v1/crash' && req.method === 'POST') return crashPost(ctx);
+  if (path === '/v1/promo' && req.method === 'POST') return promoPost(ctx);
   const admin = ctx.adminOf(req);
   if (!admin) {
     ctx.json(res, 401, { auth: false });
@@ -95,6 +108,11 @@ export async function handleDesk(ctx) {
   if (req.method === 'GET' && path === '/admin/api/search') return sendSearch(ctx);
   if (req.method === 'GET' && path === '/admin/api/nuc') return sendNuc(ctx);
   if (req.method === 'GET' && path === '/admin/api/nuc/logs') return sendLogs(ctx);
+  if (req.method === 'GET' && path === '/admin/api/crashes') return sendCrashes(ctx);
+  if (req.method === 'GET' && path === '/admin/api/crashes/log') return sendCrashLog(ctx);
+  if (req.method === 'GET' && path === '/admin/api/crashes/draft') return sendCrashDraft(ctx);
+  if (req.method === 'GET' && path === '/admin/api/logins') return sendLogins(ctx);
+  if (req.method === 'GET' && path === '/v1/rollout') return rollout(ctx);
   if (req.method !== 'POST') {
     ctx.json(res, 405, { ok: false, error: 'method' });
     return true;
@@ -120,6 +138,9 @@ export async function handleDesk(ctx) {
   if (path === '/admin/api/rollback') return rollback(ctx, admin, body);
   if (path === '/admin/api/rank/pin') return pinRank(ctx, admin, body);
   if (path === '/admin/api/nuc/restart') return restartContainer(ctx, admin, body);
+  if (path === '/admin/api/crashes/status') return crashStatus(ctx, admin, body);
+  if (path === '/admin/api/broadcast/preview') return broadcastPreview(ctx, body);
+  if (path === '/admin/api/broadcast/send') return broadcastSend(ctx, admin, body);
   ctx.json(res, 404, { ok: false, error: 'not_found' });
   return true;
 }
@@ -200,6 +221,8 @@ async function sendDesk(ctx, admin) {
     revenue: revenueView(state, series, now),
     disk: disk ? { path: disk.path, free: disk.free, total: disk.total, ratio: Math.round(disk.ratio * 1000) / 10 } : null,
     rollbacks: (state.deskRollbacks || []).slice(-20).reverse().map((r) => ({ id: r.id, at: r.at })),
+    versions: versionSummary(state.deskVersions),
+    betaPercent: Math.max(0, Math.min(100, Math.floor(Number(state.settings && state.settings.betaPercent) || 100))),
   });
   return true;
 }
@@ -476,5 +499,187 @@ async function presence(ctx) {
   }
   publishAdmin({ type: 'device' });
   ctx.json(ctx.res, 200, { ok: true });
+  return true;
+}
+
+const previews = new Map();
+
+async function sendCrashes(ctx) {
+  const state = await ctx.store.read();
+  const groups = (state.crashGroups || []).slice().reverse();
+  ctx.json(ctx.res, 200, {
+    ok: true,
+    groups: groups.map((g) => ({
+      id: g.id,
+      status: g.status,
+      count: g.count,
+      devices: (g.devices || []).length,
+      versions: g.versions || [],
+      firstAt: g.firstAt,
+      lastAt: g.lastAt,
+      title: g.title,
+      regression: !!g.regression,
+    })),
+  });
+  return true;
+}
+
+async function sendCrashLog(ctx) {
+  const id = ctx.url.searchParams.get('id') || '';
+  const state = await ctx.store.read();
+  const report = (state.crashReports || []).filter((r) => r.groupId === id).slice(-1)[0];
+  ctx.send(ctx.res, 200, crashLogText(report) || 'нет лога', {
+    'content-type': 'text/plain; charset=utf-8',
+    'content-disposition': 'attachment; filename="omp-crash-' + String(id).slice(0, 16) + '.txt"',
+  });
+  return true;
+}
+
+async function sendCrashDraft(ctx) {
+  const id = ctx.url.searchParams.get('id') || '';
+  const state = await ctx.store.read();
+  const group = (state.crashGroups || []).find((g) => g.id === id);
+  ctx.json(ctx.res, 200, { ok: !!group, text: crashDraft(group) });
+  return true;
+}
+
+async function crashStatus(ctx, admin, body) {
+  if (!confirmed(body)) {
+    ctx.json(ctx.res, 409, { ok: false, error: 'Нужно подтверждение', needConfirm: true });
+    return true;
+  }
+  const out = await ctx.store.update((cur) => {
+    const r = setCrashStatus(cur, String(body.id || ''), String(body.status || ''));
+    return { state: r.state, result: r.error ? { error: r.error } : { ok: true } };
+  });
+  if (out && out.error) {
+    ctx.json(ctx.res, 200, { ok: false, error: out.error });
+    return true;
+  }
+  await ctx.audit('crash_status', String(body.id || '') + ' ' + String(body.status || ''), admin);
+  publishAdmin({ type: 'crash' });
+  ctx.json(ctx.res, 200, { ok: true });
+  return true;
+}
+
+async function crashPost(ctx) {
+  const body = await ctx.readBody(ctx.req);
+  const parsed = body && body.payload ? safePayload(body.payload) : body || {};
+  if (parsed.diagnostics === '0' || parsed.diagnostics === false) {
+    ctx.json(ctx.res, 200, { ok: true, stored: false });
+    return true;
+  }
+  const device = String(ctx.req.headers['x-device-id'] || '');
+  const now = Date.now();
+  if (!allowRate('c:' + deviceKey(device || ctx.clientIp(ctx.req)), now, 6, 60 * 60 * 1000)) {
+    ctx.json(ctx.res, 429, { error: 'rate' });
+    return true;
+  }
+  const saved = await ctx.store.update((cur) => {
+    const r = ingestCrash(cur, { ...parsed, device: deviceKey(device) }, now);
+    return { state: r.state, result: { alert: r.alert, title: r.group.title } };
+  });
+  if (saved && saved.alert && ctx.notifyAdmins) {
+    const state = await ctx.store.read();
+    const text =
+      saved.alert === 'regression'
+        ? 'Регрессия сбоя: ' + saved.title
+        : saved.alert === 'spike'
+          ? 'Всплеск сбоев: ' + saved.title
+          : 'Новый сбой: ' + saved.title;
+    await ctx.notifyAdmins(state, text);
+  }
+  publishAdmin({ type: 'crash' });
+  ctx.json(ctx.res, 200, { ok: true, stored: true });
+  return true;
+}
+
+function safePayload(text) {
+  try {
+    return JSON.parse(String(text || '{}'));
+  } catch {
+    return {};
+  }
+}
+
+async function promoPost(ctx) {
+  const body = await ctx.readBody(ctx.req);
+  const device = String(ctx.req.headers['x-device-id'] || '');
+  const token = String(ctx.req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const now = Date.now();
+  const state = await ctx.store.read();
+  const caller = await ctx.deviceCaller(state, token, device, now);
+  if (!caller || caller.error) {
+    ctx.json(ctx.res, 401, { error: (caller && caller.error) || 'bad_token' });
+    return true;
+  }
+  const sub = state.subscriptions.find((s) => caller.code && s.id === caller.code.subscriptionId);
+  if (!sub) {
+    ctx.json(ctx.res, 404, { error: 'not_linked' });
+    return true;
+  }
+  const out = await ctx.store.update((cur) => redeemPromo(cur, { code: body.code || body.promo || '', accountId: sub.accountId, now }));
+  const err = out && out.error;
+  ctx.json(ctx.res, 200, err ? { ok: false, error: err } : { ok: true, days: out.days || 0 });
+  return true;
+}
+
+async function rollout(ctx) {
+  const device = String(ctx.req.headers['x-device-id'] || '');
+  if (!device) {
+    ctx.json(ctx.res, 400, { error: 'device' });
+    return true;
+  }
+  const state = await ctx.store.read();
+  const percent = state.settings && state.settings.betaPercent !== undefined && state.settings.betaPercent !== ''
+    ? Number(state.settings.betaPercent)
+    : 100;
+  ctx.json(ctx.res, 200, { ok: true, beta: betaCohort(device, percent), percent: Math.max(0, Math.min(100, Math.floor(percent) || 0)) });
+  return true;
+}
+
+async function broadcastPreview(ctx, body) {
+  const text = String(body.text || '').trim().slice(0, 1000);
+  if (text.length < 2) {
+    ctx.json(ctx.res, 200, { ok: false, error: 'Пустой текст' });
+    return true;
+  }
+  const segment = ['all', 'active', 'lapsed'].indexOf(body.segment) >= 0 ? body.segment : 'all';
+  const state = await ctx.store.read();
+  const ids = broadcastAudience(state, segment, Date.now());
+  const id = deviceKey(text + ':' + segment + ':' + Date.now());
+  previews.set(id, { text, ids, at: Date.now() });
+  ctx.json(ctx.res, 200, { ok: true, id, count: ids.length, sample: ids.slice(0, 5) });
+  return true;
+}
+
+async function broadcastSend(ctx, admin, body) {
+  if (!confirmed(body)) {
+    ctx.json(ctx.res, 409, { ok: false, error: 'Нужно подтверждение', needConfirm: true });
+    return true;
+  }
+  const row = previews.get(String(body.id || ''));
+  if (!row || Date.now() - row.at > 10 * 60 * 1000) {
+    ctx.json(ctx.res, 200, { ok: false, error: 'Черновик устарел. Откройте предпросмотр снова.' });
+    return true;
+  }
+  previews.delete(String(body.id || ''));
+  const state = await ctx.store.read();
+  let sent = 0;
+  if (ctx.notifyAdmins) {
+    for (let i = 0; i < row.ids.length && i < 2000; i++) {
+      await ctx.notifyAdmins(state, [{ chatId: row.ids[i], text: row.text }]);
+      sent += 1;
+    }
+  }
+  await ctx.audit('broadcast', sent + ' ' + row.text.slice(0, 80), admin);
+  publishAdmin({ type: 'audit', action: 'broadcast' });
+  ctx.json(ctx.res, 200, { ok: true, sent });
+  return true;
+}
+
+async function sendLogins(ctx) {
+  const state = await ctx.store.read();
+  ctx.json(ctx.res, 200, { ok: true, rows: (state.loginJournal || []).slice(-50).reverse() });
   return true;
 }

@@ -63,6 +63,8 @@ export type DeskData = {
   };
   disk?: { path: string; free: number; total: number; ratio: number } | null;
   rollbacks?: { id: string; at: number }[];
+  versions?: { label: string; count: number }[];
+  betaPercent?: number;
 };
 
 export function useDesk(enabled: boolean, paused: boolean) {

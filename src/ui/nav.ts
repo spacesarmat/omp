@@ -78,6 +78,7 @@ function currentFocus(): SavedFocus | undefined {
 }
 
 export function navigate(r: Route): void {
+  import('../report/crash').then((m) => m.crumb('screen ' + r.name)).catch(() => undefined);
   focusMemory[routeStack.value.length - 1] = currentFocus();
   routeStack.value = routeStack.value.concat(r);
 }

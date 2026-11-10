@@ -149,6 +149,8 @@ export type HomeData = {
     maxUses: number;
     revoked: boolean;
     createdAt?: number;
+    expiresAt?: number;
+    discountPercent?: number;
   }[];
   fails?: { at?: number; atText: string; reason: string; deviceId: string }[];
   sessions?: { id: string; lastSeen?: number; createdAt?: number; actor?: FeedActor }[];
@@ -173,6 +175,7 @@ export type BackupStatus = {
   totalBytes: number;
   stale: boolean;
   lastError: string;
+  verify?: { ok: boolean; at?: number; error?: string; name?: string } | null;
 };
 
 export type UserCode = {

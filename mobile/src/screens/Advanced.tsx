@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
+import { sendManualReport } from '../../src/report/crash';
+import { phoneSourceContext } from '../searchContext';
 import { navigate, goBack } from '../nav';
 import { Icon } from '../ui/Icon';
 import {
@@ -233,6 +235,7 @@ export function Advanced() {
             onToggle={() => updateSettings({ diagnostics: !settings.value.diagnostics })}
           />
         </div>
+        <ReportRow />
       </section>
 
       <section class="m-set-group">
@@ -252,6 +255,30 @@ export function Advanced() {
         </button>
         <p class="m-muted m-small m-set-attr">{t('settings.tmdbData')}</p>
       </section>
+    </div>
+  );
+}
+
+function ReportRow() {
+  const [comment, setComment] = useState('');
+  const [note, setNote] = useState('');
+  return (
+    <div class="m-set-row">
+      <div class="m-set-text">
+        <span>{t('settings.reportTitle')}</span>
+        <input class="m-input" value={comment} onInput={(e) => setComment((e.target as HTMLInputElement).value)} />
+        {note ? <span class="m-small m-muted">{note}</span> : null}
+      </div>
+      <button
+        type="button"
+        class="m-btn"
+        onClick={() => {
+          const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
+          void sendManualReport(phoneSourceContext, platform, comment, '').then((ok) => setNote(ok ? t('settings.promoOk') : t('settings.promoBad')));
+        }}
+      >
+        {t('settings.reportSend')}
+      </button>
     </div>
   );
 }

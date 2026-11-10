@@ -252,6 +252,42 @@ pub async fn update_apply(
     result
 }
 
+fn native_crash_path() -> std::path::PathBuf {
+    std::env::temp_dir().join("omp-native-crash.txt")
+}
+
+fn scrub_native(text: &str) -> String {
+    let mut out = String::new();
+    for line in text.lines() {
+        if line.to_ascii_lowercase().contains("magnet:?") || line.to_ascii_lowercase().contains("bearer ") {
+            out.push_str("[скрыто]\n");
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if out.len() > 4000 {
+        out.truncate(4000);
+    }
+    out
+}
+
+pub fn install_native_crash_hook() {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = std::fs::write(native_crash_path(), scrub_native(&format!("{info}")));
+        prev(info);
+    }));
+}
+
+#[tauri::command]
+pub fn take_native_crashes() -> String {
+    let path = native_crash_path();
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let _ = std::fs::remove_file(path);
+    text
+}
+
 #[tauri::command]
 pub async fn update_pending_result() -> Result<Option<UpdateResult>, String> {
     tauri::async_runtime::spawn_blocking(take_pending_update_result)

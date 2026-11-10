@@ -17,6 +17,7 @@ import { DhtPanel } from '@/panels/DhtPanel';
 import { CachePanel } from '@/panels/CachePanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import { DeskHome, DevicesDesk, FunnelDesk, RankDesk, RevenueDesk, RollbackCard, SourcesDesk, UsersDesk, NucDesk } from '@/panels/DeskViews';
+import { BroadcastDesk, CrashesDesk, LoginsDesk, VersionsDesk } from '@/panels/OpsExtra';
 import { NAV, Palette } from '@/components/palette';
 import { useDesk } from '@/lib/desk';
 import { LiveBar, useLive } from '@/lib/live';
@@ -256,6 +257,9 @@ export function App() {
           <TabsTrigger value="funnel">Воронка</TabsTrigger>
           <TabsTrigger value="revenue">Выручка</TabsTrigger>
           <TabsTrigger value="nuc">NUC</TabsTrigger>
+          <TabsTrigger value="crashes">Сбои</TabsTrigger>
+          <TabsTrigger value="broadcast">Рассылка</TabsTrigger>
+          <TabsTrigger value="versions">Версии</TabsTrigger>
         </TabsList>
 
         <TabsContent value="support">
@@ -380,8 +384,18 @@ export function App() {
         <TabsContent value="monitor">
           <MonitorPanel csrf={d.csrf || ''} />
         </TabsContent>
-        <TabsContent value="security">
+        <TabsContent value="security" className="space-y-4">
           <SecurityCard run={run} sessions={d.sessions || []} sessionId={d.sessionId || ''} />
+          <LoginsDesk />
+        </TabsContent>
+        <TabsContent value="crashes">
+          <CrashesDesk csrf={d.csrf || ''} />
+        </TabsContent>
+        <TabsContent value="broadcast">
+          <BroadcastDesk csrf={d.csrf || ''} />
+        </TabsContent>
+        <TabsContent value="versions">
+          <VersionsDesk data={deskData} />
         </TabsContent>
       </Tabs>
       <Toast />

@@ -39,6 +39,13 @@ export function reloadUpdateState(): void {
 
 export type CheckResult = 'update' | 'latest' | 'error' | 'skipped';
 
+let betaGate: (() => Promise<boolean>) | null = null;
+
+/** When set, a user who asked for betas still gets the stable feed if the server says this device is outside the percent. */
+export function setBetaGate(fn: () => Promise<boolean>): void {
+  betaGate = fn;
+}
+
 export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
   const now = opts.now === undefined ? Date.now() : opts.now;
   const current = opts.current === undefined ? APP_VERSION : opts.current;
@@ -49,7 +56,13 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
   // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the NSIS installer (update-windows.json)
   // the beta feed with «Получать бета-версии»; without it a beta waits for a release newer than itself
-  const url = opts.url || updateFeedUrl(platformKind() === 'androidtv', settings.value.betaUpdates);
+  const wantBeta = settings.value.betaUpdates;
+  const decide = !opts.url && wantBeta && betaGate ? betaGate().catch(() => false) : Promise.resolve(wantBeta);
+  return decide.then((beta) => checkFeed(opts, now, current, beta));
+}
+
+function checkFeed(opts: { manual: boolean; url?: string }, now: number, current: string, beta: boolean): Promise<CheckResult> {
+  const url = opts.url || updateFeedUrl(platformKind() === 'androidtv', beta);
   if (!url) return Promise.resolve<CheckResult>('skipped');
   return request<unknown>(url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + now, { timeoutMs: 10000, quiet: true }).then(
     (raw): CheckResult => {

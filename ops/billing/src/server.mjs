@@ -147,6 +147,7 @@ import { isCachePath, routeCache } from './cacheHttp.mjs';
 import { handleDesk } from './deskHttp.mjs';
 import { publishAdmin } from './adminLive.mjs';
 import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
+import { loginNote } from './crashIn.mjs';
 import { monitorEnv } from './monitorChecks.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
@@ -1237,6 +1238,10 @@ export function createApp(file, fetchImpl, opts) {
           readBody,
           clientIp,
           audit: (action, detail, who) => audit(file, action, detail, who),
+          notifyAdmins: async (state, messages) => {
+            const rows = typeof messages === 'string' ? adminBroadcast(state.settings, messages) : messages || [];
+            await notifyAdmins(state, rows, net);
+          },
         })
       ) {
         return;
@@ -1501,6 +1506,25 @@ export function createApp(file, fetchImpl, opts) {
         const started = adminAuth
           ? adminAuth.startPanel(Date.now())
           : await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const ip = clientIp(req);
+        const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+        if (!adminAuth && !readOnly) {
+          await store.update((cur) => {
+            const adminLogins = (cur.adminLogins || []).map((l) => (l.token === started.token ? { ...l, ip, ua } : l));
+            return { state: loginNote({ ...cur, adminLogins }, { at: Date.now(), ip, ua, result: 'pending', telegramId: '' }) };
+          });
+        }
+        const ids = String(state.settings.adminTelegramIds || '').split(/[\s,;]+/).filter(Boolean);
+        const ask = 'Подтвердите вход в админку\nIP: ' + (ip || '-') + '\nУстройство: ' + (ua || '-');
+        for (let i = 0; i < ids.length; i++) {
+          try {
+            await telegramSend(state.settings.botToken, ids[i], ask, net, {
+              inline: { inline_keyboard: [[{ text: 'Подтвердить вход', callback_data: 'alin:' + started.token }]] },
+            });
+          } catch (e) {
+            /* one admin chat can fail */
+          }
+        }
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
         if (!readOnly) {
           try {
@@ -1530,6 +1554,11 @@ export function createApp(file, fetchImpl, opts) {
           if (!readOnly) {
             try {
               await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
+              const ip = clientIp(req);
+              const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+              await store.update((cur) => ({
+                state: loginNote(cur, { at: Date.now(), ip, ua, result: 'ok', telegramId: taken.telegramId || '' }),
+              }));
             } catch (e) {
               /* ignore */
             }
@@ -1798,6 +1827,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 })
               : createPromo(state, {
@@ -1806,6 +1837,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 }),
           );
