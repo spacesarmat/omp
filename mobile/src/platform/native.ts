@@ -188,6 +188,8 @@ export interface OmpNativeApi {
   openExternal(url: string, mime: string): Promise<void>;
   /** The installed 2160 Player package; null when it is missing, the app is older or off-device. */
   player2160(): Promise<string | null>;
+  /** versionName of that package. null when the player is missing or the name is not a version. */
+  player2160Version(): Promise<string | null>;
   /** Opens the queue in 2160 Player; resolves with what it handed back (null: an older app without it). */
   open2160(o: Open2160Options): Promise<P2160Result | null>;
   /** True when this app carries 2160 Player's screen (player-core) for playEmbedded2160; false off-device or in an older app. */
@@ -354,7 +356,7 @@ interface OmpNativePlugin {
   pointerSend(o: { frame: string }): Promise<void>;
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
-  player2160?(): Promise<{ package?: unknown; embedded?: unknown }>;
+  player2160?(): Promise<{ package?: unknown; version?: unknown; embedded?: unknown }>;
   open2160?(o: Open2160Options): Promise<unknown>;
   playEmbedded2160?(o: Open2160Options): Promise<unknown>;
   audioPrepare?(): Promise<void>;
@@ -710,6 +712,17 @@ export const native: OmpNativeApi = {
     try {
       const r = await plugin.player2160();
       return r && typeof r.package === 'string' && r.package ? r.package : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async player2160Version() {
+    if (!plugin || typeof plugin.player2160 !== 'function') return null;
+    try {
+      const r = await plugin.player2160();
+      const v = r && typeof r.version === 'string' ? r.version.trim() : '';
+      return /^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(v) ? v : null;
     } catch {
       return null;
     }

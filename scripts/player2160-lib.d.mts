@@ -1,0 +1,10 @@
+export function parsePlayerFile(text: string): string;
+export function playerTag(version: string): string;
+export function comparePlayer(a: string, b: string): number;
+export function commitFromLsRemote(text: string, tag: string): string;
+export function playerCoreVersion(text: string): string;
+export function patchPlayerGradle(text: string, version: string): string;
+export function assessPlayerRelease(release: unknown, currentVersion: string): { ok: boolean; reason: string; version?: string };
+export function playerSummary(body: string, english?: boolean): string;
+export function playerNotes(version: string, sha: string, summary: string, english?: boolean): string[];
+export function upsertPlayerNotes(text: string, notes: string[], english?: boolean): string;

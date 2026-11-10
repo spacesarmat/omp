@@ -50,6 +50,23 @@ jobs:
             sha256:*) ;;
             *) echo "::warning::$LATEST has no TorrServer-android-arm64 asset with a sha256 digest, skipping"; exit 0 ;;
           esac
+          set +e
+          node scripts/torrserver-sanity.mjs "$CURRENT" "$RUNNER_TEMP/latest.json"
+          sane=$?
+          set -e
+          if [ "$sane" = "2" ]; then
+            echo "::warning::$LATEST failed the sanity check (stable tag, newer number, sha256, size), skipping"
+            exit 0
+          fi
+          if [ "$sane" != "0" ]; then
+            echo "::error::sanity check failed"
+            exit "$sane"
+          fi
+          URL=$(jq -r '[.assets[]? | select(.name == "TorrServer-android-arm64") | .browser_download_url][0] // empty' "$RUNNER_TEMP/latest.json")
+          SHA=${DIGEST#sha256:}
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/TorrServer-android-arm64" "$URL"
+          echo "$SHA  $RUNNER_TEMP/TorrServer-android-arm64" | sha256sum -c -
+          rm -f "$RUNNER_TEMP/TorrServer-android-arm64"
           BRANCH="chore/torrserver-$LATEST"
           OPEN=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --head "$BRANCH" --json number --jq 'length')
           if [ "$OPEN" != "0" ]; then
@@ -83,20 +100,30 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
-          git add torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md
+          git add torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md \
+            desktop/src-tauri/src/platform.rs desktop/src-tauri/src/download/tests.rs desktop/src/platform/native.ts
           git commit -m "chore: TorrServer $LATEST"
           # the branch belongs to this workflow; a leftover from a closed pull request is replaced with a fresh one on main
           git push --force origin "HEAD:refs/heads/$BRANCH"
-          cat > "$RUNNER_TEMP/body.md" <<BODY
+          node scripts/torrserver-sanity.mjs --summary "$RUNNER_TEMP/latest.json" > "$RUNNER_TEMP/summary.txt"
+          cat > "$RUNNER_TEMP/body.md" <<OMPBODY
           Встроенный TorrServer обновлён до $LATEST (https://github.com/YouROK/TorrServer/releases/tag/$LATEST).
 
           - torrserver.version и закреплённая загрузка (android/app/src/main/res/raw/torrserver.json: url, sha256, размер)
+          - тот же выпуск для Windows (desktop/src-tauri/src/platform.rs)
           - строка в CHANGELOG в «Не выпущено»
           - версия OMP не меняется, тег и релиз не создаются: обновление уйдёт со следующим релизом
+          - перед PR бинарник TorrServer-android-arm64 скачан и проверен по sha256
+
+          Изменения upstream:
+
+          OMPBODY
+          cat "$RUNNER_TEMP/summary.txt" >> "$RUNNER_TEMP/body.md"
+          cat >> "$RUNNER_TEMP/body.md" <<OMPBODY
 
           Открыто автоматически workflow «TorrServer update». CI на этой ветке запускается через workflow_dispatch;
           если проверок в PR нет, запустите CI вручную: Actions, CI, Run workflow, ветка $BRANCH.
-          BODY
+          OMPBODY
           if ! gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
               --title "chore: TorrServer $LATEST" --body-file "$RUNNER_TEMP/body.md"; then
             echo "::error::Could not open the pull request. Turn on Settings, Actions, General, 'Allow GitHub Actions to create and approve pull requests', or open it by hand from $BRANCH."
@@ -106,3 +133,5 @@ jobs:
           # so build, android and billing report on the pull request's head commit
           gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
             || echo "::warning::Could not start CI on $BRANCH: run it from Actions, CI, Run workflow"
+          gh workflow run desktop.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f publish=false \
+            || echo "::warning::Could not start Desktop on $BRANCH: run it from Actions, Desktop, Run workflow"

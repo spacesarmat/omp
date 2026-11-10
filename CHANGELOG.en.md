@@ -4,6 +4,13 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- On launch OMP compares the installed 2160 Player and TorrServer with the latest release. When a newer one exists it asks: Update or Later. Later is remembered for that version. If the installed version cannot be read, nothing is asked
+- [phone] The embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
+- [atv] On Android TV the embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
+- [tech] The android/vendor/2160player submodule is updated to v0.2.25 (cae50cf), player-core coordinate 0.2.25. The player2160-update workflow opens a PR for a new release. The TorrServer update workflow still opens a PR and skips a release that fails the sha256, size or version checks
+
 ## 0.20.12-beta.5
 
 - A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line

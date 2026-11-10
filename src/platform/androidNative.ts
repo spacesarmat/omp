@@ -98,7 +98,7 @@ export interface OmpNativeTvPlugin {
   /** System screen for display over other apps. { opened: false } when that screen cannot be opened. */
   requestOpenOnStartupOverlay?(): Promise<{ opened?: boolean }>;
   /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
-  player2160?(): Promise<{ package: string | null }>;
+  player2160?(): Promise<{ package: string | null; version?: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
   open2160?(o: Open2160Request): Promise<unknown>;
   /** One diagnostic line in logcat. Release WebView logging is off. tag must be omp.tracks. */

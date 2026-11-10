@@ -28,14 +28,33 @@ object Player2160 {
     const val EXTRA_PREFIX = "tv.p2160.extra."
 
     /** The first installed 2160 Player package (release before debug), or null. */
-    fun installed(pm: PackageManager): String? = PACKAGES.firstOrNull { pkg ->
-        try {
-            if (Build.VERSION.SDK_INT >= 33) pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
-            else @Suppress("DEPRECATION") pm.getPackageInfo(pkg, 0)
-            true
-        } catch (_: PackageManager.NameNotFoundException) {
-            false
-        }
+    fun installed(pm: PackageManager): String? = PACKAGES.firstOrNull { packagePresent(pm, it) }
+
+    private fun packagePresent(pm: PackageManager, pkg: String): Boolean = try {
+        if (Build.VERSION.SDK_INT >= 33) pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        else @Suppress("DEPRECATION") pm.getPackageInfo(pkg, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /** versionName, or null when the package is missing or PackageManager fails. */
+    fun versionName(pm: PackageManager, pkg: String): String? = try {
+        val info = if (Build.VERSION.SDK_INT >= 33) pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0))
+        else @Suppress("DEPRECATION") pm.getPackageInfo(pkg, 0)
+        info.versionName
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * A version OMP can compare («0.2.25», «v0.2.25», «0.2.25-beta.1»). Anything else is unknown:
+     * the launch check stays quiet. A «-test» suffix on a real version is dropped.
+     */
+    fun versionLabel(raw: String?): String? {
+        val s = raw?.trim()?.removeSuffix("-test") ?: return null
+        if (s.isEmpty() || s.length > 32) return null
+        return s.takeIf { Regex("""^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$""").matches(it) }
     }
 
     data class Item(val url: String, val title: String)
