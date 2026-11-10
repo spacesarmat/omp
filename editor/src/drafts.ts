@@ -100,6 +100,7 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
     const snapshot = structuredClone(current);
     delete snapshot.lastError;
     const write = async () => {
+      snapshot.revision = current.revision;
       try {
         const saved = await options.client.putDraft(snapshot, flushOptions);
         error = null;

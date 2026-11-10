@@ -104,6 +104,9 @@ describe('LogicEditor', () => {
     });
     mount(h(LogicEditor, { controller, screenId: 'settings', elementId: 'settings-continue' }));
     expect(host.querySelector<HTMLSelectElement>('[data-testid="condition"]')!.value).toBe('custom');
+    change('[data-testid="condition"]', 'server-true');
+    expect(host.querySelector('[data-testid="condition"] option[value="custom"]')).not.toBeNull();
+    change('[data-testid="condition"]', 'custom');
     change('[data-testid="action"]', 'toast');
     change('[data-testid="toast-message"]', 'Preserved');
     click('[data-action="save-rule"]');

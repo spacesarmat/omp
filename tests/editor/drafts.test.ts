@@ -136,6 +136,25 @@ describe('DraftController', () => {
     expect(saved).toEqual([]);
   });
 
+  it('uses the latest successful revision when a queued save starts', async () => {
+    let serverRevision = 0;
+    const controller = create([], {
+      onPut: async (draft) => {
+        if ((draft.revision ?? 0) !== serverRevision) throw new Error('DRAFT_CONFLICT');
+        serverRevision += 1;
+        return { ...draft, revision: serverRevision };
+      },
+    });
+    controller.upsertOverride({ id: 'first', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    const first = controller.flush();
+    controller.upsertOverride({ id: 'second', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-muted': '#222222' } });
+    const second = controller.flush();
+    await Promise.all([first, second]);
+    expect(serverRevision).toBe(2);
+    expect(controller.draft.revision).toBe(2);
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['first', 'second']);
+  });
+
   it('stores the saved revision and keeps it through undo', async () => {
     const controller = create([], {
       onPut: async (draft) => ({ ...draft, revision: (draft.revision ?? 0) + 1 }),

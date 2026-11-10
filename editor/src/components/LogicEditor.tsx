@@ -62,6 +62,8 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
   const [error, setError] = useState('');
   const routeIds = DESKTOP_ROUTES.map((route) => route.id);
   const issues = validateFlow(draft.flow, routeIds);
+  const selectedCondition = draft.flow.rules.find((entry) => entry.id === selectedId)?.condition;
+  const hasCustomCondition = selectedCondition && (selectedCondition.kind !== 'eq' || selectedCondition.path !== 'server.connected');
 
   useEffect(() => {
     const rule = draft.flow.rules.find((entry) => entry.id === selectedId);
@@ -132,7 +134,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
           <option value="none">Всегда</option>
           <option value="server-true">server.connected = true</option>
           <option value="server-false">server.connected = false</option>
-          {form.condition === 'custom' && <option value="custom">Исходное условие</option>}
+          {hasCustomCondition && <option value="custom">Исходное условие</option>}
         </select>
       </label>
       <label>Действие
