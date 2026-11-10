@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const COUNTER = '113673968';
-const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html', 'ops/vps/site/t/index.html'];
+const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html', 'ops/vps/site/t/index.html', 'ops/vps/site/pair/index.html'];
 const CADDYFILES = ['ops/vps/Caddyfile', 'ops/vps/Caddyfile.nuc'];
 const NOSCRIPT =
   '<noscript><div><img src="https://mc.yandex.ru/watch/113673968" style="position:absolute; left:-9999px;" alt="" /></div></noscript>\n<!-- /Yandex.Metrika counter -->';
