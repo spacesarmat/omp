@@ -1,0 +1,1 @@
+export { createDesktopNative } from './native';
