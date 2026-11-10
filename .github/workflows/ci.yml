@@ -158,14 +158,14 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eu
-          # Pull requests build the arm64 debug split only. Push and workflow_dispatch keep every ABI and the universal APK.
+          # Pull requests pass -PompAbi=arm64-v8a: one debug split, no universal APK.
+          # Push and workflow_dispatch omit it and keep every ABI. assembleDebug is the real task (splits are not flavors).
           # Configuration cache is org.gradle.configuration-cache in android/gradle.properties.
+          args=(-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64)
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            tasks=":app:assembleArm64-v8aDebug :app:testDebugUnitTest"
-          else
-            tasks="assembleDebug testDebugUnitTest"
+            args+=(-PompAbi=arm64-v8a)
           fi
-          (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 $tasks)
+          (cd android && ./gradlew "${args[@]}" assembleDebug testDebugUnitTest)
       - name: APK size per ABI
         env:
           EVENT_NAME: ${{ github.event_name }}

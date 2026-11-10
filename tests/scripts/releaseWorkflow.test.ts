@@ -78,10 +78,15 @@ describe('CI workflow', () => {
 
   it('builds only the arm64 debug APK on pull requests and uploads debug APKs otherwise', () => {
     expect(ci).toContain("if [ \"$EVENT_NAME\" = \"pull_request\" ]; then");
-    expect(ci).toContain(':app:assembleArm64-v8aDebug :app:testDebugUnitTest');
+    expect(ci).toContain('-PompAbi=arm64-v8a');
     expect(ci).toContain('assembleDebug testDebugUnitTest');
+    expect(ci).not.toContain('assembleArm64-v8aDebug');
     expect(ci).toContain("if: github.event_name != 'pull_request'");
     expect(readFileSync('android/gradle.properties', 'utf8')).toContain('org.gradle.configuration-cache=true');
+    const gradle = readFileSync('android/app/build.gradle', 'utf8');
+    expect(gradle).toContain("findProperty('ompAbi')");
+    expect(gradle).toContain('universalApk = false');
+    expect(gradle).not.toContain('taskGraph.whenReady');
   });
 });
 
