@@ -80,7 +80,9 @@ jobs:
       # the same checks the release runs (plus the type checks): a failing update opens no pull request
       - name: Install dependencies
         if: steps.apply.outputs.changed == 'true'
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix desktop
       - name: Test the update
         if: steps.apply.outputs.changed == 'true'
         run: npm test

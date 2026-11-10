@@ -74,7 +74,9 @@ jobs:
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
         if: steps.apply.outputs.changed == 'true'
-        run: npm ci
+        run: |
+          npm ci
+          npm ci --prefix desktop
       - name: Test the update
         if: steps.apply.outputs.changed == 'true'
         run: npm test

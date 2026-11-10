@@ -516,7 +516,9 @@ export function App() {
       {prompt && tabRoot && !showTour && !showSetup && <UpdateSheet info={prompt} />}
       {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
       {!prompt && localPrompt && tabRoot && !showTour && !showSetup && <LocalUpdateSheet info={localPrompt} />}
-      {!prompt && !localPrompt && componentOffer && tabRoot && !showTour && !showSetup && <ComponentUpdateSheet offer={componentOffer} />}
+      {!prompt && !localPrompt && componentOffer && tabRoot && !showTour && !showSetup && (
+        <ComponentUpdateSheet key={componentOffer.kind + ':' + componentOffer.latest} offer={componentOffer} />
+      )}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
       {tabRoot && !prompt && !localPrompt && !componentOffer && !showTour && !showSetup && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}

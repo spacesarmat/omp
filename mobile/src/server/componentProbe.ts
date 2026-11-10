@@ -32,10 +32,10 @@ export function readPhoneTorr(): Promise<TorrReading | null> {
         () => null,
       )
     : Promise.resolve(null);
-  const local = native.localServerInfo().catch(() => null);
+  const local = remote ? Promise.resolve(null) : native.localServerInfo().catch(() => null);
   return Promise.all([echo, local]).then(([version, info]) => {
-    if (remote && version) return { version, source: 'remote' as const };
-    if (!info || !info.supported) return version ? { version, source: 'remote' as const } : null;
+    if (remote) return version ? { version, source: 'remote' as const } : null;
+    if (!info || !info.supported) return null;
     const pin = info.pinVersion && torrServerVersion(info.pinVersion) ? info.pinVersion : undefined;
     const running = info.version && torrServerVersion(info.version) ? torrServerVersion(info.version)! : null;
     const seen = version || running;

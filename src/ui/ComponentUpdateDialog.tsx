@@ -25,6 +25,10 @@ export function ComponentUpdateDialog() {
   const key = offer ? offer.kind + ':' + offer.latest : null;
   if (key !== seen.current) {
     seen.current = key;
+    setBusy(false);
+    setPct(null);
+    setError('');
+    setSawQr(false);
     if (key) {
       try {
         prevFocus.current = getCurrentFocusKey() || undefined;

@@ -127,10 +127,23 @@ export function playerNotes(version, sha, summary, english) {
   ];
 }
 
-/** Puts the three player bullets under «Не выпущено» / Unreleased, replacing an older player bump there. */
+/** Puts the three player bullets under «Не выпущено» / Unreleased, replacing an older player bump there. Released sections are left as they are. */
 export function upsertPlayerNotes(text, notes, english = false) {
-  const line = new RegExp(PLAYER_LINE.source, 'gm');
-  let out = text.replace(line, '');
+  const want = english ? 'Unreleased' : 'Не выпущено';
+  const heading = new RegExp('^## ' + want + '[ \\t]*\\r?$', 'im').exec(text);
+  let prefix = '';
+  let section = '';
+  let suffix = text;
+  if (heading) {
+    const bodyStart = heading.index + heading[0].length + (text[heading.index + heading[0].length] === '\n' ? 1 : 0);
+    const next = text.slice(bodyStart).search(/^## /m);
+    const bodyEnd = next < 0 ? text.length : bodyStart + next;
+    prefix = text.slice(0, bodyStart);
+    section = text.slice(bodyStart, bodyEnd);
+    suffix = text.slice(bodyEnd);
+  }
+  section = section.replace(new RegExp(PLAYER_LINE.source, 'gm'), '');
+  let out = prefix + section + suffix;
   // insertUnreleased prepends a note that is not the TorrServer line. Insert last-first so phone stays on top.
   for (let i = notes.length - 1; i >= 0; i--) out = insertUnreleased(out, notes[i], english);
   return out;

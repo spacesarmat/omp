@@ -61,6 +61,10 @@ describe('player2160-lib', () => {
     expect(out).toContain('[phone] Встроенный плеер 2160 обновлён до 0.2.26. AC3');
     expect(out).toContain('Встроенный TorrServer обновлён до MatriX.150');
     expect(out).not.toContain('0.2.24');
+    const released = '# Изменения\n\n## Не выпущено\n\n- [phone] Встроенный плеер 2160 обновлён до 0.2.24. old\n\n## 0.20.11\n\n- [phone] Встроенный плеер 2160 обновлён до 0.2.24. В AVI поддержаны WMV и VC-1\n';
+    const kept = upsertPlayerNotes(released, notes, false);
+    expect(kept).toContain('## 0.20.11\n\n- [phone] Встроенный плеер 2160 обновлён до 0.2.24. В AVI поддержаны WMV и VC-1');
+    expect(kept).not.toContain('0.2.24. old');
     expect(playerSummary('**Звук**\n\nAC3 \u2014 fix\n\n**English:**\n\nOther')).toBe('Звук AC3 - fix');
   });
 
