@@ -3298,6 +3298,22 @@ if (started) {
       process.on('SIGINT', stopDht);
       if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
       else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
+      // Legacy alerts already probe the indexers. Otherwise record samples here so the dashboard
+      // success rate still moves while «Мониторинг» owns the Telegram alerts.
+      if (!readOnly && !legacyAlertsOn(process.env)) {
+        const sampleSources = async () => {
+          try {
+            const st = await store.read();
+            const probes = await probeAllServices(st.settings, fetch);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+          } catch (e) {
+            /* a failed probe must not stop billing */
+          }
+        };
+        const sampleTimer = setInterval(() => void sampleSources(), 5 * 60 * 1000);
+        if (sampleTimer.unref) sampleTimer.unref();
+      }
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );
