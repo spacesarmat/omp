@@ -113,7 +113,7 @@ describe('public site languages', () => {
     expect(assetVersion(enHtml, '/style.css')).toBe(css);
     expect(assetVersion(enHtml, '/app.js')).toBe(js);
     expect(enHtml).not.toMatch(/(?:href|src)="(?!\/|https?:|#)[^"]*"/);
-    expect(appJs).toContain('`/assets/${name}.webp`');
+    expect(appJs).toContain('function decideLangRedirect');
   });
 
   it('redirects a first visit to / once, and never after an explicit choice', () => {
