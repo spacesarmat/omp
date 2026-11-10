@@ -164,6 +164,31 @@ describe('editor loopback server', () => {
     })).status).toBe(401);
   });
 
+  it('does not replace an existing zero-revision draft during copy', async () => {
+    const { root, head } = await makeRepo();
+    const running = await openServer(root);
+    const existing = createDefaultDraft('draft-copy', head);
+    existing.revision = 0;
+    existing.theme.name = 'Existing zero-revision draft';
+    await mkdir(join(root, '.omp-editor', 'drafts'), { recursive: true });
+    await writeFile(join(root, '.omp-editor', 'drafts', 'draft-copy.json'), JSON.stringify(existing));
+    const original = createDefaultDraft('draft-1', head);
+    await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(original) });
+    const copy = createDefaultDraft('draft-copy', head);
+    copy.revision = 0;
+    copy.theme.name = 'Replacement';
+
+    const response = await request(running, '/api/drafts/draft-1/copy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(copy),
+    });
+    expect(response.status).toBe(409);
+    const saved = JSON.parse(await readFile(join(root, '.omp-editor', 'drafts', 'draft-copy.json'), 'utf8'));
+    expect(saved.revision).toBe(0);
+    expect(saved.theme.name).toBe('Existing zero-revision draft');
+  });
+
   it('returns not found for missing drafts, env files and command endpoints', async () => {
     const { root } = await makeRepo();
     const running = await openServer(root);

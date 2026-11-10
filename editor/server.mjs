@@ -93,10 +93,21 @@ async function readRevision(root, id) {
   }
 }
 
+async function draftExists(root, id) {
+  try {
+    await readFile(draftPath(root, id));
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
 async function writeDraft(root, draft, copyFromId) {
   return withRepositoryLock(root, async () => {
     const currentRevision = await readRevision(root, draft.id);
-    if ((draft.revision ?? 0) !== currentRevision || (copyFromId && currentRevision !== 0)) throw new HttpError(409, 'DRAFT_CONFLICT');
+    if ((draft.revision ?? 0) !== currentRevision) throw new HttpError(409, 'DRAFT_CONFLICT');
+    if (copyFromId && await draftExists(root, draft.id)) throw new HttpError(409, 'DRAFT_CONFLICT');
     const rollbackManifest = copyFromId ? await inheritExportManifest(root, copyFromId, draft.id) : null;
     try {
       const saved = { ...draft, revision: currentRevision + 1 };
