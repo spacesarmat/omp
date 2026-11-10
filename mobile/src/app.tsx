@@ -3,6 +3,7 @@ import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { parseBillingDeepLink } from '../../src/billing/deepLink';
 import { flushTitleLink, queueTitleLink } from './share/open';
+import { applyPairUrl, isPairUrl } from './share/pairOpen';
 import { setPendingBillingCode } from '../../src/billing/session';
 import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
@@ -298,12 +299,20 @@ export function App() {
             flushTitleLink();
             return;
           }
+          if (isPairUrl(res.url)) {
+            void applyPairUrl(res.url);
+            return;
+          }
           intakeBilling(res.url);
         }),
       ).catch(() => {});
       CapApp.addListener('appUrlOpen', (ev) => {
         if (queueTitleLink(ev.url)) {
           flushTitleLink();
+          return;
+        }
+        if (isPairUrl(ev.url)) {
+          void applyPairUrl(ev.url);
           return;
         }
         intakeBilling(ev.url);

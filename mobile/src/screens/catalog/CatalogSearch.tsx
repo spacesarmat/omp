@@ -27,6 +27,21 @@ export function resetCatalogResults(): void {
   kept = null;
 }
 
+/** Same title and year share one heading. Different years stay separate rows. */
+export function groupCatalogTitles(items: CatalogTitle[]): { key: string; label: string; items: CatalogTitle[] }[] {
+  const out: { key: string; label: string; items: CatalogTitle[] }[] = [];
+  const at: { [k: string]: number } = {};
+  items.forEach((x) => {
+    const key = (x.title + '|' + (x.year || 0)).toLowerCase();
+    const i = at[key];
+    if (i === undefined) {
+      at[key] = out.length;
+      out.push({ key, label: x.year ? x.title + ' · ' + x.year : x.title, items: [x] });
+    } else out[i].items.push(x);
+  });
+  return out;
+}
+
 export function CatalogResults({ text, onTrackers }: { text: string; onTrackers: (q: string) => void }) {
   const q = text.trim();
   const [items, setItems] = useState<CatalogTitle[] | null>(() => (kept && kept.q === q ? kept.items : null));
@@ -90,7 +105,10 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
       ) : (
         items && (
           <div class="m-srch-list">
-            {items.map((x) => (
+            {groupCatalogTitles(items).map((g) => (
+              <div class={g.items.length > 1 ? 'm-srch-group' : ''} key={g.key}>
+                {g.items.length > 1 && <div class="m-srch-group-title">{g.label}</div>}
+                {g.items.map((x) => (
               <PosterButton
                 key={x.kind + ':' + x.id}
                 item={x}
@@ -112,6 +130,8 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
                   {inLibrary(index, x) && <span class="m-small m-srch-lib">{t('discover.inLibrary')}</span>}
                 </span>
               </PosterButton>
+                ))}
+              </div>
             ))}
           </div>
         )

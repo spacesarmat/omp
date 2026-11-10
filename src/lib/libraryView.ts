@@ -169,3 +169,17 @@ export function remainingLabel(time: number, duration: number): string {
   if (left < 1) return t('library.leftLess');
   return t('library.left', { time: fmtDuration(left) });
 }
+
+/** Phone history and «Продолжить»: a finished stop says «Просмотрено». The TV keeps remainingLabel. */
+export function phoneRemainingLabel(time: number, duration: number, open?: boolean): string {
+  if (!(duration > 0)) return '';
+  const leftSec = Math.max(0, duration - time);
+  const left = Math.round(leftSec / 60);
+  if (!open && (time / duration >= 0.9 || left < 1)) return t('library.watchedDone');
+  if (left < 1) return t('library.leftLess');
+  return t('library.left', { time: fmtDuration(left) });
+}
+
+export function phoneHistoryFinished(time: number, duration: number, open?: boolean): boolean {
+  return phoneRemainingLabel(time, duration, open) === t('library.watchedDone');
+}

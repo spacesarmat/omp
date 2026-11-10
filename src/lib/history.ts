@@ -124,6 +124,34 @@ export function buildHistory(
   return out;
 }
 
+/** One row per show: the newest watch (the list is already newest first). Films and unknown shows stay as they are. */
+export function collapseHistoryShows(items: HistoryItem[]): HistoryItem[] {
+  const seen: { [k: string]: boolean } = {};
+  const out: HistoryItem[] = [];
+  items.forEach((it) => {
+    let show = '';
+    try {
+      show = seriesKey(it.torrent);
+    } catch {
+      show = '';
+    }
+    if (show) {
+      if (seen[show]) return;
+      seen[show] = true;
+    }
+    out.push(it);
+  });
+  return out;
+}
+
+/** Unfinished first (their own order), then finished. Phone history only. */
+export function unfinishedFirst(items: HistoryItem[], finished: (it: HistoryItem) => boolean): HistoryItem[] {
+  const open: HistoryItem[] = [];
+  const done: HistoryItem[] = [];
+  items.forEach((it) => (finished(it) ? done : open).push(it));
+  return open.concat(done);
+}
+
 /** «show|season|episode» of a series item, '' when the show or the episode is not known. */
 function episodeKey(it: HistoryItem): string {
   let show = '';

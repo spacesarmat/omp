@@ -150,8 +150,11 @@ const COLOR_KEYS: ReadonlyArray<readonly ['RED' | 'GREEN' | 'YELLOW' | 'BLUE', (
 
 /** The TV's name without the maker prefixes LG puts first: «[LG] webOS TV OLED55C9PLA» → «OLED55C9PLA». */
 export function shortTvName(name: string): string {
-  const short = (name || '').replace(/^\s*\[LG\]\s*/i, '').replace(/^webOS TV\s*/i, '').trim();
-  return short || name;
+  const raw = name || '';
+  const short = raw.replace(/^\s*\[LG\]\s*/i, '').replace(/^webOS TV\s*/i, '').trim();
+  if (short) return short;
+  if (/^\[LG\]$/i.test(raw.trim())) return 'LG';
+  return raw;
 }
 
 /** A saved TV's name as the remote shows it: the user's own name as typed, else the TV's name without LG prefixes. */
