@@ -27,8 +27,8 @@ export function alternatePool(): AlternateRow[] {
   return pool.slice();
 }
 
-/** Next release that is already in the library. `lower` prefers a smaller quality rank. */
-export function nextAlternate(currentHash: string, bias: 'any' | 'lower', known: { [hash: string]: boolean }): string {
+/** Next release that is already in the library. `lower` is strictly smaller. `sameOrLower` is for automatic switching. */
+export function nextAlternate(currentHash: string, bias: 'any' | 'lower' | 'sameOrLower', known: { [hash: string]: boolean }): string {
   const cur = (currentHash || '').toLowerCase();
   const have: AlternateRow[] = [];
   for (let i = 0; i < pool.length; i++) {
@@ -43,21 +43,20 @@ export function nextAlternate(currentHash: string, bias: 'any' | 'lower', known:
     if (progressTitleKey(have[i].title) === curKey) same.push(have[i]);
   }
   if (!same.length) return '';
-  if (bias === 'lower') {
-    const curTitle = titleOf(cur);
-    const curRank = qualityRank(curTitle);
-    let best = '';
-    let bestRank = curRank;
-    for (let i = 0; i < same.length; i++) {
-      const rank = qualityRank(same[i].title);
-      if (rank < bestRank) {
-        best = same[i].hash;
-        bestRank = rank;
-      }
+  if (bias === 'any') return same[0].hash;
+  const curRank = qualityRank(titleOf(cur));
+  let best = '';
+  let bestRank = -1;
+  for (let i = 0; i < same.length; i++) {
+    const rank = qualityRank(same[i].title);
+    const ok = bias === 'lower' ? rank < curRank : rank <= curRank;
+    if (!ok) continue;
+    if (!best || (bias === 'lower' ? rank < bestRank : rank > bestRank)) {
+      best = same[i].hash;
+      bestRank = rank;
     }
-    return best;
   }
-  return same[0].hash;
+  return best;
 }
 
 function titleOf(hash: string): string {

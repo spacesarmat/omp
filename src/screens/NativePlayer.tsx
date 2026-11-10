@@ -133,7 +133,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
               torrents.value.forEach((x) => {
                 if (x.hash) known[x.hash.toLowerCase()] = true;
               });
-              const alt = nextAlternate(item.hash || '', 'any', known);
+              const alt = nextAlternate(item.hash || '', 'sameOrLower', known);
               if (!alt) return;
               fb.switched = true;
               const film = !episodeLabel(item.title);

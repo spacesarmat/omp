@@ -9,11 +9,11 @@ export function useTrackChoice(c: TorrServerClient | null, hash: string, title: 
   const [audioI, setAudioI] = useState(0);
   const [subI, setSubI] = useState(-1);
   useEffect(() => {
-    if (!c || !hash || fileId === null || fileId < 0) {
-      setAudio([]);
-      setSubs([]);
-      return undefined;
-    }
+    setAudio([]);
+    setSubs([]);
+    setAudioI(0);
+    setSubI(-1);
+    if (!c || !hash || fileId === null || fileId < 0) return undefined;
     let alive = true;
     c.ffprobeAvailable().then(
       (ok) => {

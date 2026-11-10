@@ -204,7 +204,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     torrents.value.forEach((x) => {
       if (x.hash) known[x.hash.toLowerCase()] = true;
     });
-    const alt = item.hash ? nextAlternate(item.hash, 'any', known) : '';
+    const alt = item.hash ? nextAlternate(item.hash, 'sameOrLower', known) : '';
     if (!alt) return;
     switched.current = true;
     goAlt('any');
