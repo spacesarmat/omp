@@ -7,7 +7,7 @@ import com.spacesarmat.omp.install.ApkAbi
 
 /** APK download and install. Bodies for [OmpNativePlugin]. */
 
-internal class ApkJob(val once: CallOnce, val url: String, val sha: String) {
+internal class ApkJob(val once: CallOnce, val url: String, val sha: String, val watchPackage: String? = null) {
     fun reject(message: String, code: String) = once.reject(message, code)
 }
 
@@ -29,6 +29,7 @@ internal fun OmpNativePlugin.downloadAndInstallApkOp(call: PluginCall) {
     )
     val url = apk.url
     val sha = apk.sha256
+    val watchPackage = call.getString("packageName")
     if (!ApkInstaller.canInstall(context)) {
         // the system page «Установка неизвестных приложений»; the install goes on when the user comes back with
         // the switch on (handleOnResume), else it ends with «Разрешите установку…»
@@ -39,10 +40,10 @@ internal fun OmpNativePlugin.downloadAndInstallApkOp(call: PluginCall) {
             return
         }
         permissionWait?.job?.reject(I18n.s("plugin.updateBusy"), "omp")
-        permissionWait = InstallPermissionWait(ApkJob(once, url, sha))
+        permissionWait = InstallPermissionWait(ApkJob(once, url, sha, watchPackage))
         return
     }
-    startApkInstall(ApkJob(once, url, sha))
+    startApkInstall(ApkJob(once, url, sha, watchPackage))
 }
 
 internal fun OmpNativePlugin.canInstallApksOp(call: PluginCall) {
@@ -62,9 +63,9 @@ internal fun OmpNativePlugin.startApkInstall(job: ApkJob) {
             val apk = ApkInstaller.download(context, url, sha) { p ->
                 emit("apkProgress", JSObject().put("percent", p))
             }
-            ApkInstaller.install(context, apk) {
+            ApkInstaller.install(context, apk, {
                 // Only the real package broadcast removes the file; cancellation keeps it for a retry.
-            }
+            }, ApkInstaller.watchPackage(job.watchPackage))
             once.resolve()
         } catch (e: UserError) {
             once.reject(e.message ?: I18n.s("plugin.updateFailed"), "omp")

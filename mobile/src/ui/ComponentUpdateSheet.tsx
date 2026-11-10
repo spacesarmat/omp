@@ -36,7 +36,7 @@ export function ComponentUpdateSheet({ offer }: { offer: ComponentOffer }) {
       if (offer.apk) {
         await native.downloadAndInstallApk(offer.apk.url, offer.apk.sha256, (p) => {
           if (typeof p === 'number' && isFinite(p)) setPct(Math.max(0, Math.min(100, Math.round(p))));
-        });
+        }, undefined, offer.apk.packageName);
       } else if (offer.installEmbedded) {
         await installLocalUpdate((p) => {
           if (typeof p.percent === 'number') setPct(Math.max(0, Math.min(100, Math.round(p.percent))));

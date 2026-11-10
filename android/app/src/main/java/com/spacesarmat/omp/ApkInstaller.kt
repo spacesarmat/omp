@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.core.net.toUri
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import com.spacesarmat.omp.player.Player2160
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -21,19 +22,31 @@ class UserError(message: String) : Exception(message)
 class ApkInstallTracker() : BroadcastReceiver() {
     private var apk: File? = null
     private var onInstalled: (() -> Unit)? = null
+    /** Extra packages that finish this install (2160 Player). OMP's own package is always watched. */
+    private var watchPackages: Set<String> = emptySet()
 
-    constructor(context: Context, apk: File, onInstalled: () -> Unit) : this() {
+    constructor(
+        context: Context,
+        apk: File,
+        onInstalled: () -> Unit,
+        watchPackages: Set<String> = emptySet(),
+    ) : this() {
         this.apk = apk
         this.onInstalled = onInstalled
+        this.watchPackages = watchPackages
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_PACKAGE_ADDED && intent.action != Intent.ACTION_PACKAGE_REPLACED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED && intent.data?.schemeSpecificPart != context.packageName) return
+        val pkg = intent.data?.schemeSpecificPart
+        val own = intent.action == Intent.ACTION_MY_PACKAGE_REPLACED || pkg == context.packageName
+        val watched = pkg != null && pkg in watchPackages
+        if (!own && !watched) return
         (apk ?: File(context.cacheDir, "updates/omp.apk")).delete()
         runCatching { context.unregisterReceiver(this) }
         onInstalled?.invoke()
-        UpdateRelaunch.open(context)
+        // A 2160 Player install must not reopen OMP.
+        if (own) UpdateRelaunch.open(context)
     }
 }
 
@@ -129,9 +142,18 @@ object ApkInstaller {
         return target
     }
 
+    /**
+     * A package name the page may ask the tracker to wait for. Only 2160 Player is accepted;
+     * anything else is ignored so a page cannot watch an arbitrary install.
+     */
+    fun watchPackage(raw: String?): Set<String> {
+        val name = raw?.trim().orEmpty()
+        return if (name in Player2160.PACKAGES) setOf(name) else emptySet()
+    }
+
     /** Opens the system package installer for [apk] and calls [onInstalled] after the package is really installed. */
-    fun install(context: Context, apk: File, onInstalled: () -> Unit) {
-        val tracker = ApkInstallTracker(context, apk, onInstalled)
+    fun install(context: Context, apk: File, onInstalled: () -> Unit, watchPackages: Set<String> = emptySet()) {
+        val tracker = ApkInstallTracker(context, apk, onInstalled, watchPackages)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
             addAction(Intent.ACTION_PACKAGE_REPLACED)

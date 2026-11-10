@@ -75,7 +75,7 @@ export function ComponentUpdateDialog() {
     if (installable && offer.apk) {
       setError('');
       setBusy(true);
-      installApk(offer.apk.url, offer.apk.sha256, (p) => setPct(p)).then(
+      installApk(offer.apk.url, offer.apk.sha256, (p) => setPct(p), undefined, offer.apk.packageName).then(
         () => {
           setBusy(false);
           dismissComponent();

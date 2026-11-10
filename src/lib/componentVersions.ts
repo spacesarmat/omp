@@ -2,6 +2,8 @@ import { compareVersions } from './version';
 
 /** GitHub latest-release documents. The app reads them on launch and ignores anything it cannot check. */
 export const PLAYER_LATEST_URL = 'https://api.github.com/repos/spacesarmat/2160player/releases/latest';
+/** Release package of the external 2160 Player. The installer waits for this package, not for OMP. */
+export const PLAYER_PACKAGE = 'tv.p2160.player';
 export const TORR_LATEST_URL = 'https://api.github.com/repos/YouROK/TorrServer/releases/latest';
 
 const PLAYER_REPO = 'spacesarmat/2160player';
@@ -196,7 +198,7 @@ export interface ComponentOffer {
   latest: string;
   releaseUrl: string;
   /** Present when Update can hand this APK to the system installer. */
-  apk?: { url: string; sha256: string };
+  apk?: { url: string; sha256: string; packageName?: string };
   /** Embedded TorrServer, and the pin is exactly [latest]: the existing downloader can install it. */
   installEmbedded?: boolean;
   mobileData?: boolean;
@@ -221,7 +223,7 @@ export function decideOffers(input: {
       latest: player.version,
       releaseUrl: player.releaseUrl,
     };
-    if (apk) offer.apk = { url: apk.url, sha256: apk.sha256 };
+    if (apk) offer.apk = { url: apk.url, sha256: apk.sha256, packageName: PLAYER_PACKAGE };
     out.push(offer);
   }
   const torrRel = parseTorrRelease(input.torrRelease);

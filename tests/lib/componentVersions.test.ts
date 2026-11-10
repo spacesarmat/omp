@@ -73,6 +73,7 @@ describe('component versions', () => {
     });
     expect(offers.map((o) => o.kind)).toEqual(['player', 'torrserver']);
     expect(offers[0].apk?.url).toContain('arm64-v8a');
+    expect(offers[0].apk?.packageName).toBe('tv.p2160.player');
     expect(offers[1].installEmbedded).toBeUndefined();
     expect(decideOffers({
       playerInstalled: '0.2.25',

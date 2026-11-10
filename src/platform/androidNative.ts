@@ -22,7 +22,7 @@ export interface ListenerHandle {
 export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
   /** apks: the feed's per-ABI APKs; the plugin picks the device's one, url/sha256 (universal) otherwise. */
-  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<unknown>;
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles; packageName?: string }): Promise<unknown>;
   /** «Установка неизвестных приложений» is allowed for OMP (APKs from 0.17.0). */
   canInstallApks?(): Promise<{ granted?: unknown }>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
@@ -338,7 +338,7 @@ export function describeApkError(e: unknown): string {
  * per-ABI APKs) the plugin installs the one for the device's ABI; url/sha256 is the universal fallback.
  * Rejects with an Error whose message is in Russian.
  */
-export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void> {
+export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles, packageName?: string): Promise<void> {
   const p = nativePlugin();
   if (!p) return Promise.reject(new Error(t('update.installUnavailable')));
   let handle: ListenerHandle | null = null;
@@ -356,7 +356,10 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
     })
     .then((h) => {
       handle = h;
-      return p.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 });
+      const body: { url: string; sha256: string; apks?: ApkFiles; packageName?: string } = { url, sha256 };
+      if (apks) body.apks = apks;
+      if (packageName) body.packageName = packageName;
+      return p.downloadAndInstallApk(body);
     })
     .then(
       () => { release(); },
