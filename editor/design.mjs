@@ -63,6 +63,18 @@ function mergeOrder(base, local, incoming, key, path, issues) {
         break;
       }
     }
+    let nextAt = -1;
+    for (let next = index + 1; next < secondary.length; next += 1) {
+      const position = ordered.indexOf(secondary[next][key]);
+      if (position >= 0) {
+        nextAt = position;
+        break;
+      }
+    }
+    if (nextAt >= 0 && insertAt > nextAt) {
+      issues.push({ path: `${path}.order` });
+      continue;
+    }
     ordered.splice(insertAt, 0, id);
   }
   return ordered;
