@@ -113,8 +113,8 @@ describe('landing SEO', () => {
   it('links the Windows beta and states its processor requirement on both pages', () => {
     for (const p of PAGES) {
       const d = doc(p.file);
-      const betaRelease = 'https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1';
-      const betaInstaller = 'https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-setup.exe';
+      const betaRelease = 'https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2';
+      const betaInstaller = 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe';
       expect(d.querySelectorAll(`a[href="${betaRelease}"]`)).toHaveLength(2);
       expect(d.querySelectorAll(`a[href="${betaInstaller}"]`)).toHaveLength(2);
 
