@@ -578,9 +578,21 @@ async function crashPost(ctx) {
     return true;
   }
   const device = String(ctx.req.headers['x-device-id'] || '');
+  const token = String(ctx.req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const now = Date.now();
-  if (!allowRate('c:' + deviceKey(device || ctx.clientIp(ctx.req)), now, 6, 60 * 60 * 1000)) {
+  const ip = ctx.clientIp ? ctx.clientIp(ctx.req) : '';
+  if (!allowRate('cip:' + ip, now, 6, 60 * 60 * 1000)) {
     ctx.json(ctx.res, 429, { error: 'rate' });
+    return true;
+  }
+  if (!token) {
+    ctx.json(ctx.res, 401, { error: 'token_required' });
+    return true;
+  }
+  const stateNow = await ctx.store.read();
+  const caller = await ctx.deviceCaller(stateNow, token, device, now);
+  if (!caller || caller.error) {
+    ctx.json(ctx.res, 401, { error: (caller && caller.error) || 'bad_token' });
     return true;
   }
   const saved = await ctx.store.update((cur) => {

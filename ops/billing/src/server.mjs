@@ -335,6 +335,22 @@ async function accountDevices(store, state, accountId) {
   return out;
 }
 
+const loginPromptHits = new Map();
+
+/** At most 3 panel-login prompts per IP per 10 minutes, before any Telegram message is sent. */
+function loginPromptAllowed(ip, now) {
+  const key = String(ip || 'unknown');
+  const prev = loginPromptHits.get(key) || [];
+  const arr = prev.filter((t) => now - t < 10 * 60 * 1000);
+  if (arr.length >= 3) {
+    loginPromptHits.set(key, arr);
+    return false;
+  }
+  arr.push(now);
+  loginPromptHits.set(key, arr);
+  return true;
+}
+
 function audit(file, action, detail, admin, extra) {
   const id = (extra && extra.id) || randomId();
   return toStore(file)
@@ -1512,6 +1528,9 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
+        }
+        if (!loginPromptAllowed(clientIp(req), Date.now())) {
+          return json(res, 429, { ok: false, error: 'Слишком много запросов входа. Подождите несколько минут.' });
         }
         const started = adminAuth
           ? adminAuth.startPanel(Date.now())
@@ -3079,7 +3098,15 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
   if (adminLoginOnly) {
-    // Admin login is /start admin_TOKEN only; never pretend an unbind or pay button worked.
+    const data = String((cq && cq.data) || '');
+    if (data.indexOf('alin:') === 0 && opts && opts.adminAuthMem) {
+      const state = await store.read();
+      const who = cq && cq.from ? String(cq.from.id) : '';
+      const confirmed = opts.adminAuthMem.confirmPanel(state.settings, { token: data.slice('alin:'.length), telegramId: who, now: Date.now() });
+      await answer(confirmed && confirmed.ok ? 'Вход подтверждён' : 'Ссылка устарела');
+      return;
+    }
+    // Other buttons stay off in read-only mode. Admin login is the exception above.
     await answer('Сейчас обслуживание. Админ-вход - через ссылку в панели.');
     return;
   }
@@ -3341,6 +3368,22 @@ if (started) {
       process.on('SIGINT', stopDht);
       if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
       else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
+      // Legacy alerts already probe the indexers. Otherwise record samples here so the dashboard
+      // success rate still moves while «Мониторинг» owns the Telegram alerts.
+      if (!readOnly && !legacyAlertsOn(process.env)) {
+        const sampleSources = async () => {
+          try {
+            const st = await store.read();
+            const probes = await probeAllServices(st.settings, fetch);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+          } catch (e) {
+            /* a failed probe must not stop billing */
+          }
+        };
+        const sampleTimer = setInterval(() => void sampleSources(), 5 * 60 * 1000);
+        if (sampleTimer.unref) sampleTimer.unref();
+      }
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );

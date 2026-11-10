@@ -291,8 +291,13 @@ export function startPgBackups(cfg, getSettings, opts) {
         const gone = pruneDumps(cfg.dir, backupKeepDays(settings), Date.now());
         const verified = await verifyDump(join(cfg.dir, r.name), o.spawn);
         rememberBackupVerify({ ...verified, name: r.name });
+        if (!verified.ok) {
+          lastError = 'архив не читается: ' + (verified.error || 'list');
+          log('pg backup verify failed: ' + lastError);
+          return { ok: false, error: lastError, name: r.name, size: r.size };
+        }
+        lastError = '';
         log('pg backup ' + r.name + ' ' + r.size + ' bytes' + (gone.length ? ', removed ' + gone.length + ' old' : ''));
-        if (!verified.ok) log('pg backup verify failed: ' + (verified.error || 'list'));
       } else {
         lastError = r.error;
         process.stderr.write('pg backup failed: ' + r.error + '\n');

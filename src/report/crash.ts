@@ -42,9 +42,17 @@ export function crashFingerprint(message: string, stack: string): string {
   return (h >>> 0).toString(16);
 }
 
+function scrubStack(stack: string): string {
+  const lines = String(stack || '').split('\n').slice(0, 40);
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) out.push(scrub(lines[i]));
+  const text = out.join('\n');
+  return text.length > 4000 ? text.slice(0, 4000) : text;
+}
+
 export function buildCrash(part: { kind: string; message: string; stack?: string; comment?: string; screenshot?: string; platform: string }): CrashReport {
   const message = scrub(part.message || '').slice(0, 500);
-  const stack = scrub(part.stack || '').slice(0, 4000);
+  const stack = scrubStack(part.stack || '');
   const logs = logEntries()
     .slice(-500)
     .map((e) => e.l + ' ' + e.a + ' ' + e.x)
