@@ -58,6 +58,18 @@ describe('pickExternalAudio', () => {
     expect(pickExternalAudio(E1.audio, rec({ x: true }), S)).toBe('a:rus:hdrezka-studio');
   });
 
+  it('a saved language beats a popular voice', () => {
+    const files = list([
+      'S/Show.S01E01.mkv',
+      'S/Eng Sound/Show.S01E01.mka',
+      'S/Rus Sound/LostFilm/Show.S01E01.mka',
+    ]);
+    const audio = releaseTracks(files).byVideo[1].audio;
+    const popular = { audioLang: 'ru', communityVoice: 'LostFilm' };
+    expect(pickExternalAudio(audio, rec({ g: 'en' }), popular)).toBe('a:eng:');
+    expect(pickExternalAudio(audio, null, popular)).toBe('a:rus:lostfilm');
+  });
+
   it('nothing in the wanted language: the player\'s own choice', () => {
     expect(pickExternalAudio(E1.audio, null, { audioLang: 'de' })).toBeNull();
     expect(pickExternalAudio([], rec({ l: 'LostFilm' }), S)).toBeNull();

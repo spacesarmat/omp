@@ -137,6 +137,7 @@ export function webosAudioIndex(
   series: SeriesTracks | null,
   pref: TrackPref | null,
   audioLang: string,
+  communityVoice?: string,
 ): number {
   const all = mergeWebosAudio(builtin, external, () => '');
   if (!all.length) return -1;
@@ -147,11 +148,11 @@ export function webosAudioIndex(
   const start = pickExternalStart(
     { audio: external, subtitles: [] },
     series,
-    { audioLang: audioLang || '', subLang: '', subtitlesOn: false },
+    { audioLang: audioLang || '', subLang: '', subtitlesOn: false, communityVoice },
     { audio: embedded },
   );
   if (typeof start.embedded === 'number' && start.embedded >= 0 && start.embedded < builtin.length) return start.embedded;
-  return pickAudioFor(all, series, pref, audioLang);
+  return pickAudioFor(all, series, pref, audioLang, communityVoice);
 }
 
 /**
