@@ -72,6 +72,8 @@ interface Live {
   resolving: Map<string, Resolving>;
   query: string;
   measures: SeedMeasure[] | null;
+  /** wait: the seed check has not settled. done: it finished, failed, or was skipped. */
+  verifyPhase: 'wait' | 'done';
   verify: { notify(): void; cancel(): void } | null;
 }
 
@@ -355,7 +357,13 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         resolving: new Map(),
         query,
         measures: null,
+        verifyPhase: 'wait',
         verify: null,
+      };
+      const settle = () => {
+        if (entry.verifyPhase === 'done') return;
+        entry.verifyPhase = 'done';
+        entry.rev++;
       };
       const bump = () => {
         entry.rev++;
@@ -375,8 +383,8 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         getPending: () => entry.search.pending().length,
         onApply: (list) => {
           entry.measures = list;
-          entry.rev++;
         },
+        onSettled: () => settle(),
       });
       handles.set(id, entry);
       if (!sweeper) sweeper = setInterval(sweep, SWEEP_MS);
@@ -386,9 +394,12 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
     searchPoll(p) {
       const h = live(p);
       const s = h.search;
+      const sourcesDone = s.pending().length === 0;
+      // A check that is still running must keep the TV polling. notify settles a skipped or finished check.
+      if (sourcesDone && h.verify) h.verify.notify();
       const out: RpcPoll = {
         rev: h.rev,
-        done: s.pending().length === 0,
+        done: sourcesDone && h.verifyPhase === 'done',
         pending: s.pending().slice(),
         answered: s.answered().slice(),
         failed: s.failed().map(failure),

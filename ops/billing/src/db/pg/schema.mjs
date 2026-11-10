@@ -393,10 +393,12 @@ CREATE TABLE dht_recent_error (
   {
     version: '005_seed_probes',
     sql: `
--- Fresh seeder counts for search (src/seedProbe.mjs). One row per infohash.
--- No tracker URL, passkey, or device id. Rows older than 7 days are deleted on the next write.
+-- Fresh seeder counts for search (src/seedProbe.mjs).
+-- One row per infohash and tracker-host set. tracker_key is sorted hosts, never a URL or a passkey.
+-- Rows older than 7 days are deleted on the next write.
 CREATE TABLE seed_probes (
-  infohash text PRIMARY KEY,
+  infohash text NOT NULL,
+  tracker_key text NOT NULL,
   seeders integer NOT NULL,
   leechers integer NOT NULL,
   seeders_max integer NOT NULL,
@@ -406,7 +408,8 @@ CREATE TABLE seed_probes (
   measured_at bigint NOT NULL,
   hits integer NOT NULL,
   last_hit_at bigint NOT NULL,
-  live boolean NOT NULL
+  live boolean NOT NULL,
+  PRIMARY KEY (infohash, tracker_key)
 );
 CREATE INDEX seed_probes_measured ON seed_probes (measured_at);
 `,

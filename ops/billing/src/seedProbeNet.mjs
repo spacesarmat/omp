@@ -40,13 +40,18 @@ export async function resolvePublic(host, lookup) {
   return { address: pick.address, family };
 }
 
+function aborted(signal) {
+  return !!(signal && signal.aborted);
+}
+
 export function httpScrape(url, infohash, timeoutMs, deps) {
   const o = deps || {};
   const lookup = o.lookup || dnsLookup;
   const requestImpl = o.request || null;
+  if (aborted(o.signal)) return Promise.resolve(null);
   return resolvePublic(hostnameOf(url), lookup).then((addr) => {
-    if (!addr) return null;
-    return readHttp(url, infohash, timeoutMs, addr, requestImpl);
+    if (!addr || aborted(o.signal)) return null;
+    return readHttp(url, infohash, timeoutMs, addr, requestImpl, o.signal);
   });
 }
 
@@ -58,7 +63,7 @@ function hostnameOf(url) {
   }
 }
 
-function readHttp(url, infohash, timeoutMs, addr, requestImpl) {
+function readHttp(url, infohash, timeoutMs, addr, requestImpl, signal) {
   return new Promise((resolve) => {
     let u;
     try {
@@ -74,6 +79,10 @@ function readHttp(url, infohash, timeoutMs, addr, requestImpl) {
       settled = true;
       resolve(v);
     };
+    if (aborted(signal)) {
+      finish(null);
+      return;
+    }
     const req = lib(
       {
         protocol: u.protocol,
@@ -106,12 +115,22 @@ function readHttp(url, infohash, timeoutMs, addr, requestImpl) {
           chunks.push(chunk);
         });
         res.on('end', () => {
-          const body = Buffer.concat(chunks).toString('latin1');
-          finish(parseHttpScrape(body, infohash));
+          try {
+            const body = Buffer.concat(chunks).toString('latin1');
+            finish(parseHttpScrape(body, infohash));
+          } catch (e) {
+            finish(null);
+          }
         });
         res.on('error', () => finish(null));
       },
     );
+    if (signal && typeof signal.addEventListener === 'function') {
+      signal.addEventListener('abort', () => {
+        req.destroy();
+        finish(null);
+      });
+    }
     req.on('timeout', () => {
       req.destroy();
       finish(null);
@@ -125,13 +144,14 @@ export function udpScrape(host, port, infohash, timeoutMs, deps) {
   const o = deps || {};
   const lookup = o.lookup || dnsLookup;
   const socketFactory = o.createSocket || createSocket;
+  if (aborted(o.signal)) return Promise.resolve(null);
   return resolvePublic(host, lookup).then((addr) => {
-    if (!addr) return null;
-    return udpExchange(addr, port, infohash, timeoutMs, socketFactory);
+    if (!addr || aborted(o.signal)) return null;
+    return udpExchange(addr, port, infohash, timeoutMs, socketFactory, o.signal);
   });
 }
 
-function udpExchange(addr, port, infohash, timeoutMs, socketFactory) {
+function udpExchange(addr, port, infohash, timeoutMs, socketFactory, signal) {
   return new Promise((resolve) => {
     const type = addr.family === 6 ? 'udp6' : 'udp4';
     let socket;
@@ -156,6 +176,13 @@ function udpExchange(addr, port, infohash, timeoutMs, socketFactory) {
       resolve(v);
     };
     const timer = setTimeout(() => finish(null), timeoutMs);
+    if (signal && typeof signal.addEventListener === 'function') {
+      signal.addEventListener('abort', () => finish(null));
+    }
+    if (aborted(signal)) {
+      finish(null);
+      return;
+    }
     socket.on('error', () => finish(null));
     socket.on('message', (msg) => {
       if (phase === 0) {
@@ -185,7 +212,7 @@ function udpExchange(addr, port, infohash, timeoutMs, socketFactory) {
 /** Transport runSeedCheck calls. DNS and the sockets stay in here. */
 export function defaultSeedTransport() {
   return {
-    http: (url, infohash, timeoutMs) => httpScrape(url, infohash, timeoutMs),
-    udp: (host, port, infohash, timeoutMs) => udpScrape(host, port, infohash, timeoutMs),
+    http: (url, infohash, timeoutMs, opts) => httpScrape(url, infohash, timeoutMs, opts),
+    udp: (host, port, infohash, timeoutMs, opts) => udpScrape(host, port, infohash, timeoutMs, opts),
   };
 }

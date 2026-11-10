@@ -39,6 +39,8 @@ describe('bencode scrape', () => {
     expect(parseHttpScrape(scrapeBody(4, 1, HASH_B), HASH)).toEqual({ seeders: 4, leechers: 1 });
     expect(parseHttpScrape('d5:filesdee', HASH)).toBe(null);
     expect(parseHttpScrape(scrapeBody(-1, 1), HASH)).toBe(null);
+    expect(bdecode('l'.repeat(40) + 'e'.repeat(40))).toBe(null);
+    expect(parseHttpScrape('l'.repeat(40) + 'e'.repeat(40), HASH)).toBe(null);
   });
 
   it('builds an HTTP scrape URL and drops a private or credentialed tracker', () => {
@@ -173,6 +175,17 @@ describe('runSeedCheck', () => {
     expect(second.items[0].cached).toBe(true);
     expect(second.items[0].seeders).toBe(7);
     expect(second.stats.cache).toBe(2);
+    const other = await runSeedCheck({
+      items: [{ infohash: HASH, trackers: ['http://evil.example/announce'] }],
+      cache,
+      now: () => now + 2000,
+      transport,
+      deadlineMs: 1000,
+      timeoutMs: 500,
+    });
+    expect(calls).toHaveLength(1);
+    expect(other.items[0].cached).toBe(false);
+    expect(String(calls[0])).toContain('evil.example');
   });
 
   it('stops when the deadline passes and leaves the hash unchecked', async () => {

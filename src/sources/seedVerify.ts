@@ -161,6 +161,8 @@ export function watchSeedVerify(opts: {
   getRows: () => SourceResult[];
   getPending: () => number;
   onApply: (measures: SeedMeasure[]) => void;
+  /** Called once when the check finished, was skipped, or failed. `null` means there are no measures. */
+  onSettled?: (measures: SeedMeasure[] | null) => void;
   request?: (rows: SourceResult[], query: string, ctx: SourceContext) => Promise<SeedMeasure[] | null>;
   delayMs?: number;
 }): SeedWatch {
@@ -170,30 +172,48 @@ export function watchSeedVerify(opts: {
   const delay = opts.delayMs === undefined ? SEED_CHECK_DELAY_MS : opts.delayMs;
   const ask = opts.request || requestSeedCheck;
 
+  function finish(list: SeedMeasure[] | null): void {
+    if (dead || started) return;
+    started = true;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (list && list.length) opts.onApply(list);
+    if (opts.onSettled) opts.onSettled(list);
+  }
+
   function start(): void {
     if (dead || started) return;
-    if (!seedCheckAvailable(opts.ctx)) return;
     const rows = opts.getRows();
-    if (!rows.length) return;
+    if (!seedCheckAvailable(opts.ctx) || !rows.length) {
+      finish(null);
+      return;
+    }
     started = true;
     if (timer) clearTimeout(timer);
     timer = null;
     ask(rows, opts.query, opts.ctx as SourceContext).then(
       (list) => {
-        if (dead || !list) return;
-        opts.onApply(list);
+        if (dead) return;
+        if (list && list.length) opts.onApply(list);
+        if (opts.onSettled) opts.onSettled(list);
       },
-      () => undefined,
+      () => {
+        if (dead) return;
+        if (opts.onSettled) opts.onSettled(null);
+      },
     );
   }
 
   return {
     notify() {
       if (dead || started) return;
-      if (!opts.getRows().length) return;
-      if (!seedCheckAvailable(opts.ctx)) return;
       if (!opts.getPending()) {
         start();
+        return;
+      }
+      if (!opts.getRows().length) return;
+      if (!seedCheckAvailable(opts.ctx)) {
+        finish(null);
         return;
       }
       if (!timer) timer = setTimeout(start, delay);

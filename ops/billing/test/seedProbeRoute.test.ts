@@ -113,6 +113,7 @@ describe('POST /v1/seed-check', () => {
     await cache.save([
       {
         infohash: HASH,
+        trackerKey: 'tracker.example',
         seeders: 3,
         leechers: 1,
         seedersMax: 3,
@@ -123,8 +124,9 @@ describe('POST /v1/seed-check', () => {
         live: true,
       },
     ]);
-    await cache.touch([HASH], at + 5);
-    const rows = await cache.get([HASH]);
+    const key = [{ infohash: HASH, trackerKey: 'tracker.example' }];
+    await cache.touch(key, at + 5);
+    const rows = await cache.get(key);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ infohash: HASH, seeders: 3, leechers: 1, hits: 2, live: true, measuredAt: at });
   });

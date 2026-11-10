@@ -31,19 +31,27 @@ function capCount(n) {
   return n;
 }
 
-/** Bencode value, or null when the input is truncated or not one whole value. */
+/** A scrape dict is a few levels deep. Deeper input is refused so a small body cannot blow the stack. */
+const BDECODE_MAX_DEPTH = 32;
+
+/** Bencode value, or null when the input is truncated, too deep, or not one whole value. */
 export function bdecode(input) {
-  const r = bdecodeAt(String(input || ''), 0);
-  if (!r || r.i !== String(input || '').length) return null;
-  return r.v;
+  try {
+    const s = String(input || '');
+    const r = bdecodeAt(s, 0, 0);
+    if (!r || r.i !== s.length) return null;
+    return r.v;
+  } catch (e) {
+    return null;
+  }
 }
 
-function bdecodeAt(s, i) {
-  if (i >= s.length) return null;
+function bdecodeAt(s, i, depth) {
+  if (depth > BDECODE_MAX_DEPTH || i >= s.length) return null;
   const c = s.charAt(i);
   if (c === 'i') return bdecodeInt(s, i);
-  if (c === 'l') return bdecodeList(s, i);
-  if (c === 'd') return bdecodeDict(s, i);
+  if (c === 'l') return bdecodeList(s, i, depth);
+  if (c === 'd') return bdecodeDict(s, i, depth);
   if (c >= '0' && c <= '9') return bdecodeStr(s, i);
   return null;
 }
@@ -77,11 +85,11 @@ function bdecodeStr(s, i) {
   return { v: s.substring(start, end), i: end };
 }
 
-function bdecodeList(s, i) {
+function bdecodeList(s, i, depth) {
   const out = [];
   let j = i + 1;
   while (j < s.length && s.charAt(j) !== 'e') {
-    const item = bdecodeAt(s, j);
+    const item = bdecodeAt(s, j, depth + 1);
     if (!item) return null;
     out.push(item.v);
     j = item.i;
@@ -90,13 +98,13 @@ function bdecodeList(s, i) {
   return { v: out, i: j + 1 };
 }
 
-function bdecodeDict(s, i) {
+function bdecodeDict(s, i, depth) {
   const out = {};
   let j = i + 1;
   while (j < s.length && s.charAt(j) !== 'e') {
     const key = bdecodeStr(s, j);
     if (!key) return null;
-    const val = bdecodeAt(s, key.i);
+    const val = bdecodeAt(s, key.i, depth + 1);
     if (!val) return null;
     out[key.v] = val.v;
     j = val.i;
@@ -148,7 +156,12 @@ export function httpScrapeUrl(announce, infohashHex) {
  * A scrape dict with a single file entry is accepted even when its key does not match.
  */
 export function parseHttpScrape(body, infohashHex) {
-  const v = bdecode(body);
+  let v;
+  try {
+    v = bdecode(body);
+  } catch (e) {
+    return null;
+  }
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const files = v.files;
   if (!files || typeof files !== 'object' || Array.isArray(files)) return null;
@@ -265,6 +278,32 @@ export function trackerJobs(item) {
   return out;
 }
 
+/**
+ * Hosts the caller named, sorted, without the path or a passkey.
+ * The cache key is this plus the infohash, so one caller's tracker cannot overwrite another's row.
+ */
+export function trackerKey(item) {
+  const hash = String(item && item.infohash || '').toLowerCase();
+  const list = item && Array.isArray(item.trackers) ? item.trackers : [];
+  const seen = Object.create(null);
+  const hosts = [];
+  for (let i = 0; i < list.length; i++) {
+    const t = parseTracker(list[i], hash);
+    if (!t) continue;
+    const host = t.host.toLowerCase();
+    if (seen[host]) continue;
+    seen[host] = true;
+    hosts.push(host);
+  }
+  hosts.sort();
+  const key = hosts.join(',');
+  return key.length > 1024 ? key.slice(0, 1024) : key;
+}
+
+export function probeKey(infohash, key) {
+  return String(infohash || '') + '\n' + String(key || '');
+}
+
 export function median(nums) {
   if (!nums.length) return 0;
   const s = nums.slice().sort((a, b) => a - b);
@@ -359,18 +398,21 @@ export function createTrackerGate(opts) {
 
 export function createMemorySeedCache() {
   const rows = new Map();
+  const idOf = (row) => probeKey(row.infohash, row.trackerKey);
   return {
-    async get(hashes) {
+    async get(keys) {
       const out = [];
-      for (let i = 0; i < hashes.length; i++) {
-        const row = rows.get(hashes[i]);
+      const list = Array.isArray(keys) ? keys : [];
+      for (let i = 0; i < list.length; i++) {
+        const row = rows.get(idOf(list[i]));
         if (row) out.push({ ...row });
       }
       return out;
     },
-    async touch(hashes, now) {
-      for (let i = 0; i < hashes.length; i++) {
-        const row = rows.get(hashes[i]);
+    async touch(keys, now) {
+      const list = Array.isArray(keys) ? keys : [];
+      for (let i = 0; i < list.length; i++) {
+        const row = rows.get(idOf(list[i]));
         if (!row) continue;
         row.hits += 1;
         row.lastHitAt = now;
@@ -379,9 +421,11 @@ export function createMemorySeedCache() {
     async save(list) {
       for (let i = 0; i < list.length; i++) {
         const row = list[i];
-        const prev = rows.get(row.infohash);
-        rows.set(row.infohash, {
+        const id = idOf(row);
+        const prev = rows.get(id);
+        rows.set(id, {
           infohash: row.infohash,
+          trackerKey: row.trackerKey || '',
           seeders: row.seeders,
           leechers: row.leechers,
           seedersMax: row.seedersMax,
@@ -502,12 +546,16 @@ async function scrapeJobs(jobs, opts) {
       }
       const left = deadline - Date.now();
       const budget = left < timeoutMs ? left : timeoutMs;
+      const ac = typeof AbortController === 'function' ? new AbortController() : null;
+      let timer = null;
       try {
         if (budget < 200) continue;
+        if (ac) timer = setTimeout(() => ac.abort(), budget);
+        const signal = ac ? ac.signal : undefined;
         const sample = await Promise.race([
           job.kind === 'udp'
-            ? opts.transport.udp(job.host, job.port, job.hash, budget)
-            : opts.transport.http(job.url, job.hash, budget),
+            ? opts.transport.udp(job.host, job.port, job.hash, budget, { signal: signal })
+            : opts.transport.http(job.url, job.hash, budget, { signal: signal }),
           delay(budget).then(() => null),
         ]);
         if (sample && capCount(sample.seeders) !== null && capCount(sample.leechers) !== null) {
@@ -517,6 +565,8 @@ async function scrapeJobs(jobs, opts) {
       } catch (e) {
         // a tracker miss is not a failure of the batch
       } finally {
+        if (timer) clearTimeout(timer);
+        if (ac) ac.abort();
         gate.release();
       }
     }
@@ -541,15 +591,15 @@ export async function runSeedCheck(opts) {
   const cache = o.cache;
   const gate = o.gate || createTrackerGate();
   const transport = o.transport || { http: async () => null, udp: async () => null };
-  const hashes = items.map((it) => it.infohash);
-  const cachedRows = cache ? await cache.get(hashes) : [];
-  const byHash = Object.create(null);
-  for (let i = 0; i < cachedRows.length; i++) byHash[cachedRows[i].infohash] = cachedRows[i];
+  const wanted = items.map((it) => ({ infohash: it.infohash, trackerKey: trackerKey(it) }));
+  const cachedRows = cache ? await cache.get(wanted) : [];
+  const byId = Object.create(null);
+  for (let i = 0; i < cachedRows.length; i++) byId[probeKey(cachedRows[i].infohash, cachedRows[i].trackerKey)] = cachedRows[i];
   const fresh = [];
   const stale = [];
-  for (let i = 0; i < items.length; i++) {
-    const row = byHash[items[i].infohash];
-    if (row && cacheFresh(row, now)) fresh.push(items[i].infohash);
+  for (let i = 0; i < wanted.length; i++) {
+    const row = byId[probeKey(wanted[i].infohash, wanted[i].trackerKey)];
+    if (row && cacheFresh(row, now)) fresh.push(wanted[i]);
     else stale.push(items[i]);
   }
   if (cache && fresh.length) await cache.touch(fresh, now);
@@ -590,6 +640,7 @@ export async function runSeedCheck(opts) {
     measured[hash] = merged;
     saved.push({
       infohash: hash,
+      trackerKey: trackerKey(stale[i]),
       seeders: merged.seeders,
       leechers: merged.leechers,
       seedersMax: merged.seedersMax,
@@ -605,8 +656,9 @@ export async function runSeedCheck(opts) {
   let live = 0;
   for (let i = 0; i < items.length; i++) {
     const hash = items[i].infohash;
-    if (fresh.indexOf(hash) >= 0) {
-      const row = fromCache(byHash[hash]);
+    const id = probeKey(hash, trackerKey(items[i]));
+    if (fresh.some((k) => probeKey(k.infohash, k.trackerKey) === id)) {
+      const row = fromCache(byId[id]);
       if (row.live) live += 1;
       itemsOut.push(row);
     } else {
