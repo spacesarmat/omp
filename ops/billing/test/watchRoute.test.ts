@@ -134,6 +134,11 @@ describe('watch signals and rank', () => {
     expect(interest.rows[0].plays).toBeGreaterThan(0);
     const again = await runWatchFollow(repo, cache, { watchRankEnabled: true, cacheNodesEnabled: true }, now + 1000);
     expect(again.warmed).toBe(0);
+    const abandoned = now - 22 * 24 * 60 * 60 * 1000;
+    await file.query('UPDATE watch_best SET updated_at = $1, warmed_at = 0', [abandoned]);
+    await file.query('UPDATE watch_follow SET updated_at = $1', [abandoned]);
+    const stale = await runWatchFollow(repo, cache, { watchRankEnabled: true, cacheNodesEnabled: true }, now);
+    expect(stale.warmed).toBe(0);
     const admin = await call(app, 'GET', '/admin/api/watch-rank');
     expect(admin.status).toBe(401);
   });

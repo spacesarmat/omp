@@ -43,26 +43,44 @@ function scoredRow(row, deviceClass, voice, mods) {
   };
 }
 
+function slotKey(infohash, season, episode) {
+  return infohash + ':' + (season || 0) + ':' + (episode || 0);
+}
+
 /** One best release per season and episode. A season pack (episode 0) also fills `focus`. */
 export function chooseBests(pack, deviceClass, voice, focus) {
-  const byHash = {};
+  const bySlot = {};
   const stats = (pack && pack.stats) || [];
   const seen = (pack && pack.seen) || [];
   const mods = (pack && pack.mods) || {};
+  // One infohash can be a season pack. Each episode keeps its own samples.
   for (let i = 0; i < stats.length; i++) {
     const row = stats[i];
-    byHash[row.infohash] = candidate(row.infohash, row.title, row.season, row.episode, 0, 0, 0, row);
+    bySlot[slotKey(row.infohash, row.season, row.episode)] = candidate(row.infohash, row.title, row.season, row.episode, 0, 0, 0, row);
   }
-  for (let i = 0; i < seen.length; i++) {
-    const row = seen[i];
-    const cur = byHash[row.infohash] || candidate(row.infohash, row.title, row.season, row.episode, 0, 0, 0, null);
+  const mergeSeen = (cur, row) => {
     cur.title = cur.title || row.title;
     cur.seeds = row.seeds > cur.seeds ? row.seeds : cur.seeds;
     cur.dhtSeeds = row.dhtSeeds > cur.dhtSeeds ? row.dhtSeeds : cur.dhtSeeds;
     cur.sizeBytes = row.sizeBytes > cur.sizeBytes ? row.sizeBytes : cur.sizeBytes;
-    if (!cur.season) cur.season = row.season;
-    if (!cur.episode) cur.episode = row.episode;
-    byHash[row.infohash] = cur;
+  };
+  for (let i = 0; i < seen.length; i++) {
+    const row = seen[i];
+    const season = row.season || 0;
+    const episode = row.episode || 0;
+    // A pack-level sighting (no episode) only adds seeds. It does not replace episode scores.
+    if (!season && !episode) {
+      const prefix = row.infohash + ':';
+      const have = Object.keys(bySlot).filter((k) => k.indexOf(prefix) === 0);
+      if (have.length) {
+        for (let j = 0; j < have.length; j++) mergeSeen(bySlot[have[j]], row);
+        continue;
+      }
+    }
+    const key = slotKey(row.infohash, season, episode);
+    const cur = bySlot[key] || candidate(row.infohash, row.title, season, episode, 0, 0, 0, null);
+    mergeSeen(cur, row);
+    bySlot[key] = cur;
   }
   const best = {};
   const put = (season, episode, row) => {
@@ -82,9 +100,9 @@ export function chooseBests(pack, deviceClass, voice, focus) {
       };
     }
   };
-  const keys = Object.keys(byHash);
+  const keys = Object.keys(bySlot);
   for (let i = 0; i < keys.length; i++) {
-    const scored = scoredRow(byHash[keys[i]], deviceClass, voice, mods);
+    const scored = scoredRow(bySlot[keys[i]], deviceClass, voice, mods);
     if (!scored) continue;
     put(scored.season, scored.episode, scored);
     if (scored.episode === 0 && focus && focus.episode > 0) put(focus.season || scored.season, focus.episode, scored);

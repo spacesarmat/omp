@@ -36,4 +36,22 @@ describe('watch report batch', () => {
     flushWatch();
     expect(sent).toHaveLength(0);
   });
+
+  it('counts a switch between two qualities of one title', () => {
+    const sent: string[] = [];
+    setWatchPoster(async (body) => {
+      sent.push(body.payload);
+    });
+    const first = 'ab'.repeat(20);
+    const second = 'cd'.repeat(20);
+    watchOpen({ infohash: first, file: 1, title: 'Show 1080p AVC' });
+    watchOpen({ infohash: second, file: 2, title: 'Show 2160p HEVC' });
+    flushWatch();
+    expect(sent).toHaveLength(1);
+    const body = JSON.parse(sent[0]) as { items: { infohash: string; file: number; switched: boolean }[] };
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].infohash).toBe(first);
+    expect(body.items[0].file).toBe(1);
+    expect(body.items[0].switched).toBe(true);
+  });
 });

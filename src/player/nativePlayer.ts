@@ -120,6 +120,8 @@ export interface NativeState {
   duration: number;
   paused: boolean;
   buffering: boolean;
+  /** The native player has shown a frame. A resume position is not enough. */
+  played: boolean;
   audio: { list: string[]; sel: number };
   subs: { list: { label: string; value: string }[]; sel: string };
 }
@@ -194,7 +196,7 @@ export function sanitizeNativeState(v: unknown): NativeState | null {
   }
   return {
     index: base.index, time: base.time, duration: base.duration,
-    paused: v.paused === true, buffering: v.buffering === true, audio, subs,
+    paused: v.paused === true, buffering: v.buffering === true, played: v.played === true, audio, subs,
   };
 }
 
@@ -320,6 +322,8 @@ export class NativeSession {
         this.lastLocal = this.lastRemote = Date.now();
         this.pos = { index: o.index, time: o.startAt, duration: 0 };
         this.launched = true;
+        // The clock starts when play is requested, not when the resume position comes back.
+        this.armWatch(o.index, 0, 0);
         openRuns++;
         this.opts = o;
         const donate = nativeDonate(o.donate);
@@ -404,6 +408,22 @@ export class NativeSession {
     this.stop();
   }
 
+  /** Opens the watch clock for this item. A repeat of the same file does not restart it. */
+  private armWatch(index: number, prevTime: number, prevDuration: number): void {
+    const item = this.queue[index];
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    const k = item.hash + ':' + item.fileIndex;
+    if (this.watchKey === k) return;
+    this.finishWatch(prevTime, prevDuration, false);
+    this.watchKey = k;
+    this.watchHash = item.hash;
+    this.watchFile = item.fileIndex;
+    this.watchTitle = item.torrentTitle || item.title;
+    this.watchFileTitle = item.title;
+    this.watchVoice = '';
+    watchOpen({ infohash: item.hash, file: item.fileIndex, title: this.watchTitle, fileTitle: item.title });
+  }
+
   private finishWatch(time: number, duration: number, error: boolean): void {
     if (!this.watchKey) return;
     watchClose({
@@ -427,20 +447,10 @@ export class NativeSession {
     this.track(s);
     const item = this.queue[s.index];
     if (item && item.hash && item.fileIndex !== undefined) {
-      const k = item.hash + ':' + item.fileIndex;
-      if (this.watchKey !== k) {
-        this.finishWatch(prevPos ? prevPos.time : 0, prevPos ? prevPos.duration : 0, false);
-        this.watchKey = k;
-        this.watchHash = item.hash;
-        this.watchFile = item.fileIndex;
-        this.watchTitle = item.torrentTitle || item.title;
-        this.watchFileTitle = item.title;
-        this.watchVoice = '';
-        watchOpen({ infohash: item.hash, file: item.fileIndex, title: this.watchTitle, fileTitle: item.title });
-      }
+      this.armWatch(s.index, prevPos ? prevPos.time : 0, prevPos ? prevPos.duration : 0);
       const audioLabel = s.audio && s.audio.sel >= 0 && s.audio.list[s.audio.sel] ? s.audio.list[s.audio.sel] : '';
       if (audioLabel) this.watchVoice = audioLabel;
-      if (s.time > 0) watchFrame(item.hash, item.fileIndex);
+      if (s.played) watchFrame(item.hash, item.fileIndex);
       watchBuffer(item.hash, item.fileIndex, s.buffering);
     }
     const now = Date.now();

@@ -195,4 +195,28 @@ describe('watch rank score', () => {
     expect(pinned[0].infohash).toBe(B);
     expect(pinned[0].reason).toBe('pinned');
   });
+
+  it('keeps every episode of one season pack', () => {
+    const best = chooseBests(
+      {
+        stats: [
+          { infohash: A, title: 'Pack', season: 1, episode: 1, samples: 4, completed: 0, switched: 3, ttffMs: 20000, rebufferN: 8, rebufferMs: 9000, watchedSum: 40, codecOk: 0, codecFail: 4 },
+          { infohash: A, title: 'Pack', season: 1, episode: 2, samples: 4, completed: 4, switched: 0, ttffMs: 3000, rebufferN: 0, rebufferMs: 0, watchedSum: 380, codecOk: 4, codecFail: 0 },
+        ],
+        seen: [
+          { infohash: A, title: 'Pack', season: 1, episode: 1, seeds: 10, dhtSeeds: 0, sizeBytes: 1 },
+          { infohash: A, title: 'Pack', season: 1, episode: 2, seeds: 10, dhtSeeds: 0, sizeBytes: 1 },
+        ],
+        mods: {},
+      },
+      'tv',
+      '',
+      { season: 1, episode: 2 },
+    );
+    const e1 = best.find((x) => x.episode === 1);
+    const e2 = best.find((x) => x.episode === 2);
+    expect(e1 && e1.infohash).toBe(A);
+    expect(e2 && e2.infohash).toBe(A);
+    expect(e2 && e2.score).toBeGreaterThan(e1 ? e1.score : 0);
+  });
 });

@@ -202,7 +202,7 @@ export function parseTorznab(xml: string, sourceId: string, kind: Kind = 'jacket
       const rank = num(attrs.omp_rank);
       if (rank !== undefined) r.communityRank = rank;
       const reason = attrs.omp_reason;
-      if (reason === 'community' || reason === 'blend' || reason === 'pinned') r.communityReason = reason;
+      if (reason === 'community' || reason === 'blend' || reason === 'pinned' || reason === 'seeds' || reason === 'dht') r.communityReason = reason;
       if (attrs.omp_voice) {
         r.suggestedVoice = attrs.omp_voice.slice(0, 40);
         rememberCommunityVoice(r.hash || r.Hash, r.Title, r.suggestedVoice);

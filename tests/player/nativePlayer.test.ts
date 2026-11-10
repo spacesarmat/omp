@@ -116,7 +116,7 @@ describe('native state', () => {
     expect(sanitizeNativeState({ index: -1 })).toBeNull();
     const s = sanitizeNativeState({ index: 1, time: 'x', duration: 50, paused: true, audio: { list: ['a', 3], sel: 7 }, subs: 5 })!;
     expect(s).toEqual({
-      index: 1, time: 0, duration: 50, paused: true, buffering: false,
+      index: 1, time: 0, duration: 50, paused: true, buffering: false, played: false,
       audio: { list: ['a'], sel: -1 }, subs: { list: [{ label: 'Выкл', value: 'off' }], sel: 'off' },
     });
   });

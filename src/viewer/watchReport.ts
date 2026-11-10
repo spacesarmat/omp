@@ -7,6 +7,7 @@ import { billingSession, deviceId } from '../billing/session';
 import { withDeviceToken } from '../billing/tokens';
 import { settings } from '../store/settings';
 import { parseEpisode } from '../lib/episodes';
+import { progressTitleKey } from './tracks';
 import { nativeSourceHttp } from '../platform/androidNative';
 import { tvSourceContext } from '../sources/tvContext';
 import type { SourceContext } from '../sources/types';
@@ -202,7 +203,9 @@ export function watchOpen(sample: WatchSample): void {
   const hash = (sample.infohash || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(hash)) return;
   const title = (sample.title || '').slice(0, 120);
-  const prev = title ? lastOpen[title] : undefined;
+  // Quality and codec stay in the torrent title. The switch is by the shared title key.
+  const group = title ? progressTitleKey(title) : '';
+  const prev = group ? lastOpen[group] : undefined;
   if (prev && prev.hash !== hash) {
     enqueueWatch({
       infohash: prev.hash,
@@ -214,7 +217,7 @@ export function watchOpen(sample: WatchSample): void {
       codecOk: null,
     });
   }
-  if (title) lastOpen[title] = { hash: hash, file: sample.file || 0 };
+  if (group) lastOpen[group] = { hash: hash, file: sample.file || 0 };
   const k = keyOf(hash, sample.file || 0);
   openAt[k] = Date.now();
   delete frameAt[k];

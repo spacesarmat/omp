@@ -39,6 +39,7 @@ function statsOf(r) {
 const DAY = 24 * 60 * 60 * 1000;
 const SEEN_KEEP = 30 * DAY;
 const FOLLOW_KEEP = 180 * DAY;
+const FOLLOW_ACTIVE = 21 * DAY;
 
 export async function statsFor(query, hashes, deviceClass) {
   const list = [];
@@ -533,11 +534,12 @@ export async function writeBest(query, row, now) {
 }
 
 export async function dueWarm(query, now) {
+  // Only a pick refreshed while someone still watches the title. An abandoned row does not stay popular.
   const res = await query(
     'SELECT b.title_key, b.season, b.episode, b.device_class, b.infohash, b.title, b.seeds, b.size_bytes FROM watch_best b' +
-      ' WHERE b.infohash <> \'\' AND b.seeds > 0 AND b.warmed_at < $1' +
+      ' WHERE b.infohash <> \'\' AND b.seeds > 0 AND b.warmed_at < $1 AND b.updated_at > $2' +
       ' AND NOT EXISTS (SELECT 1 FROM watch_mod m WHERE m.infohash = b.infohash AND m.banned) LIMIT 40',
-    [now - DAY],
+    [now - DAY, now - FOLLOW_ACTIVE],
   );
   return res.rows.map((r) => ({
     titleKey: r.title_key,
