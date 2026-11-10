@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { CommittedDesign, RebaseResult } from '../../design.mjs';
-import type { EditorClient } from '../client';
+import { EditorApiError, formatEditorIssue, type EditorClient } from '../client';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 
@@ -9,33 +9,58 @@ export interface BaseReviewPanelProps {
   client: EditorClient;
 }
 
+function fingerprint(draft: DraftController['draft']): string {
+  return JSON.stringify({ ...draft, lastError: null });
+}
+
 export function BaseReviewPanel({ controller, client }: BaseReviewPanelProps) {
   const draft = useDraftController(controller);
   const [design, setDesign] = useState<CommittedDesign | null>(null);
-  const [proposal, setProposal] = useState<RebaseResult | null>(null);
+  const [proposal, setProposal] = useState<(RebaseResult & { source: string }) | null>(null);
   const [error, setError] = useState('');
+  const [issues, setIssues] = useState<unknown[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setProposal(null);
-    void client.getDesign().then((committed) => {
-      if (active) setDesign(committed);
-    }).catch((reason) => {
-      if (active) setError(reason instanceof Error ? reason.message : String(reason));
-    });
+    let generation = 0;
+    const refresh = () => {
+      const request = ++generation;
+      void client.getDesign().then((committed) => {
+        if (!active || request !== generation) return;
+        setDesign(committed);
+        setError('');
+        setIssues([]);
+      }).catch((reason) => {
+        if (!active || request !== generation) return;
+        setError(reason instanceof Error ? reason.message : String(reason));
+        setIssues(reason instanceof EditorApiError ? reason.issues : []);
+      });
+    };
+    const visibility = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', visibility);
     return () => {
       active = false;
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', visibility);
     };
-  }, [client, draft.baseCommit]);
+  }, [client]);
 
   const review = async () => {
     setBusy(true);
     setError('');
+    setIssues([]);
+    const source = fingerprint(draft);
     try {
-      setProposal(await client.rebaseDraft(draft));
+      const result = await client.rebaseDraft(draft);
+      setProposal({ ...result, source });
     } catch (reason) {
       setProposal(null);
+      setIssues(reason instanceof EditorApiError ? reason.issues : []);
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setBusy(false);
@@ -43,9 +68,17 @@ export function BaseReviewPanel({ controller, client }: BaseReviewPanelProps) {
   };
   const apply = () => {
     if (!proposal) return;
+    if (fingerprint(draft) !== proposal.source) {
+      setProposal(null);
+      setIssues([]);
+      setError('DRAFT_CHANGED_REVIEW_REQUIRED');
+      return;
+    }
     controller.rebase(proposal.draft);
     setDesign({ baseCommit: proposal.draft.baseCommit, theme: proposal.draft.theme, flow: proposal.draft.flow });
     setProposal(null);
+    setError('');
+    setIssues([]);
   };
   const stale = design?.baseCommit !== draft.baseCommit;
 
@@ -68,7 +101,12 @@ export function BaseReviewPanel({ controller, client }: BaseReviewPanelProps) {
           <button type="button" data-action="apply-base" onClick={apply}>Применить</button>
         </div>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <div role="alert">
+          <strong>{error}</strong>
+          {issues.length > 0 && <ul>{issues.map((issue, index) => <li key={index}>{formatEditorIssue(issue)}</li>)}</ul>}
+        </div>
+      )}
     </section>
   );
 }
