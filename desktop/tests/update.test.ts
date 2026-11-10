@@ -74,5 +74,7 @@ describe('desktop update API', () => {
     });
     expect(() => updateInfoFromPackage('https://example.com/OMP-0.20.11.msix', candidate.sha256))
       .toThrow('invalid update package version');
+    expect(updateInfoFromPackage('https://example.com/OMP-0.20.12-beta.2-macos-arm64.dmg', candidate.sha256).version).toBe('0.20.12-beta.2');
+    expect(updateInfoFromPackage('https://example.com/OMP-0.20.12-linux-x64.AppImage', candidate.sha256).version).toBe('0.20.12');
   });
 });

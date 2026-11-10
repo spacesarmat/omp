@@ -1,0 +1,128 @@
+@font-face {
+  font-family: Manrope;
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url("../../../ops/pages/assets/manrope-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: Manrope;
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url("../../../ops/pages/assets/manrope-cyrillic.woff2") format("woff2");
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+html.omp-desktop {
+  --omp-side: 240px;
+  --m-nav-h: 0px;
+  --m-nav-reserve: 0px;
+  background: #111310;
+  color: #f2f2e9;
+}
+html.omp-desktop.is-rail { --omp-side: 76px; }
+html.omp-desktop.is-hidden,
+html.omp-desktop.is-narrow { --omp-side: 0px; }
+html.omp-desktop body,
+html.omp-desktop #app { padding-left: var(--omp-side); }
+
+.omp-side {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  width: 240px;
+  padding: 16px 12px;
+  background: #181a15;
+  color: #f2f2e9;
+  border-right: 1px solid #31342c;
+  font-family: Manrope, system-ui, sans-serif;
+}
+.omp-side.is-rail { width: 76px; }
+html.omp-desktop.is-narrow .omp-side { box-shadow: 12px 0 40px rgba(0, 0, 0, 0.45); }
+.omp-side-brand { margin: 8px 8px 24px; color: #f9c400; font-size: 22px; font-weight: 800; }
+.omp-side-toggle,
+.omp-side-reveal {
+  border: 0;
+  border-radius: 8px;
+  background: #31342c;
+  color: #f2f2e9;
+  font-family: inherit;
+}
+.omp-side-toggle { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; }
+.omp-side-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #b3b8a8;
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+}
+.omp-side-item span { margin-left: 10px; }
+.omp-side-item:hover,
+html.omp-desktop .m-card:hover,
+html.omp-desktop .m-disc-tile:hover,
+html.omp-desktop .m-disc-rail-tile:hover { outline: 2px solid #f9c400; outline-offset: 2px; }
+.omp-side-item.is-on { background: #31342c; color: #f9c400; }
+.omp-side-reveal {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  min-height: 36px;
+  padding: 0 12px;
+}
+.omp-desk-backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  border: 0;
+  background: rgba(17, 19, 16, 0.55);
+}
+
+html.omp-desktop .m-grid,
+html.omp-desktop .m-disc-grid { grid-template-columns: repeat(auto-fit, minmax(min(128px, 100%), 1fr)); }
+html.omp-desktop .m-grid.m-view-small,
+html.omp-desktop .m-disc-grid.m-cols-3,
+html.omp-desktop .m-disc-grid.m-cards-medium { grid-template-columns: repeat(auto-fit, minmax(min(96px, 100%), 1fr)); }
+@media (min-width: 1400px) {
+  html.omp-desktop .m-grid,
+  html.omp-desktop .m-disc-grid { grid-template-columns: repeat(auto-fit, minmax(min(112px, 100%), 1fr)); }
+}
+html.omp-desktop .m-disc-rail-tile { flex-basis: 104px; width: 104px; }
+
+html.omp-desktop .m-mini.m-mini-float {
+  left: auto;
+  right: 24px;
+  bottom: 24px;
+  width: 360px;
+  z-index: 25;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+}
+html.omp-desktop.omp-context .m-sheet-host {
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding-top: var(--omp-menu-y, 24px);
+  padding-left: var(--omp-menu-x, 24px);
+}
+html.omp-desktop.omp-context .m-sheet {
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  border-radius: 16px;
+  max-height: 70vh;
+}

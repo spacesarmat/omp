@@ -47,6 +47,10 @@ impl BinaryAsset {
             "mpv.7z".to_string()
         } else if self.id == "nsis" {
             "OMP-setup.exe".to_string()
+        } else if self.id == "dmg" {
+            "OMP-update.dmg".to_string()
+        } else if self.id == "appimage" {
+            "OMP-update.AppImage".to_string()
         } else {
             self.target.executable_name(&self.id)
         }

@@ -68,6 +68,8 @@ describe('download page feeds', () => {
       '/omp/update-android-beta.json',
       '/omp/update-beta.json',
       '/omp/update-windows.json',
+      '/omp/update-macos.json',
+      '/omp/update-linux.json',
     ]);
   });
 
@@ -83,6 +85,33 @@ describe('download page feeds', () => {
     expect(document.querySelector('[data-version="stable"]')!.textContent).toBe('Stable fallback');
     expect(document.querySelector('[data-version="beta"]')!.textContent).toBe('Beta fallback');
     expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('Windows fallback');
+  });
+
+  it('shows a desktop tile only when the feed has a file', async () => {
+    document.body.innerHTML = `
+      <article data-platform="macos" data-optional="beta-macos" hidden>
+        <a data-download="beta-macos" href="https://github.com/spacesarmat/omp/releases">dmg</a>
+        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">intel</a>
+      </article>
+      <article data-platform="linux" data-optional="beta-linux" hidden>
+        <a data-download="beta-linux" href="https://github.com/spacesarmat/omp/releases">app</a>
+      </article>
+    `;
+    const empty = vi.fn((url: string) => Promise.resolve(response(url.endsWith('update-linux.json') ? { version: '0.1.0' } : {})));
+    await updateDownloads(document, empty as unknown as typeof fetch);
+    expect((document.querySelector('[data-platform="macos"]') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('[data-platform="linux"]') as HTMLElement).hidden).toBe(true);
+    const ready = vi.fn((url: string) => Promise.resolve(response(url.endsWith('update-macos.json') ? {
+      version: '0.20.12',
+      url: 'https://example.test/arm.dmg',
+      sha256: 'a'.repeat(64),
+      size: 4096,
+      assets: { x64: { url: 'https://example.test/intel.dmg', sha256: 'b'.repeat(64), size: 10 } },
+    } : {})));
+    await updateDownloads(document, ready as unknown as typeof fetch);
+    expect((document.querySelector('[data-platform="macos"]') as HTMLElement).hidden).toBe(false);
+    expect((document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement).href).toBe('https://example.test/intel.dmg');
+    expect((document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLElement).hidden).toBe(false);
   });
 
   it('keeps ABI fallbacks when a feed has no per-ABI links', async () => {
@@ -151,6 +180,8 @@ describe('download page platform highlight', () => {
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 12; Android TV) AppleWebKit')).toBe('android-tv');
     expect(detectPlatform('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit')).toBe('android');
     expect(detectPlatform('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('windows');
+    expect(detectPlatform('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')).toBe('macos');
+    expect(detectPlatform('Mozilla/5.0 (X11; Linux x86_64)')).toBe('linux');
     expect(highlightPlatform(document, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('windows');
     const yours = document.querySelector('[data-platform="windows"]')!;
     expect(document.body.firstElementChild).toBe(yours);
@@ -230,7 +261,9 @@ describe('download page languages and fallbacks', () => {
         expect(mono.style.fontFamily).toMatch(/monospace/);
         expect(mono.style.whiteSpace).toBe('normal');
         expect(mono.style.overflowWrap).toBe('anywhere');
-        expect(doc.querySelectorAll('[data-platform]')).toHaveLength(4);
+        expect(doc.querySelectorAll('[data-platform]')).toHaveLength(6);
+        expect(doc.querySelector('[data-platform="macos"]')!.hasAttribute('hidden')).toBe(true);
+        expect(doc.querySelector('[data-platform="linux"]')!.hasAttribute('hidden')).toBe(true);
       } finally {
         style.remove();
       }

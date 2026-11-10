@@ -10,11 +10,21 @@ export const ANDROID_UPDATE_URL = FEED_BASE + 'update-android.json';
 export const BETA_UPDATE_URL = FEED_BASE + 'update-beta.json';
 export const ANDROID_BETA_UPDATE_URL = FEED_BASE + 'update-android-beta.json';
 export const WINDOWS_UPDATE_URL = FEED_BASE + 'update-windows.json';
+export const MACOS_UPDATE_URL = FEED_BASE + 'update-macos.json';
+export const LINUX_UPDATE_URL = FEED_BASE + 'update-linux.json';
 
-/** The feed this device reads: Android APK, LG ipk or Windows NSIS; Android and LG use the beta pair with «Получать бета-версии». */
+function desktopFeedUrl(ua: string): string {
+  const agent = ua.toLowerCase();
+  if (agent.includes('windows')) return WINDOWS_UPDATE_URL;
+  if (agent.includes('mac os') || agent.includes('macintosh')) return MACOS_UPDATE_URL;
+  if (agent.includes('linux') || agent.includes('x11')) return LINUX_UPDATE_URL;
+  return '';
+}
+
+/** The feed this device reads: Android APK, LG ipk, or the desktop package for this OS. */
 export function updateFeedUrl(android: boolean, beta: boolean): string {
   if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-    return navigator.userAgent.toLowerCase().includes('windows') ? WINDOWS_UPDATE_URL : '';
+    return desktopFeedUrl(navigator.userAgent);
   }
   if (android) return beta ? ANDROID_BETA_UPDATE_URL : ANDROID_UPDATE_URL;
   return beta ? BETA_UPDATE_URL : UPDATE_URL;
@@ -102,21 +112,52 @@ export function apkFor(info: UpdateInfo, key: ApkAbi | null): ApkFile {
   return e || { url: info.ipkUrl, sha256: info.ipkHash, size: info.ipkSize };
 }
 
-/** Validates an Android, LG or Windows update feed; anything malformed means "no update". */
+export type DesktopAssetKey = 'nsis' | 'portable' | 'arm64' | 'x64' | 'appimage' | 'deb';
+
+/** The auto-update file for this desktop OS. Windows uses NSIS, macOS the matching dmg, Linux the AppImage. */
+export function desktopAssetKey(ua: string): DesktopAssetKey | null {
+  const agent = ua.toLowerCase();
+  if (agent.includes('windows')) return 'nsis';
+  if (agent.includes('mac os') || agent.includes('macintosh')) {
+    return agent.includes('arm') || agent.includes('aarch64') ? 'arm64' : 'x64';
+  }
+  if (agent.includes('linux') || agent.includes('x11')) return 'appimage';
+  return null;
+}
+
+function assetFile(assets: unknown, key: string): { url: string; sha256: string; size: number } | null {
+  if (!assets || typeof assets !== 'object' || Array.isArray(assets)) return null;
+  const entry = (assets as Record<string, unknown>)[key];
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const row = entry as Record<string, unknown>;
+  if (!isHttps(row.url) || typeof row.sha256 !== 'string' || !SHA256.test(row.sha256)) return null;
+  return { url: row.url, sha256: row.sha256.toLowerCase(), size: positiveSize(row.size) };
+}
+
+/** Validates an Android, LG or desktop update feed; anything malformed means "no update". */
 export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
   if (typeof o.version !== 'string' || !VERSION.test(o.version)) return null;
   const windows = isHttps(o.url) && typeof o.sha256 === 'string' && SHA256.test(o.sha256);
-  const packageUrl = windows ? o.url : o.ipkUrl;
-  const packageHash = windows ? o.sha256 : o.ipkHash;
+  let packageUrl = windows ? o.url : o.ipkUrl;
+  let packageHash = windows ? o.sha256 : o.ipkHash;
+  let packageSize = windows ? positiveSize(o.size) : positiveSize(o.ipkSize);
+  if (windows && typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && o.assets) {
+    const key = desktopAssetKey(navigator.userAgent);
+    const picked = key ? assetFile(o.assets, key) : null;
+    if (!picked) return null;
+    packageUrl = picked.url;
+    packageHash = picked.sha256;
+    packageSize = picked.size;
+  }
   if (!isHttps(packageUrl)) return null;
   if (typeof packageHash !== 'string' || !SHA256.test(packageHash)) return null;
   const info: UpdateInfo = {
     version: o.version,
     ipkUrl: packageUrl,
     ipkHash: packageHash.toLowerCase(),
-    ipkSize: windows ? positiveSize(o.size) : positiveSize(o.ipkSize),
+    ipkSize: packageSize,
     notes: noteList(o.notes),
     releaseUrl: isHttps(o.releaseUrl) ? o.releaseUrl : RELEASES_URL,
   };
@@ -128,7 +169,7 @@ export function sanitizeUpdateInfo(v: unknown): UpdateInfo | null {
 }
 
 /**
- * The title of an offered update: «Доступна бета 0.16.0-beta.2», «Вышла OMP 0.16.0 — она заменит бету» (a release
+ * The title of an offered update: «Доступна бета 0.16.0-beta.2», «Вышла OMP 0.16.0 - она заменит бету» (a release
  * over an installed beta), else «Доступна версия 0.15.4».
  */
 export function updateTitle(version: string, installed: string): string {

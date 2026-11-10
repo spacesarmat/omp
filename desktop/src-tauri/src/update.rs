@@ -1,5 +1,5 @@
 use crate::download::{download_verified, DownloadError};
-use crate::platform::{BinaryAsset, TargetPlatform};
+use crate::platform::{current, BinaryAsset, TargetPlatform};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
@@ -130,7 +130,7 @@ impl UpdateManager {
     }
 
     pub fn from_environment() -> Self {
-        Self::with_installer(env!("CARGO_PKG_VERSION"), Box::new(NsisInstaller::new()))
+        Self::with_installer(env!("CARGO_PKG_VERSION"), installer_for_host())
     }
 
     pub fn check(&self, info: &UpdateInfo) -> Result<Option<UpdateInfo>, UpdateError> {
@@ -296,6 +296,150 @@ fn add_nsis_package(path: &Path) -> Result<(), UpdateError> {
 
 #[cfg(not(windows))]
 fn add_nsis_package(_path: &Path) -> Result<(), UpdateError> {
+    Err(UpdateError::Install)
+}
+
+fn installer_for_host() -> Box<dyn PackageInstaller> {
+    match current() {
+        Ok(TargetPlatform::MacOsX64 | TargetPlatform::MacOsArm64) => Box::new(DmgInstaller::new()),
+        Ok(TargetPlatform::LinuxX64 | TargetPlatform::LinuxArm64) => {
+            Box::new(AppImageInstaller::new())
+        }
+        _ => Box::new(NsisInstaller::new()),
+    }
+}
+
+fn host_target() -> TargetPlatform {
+    current().unwrap_or(TargetPlatform::WindowsX64)
+}
+
+fn download_package(info: &UpdateInfo, id: &str) -> Result<PathBuf, UpdateError> {
+    validate_info(info)?;
+    let asset = BinaryAsset {
+        target: host_target(),
+        id: id.to_string(),
+        version: info.version.clone(),
+        url: info.url.clone(),
+        sha256: info.sha256.clone(),
+        max_bytes: MAX_PACKAGE_BYTES,
+    };
+    Ok(download_verified(asset)?)
+}
+
+pub struct DmgInstaller {
+    install: Box<InstallHook>,
+}
+
+impl DmgInstaller {
+    pub fn new() -> Self {
+        Self {
+            install: Box::new(add_dmg_package),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_install<F>(install: F) -> Self
+    where
+        F: Fn(&Path) -> Result<(), UpdateError> + Send + Sync + 'static,
+    {
+        Self {
+            install: Box::new(install),
+        }
+    }
+}
+
+impl PackageInstaller for DmgInstaller {
+    fn download(&self, info: &UpdateInfo) -> Result<PathBuf, UpdateError> {
+        download_package(info, "dmg")
+    }
+
+    fn download_apply(&self, info: &UpdateInfo) -> Result<(), UpdateError> {
+        let package = self.download(info)?;
+        (self.install)(&package)
+    }
+}
+
+pub struct AppImageInstaller {
+    install: Box<InstallHook>,
+}
+
+impl AppImageInstaller {
+    pub fn new() -> Self {
+        Self {
+            install: Box::new(add_appimage_package),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_install<F>(install: F) -> Self
+    where
+        F: Fn(&Path) -> Result<(), UpdateError> + Send + Sync + 'static,
+    {
+        Self {
+            install: Box::new(install),
+        }
+    }
+}
+
+impl PackageInstaller for AppImageInstaller {
+    fn download(&self, info: &UpdateInfo) -> Result<PathBuf, UpdateError> {
+        download_package(info, "appimage")
+    }
+
+    fn download_apply(&self, info: &UpdateInfo) -> Result<(), UpdateError> {
+        let package = self.download(info)?;
+        (self.install)(&package)
+    }
+}
+
+const APPIMAGE_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"AppImage installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; chmod +x \"$OMP_PACKAGE_PATH\" || exit 1; dest=\"${OMP_APPIMAGE_PATH:-${OMP_CURRENT_EXE:-}}\"; if [ -z \"$dest\" ]; then exit 1; fi; cp \"$OMP_PACKAGE_PATH\" \"$dest\" || exit 1; chmod +x \"$dest\" || exit 1; result='{\"status\":\"success\"}'";
+
+#[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
+const DMG_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"DMG installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; mount=$(mktemp -d); hdiutil attach \"$OMP_PACKAGE_PATH\" -nobrowse -readonly -mountpoint \"$mount\" || exit 1; app=$(find \"$mount\" -maxdepth 2 -name '*.app' -print -quit); if [ -z \"$app\" ]; then hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; fi; dest=\"${OMP_APP_DEST:-}\"; if [ -z \"$dest\" ]; then case \"${OMP_CURRENT_EXE:-}\" in *.app/*) dest=$(printf '%s' \"$OMP_CURRENT_EXE\" | sed 's/\\.app\\/.*/.app/');; *) dest=\"/Applications/OMP.app\";; esac; fi; rm -rf \"$dest\"; mkdir -p \"$(dirname \"$dest\")\"; cp -R \"$app\" \"$dest\" || { hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; }; hdiutil detach \"$mount\" >/dev/null 2>&1 || true; result='{\"status\":\"success\"}'";
+
+fn spawn_shell(script: &str, package: &Path) -> Result<(), UpdateError> {
+    let result_path = update_result_path()?;
+    if let Some(parent) = result_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| UpdateError::Install)?;
+    }
+    match std::fs::remove_file(&result_path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(UpdateError::Install),
+    }
+    let mut command = std::process::Command::new("sh");
+    command
+        .args(["-c", script])
+        .env("OMP_PACKAGE_PATH", package)
+        .env("OMP_UPDATE_PID", std::process::id().to_string())
+        .env("OMP_UPDATE_RESULT", &result_path);
+    if let Ok(exe) = std::env::current_exe() {
+        command.env("OMP_CURRENT_EXE", exe);
+    }
+    if let Ok(appimage) = std::env::var("APPIMAGE") {
+        command.env("OMP_APPIMAGE_PATH", appimage);
+    }
+    command.spawn().map_err(|_| UpdateError::Install)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn add_appimage_package(path: &Path) -> Result<(), UpdateError> {
+    spawn_shell(APPIMAGE_HELPER_SCRIPT, path)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn add_appimage_package(_path: &Path) -> Result<(), UpdateError> {
+    Err(UpdateError::Install)
+}
+
+#[cfg(target_os = "macos")]
+fn add_dmg_package(path: &Path) -> Result<(), UpdateError> {
+    spawn_shell(DMG_HELPER_SCRIPT, path)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn add_dmg_package(_path: &Path) -> Result<(), UpdateError> {
     Err(UpdateError::Install)
 }
 

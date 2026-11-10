@@ -135,6 +135,9 @@ pub trait PlayerProcess: Send {
     ) -> Result<Option<i32>, String> {
         self.try_wait()
     }
+    fn input(&mut self, _args: &[&str]) -> Result<(), String> {
+        Err("player input is unavailable".to_string())
+    }
 }
 
 type Launcher =
@@ -274,6 +277,24 @@ impl PlayerManager {
             Err(_) => self.status.error = Some("player pause failed".to_string()),
         }
         self.status.clone()
+    }
+
+    pub fn control(&mut self, action: &str) -> Result<PlayerStatus, String> {
+        if action == "pause" {
+            return Ok(self.pause());
+        }
+        let Some(process) = self.process.as_mut() else {
+            return Err("player is idle".to_string());
+        };
+        let result = match action {
+            "seek-back" => process.input(&["seek", "-10", "relative"]),
+            "seek-forward" => process.input(&["seek", "10", "relative"]),
+            "volume-down" => process.input(&["add", "volume", "-5"]),
+            "volume-up" => process.input(&["add", "volume", "5"]),
+            "fullscreen" => process.input(&["cycle", "fullscreen"]),
+            _ => Err("unknown player action".to_string()),
+        };
+        result.map(|_| self.status.clone())
     }
 
     pub fn stop(&mut self) -> PlayerStatus {
@@ -493,6 +514,16 @@ impl MpvProcess {
             .call(serde_json::json!(["loadfile", url]))
             .map(|_| ())
     }
+
+    fn input_args(&self, args: &[&str]) -> Result<(), String> {
+        let command = serde_json::Value::Array(
+            args.iter()
+                .copied()
+                .map(|arg| serde_json::Value::String(arg.to_string()))
+                .collect(),
+        );
+        self.ipc.call(command).map(|_| ())
+    }
 }
 
 impl PlayerProcess for MpvProcess {
@@ -542,6 +573,10 @@ impl PlayerProcess for MpvProcess {
 
     fn pause(&mut self, paused: bool) -> Result<(), String> {
         self.ipc.set_pause(paused)
+    }
+
+    fn input(&mut self, args: &[&str]) -> Result<(), String> {
+        self.input_args(args)
     }
 
     fn pause_cancelled(

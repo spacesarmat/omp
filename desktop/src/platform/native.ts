@@ -76,9 +76,12 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     takePendingMagnet: async () => null,
     takePendingUpdateResult: () => updateApi.takePendingUpdateResult(),
     deviceAbiKey: async () => null,
-    canInstallApks: async () => currentTargetPlatform() === TargetPlatform.WindowsX64,
+    canInstallApks: async () => true,
     downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
-      if (currentTargetPlatform() !== TargetPlatform.WindowsX64) throw new Error('unsupported update target');
+      const platform = currentTargetPlatform();
+      if (platform !== TargetPlatform.WindowsX64 && platform !== TargetPlatform.MacOsX64 && platform !== TargetPlatform.MacOsArm64 && platform !== TargetPlatform.LinuxX64 && platform !== TargetPlatform.LinuxArm64) {
+        throw new Error('unsupported update target');
+      }
       const info = updateInfoFromPackage(url, sha256);
       await updateApi.updateDownload(info);
       onProgress(50);
@@ -120,6 +123,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     },
     http,
     httpClearCookies: clearCookies,
+    playerControl: (action: string) => playerApi.playerControl(action),
     openExternal: async (url: string, mime: string) => {
       if (!mime.startsWith('video/')) {
         window.open(url, '_blank', 'noopener');

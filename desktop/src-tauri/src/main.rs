@@ -17,6 +17,7 @@ fn main() {
             app.manage(player.cancellation());
             app.manage(Arc::new(Mutex::new(player)));
             app.manage(Arc::new(Mutex::new(UpdateManager::from_environment())));
+            omp_desktop::tray::install(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -31,6 +32,7 @@ fn main() {
             commands::native_http_clear_cookies,
             commands::player_open,
             commands::player_pause,
+            commands::player_control,
             commands::player_stop,
             commands::player_status,
             commands::update_check,
