@@ -371,6 +371,12 @@ export class NativeSession {
     this.plugin.nativePlayerCommand({ cmd: { type: 'donate', on: false, session: this.sid } }).catch(() => undefined);
   }
 
+  /** Asks the built-in player to close. The close event still saves the position. */
+  close(): void {
+    if (this.done) return;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'close', session: this.sid } }).catch(() => undefined);
+  }
+
   /**
    * The screen is gone (Back on the placeholder, route replaced): once playNative was called the run keeps
    * listening until the player reports its close (progress is still saved), without calling the hooks;

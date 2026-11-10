@@ -58,6 +58,16 @@ export function titleMemoryKey(title: string): string {
   return out.replace(/ +/g, ' ').trim().slice(0, 80);
 }
 
+/** Billing key. Same cleanup as the track key, but the year stays so two films of one name do not share a row. */
+export function progressTitleKey(title: string): string {
+  const base = titleMemoryKey(title);
+  const y = /(?:^|[^0-9])((?:19|20)\d{2})(?=[^0-9]|$)/.exec(String(title || ''));
+  const year = y ? y[1] : '';
+  if (!year) return base;
+  const joined = base ? base + ' ' + year : year;
+  return joined.slice(0, 80);
+}
+
 export function episodeProgressKey(path: string, film: boolean): string {
   const label = episodeLabel(path || '');
   if (label) return label.toLowerCase();

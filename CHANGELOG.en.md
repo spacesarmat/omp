@@ -8,7 +8,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
 - Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
-- If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. A setting can switch it immediately
+- If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
+- Billing progress keeps the year, so two films with the same name do not resume each other
 - Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
 - A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
 - When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry

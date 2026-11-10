@@ -48,7 +48,7 @@ export function nextAlternate(currentHash: string, bias: 'any' | 'lower', known:
         bestRank = rank;
       }
     }
-    if (best) return best;
+    return best;
   }
   return have[0].hash;
 }

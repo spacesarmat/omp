@@ -157,17 +157,17 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     openedAt.current = Date.now();
     switched.current = false;
     setStallTick(0);
-  }, [index, reloadKey]);
+  }, [index, reloadKey, ready]);
   useEffect(() => {
-    if (vs.played) return undefined;
+    if (!ready || vs.played) return undefined;
     const id = setInterval(() => setStallTick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [vs.played, index, reloadKey]);
-  const elapsedMs = vs.played ? 0 : Date.now() - openedAt.current;
+  }, [ready, vs.played, index, reloadKey]);
+  const elapsedMs = !ready || vs.played ? 0 : Date.now() - openedAt.current;
   void stallTick;
-  const reason = startupReason({ elapsedMs: elapsedMs, fault: faultFromMediaCode(vs.errorCode), swarm: swarm, played: vs.played });
+  const reason = !ready ? 'none' : startupReason({ elapsedMs: elapsedMs, fault: faultFromMediaCode(vs.errorCode), swarm: swarm, played: vs.played });
   const stallActions = failureActions(reason);
-  const showFail = blocked || (reason !== 'none' && !vs.played);
+  const showFail = blocked || (ready && reason !== 'none' && !vs.played);
   const bytesNow = swarm.kind === 'ok' ? Math.max(swarm.stats.preloadedBytes, swarm.stats.loadedBytes) : 0;
   const speedNow = swarm.kind === 'ok' ? swarm.stats.downloadSpeed : 0;
   useEffect(() => {
@@ -197,12 +197,18 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     openAnotherRelease(item.hash);
   };
   useEffect(() => {
-    if (switched.current || !settings.value.fallbackAuto) return;
+    if (!ready || switched.current || !settings.value.fallbackAuto) return;
     if (reason !== 'slow' && reason !== 'no-seeds') return;
     if (fallbackAction(fallbackDue(elapsedMs, vs.played, bytesNow, speedNow), true) !== 'switch') return;
+    const known: { [hash: string]: boolean } = {};
+    torrents.value.forEach((x) => {
+      if (x.hash) known[x.hash.toLowerCase()] = true;
+    });
+    const alt = item.hash ? nextAlternate(item.hash, 'any', known) : '';
+    if (!alt) return;
     switched.current = true;
     goAlt('any');
-  }, [reason, stallTick]);
+  }, [ready, reason, stallTick]);
   // watch journal on TorrServer: an entry when the item starts (below) and when it is left
   const journal = useMemo(() => new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from)), []);
   useEffect(() => () => journal.end(item, posRef.current.time, posRef.current.duration), [item]);

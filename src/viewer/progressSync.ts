@@ -6,7 +6,7 @@ import { deviceId } from '../billing/session';
 import { withDeviceToken } from '../billing/tokens';
 import { nativeSourceHttp } from '../platform/androidNative';
 import type { SourceContext } from '../sources/types';
-import { episodeProgressKey, titleMemoryKey } from './tracks';
+import { episodeProgressKey, progressTitleKey } from './tracks';
 
 export interface RemoteProgress {
   positionSec: number;
@@ -108,5 +108,5 @@ export function pushProgress(row: ProgressPush): void {
 }
 
 export function progressIdentity(title: string, path: string, film: boolean): { titleKey: string; episodeKey: string } {
-  return { titleKey: titleMemoryKey(title), episodeKey: episodeProgressKey(path, film) };
+  return { titleKey: progressTitleKey(title), episodeKey: episodeProgressKey(path, film) };
 }

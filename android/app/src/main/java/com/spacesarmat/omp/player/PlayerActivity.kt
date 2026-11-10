@@ -1406,6 +1406,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
             "prev" -> playPrev()
             "audio" -> session.selectAudio(cmd.optInt("i", -1))
             "subs" -> session.selectSub(cmd.optString("value"))
+            "close" -> finish()
         }
         changed()
     }

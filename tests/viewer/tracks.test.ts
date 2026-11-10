@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getTrackPref, saveTrackPref } from '../../src/store/trackPrefs';
-import { episodeProgressKey, prefForStart, probeTracks, rememberTracks, saveTitleTrack, titleMemoryKey } from '../../src/viewer/tracks';
+import { episodeProgressKey, prefForStart, probeTracks, progressTitleKey, rememberTracks, saveTitleTrack, titleMemoryKey } from '../../src/viewer/tracks';
 import type { FfprobeResult } from '../../src/api/types';
 
 beforeEach(() => {
@@ -42,6 +42,13 @@ describe('track memory', () => {
     expect(list.audio.map((t) => t.label)).toEqual(['LostFilm AC3']);
     expect(list.audio[0].language).toBe('rus');
     expect(list.subtitles[0].label).toBe('Full ASS');
+  });
+
+  it('keeps the year on the billing key so two films of one name stay apart', () => {
+    expect(titleMemoryKey('Dune 2021 1080p')).toBe(titleMemoryKey('Dune 1984 2160p'));
+    expect(progressTitleKey('Dune 2021 1080p')).toBe('dune 2021');
+    expect(progressTitleKey('Dune 1984 2160p')).toBe('dune 1984');
+    expect(progressTitleKey('Show S01E01 2020')).toBe(progressTitleKey('Show S02E04 2020'));
   });
 
   it('keys a film as movie and an episode as its code', () => {

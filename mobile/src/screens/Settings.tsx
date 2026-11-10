@@ -429,22 +429,6 @@ export function Settings() {
             <span class="m-switch-knob" />
           </button>
         </div>
-        <div class="m-set-row" data-row="fallback">
-          <div class="m-set-text">
-            <span>{t('settings.fallbackAuto')}</span>
-            <span class="m-muted m-small">{t('settings.fallbackAutoHint')}</span>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={settings.value.fallbackAuto}
-            aria-label={t('settings.fallbackAuto')}
-            class={'m-switch' + (settings.value.fallbackAuto ? ' on' : '')}
-            onClick={() => updateSettings({ fallbackAuto: !settings.value.fallbackAuto })}
-          >
-            <span class="m-switch-knob" />
-          </button>
-        </div>
       </section>
 
       <section class="m-set-group" data-section="search">

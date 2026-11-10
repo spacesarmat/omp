@@ -190,7 +190,7 @@ export const en: EnDict<typeof ru> = {
     prebufferMetered: 'Prebuffer on mobile data',
     prebufferMeteredHint: 'While a card is open, the start of the file is fetched ahead. On mobile data this stays off until the switch is on.',
     fallbackAuto: 'Switch release automatically',
-    fallbackAutoHint: 'If playback has not started in 18 seconds, another release of the same title opens at the same position. Off: an offer only.',
+    fallbackAutoHint: 'Built-in player: if playback has not started in 18 seconds and another release is already in the library, it opens at the same position. Otherwise only an offer is shown. 2160 Player does not switch by itself.',
     liveSeedsLive: 'live',
     followNew: 'Follow new releases',
     app: 'App',
