@@ -1,8 +1,8 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ReleaseIntent } from '../../../design/schema.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
-import { createEditorClient, type EditorClient } from '../client';
+import { createEditorClient, EditorApiError, formatEditorIssue, type EditorClient } from '../client';
 import type { ExportResult } from '../../export.mjs';
 
 export interface ExportPanelProps {
@@ -15,8 +15,13 @@ export function ExportPanel({ controller, client }: ExportPanelProps) {
   const [version, setVersion] = useState('0.20.12-beta.3');
   const [channel, setChannel] = useState<'beta' | 'stable'>('beta');
   const [error, setError] = useState('');
+  const [issues, setIssues] = useState<unknown[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ExportResult | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error, issues]);
   const saveIntent = () => {
     try {
       controller.update((current) => {
@@ -25,17 +30,22 @@ export function ExportPanel({ controller, client }: ExportPanelProps) {
         return current;
       });
       setError('');
+      setIssues([]);
     } catch (reason) {
+      setIssues([]);
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
   const runExport = async () => {
     setBusy(true);
     setError('');
+    setIssues([]);
+    setResult(null);
     try {
       await controller.flush();
       setResult(await (client || createEditorClient()).exportDraft(draft));
     } catch (reason) {
+      setIssues(reason instanceof EditorApiError ? reason.issues : []);
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setBusy(false);
@@ -57,7 +67,12 @@ export function ExportPanel({ controller, client }: ExportPanelProps) {
       </label>
       <button type="button" data-action="save-release" onClick={saveIntent}>Сохранить намерение</button>
       <button type="button" data-action="export" disabled={busy} onClick={runExport}>{busy ? 'Экспорт...' : 'Экспортировать'}</button>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <div class="editor-export-error" ref={errorRef} role="alert" tabIndex={-1}>
+          <strong>{error}</strong>
+          {issues.length > 0 && <ul>{issues.map((issue, index) => <li key={index}>{formatEditorIssue(issue)}</li>)}</ul>}
+        </div>
+      )}
       {result && (
         <div class="editor-export-result">
           <strong>Файлы экспортированы</strong>

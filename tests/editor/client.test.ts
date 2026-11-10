@@ -58,6 +58,14 @@ describe('editor client', () => {
     expect((fetchMock.mock.calls[1] as unknown as [string])[0]).toBe('http://127.0.0.1:4173/api/rebase');
   });
 
+  it('preserves the API error code and issue details', async () => {
+    const issue = { code: 'CONTRAST', target: 'desktop-windows', elementId: 'nav-library', token: '--omp-color-muted', message: 'Contrast is 2.1:1' };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'DESIGN_ISSUES', issues: [issue] }), { status: 422 }));
+    const client = createEditorClient({ origin: 'http://127.0.0.1:4173', token: 'test-token', fetch: fetchMock as typeof fetch });
+    const reason = await client.exportDraft(createDefaultDraft('draft-1', BASE)).catch((error: unknown) => error);
+    expect(reason).toMatchObject({ message: 'DESIGN_ISSUES', code: 'DESIGN_ISSUES', status: 422, issues: [issue] });
+  });
+
   it('rejects token forwarding to a non-loopback origin', () => {
     expect(() => createEditorClient({ origin: 'https://attacker.invalid', token: 'test-token' })).toThrow();
   });

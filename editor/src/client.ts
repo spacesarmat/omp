@@ -3,6 +3,47 @@ import { parseFlowDocument, parseThemeDocument } from '../../design/validation';
 import type { ExportResult } from '../export.mjs';
 import type { CommittedDesign, RebaseResult } from '../design.mjs';
 
+export class EditorApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly issues: unknown[];
+
+  constructor(code: string, status: number, issues: unknown[] = []) {
+    super(code);
+    this.name = 'EditorApiError';
+    this.code = code;
+    this.status = status;
+    this.issues = issues;
+  }
+}
+
+async function apiError(response: Response): Promise<EditorApiError> {
+  let body: Record<string, unknown> = {};
+  try {
+    const value = await response.json() as unknown;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) body = value as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  const code = typeof body.error === 'string' && body.error ? body.error : `EDITOR_HTTP_${response.status}`;
+  return new EditorApiError(code, response.status, Array.isArray(body.issues) ? body.issues : []);
+}
+
+export function formatEditorIssue(issue: unknown): string {
+  if (typeof issue === 'string') return issue;
+  if (typeof issue === 'object' && issue !== null && !Array.isArray(issue)) {
+    const source = issue as Record<string, unknown>;
+    const code = typeof source.code === 'string' ? source.code : '';
+    const context = ['target', 'screenId', 'elementId', 'format', 'state', 'token', 'path']
+      .map((key) => source[key])
+      .filter((value): value is string => typeof value === 'string')
+      .join(' / ');
+    const message = typeof source.message === 'string' ? source.message : '';
+    return [code, context, message].filter(Boolean).join(': ');
+  }
+  return JSON.stringify(issue) ?? String(issue);
+}
+
 export interface EditorState {
   baseCommit: string;
   dirtyDesign: boolean;
@@ -77,13 +118,13 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
   return {
     state: async () => {
       const response = await request('/api/state');
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       return response.json() as Promise<EditorState>;
     },
     getDraft: async (id) => {
       const response = await request(`/api/drafts/${encodeURIComponent(id)}`);
       if (response.status === 404) return null;
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       return parseEditorDraft(await response.json());
     },
     putDraft: async (draft, options) => {
@@ -93,12 +134,12 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
         body: JSON.stringify(draft),
         keepalive: options?.keepalive,
       });
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       return parseEditorDraft(await response.json());
     },
     getDesign: async () => {
       const response = await request('/api/design');
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       const body = await response.json() as { design?: unknown };
       return body.design === null ? null : committedDesign(body.design);
     },
@@ -108,7 +149,7 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(draft),
       });
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       return rebaseResult(await response.json());
     },
     exportDraft: async (draft) => {
@@ -117,7 +158,7 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(draft),
       });
-      if (!response.ok) throw new Error(`EDITOR_HTTP_${response.status}`);
+      if (!response.ok) throw await apiError(response);
       return response.json() as Promise<ExportResult>;
     },
   };
