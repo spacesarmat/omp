@@ -152,6 +152,61 @@ describe('editor app', () => {
     expect(controller.hasUnsavedChanges()).toBe(false);
   });
 
+  it('recovers from a save conflict with a separate draft', async () => {
+    const saved = new Set<string>();
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+          saved.add(draft.id);
+          return { ...draft, revision: 1 };
+        },
+        getDesign: async () => null,
+        rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    await act(async () => {
+      await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save-copy"]')!.click();
+      await Promise.resolve();
+    });
+    expect(saved.has(controller.draft.id)).toBe(true);
+    expect(controller.draft.id).not.toBe('draft-1');
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+  });
+
+  it('does not save an unchanged draft when the page closes', () => {
+    let saves = 0;
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          saves += 1;
+          return draft;
+        },
+        getDesign: async () => null,
+        rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    const event = new Event('beforeunload', { cancelable: true });
+    act(() => { window.dispatchEvent(event); });
+    expect(saves).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it('ignores a failed save while the page is closing', async () => {
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
@@ -169,6 +224,7 @@ describe('editor app', () => {
         },
       });
       act(() => render(h(App, { controller }), host));
+      controller.upsertOverride({ id: 'closing', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
       act(() => { window.dispatchEvent(new Event('beforeunload')); });
       await act(async () => {
         await Promise.resolve();

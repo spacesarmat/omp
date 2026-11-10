@@ -10,7 +10,10 @@ export interface BaseReviewPanelProps {
 }
 
 function fingerprint(draft: DraftController['draft']): string {
-  return JSON.stringify({ ...draft, lastError: null });
+  const copy = { ...draft };
+  delete copy.revision;
+  delete copy.lastError;
+  return JSON.stringify(copy);
 }
 
 export function BaseReviewPanel({ controller, client }: BaseReviewPanelProps) {

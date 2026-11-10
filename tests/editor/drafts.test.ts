@@ -155,6 +155,96 @@ describe('DraftController', () => {
     expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['first', 'second']);
   });
 
+  it('recovers from DRAFT_CONFLICT by saving local edits as a new draft', async () => {
+    const saved = new Map<string, EditorDraft>();
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+        saved.set(draft.id, draft);
+        return { ...draft, revision: 1 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    await controller.saveAsNewDraft();
+    expect(controller.draft.id).not.toBe('draft-1');
+    expect(controller.draft.revision).toBe(1);
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+    expect(controller.lastError).toBeNull();
+    expect(saved.has(controller.draft.id)).toBe(true);
+  });
+
+  it('clears undo and redo history after recovering into a new draft', async () => {
+    const controller = create([], {
+      onPut: async (draft) => ({ ...draft, revision: 1 }),
+    });
+    controller.upsertOverride({ id: 'first', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    controller.upsertOverride({ id: 'second', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    controller.undo();
+    expect(controller.canUndo).toBe(true);
+    expect(controller.canRedo).toBe(true);
+    await controller.saveAsNewDraft();
+    const recoveredId = controller.draft.id;
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(false);
+    expect(controller.undo()).toBe(false);
+    expect(controller.redo()).toBe(false);
+    expect(controller.draft.id).toBe(recoveredId);
+  });
+
+  it('persists edits made while a recovered copy is being created', async () => {
+    let finishCopy!: (draft: EditorDraft) => void;
+    const copies = new Map<string, EditorDraft>();
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+        if (!copies.has(draft.id)) {
+          copies.set(draft.id, draft);
+          return new Promise<EditorDraft>((resolve) => {
+            finishCopy = resolve;
+          });
+        }
+        copies.set(draft.id, draft);
+        return { ...draft, revision: 2 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    const recovered = controller.saveAsNewDraft();
+    controller.upsertOverride({ id: 'later', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    finishCopy({ ...copies.values().next().value!, revision: 1 });
+    await recovered;
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local', 'later']);
+    expect(copies.get(controller.draft.id)?.theme.overrides.map((entry) => entry.id)).toEqual(['local', 'later']);
+    expect(controller.draft.revision).toBe(2);
+  });
+
+  it('skips queued writes for the original draft after recovery', async () => {
+    let rejectOriginal!: (reason: Error) => void;
+    const originalPromise = new Promise<EditorDraft>((_, reject) => {
+      rejectOriginal = reject;
+    });
+    const originalWrites: EditorDraft[] = [];
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') {
+          originalWrites.push(draft);
+          return originalPromise;
+        }
+        return { ...draft, revision: 1 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    const first = controller.flush();
+    const second = controller.flush();
+    const recovered = controller.saveAsNewDraft();
+    rejectOriginal(new Error('DRAFT_CONFLICT'));
+    await Promise.allSettled([first, second]);
+    await recovered;
+    expect(originalWrites).toHaveLength(1);
+    expect(controller.draft.id).not.toBe('draft-1');
+  });
+
   it('stores the saved revision and keeps it through undo', async () => {
     const controller = create([], {
       onPut: async (draft) => ({ ...draft, revision: (draft.revision ?? 0) + 1 }),

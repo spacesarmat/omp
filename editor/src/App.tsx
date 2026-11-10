@@ -43,6 +43,13 @@ function offlineClient(initial: EditorDraft): EditorClient {
 
 function EditorWorkspace({ controller, client }: { controller: DraftController; client?: EditorClient }) {
   const draft = useDraftController(controller);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('omp.editor.activeDraftId', draft.id);
+    } catch {
+      return;
+    }
+  }, [draft.id]);
   const workspaceClient = client || offlineClient(draft);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
@@ -76,6 +83,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <span class="editor-save-error" role="alert">
             {draft.lastError}
             <button type="button" data-action="retry-save" onClick={() => { void controller.flush().catch(() => undefined); }}>Повторить</button>
+            {draft.lastError === 'DRAFT_CONFLICT' && (
+              <button type="button" data-action="save-copy" onClick={() => { void controller.saveAsNewDraft().catch(() => undefined); }}>Сохранить как новый черновик</button>
+            )}
           </span>
         )}
         <button type="button" data-testid="mode-design" disabled={mode === 'design'} onClick={() => setMode('design')}>Дизайн</button>
@@ -140,7 +150,15 @@ export function App(props: AppProps = {}) {
           return;
         }
         const state = await client.state();
-        const saved = await client.getDraft('default');
+        let activeDraftId = 'default';
+        try {
+          const savedId = sessionStorage.getItem('omp.editor.activeDraftId');
+          if (savedId && /^[a-z0-9][a-z0-9-]{0,63}$/.test(savedId)) activeDraftId = savedId;
+        } catch {
+          activeDraftId = 'default';
+        }
+        const selected = await client.getDraft(activeDraftId);
+        const saved = selected || (activeDraftId === 'default' ? null : await client.getDraft('default'));
         const committed = saved ? null : await client.getDesign();
         const draft = saved || createDefaultDraft('default', committed?.baseCommit || state.baseCommit);
         if (!saved && committed) {
@@ -166,8 +184,8 @@ export function App(props: AppProps = {}) {
       if (controller.hasUnsavedChanges()) {
         event.preventDefault();
         event.returnValue = 'Changes are still being saved';
+        void controller.flush({ keepalive: true }).catch(() => undefined);
       }
-      void controller.flush({ keepalive: true }).catch(() => undefined);
     };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);
