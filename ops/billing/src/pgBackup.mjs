@@ -291,7 +291,8 @@ export function startPgBackups(cfg, getSettings, opts) {
         const gone = pruneDumps(cfg.dir, backupKeepDays(settings), Date.now());
         const verified = await verifyDump(join(cfg.dir, r.name), o.spawn);
         rememberBackupVerify({ ...verified, name: r.name });
-        log('pg backup ' + r.name + ' ' + r.size + ' bytes' + (gone.length ? ', removed ' + gone.length + ' old' : '') + (verified.ok ? ', list ok' : ', list failed'));
+        log('pg backup ' + r.name + ' ' + r.size + ' bytes' + (gone.length ? ', removed ' + gone.length + ' old' : ''));
+        if (!verified.ok) log('pg backup verify failed: ' + (verified.error || 'list'));
       } else {
         lastError = r.error;
         process.stderr.write('pg backup failed: ' + r.error + '\n');

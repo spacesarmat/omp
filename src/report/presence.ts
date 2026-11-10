@@ -1,6 +1,5 @@
 // Funnel steps and a signed-in heartbeat. Diagnostics off: no steps, the linked device still checks in.
 import { billingPost } from '../billing/client';
-import { ompSubscribed } from '../billing/entitlement';
 import { billingSession } from '../billing/session';
 import { withDeviceToken } from '../billing/tokens';
 import { APP_VERSION } from '../version';
@@ -10,10 +9,10 @@ import type { SourceContext } from '../sources/types';
 
 const KEY = 'omp.presence';
 
-export type PresenceMemory = { install: boolean; linked: boolean; active: boolean; paidOnce: boolean };
+export type PresenceMemory = { install: boolean; linked: boolean };
 
 export function emptyPresence(): PresenceMemory {
-  return { install: false, linked: false, active: false, paidOnce: false };
+  return { install: false, linked: false };
 }
 
 export function readPresence(raw: unknown): PresenceMemory {
@@ -21,15 +20,16 @@ export function readPresence(raw: unknown): PresenceMemory {
   if (!isObject(raw)) return base;
   base.install = raw.install === true;
   base.linked = raw.linked === true;
-  base.active = raw.active === true;
-  base.paidOnce = raw.paidOnce === true;
   return base;
 }
 
-/** Which funnel names to send now, and the memory to keep. */
-export function nextSteps(prev: PresenceMemory, now: { linked: boolean; active: boolean }, diagnostics: boolean): { steps: string[]; next: PresenceMemory } {
+/**
+ * Install and login only. Trial, payment and renewal are decided on the server from promo uses and payments,
+ * so a free promo is not counted as a payment and a renewal before expiry is not missed.
+ */
+export function nextSteps(prev: PresenceMemory, now: { linked: boolean }, diagnostics: boolean): { steps: string[]; next: PresenceMemory } {
   const steps: string[] = [];
-  const next: PresenceMemory = { install: prev.install, linked: prev.linked, active: now.active, paidOnce: prev.paidOnce };
+  const next: PresenceMemory = { install: prev.install, linked: now.linked ? true : prev.linked };
   if (!prev.install) {
     next.install = true;
     if (diagnostics) steps.push('install');
@@ -37,10 +37,6 @@ export function nextSteps(prev: PresenceMemory, now: { linked: boolean; active: 
   if (now.linked && !prev.linked) {
     next.linked = true;
     if (diagnostics) steps.push('login');
-  }
-  if (now.active && !prev.active) {
-    if (diagnostics) steps.push(prev.paidOnce ? 'renewal' : 'payment');
-    next.paidOnce = true;
   }
   return { steps, next };
 }
@@ -60,10 +56,13 @@ export function startPresence(ctx: () => SourceContext, platform: string): void 
     const linked = !!billingSession();
     if (!linked && !diagnostics) return;
     const prev = readPresence(loadJson<unknown>(KEY, {}, isObject));
-    const plan = nextSteps(prev, { linked, active: ompSubscribed() }, diagnostics);
-    saveJson(KEY, plan.next);
+    const plan = nextSteps(prev, { linked }, diagnostics);
     const fields = presenceFields(APP_VERSION, platform, diagnostics, plan.steps);
-    void withDeviceToken(ctx(), (headers) => billingPost(ctx(), '/v1/presence', fields, { headers, timeoutMs: 8000 })).catch(() => undefined);
+    void withDeviceToken(ctx(), (headers) => billingPost(ctx(), '/v1/presence', fields, { headers, timeoutMs: 8000 }))
+      .then((res) => {
+        if (res.status === 200) saveJson(KEY, plan.next);
+      })
+      .catch(() => undefined);
   };
   tick();
   setInterval(tick, 60000);

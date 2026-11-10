@@ -11,7 +11,7 @@ import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
+import { allowedBeta, checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -52,9 +52,9 @@ export function runUpdateCheck(o: { manual: boolean; url?: string; minIntervalMs
   return (checker ?? checkForUpdate)(o);
 }
 
-/** The phone's APK feed: the beta one with «Получать бета-версии». */
-export function phoneFeedUrl(): string {
-  return updateFeedUrl(true, settings.value.betaUpdates);
+/** The phone's APK feed. Beta is asked from billing before the URL is chosen. */
+export function phoneFeedUrl(): Promise<string> {
+  return allowedBeta(settings.value.betaUpdates).then((beta) => updateFeedUrl(true, beta));
 }
 
 /** Under «Get beta versions». */
@@ -360,7 +360,7 @@ export function Settings() {
   const showWizard = !tv || (connected && ompMissing);
 
   async function check() {
-    const r = await runUpdateCheck({ manual: true, url: phoneFeedUrl() }).catch((): CheckResult => 'error');
+    const r = await phoneFeedUrl().then((url) => runUpdateCheck({ manual: true, url })).catch((): CheckResult => 'error');
     if (r === 'error') showToast(t('updateScreen.checkFailed'));
     else if (r === 'latest') showToast(t('updateScreen.latest'));
   }

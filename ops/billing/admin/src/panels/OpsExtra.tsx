@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,14 +84,33 @@ export function BroadcastDesk({ csrf }: { csrf: string }) {
   const [text, setText] = useState('');
   const [segment, setSegment] = useState('all');
   const [preview, setPreview] = useState<{ id: string; count: number } | null>(null);
+  const previewGen = useRef(0);
   return (
     <Card>
       <CardHeader>
         <CardTitle>Рассылка в бот</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <textarea className="min-h-28 w-full rounded-md border border-border bg-background p-2 text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder="Текст сообщения" />
-        <select className="h-10 rounded-md border border-border bg-secondary px-2" value={segment} onChange={(e) => setSegment(e.target.value)} aria-label="Кому">
+        <textarea
+          className="min-h-28 w-full rounded-md border border-border bg-background p-2 text-sm"
+          value={text}
+          onChange={(e) => {
+            previewGen.current += 1;
+            setPreview(null);
+            setText(e.target.value);
+          }}
+          placeholder="Текст сообщения"
+        />
+        <select
+          className="h-10 rounded-md border border-border bg-secondary px-2"
+          value={segment}
+          onChange={(e) => {
+            previewGen.current += 1;
+            setPreview(null);
+            setSegment(e.target.value);
+          }}
+          aria-label="Кому"
+        >
           <option value="all">Все с Telegram</option>
           <option value="active">Активная подписка</option>
           <option value="lapsed">Без активной подписки</option>
@@ -99,8 +118,10 @@ export function BroadcastDesk({ csrf }: { csrf: string }) {
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            onClick={() =>
+            onClick={() => {
+              const gen = ++previewGen.current;
               void post('/admin/api/broadcast/preview', csrf, { text, segment }).then((r) => {
+                if (gen !== previewGen.current) return;
                 const extra = r as { id?: string; count?: number; ok?: boolean };
                 if (!extra.ok || !extra.id) {
                   toast('Не удалось');
@@ -108,8 +129,8 @@ export function BroadcastDesk({ csrf }: { csrf: string }) {
                 }
                 setPreview({ id: extra.id, count: extra.count || 0 });
                 toast('Получателей: ' + (extra.count || 0));
-              })
-            }
+              });
+            }}
           >
             Предпросмотр
           </Button>

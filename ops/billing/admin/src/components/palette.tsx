@@ -67,12 +67,12 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-[12vh]" onClick={() => onOpen(false)}>
       <div className="w-full max-w-xl rounded-lg border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <Command label="Поиск" shouldFilter>
+        <Command label="Поиск" shouldFilter={false}>
           <Command.Input value={q} onValueChange={setQ} placeholder="Аккаунт, устройство, платёж, раздача" autoFocus />
           <Command.List className="max-h-80 overflow-auto p-2">
             <Command.Empty className="px-2 py-3 text-sm text-muted-foreground">Ничего не найдено</Command.Empty>
             <Command.Group heading="Экраны">
-              {PAGES.map((p) => (
+              {PAGES.filter((p) => !q.trim() || p.label.toLowerCase().indexOf(q.trim().toLowerCase()) >= 0).map((p) => (
                 <Command.Item
                   key={p.id}
                   value={p.label}

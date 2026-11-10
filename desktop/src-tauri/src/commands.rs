@@ -267,7 +267,11 @@ fn scrub_native(text: &str) -> String {
         }
     }
     if out.len() > 4000 {
-        out.truncate(4000);
+        let mut end = 4000;
+        while end > 0 && !out.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.truncate(end);
     }
     out
 }

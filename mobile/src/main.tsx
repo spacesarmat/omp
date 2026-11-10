@@ -64,9 +64,12 @@ import('../../src/report/presence').then((m) =>
 import('../../src/report/rollout').then((m) => m.installRollout(phoneSourceContext)).catch(() => undefined);
 import('../../src/report/crash').then((m) => {
   const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
-  m.installCrashHooks(platform);
-  m.flushCrashes(phoneSourceContext);
-  m.crumb('start ' + platform);
+  m.installCrashHooks(platform, phoneSourceContext);
+  return native.takeNativeCrashes().then((text) => {
+    if (text) m.queueCrash({ kind: 'native', message: text.slice(0, 400), stack: text, platform });
+    m.crumb('start ' + platform);
+    return m.flushCrashes(phoneSourceContext);
+  });
 }).catch(() => undefined);
 startKeyboardWatch();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card

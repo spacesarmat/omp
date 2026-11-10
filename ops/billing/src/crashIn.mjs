@@ -53,7 +53,11 @@ export function ingestCrash(state, raw, now) {
     groups.push(group);
     alert = 'new';
   }
-  const newest = group.versions.slice().sort().slice(-1)[0] || '';
+  let newest = '';
+  const known = group.versions || [];
+  for (let i = 0; i < known.length; i++) {
+    if (!newest || versionLess(newest, known[i])) newest = known[i];
+  }
   if (group.status === 'fixed' && version && versionLess(newest, version)) {
     group.status = 'new';
     group.regression = true;

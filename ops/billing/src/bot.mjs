@@ -9,6 +9,7 @@ import {
   adminChatIds,
   appendSupportMessage,
   confirmAdminPanelLogin,
+  isPanelReader,
   confirmDeviceLink,
   createPromo,
   baseDevices,
@@ -712,7 +713,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
 export function botCallback(state, { chatId, data, now, info }) {
   const rawData = String(data || '');
   if (rawData.indexOf('alin:') === 0) {
-    const token = rawData.slice(6);
+    const token = rawData.slice('alin:'.length);
     const out = confirmAdminPanelLogin(state, { token, telegramId: chatId, now });
     if (out.result && out.result.ok) {
       return { state: out.state, answer: 'Вход подтверждён', messages: [{ chatId, text: 'Вход в админ-панель подтверждён. Вернитесь в браузер.' }], clearMarkup: true };
@@ -1034,6 +1035,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       say('Нет доступа. Добавьте свой Telegram id в настройках панели.');
       return { state: cur, messages, pad: 'user' };
     }
+  }
+  if ((action === 'admin_grant' || action === 'admin_promo') && isPanelReader(cur.settings, chatId)) {
+    say('Режим только просмотра. Выдача дней и промокоды недоступны.', { adminPad: true });
+    return { state: cur, messages, pad: 'admin' };
   }
 
   if (action === 'user_mode') {

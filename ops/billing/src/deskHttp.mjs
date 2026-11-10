@@ -99,6 +99,7 @@ export async function handleDesk(ctx) {
   if (path === '/v1/presence' && req.method === 'POST') return presence(ctx);
   if (path === '/v1/crash' && req.method === 'POST') return crashPost(ctx);
   if (path === '/v1/promo' && req.method === 'POST') return promoPost(ctx);
+  if (path === '/v1/rollout' && req.method === 'GET') return rollout(ctx);
   const admin = ctx.adminOf(req);
   if (!admin) {
     ctx.json(res, 401, { auth: false });
@@ -112,7 +113,6 @@ export async function handleDesk(ctx) {
   if (req.method === 'GET' && path === '/admin/api/crashes/log') return sendCrashLog(ctx);
   if (req.method === 'GET' && path === '/admin/api/crashes/draft') return sendCrashDraft(ctx);
   if (req.method === 'GET' && path === '/admin/api/logins') return sendLogins(ctx);
-  if (req.method === 'GET' && path === '/v1/rollout') return rollout(ctx);
   if (req.method !== 'POST') {
     ctx.json(res, 405, { ok: false, error: 'method' });
     return true;
@@ -222,9 +222,17 @@ async function sendDesk(ctx, admin) {
     disk: disk ? { path: disk.path, free: disk.free, total: disk.total, ratio: Math.round(disk.ratio * 1000) / 10 } : null,
     rollbacks: (state.deskRollbacks || []).slice(-20).reverse().map((r) => ({ id: r.id, at: r.at })),
     versions: versionSummary(state.deskVersions),
-    betaPercent: Math.max(0, Math.min(100, Math.floor(Number(state.settings && state.settings.betaPercent) || 100))),
+    betaPercent: betaPercentOf(state.settings),
   });
   return true;
+}
+
+function betaPercentOf(settings) {
+  const raw = settings && settings.betaPercent;
+  if (raw === undefined || raw === null || raw === '') return 100;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 100;
+  return Math.max(0, Math.min(100, Math.floor(n)));
 }
 
 function sourceBlock(state, probes) {
@@ -663,18 +671,24 @@ async function broadcastSend(ctx, admin, body) {
     ctx.json(ctx.res, 200, { ok: false, error: 'Черновик устарел. Откройте предпросмотр снова.' });
     return true;
   }
+  if (row.ids.length > 2000) {
+    ctx.json(ctx.res, 200, { ok: false, error: 'Слишком много получателей: ' + row.ids.length + '. Лимит 2000. Сузьте сегмент.' });
+    return true;
+  }
   previews.delete(String(body.id || ''));
   const state = await ctx.store.read();
   let sent = 0;
+  let failed = 0;
   if (ctx.notifyAdmins) {
-    for (let i = 0; i < row.ids.length && i < 2000; i++) {
-      await ctx.notifyAdmins(state, [{ chatId: row.ids[i], text: row.text }]);
-      sent += 1;
+    for (let i = 0; i < row.ids.length; i++) {
+      const n = await ctx.notifyAdmins(state, [{ chatId: row.ids[i], text: row.text }]);
+      if (n) sent += Number(n) || 0;
+      else failed += 1;
     }
   }
-  await ctx.audit('broadcast', sent + ' ' + row.text.slice(0, 80), admin);
+  await ctx.audit('broadcast', sent + '/' + failed + ' ' + row.text.slice(0, 80), admin);
   publishAdmin({ type: 'audit', action: 'broadcast' });
-  ctx.json(ctx.res, 200, { ok: true, sent });
+  ctx.json(ctx.res, 200, { ok: failed === 0 && sent === row.ids.length, sent, failed });
   return true;
 }
 

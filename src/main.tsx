@@ -8,7 +8,7 @@ import { readLaunchParams, onRelaunch } from './platform/launch';
 import { installTvTitleLinks } from './titleLink';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
-import { nativePlugin, nativeSetCleartextHosts, nativeTorrServerTls } from './platform/androidNative';
+import { nativePlugin, nativeSetCleartextHosts, nativeSourceHttp, nativeTorrServerTls } from './platform/androidNative';
 import { nativeTlsProbe, setTlsProbe } from './api/tlsProbe';
 import { certQuestionText, installTorrServerTls } from './api/torrServerTls';
 import { confirmWithBody } from './ui/dialog';
@@ -54,13 +54,20 @@ if (platformKind() === 'androidtv') {
 }
 
 installErrorHooks();
-import('./report/presence').then((m) => m.startPresence(tvSourceContext, platformKind() === 'androidtv' ? 'androidtv' : 'webos')).catch(() => undefined);
-import('./report/rollout').then((m) => m.installRollout(tvSourceContext)).catch(() => undefined);
-import('./report/crash').then((m) => {
-  const platform = platformKind() === 'androidtv' ? 'androidtv' : 'webos';
-  m.installCrashHooks(platform);
-  m.flushCrashes(tvSourceContext);
-}).catch(() => undefined);
+import('./billing/webHttp')
+  .then((web) => {
+    const ctx = () => (nativeSourceHttp() ? tvSourceContext() : web.webBillingContext(tvSourceContext()));
+    const platform = platformKind() === 'androidtv' ? 'androidtv' : 'webos';
+    return Promise.all([
+      import('./report/presence').then((m) => m.startPresence(ctx, platform)),
+      import('./report/rollout').then((m) => m.installRollout(ctx)),
+      import('./report/crash').then((m) => {
+        m.installCrashHooks(platform, ctx);
+        return m.flushCrashes(ctx);
+      }),
+    ]);
+  })
+  .catch(() => undefined);
 setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 

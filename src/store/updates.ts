@@ -56,9 +56,16 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
   // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the NSIS installer (update-windows.json)
   // the beta feed with «Получать бета-версии»; without it a beta waits for a release newer than itself
-  const wantBeta = settings.value.betaUpdates;
-  const decide = !opts.url && wantBeta && betaGate ? betaGate().catch(() => false) : Promise.resolve(wantBeta);
-  return decide.then((beta) => checkFeed(opts, now, current, beta));
+  if (!opts.url && settings.value.betaUpdates && betaGate) {
+    return allowedBeta(true).then((beta) => checkFeed(opts, now, current, beta));
+  }
+  return checkFeed(opts, now, current, settings.value.betaUpdates);
+}
+
+/** False when this device is outside the staged beta percent. A failed check does not open the beta feed. */
+export function allowedBeta(want: boolean): Promise<boolean> {
+  if (!want || !betaGate) return Promise.resolve(!!want);
+  return betaGate().catch(() => false);
 }
 
 function checkFeed(opts: { manual: boolean; url?: string }, now: number, current: string, beta: boolean): Promise<CheckResult> {

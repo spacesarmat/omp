@@ -379,7 +379,7 @@ export function App() {
 
   // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
   useEffect(
-    () => installUpdateChecks((gap) => void runUpdateCheck({ manual: false, url: phoneFeedUrl(), minIntervalMs: gap }).catch(() => {})),
+    () => installUpdateChecks((gap) => void phoneFeedUrl().then((url) => runUpdateCheck({ manual: false, url, minIntervalMs: gap })).catch(() => {})),
     [],
   );
 

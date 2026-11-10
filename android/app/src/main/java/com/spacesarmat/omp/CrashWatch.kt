@@ -33,7 +33,10 @@ object CrashWatch {
                 } catch (e: InterruptedException) {
                     return@Thread
                 }
-                if (!ping.get()) write(app, "anr", RuntimeException("anr"))
+                if (!ping.get()) {
+                    val stack = Looper.getMainLooper().thread.stackTrace.joinToString("\n") { it.toString() }
+                    writeText(app, "anr", stack)
+                }
             }
         }, "omp-anr").apply { isDaemon = true }.start()
     }
@@ -55,14 +58,17 @@ object CrashWatch {
     }
 
     private fun write(app: Application, kind: String, error: Throwable) {
+        writeText(app, kind, scrub(error.javaClass.simpleName + ": " + (error.message ?: "")) + "\n" + scrub(error.stackTraceToString()))
+    }
+
+    private fun writeText(app: Application, kind: String, body: String) {
         if (kind == "anr") {
             val now = System.currentTimeMillis()
             if (now - lastAnr < 60_000) return
             lastAnr = now
         }
         try {
-            val line = kind + "\n" + scrub(error.javaClass.simpleName + ": " + (error.message ?: "")) + "\n" + scrub(error.stackTraceToString()) + "\n---\n"
-            File(app.filesDir, FILE).appendText(line)
+            File(app.filesDir, FILE).appendText(kind + "\n" + scrub(body) + "\n---\n")
         } catch (_: Exception) {
             /* a crash report must not crash again */
         }

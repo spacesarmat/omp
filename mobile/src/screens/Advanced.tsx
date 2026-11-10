@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { sendManualReport } from '../../src/report/crash';
+import { sendManualReport } from '../../../src/report/crash';
 import { phoneSourceContext } from '../searchContext';
 import { navigate, goBack } from '../nav';
 import { Icon } from '../ui/Icon';
