@@ -400,5 +400,24 @@ export async function createPgStore({ connectionString, schema, max }) {
     },
     /** Read-only stats and tests: run SQL on the store's pool (same schema). */
     query: (sql, params) => pool.query(sql, params),
+    /** One transaction on a single connection. Rolls back if fn throws. */
+    withClient: async (fn) => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const out = await fn((sql, params) => client.query(sql, params));
+        await client.query('COMMIT');
+        return out;
+      } catch (e) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (e2) {
+          /* the server rolls the transaction back when the connection dies */
+        }
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
   };
 }

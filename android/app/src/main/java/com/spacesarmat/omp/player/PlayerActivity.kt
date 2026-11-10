@@ -1548,6 +1548,7 @@ class PlayerActivity : AppCompatActivity(), PlayerSession.Ui {
         val o = base(st)
         o.put("paused", st.paused)
         o.put("buffering", st.buffering)
+        o.put("played", st.played)
         o.put("audio", JSObject().put("list", aList).put("sel", st.audioSel))
         o.put("subs", JSObject().put("list", sList).put("sel", st.subSel))
         NativePlayerBridge.emit("nativePlayerState", o)

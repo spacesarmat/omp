@@ -87,6 +87,12 @@ export interface SourceResult extends SearchResult {
    * duplicates merge in, so the row keeps its UI state.
    */
   groupKey?: string;
+  /** Billing community rank. Present when playback samples or an admin pin changed the order. */
+  communityRank?: number;
+  /** community, blend or pinned. Absent when the row kept the ordinary order. */
+  communityReason?: string;
+  /** Popular voice-over for this title. */
+  suggestedVoice?: string;
 }
 
 /** Answer of the Android refresh of the OMP subscription (BillingTokens.kt). The refresh token never reaches the page. */

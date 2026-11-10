@@ -15,6 +15,7 @@ import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
 import { DhtPanel } from '@/panels/DhtPanel';
 import { CachePanel } from '@/panels/CachePanel';
+import { WatchPanel } from '@/panels/WatchPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import type { HomeData, UserData } from '@/lib/types';
 
@@ -182,6 +183,7 @@ export function App() {
           <TabsTrigger value="ads">Реклама</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
           <TabsTrigger value="cache">Кэш</TabsTrigger>
+          <TabsTrigger value="watch">Подбор</TabsTrigger>
           <TabsTrigger value="dht">DHT</TabsTrigger>
           <TabsTrigger value="monitor">Мониторинг</TabsTrigger>
           <TabsTrigger value="changes">Изменения</TabsTrigger>
@@ -276,6 +278,7 @@ export function App() {
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>
         <TabsContent value="cache">{tab === 'cache' ? <CachePanel csrf={d.csrf || ''} /> : null}</TabsContent>
+        <TabsContent value="watch">{tab === 'watch' ? <WatchPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="dht">{tab === 'dht' ? <DhtPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="monitor">
           <MonitorPanel csrf={d.csrf || ''} />

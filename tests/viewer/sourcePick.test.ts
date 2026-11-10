@@ -77,4 +77,13 @@ describe('viewer source rank', () => {
   it('does not invent a pick for an empty list', () => {
     expect(pickDefaultSource([], 'q', phone)).toBeNull();
   });
+
+  it('lets a community playback rank beat a locally nicer codec', () => {
+    const list = [
+      row({ Title: 'Film 2020 1080p AVC', Seed: 40, seedCheck: 'live', seedCheckAt: NOW }),
+      row({ Title: 'Film 2020 2160p DV HEVC', Seed: 4, seedCheck: 'live', seedCheckAt: NOW, communityRank: 8000, communityReason: 'community' }),
+    ];
+    const pick = pickDefaultSource(list, 'film', phone);
+    expect(pick && pick.row.Title).toContain('2160p');
+  });
 });

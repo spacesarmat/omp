@@ -72,6 +72,8 @@ export function speedFit(sizeBytes: number | undefined, speedBps: number): numbe
 }
 
 export function smartScore(r: SourceResult, query: string, ctx: RankContext): number {
+  // rankScore adds the community bonus from billing (omp_rank) when viewers have samples.
+  // Codec, link speed and quality stay the local tie-break on top of that.
   const base = rankScore(r, query, ctx.now);
   return base + codecFit(r.Title || '', ctx.device) * 5000 + speedFit(r.sizeBytes, ctx.speedBps) * 4000 + qualityRank(r.Title || '') * 10;
 }

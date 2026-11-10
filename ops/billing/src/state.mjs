@@ -45,6 +45,11 @@ export function emptyState() {
        * prefix is megabytes, or a percent when megabytes are 0.
        */
       cacheNodesEnabled: false,
+      /**
+       * Community ranking of search results. On by default.
+       * With no playback samples the feed order is unchanged. Pins, bans and learned scores apply when present.
+       */
+      watchRankEnabled: true,
       cachePrefixMb: 512,
       cachePrefixPercent: 0,
       /** Internal docker URL of VPS TorrServer (ops health only, never sent to phones). */
