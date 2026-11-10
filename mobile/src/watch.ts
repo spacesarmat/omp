@@ -16,6 +16,10 @@ import { CONTROL_MIN_VERSION } from '../../src/phone/protocol';
 import { native, type Open2160Options } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
+import { cacheNodesOn } from '../../src/billing/entitlement';
+import { rememberedCacheSource, rewritePlaybackUrl } from '../../src/cache/cacheNode';
+import { prepareCachePlayback } from '../../src/cache/lookup';
+import { phoneSourceContext } from './searchContext';
 import { loadSkip, recordWatch } from '../../src/store/journal';
 import { play2160 } from '../../src/player/player2160';
 import type { PlayItem } from '../../src/player/types';
@@ -56,7 +60,7 @@ export function watchOnTvParams(serverUrl: string, hash: string, file?: number, 
 
 /** Stream URL with credentials embedded: an external player cannot send headers. */
 export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file: TorrentFile, withAuth = true): string {
-  const url = c.streamUrl(t.hash, file.id, baseName(file.path));
+  const url = rewritePlaybackUrl(c.streamUrl(t.hash, file.id, baseName(file.path)), t.hash, rememberedCacheSource(t.hash));
   return withAuth ? c.videoSrc(url) : url;
 }
 
@@ -193,6 +197,13 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
   if (isAudiobookTorrent(t)) {
     navigate({ name: 'audiobook', hash: w.hash });
     return nonePlayed();
+  }
+  if (cacheNodesOn()) {
+    try {
+      await prepareCachePlayback(w.hash, phoneSourceContext());
+    } catch (e) {
+      /* the local TorrServer stays the source */
+    }
   }
   const at = w.at >= MIN_RESUME ? Math.floor(w.at) : 0;
   const mode = settings.value.phonePlayer;

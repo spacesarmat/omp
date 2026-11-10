@@ -1,0 +1,10 @@
+{
+  "CacheSize": 1073741824,
+  "PreloadCache": 0,
+  "ReaderReadAHead": 95,
+  "UseDisk": true,
+  "ConnectionsLimit": 25,
+  "DownloadRateLimit": 0,
+  "UploadRateLimit": 0,
+  "TorrentDisconnectTimeout": 30
+}
