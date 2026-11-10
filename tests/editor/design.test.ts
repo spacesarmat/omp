@@ -119,4 +119,57 @@ describe('committed editor designs', () => {
     });
     expect(JSON.stringify(local)).toBe(before);
   });
+
+  it('preserves committed precedence while merging edited entries', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.theme.overrides.push(
+      { id: 'first', scope: 'component', componentId: 'button', tokens: { '--omp-color-accent': '#111111' } },
+      { id: 'second', scope: 'component', componentId: 'button', tokens: { '--omp-color-accent': '#222222' } },
+    );
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.theme.overrides = structuredClone(initial.theme.overrides);
+    local.theme.overrides[0].tokens['--omp-color-accent'] = '#333333';
+    local.flow.rules[0].action = { type: 'toast', message: 'Local edit' };
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.theme.overrides = [initial.theme.overrides[1], initial.theme.overrides[0]];
+    incoming.flow.rules = [initial.flow.rules[1], initial.flow.rules[0], ...initial.flow.rules.slice(2)];
+    await writeDesign(root, incoming);
+    await commit(root, 'reorder design');
+
+    const result = await rebaseDraft({ root, draft: local });
+    expect(result.draft.theme.overrides.map((entry) => entry.id)).toEqual(['second', 'first']);
+    expect(result.draft.theme.overrides[1].tokens['--omp-color-accent']).toBe('#333333');
+    expect(result.draft.flow.rules.slice(0, 2).map((entry) => entry.id)).toEqual(['nav-news', 'nav-library']);
+    expect(result.draft.flow.rules[1].action).toEqual({ type: 'toast', message: 'Local edit' });
+  });
+
+  it('reports independent order changes instead of choosing one silently', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules = [local.flow.rules[1], local.flow.rules[0], ...local.flow.rules.slice(2)];
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules = [incoming.flow.rules[2], incoming.flow.rules[1], incoming.flow.rules[0], ...incoming.flow.rules.slice(3)];
+    await writeDesign(root, incoming);
+    await commit(root, 'different reorder');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'flow.rules.order' }],
+    });
+  });
+
+  it('stops instead of inventing a base when its commit is unavailable', async () => {
+    const root = await makeRepo();
+    const draft = createDefaultDraft('draft-1', '0000000000000000000000000000000000000000');
+    const before = JSON.stringify(draft);
+    await expect(rebaseDraft({ root, draft })).rejects.toMatchObject({ code: 'BASE_HISTORY_UNAVAILABLE' });
+    expect(JSON.stringify(draft)).toBe(before);
+  });
 });

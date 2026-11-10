@@ -33,6 +33,41 @@ function object(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function reordered(base, current, key) {
+  const baseIds = base.map((entry) => entry[key]);
+  const currentIds = current.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
+  const expected = baseIds.filter((id) => currentIds.includes(id));
+  return !equal(currentIds, expected);
+}
+
+function mergeOrder(base, local, incoming, key, path, issues) {
+  const localReordered = reordered(base, local, key);
+  const incomingReordered = reordered(base, incoming, key);
+  if (localReordered && incomingReordered) {
+    const baseIds = base.map((entry) => entry[key]);
+    const localOrder = local.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
+    const incomingOrder = incoming.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
+    if (!equal(localOrder, incomingOrder)) issues.push({ path: `${path}.order` });
+  }
+  const preferred = incomingReordered ? incoming : localReordered ? local : incoming;
+  const secondary = preferred === incoming ? local : incoming;
+  const ordered = preferred.map((entry) => entry[key]);
+  for (let index = 0; index < secondary.length; index += 1) {
+    const id = secondary[index][key];
+    if (ordered.includes(id)) continue;
+    let insertAt = 0;
+    for (let previous = index - 1; previous >= 0; previous -= 1) {
+      const position = ordered.indexOf(secondary[previous][key]);
+      if (position >= 0) {
+        insertAt = position + 1;
+        break;
+      }
+    }
+    ordered.splice(insertAt, 0, id);
+  }
+  return ordered;
+}
+
 function mergeValue(base, local, incoming, path, issues) {
   if (equal(local, base)) return structuredClone(incoming);
   if (equal(incoming, base) || equal(local, incoming)) return structuredClone(local);
@@ -49,7 +84,7 @@ function mergeValue(base, local, incoming, path, issues) {
     const key = path === 'theme.releaseIntents' ? 'target' : path === 'theme.overrides' || path === 'flow.rules' ? 'id' : null;
     if (key) {
       const result = [];
-      const ids = [...new Set([...local, ...incoming].map((entry) => entry[key]))];
+      const ids = mergeOrder(base, local, incoming, key, path, issues);
       for (const id of ids) {
         const value = mergeValue(
           base.find((entry) => entry[key] === id),
@@ -90,6 +125,11 @@ async function readDocument(root, commit, path, parser) {
 }
 
 async function designAt(root, commit) {
+  try {
+    await execute('git', ['cat-file', '-e', `${commit}^{commit}`], { cwd: root });
+  } catch {
+    throw new DesignError('BASE_HISTORY_UNAVAILABLE', 409, [{ path: 'baseCommit' }]);
+  }
   const theme = await readDocument(root, commit, THEME_PATH, parseThemeDocument);
   const flow = await readDocument(root, commit, FLOW_PATH, parseFlowDocument);
   return {
