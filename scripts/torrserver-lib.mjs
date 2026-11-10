@@ -66,7 +66,8 @@ export function insertUnreleased(text, note, english = false) {
     const next = text.slice(bodyStart).search(/^## /m);
     const bodyEnd = next < 0 ? text.length : bodyStart + next;
     let body = text.slice(bodyStart, bodyEnd);
-    if (TORRSERVER_LINE.test(body)) body = body.replace(TORRSERVER_LINE, bullet);
+    const noteIsTorr = /^(Встроенный TorrServer обновлён до|The built-in TorrServer is updated to) /.test(note);
+    if (noteIsTorr && TORRSERVER_LINE.test(body)) body = body.replace(TORRSERVER_LINE, bullet);
     else {
       const lead = /^(\r?\n)*/.exec(body)[0];
       body = (lead || eol) + bullet + body.slice(lead.length);
@@ -119,6 +120,136 @@ export function formatPin(p) {
 }
 
 /** Parses the pin file and checks it matches torrserver.version. */
+export const WINDOWS_ASSET = 'TorrServer-windows-amd64.exe';
+const MIN_BIN = 20 * 1024 * 1024;
+const MAX_BIN = 120 * 1024 * 1024;
+
+function matrixParts(tag) {
+  const m = /^MatriX\.(\d+)(?:\.(\d+))?$/.exec(String(tag).trim());
+  if (!m) return null;
+  return [Number(m[1]), m[2] ? Number(m[2]) : 0];
+}
+
+/** 1 / 0 / -1, or null when either tag is not MatriX.N or MatriX.N.M. */
+export function compareMatrix(a, b) {
+  const pa = matrixParts(a);
+  const pb = matrixParts(b);
+  if (!pa || !pb) return null;
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+function assetPin(release, tag, name) {
+  const asset = ((release && release.assets) || []).find((a) => a && a.name === name);
+  if (!asset) throw new Error('Asset ' + name + ' not found / нет ассета ' + name);
+  const url = typeof asset.browser_download_url === 'string' ? asset.browser_download_url : '';
+  if (url !== URL_PREFIX + tag + '/' + name) throw new Error('Pin url does not match the tag: ' + url);
+  const size = asset.size;
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_SIZE) throw new Error('Pin size is invalid');
+  return { tag, asset: name, url, sha256: parseDigest(asset.digest), size };
+}
+
+/** Windows desktop binary of [tag]. Same checks as the Android pin. */
+export function windowsPin(release, tag) {
+  return assetPin(release, tag, WINDOWS_ASSET);
+}
+
+/**
+ * Whether an upstream release is safe to pin: stable, a newer MatriX tag, arm64 and windows assets
+ * with sha256 and a plausible size. { ok:false } is a skip, not a crash.
+ */
+export function assessRelease(release, currentTag) {
+  if (!release || typeof release !== 'object') return { ok: false, reason: 'no release' };
+  if (release.draft || release.prerelease) return { ok: false, reason: 'not a stable release' };
+  const tag = typeof release.tag_name === 'string' ? release.tag_name.trim() : '';
+  let current;
+  try {
+    current = parseVersionFile(currentTag);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  if (!matrixParts(tag)) return { ok: false, reason: 'unexpected tag ' + tag };
+  const cmp = compareMatrix(tag, current);
+  if (cmp === null) return { ok: false, reason: 'cannot compare ' + tag };
+  if (cmp <= 0) return { ok: false, reason: tag + ' is not newer than ' + current };
+  try {
+    const arm = pinFromRelease(release, tag);
+    if (arm.size < MIN_BIN || arm.size > MAX_BIN) return { ok: false, reason: 'arm64 size ' + arm.size };
+    const win = windowsPin(release, tag);
+    if (win.size < MIN_BIN || win.size > MAX_BIN) return { ok: false, reason: 'windows size ' + win.size };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+  return { ok: true, reason: '' };
+}
+
+/** Rust integer with underscores, matching the desktop pin (`63_884_288`). */
+export function rustNum(n) {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '_');
+}
+
+const RUST_BLOCK = /id: "torrserver"\.to_string\(\),\r?\n([ \t]*)version: "[^"]+"\.to_string\(\),\r?\n[ \t]*url: "[^"]+"\.to_string\(\),\r?\n[ \t]*sha256: "[^"]+"\.to_string\(\),\r?\n[ \t]*max_bytes: [\d_]+,/;
+
+/** The Windows TorrServer pin inside desktop/src-tauri/src/platform.rs. */
+export function readRustPin(text) {
+  const m = RUST_BLOCK.exec(text);
+  if (!m) throw new Error('desktop TorrServer pin not found');
+  return {
+    tag: /version: "([^"]+)"/.exec(m[0])[1],
+    url: /url: "([^"]+)"/.exec(m[0])[1],
+    sha256: /sha256: "([^"]+)"/.exec(m[0])[1],
+    size: Number(/max_bytes: ([\d_]+)/.exec(m[0])[1].replace(/_/g, '')),
+  };
+}
+
+export function writeRustPin(text, pin) {
+  const m = RUST_BLOCK.exec(text);
+  if (!m) throw new Error('desktop TorrServer pin not found');
+  const indent = m[1];
+  const block = [
+    'id: "torrserver".to_string(),',
+    indent + 'version: "' + pin.tag + '".to_string(),',
+    indent + 'url: "' + pin.url + '".to_string(),',
+    indent + 'sha256: "' + pin.sha256 + '".to_string(),',
+    indent + 'max_bytes: ' + rustNum(pin.size) + ',',
+  ].join(text.includes('\r\n') ? '\r\n' : '\n');
+  return text.slice(0, m.index) + block + text.slice(m.index + m[0].length);
+}
+
+export function patchPinLiteral(text, from, to) {
+  const needle = "pinVersion: '" + from + "'";
+  if (!text.includes(needle)) throw new Error('pinVersion not found');
+  return text.split(needle).join("pinVersion: '" + to + "'");
+}
+
+/** Replaces the previous Windows pin's tag, sha256 and size in the desktop test. */
+export function patchDesktopTest(text, prev, pin) {
+  let out = text.split(prev.tag).join(pin.tag);
+  out = out.split(prev.sha256).join(pin.sha256);
+  const oldRust = rustNum(prev.size);
+  const newRust = rustNum(pin.size);
+  if (oldRust !== newRust) out = out.split(oldRust).join(newRust);
+  if (String(prev.size) !== String(pin.size)) out = out.split(String(prev.size)).join(String(pin.size));
+  return out;
+}
+
+/** Release notes for a PR body: one paragraph, hyphens only, cut at 800 characters. */
+export function releaseSummary(body) {
+  let text = String(body || '');
+  text = text.replace(/\u2014/g, '-').replace(/\u2013/g, '-').replace(/\u2011/g, '-');
+  text = text.replace(/```[\s\S]*?```/g, ' ');
+  text = text.replace(/\[[^\]]*]\([^)]*\)/g, ' ');
+  text = text.replace(/\(\s*\)/g, ' ');
+  text = text.replace(/[#*`>]/g, ' ');
+  text = text.replace(/\s+/g, ' ').trim();
+  if (text.length > 800) text = text.slice(0, 797).replace(/\s+\S*$/, '') + '...';
+  return text;
+}
+
 export function parsePin(text, tag) {
   let p;
   try {

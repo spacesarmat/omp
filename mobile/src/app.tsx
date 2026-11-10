@@ -26,9 +26,12 @@ import {
   localUpdatePrompt,
   watchLocalServer,
 } from './server/localServer';
+import { readPhoneAbi, readPhonePlayerVersion, readPhoneTorr } from './server/componentProbe';
+import { checkComponentUpdates, componentPrompt, installComponentChecks } from '../../src/store/componentUpdates';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { UpdateSheet } from './ui/UpdateSheet';
 import { LocalUpdateSheet } from './ui/LocalUpdateSheet';
+import { ComponentUpdateSheet } from './ui/ComponentUpdateSheet';
 import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
@@ -398,6 +401,19 @@ export function App() {
     [],
   );
 
+  // 2160 Player on the device and the user's TorrServer, against the latest GitHub release
+  useEffect(
+    () => installComponentChecks((gap) => {
+      void checkComponentUpdates({
+        playerVersion: readPhonePlayerVersion,
+        torr: readPhoneTorr,
+        abi: readPhoneAbi,
+        minIntervalMs: gap,
+      }).catch(() => {});
+    }),
+    [],
+  );
+
   const route = currentRoute.value;
   // a title link that arrived before a server was connected opens once Connect is left
   useEffect(() => {
@@ -418,6 +434,7 @@ export function App() {
   });
   const prompt = updatePrompt.value;
   const localPrompt = localUpdatePrompt.value;
+  const componentOffer = componentPrompt.value;
   const tabRoot = TABS.includes(route.name);
   // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
   const showNav = tabRoot || route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person';
@@ -508,8 +525,11 @@ export function App() {
       {prompt && tabRoot && !showTour && !showSetup && <UpdateSheet info={prompt} />}
       {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
       {!prompt && localPrompt && tabRoot && !showTour && !showSetup && <LocalUpdateSheet info={localPrompt} />}
+      {!prompt && !localPrompt && componentOffer && tabRoot && !showTour && !showSetup && (
+        <ComponentUpdateSheet key={componentOffer.kind + ':' + componentOffer.latest} offer={componentOffer} />
+      )}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && !localPrompt && !showTour && !showSetup && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && !componentOffer && !showTour && !showSetup && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <ConfirmHost />

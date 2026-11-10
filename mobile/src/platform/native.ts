@@ -190,6 +190,8 @@ export interface OmpNativeApi {
   openExternal(url: string, mime: string): Promise<void>;
   /** The installed 2160 Player package; null when it is missing, the app is older or off-device. */
   player2160(): Promise<string | null>;
+  /** versionName of that package. null when the player is missing or the name is not a version. */
+  player2160Version(): Promise<string | null>;
   /** Opens the queue in 2160 Player; resolves with what it handed back (null: an older app without it). */
   open2160(o: Open2160Options): Promise<P2160Result | null>;
   /** True when this app carries 2160 Player's screen (player-core) for playEmbedded2160; false off-device or in an older app. */
@@ -209,7 +211,7 @@ export interface OmpNativeApi {
   takePendingAudioOpen(): Promise<string | null>;
   onAudioOpen(cb: (hash: string) => void): () => void;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
-  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
+  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles, packageName?: string): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
   deviceAbiKey(): Promise<ApkAbi | null>;
   /** Deferred desktop update result, read once after the app restarts. */
@@ -356,14 +358,14 @@ interface OmpNativePlugin {
   pointerSend(o: { frame: string }): Promise<void>;
   wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
-  player2160?(): Promise<{ package?: unknown; embedded?: unknown }>;
+  player2160?(): Promise<{ package?: unknown; version?: unknown; embedded?: unknown }>;
   open2160?(o: Open2160Options): Promise<unknown>;
   playEmbedded2160?(o: Open2160Options): Promise<unknown>;
   audioPrepare?(): Promise<void>;
   audioPlay?(o: AudioPlayRequest): Promise<unknown>;
   audioControl?(o: AudioControlRequest): Promise<unknown>;
   audioState?(): Promise<unknown>;
-  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles; packageName?: string }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
@@ -721,6 +723,17 @@ export const native: OmpNativeApi = {
     }
   },
 
+  async player2160Version() {
+    if (!plugin || typeof plugin.player2160 !== 'function') return null;
+    try {
+      const r = await plugin.player2160();
+      const v = r && typeof r.version === 'string' ? r.version.trim() : '';
+      return /^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(v) ? v : null;
+    } catch {
+      return null;
+    }
+  },
+
   open2160(o) {
     if (!plugin) return unavailable();
     if (typeof plugin.open2160 !== 'function') return Promise.resolve(null);
@@ -806,12 +819,15 @@ export const native: OmpNativeApi = {
     }));
   },
 
-  async downloadAndInstallApk(url, sha256, onProgress, apks) {
+  async downloadAndInstallApk(url, sha256, onProgress, apks, packageName) {
     if (!plugin) return unavailable();
     // awaited so that no early progress event is missed
     const handle = await plugin.addListener('apkProgress', (e) => onProgress(e.percent));
+    const body: { url: string; sha256: string; apks?: ApkFiles; packageName?: string } = { url, sha256 };
+    if (apks) body.apks = apks;
+    if (packageName) body.packageName = packageName;
     try {
-      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 }));
+      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk(body));
     } finally {
       void handle.remove();
     }

@@ -18,6 +18,19 @@ class Player2160Test {
     )
 
     @Test
+    fun versionLabelKeepsComparableNamesAndDropsTheRest() {
+        assertEquals("0.2.25", Player2160.versionLabel("0.2.25"))
+        assertEquals("v0.2.25", Player2160.versionLabel(" v0.2.25 "))
+        assertEquals("0.2.25", Player2160.versionLabel("0.2.25-test"))
+        assertEquals("0.2.25-beta.1", Player2160.versionLabel("0.2.25-beta.1"))
+        assertNull(Player2160.versionLabel(null))
+        assertNull(Player2160.versionLabel(""))
+        assertNull(Player2160.versionLabel("debug"))
+        assertNull(Player2160.versionLabel("0.2.25-debug"))
+        assertNull(Player2160.versionLabel("MatriX.150"))
+    }
+
+    @Test
     fun oneItemHasTitlePositionAndReturnResultButNoPlaylist() {
         val s = Player2160.spec(one, 0, 754_000L, false, "")
         assertEquals("http://srv/a.mkv", s.url)
