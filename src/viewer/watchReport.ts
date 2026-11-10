@@ -10,8 +10,15 @@ import { parseEpisode } from '../lib/episodes';
 import { nativeSourceHttp } from '../platform/androidNative';
 import { tvSourceContext } from '../sources/tvContext';
 import type { SourceContext } from '../sources/types';
+import { setWatchDeviceClass as setClass, watchDeviceClass as currentClass, type WatchClass } from './watchDevice';
 
-export type WatchClass = 'tv' | 'phone';
+export type { WatchClass };
+export function setWatchDeviceClass(kind: WatchClass): void {
+  setClass(kind);
+}
+export function watchDeviceClass(): WatchClass {
+  return currentClass();
+}
 
 export interface WatchSample {
   infohash: string;
@@ -32,7 +39,6 @@ export interface WatchSample {
   codecOk?: boolean | null;
 }
 
-let deviceClass: WatchClass = 'tv';
 let contextFn: (() => SourceContext | null) | null = null;
 let poster: ((body: { [key: string]: string }) => Promise<void>) | null = null;
 
@@ -42,14 +48,6 @@ const frameAt: { [key: string]: number } = {};
 const rebuffers: { [key: string]: { n: number; ms: number; since: number } } = {};
 const lastOpen: { [key: string]: { hash: string; file: number } } = {};
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-export function setWatchDeviceClass(kind: WatchClass): void {
-  deviceClass = kind === 'tv' ? 'tv' : 'phone';
-}
-
-export function watchDeviceClass(): WatchClass {
-  return deviceClass;
-}
 
 export function setWatchContext(fn: (() => SourceContext | null) | null): void {
   contextFn = fn;
@@ -156,11 +154,11 @@ export function flushWatch(): void {
   const items = queue.splice(0, 20);
   const payload = JSON.stringify({
     help: true,
-    deviceClass,
+    deviceClass: currentClass(),
     codecs: browserCodecs(),
     items,
   });
-  void send({ payload, deviceId: deviceId(), deviceClass, help: '1' });
+  void send({ payload, deviceId: deviceId(), deviceClass: currentClass(), help: '1' });
   if (queue.length) schedule();
 }
 

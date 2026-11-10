@@ -16,6 +16,7 @@ import { addFindings, rememberSeen, seenKeys } from './subs';
 import { EPISODES_ID, type Finding } from './types';
 import { displayTitle } from '../lib/torrentName';
 import { communityBoost } from '../viewer/communityRank';
+import { fetchWatchBest } from '../viewer/watchBest';
 
 /** The fields of a library torrent the check needs. */
 export type LibraryTorrent = Pick<Torrent, 'hash' | 'title' | 'category' | 'data' | 'file_stats'>;
@@ -278,7 +279,7 @@ export function findNewEpisodes(ctx: SourceContext, t: LibraryTorrent, opts?: Ne
   }
   const have = libraryRange(t);
   const bestP = have
-    ? import('../viewer/watchBest').then((m) => m.fetchWatchBest(ctx, t.title, have.season, have.to + 1)).catch(() => null)
+    ? fetchWatchBest(ctx, t.title, have.season, have.to + 1).catch(() => null)
     : Promise.resolve(null);
   return Promise.all([h.done.then(() => h.results(), () => [] as SourceResult[]), bestP]).then(([results, best]) =>
     pickNewer(t, results, { source: o.source, bestHash: best && best.infohash ? best.infohash : undefined }),

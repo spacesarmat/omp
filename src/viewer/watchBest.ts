@@ -4,7 +4,7 @@ import { billingGet } from '../billing/client';
 import { billingSession } from '../billing/session';
 import { withDeviceToken } from '../billing/tokens';
 import type { SourceContext } from '../sources/types';
-import { watchDeviceClass } from './watchReport';
+import { watchDeviceClass } from './watchDevice';
 
 export interface WatchBest {
   infohash: string;
