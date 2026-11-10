@@ -1,0 +1,240 @@
+import { h, render } from 'preact';
+import { act } from 'preact/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { App } from '../../editor/src/App';
+import * as protocol from '../../editor/src/preview/protocol';
+import { createDefaultDraft } from '../../editor/shared/draft';
+import { createDraftController, type DraftController } from '../../editor/src/drafts';
+
+const BASE = '0000000000000000000000000000000000000000';
+let host: HTMLDivElement;
+let controller: DraftController;
+
+function select(testId: string, value: string): void {
+  const input = host.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`)!;
+  act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+beforeEach(() => {
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  controller = createDraftController({
+    draft: createDefaultDraft('draft-1', BASE),
+    client: {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+    },
+  });
+  act(() => render(h(App, { controller }), host));
+});
+
+afterEach(() => {
+  act(() => render(null, host));
+  controller.dispose();
+  host.remove();
+  vi.restoreAllMocks();
+});
+
+describe('editor app', () => {
+  it('starts with Windows settings in Russian landscape and a token-free titled iframe', () => {
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="target"]')!.value).toBe('desktop-windows');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="route"]')!.value).toBe('settings');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="format"]')!.value).toBe('landscape');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="language"]')!.value).toBe('ru');
+    const iframe = host.querySelector('iframe')!;
+    expect(iframe.title).toBe('OMP preview');
+    expect(iframe.getAttribute('src')).toBe('/preview.html');
+    expect(iframe.src).not.toContain('token');
+    expect(iframe.dataset.viewport).toBe('1280x720');
+    expect(host.querySelector('[data-action="create-snapshot"]')).not.toBeNull();
+  });
+
+  it('switches macOS and Linux without changing screen or language', () => {
+    select('target', 'desktop-macos');
+    expect(host.querySelector('iframe')!.dataset.target).toBe('desktop-macos');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="route"]')!.value).toBe('settings');
+    select('target', 'desktop-linux');
+    expect(host.querySelector('iframe')!.dataset.target).toBe('desktop-linux');
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="language"]')!.value).toBe('ru');
+  });
+
+  it('uses portrait dimensions and remounts preview for English', () => {
+    select('format', 'portrait');
+    expect(host.querySelector('iframe')!.dataset.viewport).toBe('720x960');
+    const russian = host.querySelector('iframe')!;
+    select('language', 'en');
+    const english = host.querySelector('iframe')!;
+    expect(english).not.toBe(russian);
+    expect(english.dataset.language).toBe('en');
+  });
+
+  it('sends a protocol navigation command for screen selection', () => {
+    const send = vi.spyOn(protocol, 'sendPreviewCommand').mockImplementation(() => undefined);
+    const iframe = host.querySelector('iframe')!;
+    iframe.dispatchEvent(new Event('load'));
+    send.mockClear();
+    select('route', 'library');
+    expect(send).toHaveBeenCalled();
+    const command = send.mock.calls[send.mock.calls.length - 1][1];
+    expect(command).toMatchObject({ type: 'navigate', route: 'library' });
+  });
+
+  it('shows a failed save and retries it successfully', async () => {
+    let attempts = 0;
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          attempts += 1;
+          if (attempts === 1) throw new Error('offline');
+          return draft;
+        },
+        getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    await act(async () => {
+      await expect(controller.flush()).rejects.toThrow('offline');
+    });
+    expect(controller.lastError).toBe('offline');
+    expect(controller.draft.lastError).toBe('offline');
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain('offline');
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="retry-save"]')!.click();
+      await Promise.resolve();
+    });
+    expect(attempts).toBe(2);
+    expect(host.textContent).not.toContain('offline');
+  });
+
+  it('warns before closing while the latest edits are still saving', async () => {
+    const saved: Array<ReturnType<typeof createDefaultDraft>> = [];
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          saved.push(draft);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return draft;
+        },
+        getDesign: async () => null,
+        rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    controller.upsertOverride({ id: 'latest', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    const first = controller.flush();
+    const event = new Event('beforeunload', { cancelable: true });
+    act(() => { window.dispatchEvent(event); });
+    expect(event.defaultPrevented).toBe(true);
+    await act(async () => {
+      await first;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(saved).toHaveLength(2);
+    expect(controller.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('recovers from a save conflict with a separate draft', async () => {
+    const saved = new Set<string>();
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+          saved.add(draft.id);
+          return { ...draft, revision: 1 };
+        },
+        getDesign: async () => null,
+        rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    await act(async () => {
+      await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="save-copy"]')!.click();
+      await Promise.resolve();
+    });
+    expect(saved.has(controller.draft.id)).toBe(true);
+    expect(controller.draft.id).not.toBe('draft-1');
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+  });
+
+  it('does not save an unchanged draft when the page closes', () => {
+    let saves = 0;
+    controller = createDraftController({
+      draft: createDefaultDraft('draft-1', BASE),
+      client: {
+        state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+        getDraft: async () => null,
+        putDraft: async (draft) => {
+          saves += 1;
+          return draft;
+        },
+        getDesign: async () => null,
+        rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      },
+    });
+    act(() => render(h(App, { controller }), host));
+    const event = new Event('beforeunload', { cancelable: true });
+    act(() => { window.dispatchEvent(event); });
+    expect(saves).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('ignores a failed save while the page is closing', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      controller = createDraftController({
+        draft: createDefaultDraft('draft-1', BASE),
+        client: {
+          state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+          getDraft: async () => null,
+          putDraft: async () => { throw new Error('offline'); },
+          getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        },
+      });
+      act(() => render(h(App, { controller }), host));
+      controller.upsertOverride({ id: 'closing', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+      act(() => { window.dispatchEvent(new Event('beforeunload')); });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(controller.lastError).toBe('offline');
+      expect(host.textContent).toContain('offline');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});

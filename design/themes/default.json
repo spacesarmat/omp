@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "default",
+  "name": "OMP Default",
+  "baseCommit": "ec4c646aba58e56c096d713992757fa77e732d04",
+  "tokens": {
+    "--omp-color-background": "#0F1115",
+    "--omp-color-panel": "#181B22",
+    "--omp-color-text": "#E8EAF0",
+    "--omp-color-accent": "#F5B700",
+    "--omp-color-muted": "#9AA1B2",
+    "--omp-color-danger": "#E5484D",
+    "--omp-size-space": "16px",
+    "--omp-size-font": "16px",
+    "--omp-size-sidebar": "240px",
+    "--omp-size-radius": "12px"
+  },
+  "overrides": [],
+  "releaseIntents": []
+}

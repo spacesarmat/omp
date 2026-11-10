@@ -35,6 +35,9 @@ export default defineConfig({
     }),
     stripCrossorigin(),
   ],
+  resolve: {
+    dedupe: ['preact', '@preact/signals'],
+  },
   build: {
     outDir: 'dist',
     assetsInlineLimit: 0,
