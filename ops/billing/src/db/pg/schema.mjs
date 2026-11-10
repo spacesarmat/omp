@@ -482,7 +482,27 @@ CREATE INDEX cache_interest_updated ON cache_interest (updated_at);
 `,
   },
   {
-    // 008 is reserved for PR 335 (playback_progress). This stays 009 so the two migrations do not collide.
+    version: '008_playback_progress',
+    sql: `
+-- Continue on another device. One row per account, title and episode.
+-- title_key and episode_key are app labels, not a torrent hash, so a different release still matches.
+-- device_id is the writer. The API returns otherDevice, not the id.
+CREATE TABLE playback_progress (
+  account_id text NOT NULL,
+  title_key text NOT NULL,
+  episode_key text NOT NULL,
+  position_sec integer NOT NULL,
+  duration_sec integer NOT NULL,
+  title text NOT NULL DEFAULT '',
+  label text NOT NULL DEFAULT '',
+  device_id text NOT NULL DEFAULT '',
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (account_id, title_key, episode_key)
+);
+CREATE INDEX playback_progress_updated ON playback_progress (account_id, updated_at DESC);
+`,
+  },
+  {
     version: '009_watch_quality',
     sql: `
 -- Community quality of a release (src/watchRank.mjs).

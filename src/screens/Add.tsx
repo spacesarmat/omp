@@ -32,6 +32,12 @@ import { isHotChip, kindFilterOptions, releaseChips, releaseTitle, resultKindLab
 import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../lib/releaseKind';
 import { orderSearch, seedStatusLine } from '../sources/seedRank';
 import { communityLabel } from '../viewer/communityRank';
+import { deviceCaps, pickDefaultSource } from '../viewer/sourcePick';
+import { lastLinkSpeed } from '../viewer/linkSpeed';
+import { noteAlternatePool } from '../viewer/alternates';
+import { connectionMetered, protectWarm, protectWarmLink, shouldPrebuffer, startWarm } from '../viewer/prebuffer';
+import { asWarm } from '../viewer/warmClient';
+import { settings } from '../store/settings';
 import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
@@ -262,6 +268,8 @@ export function AddScreen() {
 
   // a phone row asks the phone for its link (nnmclub, rutracker: the release page; a .torrent-only release fails)
   const addResult = (r: TvResult) => {
+    protectWarm((r.hash || r.Hash || '').toLowerCase());
+    protectWarmLink(r.Magnet || r.Link || r.Hash || '');
     if (busy) return;
     const key = resultKey(r);
     setBusy(true);
@@ -446,6 +454,7 @@ export function AddScreen() {
   };
   // a release of unknown kind shows only under «Все»
   const pool = rows ? filterByKind(rows, kindF) : null;
+  const rankCtx = { device: deviceCaps('tv'), speedBps: lastLinkSpeed(), now: Date.now() };
   const sorted = pool
     ? streaming
       ? stableTvOrder(order.current, pool, sortKey)
@@ -453,6 +462,26 @@ export function AddScreen() {
         ? orderSearch(pool, 'seeds', searchedQ.current, Date.now())
         : sortTvResults(pool, sortKey)
     : [];
+  const pick = sorted.length ? pickDefaultSource(sorted, searchedQ.current, rankCtx) : null;
+  const pickKey = pick ? resultKey(pick.row) : '';
+  useEffect(() => {
+    noteAlternatePool(sorted.map((r) => ({ hash: (r.hash || r.Hash || '').toLowerCase(), title: r.Title || '' })));
+  }, [pickKey, sorted.length, streaming]);
+  useEffect(() => {
+    const r = details || (pick ? pick.row : null);
+    if (!r || streaming) return undefined;
+    const hash = (r.hash || r.Hash || '').toLowerCase();
+    const link = r.Magnet || r.Link || hash;
+    if (!hash && !link) return undefined;
+    let stop = (): void => undefined;
+    const timer = setTimeout(() => {
+      stop = startWarm(asWarm(c), { hash: hash, link: link }, shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered));
+    }, 700);
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [streaming, pickKey, details ? resultKey(details) : '']);
   order.current = sorted.map(resultKey);
   // the focused row left the list (a phone row TorrServer also found, after the fallback): the cursor goes to the row
   // now at its place, or to the search line when the list is empty (applied after the commit, below)
@@ -596,7 +625,7 @@ export function AddScreen() {
             const want = i < POSTER_FIRST || (focusIdx >= 0 && Math.abs(i - focusIdx) <= POSTER_NEAR);
             return (
               // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
-              <Focusable key={key} focusKey={'res-' + key} className="list-item search-result" onPress={() => addResult(r)} onFocused={() => setFocusedKey(key)}>
+              <Focusable key={key} focusKey={'res-' + key} className={'list-item search-result' + (key === pickKey ? ' is-pick' : '')} onPress={() => addResult(r)} onFocused={() => setFocusedKey(key)}>
                 <Thumb title={r.Title} want={want} />
                 <div class="search-main">
                   <div class="search-line1">
@@ -604,6 +633,7 @@ export function AddScreen() {
                     {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
                     {kind && <span class="search-chip search-kind">{tvGlyphs(kind)}</span>}
                     {communityLabel(r) && <span class="search-chip">{tvGlyphs(communityLabel(r))}</span>}
+                    {key === pickKey && pick && <span class="search-chip pick-badge">{pick.badge}</span>}
                     {chips.map((ch) => (
                       <span key={ch} class={'search-chip' + (isHotChip(ch) ? ' hot' : '')}>
                         {ch}

@@ -459,6 +459,7 @@ describe.skipIf(!PG_URL)('postgres only', () => {
       { version: '005_seed_probes' },
       { version: '006_seed_probe_dht' },
       { version: '007_cache_nodes' },
+      { version: '008_playback_progress' },
       { version: '009_watch_quality' },
     ]);
     const idx = await store.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'devices_active_code' AND schemaname = $1", [schema]);

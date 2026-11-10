@@ -17,6 +17,8 @@ import { torrents } from '../store/library';
 import { settings } from '../store/settings';
 import { communityVoiceFor } from '../viewer/communityRank';
 import { reportPlayResult } from '../viewer/watchReport';
+import { normalizeLang } from '../lib/tracks';
+import { prefForStart } from '../viewer/tracks';
 import { rememberSeriesTracks, seriesTracksFor } from '../store/seriesTracks';
 import {
   externalTracksForItem,
@@ -335,13 +337,24 @@ function open2160(
 ): Promise<P2160Saved | null> {
   const fromStart = startAt < MIN_RESUME;
   const s = settings.peek();
+  const item = queue[index];
+  const pref = item ? prefForStart(item.hash, item.torrentTitle || item.title) : null;
+  let audioLang = s.audioLang;
+  let subLang = s.subLang;
+  let subtitlesOn = s.subtitlesOn;
+  if (pref && pref.audioLang) audioLang = normalizeLang(pref.audioLang) || audioLang;
+  if (pref && pref.sub === 'off') subtitlesOn = false;
+  else if (pref && pref.sub && pref.sub !== 'off' && pref.sub.lang) {
+    subtitlesOn = true;
+    subLang = normalizeLang(pref.sub.lang) || subLang;
+  }
   let tracks: ExternalTracksForItem[] = [];
   try {
     const current = queue[index];
     tracks = queueExternalTracks(c, queue, {
-      audioLang: s.audioLang,
-      subLang: s.subLang,
-      subtitlesOn: s.subtitlesOn,
+      audioLang: audioLang,
+      subLang: subLang,
+      subtitlesOn: subtitlesOn,
       communityVoice: communityVoiceFor(current && current.hash, current && (current.torrentTitle || current.title)),
     });
   } catch (e) {

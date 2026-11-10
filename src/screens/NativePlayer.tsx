@@ -11,13 +11,20 @@ import type { PlayItem } from '../player/types';
 import { WatchJournal, journalSource } from '../player/watchJournal';
 import { recordWatch, loadSkip, saveSkip } from '../store/journal';
 import { setPlayerBridge, postSoon } from '../phone/link';
-import { goBack, currentRoute } from '../ui/nav';
+import { goBack, currentRoute, replaceRoute } from '../ui/nav';
+import { swarmFromCache } from '../player/playbackFailure';
+import { nativeFallbackDue } from '../viewer/nativeFallback';
+import { nextAlternate, requestAutoplay, stashResume } from '../viewer/alternates';
+import { progressIdentity } from '../viewer/progressSync';
+import { episodeLabel } from '../lib/episodes';
+import { torrents } from '../store/library';
 import { openAnotherRelease } from '../player/anotherRelease';
 import { toast } from '../ui/toast';
 import { t, lang } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
+import { prefForStart } from '../viewer/tracks';
 import { seriesTracksFor } from '../store/seriesTracks';
 import { nativeTrackStart } from '../player/trackPrefs';
 import { communityVoiceFor } from '../viewer/communityRank';
@@ -91,6 +98,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
       const s = settings.value;
       const c = client.value;
       const journal = new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from));
+      const fb = { t0: 0, index: -1, busy: false, switched: false };
       const startBuiltin = () => {
       const run = new NativeSession(plugin, c, queue, {
         onState: (st, prev) => {
@@ -98,6 +106,48 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
           // every state event (≈1 Hz, evaluateJavascript) posts: the page timers are throttled while
           // PlayerActivity covers the WebView, so the interval alone lets «Сейчас играет» go stale
           postSoon();
+          if (!s.fallbackAuto || fb.switched || cancelled) return;
+          if (st.time >= 1 || !st.buffering) {
+            fb.t0 = 0;
+            return;
+          }
+          const now = Date.now();
+          if (!fb.t0 || fb.index !== st.index) {
+            fb.t0 = now;
+            fb.index = st.index;
+          }
+          const elapsed = now - fb.t0;
+          const item = queue[st.index];
+          if (elapsed < 15000 || fb.busy || !c || !item || !item.hash) return;
+          fb.busy = true;
+          c.cache(item.hash).then(
+            (cache) => {
+              fb.busy = false;
+              if (cancelled || fb.switched) return;
+              const live = run.state;
+              if (!live || live.index !== st.index || live.time >= 1 || !live.buffering) return;
+              const swarm = swarmFromCache(cache ? 'ok' : 'down', cache, true);
+              const bytes = swarm.kind === 'ok' ? Math.max(swarm.stats.preloadedBytes, swarm.stats.loadedBytes) : 0;
+              const speed = swarm.kind === 'ok' ? swarm.stats.downloadSpeed : 0;
+              if (!nativeFallbackDue({ auto: true, elapsedMs: elapsed, time: st.time, buffering: st.buffering, bytes: bytes, speedBps: speed, swarm: swarm })) return;
+              const known: { [hash: string]: boolean } = {};
+              torrents.value.forEach((x) => {
+                if (x.hash) known[x.hash.toLowerCase()] = true;
+              });
+              const alt = nextAlternate(item.hash || '', 'sameOrLower', known);
+              if (!alt) return;
+              fb.switched = true;
+              const film = !episodeLabel(item.title);
+              const id = progressIdentity(item.torrentTitle || item.title, item.title, film);
+              stashResume(id.titleKey, id.episodeKey, st.time);
+              requestAutoplay(alt, st.time, id.episodeKey);
+              replaceRoute({ name: 'torrent', hash: alt });
+              run.close();
+            },
+            () => {
+              fb.busy = false;
+            },
+          );
         },
         onClosed: (closed, replaced) => {
           if (unbridge) unbridge();
@@ -120,7 +170,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
       run.start({
         index, startAt: pos, seekStep: s.seekStep, autoNext: seasonNext ? true : s.autoNext, immediateNext: !!seasonNext,
         // «Озвучка» of the series (else the torrent's own choice, else the settings): by title, then language
-        ...nativeTrackStart(seriesTracksFor(firstHash), firstHash ? getTrackPref(firstHash) : null, s, communityVoiceFor(firstHash, queue[index].torrentTitle || queue[index].title)),
+        ...nativeTrackStart(seriesTracksFor(firstHash), prefForStart(firstHash, queue[index].torrentTitle || queue[index].title), s, communityVoiceFor(firstHash, queue[index].torrentTitle || queue[index].title)),
         donate,
         // «Плеер»: the torrent's choice from the player menu wins over the setting
         engine: engineFor(s.playerEngine, queue[index].hash ? getTrackPref(queue[index].hash!) : null),

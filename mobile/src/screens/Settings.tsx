@@ -413,6 +413,22 @@ export function Settings() {
         <PhoneServerRow />
         <VideoPlayerRow />
         <LanguageRow />
+        <div class="m-set-row" data-row="prebuffer">
+          <div class="m-set-text">
+            <span>{t('settings.prebufferMetered')}</span>
+            <span class="m-muted m-small">{t('settings.prebufferMeteredHint')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.prebufferOnMetered}
+            aria-label={t('settings.prebufferMetered')}
+            class={'m-switch' + (settings.value.prebufferOnMetered ? ' on' : '')}
+            onClick={() => updateSettings({ prebufferOnMetered: !settings.value.prebufferOnMetered })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
       </section>
 
       <section class="m-set-group" data-section="search">

@@ -84,6 +84,16 @@ export interface AppSettings {
   testLabelPx: number;
   /** Test-mode label size in px on the phone (4..24). Beta only. */
   testLabelPhonePx: number;
+  /**
+   * Prebuffer the likely file while a card or a search row is open, also on metered mobile data.
+   * Off: Wi-Fi and Ethernet still prebuffer, cellular does not.
+   */
+  prebufferOnMetered: boolean;
+  /**
+   * A play that is still not watchable after 18 s switches to another release of the same title.
+   * Off: the player only offers the switch.
+   */
+  fallbackAuto: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -118,6 +128,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   testMode: false,
   testLabelPx: 20,
   testLabelPhonePx: 12,
+  prebufferOnMetered: false,
+  fallbackAuto: false,
 };
 
 const KEY = 'tsp.settings';
