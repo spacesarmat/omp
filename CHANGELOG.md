@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.12-beta.3
 
 - [phone] Проверенные сиды поиска остаются, если уйти с экрана и вернуться
 - Если у раздачи нет infohash, поиск помечает ее «не проверено»

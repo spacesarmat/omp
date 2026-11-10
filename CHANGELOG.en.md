@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.12-beta.3
 
 - [phone] Checked search seeds stay when you leave the screen and come back
 - A release with no infohash is marked "not checked"
