@@ -184,6 +184,23 @@ describe('committed editor designs', () => {
     });
   });
 
+  it('ignores deleted entries when checking placement', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules[0].action = { type: 'toast', message: 'Local edit' };
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules = [incoming.flow.rules[2], incoming.flow.rules[0]];
+    await writeDesign(root, incoming);
+    await commit(root, 'delete unchanged rule');
+
+    const result = await rebaseDraft({ root, draft: local });
+    expect(result.draft.flow.rules.map((entry) => entry.id)).toEqual(['nav-search', 'nav-library']);
+    expect(result.draft.flow.rules[1].action).toEqual({ type: 'toast', message: 'Local edit' });
+  });
+
   it('stops instead of inventing a base when its commit is unavailable', async () => {
     const root = await makeRepo();
     const draft = createDefaultDraft('draft-1', '0000000000000000000000000000000000000000');
