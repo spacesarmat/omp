@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bitmagnetSearchUrl, searchBitmagnet } from '../src/jackett.mjs';
+import { bitmagnetCapsUrl, bitmagnetSearchUrl, searchBitmagnet } from '../src/jackett.mjs';
 
 const XML =
   '<?xml version="1.0"?><rss><channel><item>' +
@@ -16,6 +16,8 @@ describe('bitmagnet Torznab', () => {
     expect(bitmagnetSearchUrl('http://bitmagnet:3333/torznab/', 'k', 'q', '3030')).toBe(
       'http://bitmagnet:3333/torznab?t=search&q=q&apikey=k&cat=3030',
     );
+    expect(bitmagnetCapsUrl('http://bitmagnet:3333', 'k')).toBe('http://bitmagnet:3333/torznab?t=caps&apikey=k');
+    expect(bitmagnetCapsUrl('http://bitmagnet:3333', '')).toBe('http://bitmagnet:3333/torznab?t=caps');
   });
 
   it('is off without a URL and returns the feed when the server answers', async () => {

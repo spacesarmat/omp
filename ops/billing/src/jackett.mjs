@@ -170,10 +170,13 @@ export function bitmagnetSearchUrl(origin, apiKey, query, cat) {
   return appendCat(url, cat);
 }
 
-export function bitmagnetCapsUrl(origin) {
+export function bitmagnetCapsUrl(origin, apiKey) {
   let base = indexerOrigin(origin);
   if (!/\/torznab$/i.test(base)) base += '/torznab';
-  return base + '?t=caps';
+  let url = base + '?t=caps';
+  const key = String(apiKey || '');
+  if (key) url += '&apikey=' + encodeURIComponent(key);
+  return url;
 }
 
 export function jackettSearchUrl(origin, apiKey, query, cat) {

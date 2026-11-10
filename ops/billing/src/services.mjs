@@ -193,7 +193,7 @@ export async function probeService(kind, settings, fetchImpl) {
       if (!s.bitmagnetUrl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
       }
-      url = bitmagnetCapsUrl(s.bitmagnetUrl);
+      url = bitmagnetCapsUrl(s.bitmagnetUrl, s.bitmagnetApiKey);
     } else {
       const indexer = kind === 'jacred'
         ? { url: s.jacredUrl, key: s.jacredApiKey }
@@ -202,6 +202,8 @@ export async function probeService(kind, settings, fetchImpl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
       }
       url = capsUrl(indexer.url, indexer.key);
+    }
+    if (kind !== 'torrserver') {
       const user = String(s.indexerUser || '');
       if (user) {
         headers.Authorization =

@@ -22,7 +22,8 @@ describe('test bitmagnet compose', () => {
     expect(file).not.toMatch(/0\.0\.0\.0:3333/);
     expect(file).not.toContain('5432:5432');
     expect(deploy).not.toContain('bitmagnet');
-    expect(main).not.toContain('bitmagnet');
+    expect(main).not.toMatch(/\n  bitmagnet:\n/);
+    expect(main).toContain('BILLING_BITMAGNET_API_KEY: ${BILLING_BITMAGNET_API_KEY:-}');
     expect(readFileSync('ops/vps/bitmagnet/README.md', 'utf8')).toContain('docker compose --env-file .env down');
   });
 });
