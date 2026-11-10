@@ -42,6 +42,36 @@ npm --prefix desktop run tauri -- build --bundles nsis
 
 CI содержит `build`, `android`, `billing`, smoke-матрицу Windows/macOS/Ubuntu и `package-windows`. Cargo и `node_modules` кешируются по ОС и lockfiles. При точном cache hit зависимости устанавливаются через `npm install --prefer-offline`, при промахе - через `npm ci`. `git diff --exit-code` не позволяет кешу изменить lockfiles.
 
+## Локальный редактор тем и правил
+
+Первый preview-срез редактора работает отдельно от production Windows-приложения и не меняет его экраны. Он показывает настоящие компоненты в новом desktop shell с левым меню. Windows, macOS и Linux имеют общие функции, но независимые темы. Поддерживаются landscape, portrait и RU/EN preview.
+
+Запуск из корня репозитория:
+
+```bash
+npm run editor
+```
+
+Открывать нужно только выданный командой URL `http://127.0.0.1:<port>/#token=<session>`. Токен находится во fragment и удаляется из address bar после чтения. Он хранится только в sessionStorage вкладки. Сервер слушает только loopback и не читает `.env`, пользовательские секреты или реальные хранилища OMP.
+
+В первом срезе:
+
+- Дизайн и логика доступны для desktop `settings`; остальные legacy-экраны имеют уровень `preview` и не выдаются за мигрированные.
+- Preview native и HTTP отвечают только fixtures. Реальные TorrServer, billing, Telegram, NUC и устройства не вызываются.
+- Черновики сохраняются в `.omp-editor/`. Экспорт пишет только разрешённые файлы `design/` и защищает чужие изменения через `baseCommit` и manifest.
+- Release intent не создаёт branch, tag, push, PR, GitHub Release или deploy.
+- Произвольный JavaScript и произвольный CSS запрещены. Разрешены только зарегистрированные tokens, события, условия и действия.
+
+Проверки редактора:
+
+```bash
+npm run test:editor
+npm run build:editor
+npm run editor:generate -- --check
+```
+
+Production-переключение desktop shell, phone/TV-редактор и полный реестр действий относятся к следующим этапам.
+
 ## TorrServer и источники
 
 Встроенный TorrServer скачивается по HTTPS с точным SHA-256 и лимитом размера, затем запускается только на `127.0.0.1:8090`. HTTP и peer listener ограничены loopback. Можно выбрать внешний TorrServer, тогда встроенный процесс не запускается и адрес не меняется.

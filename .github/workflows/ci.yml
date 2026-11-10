@@ -62,6 +62,8 @@ jobs:
       - run: npm run build:mobile
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      - run: npm run build:editor
+      - run: npm run editor:generate -- --check
       - run: npm run check:overflow
       - run: node scripts/package.mjs
       - run: npm run check:boot

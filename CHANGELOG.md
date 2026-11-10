@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Добавлен локальный preview-редактор тем и правил с независимым оформлением Windows, macOS и Linux, симулятором, черновиками и защищённым экспортом
+
 ## 0.20.12-beta.2
 
 - На сайте omp-player.online появилась Windows-версия: карточка платформы и кнопка скачивания бета-установщика NSIS на русской и английской версиях
