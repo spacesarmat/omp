@@ -150,7 +150,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
     // Loaded only when the feature is on, so the TV bundle does not gain this path while the flag is off.
     import('../cache/lookup').then((mod) => import('../sources/tvContext').then((tv) => mod.prepareCachePlayback(hash, tv.tvSourceContext()))).then(
       (src) => {
-        if (!dead && src) setCacheGen((n) => n + 1);
+        if (!dead) setCacheGen((n) => n + 1);
       },
       () => undefined,
     );

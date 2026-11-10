@@ -57,6 +57,7 @@ function sendJson(res, status, body) {
 function proxy(req, res, target) {
   const headers = { host: torrDest.host };
   if (req.headers.range) headers.range = req.headers.range;
+  let upstream = null;
   const up = http.request(
     {
       protocol: torrDest.protocol,
@@ -67,6 +68,7 @@ function proxy(req, res, target) {
       headers,
     },
     (upRes) => {
+      upstream = upRes;
       const pass = {};
       const keep = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
       for (let i = 0; i < keep.length; i++) {
@@ -76,6 +78,12 @@ function proxy(req, res, target) {
       upRes.pipe(res);
     },
   );
+  const stop = () => {
+    up.destroy();
+    if (upstream) upstream.destroy();
+  };
+  res.on('close', stop);
+  req.on('close', stop);
   up.on('error', () => {
     if (!res.headersSent) res.writeHead(502);
     res.end();
@@ -127,7 +135,9 @@ async function fill(row, already) {
     await report(row, 'caching', 'no_metadata');
     return;
   }
-  const goal = prefixGoal(row);
+  const wanted = prefixGoal(row);
+  const fileBytes = Math.floor(Number(file.length) || 0);
+  const goal = fileBytes > 0 ? Math.min(wanted, fileBytes) : wanted;
   let got = 0;
   try {
     got = await readPrefix(torr, hash, file.id, goal);
@@ -171,27 +181,24 @@ async function beat(path) {
   return out.data;
 }
 
-async function tick() {
+let syncing = false;
+
+async function syncOnce() {
+  if (syncing) return;
+  syncing = true;
   try {
-    const reg = await beat('/v1/cache/register');
-    if (!reg) return;
-    if (reg.disabled || reg.enabled === false) {
-      await syncAssignments([]);
-      return;
-    }
     const pulled = await billingJson(billing, token, 'GET', '/v1/cache/assignments');
     if (pulled.status !== 200) {
       process.stderr.write('cache assignments status=' + pulled.status + '\n');
       return;
     }
     const rows = pulled.data && Array.isArray(pulled.data.assignments) ? pulled.data.assignments : [];
-    if (pulled.data && pulled.data.enabled === false) {
-      await syncAssignments([]);
-      return;
-    }
-    await syncAssignments(rows);
+    if (!pulled.data || pulled.data.enabled === false || pulled.data.disabled === true) await syncAssignments([]);
+    else await syncAssignments(rows);
   } catch (e) {
-    process.stderr.write('cache tick failed\n');
+    process.stderr.write('cache sync failed\n');
+  } finally {
+    syncing = false;
   }
 }
 
@@ -199,7 +206,13 @@ server.listen(port, '0.0.0.0', () => {
   process.stderr.write('cache agent listening on ' + port + '\n');
 });
 
-await tick();
+await beat('/v1/cache/register');
+void syncOnce();
 setInterval(() => {
-  void tick();
+  void beat('/v1/cache/heartbeat').catch(() => {
+    process.stderr.write('cache heartbeat failed\n');
+  });
+}, 30000);
+setInterval(() => {
+  void syncOnce();
 }, Math.max(15, Math.floor(Number(process.env.SYNC_SEC || 60))) * 1000);

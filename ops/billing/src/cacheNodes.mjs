@@ -268,22 +268,26 @@ export function planAssignments(input) {
   for (let i = 0; i < picked.length; i++) {
     const p = picked[i];
     if (byHash[p.infohash] || removedRecent[p.infohash]) continue;
-    const sample = resolvePrefix(settings, null, p.sizeBytes);
-    const need = reserveBytes({ prefixBytes: sample.prefixBytes });
     let best = null;
     let bestFree = -1;
+    let bestNeed = 0;
+    let bestPrefix = null;
     for (let j = 0; j < online.length; j++) {
       const n = online[j];
       const cap = num(n.capacityBytes);
       if (cap <= 0) continue;
+      const prefix = resolvePrefix(settings, n, p.sizeBytes);
+      const need = reserveBytes({ prefixBytes: prefix.prefixBytes });
       const free = cap - (used[n.id] || 0);
       if (free < need || free <= bestFree) continue;
       best = n;
       bestFree = free;
+      bestNeed = need;
+      bestPrefix = prefix;
     }
-    if (!best) continue;
-    const prefix = resolvePrefix(settings, best, p.sizeBytes);
-    used[best.id] += need;
+    if (!best || !bestPrefix) continue;
+    const prefix = bestPrefix;
+    used[best.id] += bestNeed;
     create.push({
       id: randomId(),
       nodeId: best.id,
@@ -294,6 +298,7 @@ export function planAssignments(input) {
       prefixPercent: prefix.prefixPercent,
       score: p.score,
       magnet: cleanMagnet('', p.infohash),
+      protectManual: true,
     });
   }
   const onlineIds = {};
@@ -362,7 +367,7 @@ export function sourceFor(rows, infohash, now) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (row.infohash !== hash || row.status !== 'cached') continue;
-    if (row.nodeStatus === 'disabled' || !row.hasToken) continue;
+    if (row.nodeStatus === 'disabled' || !row.hasToken || row.torrserverOk !== true) continue;
     if (!nodeOnline({ status: row.nodeStatus, lastHeartbeat: row.lastHeartbeat }, at)) continue;
     const url = safeNodeUrl(row.url);
     if (!url) continue;

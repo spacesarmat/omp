@@ -2,6 +2,7 @@
 import { billingGet, billingPost } from '../billing/client';
 import { cacheNodesOn } from '../billing/entitlement';
 import { withDeviceToken } from '../billing/tokens';
+import { allowTypedCleartext } from '../cleartextSync';
 import type { SourceContext } from '../sources/types';
 import { rememberCacheSource, type CacheReleaseSource } from './cacheNode';
 
@@ -26,6 +27,15 @@ function parseSource(text: string, hash: string): CacheReleaseSource | null {
   };
 }
 
+/** Public HTTP has to be on the native allow-list before a player opens the URL. HTTPS needs no list. */
+function allowPlayback(source: CacheReleaseSource | null): Promise<CacheReleaseSource | null> {
+  if (!source || source.url.indexOf('http://') !== 0) return Promise.resolve(source);
+  return allowTypedCleartext(source.url).then(
+    () => source,
+    () => null,
+  );
+}
+
 /** Resolves a cache node for this infohash, or null when the feature is off or billing has none. */
 export function prepareCachePlayback(hash: string, ctx: SourceContext | null): Promise<CacheReleaseSource | null> {
   if (!cacheNodesOn()) return Promise.resolve(null);
@@ -42,8 +52,10 @@ export function prepareCachePlayback(hash: string, ctx: SourceContext | null): P
   ).then(
     (res) => {
       const source = res.status === 200 ? parseSource(res.text, id) : null;
-      rememberCacheSource(id, source);
-      return source;
+      return allowPlayback(source).then((ready) => {
+        rememberCacheSource(id, ready);
+        return ready;
+      });
     },
     () => {
       rememberCacheSource(id, null);

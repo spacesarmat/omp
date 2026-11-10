@@ -1,4 +1,5 @@
 // Playback hook for a popular-release cache node. With no source the local TorrServer URL is unchanged.
+import { cacheNodesOn } from '../billing/entitlement';
 
 export interface CacheReleaseSource {
   url: string;
@@ -21,6 +22,15 @@ export function rememberCacheSource(hash: string, source: CacheReleaseSource | n
 
 export function rememberedCacheSource(hash: string): CacheReleaseSource | null {
   return remembered[String(hash || '').toLowerCase()] || null;
+}
+
+/** The remembered node, or null when the feature is off. Turning it off forgets every remembered host. */
+export function activeCacheSource(hash: string): CacheReleaseSource | null {
+  if (!cacheNodesOn()) {
+    clearCacheSources();
+    return null;
+  }
+  return rememberedCacheSource(hash);
 }
 
 export function clearCacheSources(): void {

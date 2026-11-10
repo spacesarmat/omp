@@ -46,6 +46,7 @@ function assignmentOf(r) {
     updatedAt: num(r.updated_at),
     removedAt: r.removed_at ? num(r.removed_at) : 0,
     nodeStatus: r.node_status || '',
+    torrserverOk: r.torrserver_ok === true,
     url: r.node_url || '',
     nodeUrl: r.node_url || '',
     lastHeartbeat: r.last_heartbeat ? num(r.last_heartbeat) : 0,
@@ -140,7 +141,7 @@ export async function assignmentsForNode(query, nodeId) {
 export async function sourcesForHash(query, infohash) {
   const res = await query(
     'SELECT a.id, a.node_id, a.infohash, a.title, a.prefix_bytes, a.status, n.status AS node_status, n.url AS node_url,' +
-      ' n.last_heartbeat, (n.token_hash <> \'\') AS node_has_token' +
+      ' n.last_heartbeat, n.torrserver_ok, (n.token_hash <> \'\') AS node_has_token' +
       ' FROM cache_assignments a JOIN cache_nodes n ON n.id = a.node_id WHERE a.infohash = $1',
     [infohash],
   );
@@ -155,7 +156,8 @@ export async function upsertAssignment(query, row, now) {
       ' ON CONFLICT (node_id, infohash) DO UPDATE SET title = EXCLUDED.title, magnet = EXCLUDED.magnet,' +
       ' size_bytes = EXCLUDED.size_bytes, prefix_bytes = EXCLUDED.prefix_bytes, prefix_percent = EXCLUDED.prefix_percent,' +
       ' status = \'assigned\', pinned = EXCLUDED.pinned, source = EXCLUDED.source, score = EXCLUDED.score,' +
-      ' error = \'\', updated_at = EXCLUDED.updated_at, removed_at = NULL',
+      ' error = \'\', updated_at = EXCLUDED.updated_at, removed_at = NULL' +
+      (row.protectManual ? ' WHERE cache_assignments.pinned = false AND cache_assignments.source = \'auto\'' : ''),
     [
       id,
       row.nodeId,
@@ -208,10 +210,10 @@ export async function noteInterest(query, row, now) {
       ' title = CASE WHEN EXCLUDED.title <> \'\' THEN EXCLUDED.title ELSE cache_interest.title END,' +
       ' searches = cache_interest.searches + EXCLUDED.searches,' +
       ' plays = cache_interest.plays + EXCLUDED.plays,' +
-      ' seeders = GREATEST(cache_interest.seeders, EXCLUDED.seeders),' +
+      ' seeders = CASE WHEN $8 THEN EXCLUDED.seeders ELSE cache_interest.seeders END,' +
       ' size_bytes = GREATEST(cache_interest.size_bytes, EXCLUDED.size_bytes),' +
       ' updated_at = EXCLUDED.updated_at',
-    [row.infohash, row.title || '', searches, plays, num(row.seeders), num(row.sizeBytes), now],
+    [row.infohash, row.title || '', searches, plays, num(row.seeders), num(row.sizeBytes), now, row.event !== 'play'],
   );
 }
 

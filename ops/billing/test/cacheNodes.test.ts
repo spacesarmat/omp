@@ -94,5 +94,13 @@ describe('cache node foundation', () => {
     expect(plan.drop).toEqual([stale.id]);
     expect(plan.drop).not.toContain(pinned.id);
     expect(plan.drop).not.toContain(away.id);
+    const huge = planAssignments({
+      now,
+      settings,
+      nodes: [{ ...online, capacityBytes: 600 * MB, prefixMb: 2048 }],
+      assignments: [],
+      picked: [{ infohash: '11'.repeat(20), title: 'big', searches: 4, plays: 0, seeders: 3, sizeBytes: 0, score: 11 }],
+    });
+    expect(huge.create).toEqual([]);
   });
 });

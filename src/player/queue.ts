@@ -1,6 +1,6 @@
 import type { TorrServerClient } from '../api/torrserver';
 import type { Torrent } from '../api/types';
-import { rememberedCacheSource, rewritePlaybackUrl } from '../cache/cacheNode';
+import { activeCacheSource, rewritePlaybackUrl } from '../cache/cacheNode';
 import { TorrentFile, fileKind, baseName, extOf, playableFiles, matchSubtitles, subtitleLabel } from '../lib/episodes';
 import type { PlayItem } from './types';
 import { displayTitle } from '../lib/torrentName';
@@ -8,7 +8,7 @@ import { displayTitle } from '../lib/torrentName';
 export function buildTorrentQueue(c: TorrServerClient, t: Torrent, files: TorrentFile[]): PlayItem[] {
   const subs = files.filter((f) => fileKind(f.path) === 'subtitle');
   const playable = playableFiles(files);
-  const source = rememberedCacheSource(t.hash);
+  const source = activeCacheSource(t.hash);
   const stream = (id: number, path: string) => rewritePlaybackUrl(c.streamUrl(t.hash, id, baseName(path)), t.hash, source);
   return playable.map((f) => ({
     url: stream(f.id, f.path),

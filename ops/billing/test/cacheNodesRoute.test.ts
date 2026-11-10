@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { activate, createSubscription, deviceCode, issueCliAdminLogin } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { resetPopularityClock } from '../src/cacheNodes.mjs';
+import { upsertAssignment } from '../src/db/pg/cacheNodesSql.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
 
@@ -185,6 +186,30 @@ describe('cache node routes', () => {
     expect(hashes).toContain(HASH);
     expect(hashes).toContain(OTHER);
     expect(hashes).not.toContain(DEAD);
+    const kept = await store.query('SELECT pinned, source FROM cache_assignments WHERE infohash = $1', [HASH]);
+    expect(kept.rows[0]).toEqual({ pinned: true, source: 'manual' });
+    await upsertAssignment(
+      (sql: string, params?: unknown[]) => store.query(sql, params),
+      {
+        id: 'f'.repeat(16),
+        nodeId,
+        infohash: HASH,
+        title: 'Film',
+        magnet: 'magnet:?xt=urn:btih:' + HASH,
+        prefixBytes: 1,
+        pinned: false,
+        source: 'auto',
+        protectManual: true,
+      },
+      Date.now(),
+    );
+    const still = await store.query('SELECT pinned, source FROM cache_assignments WHERE infohash = $1', [HASH]);
+    expect(still.rows[0]).toEqual({ pinned: true, source: 'manual' });
+    const fresh = '12'.repeat(20);
+    await call(app, 'POST', '/v1/cache/interest', { headers: deviceHeaders, json: { infohash: fresh, event: 'search', seeders: 8 } });
+    await call(app, 'POST', '/v1/cache/interest', { headers: deviceHeaders, json: { infohash: fresh, event: 'search', seeders: 0 } });
+    const seeds = await store.query('SELECT seeders FROM cache_interest WHERE infohash = $1', [fresh]);
+    expect(seeds.rows[0].seeders).toBe(0);
 
     const revoked = await call(app, 'POST', '/admin/cache/token/revoke', { headers: adminHeaders, json: { csrf, id: nodeId } });
     expect(revoked.data.ok).toBe(true);

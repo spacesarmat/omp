@@ -17,7 +17,7 @@ import { native, type Open2160Options } from './platform/native';
 import { currentRoute, navigate, type MRoute } from './nav';
 import { parseTorrentData, type TorrServerClient } from '../../src/api/torrserver';
 import { cacheNodesOn } from '../../src/billing/entitlement';
-import { rememberedCacheSource, rewritePlaybackUrl } from '../../src/cache/cacheNode';
+import { activeCacheSource, rewritePlaybackUrl } from '../../src/cache/cacheNode';
 import { prepareCachePlayback } from '../../src/cache/lookup';
 import { phoneSourceContext } from './searchContext';
 import { loadSkip, recordWatch } from '../../src/store/journal';
@@ -60,7 +60,7 @@ export function watchOnTvParams(serverUrl: string, hash: string, file?: number, 
 
 /** Stream URL with credentials embedded: an external player cannot send headers. */
 export function streamUrlFor(c: TorrServerClient, t: Pick<Torrent, 'hash'>, file: TorrentFile, withAuth = true): string {
-  const url = rewritePlaybackUrl(c.streamUrl(t.hash, file.id, baseName(file.path)), t.hash, rememberedCacheSource(t.hash));
+  const url = rewritePlaybackUrl(c.streamUrl(t.hash, file.id, baseName(file.path)), t.hash, activeCacheSource(t.hash));
   return withAuth ? c.videoSrc(url) : url;
 }
 
