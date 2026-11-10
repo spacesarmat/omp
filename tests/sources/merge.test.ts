@@ -69,6 +69,19 @@ describe('mergeResults', () => {
     expect(a.sources).toBeUndefined();
   });
 
+  it('merges the same infohash from a magnet and from Hash, ignoring case', () => {
+    const hash = 'ab'.repeat(20);
+    const out = mergeResults([
+      r({ source: 'rutor', Title: 'Film A', Magnet: 'magnet:?xt=urn:btih:' + hash + '&tr=udp%3A%2F%2Ftracker.example%3A6969', Seed: 2 }),
+      r({ source: 'jackett', Title: 'Film A other', Hash: hash.toUpperCase(), Seed: 9 }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe('jackett');
+    expect(out[0].hash).toBe(hash);
+    expect(out[0].sources).toEqual(['rutor']);
+    expect(out[0].Magnet).toContain('btih:' + hash);
+  });
+
   it('different hashes are never merged even with the same title and size', () => {
     const out = mergeResults([
       r({ source: 'rutor', Title: 'X', hash: 'aa', sizeBytes: GB }),

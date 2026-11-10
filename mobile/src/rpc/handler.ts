@@ -7,6 +7,8 @@ import { handoffTorrent } from '../../../src/lib/announce';
 import { searchAll } from '../../../src/sources/search';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
+import { rankSearchResults } from '../../../src/sources/seedRank';
+import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import type { Subscription } from '../../../src/monitor/types';
 import { monitorMethods } from './monitorMethods';
 import type { SearchHandle } from '../../../src/sources/search';
@@ -68,6 +70,9 @@ interface Live {
   keys: Map<string, string>;
   rows: Map<string, string>;
   resolving: Map<string, Resolving>;
+  query: string;
+  measures: SeedMeasure[] | null;
+  verify: { notify(): void; cancel(): void } | null;
 }
 
 export type Params = { [k: string]: unknown };
@@ -134,6 +139,9 @@ export function toRpcResult(r: SourceResult, key: string): RpcResult {
   const date = resultDate(r);
   if (date) out.date = date;
   if (Array.isArray(r.sources) && r.sources.length) out.sources = r.sources.filter((s) => typeof s === 'string');
+  if (r.seedCheck) out.seedCheck = r.seedCheck;
+  if (typeof r.seedCheckAt === 'number') out.seedCheckAt = r.seedCheckAt;
+  if (typeof r.dhtPeers === 'number') out.dhtPeers = r.dhtPeers;
   return out;
 }
 
@@ -191,6 +199,7 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
 
   const drop = (h: Live) => {
     handles.delete(h.id);
+    if (h.verify) h.verify.cancel();
     try {
       h.search.cancel();
     } catch {
@@ -336,9 +345,21 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       }
       let id = randomId();
       while (handles.has(id)) id = randomId();
-      const entry: Live = { id, search: null as unknown as SearchHandle, rev: 1, used: deps.now(), keys: new Map(), rows: new Map(), resolving: new Map() };
+      const entry: Live = {
+        id,
+        search: null as unknown as SearchHandle,
+        rev: 1,
+        used: deps.now(),
+        keys: new Map(),
+        rows: new Map(),
+        resolving: new Map(),
+        query,
+        measures: null,
+        verify: null,
+      };
       const bump = () => {
         entry.rev++;
+        if (entry.verify) entry.verify.notify();
       };
       entry.search = search(query, {
         ctx: deps.ctx(),
@@ -346,6 +367,16 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         sources: chosen.map((s) => s.id),
         onResult: bump,
         onDone: bump,
+      });
+      entry.verify = watchSeedVerify({
+        query,
+        ctx: deps.ctx(),
+        getRows: () => entry.search.results(),
+        getPending: () => entry.search.pending().length,
+        onApply: (list) => {
+          entry.measures = list;
+          entry.rev++;
+        },
       });
       handles.set(id, entry);
       if (!sweeper) sweeper = setInterval(sweep, SWEEP_MS);
@@ -362,7 +393,12 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         answered: s.answered().slice(),
         failed: s.failed().map(failure),
       };
-      if (p.rev !== h.rev) out.results = sortResults(s.results(), 'seeds').slice(0, MAX_RESULTS).map((r) => toRpcResult(r, opaqueKey(h, r)));
+      if (p.rev !== h.rev) {
+        const raw = s.results();
+        const shown = h.measures ? applySeedRound(raw, h.measures, true) : raw;
+        const ranked = h.measures ? rankSearchResults(shown, h.query, deps.now()) : sortResults(shown, 'seeds');
+        out.results = ranked.slice(0, MAX_RESULTS).map((r) => toRpcResult(r, opaqueKey(h, r)));
+      }
       return out;
     },
 
