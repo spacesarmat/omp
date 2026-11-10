@@ -1,4 +1,4 @@
-// Playback position per account, title and episode (schema migration 007_playback_progress).
+// Playback position per account, title and episode (schema migration 008_playback_progress).
 // Outside the billing state snapshot. One row per account, title key and episode key.
 
 const KEEP = 200;

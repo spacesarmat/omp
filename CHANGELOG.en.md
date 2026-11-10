@@ -13,7 +13,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
 - A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
 - When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
-- [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 007_playback_progress. A new billing image is required. Nothing was deployed to the NUC
+- [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 008_playback_progress. 007 is taken by cache nodes. A new billing image is required. Nothing was deployed to the NUC
+- [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
 
 ## 0.20.12-beta.5
 

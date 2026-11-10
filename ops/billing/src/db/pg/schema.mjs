@@ -426,7 +426,63 @@ ALTER TABLE seed_probes ADD COLUMN dht_estimate boolean NOT NULL DEFAULT false;
 `,
   },
   {
-    version: '007_playback_progress',
+    version: '007_cache_nodes',
+    sql: `
+-- Popular-release cache nodes (src/cacheNodes.mjs). Off until settings.cacheNodesEnabled is true.
+-- token_hash is sha256 of the node token. The token itself is never stored.
+-- A revoked node has an empty token_hash and cannot call the API.
+CREATE TABLE cache_nodes (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  url text NOT NULL,
+  region text NOT NULL DEFAULT '',
+  capacity_bytes bigint NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  last_heartbeat bigint,
+  token_hash text NOT NULL DEFAULT '',
+  disk_used_bytes bigint NOT NULL DEFAULT 0,
+  disk_total_bytes bigint NOT NULL DEFAULT 0,
+  torrserver_ok boolean NOT NULL DEFAULT false,
+  prefix_mb integer NOT NULL DEFAULT 0,
+  prefix_percent integer NOT NULL DEFAULT 0,
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL
+);
+CREATE INDEX cache_nodes_token ON cache_nodes (token_hash) WHERE token_hash <> '';
+CREATE TABLE cache_assignments (
+  id text PRIMARY KEY,
+  node_id text NOT NULL REFERENCES cache_nodes (id) ON DELETE CASCADE,
+  infohash text NOT NULL,
+  title text NOT NULL DEFAULT '',
+  magnet text NOT NULL DEFAULT '',
+  size_bytes bigint NOT NULL DEFAULT 0,
+  prefix_bytes bigint NOT NULL DEFAULT 0,
+  prefix_percent integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned', 'caching', 'cached', 'failed', 'removed')),
+  pinned boolean NOT NULL DEFAULT false,
+  source text NOT NULL DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
+  score integer NOT NULL DEFAULT 0,
+  error text NOT NULL DEFAULT '',
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL,
+  removed_at bigint,
+  UNIQUE (node_id, infohash)
+);
+CREATE INDEX cache_assignments_hash ON cache_assignments (infohash);
+CREATE TABLE cache_interest (
+  infohash text PRIMARY KEY,
+  title text NOT NULL DEFAULT '',
+  searches integer NOT NULL DEFAULT 0,
+  plays integer NOT NULL DEFAULT 0,
+  seeders integer NOT NULL DEFAULT 0,
+  size_bytes bigint NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL
+);
+CREATE INDEX cache_interest_updated ON cache_interest (updated_at);
+`,
+  },
+  {
+    version: '008_playback_progress',
     sql: `
 -- Continue on another device. One row per account, title and episode.
 -- title_key and episode_key are app labels, not a torrent hash, so a different release still matches.

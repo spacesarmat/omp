@@ -141,6 +141,9 @@ import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSid
 import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
+import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
+import { cacheEnabled } from './cacheNodes.mjs';
+import { isCachePath, routeCache } from './cacheHttp.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -1012,6 +1015,10 @@ export function createApp(file, fetchImpl, opts) {
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
+  const cacheRepo = typeof store.query === 'function' ? createCacheRepo((sql, params) => store.query(sql, params)) : null;
+  const cacheNodeRate = createRateLimit(60, 60 * 1000);
+  const cacheSourceRate = createRateLimit(30, 60 * 1000);
+  const cacheInterestRate = createRateLimit(30, 60 * 1000);
   // Minute counters survive a restart when the store has the DHT tables. Memory-only stores keep the process map.
   bindDhtStats(store.dht || null);
   // Per device, settings.dhtPerMinute (default 30) per minute. Rebuilt when the saved cap changes.
@@ -1199,6 +1206,24 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('retry-after', '600');
         if (path === '/v1/yoomoney') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
+      }
+      if (isCachePath(path)) {
+        await routeCache(req, res, {
+          path,
+          url,
+          res,
+          store,
+          repo: cacheRepo,
+          json,
+          readBody,
+          adminOf,
+          deviceCaller,
+          audit: (action, detail) => audit(file, action, detail, adminOf(req)),
+          nodeRate: cacheNodeRate,
+          sourceRate: cacheSourceRate,
+          interestRate: cacheInterestRate,
+        });
+        return;
       }
       if (req.method === 'GET' && path === '/v1/ads-config') {
         // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
@@ -2221,6 +2246,8 @@ export function createApp(file, fetchImpl, opts) {
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
+          // Popular-release cache. Omitted by old servers. False until an admin turns it on.
+          cache: { enabled: cacheEnabled(state.settings) },
         });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {
@@ -2360,6 +2387,21 @@ export function createApp(file, fetchImpl, opts) {
           });
           counts = out.stats;
           status = 200;
+          // Interest feeds the cache job only after the feature is turned on. The answer itself stays the same.
+          if (cacheRepo && cacheEnabled(state.settings)) {
+            try {
+              for (let i = 0; i < out.items.length; i++) {
+                const it = out.items[i];
+                const seeds = it.estimate ? Math.max(it.seeders || 0, it.dhtSeeds || 0) : it.seeders || 0;
+                await cacheRepo.noteInterest(
+                  { infohash: it.infohash, title: '', event: 'search', seeders: seeds, sizeBytes: 0 },
+                  Date.now(),
+                );
+              }
+            } catch (e) {
+              /* a missed interest row must not fail the seed check */
+            }
+          }
           return json(res, 200, { items: out.items });
         } catch (e) {
           if (isReadOnlyError(e)) {
