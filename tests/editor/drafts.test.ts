@@ -125,9 +125,32 @@ describe('DraftController', () => {
       throw new Error('offline');
     } });
     controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
-    await controller.flush();
+    await expect(controller.flush()).rejects.toThrow('offline');
     expect(controller.lastError).toBe('offline');
+    expect(controller.draft.lastError).toBe('offline');
     expect(controller.draft.theme.overrides[0].id).toBe('local');
+  });
+
+  it('clears a save error on retry and does not persist it', async () => {
+    const saved: EditorDraft[] = [];
+    let attempts = 0;
+    const controller = create(saved, {
+      onPut: async (draft) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('offline');
+        saved.push(draft);
+        return draft;
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('offline');
+    await controller.flush();
+    expect(attempts).toBe(2);
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.lastError).toBeNull();
+    expect(saved).toHaveLength(1);
+    expect(saved[0].lastError).toBeUndefined();
+    expect(saved[0].theme.overrides[0].id).toBe('local');
   });
 
   it('changes view and language without replacing theme or flow', () => {
@@ -169,5 +192,17 @@ describe('useDraftController', () => {
     act(() => render(null, host));
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('rerenders when the controller notifies a change', () => {
+    const controller = create();
+    function View() {
+      const draft = useDraftController(controller);
+      return h('span', null, draft.theme.overrides.length);
+    }
+    const host = document.createElement('div');
+    act(() => render(h(View, {}), host));
+    act(() => controller.upsertOverride({ id: 'win', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } }));
+    expect(host.textContent).toBe('1');
   });
 });

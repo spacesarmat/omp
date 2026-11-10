@@ -69,6 +69,12 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         <button type="button" data-action="undo" disabled={!controller.canUndo} onClick={() => controller.undo()}>Отменить</button>
         <button type="button" data-action="redo" disabled={!controller.canRedo} onClick={() => controller.redo()}>Повторить</button>
         <button type="button" data-action="snapshot" onClick={() => controller.snapshot(`Snapshot ${new Date().toISOString()}`)}>Snapshot</button>
+        {draft.lastError && (
+          <span class="editor-save-error" role="alert">
+            {draft.lastError}
+            <button type="button" data-action="retry-save" onClick={() => { void controller.flush().catch(() => undefined); }}>Повторить</button>
+          </span>
+        )}
         <button type="button" data-testid="mode-design" disabled={mode === 'design'} onClick={() => setMode('design')}>Дизайн</button>
         <button type="button" data-testid="mode-logic" disabled={!canEditLogic || mode === 'logic'} onClick={() => setMode('logic')}>Логика</button>
         <button type="button" data-testid="mode-simulate" disabled={!canEditLogic || mode === 'simulate'} onClick={() => setMode('simulate')}>Симуляция</button>
@@ -111,7 +117,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
 }
 
 export function App(props: AppProps = {}) {
-  const [controller, setController] = useState<DraftController | null>(props.controller || null);
+  const [createdController, setCreatedController] = useState<DraftController | null>(null);
+  const controller = props.controller || createdController;
   const [apiClient, setApiClient] = useState<EditorClient | undefined>(props.client);
   const [error, setError] = useState('');
   const [ownsController] = useState(!props.controller);
@@ -124,12 +131,12 @@ export function App(props: AppProps = {}) {
       try {
         if (props.draft) {
           const draft = props.draft;
-          if (active) setController(createDraftController({ draft, client }));
+          if (active) setCreatedController(createDraftController({ draft, client }));
           return;
         }
         const state = await client.state();
         const saved = await client.getDraft('default');
-        if (active) setController(createDraftController({ draft: saved || createDefaultDraft('default', state.baseCommit), client }));
+        if (active) setCreatedController(createDraftController({ draft: saved || createDefaultDraft('default', state.baseCommit), client }));
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
       }

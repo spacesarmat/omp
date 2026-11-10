@@ -86,12 +86,17 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
     }
     if (disposed) return writeChain;
     const snapshot = structuredClone(current);
+    delete snapshot.lastError;
     const write = async () => {
       try {
         await options.client.putDraft(snapshot, flushOptions);
         error = null;
+        current = { ...current, lastError: null };
       } catch (reason) {
         error = reason instanceof Error ? reason.message : String(reason);
+        current = { ...current, lastError: error };
+        notify();
+        throw reason;
       }
       notify();
     };

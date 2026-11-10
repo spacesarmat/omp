@@ -22,6 +22,7 @@ export interface EditorDraft {
   theme: ThemeDocument;
   flow: FlowDocument;
   snapshots: DraftSnapshot[];
+  lastError?: string | null;
 }
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -71,7 +72,7 @@ export function createDefaultDraft(idValue: string, baseCommit: string): EditorD
 }
 
 export function parseEditorDraft(value: unknown): EditorDraft {
-  const source = object(value, 'draft', ['schemaVersion', 'id', 'baseCommit', 'target', 'screenId', 'format', 'language', 'theme', 'flow', 'snapshots']);
+  const source = object(value, 'draft', ['schemaVersion', 'id', 'baseCommit', 'target', 'screenId', 'format', 'language', 'theme', 'flow', 'snapshots', 'lastError']);
   if (source.schemaVersion !== 1) fail('draft.schemaVersion');
   if (typeof source.baseCommit !== 'string' || !COMMIT.test(source.baseCommit)) fail('draft.baseCommit');
   if (typeof source.target !== 'string' || !DESKTOP_DESIGN_TARGETS.includes(source.target as DesktopDesignTarget)) fail('draft.target');
@@ -83,6 +84,7 @@ export function parseEditorDraft(value: unknown): EditorDraft {
   const flow = parseFlowDocument(source.flow);
   if (theme.baseCommit !== source.baseCommit || flow.baseCommit !== source.baseCommit) fail('draft.baseCommit');
   const baseCommit = source.baseCommit;
+  if (source.lastError !== undefined && source.lastError !== null && typeof source.lastError !== 'string') fail('draft.lastError');
   return {
     schemaVersion: 1,
     id: id(source.id, 'draft.id'),
@@ -94,5 +96,6 @@ export function parseEditorDraft(value: unknown): EditorDraft {
     theme,
     flow,
     snapshots: source.snapshots.map((entry, index) => snapshot(entry, `draft.snapshots[${index}]`, baseCommit)),
+    ...(source.lastError !== undefined ? { lastError: source.lastError } : {}),
   };
 }
