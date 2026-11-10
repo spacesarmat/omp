@@ -155,6 +155,25 @@ describe('DraftController', () => {
     expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['first', 'second']);
   });
 
+  it('recovers from DRAFT_CONFLICT by saving local edits as a new draft', async () => {
+    const saved = new Map<string, EditorDraft>();
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+        saved.set(draft.id, draft);
+        return { ...draft, revision: 1 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    await controller.saveAsNewDraft();
+    expect(controller.draft.id).not.toBe('draft-1');
+    expect(controller.draft.revision).toBe(1);
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+    expect(controller.lastError).toBeNull();
+    expect(saved.has(controller.draft.id)).toBe(true);
+  });
+
   it('stores the saved revision and keeps it through undo', async () => {
     const controller = create([], {
       onPut: async (draft) => ({ ...draft, revision: (draft.revision ?? 0) + 1 }),

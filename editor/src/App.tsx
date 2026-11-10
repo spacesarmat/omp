@@ -76,6 +76,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <span class="editor-save-error" role="alert">
             {draft.lastError}
             <button type="button" data-action="retry-save" onClick={() => { void controller.flush().catch(() => undefined); }}>Повторить</button>
+            {draft.lastError === 'DRAFT_CONFLICT' && (
+              <button type="button" data-action="save-copy" onClick={() => { void controller.saveAsNewDraft().catch(() => undefined); }}>Сохранить как новый черновик</button>
+            )}
           </span>
         )}
         <button type="button" data-testid="mode-design" disabled={mode === 'design'} onClick={() => setMode('design')}>Дизайн</button>
@@ -166,8 +169,8 @@ export function App(props: AppProps = {}) {
       if (controller.hasUnsavedChanges()) {
         event.preventDefault();
         event.returnValue = 'Changes are still being saved';
+        void controller.flush({ keepalive: true }).catch(() => undefined);
       }
-      void controller.flush({ keepalive: true }).catch(() => undefined);
     };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);

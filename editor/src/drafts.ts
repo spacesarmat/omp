@@ -19,6 +19,7 @@ export interface DraftController {
   undo(): boolean;
   redo(): boolean;
   flush(options?: { keepalive?: boolean }): Promise<void>;
+  saveAsNewDraft(): Promise<void>;
   hasUnsavedChanges(): boolean;
   dispose(): void;
 }
@@ -103,12 +104,16 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       snapshot.revision = current.revision;
       try {
         const saved = await options.client.putDraft(snapshot, flushOptions);
-        error = null;
-        current = { ...current, lastError: null, ...(saved.revision !== undefined ? { revision: saved.revision } : {}) };
+        if (current.id === snapshot.id) {
+          error = null;
+          current = { ...current, lastError: null, ...(saved.revision !== undefined ? { revision: saved.revision } : {}) };
+        }
       } catch (reason) {
-        error = reason instanceof Error ? reason.message : String(reason);
-        current = { ...current, lastError: error };
-        notify();
+        if (current.id === snapshot.id) {
+          error = reason instanceof Error ? reason.message : String(reason);
+          current = { ...current, lastError: error };
+          notify();
+        }
         throw reason;
       } finally {
         pendingWrites -= 1;
@@ -165,7 +170,7 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       if (disposed) return;
       const rebased = parseEditorDraft(draft);
       if (rebased.id !== current.id) throw new Error('REBASE_DRAFT_MISMATCH');
-      current = { ...rebased, lastError: null };
+      current = { ...rebased, revision: current.revision, lastError: null };
       past = [];
       future = [];
       error = null;
@@ -213,6 +218,32 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       past.push(remember(current));
       restoreSerialized(next);
       return true;
+    },
+    async saveAsNewDraft() {
+      if (disposed) return;
+      const sourceId = current.id;
+      const snapshot = structuredClone(current);
+      snapshot.id = `${sourceId.slice(0, 48)}-copy-${Date.now().toString(36)}`;
+      snapshot.revision = 0;
+      delete snapshot.lastError;
+      pendingWrites += 1;
+      try {
+        const saved = await options.client.putDraft(snapshot, {});
+        if (current.id === sourceId) {
+          error = null;
+          current = { ...current, id: saved.id, revision: saved.revision, lastError: null };
+        }
+      } catch (reason) {
+        if (current.id === sourceId) {
+          error = reason instanceof Error ? reason.message : String(reason);
+          current = { ...current, lastError: error };
+          notify();
+        }
+        throw reason;
+      } finally {
+        pendingWrites -= 1;
+        notify();
+      }
     },
     flush,
     hasUnsavedChanges() {

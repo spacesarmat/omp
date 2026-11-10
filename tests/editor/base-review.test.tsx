@@ -25,7 +25,7 @@ describe('BaseReviewPanel', () => {
     const client: EditorClient = {
       state: async () => ({ baseCommit: NEXT, dirtyDesign: false }),
       getDraft: async () => null,
-      putDraft: async (draft) => draft,
+      putDraft: async (draft) => ({ ...draft, revision: 1 }),
       getDesign: async () => ({ baseCommit: NEXT, theme: incoming.theme, flow: incoming.flow }),
       rebaseDraft: vi.fn(async () => ({ draft: merged, changes: ['design/themes/default.json'] })),
       exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
@@ -50,9 +50,13 @@ describe('BaseReviewPanel', () => {
     const review = host.querySelector<HTMLPreElement>('.editor-base-proposal pre')!.textContent;
     expect(review).toContain('From Git');
     expect(review).toContain('local-only');
+    await act(async () => {
+      await controller.flush();
+    });
 
     act(() => host.querySelector<HTMLButtonElement>('[data-action="apply-base"]')!.click());
     expect(controller.draft.baseCommit).toBe(NEXT);
+    expect(controller.draft.revision).toBe(1);
     expect(controller.draft.theme.name).toBe('From Git');
     expect(host.textContent).toContain('База актуальна');
     controller.dispose();
