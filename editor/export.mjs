@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { DESIGN_ELEMENTS } from '../design/catalog.ts';
 import { generateThemeCss } from '../design/theme.ts';
@@ -137,7 +137,21 @@ async function restore(root, backup) {
   }
 }
 
-export async function exportDraft({ root, draft: input }) {
+const exportQueues = new Map();
+
+export function exportDraft(options) {
+  const key = resolve(options.root);
+  const previous = exportQueues.get(key) || Promise.resolve();
+  const result = previous.then(() => performExport(options));
+  const settled = result.then(() => undefined, () => undefined);
+  exportQueues.set(key, settled);
+  void settled.then(() => {
+    if (exportQueues.get(key) === settled) exportQueues.delete(key);
+  });
+  return result;
+}
+
+async function performExport({ root, draft: input }) {
   let draft;
   try {
     draft = parseEditorDraft(input);
