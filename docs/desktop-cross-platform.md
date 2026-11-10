@@ -6,6 +6,12 @@
 
 macOS и Linux проходят базовую CI-матрицу, но готовых пакетов для них пока нет. Microsoft Store и обязательный пульт не входят в первую версию. Для mpv используется сборка x86_64-v3, поэтому нужен процессор с соответствующими инструкциями. Старые процессоры x86_64 без x86_64-v3 не поддерживаются.
 
+## Версионирование и теги desktop
+
+Desktop живёт своим циклом версий, независимо от Android, webOS и ТВ. Источник версии desktop - `desktop/package.json`, та же версия дублируется в `desktop/src-tauri/tauri.conf.json` и в `Cargo.toml`/`Cargo.lock`. Их согласованность между собой проверяет `tests/version.test.ts`; совпадение с корневой версией `package.json` не требуется. Desktop UI получает версию из `desktop/package.json` на этапе сборки (`desktop/vite.config.ts`).
+
+Desktop-релиз публикуется тегом `desktop-<version>`, например `desktop-0.20.12-beta.2`. Такой тег не запускает Release workflow (он срабатывает только на `v*`), поэтому Android и webOS в релиз не попадают. Тег создаётся вручную вместе с GitHub Release, затем Desktop workflow (`workflow_dispatch`, `publish=true`, поле tag = существующий `desktop-<version>`) собирает NSIS, загружает его в этот release и обновляет feed `update-windows.json` на gh-pages. Версия установщика берётся из `tauri.conf.json`, заметки для feed - из раздела `## <version>` в `CHANGELOG.md`.
+
 ## Установка и WebView2
 
 Для интерфейса нужен Microsoft Edge WebView2 Runtime. Если его нет, приложение показывает инструкцию и ссылку на установку: https://developer.microsoft.com/microsoft-edge/webview2/

@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.12-beta.2
 
 - На сайте omp-player.online появилась Windows-версия: карточка платформы и кнопка скачивания бета-установщика NSIS на русской и английской версиях
 - Первая desktop-версия OMP для Windows: каталог, поиск, встроенный или внешний TorrServer, внешний mpv и обновление через NSIS-установщик
