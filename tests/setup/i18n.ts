@@ -10,11 +10,13 @@ import { resetSeasonTotals } from '../../src/lib/episodesOutOf';
  * ('en') is reset to 'system' so that a later updateSettings() cannot bring it back.
  */
 function stubNavigatorLanguage(): void {
+  if (typeof window === 'undefined') return;
   Object.defineProperty(window.navigator, 'languages', { configurable: true, get: () => ['ru-RU'] });
   Object.defineProperty(window.navigator, 'language', { configurable: true, get: () => 'ru-RU' });
 }
 
 async function resetStoredLanguage(): Promise<void> {
+  if (typeof window === 'undefined') return;
   let stored: Record<string, unknown> | null = null;
   try {
     const raw = window.localStorage.getItem('tsp.settings');

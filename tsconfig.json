@@ -9,6 +9,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "lib": ["DOM", "DOM.Iterable", "ES2020"],
     "types": ["vite/client"],
     "paths": {

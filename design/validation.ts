@@ -14,7 +14,7 @@ import {
   type ThemeDocument,
   type ThemeOverride,
   type TokenMap,
-} from './schema';
+} from './schema.ts';
 
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const COMMIT = /^[0-9a-f]{40}$/;
