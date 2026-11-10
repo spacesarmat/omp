@@ -47,7 +47,7 @@ const queue: WatchSample[] = [];
 const openAt: { [key: string]: number } = {};
 const frameAt: { [key: string]: number } = {};
 const rebuffers: { [key: string]: { n: number; ms: number; since: number } } = {};
-const lastOpen: { [key: string]: { hash: string; file: number } } = {};
+const lastOpen: { [key: string]: { hash: string; file: number; title: string; fileTitle?: string; season: number; episode: number; finished: boolean } } = {};
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function setWatchContext(fn: (() => SourceContext | null) | null): void {
@@ -83,6 +83,27 @@ function withEpisode(sample: WatchSample): WatchSample {
   const season = sample.season || (info.season !== null ? info.season : 0);
   const episode = sample.episode || (info.episode !== null ? info.episode : 0);
   return { ...sample, season: season, episode: episode };
+}
+
+/** Season and episode from the file name, then from the torrent title. */
+function episodeOf(sample: WatchSample): { season: number; episode: number } {
+  const filled = withEpisode(sample);
+  if (filled.season || filled.episode) return { season: filled.season || 0, episode: filled.episode || 0 };
+  const fromTitle = parseEpisode(sample.title || '');
+  return {
+    season: fromTitle.season !== null ? fromTitle.season : 0,
+    episode: fromTitle.episode !== null ? fromTitle.episode : 0,
+  };
+}
+
+/** One open watch per title and episode. A film with no episode code stays on the title key. */
+function groupOf(sample: WatchSample): string {
+  const title = (sample.title || '').slice(0, 120);
+  const base = title ? progressTitleKey(title) : '';
+  if (!base) return '';
+  const ep = episodeOf(sample);
+  if (ep.season || ep.episode) return base + ':' + ep.season + ':' + ep.episode;
+  return base;
 }
 
 function helpOn(): boolean {
@@ -198,26 +219,40 @@ export function enqueueWatch(sample: WatchSample): void {
   else schedule();
 }
 
-/** A file started. A different release of the same title marks the previous one as switched away. */
+/**
+ * A file started. Another release of the same episode marks an unfinished watch as switched away.
+ * The next episode, and a watch that already finished, keep the earlier vote.
+ */
 export function watchOpen(sample: WatchSample): void {
   const hash = (sample.infohash || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(hash)) return;
-  const title = (sample.title || '').slice(0, 120);
-  // Quality and codec stay in the torrent title. The switch is by the shared title key.
-  const group = title ? progressTitleKey(title) : '';
+  const group = groupOf(sample);
+  const ep = episodeOf(sample);
   const prev = group ? lastOpen[group] : undefined;
-  if (prev && prev.hash !== hash) {
+  if (prev && prev.hash !== hash && !prev.finished) {
     enqueueWatch({
       infohash: prev.hash,
       file: prev.file,
-      title: sample.title,
-      fileTitle: sample.fileTitle,
+      title: prev.title,
+      fileTitle: prev.fileTitle,
+      season: prev.season,
+      episode: prev.episode,
       switched: true,
       watchedPct: 0,
       codecOk: null,
     });
   }
-  if (group) lastOpen[group] = { hash: hash, file: sample.file || 0 };
+  if (group) {
+    lastOpen[group] = {
+      hash: hash,
+      file: sample.file || 0,
+      title: (sample.title || '').slice(0, 120),
+      fileTitle: sample.fileTitle,
+      season: ep.season,
+      episode: ep.episode,
+      finished: false,
+    };
+  }
   const k = keyOf(hash, sample.file || 0);
   openAt[k] = Date.now();
   delete frameAt[k];
@@ -261,19 +296,23 @@ export function watchClose(sample: WatchSample & { time?: number; duration?: num
   const dur = sample.duration && sample.duration > 0 ? sample.duration : 0;
   const time = sample.time && sample.time > 0 ? sample.time : 0;
   const pct = dur > 0 ? Math.round((Math.min(time, dur) / dur) * 100) : sample.watchedPct || 0;
+  const done = sample.completed === true || pct >= 90;
+  const group = groupOf(sample);
+  const ep = episodeOf(sample);
+  if (group && lastOpen[group] && lastOpen[group].hash === hash) lastOpen[group].finished = done;
   enqueueWatch({
     infohash: hash,
     file,
     title: sample.title,
     fileTitle: sample.fileTitle,
     titleKey: sample.titleKey,
-    season: sample.season,
-    episode: sample.episode,
+    season: sample.season || ep.season,
+    episode: sample.episode || ep.episode,
     ttffMs: framed && opened ? Math.max(0, framed - opened) : 0,
     rebufferCount: buf.n,
     rebufferMs: buf.ms,
     watchedPct: pct,
-    completed: sample.completed === true || pct >= 90,
+    completed: done,
     switched: sample.switched === true,
     voice: sample.voice,
     codecOk: sample.error ? false : framed ? true : sample.codecOk,
