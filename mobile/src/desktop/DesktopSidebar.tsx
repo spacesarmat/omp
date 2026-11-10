@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { lang } from '../../../src/i18n';
+import { t } from '../../../src/i18n';
 import { switchTab } from '../nav';
 import { Icon } from '../ui/Icon';
 import { desktopNavItems, type Tab } from '../ui/NavBar';
@@ -41,20 +41,15 @@ export function DesktopSidebar({ active }: { active: Tab }) {
     };
   }, [mode, narrow]);
 
-  const en = lang.value === 'en';
-  const label = mode === 'expanded'
-    ? (en ? 'Icon rail' : 'Только значки')
-    : mode === 'rail'
-      ? (en ? 'Hide menu' : 'Скрыть меню')
-      : (en ? 'Show menu' : 'Показать меню');
+  const label = mode === 'expanded' ? t('nav.menuRail') : mode === 'rail' ? t('nav.menuHide') : t('nav.menuShow');
 
   return (
     <div class="omp-desk-chrome">
       {mode !== 'hidden' && narrow && (
-        <button type="button" class="omp-desk-backdrop" aria-label={en ? 'Hide menu' : 'Скрыть меню'} onClick={() => apply('hidden')} />
+        <button type="button" class="omp-desk-backdrop" aria-label={t('nav.menuHide')} onClick={() => apply('hidden')} />
       )}
       {mode !== 'hidden' && (
-        <aside class={'omp-side is-' + mode} aria-label={en ? 'Main menu' : 'Основное меню'}>
+        <aside class={'omp-side is-' + mode} aria-label={t('nav.menuMain')}>
           <div class="omp-side-brand">{mode === 'expanded' ? 'OMP' : 'O'}</div>
           <button type="button" class="omp-side-toggle" aria-label={label} onClick={() => apply(nextSidebarMode(mode))}>
             {mode === 'expanded' ? '<' : '>'}
@@ -81,8 +76,8 @@ export function DesktopSidebar({ active }: { active: Tab }) {
         </aside>
       )}
       {mode === 'hidden' && (
-        <button type="button" class="omp-side-reveal" aria-label={en ? 'Show menu' : 'Показать меню'} onClick={() => apply('expanded')}>
-          {en ? 'Menu' : 'Меню'}
+        <button type="button" class="omp-side-reveal" aria-label={t('nav.menuShow')} onClick={() => apply('expanded')}>
+          {t('nav.menuButton')}
         </button>
       )}
     </div>

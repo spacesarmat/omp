@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateNotes, updateTitle } from '../../src/lib/updateInfo';
+import { sanitizeUpdateInfo, setDesktopUpdatePlatform, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateNotes, updateTitle } from '../../src/lib/updateInfo';
 
 const HASH = 'a'.repeat(64);
 const good = {
@@ -144,6 +144,9 @@ describe('beta feeds and titles', () => {
       Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Intel Mac OS X 14_0', configurable: true });
       expect(updateFeedUrl(false, false)).toBe(B + 'update-macos.json');
       expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-x64.dmg');
+      setDesktopUpdatePlatform('macos-arm64');
+      expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-arm64.dmg');
+      setDesktopUpdatePlatform('');
       Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Mac OS X 14_0; arm64', configurable: true });
       expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-arm64.dmg');
       Object.defineProperty(navigator, 'userAgent', { value: 'X11; Linux x86_64', configurable: true });

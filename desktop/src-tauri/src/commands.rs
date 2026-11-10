@@ -227,6 +227,11 @@ where
 }
 
 #[tauri::command]
+pub fn update_supported() -> bool {
+    crate::update::updates_are_automatic()
+}
+
+#[tauri::command]
 pub async fn update_check(
     info: UpdateInfo,
     state: State<'_, Arc<Mutex<UpdateManager>>>,

@@ -114,8 +114,20 @@ export function apkFor(info: UpdateInfo, key: ApkAbi | null): ApkFile {
 
 export type DesktopAssetKey = 'nsis' | 'portable' | 'arm64' | 'x64' | 'appimage' | 'deb';
 
+let desktopCpu = '';
+
+/** Real CPU from the desktop `target_platform` command. WebKit on Apple Silicon still says Intel. */
+export function setDesktopUpdatePlatform(platform: string): void {
+  desktopCpu = platform;
+}
+
 /** The auto-update file for this desktop OS. Windows uses NSIS, macOS the matching dmg, Linux the AppImage. */
 export function desktopAssetKey(ua: string): DesktopAssetKey | null {
+  const id = desktopCpu.toLowerCase();
+  if (id === 'macos-arm64') return 'arm64';
+  if (id === 'macos-x64') return 'x64';
+  if (id === 'linux-x64' || id === 'linux-arm64') return 'appimage';
+  if (id === 'windows-x64') return 'nsis';
   const agent = ua.toLowerCase();
   if (agent.includes('windows')) return 'nsis';
   if (agent.includes('mac os') || agent.includes('macintosh')) {

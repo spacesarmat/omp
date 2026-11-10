@@ -302,10 +302,37 @@ fn add_nsis_package(_path: &Path) -> Result<(), UpdateError> {
 fn installer_for_host() -> Box<dyn PackageInstaller> {
     match current() {
         Ok(TargetPlatform::MacOsX64 | TargetPlatform::MacOsArm64) => Box::new(DmgInstaller::new()),
-        Ok(TargetPlatform::LinuxX64 | TargetPlatform::LinuxArm64) => {
+        Ok(TargetPlatform::LinuxX64 | TargetPlatform::LinuxArm64)
+            if std::env::var_os("APPIMAGE").is_some() =>
+        {
             Box::new(AppImageInstaller::new())
         }
+        Ok(TargetPlatform::LinuxX64 | TargetPlatform::LinuxArm64) => {
+            Box::new(ManualInstaller)
+        }
         _ => Box::new(NsisInstaller::new()),
+    }
+}
+
+pub fn updates_are_automatic() -> bool {
+    match current() {
+        Ok(TargetPlatform::LinuxX64 | TargetPlatform::LinuxArm64) => {
+            std::env::var_os("APPIMAGE").is_some()
+        }
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
+struct ManualInstaller;
+
+impl PackageInstaller for ManualInstaller {
+    fn download(&self, _info: &UpdateInfo) -> Result<PathBuf, UpdateError> {
+        Err(UpdateError::Install)
+    }
+
+    fn download_apply(&self, _info: &UpdateInfo) -> Result<(), UpdateError> {
+        Err(UpdateError::Install)
     }
 }
 
@@ -392,10 +419,10 @@ impl PackageInstaller for AppImageInstaller {
     }
 }
 
-const APPIMAGE_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"AppImage installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; chmod +x \"$OMP_PACKAGE_PATH\" || exit 1; dest=\"${OMP_APPIMAGE_PATH:-${OMP_CURRENT_EXE:-}}\"; if [ -z \"$dest\" ]; then exit 1; fi; cp \"$OMP_PACKAGE_PATH\" \"$dest\" || exit 1; chmod +x \"$dest\" || exit 1; result='{\"status\":\"success\"}'";
+const APPIMAGE_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"AppImage installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; chmod +x \"$OMP_PACKAGE_PATH\" || exit 1; dest=\"${OMP_APPIMAGE_PATH:-}\"; if [ -z \"$dest\" ]; then exit 1; fi; stage=\"${dest}.new\"; cp \"$OMP_PACKAGE_PATH\" \"$stage\" || exit 1; chmod +x \"$stage\" || exit 1; mv -f \"$stage\" \"$dest\" || exit 1; result='{\"status\":\"success\"}'";
 
 #[cfg_attr(not(any(target_os = "macos", test)), allow(dead_code))]
-const DMG_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"DMG installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; mount=$(mktemp -d); hdiutil attach \"$OMP_PACKAGE_PATH\" -nobrowse -readonly -mountpoint \"$mount\" || exit 1; app=$(find \"$mount\" -maxdepth 2 -name '*.app' -print -quit); if [ -z \"$app\" ]; then hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; fi; dest=\"${OMP_APP_DEST:-}\"; if [ -z \"$dest\" ]; then case \"${OMP_CURRENT_EXE:-}\" in *.app/*) dest=$(printf '%s' \"$OMP_CURRENT_EXE\" | sed 's/\\.app\\/.*/.app/');; *) dest=\"/Applications/OMP.app\";; esac; fi; rm -rf \"$dest\"; mkdir -p \"$(dirname \"$dest\")\"; cp -R \"$app\" \"$dest\" || { hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; }; hdiutil detach \"$mount\" >/dev/null 2>&1 || true; result='{\"status\":\"success\"}'";
+const DMG_HELPER_SCRIPT: &str = "result='{\"status\":\"error\",\"message\":\"DMG installation failed\"}'; write_result() { printf '%s' \"$result\" > \"$OMP_UPDATE_RESULT\"; }; trap write_result EXIT; while kill -0 \"$OMP_UPDATE_PID\" 2>/dev/null; do sleep 0.5; done; mount=$(mktemp -d); hdiutil attach \"$OMP_PACKAGE_PATH\" -nobrowse -readonly -mountpoint \"$mount\" || exit 1; app=$(find \"$mount\" -maxdepth 2 -name '*.app' -print -quit); if [ -z \"$app\" ]; then hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; fi; dest=\"${OMP_APP_DEST:-}\"; if [ -z \"$dest\" ]; then case \"${OMP_CURRENT_EXE:-}\" in *.app/*) dest=$(printf '%s' \"$OMP_CURRENT_EXE\" | sed 's/\\.app\\/.*/.app/');; *) dest=\"/Applications/OMP.app\";; esac; fi; mkdir -p \"$(dirname \"$dest\")\"; stage=\"${dest}.new\"; backup=\"${dest}.bak\"; rm -rf \"$stage\"; cp -R \"$app\" \"$stage\" || { hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; }; rm -rf \"$backup\"; if [ -e \"$dest\" ]; then mv \"$dest\" \"$backup\" || { hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; }; fi; if mv \"$stage\" \"$dest\"; then rm -rf \"$backup\"; else if [ -e \"$backup\" ]; then mv \"$backup\" \"$dest\"; fi; hdiutil detach \"$mount\" >/dev/null 2>&1 || true; exit 1; fi; hdiutil detach \"$mount\" >/dev/null 2>&1 || true; result='{\"status\":\"success\"}'";
 
 fn spawn_shell(script: &str, package: &Path) -> Result<(), UpdateError> {
     let result_path = update_result_path()?;

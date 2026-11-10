@@ -76,7 +76,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     takePendingMagnet: async () => null,
     takePendingUpdateResult: () => updateApi.takePendingUpdateResult(),
     deviceAbiKey: async () => null,
-    canInstallApks: async () => true,
+    canInstallApks: async () => bridge.invoke<boolean>('update_supported'),
     downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
       const platform = currentTargetPlatform();
       if (platform !== TargetPlatform.WindowsX64 && platform !== TargetPlatform.MacOsX64 && platform !== TargetPlatform.MacOsArm64 && platform !== TargetPlatform.LinuxX64 && platform !== TargetPlatform.LinuxArm64) {

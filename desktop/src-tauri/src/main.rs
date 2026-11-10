@@ -35,6 +35,7 @@ fn main() {
             commands::player_control,
             commands::player_stop,
             commands::player_status,
+            commands::update_supported,
             commands::update_check,
             commands::update_download,
             commands::update_apply,

@@ -25,7 +25,6 @@ html.omp-desktop {
 html.omp-desktop.is-rail { --omp-side: 76px; }
 html.omp-desktop.is-hidden,
 html.omp-desktop.is-narrow { --omp-side: 0px; }
-html.omp-desktop body,
 html.omp-desktop #app { padding-left: var(--omp-side); }
 
 .omp-side {

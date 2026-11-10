@@ -18,6 +18,9 @@ url = "2.5.8"
 base64 = "0.23"
 sevenz-rust = "0.6.1"
 ureq = { version = "3.5.1", default-features = false, features = ["rustls", "cookies"] }
+zip = "2.4"
+flate2 = "1"
+tar = "0.4"
 
 [dev-dependencies]
 tempfile = "3.27.0"

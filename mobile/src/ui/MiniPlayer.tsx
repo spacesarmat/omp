@@ -4,7 +4,7 @@ import { activeTv } from '../tv/tvStore';
 import { nowPlaying, linkStatus, sendCmd } from '../tv/playerLink';
 import { formatDuration } from '../../../src/lib/format';
 import { playerPosterStyle } from './playerPoster';
-import { lang, t } from '../../../src/i18n';
+import { t } from '../../../src/i18n';
 import { humanEpisodeCode, subtitleCode, usePlayingNames } from '../lib/playingNames';
 import { realEpisodeName } from '../../../src/lib/episodeNames';
 import { isDesktopBuild } from '../desktop/runtime';
@@ -50,7 +50,7 @@ export function MiniPlayer() {
         <button
           type="button"
           class="m-mini-btn"
-          aria-label={lang.value === 'en' ? 'Picture in picture' : 'Картинка в картинке'}
+          aria-label={t('nav.pip')}
           onClick={(event) => {
             const host = (event.currentTarget as HTMLElement).closest('.m-mini');
             if (!host) return;

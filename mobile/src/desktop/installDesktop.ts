@@ -1,11 +1,14 @@
+import { t } from '../../../src/i18n';
 import { linkStatus, nowPlaying, sendCmd } from '../tv/playerLink';
 import { volume } from '../tv/tvClient';
 import { native } from '../platform/native';
+import { showToast } from '../ui/toast';
 import { linksFromDrop } from './drop';
 import { desktopHotkey } from './hotkeys';
 import { installWheelScroll } from './wheel';
 
 const PIP_KEY = 'omp.desktop.pip';
+const MAX_TORRENT_BYTES = 20 * 1024 * 1024;
 
 function placeMenu(event: MouseEvent): void {
   const root = document.documentElement;
@@ -48,8 +51,12 @@ export function installDesktopExtras(actions: {
     if (action === 'search') {
       event.preventDefault();
       actions.onSearch();
-      const field = document.querySelector<HTMLElement>('.m-screen input, .m-screen textarea');
-      if (field) field.focus();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const field = document.querySelector<HTMLElement>('.m-screen input, .m-screen textarea');
+          if (field) field.focus();
+        });
+      });
       return;
     }
     if (action === 'back') {
@@ -89,7 +96,11 @@ export function installDesktopExtras(actions: {
   const onContext = (event: Event) => {
     if (event instanceof MouseEvent) placeMenu(event);
   };
-  const clearContext = () => document.documentElement.classList.remove('omp-context');
+  const clearContext = (event: Event) => {
+    const target = event.target as Element | null;
+    if (target && target.closest && target.closest('.m-sheet-host')) return;
+    document.documentElement.classList.remove('omp-context');
+  };
   const onDragOver = (event: DragEvent) => {
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
     event.preventDefault();
@@ -99,9 +110,11 @@ export function installDesktopExtras(actions: {
     const transfer = event.dataTransfer;
     if (!transfer) return;
     const text = transfer.getData('text/uri-list') || transfer.getData('text/plain') || '';
-    const files = Array.from(transfer.files || []);
+    const files = Array.from(transfer.files || []).filter((file) => file.name.toLowerCase().endsWith('.torrent') && file.size > 0 && file.size <= MAX_TORRENT_BYTES);
     void Promise.all(files.map(readFile)).then((read) => {
-      for (const link of linksFromDrop(text, read)) actions.onOpenLink(link);
+      const links = linksFromDrop(text, read);
+      if (links.length > 1) showToast(t('nav.dropFirst'));
+      if (links[0]) actions.onOpenLink(links[0]);
     });
   };
   window.addEventListener('keydown', onKey);
