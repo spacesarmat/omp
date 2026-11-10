@@ -78,6 +78,32 @@ describe('design export', () => {
     expect(await readFile(windows, 'utf8')).toBe(initial + '\n/* user edit */\n');
   });
 
+  it('rejects staged design changes without overwriting them', async () => {
+    const { root, head } = await makeRepo();
+    await mkdir(join(root, 'design', 'themes'), { recursive: true });
+    const stagedPath = join(root, 'design', 'themes', 'staged.json');
+    await writeFile(stagedPath, '{"version":"staged"}\n');
+    await execute('git', ['add', 'design/themes/staged.json'], { cwd: root });
+    const draft = createDefaultDraft('draft-1', head);
+    await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DIRTY_DESIGN' });
+    expect(await readFile(stagedPath, 'utf8')).toBe('{"version":"staged"}\n');
+  });
+
+  it('checks contrast for navigation elements before export', async () => {
+    const { root, head } = await makeRepo();
+    const draft = createDefaultDraft('draft-1', head);
+    draft.theme.overrides.push({
+      id: 'nav-low-contrast',
+      scope: 'element',
+      target: 'desktop-windows',
+      screenId: 'settings',
+      elementId: 'nav-library',
+      tokens: { '--omp-color-accent': '#000000' },
+    });
+    await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DESIGN_ISSUES' });
+    expect(await readdir(join(root, 'design'))).toEqual([]);
+  });
+
   it('removes only files owned by the previous manifest', async () => {
     const { root, head } = await makeRepo();
     const draft = createDefaultDraft('draft-1', head);

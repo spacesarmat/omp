@@ -67,6 +67,7 @@ async function manifestFor(root, draftId) {
 async function verifyDirty(root, manifest) {
   const dirty = [...new Set([
     ...await gitLines(root, ['diff', '--name-only', '--', 'design']),
+    ...await gitLines(root, ['diff', '--cached', '--name-only', '--', 'design']),
     ...await gitLines(root, ['ls-files', '--others', '--exclude-standard', '--', 'design']),
   ])].sort();
   for (const path of dirty) safePath(path);
@@ -88,7 +89,12 @@ async function verifyDirty(root, manifest) {
 }
 
 function contexts() {
-  return DESKTOP_DESIGN_TARGETS.flatMap((target) => DESIGN_ELEMENTS.flatMap((element) => (
+  const navigationElements = DESKTOP_ROUTES.filter((route) => route.menu).map((route) => ({
+    componentId: 'sidebar-item',
+    id: `nav-${route.id}`,
+  }));
+  const elements = [...DESIGN_ELEMENTS, ...navigationElements];
+  return DESKTOP_DESIGN_TARGETS.flatMap((target) => elements.flatMap((element) => (
     DESIGN_FORMATS.flatMap((format) => DESIGN_STATES.map((state) => ({
       target,
       screenId: 'settings',
