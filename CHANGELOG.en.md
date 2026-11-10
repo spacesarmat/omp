@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Added a local preview editor for themes and interaction rules with independent Windows, macOS and Linux styling, simulation, drafts and protected export
+- [tech] The theme editor shows an autosave error and offers a retry. The error text is not stored in the saved draft and does not return on undo. A background save does not leave an unhandled rejection
+
 ## 0.20.12-beta.4
 
 - Search shows checked seeds or "not checked" on its own and reorders the list. A row no longer jumps between "0 seeds", "No tracker address" and DHT peers: that is one result, the same for the automatic check and the Seeds button

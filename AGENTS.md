@@ -11,11 +11,14 @@
 - `desktop/`: Windows desktop (Tauri + Preact, экраны `mobile/src`). TypeScript адаптеры в `desktop/src/platform`, Rust-процессы,
   загрузки, mpv и обновления в `desktop/src-tauri`, тесты в `desktop/tests`. NSIS-установщик собирается через `npm --prefix desktop run tauri -- build --bundles nsis`.
   Установка и переносимость описаны в `docs/desktop-cross-platform.md`.
+- `editor/`: локальный preview-редактор тем и правил, запуск `npm run editor`, сборка `npm run build:editor`.
+  `design/`: версионированные JSON-темы и правила, семантические tokens и детерминированный CSS generator.
+  Проверки: `npm run test:editor`, `npm run editor:generate -- --check`. Production desktop shell пока не переключается.
 - `ops/billing/`: биллинг и админ-панель (`src/*.mjs` сервер и бот @OMPBILLINGBOT, `admin/` React-панель, Postgres).
 - `ops/vps/`: сервер (NUC): `docker-compose.yml` + `docker-compose.nuc.yml`, `Caddyfile.nuc`, `deploy.sh`, `jacred/`, `jackett-monitor/`, `site/`.
 - `scripts/`: релиз, CHANGELOG, Telegram-посты, TorrServer, проверки (`npm run check:boot`, `check:changelog`, `check:torrserver`,
   `npm run check:overflow`, `npm run screenshots`).
-- Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`, `npm run build:desktop`.
+- Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`, `npm run build:desktop`, `npm run build:editor`.
   Rust: `cargo test --manifest-path desktop/src-tauri/Cargo.toml`. Node 24.
   Полный `npm test` запускать в Linux или WSL: нужны `shellcheck`, `rsync`, `flock` и Postgres 17. Git Bash на Windows - только точечные JS-тесты.
 - CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Desktop (`.github/workflows/desktop.yml`): smoke-матрица и `package-windows`.
