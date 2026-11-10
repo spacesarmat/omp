@@ -152,7 +152,7 @@ export function App(props: AppProps = {}) {
   useEffect(() => {
     if (!controller) return;
     const flush = () => {
-      void controller.flush({ keepalive: true });
+      void controller.flush({ keepalive: true }).catch(() => undefined);
     };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);

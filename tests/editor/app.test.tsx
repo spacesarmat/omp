@@ -115,4 +115,32 @@ describe('editor app', () => {
     expect(attempts).toBe(2);
     expect(host.textContent).not.toContain('offline');
   });
+
+  it('ignores a failed save while the page is closing', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      controller = createDraftController({
+        draft: createDefaultDraft('draft-1', BASE),
+        client: {
+          state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+          getDraft: async () => null,
+          putDraft: async () => { throw new Error('offline'); },
+          exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+        },
+      });
+      act(() => render(h(App, { controller }), host));
+      act(() => { window.dispatchEvent(new Event('beforeunload')); });
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(controller.lastError).toBe('offline');
+      expect(host.textContent).toContain('offline');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
 });
