@@ -135,6 +135,16 @@ describe('ThemeInspector', () => {
     expect(host.querySelector('[data-token="--omp-color-background"]')).not.toBeNull();
     expect(host.querySelector('[data-token="--omp-color-text"]')).toBeNull();
   });
+  it('omits focus for containers that cannot receive keyboard focus', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape' }));
+    change('[data-testid="scope"]', 'state');
+    let states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover']);
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'content', format: 'landscape' }), host));
+    states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover']);
+  });
 });
 
 describe('editor before and after', () => {

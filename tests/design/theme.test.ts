@@ -68,12 +68,24 @@ describe('theme resolver and generator', () => {
       });
     }
     const css = generateThemeCss(theme, 'desktop-windows');
-    expect(css).toContain('[data-design-overrides~="button-hover"]:hover');
-    expect(css).toContain('[data-design-overrides~="button-focus"]:focus-visible');
-    expect(css).toContain('[data-design-overrides~="button-active"]:active');
-    expect(css).toContain('[data-design-overrides~="button-disabled"]:disabled');
-    expect(css).toContain('[data-design-overrides~="button-error"][data-design-error="true"]');
+    expect(css).toContain('[data-design-overrides~="button-hover"]:where(:hover)');
+    expect(css).toContain('[data-design-overrides~="button-focus"]:where(:focus-visible)');
+    expect(css).toContain('[data-design-overrides~="button-active"]:where(:active)');
+    expect(css).toContain('[data-design-overrides~="button-disabled"]:where(:disabled)');
+    expect(css).toContain('[data-design-overrides~="button-error"]:where([data-design-error="true"])');
     expect(css).not.toContain('[data-design-overrides~="button-hover"] {');
+  });
+
+  it('keeps state and default override specificity equal', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.overrides.push(
+      { id: 'component-hover', scope: 'component', componentId: 'button', state: 'hover', tokens: { '--omp-color-accent': '#111111' } },
+      { id: 'element-default', scope: 'element', elementId: 'settings-continue', tokens: { '--omp-color-accent': '#222222' } },
+    );
+    const css = generateThemeCss(theme, 'desktop-windows');
+    expect(css).toContain('[data-design-overrides~="component-hover"]:where(:hover)');
+    expect(css.indexOf('component-hover')).toBeLessThan(css.indexOf('element-default'));
+    expect(resolveThemeTokens(theme, { ...context, componentId: 'button', state: 'hover' })['--omp-color-accent']).toBe('#222222');
   });
 
   it('reports contrast and font size errors with their context', () => {

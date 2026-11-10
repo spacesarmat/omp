@@ -25,6 +25,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-color-panel', label: 'Фон панели', kind: 'color' },
       { token: '--omp-size-sidebar', label: 'Ширина панели', kind: 'px' },
     ],
+    states: ['default', 'hover'],
   },
   {
     id: 'sidebar-item',
@@ -46,6 +47,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
       { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
     ],
+    states: ['default', 'hover'],
   },
   {
     id: 'settings-continue',

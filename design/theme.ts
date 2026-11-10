@@ -54,11 +54,11 @@ function declarations(tokens: TokenMap): string {
 
 const STATE_SELECTORS: Record<DesignState, string> = {
   default: '',
-  hover: ':hover',
-  focus: ':focus-visible',
-  active: ':active',
-  disabled: ':disabled',
-  error: '[data-design-error="true"]',
+  hover: ':where(:hover)',
+  focus: ':where(:focus-visible)',
+  active: ':where(:active)',
+  disabled: ':where(:disabled)',
+  error: ':where([data-design-error="true"])',
 };
 
 export function generateThemeCss(theme: ThemeDocument, target: DesktopDesignTarget): string {
