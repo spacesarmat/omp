@@ -2,7 +2,7 @@
 // popularity job (cacheNodes.noteInterest) once a day. The cache flag still decides
 // whether a node is asked to fill anything. This only adds interest rows.
 import { cacheEnabled } from './cacheNodes.mjs';
-import { blendScore, coldScore, learnedScore, releasesToWarm } from './watchRank.mjs';
+import { blendScore, coldScore, learnedScore, releasesToWarm, watchRankEnabled } from './watchRank.mjs';
 
 function candidate(infohash, title, season, episode, seeds, dhtSeeds, sizeBytes, stats) {
   return {
@@ -97,6 +97,7 @@ export function chooseBests(pack, deviceClass, voice, focus) {
  * that have not been handed to the cache in the last day.
  */
 export async function runWatchFollow(repo, cacheRepo, settings, now) {
+  if (!watchRankEnabled(settings)) return { titles: 0, warmed: 0 };
   const at = now || Date.now();
   const groups = await repo.followGroups(at);
   for (let i = 0; i < groups.length; i++) {

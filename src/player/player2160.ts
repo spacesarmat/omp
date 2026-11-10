@@ -382,6 +382,7 @@ function open2160(
         infohash: saved.item.hash,
         file: saved.item.fileIndex,
         title: saved.item.torrentTitle || saved.item.title,
+        fileTitle: saved.item.title,
         watchedPct: pct,
         completed: saved.completed,
       });

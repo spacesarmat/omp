@@ -186,12 +186,13 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     const hash = item.hash;
     const file = item.fileIndex;
     const title = item.torrentTitle || item.title;
-    watchOpen({ infohash: hash, file, title });
+    watchOpen({ infohash: hash, file, title, fileTitle: item.title });
     return () => {
       watchClose({
         infohash: hash,
         file,
         title,
+        fileTitle: item.title,
         time: posRef.current.time,
         duration: posRef.current.duration,
         voice: watchVoice.current,

@@ -10,7 +10,8 @@ function row(title: string, seed: number, extra: Partial<SourceResult> = {}): So
 describe('community rank on the client', () => {
   it('adds nothing until billing marks a learned row', () => {
     expect(communityBoost(row('A', 10))).toBe(0);
-    expect(communityBoost({ communityReason: 'seeds', communityRank: 90 })).toBe(0);
+    expect(communityBoost({ communityReason: 'seeds' })).toBe(0);
+    expect(communityBoost({ communityReason: 'seeds', communityRank: 90 })).toBeGreaterThan(0);
     const marked = row('A', 1, { communityReason: 'community', communityRank: 80 });
     expect(communityBoost(marked)).toBeGreaterThan(rankScore(row('B', 5000, { seedCheck: 'live', Seed: 5000 }), 'q', 0));
     expect(communityLabel(marked)).toContain('зрител');

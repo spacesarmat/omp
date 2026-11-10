@@ -6,6 +6,7 @@ import { billingPost } from '../billing/client';
 import { billingSession, deviceId } from '../billing/session';
 import { withDeviceToken } from '../billing/tokens';
 import { settings } from '../store/settings';
+import { parseEpisode } from '../lib/episodes';
 import { nativeSourceHttp } from '../platform/androidNative';
 import { tvSourceContext } from '../sources/tvContext';
 import type { SourceContext } from '../sources/types';
@@ -16,6 +17,8 @@ export interface WatchSample {
   infohash: string;
   file: number;
   title: string;
+  /** Current file name. Used when the torrent title has no season or episode. */
+  fileTitle?: string;
   titleKey?: string;
   season?: number;
   episode?: number;
@@ -37,7 +40,7 @@ const queue: WatchSample[] = [];
 const openAt: { [key: string]: number } = {};
 const frameAt: { [key: string]: number } = {};
 const rebuffers: { [key: string]: { n: number; ms: number; since: number } } = {};
-const lastHash: { [key: string]: string } = {};
+const lastOpen: { [key: string]: { hash: string; file: number } } = {};
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function setWatchDeviceClass(kind: WatchClass): void {
@@ -64,14 +67,23 @@ export function resetWatchReport(): void {
     delete openAt[keys[i]];
     delete frameAt[keys[i]];
     delete rebuffers[keys[i]];
-    delete lastHash[keys[i]];
   }
+  const titles = Object.keys(lastOpen);
+  for (let i = 0; i < titles.length; i++) delete lastOpen[titles[i]];
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = null;
 }
 
 function keyOf(hash: string, file: number): string {
   return hash.toLowerCase() + ':' + file;
+}
+
+function withEpisode(sample: WatchSample): WatchSample {
+  if ((sample.season && sample.episode) || !sample.fileTitle) return sample;
+  const info = parseEpisode(sample.fileTitle);
+  const season = sample.season || (info.season !== null ? info.season : 0);
+  const episode = sample.episode || (info.episode !== null ? info.episode : 0);
+  return { ...sample, season: season, episode: episode };
 }
 
 function helpOn(): boolean {
@@ -166,13 +178,14 @@ export function enqueueWatch(sample: WatchSample): void {
   const hash = (sample.infohash || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(hash)) return;
   if (!helpOn()) return;
+  const filled = withEpisode(sample);
   queue.push({
     infohash: hash,
-    file: sample.file || 0,
-    title: (sample.title || '').slice(0, 300),
-    titleKey: sample.titleKey,
-    season: sample.season,
-    episode: sample.episode,
+    file: filled.file || 0,
+    title: (filled.title || '').slice(0, 300),
+    titleKey: filled.titleKey,
+    season: filled.season,
+    episode: filled.episode,
     ttffMs: sample.ttffMs || 0,
     rebufferCount: sample.rebufferCount || 0,
     rebufferMs: sample.rebufferMs || 0,
@@ -191,18 +204,19 @@ export function watchOpen(sample: WatchSample): void {
   const hash = (sample.infohash || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(hash)) return;
   const title = (sample.title || '').slice(0, 120);
-  const prev = title ? lastHash[title] : '';
-  if (prev && prev !== hash) {
+  const prev = title ? lastOpen[title] : undefined;
+  if (prev && prev.hash !== hash) {
     enqueueWatch({
-      infohash: prev,
-      file: sample.file || 0,
+      infohash: prev.hash,
+      file: prev.file,
       title: sample.title,
+      fileTitle: sample.fileTitle,
       switched: true,
       watchedPct: 0,
       codecOk: null,
     });
   }
-  if (title) lastHash[title] = hash;
+  if (title) lastOpen[title] = { hash: hash, file: sample.file || 0 };
   const k = keyOf(hash, sample.file || 0);
   openAt[k] = Date.now();
   delete frameAt[k];
@@ -250,6 +264,7 @@ export function watchClose(sample: WatchSample & { time?: number; duration?: num
     infohash: hash,
     file,
     title: sample.title,
+    fileTitle: sample.fileTitle,
     titleKey: sample.titleKey,
     season: sample.season,
     episode: sample.episode,

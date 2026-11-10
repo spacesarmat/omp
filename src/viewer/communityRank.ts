@@ -15,8 +15,9 @@ export interface CommunityRow {
 export function communityBoost(r: CommunityRow | null | undefined): number {
   if (!r) return 0;
   const reason = r.communityReason;
-  if (reason !== 'community' && reason !== 'blend' && reason !== 'pinned') return 0;
-  const rank = typeof r.communityRank === 'number' && isFinite(r.communityRank) ? Math.round(r.communityRank) : 0;
+  if (reason !== 'community' && reason !== 'blend' && reason !== 'pinned' && reason !== 'seeds' && reason !== 'dht') return 0;
+  if (typeof r.communityRank !== 'number' || !isFinite(r.communityRank)) return 0;
+  const rank = Math.round(r.communityRank);
   return BOOST + rank * 100;
 }
 

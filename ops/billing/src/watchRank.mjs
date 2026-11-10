@@ -41,7 +41,8 @@ export function titleKeyOf(title, given) {
   let t = clipText(title, 300).toLowerCase().split('/')[0];
   t = t.replace(/\[[^\]]*\]/g, ' ').replace(/\([^)]*\)/g, ' ');
   t = t.replace(/\b(19|20)\d{2}\b/g, ' ');
-  t = t.replace(/\b(s\d{1,2}e\d{1,3}|[248]k|2160p|1080p|720p|480p|hdr10\+|hdr|hevc|x265|x264)\b/gi, ' ');
+  t = t.replace(/\b(s\d{1,2}e\d{1,3}|[248]k|2160p|1080p|720p|480p|hdr10\+|hdr|sdr|hevc|x265|x264|h\.?264|h\.?265|avc|aac|ac3|dts)\b/gi, ' ');
+  t = t.replace(/\b(web[\s-]?dl|webrip|bluray|blu-ray|bdrip|bdremux|hdrip|hdtv|dvdrip|remux|amzn|dsnp|nf|hmax)\b/gi, ' ');
   t = t.replace(/[^a-z0-9а-яё]+/gi, ' ').trim();
   return t.slice(0, 80);
 }
@@ -358,18 +359,23 @@ export function renderFeed(parsed, ctx) {
     if (scored.reorder || voice) changed = true;
     rows.push({
       index: it.index,
-      xml: annotate(it, { reorder: scored.reorder, rank: scored.rank, reason: scored.reason, voice }),
-      rank: scored.reorder ? scored.rank : -1,
+      item: it,
+      voice,
+      reason: scored.reason,
+      blend: scored.rank,
       reorder: scored.reorder,
     });
   }
   if (!changed) return { xml: parsed.original, changed: false, rows: parsed.items };
   const anyOrder = rows.some((r) => r.reorder);
-  if (anyOrder) {
-    rows.sort((a, b) => b.rank - a.rank || a.index - b.index);
+  if (anyOrder) rows.sort((a, b) => b.blend - a.blend || a.index - b.index);
+  const bodyRows = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    bodyRows.push(annotate(row.item, { reorder: anyOrder, rank: row.blend, reason: row.reason, voice: row.voice }));
   }
   let body = '';
-  for (let i = 0; i < rows.length; i++) body += rows[i].xml;
+  for (let i = 0; i < bodyRows.length; i++) body += bodyRows[i];
   const rest = parsed.truncated || [];
   for (let i = 0; i < rest.length; i++) body += rest[i];
   return { xml: parsed.head + body + parsed.tail, changed: true, rows };

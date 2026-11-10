@@ -261,6 +261,7 @@ export class NativeSession {
   private watchHash = '';
   private watchFile = 0;
   private watchTitle = '';
+  private watchFileTitle = '';
   private watchVoice = '';
   private done = false;
   private readonly sid = ++sessionSeq;
@@ -409,6 +410,7 @@ export class NativeSession {
       infohash: this.watchHash,
       file: this.watchFile,
       title: this.watchTitle,
+      fileTitle: this.watchFileTitle,
       time,
       duration,
       voice: this.watchVoice,
@@ -432,8 +434,12 @@ export class NativeSession {
         this.watchHash = item.hash;
         this.watchFile = item.fileIndex;
         this.watchTitle = item.torrentTitle || item.title;
-        watchOpen({ infohash: item.hash, file: item.fileIndex, title: this.watchTitle });
+        this.watchFileTitle = item.title;
+        this.watchVoice = '';
+        watchOpen({ infohash: item.hash, file: item.fileIndex, title: this.watchTitle, fileTitle: item.title });
       }
+      const audioLabel = s.audio && s.audio.sel >= 0 && s.audio.list[s.audio.sel] ? s.audio.list[s.audio.sel] : '';
+      if (audioLabel) this.watchVoice = audioLabel;
       if (s.time > 0) watchFrame(item.hash, item.fileIndex);
       watchBuffer(item.hash, item.fileIndex, s.buffering);
     }

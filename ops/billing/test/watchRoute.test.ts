@@ -118,7 +118,7 @@ describe('watch signals and rank', () => {
     expect(off.data.accepted).toBe(0);
     const repo = createWatchRepo(file);
     const xml =
-      '<?xml version="1.0"?><rss><channel>' + rss('Other', A, 80) + rss('Show S01E02 2160p HDR', B, 5) + '</channel></rss>';
+      '<?xml version="1.0"?><rss><channel>' + rss('Other', A, 2) + rss('Show S01E02 2160p HDR', B, 5) + '</channel></rss>';
     const ranked = await rankSearchXml(repo, xml, { deviceClass: 'tv', now, readOnly: false });
     expect(ranked.indexOf(B)).toBeLessThan(ranked.indexOf(A));
     expect(ranked).toContain('omp_voice" value="LostFilm"');

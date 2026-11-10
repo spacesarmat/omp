@@ -13,6 +13,7 @@ import {
   removeDelta,
   renderFeed,
   scoreOf,
+  titleKeyOf,
   voteDelta,
   voterHash,
   watchRankEnabled,
@@ -143,6 +144,16 @@ describe('watch rank score', () => {
     expect(parsed.items[0].episode).toBe(3);
     expect(parsed.items[0].codecs).toEqual(['h264', 'hevc']);
     expect(parsed.items[0].follow).toBe(true);
+    expect(titleKeyOf('Show S01E01 1080p WEB-DL', '')).toBe(titleKeyOf('Show S01E02 720p BluRay', ''));
+    const bad = renderFeed(parseFeed(feed(item('Bad', A, '1') + item('Healthy', B, '200'))), {
+      stats: {
+        [A]: { samples: 1, completed: 0, switched: 1, ttffMs: 20000, rebufferN: 5, rebufferMs: 8000, watchedSum: 5, codecOk: 0, codecFail: 1 },
+      },
+      mods: {},
+      voices: {},
+      deviceClass: 'tv',
+    });
+    expect(bad.xml.indexOf(B)).toBeLessThan(bad.xml.indexOf(A));
     expect(releasesToWarm([{ infohash: A, seeds: 0, title: 'x' }, { infohash: B, seeds: 4, title: 'Y' }])).toEqual([
       { infohash: B, title: 'Y', seeds: 4, sizeBytes: 0 },
     ]);

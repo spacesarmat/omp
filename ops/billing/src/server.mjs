@@ -2494,6 +2494,7 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, 429, { error: 'rate' });
         }
         if (req.method === 'GET') {
+          if (!watchRankEnabled(state.settings)) return json(res, 200, { infohash: '', score: 0, reason: '', voice: '' });
           const best = await watchRepo.readBest({
             titleKey: url.searchParams.get('titleKey') || '',
             season: url.searchParams.get('season') || 0,

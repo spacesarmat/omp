@@ -345,15 +345,17 @@ export async function readBest(query, key) {
   const season = num(key.season);
   const episode = num(key.episode);
   const exact = await query(
-    'SELECT title_key, season, episode, device_class, infohash, title, score, reason, voice, seeds' +
-      ' FROM watch_best WHERE title_key = $1 AND season = $2 AND episode = $3 AND device_class = $4',
+    'SELECT b.title_key, b.season, b.episode, b.device_class, b.infohash, b.title, b.score, b.reason, b.voice, b.seeds' +
+      ' FROM watch_best b WHERE b.title_key = $1 AND b.season = $2 AND b.episode = $3 AND b.device_class = $4' +
+      ' AND NOT EXISTS (SELECT 1 FROM watch_mod m WHERE m.infohash = b.infohash AND m.banned)',
     [titleKey, season, episode, deviceClass],
   );
   if (exact.rows[0]) return bestOf(exact.rows[0]);
   const loose = await query(
-    'SELECT title_key, season, episode, device_class, infohash, title, score, reason, voice, seeds' +
-      ' FROM watch_best WHERE title_key = $1 AND device_class = $2 AND ($3 = 0 OR season = $3)' +
-      ' ORDER BY episode DESC LIMIT 1',
+    'SELECT b.title_key, b.season, b.episode, b.device_class, b.infohash, b.title, b.score, b.reason, b.voice, b.seeds' +
+      ' FROM watch_best b WHERE b.title_key = $1 AND b.device_class = $2 AND ($3 = 0 OR b.season = $3)' +
+      ' AND NOT EXISTS (SELECT 1 FROM watch_mod m WHERE m.infohash = b.infohash AND m.banned)' +
+      ' ORDER BY b.episode DESC LIMIT 1',
     [titleKey, deviceClass, season],
   );
   return loose.rows[0] ? bestOf(loose.rows[0]) : null;
@@ -380,6 +382,7 @@ export async function setMod(query, row, now) {
   const banned = row.banned === true;
   const pinned = row.pinned === true && !banned;
   const note = String(row.note || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (banned) await query('DELETE FROM watch_best WHERE infohash = $1', [infohash]);
   await query(
     'INSERT INTO watch_mod (infohash, pinned, banned, note, updated_at) VALUES ($1,$2,$3,$4,$5)' +
       ' ON CONFLICT (infohash) DO UPDATE SET pinned = EXCLUDED.pinned, banned = EXCLUDED.banned,' +
@@ -531,8 +534,9 @@ export async function writeBest(query, row, now) {
 
 export async function dueWarm(query, now) {
   const res = await query(
-    'SELECT title_key, season, episode, device_class, infohash, title, seeds, size_bytes FROM watch_best' +
-      ' WHERE infohash <> \'\' AND seeds > 0 AND warmed_at < $1 LIMIT 40',
+    'SELECT b.title_key, b.season, b.episode, b.device_class, b.infohash, b.title, b.seeds, b.size_bytes FROM watch_best b' +
+      ' WHERE b.infohash <> \'\' AND b.seeds > 0 AND b.warmed_at < $1' +
+      ' AND NOT EXISTS (SELECT 1 FROM watch_mod m WHERE m.infohash = b.infohash AND m.banned) LIMIT 40',
     [now - DAY],
   );
   return res.rows.map((r) => ({
@@ -555,7 +559,36 @@ export async function markWarmed(query, row, now) {
 }
 
 export async function pruneWatch(query, now) {
-  await query('DELETE FROM watch_votes WHERE updated_at < $1', [now - FOLLOW_KEEP]);
+  // Drop the vote and take its contribution back, so a later watch is not a second sample.
+  await query(
+    'WITH old AS (DELETE FROM watch_votes WHERE updated_at < $1 RETURNING *),' +
+      ' voice_fix AS (' +
+      ' UPDATE watch_voice v SET picks = GREATEST(0, v.picks - c.n), updated_at = $1' +
+      ' FROM (SELECT title_key, voice, count(*)::int AS n FROM old WHERE voice <> \'\' GROUP BY title_key, voice) c' +
+      ' WHERE v.title_key = c.title_key AND v.voice = c.voice RETURNING 1)' +
+      ' UPDATE watch_release_stats s SET' +
+      ' samples = GREATEST(0, s.samples - c.n),' +
+      ' completed = GREATEST(0, s.completed - c.completed),' +
+      ' switched = GREATEST(0, s.switched - c.switched),' +
+      ' ttff_ms = GREATEST(0, s.ttff_ms - c.ttff_ms),' +
+      ' rebuffer_n = GREATEST(0, s.rebuffer_n - c.rebuffer_n),' +
+      ' rebuffer_ms = GREATEST(0, s.rebuffer_ms - c.rebuffer_ms),' +
+      ' watched_sum = GREATEST(0, s.watched_sum - c.watched_sum),' +
+      ' codec_ok = GREATEST(0, s.codec_ok - c.codec_ok),' +
+      ' codec_fail = GREATEST(0, s.codec_fail - c.codec_fail),' +
+      ' updated_at = $1' +
+      ' FROM (' +
+      ' SELECT infohash, file_index, device_class, count(*)::int AS n,' +
+      ' sum(CASE WHEN completed THEN 1 ELSE 0 END)::int AS completed,' +
+      ' sum(CASE WHEN switched THEN 1 ELSE 0 END)::int AS switched,' +
+      ' sum(ttff_ms)::bigint AS ttff_ms, sum(rebuffer_n)::int AS rebuffer_n, sum(rebuffer_ms)::bigint AS rebuffer_ms,' +
+      ' sum(watched_pct)::int AS watched_sum,' +
+      ' sum(CASE WHEN codec_known AND codec_ok THEN 1 ELSE 0 END)::int AS codec_ok,' +
+      ' sum(CASE WHEN codec_known AND NOT codec_ok THEN 1 ELSE 0 END)::int AS codec_fail' +
+      ' FROM old GROUP BY infohash, file_index, device_class) c' +
+      ' WHERE s.infohash = c.infohash AND s.file_index = c.file_index AND s.device_class = c.device_class',
+    [now - FOLLOW_KEEP],
+  );
   await query('DELETE FROM watch_follow WHERE updated_at < $1', [now - FOLLOW_KEEP]);
   await query('DELETE FROM watch_seen WHERE updated_at < $1', [now - SEEN_KEEP]);
 }
