@@ -76,12 +76,34 @@ await server.listen();
 const addr = server.httpServer.address();
 const pageUrl = `http://127.0.0.1:${addr.port}/overflow.html`;
 
-const profile = mkdtempSync(join(tmpdir(), 'omp-overflow-'));
-const proc = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: 'ignore' });
+// Headless Chrome on a busy CI runner sometimes exits before it writes the port file.
+async function startChrome() {
+  let last = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const dir = mkdtempSync(join(tmpdir(), 'omp-overflow-'));
+    const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--hide-scrollbars', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore' });
+    const portFile = join(dir, 'DevToolsActivePort');
+    for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
+    if (existsSync(portFile)) return { profile: dir, proc: child };
+    last = child;
+    child.kill();
+    await sleep(300);
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* the next attempt uses a new profile */
+    }
+  }
+  if (last) last.kill();
+  throw new Error('Chrome did not open a DevTools port');
+}
+
+const started = await startChrome();
+const profile = started.profile;
+const proc = started.proc;
 let exitCode = 0;
 try {
   const portFile = join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await sleep(100);
   const [port, path] = readFileSync(portFile, 'utf8').trim().split('\n');
   const c = cdp(`ws://127.0.0.1:${port}${path}`);
   await c.open;
