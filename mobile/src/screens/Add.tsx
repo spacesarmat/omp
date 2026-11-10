@@ -779,7 +779,7 @@ export function Add({
       )}
       {searchError && <LaunchError message={searchError} />}
       {rows && (
-        <div class="m-seg m-search-kinds" role="group" aria-label={t('search.kind.filterLabel')} data-kind-filter="">
+        <div class="m-seg m-search-kinds m-scroll-x" role="group" aria-label={t('search.kind.filterLabel')} data-kind-filter="">
           {kindFilterOptions().map((o) => (
             <button
               key={o.id}
