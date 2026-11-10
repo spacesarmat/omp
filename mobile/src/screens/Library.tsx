@@ -26,7 +26,7 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, sortOptions } from '../../../src/lib/librarySearch';
 import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
-import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
@@ -489,6 +489,8 @@ export function Library() {
       at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
+      files: filesOf(tor),
+      season: parseEpisode(target.path).season !== null ? parseEpisode(target.path).season! : undefined,
       onError: setTvError,
     });
   };
@@ -520,12 +522,17 @@ export function Library() {
           },
         );
     }
+    const tor = list.find((x) => x.hash === hash);
+    const file = tor ? filesOf(tor).find((f) => f.id === fileIndex) : undefined;
+    const season = file ? parseEpisode(file.path).season : null;
     return launch.start({
       hash,
       file: fileIndex,
       at: time,
       duration: duration > 0 ? duration : undefined,
       label,
+      files: tor ? filesOf(tor) : undefined,
+      season: season !== null ? season : undefined,
       onError: setTvError,
     });
   };
