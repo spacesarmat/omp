@@ -8,7 +8,8 @@ import { SubSheet } from '../ui/SubSheet';
 import { HeadButton, ScreenHeader } from '../ui/ScreenHeader';
 import { ReplaceSheet, libraryTorrentOf } from '../ui/ReplaceSheet';
 import { useResultRows } from '../ui/useResultRows';
-import { RawTitle, ReleaseChips, ResultThumb } from '../ui/ReleaseRow';
+import { RawTitle, ReleaseChips, ResultThumb, releaseTitle } from '../ui/ReleaseRow';
+import { Sheet } from '../ui/Sheet';
 import { navigate } from '../nav';
 import { useLongPress } from '../ui/longPress';
 import { ShareMenu } from '../share/ShareMenu';
@@ -110,12 +111,41 @@ export function resetNews(): void {
   memo.q = '';
 }
 
+const FEED_HINT_KEY = 'omp.feedSitesHint';
+
+function feedHintOff(): boolean {
+  try {
+    return localStorage.getItem(FEED_HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function dedupeFeed(rows: SourceResult[]): SourceResult[] {
+  const seen: { [k: string]: boolean } = {};
+  const out: SourceResult[] = [];
+  rows.forEach((r) => {
+    const s = releaseTitle(r.Title || '');
+    const k = (s.title + '|' + s.meta).toLowerCase();
+    // only the same title and year (or season). A bare name stays, so two different releases are not merged.
+    if (!s.title || !s.meta) {
+      out.push(r);
+      return;
+    }
+    if (seen[k]) return;
+    seen[k] = true;
+    out.push(r);
+  });
+  return out;
+}
+
 function feedCategoryOf(cat: FeedCategory): (r: SourceResult) => string {
   return (r) => (cat === 'movie' ? 'movie' : cat === 'tv' ? 'tv' : guessCategory(r.Title));
 }
 
 function Feed() {
   const [cat, setCatState] = useState<FeedCategory>(memo.cat);
+  const [showHint, setShowHint] = useState(() => !feedHintOff());
   const [hd, setHdState] = useState(memo.hd);
   const [, setTick] = useState(0);
   const rows = useResultRows({ category: feedCategoryOf(cat), seedCode: 'P03.7', menu: true });
@@ -171,9 +201,30 @@ function Feed() {
           1080p+
         </button>
       </div>
-      {names.length === 0 ? (
-        <div class="m-hint-warn">{t('news.enableSites')}</div>
-      ) : (
+      {names.length === 0 && showHint ? (
+        <div class="m-hint-warn m-feed-banner">
+          <span>{t('news.enableSites')}</span>
+          <div class="m-feed-banner-actions">
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'sources' })}>
+              {t('news.feedSources')}
+            </button>
+            <button
+              type="button"
+              class="m-btn m-btn-primary m-btn-sm"
+              onClick={() => {
+                try {
+                  localStorage.setItem(FEED_HINT_KEY, '1');
+                } catch {
+                  // the hint stays dismissed for this visit even if storage is blocked
+                }
+                setShowHint(false);
+              }}
+            >
+              {t('news.feedGotIt')}
+            </button>
+          </div>
+        </div>
+      ) : names.length === 0 ? null : (
         <div class="m-news-status m-muted m-small" role="status">
           <span class="m-grow">{status.join(' · ')}</span>
           <button type="button" class="m-btn-text" disabled={!!h} onClick={() => refreshFeed(cat, true)}>
@@ -185,7 +236,7 @@ function Feed() {
       {names.length > 0 && !h && shown.length === 0 && (
         <div class="m-muted">{list.length ? t('news.noHd') : failed[cat] ? t('news.noAnswerLater') : t('news.empty')}</div>
       )}
-      <div class="m-results">{shown.map((r) => rows.card(r))}</div>
+      <div class="m-results">{dedupeFeed(shown).map((r) => rows.card(r))}</div>
       {rows.sheets}
     </>
   );
@@ -305,22 +356,37 @@ function removeSub(s: Subscription): void {
 }
 
 function SubLine(p: { s: Subscription; off: boolean; n: number }) {
+  const [menu, setMenu] = useState(false);
   return (
     <SubSwipeCard id={p.s.id} onCheck={() => void checkSubNow(p.s.id)} onDelete={() => removeSub(p.s)}>
       <div class="m-sub-card">
         {p.s.catalog ? <WantSub s={p.s} off={p.off} n={p.n} /> : <PlainSub s={p.s} off={p.off} n={p.n} />}
         <button
           type="button"
-          class="m-sub-remove tm"
+          class="m-icon-btn m-sub-menu tm"
           data-code="P03.4"
           data-sub-remove={p.s.id}
-          aria-label={t('monitor.sub.deleteOne', { query: p.s.query })}
-          onClick={() => removeSub(p.s)}
+          aria-label={t('library.actions')}
+          aria-haspopup="dialog"
+          onClick={() => setMenu(true)}
         >
-          <Icon d={ICONS.trash} size={18} />
-          <span>{t('common.delete')}</span>
+          <Icon d="M5 12h.01M12 12h.01M19 12h.01" size={18} />
         </button>
       </div>
+      {menu && (
+        <Sheet label={t('library.actions')} onClose={() => setMenu(false)}>
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-danger"
+            onClick={() => {
+              setMenu(false);
+              removeSub(p.s);
+            }}
+          >
+            {t('common.delete')}
+          </button>
+        </Sheet>
+      )}
     </SubSwipeCard>
   );
 }
@@ -450,7 +516,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
             type="search"
             data-subs-search
             aria-label={t('news.subsSearch')}
-            placeholder={t('news.subsSearch')}
+            placeholder={t('news.subsSearchShort')}
             value={query}
             clearAttrs={{ 'data-subs-clear': '' }}
             clearLabel={t('news.clearSearch')}

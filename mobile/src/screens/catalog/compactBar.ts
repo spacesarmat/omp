@@ -12,6 +12,13 @@ export function setDiscoverHeadSlot(node: HTMLElement | null): void {
   if (discoverHeadSlot.value !== node) discoverHeadSlot.value = node;
 }
 
+/** Portrait: the discover title and chips stick with «Мои / Обзор». */
+export const discoverStickySlot = signal<HTMLElement | null>(null);
+
+export function setDiscoverStickySlot(node: HTMLElement | null): void {
+  if (discoverStickySlot.value !== node) discoverStickySlot.value = node;
+}
+
 function readCompact(): boolean {
   try {
     return typeof matchMedia === 'function' && matchMedia(COMPACT_CATALOG_MQ).matches;

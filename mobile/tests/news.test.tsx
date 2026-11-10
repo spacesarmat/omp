@@ -329,10 +329,12 @@ describe('«Новое» · Подписки', () => {
     const button = el.querySelector('[data-sub-remove="' + gone.id + '"]') as HTMLButtonElement;
     expect(button.getAttribute('data-code')).toBe('P03.4');
     click(button);
+    click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Удалить')!);
     expect(document.getElementById('m-confirm-msg')!.textContent).toBe('Удалить подписку «Убрать»?');
     await declineConfirm();
     expect(loadSubs().map((s) => s.id).sort()).toEqual([keep.id, gone.id].sort());
     click(el.querySelector('[data-sub-remove="' + gone.id + '"]')!);
+    click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Удалить')!);
     await acceptConfirm();
     expect(loadSubs().map((s) => s.query)).toEqual(['Оставить']);
     reloadMonitor();
@@ -622,7 +624,8 @@ describe('News in English', () => {
 
   it('feed: no sources switched on and sites that did not answer', async () => {
     await mount();
-    expect(el.querySelector('.m-hint-warn')!.textContent).toBe('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Got it');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
     registerSource({ id: 'feedy', name: 'Feedy', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('down')) });
     click(byText('Series'));

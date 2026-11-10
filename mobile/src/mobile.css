@@ -250,7 +250,7 @@ button, .m-btn {
 .m-empty { padding: 24px 0; text-align: center; }
 /* the button under a centred heading and text sits in the middle too («Подключить ТВ» on «Пульт») */
 .m-empty .m-btn { margin: 0 auto; }
-.m-library { overflow-x: hidden; }
+.m-library { overflow-x: clip; }
 /* columns follow the width: a card stays at least 156px (large) or 104px (medium), a short row grows to fill */
 .m-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(156px, 100%), 1fr)); gap: 16px 12px; min-width: 0; width: 100%; }
 .m-grid.m-view-small { grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr)); gap: 12px 8px; }
@@ -258,7 +258,7 @@ button, .m-btn {
 .m-view-small .m-poster { padding: 8px; border-radius: 10px; }
 .m-view-small .m-poster-title { font-size: 12px; }
 .m-view-small .m-badge { top: 6px; left: 6px; padding: 1px 6px; font-size: 10px; }
-.m-view-small .m-card-title { font-size: 12px; line-height: 16px; min-height: 32px; }
+.m-view-small .m-card-title { font-size: 12px; line-height: 16px; min-height: 0; max-height: 32px; -webkit-line-clamp: 2; white-space: normal; }
 .m-vlist { display: flex; flex-direction: column; gap: 4px; }
 .m-vrow { display: flex; align-items: center; gap: 12px; padding: 6px 0; border: none; background: none; text-align: left; color: inherit; min-width: 0; }
 .m-vrow > svg { flex-shrink: 0; color: var(--muted); }
@@ -284,11 +284,11 @@ button, .m-btn {
 .m-view-small .m-card-meta { font-size: 11px; line-height: 14px; }
 .m-card { display: flex; flex-direction: column; gap: 4px; padding: 0; border: none; background: none; text-align: left; min-width: 0; }
 .m-card-title {
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 14px;
   font-weight: 600;
   line-height: 19px;
-  min-height: 38px;
+  min-height: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -334,8 +334,9 @@ button, .m-btn {
 .m-hrow-main { flex-grow: 1; min-width: 0; display: flex; gap: 12px; padding: 0; border: none; background: none; text-align: left; }
 .m-hrow-text { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .m-hrow-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.m-hrow-pos { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
-.m-hrow-src { margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-hrow-pos { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 6px; font-size: 12px; white-space: nowrap; }
+.m-hrow-pos > span { flex-shrink: 0; }
+.m-hrow-src { margin-top: 4px; white-space: normal; overflow: visible; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .m-hfilters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
 .m-hfilters::-webkit-scrollbar { display: none; }
 .m-hfilter {
@@ -356,9 +357,10 @@ button, .m-btn {
 .m-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg-btn { flex: 1 1 0; min-height: 40px; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 15px; font-weight: 700; }
 .m-seg-btn.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
-/* four kind buttons («Все / Фильмы / Сериалы / Аудиокниги») wrap to two rows on a narrow phone */
-.m-search-kinds { flex-wrap: wrap; }
-.m-search-kinds .m-seg-btn { flex: 1 1 45%; padding: 0 8px; font-size: 14px; }
+/* kind chips stay one scrolling row */
+.m-search-kinds { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.m-search-kinds::-webkit-scrollbar { display: none; }
+.m-search-kinds .m-seg-btn { flex: 0 0 auto; padding: 0 12px; font-size: 14px; }
 /* «Каталог» → compact top (v0.17): the small logo, a 36px «Мои | Обзор» switch and the icon buttons share one 44px row;
    the switch buttons stay 44px tall for the finger, their pill and the track are drawn 30 / 36px tall */
 .m-library { gap: 12px; }
@@ -1503,9 +1505,9 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 /* «Фильм» / «Сериал · S02 · 1-8 из 8»: a quality chip with a frame */
 .m-kind-badge { background: none; box-shadow: inset 0 0 0 1px #3A4150; }
 .m-search-kinds { margin: 4px 0 8px; }
-.m-rc-meta { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; font-size: 12px; line-height: 16px; }
+.m-rc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; white-space: normal; font-size: 13px; line-height: 18px; }
 .m-rc-meta .m-src-badge, .m-rc-meta .m-flag { flex-shrink: 0; padding: 0 6px; border-radius: 5px; }
-.m-rc-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.m-rc-meta-text { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
 .seed-approx { opacity: 0.72; }
 .seed-live { display: inline-block; width: 6px; height: 6px; margin-left: 4px; border-radius: 50%; background: var(--ok, #3fb950); vertical-align: middle; }
 .m-rc-bottom { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; min-width: 0; max-width: 100%; overflow: hidden; }
@@ -1657,7 +1659,9 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-sub-new { min-height: 46px; border: 1px dashed #3A3F4B; border-radius: 14px; background: none; color: #C9CEDA; font: inherit; font-size: 14px; font-weight: 700; }
 .m-subs-search { display: flex; align-items: center; gap: 6px; }
 .m-subs-search .m-input { min-width: 0; }
-.m-subs-sort { align-items: center; }
+.m-subs-sort { align-items: center; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.m-subs-sort::-webkit-scrollbar { display: none; }
+.m-subs-sort .m-chip { flex-shrink: 0; }
 .m-subs-sort-label { flex: 0 0 auto; white-space: nowrap; }
 .m-sub-check { align-self: flex-start; }
 .m-ep-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; background: var(--panel); overflow-wrap: anywhere; }
@@ -1665,7 +1669,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-hl { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-flag { padding: 2px 8px; border-radius: 6px; background: var(--accent); color: var(--bg); font-weight: 700; }
 .m-watch-prompt { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
-.m-sub-plate { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: #3A3320; color: var(--accent); font-size: 13px; line-height: 1.35; }
+.m-sub-plate { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 13px; line-height: 1.35; }
 .m-sub-plate svg { flex-shrink: 0; }
 .m-sub-plate .m-btn { flex-shrink: 0; }
 .m-sub-form { display: flex; flex-direction: column; gap: 12px; }
@@ -1806,8 +1810,8 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 /* «Каталог»: menu on long press and selection mode */
 .m-card, .m-vrow, .m-crow { position: relative; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 .m-row-wrap { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.m-row-wrap > .m-vrow, .m-row-wrap > .m-crow { flex: 1 1 auto; }
-.m-card-more { flex-shrink: 0; }
+.m-row-wrap > .m-vrow, .m-row-wrap > .m-crow { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.m-card-more { flex: 0 0 44px; position: relative; z-index: 1; background: var(--bg); }
 .m-select-bar { gap: 8px; }
 .m-select-count { flex: 1 1 auto; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-select-bar .m-btn { width: auto; padding: 0 14px; flex-shrink: 0; }
@@ -1866,7 +1870,7 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-head-btn:disabled { opacity: 0.6; }
 /* «Добавить»: magnet is a full-width secondary button under the search chips; tapped, the field opens in place */
 .m-add-magnet { display: flex; flex-direction: column; gap: 10px; }
-.m-add-magnet-btn { width: 100%; }
+.m-add-magnet-btn { width: auto; align-self: flex-start; min-height: 40px; padding: 0 14px; }
 .m-add-magnet .m-input { height: 44px; font-size: 15px; }
 /* ---- «Мои» → the screen of a series card ---- */
 .m-screen[data-route='series'] { display: flex; flex-direction: column; gap: 12px; }
@@ -2225,7 +2229,7 @@ html.m-hint-hold .m-hint { display: none; }
   padding: 8px; border: none; border-radius: 14px; background: var(--panel); color: inherit; text-align: left;
 }
 .m-resume-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.m-resume-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-resume-name { font-weight: 700; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
 .m-resume-card .m-bar-track { margin-top: 4px; }
 .m-release-switch { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 2px 0 2px 12px; border-radius: 12px; background: var(--panel); }
 .m-release-switch-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; color: var(--muted); }
@@ -2358,3 +2362,66 @@ body.test-labels [data-code]::after {
 .m-ad-rail-text > *:last-child { margin-bottom: 0; }
 .m-ad-rail-text .m-card-title { min-height: 0; margin-top: 0; }
 .m-ad-more { align-self: flex-start; margin-top: 4px; }
+
+/* Catalog header: one sticky bar. On scroll the subtitle drops out whole, it is not clipped in half. */
+.m-lib-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--bg);
+  margin-left: -16px;
+  margin-right: -16px;
+  padding: 0 16px 8px;
+}
+.m-disc-sticky-slot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.m-library[data-collapsed='1'] .m-disc-head .m-grow { display: none; }
+.m-library[data-collapsed='1'] .m-disc-head h2 { font-size: 16px; }
+.m-library[data-collapsed='1'] .m-lib-sticky { padding-bottom: 4px; }
+.m-tv-steps { white-space: pre-line; }
+.m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
+.m-ep-fold { align-self: flex-start; }
+.m-feed-banner { display: flex; flex-direction: column; gap: 8px; }
+.m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
+.m-rc-bottom > .m-rc-btn { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.m-rc-watch, .m-rc-more { position: relative; z-index: 1; }
+.m-rc-watch { flex: 1 1 auto; min-width: 0; }
+.m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }
+.m-result-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--panel); }
+.m-result-group-title { font-weight: 700; }
+.m-sub-menu { flex-shrink: 0; }
+
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --m-nav-h: 0px; --m-nav-reserve: 0px; --m-mini-h: 44px; --m-rail: 72px; }
+  .m-nav {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: var(--m-rail);
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    border-top: none;
+    border-right: 1px solid var(--panel-2);
+    padding: 8px 4px;
+  }
+  .m-nav-item { flex-direction: column; justify-content: center; gap: 2px; min-height: 0; padding-top: 2px; font-size: 10px; }
+  .m-nav-pill { width: 44px; height: 26px; }
+  .m-screen {
+    padding-top: calc(env(safe-area-inset-top) + 6px);
+    padding-left: calc(var(--m-rail) + 10px + env(safe-area-inset-left));
+    padding-bottom: calc(12px + var(--m-mini-h) + env(safe-area-inset-bottom));
+  }
+  .m-library { padding-top: 4px; gap: 8px; }
+  .m-lib-head { min-height: 40px; }
+  .m-bar-title, .m-screen h1 { font-size: 18px; }
+  .m-mini {
+    left: calc(var(--m-rail) + 8px);
+    height: var(--m-mini-h);
+    bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  .m-now-body { margin-top: 0; padding-top: 8px; }
+  .m-now-bleed .m-now-head { position: relative; background: var(--bg); }
+  .m-now-bleed .m-now-head::before { display: none; }
+  .m-now-title { text-shadow: 0 1px 2px #000; background: rgba(15, 17, 21, 0.72); padding: 2px 8px; border-radius: 8px; }
+}

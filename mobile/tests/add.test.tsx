@@ -50,11 +50,22 @@ function type(sel: string, v: string) {
 }
 
 // row actions carry the row title: «Добавить на сервер: <title>», «Подробнее: <title>»
-const byLabel = (l: string) =>
+const matchLabel = (l: string) =>
   Array.from(el.querySelectorAll('button')).filter((b) => {
     const a = b.getAttribute('aria-label') || '';
     return a === l || a.indexOf(l + ': ') === 0 || a.indexOf(l + ', ') === 0;
   });
+const byLabel = (l: string) => {
+  let found = matchLabel(l);
+  if (!found.length) {
+    const more = el.querySelector('.m-rc-more') as HTMLElement | null;
+    if (more) {
+      act(() => more.click());
+      found = matchLabel(l);
+    }
+  }
+  return found;
+};
 const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 const click = (n: Element) => act(() => (n as HTMLElement).click());
 // a tap on a found-release card opens its «Подробнее» sheet (the category, the full title, the actions)
@@ -906,7 +917,7 @@ describe('Add unified search: stable rows', () => {
     search('x');
     await flush();
     const card = el.querySelector('.m-result-card')!;
-    expect(card.querySelector('.m-btn')).toBeNull();
+    expect(card.querySelector('.m-rc-watch')!.textContent).toBe('Смотреть');
     expect(card.querySelector('.m-chip')).toBeNull();
     expect(card.querySelector('.m-raw-title')).toBeNull();
     const round = Array.from(card.querySelectorAll('.m-rc-btn'));
@@ -987,6 +998,7 @@ describe('Add «Подписаться»', () => {
     search('  Северный ветер сезон 2 ');
     await flush();
     const plate = el.querySelector('[data-plate="subscribe"]')!;
+    click(plate.querySelector('button[aria-expanded]')!);
     expect(plate.textContent).toContain('Сообщить, когда появятся новые раздачи по этому запросу');
     click(Array.from(plate.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
     expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Северный ветер сезон 2');
@@ -998,6 +1010,7 @@ describe('Add «Подписаться»', () => {
     expect(subs[0]).toMatchObject({ query: 'Северный ветер сезон 2', quality: '1080', sources: ['fake'], notify: true });
     // already subscribed: the plate opens it instead
     const again = el.querySelector('[data-plate="subscribe"]')!;
+    if (again.querySelector('button[aria-expanded]')!.getAttribute('aria-expanded') !== 'true') click(again.querySelector('button[aria-expanded]')!);
     expect(again.textContent).toContain('Вы подписаны на этот запрос');
     click(Array.from(again.querySelectorAll('button')).find((b) => b.textContent === 'Открыть')!);
     expect(currentRoute.value).toEqual({ name: 'subFindings', id: subs[0].id });
@@ -1045,6 +1058,7 @@ describe('Add in English', () => {
     await flush();
     expect(el.textContent).toContain('Nothing found');
     const plate = el.querySelector('[data-plate="subscribe"]')!;
+    click(plate.querySelector('button[aria-expanded]')!);
     expect(plate.textContent).toContain('Get notified when new torrents for this search appear');
     expect(byText('Subscribe')).toBeTruthy();
     click(byText('Add'));
