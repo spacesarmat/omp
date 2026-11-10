@@ -19,6 +19,7 @@ import { seriesGroupOf, torrentName } from '../lib/cleanNames';
 import { requestSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
 import { parseReleaseInfo, releaseBadges } from '../lib/releaseInfo';
 import { buildTorrentQueue } from '../player/queue';
+import { cacheNodesOn } from '../billing/entitlement';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
@@ -142,7 +143,22 @@ export function TorrentScreen({ hash }: { hash: string }) {
     setSeasonPick(null);
   }, [hash]);
 
-  const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
+  const [cacheGen, setCacheGen] = useState(0);
+  useEffect(() => {
+    if (!cacheNodesOn()) return;
+    let dead = false;
+    // Loaded only when the feature is on, so the TV bundle does not gain this path while the flag is off.
+    import('../cache/lookup').then((mod) => import('../sources/tvContext').then((tv) => mod.prepareCachePlayback(hash, tv.tvSourceContext()))).then(
+      (src) => {
+        if (!dead) setCacheGen((n) => n + 1);
+      },
+      () => undefined,
+    );
+    return () => {
+      dead = true;
+    };
+  }, [hash]);
+  const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files, cacheGen]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
   const packSeasons = useMemo(() => seasonsInFiles(playableFiles(files)), [files]);
   const loose = useMemo(() => hasLooseFiles(playableFiles(files)), [files]);

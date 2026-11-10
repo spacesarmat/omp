@@ -43,6 +43,8 @@ interface MeBody {
   sources?: { jackett?: boolean; jacred?: boolean; bitmagnet?: boolean };
   /** 0: no monitoring cap. Omitted by a server from before this field. */
   monitorMax?: number;
+  /** Popular-release cache. Omitted or false: the player keeps the local TorrServer. */
+  cache?: { enabled?: boolean };
 }
 
 interface ErrorBody {
@@ -355,6 +357,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           jacred: flags.jacred,
           bitmagnet: flags.bitmagnet === true,
           monitorMax: cap,
+          cacheNodes: !!(body.cache && body.cache.enabled === true),
         };
         // The account screen refetches on this event. An unchanged answer must not emit, or the two call each other.
         if (!billingAccessMatches(next)) changed = true;

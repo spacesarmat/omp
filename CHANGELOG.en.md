@@ -10,6 +10,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] The embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
 - [atv] On Android TV the embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
 - [tech] The android/vendor/2160player submodule is updated to v0.2.25 (cae50cf), player-core coordinate 0.2.25. The player2160-update workflow opens a PR for a new release. The TorrServer update workflow still opens a PR and skips a release that fails the sha256, size or version checks
+- [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
 
 ## 0.20.12-beta.5
 
