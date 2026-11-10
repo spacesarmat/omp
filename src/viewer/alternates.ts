@@ -1,6 +1,7 @@
 // Other releases seen in the last search, so a stalled play can switch without a new search.
 // Chromium 53 safe.
 import { qualityRank } from '../monitor/quality';
+import { progressTitleKey } from './tracks';
 
 export interface AlternateRow {
   hash: string;
@@ -35,22 +36,28 @@ export function nextAlternate(currentHash: string, bias: 'any' | 'lower', known:
     if (!known[pool[i].hash]) continue;
     have.push(pool[i]);
   }
-  if (!have.length) return '';
+  const curKey = progressTitleKey(titleOf(cur));
+  if (!curKey) return '';
+  const same: AlternateRow[] = [];
+  for (let i = 0; i < have.length; i++) {
+    if (progressTitleKey(have[i].title) === curKey) same.push(have[i]);
+  }
+  if (!same.length) return '';
   if (bias === 'lower') {
     const curTitle = titleOf(cur);
     const curRank = qualityRank(curTitle);
     let best = '';
     let bestRank = curRank;
-    for (let i = 0; i < have.length; i++) {
-      const rank = qualityRank(have[i].title);
-      if (curTitle && rank < bestRank) {
-        best = have[i].hash;
+    for (let i = 0; i < same.length; i++) {
+      const rank = qualityRank(same[i].title);
+      if (rank < bestRank) {
+        best = same[i].hash;
         bestRank = rank;
       }
     }
     return best;
   }
-  return have[0].hash;
+  return same[0].hash;
 }
 
 function titleOf(hash: string): string {

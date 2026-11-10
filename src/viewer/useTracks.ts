@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { TorrServerClient } from '../api/torrserver';
+import { normalizeLang } from '../lib/tracks';
 import { probeTracks, prefForStart, rememberTracks, type ProbeTrack } from './tracks';
 
 export function useTrackChoice(c: TorrServerClient | null, hash: string, title: string, fileId: number | null) {
@@ -54,13 +55,13 @@ export function useTrackChoice(c: TorrServerClient | null, hash: string, title: 
     const next = (audioI + 1) % audio.length;
     setAudioI(next);
     const tr = audio[next];
-    rememberTracks(hash, title, { audioLang: tr.language, audioLabel: tr.label });
+    rememberTracks(hash, title, { audioLang: normalizeLang(tr.language), audioLabel: tr.label });
   };
   const cycleSub = () => {
     const next = subI + 1 >= subs.length ? -1 : subI + 1;
     setSubI(next);
     if (next < 0) rememberTracks(hash, title, { sub: 'off' });
-    else rememberTracks(hash, title, { sub: { lang: subs[next].language, label: subs[next].label } });
+    else rememberTracks(hash, title, { sub: { lang: normalizeLang(subs[next].language), label: subs[next].label } });
   };
   return { audio: audio, subs: subs, audioI: audioI, subI: subI, cycleAudio: cycleAudio, cycleSub: cycleSub };
 }

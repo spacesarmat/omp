@@ -14,7 +14,7 @@ describe('progress body', () => {
       durationSec: 0,
     });
     expect(parseProgressBody({ titleKey: '', episodeKey: 's01e02', positionSec: 10 }).error).toBe('bad_body');
-    expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 0 }).error).toBe('bad_body');
+    expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 0 })).toMatchObject({ positionSec: 0 });
     expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 999999 }).error).toBe('bad_body');
   });
 

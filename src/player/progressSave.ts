@@ -29,10 +29,11 @@ export function saveItemProgress(
     const title = item.torrentTitle || item.title;
     const film = !episodeLabel(item.title);
     const id = progressIdentity(title, item.title, film);
+    const finished = !open && duration > 0 && time / duration >= WATCHED_RATIO;
     pushProgress({
       titleKey: id.titleKey,
       episodeKey: id.episodeKey,
-      positionSec: Math.floor(time),
+      positionSec: finished ? 0 : Math.floor(time),
       durationSec: Math.floor(duration),
       title: title,
       label: episodeLabel(item.title),

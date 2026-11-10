@@ -292,6 +292,11 @@ export function TorrentScreen({ hash }: { hash: string }) {
   const titleForKey = tor ? displayTitle(tor) : '';
   const film = !!tor && !isSeries(tor);
   const remote = useContinue(titleForKey, playPath, film, localPos);
+  if (localPos <= 0 && remote.episodeKey) {
+    for (let i = 0; i < queue.length; i++) {
+      if (episodeProgressKey(queue[i].title, film) === remote.episodeKey) target = i;
+    }
+  }
   const stashed = stashedResume(titleMemoryKey(titleForKey), episodeProgressKey(playPath, film));
   const targetPos = Math.max(localPos, remote.sec, stashed);
   const fileForWarm = queue[target] ? files.filter((f) => f.id === queue[target].fileIndex)[0] : null;

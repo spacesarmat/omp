@@ -58,6 +58,7 @@ import { asWarm } from '../../../src/viewer/warmClient';
 import { useContinue } from '../../../src/viewer/useContinue';
 import { useTrackChoice } from '../../../src/viewer/useTracks';
 import { takeAutoplay } from '../../../src/viewer/alternates';
+import { episodeProgressKey } from '../../../src/viewer/tracks';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
@@ -571,7 +572,7 @@ export function Torrent({ hash }: { hash: string }) {
   const previewTarget = watchTarget(hash, previewFiles);
   const titleKeySrc = tor ? displayTitle(tor) : '';
   const localPreview = previewTarget ? sharedResume(hash, previewTarget.id) : 0;
-  const remote = useContinue(titleKeySrc, previewTarget ? previewTarget.path : '', book, localPreview);
+  const remote = useContinue(titleKeySrc, previewTarget ? previewTarget.path : '', !(previewTarget && episodeLabel(previewTarget.path)), localPreview);
   const tracks = useTrackChoice(c || null, hash, titleKeySrc, previewTarget ? previewTarget.id : null);
   useEffect(() => {
     if (!c) return undefined;
@@ -711,8 +712,13 @@ export function Torrent({ hash }: { hash: string }) {
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one
-  const target = watchTarget(hash, files);
+  let target = watchTarget(hash, files);
   const localAt = target ? sharedResume(hash, target.id) : 0;
+  if (localAt <= 0 && remote.episodeKey) {
+    for (let i = 0; i < files.length; i++) {
+      if (episodeProgressKey(files[i].path, !episodeLabel(files[i].path)) === remote.episodeKey) target = files[i];
+    }
+  }
   const at = Math.max(localAt, remote.sec);
   const fromOther = remote.other && remote.sec > localAt;
   const targetCode = target ? fileCode(target) : '';

@@ -31,7 +31,7 @@ export function parseProgressBody(body) {
   const episodeKey = clean(src.episodeKey, EP_MAX);
   const positionSec = pos(src.positionSec);
   const durationSec = pos(src.durationSec === undefined || src.durationSec === '' ? 0 : src.durationSec);
-  if (!titleKey || !episodeKey || positionSec < 1 || durationSec < 0) return { error: 'bad_body' };
+  if (!titleKey || !episodeKey || positionSec < 0 || durationSec < 0) return { error: 'bad_body' };
   return {
     titleKey,
     episodeKey,

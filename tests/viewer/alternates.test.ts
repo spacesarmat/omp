@@ -15,6 +15,8 @@ describe('lower quality alternate', () => {
     expect(nextAlternate('bbb', 'lower', known)).toBe('ccc');
     expect(nextAlternate('ccc', 'lower', known)).toBe('');
     expect(nextAlternate('ccc', 'any', known)).toBe('aaa');
+    noteAlternatePool([{ hash: 'zzz', title: 'Other movie 1080p' }]);
+    expect(nextAlternate('aaa', 'any', { aaa: true, zzz: true })).toBe('');
   });
 });
 

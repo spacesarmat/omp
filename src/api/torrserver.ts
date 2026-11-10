@@ -266,6 +266,8 @@ export class TorrServerClient {
   /** Same as preload, but `signal` aborts the request when the viewer leaves the screen. Never rejects. */
   preloadAbortable(hash: string, fileIndex: number, name = 'file', signal?: AbortSignal): Promise<void> {
     const path = '/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + fileIndex + '&preload';
+    // The native transport cannot abort. A speculative preload would keep running after the screen is left.
+    if (signal && this.via(this.baseUrl + path)) return Promise.resolve();
     return this.call<string>(path, {
       method: 'GET',
       responseType: 'text',
@@ -286,6 +288,7 @@ export class TorrServerClient {
   preloadTail(hash: string, fileIndex: number, name: string, start: number, end: number, signal?: AbortSignal): Promise<void> {
     if (!(end >= start)) return Promise.resolve();
     const path = '/stream/' + encodeURIComponent(name || 'file') + '?link=' + hash + '&index=' + fileIndex + '&play';
+    if (signal && this.via(this.baseUrl + path)) return Promise.resolve();
     return this.call<ArrayBuffer>(path, {
       method: 'GET',
       responseType: 'arraybuffer',

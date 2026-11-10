@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseProgressBody, pickContinue, type RemoteProgress } from '../../src/viewer/progressSync';
 
 function remote(positionSec: number, other = true): RemoteProgress {
-  return { positionSec: positionSec, durationSec: 3600, updatedAt: 10, otherDevice: other, label: 'S01E02' };
+  return { positionSec: positionSec, durationSec: 3600, updatedAt: 10, otherDevice: other, label: 'S01E02', episodeKey: 's01e02' };
 }
 
 describe('continue position', () => {

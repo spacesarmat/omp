@@ -179,7 +179,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
   const goAlt = (bias: 'any' | 'lower') => {
-    const pos = posRef.current.time;
+    const pos = posRef.current.time >= 1 ? posRef.current.time : startPos.current;
     const title = item.torrentTitle || item.title;
     const film = !episodeLabel(item.title);
     const id = progressIdentity(title, item.title, film);
@@ -793,7 +793,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   }, 110);
 
   useKeys((a) => {
-    if (blocked) return false; // error view buttons use spatial navigation
+    if (blocked || showFail || deadNow) return false; // error view buttons use spatial navigation
     lastKeyAt.current = Date.now();
     taps.cancel();
     if (next.countdown !== null) {

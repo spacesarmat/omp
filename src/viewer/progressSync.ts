@@ -14,6 +14,7 @@ export interface RemoteProgress {
   updatedAt: number;
   otherDevice: boolean;
   label: string;
+  episodeKey: string;
 }
 
 export interface ProgressPush {
@@ -60,6 +61,7 @@ export function parseProgressBody(text: string): RemoteProgress | null {
       updatedAt: num(v.updatedAt),
       otherDevice: v.otherDevice === true,
       label: typeof v.label === 'string' ? v.label : '',
+      episodeKey: typeof v.episodeKey === 'string' ? v.episodeKey : '',
     };
   } catch (e) {
     return null;
@@ -91,7 +93,7 @@ export function fetchProgress(titleKey: string, episodeKey: string): Promise<Rem
 export function pushProgress(row: ProgressPush): void {
   const ctx = progressContext();
   if (!ctx || !billingSession() || !row.titleKey || !row.episodeKey) return;
-  if (!(row.positionSec >= 1)) return;
+  if (!(row.positionSec >= 0)) return;
   const body: { [k: string]: string } = {
     titleKey: row.titleKey,
     episodeKey: row.episodeKey,
