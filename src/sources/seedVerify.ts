@@ -177,7 +177,7 @@ export function watchSeedVerify(opts: {
     started = true;
     if (timer) clearTimeout(timer);
     timer = null;
-    if (list && list.length) opts.onApply(list);
+    if (list) opts.onApply(list);
     if (opts.onSettled) opts.onSettled(list);
   }
 
@@ -194,7 +194,7 @@ export function watchSeedVerify(opts: {
     ask(rows, opts.query, opts.ctx as SourceContext).then(
       (list) => {
         if (dead) return;
-        if (list && list.length) opts.onApply(list);
+        if (list) opts.onApply(list);
         if (opts.onSettled) opts.onSettled(list);
       },
       () => {
