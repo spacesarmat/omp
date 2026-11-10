@@ -54,11 +54,24 @@ export function starsOffered(settings, kind) {
   return wholeStars(settings.starsPrice) >= 1;
 }
 
+/** Floor to the asset scale so a credit discount never rounds up into an extra charge. */
+function formatAssetFloor(asset, value) {
+  const scale = asset === 'USDT' ? 2 : asset === 'TON' ? 4 : asset === 'BTC' ? 8 : 0;
+  if (!scale) return '';
+  const n = Number(value);
+  if (!Number.isFinite(n) || !(n > 0)) return '';
+  const factor = 10 ** scale;
+  const units = Math.floor(n * factor + 1e-9);
+  if (!(units > 0) || !Number.isSafeInteger(units)) return '';
+  return Math.floor(units / factor) + '.' + String(units % factor).padStart(scale, '0');
+}
+
 /**
  * Crypto amount string for one order, or ''.
- * An explicit asset price wins. Otherwise rubPay / rate, rounded to the asset scale (half up).
+ * An explicit asset price wins. A ruble credit scales it down (floor), the same way as stars.
+ * Otherwise rubPay / rate, rounded to the asset scale (half up). rubPay is already after credit.
  */
-export function cryptoDue(settings, asset, kind, extras, rubPay) {
+export function cryptoDue(settings, asset, kind, extras, rubGross, rubPay) {
   const key = assetKey(asset);
   if (!key) return '';
   const s = settings || {};
@@ -71,9 +84,18 @@ export function cryptoDue(settings, asset, kind, extras, rubPay) {
   } else if (base > 0 && (n <= 0 || extra > 0)) {
     explicit = base + extra * n;
   }
-  if (explicit > 0) return formatAsset(asset, explicit);
+  if (explicit > 0) {
+    const gross = Number(rubGross) || 0;
+    const pay = rubPay == null ? gross : Number(rubPay) || 0;
+    let scaled = explicit;
+    if (gross > 0 && pay < gross - 1e-9) {
+      if (!(pay > 0)) return '';
+      scaled = (explicit * pay) / gross;
+    }
+    return formatAssetFloor(asset, scaled);
+  }
   const rate = Number(s['cryptoRate' + key]) || 0;
-  const rub = Number(rubPay) || 0;
+  const rub = Number(rubPay == null ? rubGross : rubPay) || 0;
   if (!(rate > 0) || !(rub > 0)) return '';
   return formatAsset(asset, rub / rate);
 }

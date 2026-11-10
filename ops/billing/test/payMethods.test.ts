@@ -4,7 +4,7 @@ import { botCallback, botReply } from '../src/bot.mjs';
 import { amountCovers, cryptoPayAuthentic, cryptoPayHost, cryptoPaySign, formatAsset, paidInvoice } from '../src/cryptoPay.mjs';
 import { applyPayment, financeReport, openAccount, quotePurchase } from '../src/logic.mjs';
 import { cryptoOffered, starCheckoutDecision, starDue, starInvoiceBody } from '../src/payMethods.mjs';
-import { createApp } from '../src/server.mjs';
+import { createApp, pollBot } from '../src/server.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
@@ -223,6 +223,57 @@ describe('one order, one extension', () => {
     expect(extra.state.subscriptions[0].paidUntil).toBe(ok.state.subscriptions[0].paidUntil);
   });
 
+  it('scales crypto by the ruble credit and refuses a second order that spends the same credit', () => {
+    const b = boot();
+    b.state.settings.cryptoUsdt = 2;
+    const opened = applyPayment(b.state, {
+      operationId: 'ym-new',
+      label: 'new:' + b.accountId,
+      amount: '150.00',
+      currency: '643',
+      now: b.now,
+    });
+    expect(opened.result.kind).toBe('new');
+    opened.state.subscriptions[0].creditRub = 50;
+    const subId = opened.state.subscriptions[0].id;
+    const stars = quotePurchase(opened.state, {
+      kind: 'sub',
+      accountId: b.accountId,
+      subscriptionId: subId,
+      now: b.now + 1,
+      method: 'stars',
+    });
+    expect(stars.result.payAmount).toBe('66');
+    const crypto = quotePurchase(stars.state, {
+      kind: 'sub',
+      accountId: b.accountId,
+      subscriptionId: subId,
+      now: b.now + 1,
+      method: 'crypto',
+      asset: 'USDT',
+    });
+    expect(crypto.result.payAmount).toBe('1.33');
+    const paid = applyPayment(crypto.state, {
+      operationId: 'stars:credit',
+      label: stars.result.label,
+      amount: '66',
+      currency: 'XTR',
+      now: b.now + 2,
+    });
+    expect(paid.result.kind).toBe('renew');
+    expect(paid.state.subscriptions[0].creditRub).toBe(0);
+    const until = paid.state.subscriptions[0].paidUntil;
+    const second = applyPayment(paid.state, {
+      operationId: 'crypto:credit',
+      label: crypto.result.label,
+      amount: '1.33',
+      currency: 'USDT',
+      now: b.now + 3,
+    });
+    expect(second.result.error).toBe('amount');
+    expect(second.state.subscriptions[0].paidUntil).toBe(until);
+  });
+
   it('pre_checkout does not extend the subscription', () => {
     const b = boot();
     const quoted = quotePurchase(b.state, { kind: 'new', accountId: b.accountId, now: b.now, method: 'stars' });
@@ -323,6 +374,83 @@ describe('crypto pay webhook', () => {
     expect(replayed.subscriptions).toHaveLength(1);
     expect(replayed.subscriptions[0].paidUntil).toBe(until);
     expect(paidInvoice({ update_type: 'invoice_paid', payload: { status: 'active', invoice_id: 1 } })).toBeNull();
+  });
+});
+
+describe('stars poll durability', () => {
+  function starUpdate(id: number) {
+    return {
+      update_id: id,
+      message: {
+        chat: { id: 42, type: 'private' },
+        successful_payment: {
+          currency: 'XTR',
+          total_amount: 100,
+          invoice_payload: 'buy:abc',
+          telegram_payment_charge_id: 'charge-1',
+        },
+      },
+    };
+  }
+
+  function tg(result: unknown) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, result }),
+      text: async () => '',
+    };
+  }
+
+  it('retries the same update when the payment write fails, and does not apply it during cutover', async () => {
+    const state = emptyState();
+    state.settings.botToken = '123456:poll';
+    const offsets: number[] = [];
+    let polls = 0;
+    const fetchImpl = async (url: string) => {
+      if (String(url).indexOf('/getUpdates') < 0) return tg({});
+      const offset = Number(new URL(url).searchParams.get('offset') || 0);
+      offsets.push(offset);
+      polls += 1;
+      return tg(polls === 1 ? [starUpdate(7)] : []);
+    };
+    const store = {
+      read: async () => state,
+      update: async () => {
+        throw new Error('db down');
+      },
+      registry: {},
+    };
+    await pollBot(store, fetchImpl, { maxLoops: 3, sleep: async () => {}, now: () => Date.now() });
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBe(7);
+
+    const cutoverOffsets: number[] = [];
+    let cutoverPolls = 0;
+    let writes = 0;
+    const cutoverFetch = async (url: string) => {
+      if (String(url).indexOf('/getUpdates') < 0) return tg({});
+      cutoverOffsets.push(Number(new URL(url).searchParams.get('offset') || 0));
+      cutoverPolls += 1;
+      return tg(cutoverPolls === 1 ? [starUpdate(9)] : []);
+    };
+    const cutoverStore = {
+      read: async () => state,
+      update: async () => {
+        writes += 1;
+        return {};
+      },
+      registry: {},
+    };
+    await pollBot(cutoverStore, cutoverFetch, {
+      maxLoops: 3,
+      adminLoginOnly: true,
+      sleep: async () => {},
+      now: () => Date.now(),
+    });
+    expect(writes).toBe(0);
+    expect(cutoverOffsets[0]).toBe(0);
+    expect(cutoverOffsets[1]).toBe(9);
   });
 });
 

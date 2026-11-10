@@ -2463,7 +2463,8 @@ export function createApp(file, fetchImpl, opts) {
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
-        if (seenCountry && account.country !== seenCountry) {
+        // Optional. A read-only cutover must still answer /v1/me.
+        if (!readOnly && seenCountry && account.country !== seenCountry) {
           const accountId = account.id;
           await store.update((cur) => ({ state: rememberCountry(cur, accountId, seenCountry) }));
         }
@@ -3192,17 +3193,30 @@ export async function pollBot(file, fetchImpl, opts) {
           const sp = msg.successful_payment;
           const charge = String(sp.telegram_payment_charge_id || '');
           const payload = String(sp.invoice_payload || '');
+          if (charge && payload && adminLoginOnly) {
+            // Cutover poller must not apply or ack a payment. The next getUpdates sees this update again.
+            offset = u.update_id;
+            await sleep(5000);
+            break;
+          }
           if (charge && payload) {
             const paidAt = Date.now();
-            const applied = await store.update((cur) =>
-              applyPayment(cur, {
-                operationId: 'stars:' + charge,
-                label: payload,
-                amount: String(sp.total_amount),
-                currency: 'XTR',
-                now: paidAt,
-              }),
-            );
+            let applied;
+            try {
+              applied = await store.update((cur) =>
+                applyPayment(cur, {
+                  operationId: 'stars:' + charge,
+                  label: payload,
+                  amount: String(sp.total_amount),
+                  currency: 'XTR',
+                  now: paidAt,
+                }),
+              );
+            } catch (e) {
+              // The write did not commit. Do not ack the update, so the next poll retries it.
+              offset = u.update_id;
+              throw e;
+            }
             const freshStar = await store.read();
             if (!applied.duplicate && !applied.error) {
               try {

@@ -1301,6 +1301,9 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     const usedCredit = quote ? Math.max(0, Math.floor(Number(quote.credit) || 0)) : 0;
     const haveCredit = creditOf(sub);
     const missing = Math.max(0, usedCredit - haveCredit);
+    // Stars and crypto cannot collect the missing rubles on top of an already sent invoice.
+    // A second quote that spent the same credit is refused instead of extending at the old discount.
+    if (alt && missing > 0) return rejectAmount(state, row);
     const need = (quoted !== null ? quoted : priceOf(state, act)) + missing;
     if (!coversNeed(need)) return rejectAmount(state, row);
     const next = extendPaid(state, sub, days, now, quotedExtras);
@@ -2484,7 +2487,7 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     payAsset = 'XTR';
   } else if (method === 'crypto') {
     if (CRYPTO_ASSETS.indexOf(asset) < 0) return { state, result: { error: 'bad_method' } };
-    const amount = cryptoDue(state.settings, asset, kind, extras, price);
+    const amount = cryptoDue(state.settings, asset, kind, extras, rubGross, price);
     if (!amount) return { state, result: { error: 'no_price' } };
     payMethod = 'crypto';
     payAmount = amount;
