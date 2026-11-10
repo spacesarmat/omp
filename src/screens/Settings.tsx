@@ -273,6 +273,8 @@ export function SettingsScreen() {
       <ChoiceRow focusKey="set-seekStep" label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
       <ChoiceRow focusKey="set-edgeStep" label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
       <ChoiceRow focusKey="set-autoNext" label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
+      <ChoiceRow focusKey="set-prebuffer" label={t('settings.prebufferMetered')} value={s.prebufferOnMetered} options={onOff()} onChange={(v) => updateSettings({ prebufferOnMetered: v })} />
+      <ChoiceRow focusKey="set-fallback" label={t('settings.fallbackAuto')} value={s.fallbackAuto} options={onOff()} onChange={(v) => updateSettings({ fallbackAuto: v })} />
       <ChoiceRow focusKey="set-showStats" label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
 
       <h2>{t('common.subtitles')}</h2>

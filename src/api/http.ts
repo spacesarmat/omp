@@ -48,6 +48,8 @@ export interface HttpOptions {
   headers?: { [k: string]: string };
   /** Sends the request instead of fetch() (Android: a TorrServer over https goes through the native trust). */
   transport?: HttpTransport;
+  /** Aborts the request. A transport ignores it and uses its own timeout. */
+  signal?: AbortSignal;
 }
 
 /** What a transport gets: the body as text or as base64 bytes, its type apart from the headers. */
@@ -188,6 +190,10 @@ export function request<T>(url: string, opts: HttpOptions = {}): Promise<T> {
   const maxBytes = opts.maxBytes === undefined ? 5 * 1024 * 1024 : opts.maxBytes;
   const timeoutMs = opts.timeoutMs === undefined ? 5000 : opts.timeoutMs;
   const controller = opts.transport || typeof AbortController === 'undefined' ? null : new AbortController();
+  if (controller && opts.signal) {
+    if (opts.signal.aborted) controller.abort();
+    else opts.signal.addEventListener('abort', () => controller.abort());
+  }
   const sent: Promise<FetchLike> = opts.transport
     ? transportFetch(opts.transport, url, { method, headers, body, timeoutMs: timeoutMs > 0 ? timeoutMs : 120000 })
     : fetch(url, { method, headers, body, signal: controller ? controller.signal : undefined });

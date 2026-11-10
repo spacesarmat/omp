@@ -4,6 +4,16 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
+- Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
+- If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. A setting can switch it immediately
+- Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
+- A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
+- When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 007_playback_progress. A new billing image is required. Nothing was deployed to the NUC
+
 ## 0.20.12-beta.5
 
 - A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line

@@ -26,6 +26,7 @@ import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL } from '../lib/donate';
 import { log } from '../lib/log';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { rememberTracks } from '../viewer/tracks';
 import type { PlayerEngineSetting } from './nativeEngine';
 import { assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe } from './nativeEngine';
 
@@ -565,13 +566,13 @@ export class NativeSession {
     const item = e && this.queue[e.index];
     if (!e || !item || !item.hash) return;
     if (e.kind === 'audio') {
-      saveTrackPref(item.hash, { audioLang: e.lang, audioLabel: e.label });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { audioLang: e.lang, audioLabel: e.label });
       void this.seriesSaver(item.hash, e.channels ? { l: e.label, g: e.lang, c: e.channels, k: e.seen } : { l: e.label, g: e.lang, k: e.seen });
     } else if (e.off) {
-      saveTrackPref(item.hash, { sub: 'off' });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: 'off' });
       void this.seriesSaver(item.hash, { s: 'off' });
     } else {
-      saveTrackPref(item.hash, { sub: { lang: e.lang, label: e.label } });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: { lang: e.lang, label: e.label } });
       void this.seriesSaver(item.hash, { s: { l: e.label, g: e.lang } });
     }
   }

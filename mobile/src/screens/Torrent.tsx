@@ -52,6 +52,12 @@ import { reloadMonitor } from '../monitor/ui';
 import { deleteRelease, deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { releaseName } from '../lib/duplicates';
 import { displayTitle } from '../../../src/lib/torrentName';
+import { settings } from '../../../src/store/settings';
+import { startFileWarm, shouldPrebuffer, connectionMetered } from '../../../src/viewer/prebuffer';
+import { asWarm } from '../../../src/viewer/warmClient';
+import { useContinue } from '../../../src/viewer/useContinue';
+import { useTrackChoice } from '../../../src/viewer/useTracks';
+import { takeAutoplay } from '../../../src/viewer/alternates';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
@@ -561,6 +567,34 @@ export function Torrent({ hash }: { hash: string }) {
     if (cur.name === 'torrent' && cur.hash === hash) replaceTop({ name: 'audiobook', hash });
   }, [book, hash]);
 
+  const previewFiles = playableFiles(allFiles);
+  const previewTarget = watchTarget(hash, previewFiles);
+  const titleKeySrc = tor ? displayTitle(tor) : '';
+  const localPreview = previewTarget ? sharedResume(hash, previewTarget.id) : 0;
+  const remote = useContinue(titleKeySrc, previewTarget ? previewTarget.path : '', book, localPreview);
+  const tracks = useTrackChoice(c || null, hash, titleKeySrc, previewTarget ? previewTarget.id : null);
+  useEffect(() => {
+    if (!c) return undefined;
+    return startFileWarm(
+      asWarm(c),
+      hash,
+      previewTarget ? { id: previewTarget.id, path: previewTarget.path, length: previewTarget.length } : null,
+      shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered),
+    );
+  }, [c, hash, previewTarget ? previewTarget.id : -1, settings.value.prebufferOnMetered]);
+  useEffect(() => {
+    if (!previewTarget || !c || !tor) return;
+    const job = takeAutoplay(hash);
+    if (!job) return;
+    void watchOnPhone(c, tor, {
+      hash: hash,
+      file: previewTarget,
+      title: stripExt(baseName(previewTarget.path)),
+      at: job.positionSec,
+      duration: 0,
+    });
+  }, [hash, previewTarget ? previewTarget.id : -1]);
+
   if (!c || !tor) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
@@ -678,9 +712,13 @@ export function Torrent({ hash }: { hash: string }) {
 
   // where to continue: the latest started file of this torrent, else the first one
   const target = watchTarget(hash, files);
-  const at = target ? sharedResume(hash, target.id) : 0;
+  const localAt = target ? sharedResume(hash, target.id) : 0;
+  const at = Math.max(localAt, remote.sec);
+  const fromOther = remote.other && remote.sec > localAt;
   const targetCode = target ? fileCode(target) : '';
-  const mainLabel = at > 0
+  const mainLabel = fromOther
+    ? t('viewer.continueOther', { time: formatDuration(at) })
+    : at > 0
     ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
     : t('news.watchOnTv') + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
 
@@ -844,6 +882,18 @@ export function Torrent({ hash }: { hash: string }) {
           </>
         )}
         {status && <LaunchError message={status} />}
+        {(tracks.audio.length > 0 || tracks.subs.length > 0) && (
+          <div class="m-torrent-tracks" data-tracks>
+            {tracks.audio.length > 0 && (
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={tracks.cycleAudio}>
+                {t('viewer.tracksAudio') + ': ' + tracks.audio[tracks.audioI].label}
+              </button>
+            )}
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={tracks.cycleSub}>
+              {t('viewer.tracksSub') + ': ' + (tracks.subI >= 0 && tracks.subs[tracks.subI] ? tracks.subs[tracks.subI].label : t('viewer.tracksOff'))}
+            </button>
+          </div>
+        )}
         {releases.length > 1 && (
           <ReleasesBlock
             releases={releases}
