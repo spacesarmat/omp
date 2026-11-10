@@ -40,6 +40,8 @@ export interface AccessInput {
   bitmagnet?: boolean;
   /** 0: no monitoring cap. Omitted: this answer did not say. */
   monitorMax?: number;
+  /** Popular-release cache nodes. Omitted or false: playback stays on the local TorrServer. */
+  cacheNodes?: boolean;
 }
 
 interface AccessRecord {
@@ -55,6 +57,7 @@ interface AccessRecord {
   jacred?: boolean;
   bitmagnet?: boolean;
   monitorMax?: number;
+  cacheNodes?: boolean;
 }
 
 function finite(v: unknown): number | null {
@@ -74,6 +77,7 @@ function parseAccess(v: unknown): AccessRecord | null {
   if (v.jackett === true || v.jackett === false) rec.jackett = v.jackett;
   if (v.jacred === true || v.jacred === false) rec.jacred = v.jacred;
   if (v.bitmagnet === true || v.bitmagnet === false) rec.bitmagnet = v.bitmagnet;
+  if (v.cacheNodes === true || v.cacheNodes === false) rec.cacheNodes = v.cacheNodes;
   const cap = finite(v.monitorMax);
   if (cap !== null && cap >= 0 && cap <= 10000) rec.monitorMax = Math.floor(cap);
   return rec;
@@ -108,6 +112,7 @@ export function saveBillingAccess(acc: AccessInput | null): void {
   if (acc.jackett === true || acc.jackett === false) row.jackett = acc.jackett;
   if (acc.jacred === true || acc.jacred === false) row.jacred = acc.jacred;
   if (acc.bitmagnet === true || acc.bitmagnet === false) row.bitmagnet = acc.bitmagnet;
+  if (acc.cacheNodes === true || acc.cacheNodes === false) row.cacheNodes = acc.cacheNodes;
   if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && acc.monitorMax >= 0) row.monitorMax = Math.floor(acc.monitorMax);
   saveJson(ACCESS_KEY, row);
 }
@@ -126,6 +131,7 @@ export function billingAccessMatches(acc: AccessInput): boolean {
   if ((acc.jacred === true || acc.jacred === false) && rec.jacred !== acc.jacred) return false;
   // Missing and false are both off. Only turning the source on or off emits.
   if ((acc.bitmagnet === true) !== (rec.bitmagnet === true)) return false;
+  if ((acc.cacheNodes === true) !== (rec.cacheNodes === true)) return false;
   if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && rec.monitorMax !== Math.floor(acc.monitorMax)) return false;
   return true;
 }
@@ -171,6 +177,12 @@ export function freshPremiumSources(now?: number): { jackett: boolean; jacred: b
  * Source flags from the last /v1/me while the server date still counts, even when that check is older than
  * PREMIUM_FRESH_MS. Null when the answer named no sources: do not guess both on.
  */
+/** True only after /v1/me said the cache-node feature is on. Missing means off, so playback is unchanged. */
+export function cacheNodesOn(): boolean {
+  const row = accessForSession();
+  return !!(row && row.rec.cacheNodes === true);
+}
+
 /** bitmagnet is off unless a fresh-enough /v1/me named it. Missing means disabled. */
 export function bitmagnetSourceOn(now?: number): boolean {
   if (!ompSubscribed(now)) return false;

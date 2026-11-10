@@ -46,6 +46,12 @@ import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../add
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { orderSearch } from '../../../src/sources/seedRank';
+import { deviceCaps, pickDefaultSource } from '../../../src/viewer/sourcePick';
+import { lastLinkSpeed } from '../../../src/viewer/linkSpeed';
+import { noteAlternatePool } from '../../../src/viewer/alternates';
+import { connectionMetered, protectWarm, protectWarmLink, shouldPrebuffer, startWarm } from '../../../src/viewer/prebuffer';
+import { asWarm } from '../../../src/viewer/warmClient';
+import { settings } from '../../../src/store/settings';
 import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
@@ -511,6 +517,8 @@ export function Add({
 
   // 'tv': add and play on the TV; 'phone': add and play here (one file), else the torrent screen to choose
   const addResult = async (r: SourceResult, watch: false | 'tv' | 'phone') => {
+    protectWarm((r.hash || r.Hash || '').toLowerCase());
+    protectWarmLink(r.Magnet || r.Link || r.Hash || '');
     const key = resultKey(r);
     if (pendingRef.current.has(key)) return;
     if (watch === 'tv' && !tv) {
@@ -571,6 +579,8 @@ export function Add({
   const kindEmpty = kindF !== 'all' && matching.length > 0;
   // the search settled and not one source answered (no network, or every site down)
   const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
+  const rankKind = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'tv' : 'phone';
+  const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
@@ -584,6 +594,27 @@ export function Add({
   const others = prog ? prog.failed.filter((id) => !blocked.includes(id) && !ipBanNote(id) && fixKind(id) !== '') : [];
   const bannedIds = prog ? prog.failed.filter((id) => !!ipBanNote(id)) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
+  const pick = visible.length ? pickDefaultSource(visible, memo.searched, rankCtx) : null;
+  const pickKey = pick ? resultKey(pick.row) : '';
+  useEffect(() => {
+    noteAlternatePool(visible.map((r) => ({ hash: (r.hash || r.Hash || '').toLowerCase(), title: r.Title || '' })));
+  }, [pickKey, visible.length, searching]);
+  useEffect(() => {
+    const r = pick ? pick.row : null;
+    const c = client.value;
+    if (!r || searching || !c) return undefined;
+    const hash = (r.hash || r.Hash || '').toLowerCase();
+    const link = r.Magnet || r.Link || hash;
+    if (!hash && !link) return undefined;
+    let stop = (): void => undefined;
+    const timer = setTimeout(() => {
+      stop = startWarm(asWarm(c), { hash: hash, link: link }, shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered));
+    }, 700);
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [searching, pickKey]);
   const renderResults = (list: SourceResult[]) =>
     groupSameTitles(list).map((g) => {
       const many = g.rows.length > 1;
@@ -596,6 +627,8 @@ export function Add({
             nested={many}
             category={categoryOfRow(r)}
             busy={pending[k]}
+            flag={k === pickKey && pick ? pick.badge : undefined}
+            highlight={k === pickKey}
             onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
             onAdd={() => void addResult(r, false)}
             onWatch={() => void addResult(r, 'tv')}

@@ -4,6 +4,7 @@ import { errorMessage } from './api/http';
 import { navigate, openPlayer, resetTo } from './ui/nav';
 import { toast } from './ui/toast';
 import { buildTorrentQueue } from './player/queue';
+import { cacheNodesOn } from './billing/entitlement';
 import { attachPhone } from './phone/link';
 import { savePhoneLink } from './phone/phoneStore';
 import { checkForUpdate, dismissPrompt } from './store/updates';
@@ -61,36 +62,45 @@ export function runLaunchParams(raw: unknown): void {
       .then((tor) => (c.files(tor).length ? tor : c.loadInfo(hash)))
       .then(
         (tor) => {
-          const full = buildTorrentQueue(c, tor, c.files(tor));
-          let queue = full;
-          let seasonNext = false;
-          if (a.files && a.files.length) {
-            const byId: { [id: number]: (typeof full)[number] } = {};
-            full.forEach((q) => {
-              if (q.fileIndex !== undefined) byId[q.fileIndex] = q;
-            });
-            const sliced = a.files.map((id) => byId[id]).filter((q) => !!q);
-            if (sliced.length && sliced.some((q) => q.fileIndex === file)) {
-              queue = sliced;
-              seasonNext = true;
+          const open = () => {
+            const full = buildTorrentQueue(c, tor, c.files(tor));
+            let queue = full;
+            let seasonNext = false;
+            if (a.files && a.files.length) {
+              const byId: { [id: number]: (typeof full)[number] } = {};
+              full.forEach((q) => {
+                if (q.fileIndex !== undefined) byId[q.fileIndex] = q;
+              });
+              const sliced = a.files.map((id) => byId[id]).filter((q) => !!q);
+              if (sliced.length && sliced.some((q) => q.fileIndex === file)) {
+                queue = sliced;
+                seasonNext = true;
+              }
             }
-          }
-          const index = queue.findIndex((q) => q.fileIndex === file);
-          if (index < 0) {
-            resumeOnboarding();
-            toast(t('errors.badLaunchParams'), 'error');
-            navigate({ name: 'torrent', hash });
+            const index = queue.findIndex((q) => q.fileIndex === file);
+            if (index < 0) {
+              resumeOnboarding();
+              toast(t('errors.badLaunchParams'), 'error');
+              navigate({ name: 'torrent', hash });
+              return;
+            }
+            const route: { name: 'player'; queue: typeof queue; index: number; startAt?: number; from?: string; seasonNext?: boolean } = {
+              name: 'player',
+              queue,
+              index,
+              startAt,
+            };
+            if (from) route.from = from;
+            if (seasonNext) route.seasonNext = true;
+            openPlayer(route);
+          };
+          if (!cacheNodesOn()) {
+            open();
             return;
           }
-          const route: { name: 'player'; queue: typeof queue; index: number; startAt?: number; from?: string; seasonNext?: boolean } = {
-            name: 'player',
-            queue,
-            index,
-            startAt,
-          };
-          if (from) route.from = from;
-          if (seasonNext) route.seasonNext = true;
-          openPlayer(route);
+          import('./cache/lookup')
+            .then((mod) => import('./sources/tvContext').then((tv) => mod.prepareCachePlayback(hash, tv.tvSourceContext())))
+            .then(open, open);
         },
         (e) => {
           resumeOnboarding();

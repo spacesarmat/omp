@@ -1668,6 +1668,8 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-ep-card-title { font-size: 14px; font-weight: 700; }
 .m-hl { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-flag { padding: 2px 8px; border-radius: 6px; background: var(--accent); color: var(--bg); font-weight: 700; }
+.m-torrent-tracks { margin-top: 8px; }
+.m-torrent-tracks .m-btn { margin-right: 8px; margin-bottom: 8px; }
 .m-watch-prompt { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
 .m-sub-plate { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 13px; line-height: 1.35; }
 .m-sub-plate svg { flex-shrink: 0; }

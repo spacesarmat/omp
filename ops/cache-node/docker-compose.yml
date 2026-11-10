@@ -1,0 +1,67 @@
+# A cache node is its own server. deploy.sh does not start this file and it does not join the omp network.
+
+name: omp-cache-node
+
+services:
+  torrserver:
+    image: ghcr.io/yourok/torrserver@sha256:9188743fbdba14dccd38654a1185f44338bf5062f4098730acb8adeac6e596d7
+    restart: unless-stopped
+    environment:
+      TS_PORT: "8090"
+      TS_DONTKILL: "1"
+      TS_HTTPAUTH: "0"
+      TS_CONF_PATH: /opt/ts/config
+      TS_TORR_DIR: /opt/ts/torrents
+    volumes:
+      - ts_config:/opt/ts/config
+      - ts_torrents:/opt/ts/torrents
+      - ./torrserver.settings.json:/opt/ts/config/settings.json:ro
+    expose:
+      - "8090"
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8090/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - cache
+
+  agent:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TORRSERVER_URL: http://torrserver:8090
+      DATA_DIR: /torrents
+      PORT: "8090"
+    ports:
+      - "${CACHE_PUBLISH:-127.0.0.1:8090}:8090"
+    volumes:
+      - ts_torrents:/torrents:ro
+    depends_on:
+      torrserver:
+        condition: service_healthy
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - cache
+
+networks:
+  cache:
+    driver: bridge
+
+volumes:
+  ts_config:
+  ts_torrents:

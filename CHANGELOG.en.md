@@ -4,6 +4,20 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
+- [tech] The download page has one tile each for Android, Android TV, LG webOS and Windows. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl. There is no macOS build
+- While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
+- Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
+- If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
+- Billing progress keeps the year, so two films with the same name do not resume each other. Phone and TV use the same episode key. A finished file does not resume at the end on another device
+- Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
+- A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
+- When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 008_playback_progress. 007 is taken by cache nodes. A new billing image is required. Nothing was deployed to the NUC
+- [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
+
 ## 0.20.12-beta.5
 
 - A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line

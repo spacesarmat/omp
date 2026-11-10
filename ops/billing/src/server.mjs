@@ -139,6 +139,11 @@ import {
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
 import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
+import { createPlaybackStore } from './db/pg/playbackSql.mjs';
+import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
+import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
+import { cacheEnabled } from './cacheNodes.mjs';
+import { isCachePath, routeCache } from './cacheHttp.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -1010,6 +1015,10 @@ export function createApp(file, fetchImpl, opts) {
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
+  const cacheRepo = typeof store.query === 'function' ? createCacheRepo((sql, params) => store.query(sql, params)) : null;
+  const cacheNodeRate = createRateLimit(60, 60 * 1000);
+  const cacheSourceRate = createRateLimit(30, 60 * 1000);
+  const cacheInterestRate = createRateLimit(30, 60 * 1000);
   // Minute counters survive a restart when the store has the DHT tables. Memory-only stores keep the process map.
   bindDhtStats(store.dht || null);
   // Per device, settings.dhtPerMinute (default 30) per minute. Rebuilt when the saved cap changes.
@@ -1034,6 +1043,8 @@ export function createApp(file, fetchImpl, opts) {
   const seedGate = (opts && opts.seedGate) || createTrackerGate();
   const seedTransport = (opts && opts.seedTransport) || defaultSeedTransport();
   const seedCache = (opts && opts.seedCache) || (typeof store.query === 'function' ? createPgSeedCache(store) : createMemorySeedCache());
+  const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
+  const progressRate = createRateLimit(40, 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
@@ -1195,6 +1206,24 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('retry-after', '600');
         if (path === '/v1/yoomoney') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
+      }
+      if (isCachePath(path)) {
+        await routeCache(req, res, {
+          path,
+          url,
+          res,
+          store,
+          repo: cacheRepo,
+          json,
+          readBody,
+          adminOf,
+          deviceCaller,
+          audit: (action, detail) => audit(file, action, detail, adminOf(req)),
+          nodeRate: cacheNodeRate,
+          sourceRate: cacheSourceRate,
+          interestRate: cacheInterestRate,
+        });
+        return;
       }
       if (req.method === 'GET' && path === '/v1/ads-config') {
         // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
@@ -2217,7 +2246,49 @@ export function createApp(file, fetchImpl, opts) {
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
+          // Popular-release cache. Omitted by old servers. False until an admin turns it on.
+          cache: { enabled: cacheEnabled(state.settings) },
         });
+      }
+      if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {
+        // Same device token as /v1/me. The row is the account's, so another signed-in device can continue.
+        // The device id is stored and compared here. It is not returned.
+        const device = String(req.headers['x-device-id'] || '');
+        const token = bearer(req);
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        if (!playback) return json(res, 503, { error: 'unavailable' });
+        const state = await store.read();
+        const caller = await deviceCaller(state, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
+        if (!accountId) return json(res, 404, { error: 'not_linked' });
+        const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+        if (!progressRate.allow(rateKey)) {
+          const wait = String(progressRate.retryAfter(rateKey) || 1);
+          res.setHeader('retry-after', wait);
+          return json(res, 429, { error: 'rate' });
+        }
+        if (req.method === 'GET') {
+          const q = parseProgressQuery(url.searchParams);
+          if (q.error) return json(res, 400, q);
+          const row = await playback.load(accountId, q.titleKey, q.episodeKey);
+          if (!row || !row.positionSec) return json(res, 404, { error: 'none' });
+          return json(res, 200, {
+            positionSec: row.positionSec,
+            durationSec: row.durationSec,
+            updatedAt: row.updatedAt,
+            label: row.label,
+            title: row.title,
+            episodeKey: row.episodeKey,
+            otherDevice: !!row.deviceId && row.deviceId !== device,
+          });
+        }
+        const body = await readBody(req);
+        const parsed = parseProgressBody(body);
+        if (parsed.error) return json(res, 400, parsed);
+        await playback.save(accountId, { ...parsed, deviceId: device }, Date.now());
+        return json(res, 200, { ok: true });
       }
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
@@ -2316,6 +2387,21 @@ export function createApp(file, fetchImpl, opts) {
           });
           counts = out.stats;
           status = 200;
+          // Interest feeds the cache job only after the feature is turned on. The answer itself stays the same.
+          if (cacheRepo && cacheEnabled(state.settings)) {
+            try {
+              for (let i = 0; i < out.items.length; i++) {
+                const it = out.items[i];
+                const seeds = it.estimate ? Math.max(it.seeders || 0, it.dhtSeeds || 0) : it.seeders || 0;
+                await cacheRepo.noteInterest(
+                  { infohash: it.infohash, title: '', event: 'search', seeders: seeds, sizeBytes: 0 },
+                  Date.now(),
+                );
+              }
+            } catch (e) {
+              /* a missed interest row must not fail the seed check */
+            }
+          }
           return json(res, 200, { items: out.items });
         } catch (e) {
           if (isReadOnlyError(e)) {

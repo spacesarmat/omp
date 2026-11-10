@@ -26,6 +26,7 @@ import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL } from '../lib/donate';
 import { log } from '../lib/log';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { rememberTracks } from '../viewer/tracks';
 import type { PlayerEngineSetting } from './nativeEngine';
 import { assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe } from './nativeEngine';
 
@@ -370,6 +371,12 @@ export class NativeSession {
     this.plugin.nativePlayerCommand({ cmd: { type: 'donate', on: false, session: this.sid } }).catch(() => undefined);
   }
 
+  /** Asks the built-in player to close. The close event still saves the position. */
+  close(): void {
+    if (this.done) return;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'close', session: this.sid } }).catch(() => undefined);
+  }
+
   /**
    * The screen is gone (Back on the placeholder, route replaced): once playNative was called the run keeps
    * listening until the player reports its close (progress is still saved), without calling the hooks;
@@ -565,13 +572,13 @@ export class NativeSession {
     const item = e && this.queue[e.index];
     if (!e || !item || !item.hash) return;
     if (e.kind === 'audio') {
-      saveTrackPref(item.hash, { audioLang: e.lang, audioLabel: e.label });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { audioLang: e.lang, audioLabel: e.label });
       void this.seriesSaver(item.hash, e.channels ? { l: e.label, g: e.lang, c: e.channels, k: e.seen } : { l: e.label, g: e.lang, k: e.seen });
     } else if (e.off) {
-      saveTrackPref(item.hash, { sub: 'off' });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: 'off' });
       void this.seriesSaver(item.hash, { s: 'off' });
     } else {
-      saveTrackPref(item.hash, { sub: { lang: e.lang, label: e.label } });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: { lang: e.lang, label: e.label } });
       void this.seriesSaver(item.hash, { s: { l: e.label, g: e.lang } });
     }
   }

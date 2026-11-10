@@ -9,6 +9,7 @@ import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
 import { ensureLinkedBilling } from '../../src/sources/ompJackett';
 import { setDhtPeersContext } from '../../src/sources/dhtPeers';
+import { setProgressContext } from '../../src/viewer/progressSync';
 import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
 import { setTorrServerTransport, TorrServerClient } from '../../src/api/torrserver';
@@ -68,6 +69,7 @@ registerBuiltinSources();
 startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
 // «Проверить сиды» asks billing for a DHT count with the same device token. webOS has no native HTTP and skips it.
 setDhtPeersContext(phoneSourceContext);
+setProgressContext(phoneSourceContext);
 // A feed row without a magnet (NNM-Club) loads the announce list from its topic page. No invented tracker URL.
 setProbeContext(() => phoneSourceContext());
 bindWifiRuntime({

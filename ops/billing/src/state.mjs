@@ -40,6 +40,13 @@ export function emptyState() {
       bitmagnetUrl: '',
       bitmagnetApiKey: '',
       bitmagnetEnabled: false,
+      /**
+       * Popular-release cache nodes. Off until an admin turns it on.
+       * prefix is megabytes, or a percent when megabytes are 0.
+       */
+      cacheNodesEnabled: false,
+      cachePrefixMb: 512,
+      cachePrefixPercent: 0,
       /** Internal docker URL of VPS TorrServer (ops health only, never sent to phones). */
       torrserverUrl: '',
       /** Shared basic-auth for Jackett and JacRed when they sit behind the panel proxy. */
