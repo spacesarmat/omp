@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
+
 ## 0.20.12-beta.5
 
 - A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line

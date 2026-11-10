@@ -4,6 +4,7 @@ import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKee
 import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
 import { secretText } from './envSecrets.mjs';
 import { bitmagnetCapsUrl } from './jackett.mjs';
+import { prefixMbOf, prefixPercentOf, validPrefixMb, validPrefixPercent } from './cacheNodes.mjs';
 
 /** settings.baseDevices from the form: a whole number 1-20. */
 export function validBase(v) {
@@ -64,6 +65,9 @@ export function publicAdminSettings(settings, env) {
     bitmagnetUrl: s.bitmagnetUrl || '',
     bitmagnetApiKey: secretText(s.bitmagnetApiKey),
     bitmagnetEnabled: s.bitmagnetEnabled === true,
+    cacheNodesEnabled: s.cacheNodesEnabled === true,
+    cachePrefixMb: prefixMbOf(s),
+    cachePrefixPercent: prefixPercentOf(s),
     torrserverUrl: s.torrserverUrl || '',
     indexerUser: s.indexerUser || '',
     indexerPass: secretText(s.indexerPass),
@@ -124,6 +128,15 @@ export function mergeSettings(prev, body) {
     bitmagnetUrl: String(b.bitmagnetUrl !== undefined ? b.bitmagnetUrl : cur.bitmagnetUrl || '').replace(/\/+$/, ''),
     bitmagnetApiKey: String(cur.bitmagnetApiKey || ''),
     bitmagnetEnabled: bool(b.bitmagnetEnabled, cur.bitmagnetEnabled === true),
+    cacheNodesEnabled: b.cacheNodesEnabled !== undefined ? bool(b.cacheNodesEnabled, false) : cur.cacheNodesEnabled === true,
+    cachePrefixMb:
+      b.cachePrefixMb !== undefined && b.cachePrefixMb !== '' && validPrefixMb(b.cachePrefixMb)
+        ? Number(b.cachePrefixMb)
+        : prefixMbOf(cur),
+    cachePrefixPercent:
+      b.cachePrefixPercent !== undefined && b.cachePrefixPercent !== '' && validPrefixPercent(b.cachePrefixPercent)
+        ? Number(b.cachePrefixPercent)
+        : prefixPercentOf(cur),
     torrserverUrl: String(b.torrserverUrl !== undefined ? b.torrserverUrl : cur.torrserverUrl || '').replace(
       /\/+$/,
       '',
