@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.12-beta.5
 
 - A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line
 - [tech] Added a local preview editor for themes and interaction rules with independent Windows, macOS and Linux styling, simulation, drafts and protected export
