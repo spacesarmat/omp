@@ -1,0 +1,99 @@
+:root {
+  color: #e8eaf0;
+  background: #0f1115;
+  font-family: Manrope, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+.editor-app {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.editor-header,
+.editor-target-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.editor-header strong {
+  margin-right: auto;
+  color: #f5b700;
+  font-size: 22px;
+}
+
+.editor-target-bar label {
+  display: flex;
+  flex-direction: column;
+  margin-right: 12px;
+  color: #9aa1b2;
+  font-size: 12px;
+}
+
+.editor-target-bar select {
+  min-width: 130px;
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid #252a35;
+  border-radius: 8px;
+  background: #181b22;
+  color: #e8eaf0;
+}
+
+.editor-workspace {
+  display: flex;
+  align-items: flex-start;
+}
+
+.editor-preview-frame {
+  flex: none;
+  max-width: calc(100vw - 300px);
+  overflow: auto;
+  border: 1px solid #252a35;
+  background: #0f1115;
+}
+
+.editor-preview-frame iframe {
+  display: block;
+  border: 0;
+}
+
+.editor-inspector {
+  width: 260px;
+  margin-left: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #181b22;
+}
+
+.editor-inspector h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+button,
+select {
+  cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid #f5b700;
+  outline-offset: 3px;
+}
