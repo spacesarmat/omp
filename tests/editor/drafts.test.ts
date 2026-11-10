@@ -136,6 +136,18 @@ describe('DraftController', () => {
     expect(saved).toEqual([]);
   });
 
+  it('stores the saved revision and keeps it through undo', async () => {
+    const controller = create([], {
+      onPut: async (draft) => ({ ...draft, revision: (draft.revision ?? 0) + 1 }),
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await controller.flush();
+    expect(controller.draft.revision).toBe(1);
+    expect(controller.undo()).toBe(true);
+    await controller.flush();
+    expect(controller.draft.revision).toBe(2);
+  });
+
   it('keeps local changes and records write errors', async () => {
     const controller = create([], { onPut: async () => {
       throw new Error('offline');

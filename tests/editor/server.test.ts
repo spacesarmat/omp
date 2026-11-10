@@ -57,15 +57,33 @@ describe('editor loopback server', () => {
   it('round-trips a valid draft atomically and supports repeated writes', async () => {
     const { root, head } = await makeRepo();
     const running = await openServer(root);
-    const draft = createDefaultDraft('draft-1', head);
+    let current = createDefaultDraft('draft-1', head);
     for (let count = 0; count < 2; count += 1) {
-      const response = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      const response = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(current) });
       expect(response.status).toBe(200);
+      current = await response.json();
+      expect(current.revision).toBe(count + 1);
     }
     const response = await request(running, '/api/drafts/draft-1');
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(draft);
+    expect(await response.json()).toEqual(current);
     expect(await readdir(join(root, '.omp-editor', 'drafts'))).toEqual(['draft-1.json']);
+  });
+
+  it('rejects an outdated draft revision without replacing newer edits', async () => {
+    const { root, head } = await makeRepo();
+    const running = await openServer(root);
+    const draft = createDefaultDraft('draft-1', head);
+    expect((await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })).status).toBe(200);
+    draft.theme.overrides.push({ id: 'newer-edit', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    expect((await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, revision: 1 }) })).status).toBe(200);
+
+    const stale = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: 'DRAFT_CONFLICT' });
+    const current = await (await request(running, '/api/drafts/draft-1')).json();
+    expect(current.revision).toBe(2);
+    expect(current.theme.overrides.map((entry: { id: string }) => entry.id)).toEqual(['newer-edit']);
   });
 
   it('rejects traversal and invalid draft ids without touching outside files', async () => {
@@ -104,7 +122,7 @@ describe('editor loopback server', () => {
     badTheme.theme.tokens['--omp-color-accent'] = 'url(javascript:alert(1))';
     const invalid = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(badTheme) });
     expect(invalid.status).toBe(400);
-    expect(await (await request(running, '/api/drafts/draft-1')).json()).toEqual(draft);
+    expect(await (await request(running, '/api/drafts/draft-1')).json()).toEqual({ ...draft, revision: 1 });
   });
 
   it('serves committed designs and rebases drafts through authorized API routes', async () => {

@@ -193,7 +193,7 @@ async function acquireRepositoryLock(root) {
   };
 }
 
-async function withRepositoryLock(root, operation) {
+export async function withRepositoryLock(root, operation) {
   const release = await acquireRepositoryLock(root);
   try {
     return await operation();

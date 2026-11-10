@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parseEditorDraft } from './shared/draft.ts';
-import { exportDraft } from './export.mjs';
+import { exportDraft, withRepositoryLock } from './export.mjs';
 import { getCommittedDesign, rebaseDraft } from './design.mjs';
 
 const execute = promisify(execFile);
@@ -81,17 +81,34 @@ async function readDraft(root, id) {
   }
 }
 
-async function writeDraft(root, draft) {
-  const path = draftPath(root, draft.id);
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = join(dirname(path), `.${draft.id}.${randomBytes(8).toString('hex')}.tmp`);
+async function readRevision(root, id) {
   try {
-    await writeFile(temporary, JSON.stringify(draft), { mode: 0o600, flag: 'wx' });
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
+    const value = JSON.parse(await readFile(draftPath(root, id), 'utf8'));
+    const revision = value.revision ?? 0;
+    if (!Number.isInteger(revision) || revision < 0) throw new Error('revision');
+    return revision;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return 0;
+    throw new HttpError(400, 'INVALID_DRAFT');
   }
-  return draft;
+}
+
+async function writeDraft(root, draft) {
+  return withRepositoryLock(root, async () => {
+    const currentRevision = await readRevision(root, draft.id);
+    if ((draft.revision ?? 0) !== currentRevision) throw new HttpError(409, 'DRAFT_CONFLICT');
+    const saved = { ...draft, revision: currentRevision + 1 };
+    const path = draftPath(root, draft.id);
+    await mkdir(dirname(path), { recursive: true });
+    const temporary = join(dirname(path), `.${draft.id}.${randomBytes(8).toString('hex')}.tmp`);
+    try {
+      await writeFile(temporary, JSON.stringify(saved), { mode: 0o600, flag: 'wx' });
+      await rename(temporary, path);
+    } finally {
+      await rm(temporary, { force: true });
+    }
+    return saved;
+  });
 }
 
 async function gitState(root) {

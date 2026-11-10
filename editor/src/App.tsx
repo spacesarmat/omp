@@ -112,7 +112,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <SnapshotPanel controller={controller} />
           {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />}
           {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
-          {mode === 'simulate' && <SimulationPanel flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
+          {mode === 'simulate' && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
           <ExportPanel controller={controller} client={workspaceClient} />
           <span>{trace.length ? `Действий: ${trace.length}` : mode}</span>
         </aside>
@@ -162,7 +162,11 @@ export function App(props: AppProps = {}) {
   }, [controller, ownsController]);
   useEffect(() => {
     if (!controller) return;
-    const flush = () => {
+    const flush = (event: BeforeUnloadEvent) => {
+      if (controller.hasUnsavedChanges()) {
+        event.preventDefault();
+        event.returnValue = 'Changes are still being saved';
+      }
       void controller.flush({ keepalive: true }).catch(() => undefined);
     };
     window.addEventListener('beforeunload', flush);

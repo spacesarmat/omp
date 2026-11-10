@@ -19,6 +19,7 @@ export interface DraftController {
   undo(): boolean;
   redo(): boolean;
   flush(options?: { keepalive?: boolean }): Promise<void>;
+  hasUnsavedChanges(): boolean;
   dispose(): void;
 }
 
@@ -38,6 +39,7 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
   let disposed = false;
   let error: string | null = null;
   let writeChain = Promise.resolve();
+  let pendingWrites = 0;
   const listeners = new Set<() => void>();
   const autosaveMs = options.autosaveMs ?? 300;
 
@@ -81,6 +83,7 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
   };
   const restoreSerialized = (serialized: string) => {
     const restored = parseEditorDraft(JSON.parse(serialized));
+    restored.revision = current.revision;
     delete restored.lastError;
     current = restored;
     error = null;
@@ -93,20 +96,23 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       timer = undefined;
     }
     if (disposed) return writeChain;
+    pendingWrites += 1;
     const snapshot = structuredClone(current);
     delete snapshot.lastError;
     const write = async () => {
       try {
-        await options.client.putDraft(snapshot, flushOptions);
+        const saved = await options.client.putDraft(snapshot, flushOptions);
         error = null;
-        current = { ...current, lastError: null };
+        current = { ...current, lastError: null, ...(saved.revision !== undefined ? { revision: saved.revision } : {}) };
       } catch (reason) {
         error = reason instanceof Error ? reason.message : String(reason);
         current = { ...current, lastError: error };
         notify();
         throw reason;
+      } finally {
+        pendingWrites -= 1;
+        notify();
       }
-      notify();
     };
     writeChain = writeChain.then(write, write);
     return writeChain;
@@ -208,6 +214,9 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       return true;
     },
     flush,
+    hasUnsavedChanges() {
+      return !disposed && (timer !== undefined || pendingWrites > 0 || error !== null);
+    },
     dispose() {
       disposed = true;
       if (timer) clearTimeout(timer);
