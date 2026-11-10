@@ -22,6 +22,7 @@ import { prepareCachePlayback } from '../../src/cache/lookup';
 import { phoneSourceContext } from './searchContext';
 import { loadSkip, recordWatch } from '../../src/store/journal';
 import { play2160 } from '../../src/player/player2160';
+import { displayTitle } from '../../src/lib/torrentName';
 import type { PlayItem } from '../../src/player/types';
 import { MIN_RESUME, getLocalProgress } from '../../src/store/progress';
 import { settings } from '../../src/store/settings';
@@ -219,11 +220,13 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
       files.unshift(w.file);
       start = 0;
     }
+    const showTitle = displayTitle(t);
     const queue: PlayItem[] = files.map((f) => ({
       url: streamUrlFor(c, t, f, false),
       title: f.id === w.file.id ? w.title : baseName(f.path),
       hash: w.hash,
       fileIndex: f.id,
+      torrentTitle: showTitle,
     }));
     const skip = await loadSkip(c, w.hash).catch(() => null);
     let index = start;

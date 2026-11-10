@@ -118,11 +118,14 @@ export function PlayerError(p: {
   onAnother?: () => void;
   /** Primary label when it is not «Другая раздача» (the dead-release «Найти в лучшем качестве»). */
   anotherLabel?: string;
+  /** «Ниже качество»: another release with a lower picture. */
+  onLower?: () => void;
 }) {
   const details = p.showProbe ? videoSummary(p.probe) : '';
   const another = !!p.onAnother;
   const actions = [];
   if (p.onAnother) actions.push({ label: p.anotherLabel || t('player.anotherRelease'), onPress: p.onAnother, focusKey: 'player-err-another', className: 'primary' });
+  if (p.onLower) actions.push({ label: t('viewer.lowerQuality'), onPress: p.onLower, focusKey: 'player-err-lower' });
   actions.push({ label: t('common.retry'), onPress: p.onRetry, focusKey: 'player-err-retry', className: another ? '' : 'primary' });
   actions.push({ label: t('player.back'), onPress: p.onBack, focusKey: 'player-err-back' });
   return (
