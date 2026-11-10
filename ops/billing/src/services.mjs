@@ -66,6 +66,7 @@ export function publicAdminSettings(settings, env) {
     bitmagnetApiKey: secretText(s.bitmagnetApiKey),
     bitmagnetEnabled: s.bitmagnetEnabled === true,
     cacheNodesEnabled: s.cacheNodesEnabled === true,
+    watchRankEnabled: s.watchRankEnabled !== false,
     cachePrefixMb: prefixMbOf(s),
     cachePrefixPercent: prefixPercentOf(s),
     torrserverUrl: s.torrserverUrl || '',
@@ -129,6 +130,7 @@ export function mergeSettings(prev, body) {
     bitmagnetApiKey: String(cur.bitmagnetApiKey || ''),
     bitmagnetEnabled: bool(b.bitmagnetEnabled, cur.bitmagnetEnabled === true),
     cacheNodesEnabled: b.cacheNodesEnabled !== undefined ? bool(b.cacheNodesEnabled, false) : cur.cacheNodesEnabled === true,
+    watchRankEnabled: b.watchRankEnabled !== undefined ? bool(b.watchRankEnabled, true) : cur.watchRankEnabled !== false,
     cachePrefixMb:
       b.cachePrefixMb !== undefined && b.cachePrefixMb !== '' && validPrefixMb(b.cachePrefixMb)
         ? Number(b.cachePrefixMb)

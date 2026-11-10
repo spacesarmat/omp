@@ -6,8 +6,12 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
-- [tech] The download page has one tile each for Android, Android TV, LG webOS and Windows. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl. There is no macOS build
+- Desktop: macOS (Intel and Apple Silicon) and Linux (AppImage and deb) join Windows. Auto-update uses the same feed: NSIS, DMG or AppImage. macOS is not signed by Apple: right-click and Open, or System Settings - Privacy and Security - Open Anyway
+- On a computer the menu is on the left: labels, an icon rail, or hidden. A button and Ctrl+B (Cmd+B on Mac). The choice is remembered. On a narrow window the menu covers the content
+- On a computer posters highlight, and a right click opens the same menu as a long press. Space pauses, arrows seek and change volume, F is fullscreen, Ctrl+K or Cmd+K opens search, Esc goes back. Rows scroll with the wheel
+- A wide screen shows more catalog columns. The mini player can float with the PiP button. A .torrent file or a magnet can be dropped on the window. The tray can show, hide and quit
+- The download page and omp-player.online list macOS and Linux. A tile stays hidden when the feed has no file
+- Search puts first the release viewers finish without stalls. A short label explains the pick, and a popular voice-over is suggested until you choose your own. Settings include "Help improve picks", on by default, and you can turn it off
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
 - Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
 - If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
@@ -15,6 +19,10 @@ The English translation covers the latest versions only; the full history (in Ru
 - Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
 - A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
 - When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
+- [tech] The download page has one tile each for Android, Android TV, LG webOS, Windows, macOS and Linux. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl
+- [tech] Desktop CI builds an NSIS installer and a portable exe, two DMGs (Intel and Apple Silicon, ad-hoc) and a Linux AppImage with a deb. Feeds update-windows.json, update-macos.json and update-linux.json include sha256 and size
+- [tech] Billing learns from playback: POST /v1/watch-signals, GET /v1/watch-best, migration 009_watch_quality. One vote per account and device. Shared tables keep hashes and counters only. The score blends seeds and DHT with real signals. watchRankEnabled is on: with no signals the search order does not change. The Picks admin tab shows scores and can pin or ban a release. Every 15 minutes the best release of an active series is stored, and when cache nodes are on it is sent once a day into cache_interest (noteInterest). The billing image was not deployed
 - [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 008_playback_progress. 007 is taken by cache nodes. A new billing image is required. Nothing was deployed to the NUC
 - [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
 

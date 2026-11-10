@@ -7,6 +7,7 @@ import { dhtSeedCheckAvailable } from '../../../src/sources/dhtPeers';
 import { infohashOf, trackerTargets } from '../../../src/sources/liveSeeds';
 import { rowNeedsMagnet } from '../../../src/sources/rowMagnet';
 import { indexerSeedLine, visibleSeedLine } from '../../../src/sources/seedRank';
+import { communityLabel } from '../../../src/viewer/communityRank';
 import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
@@ -31,7 +32,7 @@ export function knownSeeds(r: SourceResult): string {
 /** «18 GB · 152 сида · сегодня · ещё в Torznab». */
 export function resultMeta(r: SourceResult): string {
   const more = r.sources && r.sources.length ? t('add.alsoIn', { names: r.sources.map(sourceName).join(', ') }) : '';
-  return [sizeText(r), knownSeeds(r), resultDate(r), more].filter(Boolean).join(' · ');
+  return [communityLabel(r), sizeText(r), knownSeeds(r), resultDate(r), more].filter(Boolean).join(' · ');
 }
 
 const PLUS = 'M12 5v14M5 12h14';
