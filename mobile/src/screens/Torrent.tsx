@@ -724,7 +724,7 @@ export function Torrent({ hash }: { hash: string }) {
     }
   }
   const at = jumped ? remote.remoteSec : Math.max(localAt, remote.sec);
-  const fromOther = jumped || (remote.other && remote.sec > localAt);
+  const fromOther = remote.other && (jumped || remote.sec > localAt);
   const targetCode = target ? fileCode(target) : '';
   const mainLabel = fromOther
     ? t('viewer.continueOther', { time: formatDuration(at) })

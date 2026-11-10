@@ -355,7 +355,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
       if (next && next !== tor.hash) replaceRoute({ name: 'torrent', hash: next });
     });
   };
-  const playLabel = (jumped || remote.other)
+  const playLabel = remote.other
     ? t('viewer.continueOther', { time: formatDuration(targetPos) })
     : book
     ? (targetPos > 0

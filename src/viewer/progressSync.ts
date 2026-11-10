@@ -72,6 +72,33 @@ export function parseProgressBody(text: string): RemoteProgress | null {
  * Remote position wins when it is another device and it is clearly further along.
  * The same device, or a remote that is behind, keeps the local second.
  */
+export interface ContinueChoice {
+  sec: number;
+  other: boolean;
+  /** Episode of the stored row when it should move the card. Empty when there is nothing to move to. */
+  episodeKey: string;
+  /** Seconds for that episode. The card applies them only after the file is found. */
+  remoteSec: number;
+}
+
+/**
+ * Same-device and other-device rows both keep their episode key.
+ * Seconds of a different episode stay off the file on screen until that episode is found.
+ */
+export function continueChoice(localEpisodeKey: string, localSec: number, remote: RemoteProgress | null): ContinueChoice {
+  const remoteKey = remote && remote.episodeKey ? remote.episodeKey : '';
+  const same = !remoteKey || remoteKey === localEpisodeKey;
+  const sec = same ? pickContinue(localSec, remote) : localSec > 0 ? localSec : 0;
+  const other = !!(same && remote && remote.otherDevice && sec === remote.positionSec && sec > localSec);
+  const usable = !!(remote && remote.positionSec >= 15 && remoteKey);
+  return {
+    sec: sec,
+    other: other,
+    episodeKey: usable ? remoteKey : '',
+    remoteSec: usable ? remote.positionSec : 0,
+  };
+}
+
 export function pickContinue(localSec: number, remote: RemoteProgress | null): number {
   const local = localSec > 0 ? localSec : 0;
   if (!remote || !remote.otherDevice) return local;
