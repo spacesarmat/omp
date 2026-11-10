@@ -29,6 +29,10 @@ export interface RpcResult {
   Hash: string;
   source: string;
   sources?: string[];
+  /** Present after the phone's seed check. Absent until that round finishes. */
+  seedCheck?: 'live' | 'dht' | 'unverified';
+  seedCheckAt?: number;
+  dhtPeers?: number;
 }
 
 export interface RpcFailure {

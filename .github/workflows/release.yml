@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z) to build
+        type: string
+        required: true
   workflow_call:
     inputs:
       tag:
@@ -59,6 +65,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm --prefix ops/billing ci
+      # Root tests import desktop/src, which resolves @tauri-apps/api from desktop/node_modules.
+      - run: npm ci --prefix desktop
       - name: Tag must match package.json version
         run: test "${TAG}" = "v$(node -p "require('./package.json').version")"
       - run: npm test
