@@ -24,12 +24,13 @@ export function ComponentUpdateDialog() {
   const seen = useRef<string | null>(null);
   const key = offer ? offer.kind + ':' + offer.latest : null;
   if (key !== seen.current) {
+    const opening = !seen.current && !!key;
     seen.current = key;
     setBusy(false);
     setPct(null);
     setError('');
     setSawQr(false);
-    if (key) {
+    if (opening) {
       try {
         prevFocus.current = getCurrentFocusKey() || undefined;
       } catch (e) {
@@ -38,21 +39,22 @@ export function ComponentUpdateDialog() {
     }
   }
 
-  const restore = () => {
+  const restoreIfClosed = () => {
+    if (componentPrompt.value) return;
     const k = prevFocus.current;
     prevFocus.current = undefined;
     focusAfterClose(k);
   };
   const later = () => {
     laterComponent();
-    restore();
+    restoreIfClosed();
   };
 
   useKeys((a) => {
     if (!componentPrompt.value || busy) return busy ? true : false;
     if (a === 'back') {
       dismissComponent();
-      restore();
+      restoreIfClosed();
       return true;
     }
     return 'spatial';
@@ -77,7 +79,7 @@ export function ComponentUpdateDialog() {
         () => {
           setBusy(false);
           dismissComponent();
-          restore();
+          restoreIfClosed();
         },
         (e) => {
           setBusy(false);

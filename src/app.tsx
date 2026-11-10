@@ -163,7 +163,7 @@ export function App() {
   const wn = whatsNew.value;
   const anyDialog = dialogOpen.value || textDialogOpen.value;
   const showTour = onboardingVisible('tv', r.name);
-  const showWhatsNew = !!wn && !showTour && !anyDialog && !componentPrompt.value && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
+  const showWhatsNew = !!wn && !showTour && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value && !componentPrompt.value));
   return (
     <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
