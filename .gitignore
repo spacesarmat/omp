@@ -40,3 +40,5 @@ ops/nas/**/init.yaml
 ops/nas/**/.env
 graphify-out/
 **/graphify-out/
+.omp-editor/
+dist-editor/
