@@ -80,6 +80,13 @@ describe('release billing gate', () => {
     expect(testStep).toContain('BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test');
     expect(testStep).toContain("BILLING_TEST_REQUIRE_PG: '1'");
   });
+
+  it('installs desktop dependencies before npm test', () => {
+    const desktop = yml.indexOf('run: npm ci --prefix desktop');
+    const test = yml.indexOf('run: npm test');
+    expect(desktop).toBeGreaterThan(-1);
+    expect(desktop).toBeLessThan(test);
+  });
 });
 
 /** Job env is indented four spaces. Step env is indented further, so it is not included. */
