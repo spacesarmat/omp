@@ -24,10 +24,10 @@ describe('cache playback hook', () => {
     expect(cacheNodesOn()).toBe(false);
   });
 
-  it('rewrites a queue only after the source is remembered, and a missing flag does not', () => {
+  it('rewrites a queue only while the feature is on', () => {
     saveBillingSession({ token: 'legacy-token', paidUntil: Date.now() + 86400000, id: 'sess' });
-    saveBillingAccess({ active: true, accessUntil: Date.now() + 86400000, cacheNodes: false });
-    expect(cacheNodesOn()).toBe(false);
+    saveBillingAccess({ active: true, accessUntil: Date.now() + 86400000, cacheNodes: true });
+    expect(cacheNodesOn()).toBe(true);
     const c = new TorrServerClient({ url: 'http://10.0.0.8:8090' });
     const files = [{ id: 1, path: 'Film.mkv', length: 10 }];
     const before = buildTorrentQueue(c, { hash: HASH, title: 'Film', stat: 3 }, files);
@@ -35,6 +35,8 @@ describe('cache playback hook', () => {
     rememberCacheSource(HASH, { url: 'http://cache.example:8090', infohash: HASH, title: 'Film', prefixBytes: 5 });
     const after = buildTorrentQueue(c, { hash: HASH, title: 'Film', stat: 3 }, files);
     expect(after[0].url.indexOf('http://cache.example:8090/')).toBe(0);
-    expect(after[0].url).not.toBe(before[0].url);
+    saveBillingAccess({ active: true, accessUntil: Date.now() + 86400000, cacheNodes: false });
+    const back = buildTorrentQueue(c, { hash: HASH, title: 'Film', stat: 3 }, files);
+    expect(back[0].url).toBe(before[0].url);
   });
 });

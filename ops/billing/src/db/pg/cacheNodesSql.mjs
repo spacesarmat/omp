@@ -157,7 +157,9 @@ export async function upsertAssignment(query, row, now) {
       ' size_bytes = EXCLUDED.size_bytes, prefix_bytes = EXCLUDED.prefix_bytes, prefix_percent = EXCLUDED.prefix_percent,' +
       ' status = \'assigned\', pinned = EXCLUDED.pinned, source = EXCLUDED.source, score = EXCLUDED.score,' +
       ' error = \'\', updated_at = EXCLUDED.updated_at, removed_at = NULL' +
-      (row.protectManual ? ' WHERE cache_assignments.pinned = false AND cache_assignments.source = \'auto\'' : ''),
+      (row.protectManual
+        ? ' WHERE cache_assignments.status = \'removed\' OR (cache_assignments.pinned = false AND cache_assignments.source = \'auto\')'
+        : ''),
     [
       id,
       row.nodeId,

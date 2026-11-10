@@ -205,6 +205,24 @@ describe('cache node routes', () => {
     );
     const still = await store.query('SELECT pinned, source FROM cache_assignments WHERE infohash = $1', [HASH]);
     expect(still.rows[0]).toEqual({ pinned: true, source: 'manual' });
+    await store.query("UPDATE cache_assignments SET status = 'removed', pinned = false, removed_at = $2 WHERE infohash = $1", [HASH, Date.now() - 8 * 60 * 60 * 1000]);
+    await upsertAssignment(
+      (sql: string, params?: unknown[]) => store.query(sql, params),
+      {
+        id: 'e'.repeat(16),
+        nodeId,
+        infohash: HASH,
+        title: 'Film',
+        magnet: 'magnet:?xt=urn:btih:' + HASH,
+        prefixBytes: 1,
+        pinned: false,
+        source: 'auto',
+        protectManual: true,
+      },
+      Date.now(),
+    );
+    const revived = await store.query("SELECT status, source FROM cache_assignments WHERE infohash = $1", [HASH]);
+    expect(revived.rows[0]).toEqual({ status: 'assigned', source: 'auto' });
     const fresh = '12'.repeat(20);
     await call(app, 'POST', '/v1/cache/interest', { headers: deviceHeaders, json: { infohash: fresh, event: 'search', seeders: 8 } });
     await call(app, 'POST', '/v1/cache/interest', { headers: deviceHeaders, json: { infohash: fresh, event: 'search', seeders: 0 } });
