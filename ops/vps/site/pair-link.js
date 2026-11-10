@@ -36,8 +36,12 @@
   };
 
   function parseSearch(search) {
-    var q = String(search || '');
+    var raw = String(search || '');
+    var hashAt = raw.indexOf('#');
+    var hash = hashAt >= 0 ? raw.slice(hashAt + 1) : '';
+    var q = hashAt >= 0 ? raw.slice(0, hashAt) : raw;
     if (q.charAt(0) === '?') q = q.slice(1);
+    if (hash) q += (q ? '&' : '') + hash;
     var out = { v: '', url: '', name: '', user: '', password: '' };
     q.split('&').forEach(function (part) {
       var eq = part.indexOf('=');
@@ -58,14 +62,20 @@
   function pageUrl(data) {
     var s = ORIGIN + '/pair?v=1&url=' + encodeURIComponent(data.url);
     if (data.name) s += '&name=' + encodeURIComponent(data.name);
-    if (data.user) s += '&user=' + encodeURIComponent(data.user);
-    if (data.password) s += '&password=' + encodeURIComponent(data.password);
+    var frag = [];
+    if (data.user) frag.push('user=' + encodeURIComponent(data.user));
+    if (data.password) frag.push('password=' + encodeURIComponent(data.password));
+    if (frag.length) s += '#' + frag.join('&');
     return s;
   }
 
   function intentUrl(data) {
     var url = pageUrl(data);
-    var path = url.slice(ORIGIN.length);
+    var hash = url.indexOf('#');
+    var base = hash >= 0 ? url.slice(0, hash) : url;
+    var frag = hash >= 0 ? url.slice(hash + 1) : '';
+    var app = frag ? base + (base.indexOf('?') >= 0 ? '&' : '?') + frag : base;
+    var path = app.slice(ORIGIN.length);
     return 'intent://omp-player.online' + path + '#Intent;scheme=https;package=' + PKG + ';S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
   }
 
@@ -99,11 +109,12 @@
     setText(doc.getElementById('pair-kicker'), copy.kicker);
     setText(doc.getElementById('pair-heading'), data.name || copy.title);
     setText(doc.getElementById('pair-line'), copy.lead);
-    setText(doc.getElementById('pair-url-label'), copy.url);
+    setText(doc.getElementById('pair-url-caption'), copy.url);
     if (urlInput) urlInput.value = data.url;
     if (userLabel) userLabel.hidden = !data.user;
     if (userInput) userInput.value = data.user || '';
-    setText(userLabel && userLabel.firstChild, copy.user);
+    setText(doc.getElementById('pair-user-caption'), copy.user);
+    setText(doc.getElementById('pair-pass-caption'), copy.pass);
     if (passLabel) passLabel.hidden = !data.password;
     if (passInput) {
       passInput.value = data.password || '';
@@ -122,7 +133,7 @@
 
   if (typeof document !== 'undefined' && document.getElementById && document.getElementById('pair-card')) {
     var lang = 'ru';
-    var search = typeof location !== 'undefined' ? location.search : '';
+    var search = typeof location !== 'undefined' ? location.search + (location.hash || '') : '';
     fill(document, search, lang);
     var btn = document.getElementById('pair-lang');
     if (btn) {

@@ -6,7 +6,11 @@ describe('pairing uri', () => {
     const u = buildPairUri({ url: 'http://192.168.1.10:8090', name: 'Дом', user: 'admin', password: 'p&s s' });
     expect(u.indexOf(PAIR_ORIGIN + '/pair?v=1&url=')).toBe(0);
     expect(u.indexOf('omp://')).toBe(-1);
+    expect(u.split('#')[0]).not.toMatch(/[?&](user|password)=/);
+    expect(u.split('#')[1]).toContain('password=' + encodeURIComponent('p&s s'));
     expect(parsePairUri(u)).toEqual({ url: 'http://192.168.1.10:8090', name: 'Дом', user: 'admin', password: 'p&s s' });
+    expect(parsePairUri(pairIntentUri(u))).toEqual({ url: 'http://192.168.1.10:8090', name: 'Дом', user: 'admin', password: 'p&s s' });
+    expect(parsePairUri(PAIR_ORIGIN + '/pair?v=1&url=' + encodeURIComponent('http://h:1') + '&user=admin&password=old')).toEqual({ url: 'http://h:1', user: 'admin', password: 'old' });
     expect(buildPairUri({ url: 'http://h:1' })).toBe(PAIR_ORIGIN + '/pair?v=1&url=' + encodeURIComponent('http://h:1'));
     expect(parsePairUri(buildPairUri({ url: 'http://h:1' }))).toEqual({ url: 'http://h:1' });
   });

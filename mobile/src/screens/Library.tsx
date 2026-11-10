@@ -137,7 +137,6 @@ export function Library() {
   // why the last start from here failed (the store's error is reset by the next status refresh)
   const [startError, setStartError] = useState('');
   const [phoneName, setPhoneName] = useState('');
-  const [phoneModel, setPhoneModel] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [donateCard, setDonateCard] = useState(() => donateCardDue());
   const [pull, setPull] = useState(0);
@@ -173,7 +172,6 @@ export function Library() {
     native.phoneIdentity().then(
       (id) => {
         setPhoneName(id.name);
-        setPhoneModel(id.model);
       },
       () => undefined,
     );
@@ -833,7 +831,7 @@ export function Library() {
                         <span class="m-bar-track">
                           <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
                         </span>
-                        <span class="m-muted m-small m-hrow-src">{sourceLine(e.source.name && phoneModel && e.source.name === phoneModel && phoneName ? { ...e.source, name: phoneName } : e.source, now)}</span>
+                        <span class="m-muted m-small m-hrow-src">{sourceLine(e.source, now)}</span>
                       </span>
                     </button>
                     <button type="button" class="m-play" aria-label={tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')} onClick={() => void continueOnTv(tor.hash, e.fileIndex, from, duration, [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · '))}>

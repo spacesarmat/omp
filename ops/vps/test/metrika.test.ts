@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const COUNTER = '113673968';
-const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html', 'ops/vps/site/t/index.html', 'ops/vps/site/pair/index.html'];
+const PAGES = ['ops/vps/site/index.html', 'ops/vps/site/en/index.html', 'ops/vps/site/404.html', 'ops/vps/site/t/index.html'];
 const CADDYFILES = ['ops/vps/Caddyfile', 'ops/vps/Caddyfile.nuc'];
 const NOSCRIPT =
   '<noscript><div><img src="https://mc.yandex.ru/watch/113673968" style="position:absolute; left:-9999px;" alt="" /></div></noscript>\n<!-- /Yandex.Metrika counter -->';
@@ -100,7 +100,8 @@ describe('Yandex.Metrika on the public site', () => {
     expect(csp['frame-ancestors']).toEqual(["'self'", ...METRIKA_FRAME_HOSTS.map((h) => 'https://' + h)]);
   });
 
-  it('stays off billing, Jackett and JacRed', () => {
+  it('stays off the pairing page, billing, Jackett and JacRed', () => {
+    expect(read('ops/vps/site/pair/index.html')).not.toContain('mc.yandex');
     for (const f of CADDYFILES) {
       const caddy = read(f);
       const rest = caddy.slice(caddy.indexOf('billing.omp-player.online {'));

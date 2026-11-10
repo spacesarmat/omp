@@ -2393,7 +2393,7 @@ body.test-labels [data-code]::after {
 .m-ep-fold { align-self: flex-start; }
 .m-feed-banner { display: flex; flex-direction: column; gap: 8px; }
 .m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
-.m-rc-bottom > .m-rc-btn { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.m-rc-bottom > .m-rc-btn { display: none; }
 .m-rc-watch, .m-rc-more { position: relative; z-index: 1; }
 .m-rc-watch { flex: 1 1 auto; min-width: 0; }
 .m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }

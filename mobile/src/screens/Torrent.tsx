@@ -387,8 +387,9 @@ export function EpisodeRows({
     const row = listRef.current ? (listRef.current.querySelector('[data-current="1"]') as HTMLElement | null) : null;
     if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
   }, [hash, current, openList]);
-  const from = openList ? 0 : Math.max(0, current - 1);
-  const to = openList ? files.length : Math.min(files.length, current + 3);
+  const folded = files.length > foldAt && !openList;
+  const from = folded ? Math.max(0, current - 1) : 0;
+  const to = folded ? Math.min(files.length, current + 3) : files.length;
   return (
     <div class="m-list m-eps" ref={listRef}>
       {files.length > foldAt && (
@@ -934,10 +935,10 @@ export function Torrent({ hash }: { hash: string }) {
             )}
           </div>
         )}
-        {!(film && !series) && ((!book && series) || film || upgrade) && (
+        {(!(film && !series) || files.length === 0) && ((!book && series) || film || upgrade) && (
           <div class="m-skip" data-block="monitoring">
             <div class="m-skip-head">
-              <span class="m-skip-title">{t('monitor.title')}</span>
+              <span class="m-skip-title">{film && !series ? t('torrent.viewSettings') : t('monitor.title')}</span>
             </div>
             {!book && series && (
               <div class="m-skip-row" data-block="watch-new">
