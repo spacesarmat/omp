@@ -42,7 +42,8 @@ export interface ThemeDocument {
 export type ConditionPath = 'server.connected' | 'target' | 'screen.current';
 export type InteractionCondition =
   | { kind: 'eq'; path: ConditionPath; value: string | boolean }
-  | { kind: 'all' | 'any'; conditions: InteractionCondition[] }
+  | { kind: 'all'; conditions: InteractionCondition[] }
+  | { kind: 'any'; conditions: InteractionCondition[] }
   | { kind: 'not'; condition: InteractionCondition };
 
 export type InteractionAction =
