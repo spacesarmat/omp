@@ -129,7 +129,7 @@ describe('series screen with TMDB', () => {
     fake();
     mount();
     await flush();
-    expect(chips().map((c) => c.textContent)).toEqual(['Сезон 1', 'Сезон 2', '+Сезон 3']);
+    expect(chips().map((c) => c.textContent)).toEqual(['Сезон 1', 'Сезон 2', 'Найти сезон 3']);
     expect(chips()[2].classList.contains('m-chip-missing')).toBe(true);
     expect(chips()[2].getAttribute('aria-label')).toBe('Сезон 3, нет в каталоге');
     expect(chips()[1].classList.contains('on')).toBe(true);
@@ -169,7 +169,7 @@ describe('series screen with TMDB', () => {
     fake();
     mount();
     await flush();
-    expect(chips().map((c) => c.textContent)).toEqual(['Season 1', 'Season 2', '+Season 3']);
+    expect(chips().map((c) => c.textContent)).toEqual(['Season 1', 'Season 2', 'Find season 3']);
     expect(el.querySelector('.m-sh-caption')!.textContent).toBe('10 episodes · 2025');
     expect(el.querySelector('.m-sh-meta')!.textContent).toBe('2024-2026 · ★ 7.6 · Фантастика, Драма');
     act(() => chips()[2].click());

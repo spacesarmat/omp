@@ -100,7 +100,8 @@ describe('Yandex.Metrika on the public site', () => {
     expect(csp['frame-ancestors']).toEqual(["'self'", ...METRIKA_FRAME_HOSTS.map((h) => 'https://' + h)]);
   });
 
-  it('stays off billing, Jackett and JacRed', () => {
+  it('stays off the pairing page, billing, Jackett and JacRed', () => {
+    expect(read('ops/vps/site/pair/index.html')).not.toContain('mc.yandex');
     for (const f of CADDYFILES) {
       const caddy = read(f);
       const rest = caddy.slice(caddy.indexOf('billing.omp-player.online {'));

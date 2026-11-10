@@ -112,6 +112,7 @@ describe('Remote header and layout', () => {
     expect(shortTvName('webOS TV UN43')).toBe('UN43');
     expect(shortTvName('Гостиная')).toBe('Гостиная');
     expect(shortTvName('[LG] webOS TV ')).toBe('[LG] webOS TV ');
+    expect(shortTvName('[LG]')).toBe('LG');
   });
 
   it('the no-TV state has the tab header', () => {

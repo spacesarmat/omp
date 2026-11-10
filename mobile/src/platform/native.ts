@@ -164,6 +164,8 @@ export interface OmpNativeApi {
   scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[] | null>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
+  /** Friendly name and the manufacturer+model code, for history rows stored before the friendly name. */
+  phoneIdentity(): Promise<{ name: string; model: string }>;
   /**
    * Opens the socket and sends `register`; resolves once open with the port that worked.
    * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
@@ -346,7 +348,7 @@ interface OmpNativePlugin {
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
   scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
   stopDiscovery(o: { group?: string }): Promise<void>;
-  phoneName(): Promise<{ name?: string | null }>;
+  phoneName(): Promise<{ name?: string | null; model?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   setCleartextHosts?(o: { hosts: string[] }): Promise<void>;
   trustTvCert?(o: { host: string; fingerprint: string }): Promise<void>;
@@ -635,14 +637,18 @@ export const native: OmpNativeApi = {
     return out;
   },
 
-  async phoneName() {
-    if (!plugin) return phoneFallback();
+  async phoneIdentity() {
+    if (!plugin) return { name: phoneFallback(), model: '' };
     try {
       const r = await plugin.phoneName();
-      return text(r?.name?.trim()) ?? phoneFallback();
+      return { name: text(r?.name?.trim()) ?? phoneFallback(), model: text(r?.model?.trim()) ?? '' };
     } catch {
-      return phoneFallback();
+      return { name: phoneFallback(), model: '' };
     }
+  },
+  async phoneName() {
+    const id = await this.phoneIdentity();
+    return id.name;
   },
 
   tvConnect(ip, register, preferPort) {
