@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.20.12-beta.4
 
 - Поиск сам показывает проверенные сиды или «не проверено» и перестраивает список. Строка больше не прыгает между «0 сидов», «Нет адреса трекера» и пирами DHT: это один итог, одинаковый у автоматической проверки и у кнопки «Сиды»
 - [tech] Релизный workflow ставит зависимости desktop перед npm test, иначе сборка не находит @tauri-apps/api
