@@ -28,8 +28,8 @@ class ApkInstallTracker() : BroadcastReceiver() {
     constructor(
         context: Context,
         apk: File,
-        onInstalled: () -> Unit,
         watchPackages: Set<String> = emptySet(),
+        onInstalled: () -> Unit,
     ) : this() {
         this.apk = apk
         this.onInstalled = onInstalled
@@ -152,8 +152,8 @@ object ApkInstaller {
     }
 
     /** Opens the system package installer for [apk] and calls [onInstalled] after the package is really installed. */
-    fun install(context: Context, apk: File, onInstalled: () -> Unit, watchPackages: Set<String> = emptySet()) {
-        val tracker = ApkInstallTracker(context, apk, onInstalled, watchPackages)
+    fun install(context: Context, apk: File, watchPackages: Set<String> = emptySet(), onInstalled: () -> Unit) {
+        val tracker = ApkInstallTracker(context, apk, watchPackages, onInstalled)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
             addAction(Intent.ACTION_PACKAGE_REPLACED)

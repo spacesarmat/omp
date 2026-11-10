@@ -122,7 +122,7 @@ class AudioRedirectTest {
         val context = RuntimeEnvironment.getApplication()
         val apk = File.createTempFile("p2160", ".apk")
         var completed = 0
-        val tracker = ApkInstallTracker(context, apk, { completed++ }, setOf("tv.p2160.player"))
+        val tracker = ApkInstallTracker(context, apk, setOf("tv.p2160.player")) { completed++ }
         tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED).setData(android.net.Uri.parse("package:tv.p2160.player")))
         assertFalse(apk.exists())
         assertEquals(1, completed)
