@@ -523,7 +523,7 @@ describe('omp Jackett source', () => {
     expect(list[0].Title).toBe('Film');
     expect(list[0].Hash).toBe(H);
     expect(site.calls[0].url).toBe(BILLING_ORIGIN + '/v1/search');
-    expect(site.calls[0].form).toEqual({ source: 'jackett', q: 'q', deviceId: deviceId() });
+    expect(site.calls[0].form).toEqual({ source: 'jackett', q: 'q', deviceId: deviceId(), deviceClass: 'tv' });
     expect(site.calls[0].opts?.headers?.Authorization).toBe('Bearer tok-1');
   });
 

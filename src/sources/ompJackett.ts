@@ -17,6 +17,7 @@ import {
 import { billingAccessMatches, bitmagnetSourceOn, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
+import { watchDeviceClass } from '../viewer/watchReport';
 import { audiobookSearch, parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
 import type { Source, SourceContext, SourceResult } from './types';
@@ -421,7 +422,7 @@ function noteAccessDenied(status: number, text: string, startedFor: string): voi
 
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
   const startedFor = bindingKey();
-  const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
+  const body: { [key: string]: string } = { source, q: query, deviceId: deviceId(), deviceClass: watchDeviceClass() };
   if (cat) body.cat = cat;
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/search', body, { headers, timeoutMs: 25000 })).then(
     (res) => {
