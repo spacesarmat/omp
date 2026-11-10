@@ -389,7 +389,9 @@ describe('«Новое» · Подписки', () => {
       const point = { clientX: x, clientY: y, identifier: 1 };
       Object.defineProperty(ev, 'touches', { value: type === 'touchend' ? [] : [point] });
       Object.defineProperty(ev, 'changedTouches', { value: [point] });
-      act(() => sheet.dispatchEvent(ev));
+      act(() => {
+        sheet.dispatchEvent(ev);
+      });
     };
     touch('touchstart', 200, 40);
     touch('touchmove', 40, 44);
