@@ -1,55 +1,139 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../design/interaction.ts';
 import type { DesktopDesignTarget, DesignFormat } from '../../design/schema.ts';
-import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
+import { createDefaultTheme } from '../../design/defaults';
 import type { DesktopRouteId } from '../../desktop/src/shell/routes';
+import { createDefaultDraft, type EditorDraft } from '../shared/draft';
+import { createDraftController, type DraftController } from './drafts';
+import { useDraftController } from './useDraftController';
+import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
+import { ThemeInspector } from './components/ThemeInspector';
 
-const BASE = '0000000000000000000000000000000000000000';
+export interface AppProps {
+  controller?: DraftController;
+  draft?: EditorDraft;
+  client?: EditorClient;
+}
 
-export function App() {
+function offlineClient(initial: EditorDraft): EditorClient {
+  let current = initial;
+  return {
+    state: async () => ({ baseCommit: initial.baseCommit, dirtyDesign: false }),
+    getDraft: async () => current,
+    putDraft: async (draft) => {
+      current = draft;
+      return current;
+    },
+  };
+}
+
+function EditorWorkspace({ controller }: { controller: DraftController }) {
+  const draft = useDraftController(controller);
   const [sessionId] = useState(createSessionId);
-  const [target, setTarget] = useState<DesktopDesignTarget>('desktop-windows');
-  const [route, setRoute] = useState<DesktopRouteId>('settings');
-  const [format, setFormat] = useState<DesignFormat>('landscape');
-  const [language, setLanguage] = useState<'ru' | 'en'>('ru');
+  const [selected, setSelected] = useState('sidebar');
   const [mode] = useState<'design' | 'logic' | 'simulate'>('design');
   const [serverConnected] = useState(false);
-  const [theme] = useState(() => createDefaultTheme(BASE));
-  const [flow] = useState(() => createDefaultFlow(BASE));
-  const [selected, setSelected] = useState('');
+  const [previewMode, setPreviewMode] = useState<'before' | 'after'>('after');
   const [trace, setTrace] = useState<InteractionTrace[]>([]);
+  const setView = (view: Partial<Pick<EditorDraft, 'target' | 'screenId' | 'format' | 'language'>>) => {
+    controller.setView({
+      target: view.target || draft.target,
+      screenId: view.screenId || draft.screenId,
+      format: view.format || draft.format,
+      language: view.language || draft.language,
+    });
+  };
+  const previewTheme = previewMode === 'before' ? createDefaultTheme(draft.baseCommit) : draft.theme;
 
   return (
     <main class="editor-app">
       <header class="editor-header">
         <strong>OMP Design Editor</strong>
-        <span>{selected || 'Выберите элемент'}</span>
+        <span>{selected}</span>
+        <button type="button" data-testid="before-after" onClick={() => setPreviewMode((value) => value === 'after' ? 'before' : 'after')}>
+          {previewMode === 'after' ? 'До' : 'После'}
+        </button>
+        <button type="button" data-action="undo" disabled={!controller.canUndo} onClick={() => controller.undo()}>Отменить</button>
+        <button type="button" data-action="redo" disabled={!controller.canRedo} onClick={() => controller.redo()}>Повторить</button>
+        <button type="button" data-action="snapshot" onClick={() => controller.snapshot(`Snapshot ${new Date().toISOString()}`)}>Snapshot</button>
       </header>
-      <TargetBar target={target} route={route} format={format} language={language} onTarget={setTarget} onRoute={setRoute} onFormat={setFormat} onLanguage={setLanguage} />
+      <TargetBar
+        target={draft.target}
+        route={draft.screenId}
+        format={draft.format}
+        language={draft.language}
+        onTarget={(target: DesktopDesignTarget) => setView({ target })}
+        onRoute={(screenId: DesktopRouteId) => setView({ screenId })}
+        onFormat={(format: DesignFormat) => setView({ format })}
+        onLanguage={(language: 'ru' | 'en') => setView({ language })}
+      />
       <section class="editor-workspace">
         <PreviewPane
-          target={target}
-          route={route}
-          format={format}
-          language={language}
+          target={draft.target}
+          route={draft.screenId}
+          format={draft.format}
+          language={draft.language}
           mode={mode}
           serverConnected={serverConnected}
-          theme={theme}
-          flow={flow}
+          theme={previewTheme}
+          flow={draft.flow}
           sessionId={sessionId}
           onSelect={setSelected}
-          onNavigate={setRoute}
+          onNavigate={(screenId) => setView({ screenId })}
           onTrace={setTrace}
         />
         <aside class="editor-inspector">
-          <h2>Свойства</h2>
-          <p>{selected || 'Элемент не выбран'}</p>
+          <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} />
           <span>{trace.length ? `Действий: ${trace.length}` : 'Дизайн'}</span>
         </aside>
       </section>
     </main>
   );
+}
+
+export function App(props: AppProps = {}) {
+  const [controller, setController] = useState<DraftController | null>(props.controller || null);
+  const [error, setError] = useState('');
+  const [ownsController] = useState(!props.controller);
+  useEffect(() => {
+    if (props.controller) return;
+    let active = true;
+    const client = props.client || (props.draft ? offlineClient(props.draft) : createEditorClient());
+    const load = async () => {
+      try {
+        if (props.draft) {
+          const draft = props.draft;
+          if (active) setController(createDraftController({ draft, client }));
+          return;
+        }
+        const state = await client.state();
+        const saved = await client.getDraft('default');
+        if (active) setController(createDraftController({ draft: saved || createDefaultDraft('default', state.baseCommit), client }));
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    };
+    void load();
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => () => {
+    if (ownsController) controller?.dispose();
+  }, [controller, ownsController]);
+  useEffect(() => {
+    if (!controller) return;
+    const flush = () => {
+      void controller.flush({ keepalive: true });
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => window.removeEventListener('beforeunload', flush);
+  }, [controller]);
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!controller) return <p>Loading editor...</p>;
+  return <EditorWorkspace controller={controller} />;
 }

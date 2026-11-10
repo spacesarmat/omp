@@ -3,8 +3,12 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../editor/src/App';
 import * as protocol from '../../editor/src/preview/protocol';
+import { createDefaultDraft } from '../../editor/shared/draft';
+import { createDraftController, type DraftController } from '../../editor/src/drafts';
 
+const BASE = '0000000000000000000000000000000000000000';
 let host: HTMLDivElement;
+let controller: DraftController;
 
 function select(testId: string, value: string): void {
   const input = host.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`)!;
@@ -17,11 +21,20 @@ function select(testId: string, value: string): void {
 beforeEach(() => {
   host = document.createElement('div');
   document.body.appendChild(host);
-  act(() => render(h(App, {}), host));
+  controller = createDraftController({
+    draft: createDefaultDraft('draft-1', BASE),
+    client: {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+    },
+  });
+  act(() => render(h(App, { controller }), host));
 });
 
 afterEach(() => {
   act(() => render(null, host));
+  controller.dispose();
   host.remove();
   vi.restoreAllMocks();
 });
