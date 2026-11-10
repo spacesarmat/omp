@@ -1,9 +1,12 @@
 {
-  "version": "0.20.12-beta.1",
-  "url": "https://github.com/spacesarmat/omp/releases/download/v0.20.12-beta.1/OMP-0.20.12-beta.1-setup.exe",
-  "sha256": "35834c451ab5ddda3eeff9bff3359c0e3dcce43738b65e02c7ab10c8d719c1a1",
+  "version": "0.20.12-beta.2",
+  "url": "https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe",
+  "sha256": "5aba67590893c1c6603d5289fe9c30bab19bf543188d3320dd52660566e6319c",
   "notes": [
-    "После обновления приложение открывается снова. Если Android блокирует запуск, появляется уведомление с кнопкой открытия"
+    "На сайте omp-player.online появилась Windows-версия: карточка платформы и кнопка скачивания бета-установщика NSIS на русской и английской версиях",
+    "Первая desktop-версия OMP для Windows: каталог, поиск, встроенный или внешний TorrServer, внешний mpv и обновление через NSIS-установщик",
+    "Страница загрузки OMP предлагает Windows-бету: прямая ссылка на NSIS-установщик и номер версии из фида обновлений",
+    "Desktop: встроенный TorrServer завершается при выходе и не запускается автоматически при выбранном внешнем сервере"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.20.12-beta.1"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2"
 }
