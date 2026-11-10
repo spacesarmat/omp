@@ -214,12 +214,19 @@ jobs:
           gh release upload $env:RELEASE_TAG $package.FullName --clobber
           $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
           $sha = $null
+          $nativePreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
           try {
-            $sha = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>$null
-          } catch {
-            if ($_.Exception.Message -notmatch '404|Not Found') {
-              throw
-            }
+            $lookup = gh api "repos/${{ github.repository }}/contents/update-windows.json?ref=gh-pages" --jq .sha 2>&1
+            $lookupExit = $LASTEXITCODE
+          } finally {
+            $PSNativeCommandUseErrorActionPreference = $nativePreference
+          }
+          if ($lookupExit -ne 0 -and ($lookup | Out-String) -notmatch '404|Not Found') {
+            throw ($lookup | Out-String)
+          }
+          if ($lookupExit -eq 0) {
+            $sha = $lookup
           }
           if ($sha) {
             gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Update Windows desktop feed" -f content="$content" -f sha="$sha" -f branch="gh-pages"
