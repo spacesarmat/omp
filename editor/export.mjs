@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
@@ -63,6 +63,36 @@ async function manifestFor(root, draftId) {
   } catch {
     throw new ExportError('INVALID_EXPORT_MANIFEST', 409);
   }
+}
+
+export async function inheritExportManifest(root, sourceId, targetId) {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(sourceId) || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(targetId) || sourceId === targetId) {
+    throw new ExportError('INVALID_EXPORT_COPY', 400);
+  }
+  const manifest = await manifestFor(root, sourceId);
+  if (!manifest) return null;
+  const path = join(root, '.omp-editor', 'exports', `${targetId}.json`);
+  let handle;
+  let created = false;
+  try {
+    handle = await open(path, 'wx', 0o600);
+    created = true;
+    await handle.writeFile(json({ schemaVersion: 1, draftId: targetId, files: manifest.files }));
+    await handle.close();
+    handle = null;
+  } catch (error) {
+    if (handle) await handle.close().catch(() => undefined);
+    if (created) {
+      try {
+        await rm(path, { force: true });
+      } catch {}
+    }
+    if (error && typeof error === 'object' && error.code === 'EEXIST') throw new ExportError('EXPORT_MANIFEST_EXISTS', 409);
+    throw error;
+  }
+  return async () => {
+    await rm(path, { force: true });
+  };
 }
 
 async function verifyDirty(root, manifest) {

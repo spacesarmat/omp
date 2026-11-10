@@ -53,6 +53,7 @@ export interface EditorClient {
   state(): Promise<EditorState>;
   getDraft(id: string): Promise<EditorDraft | null>;
   putDraft(draft: EditorDraft, options?: { keepalive?: boolean }): Promise<EditorDraft>;
+  copyDraft?(draft: EditorDraft, sourceId: string): Promise<EditorDraft>;
   getDesign(): Promise<CommittedDesign | null>;
   rebaseDraft(draft: EditorDraft): Promise<RebaseResult>;
   exportDraft(draft: EditorDraft): Promise<ExportResult>;
@@ -133,6 +134,15 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(draft),
         keepalive: options?.keepalive,
+      });
+      if (!response.ok) throw await apiError(response);
+      return parseEditorDraft(await response.json());
+    },
+    copyDraft: async (draft, sourceId) => {
+      const response = await request(`/api/drafts/${encodeURIComponent(sourceId)}/copy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(draft),
       });
       if (!response.ok) throw await apiError(response);
       return parseEditorDraft(await response.json());
