@@ -53,6 +53,7 @@ describe('editor app', () => {
     expect(iframe.getAttribute('src')).toBe('/preview.html');
     expect(iframe.src).not.toContain('token');
     expect(iframe.dataset.viewport).toBe('1280x720');
+    expect(host.querySelector('[data-action="create-snapshot"]')).not.toBeNull();
   });
 
   it('switches macOS and Linux without changing screen or language', () => {
