@@ -273,6 +273,29 @@ export function startTelegramLink(ctx: SourceContext): Promise<string> {
  * Unlinks this install from the Telegram account on the billing server. Sends the device token when there is a
  * session (ready for BILLING_LINK_CLEAR_REQUIRE_TOKEN=1); a phone linked to Telegram without a code has none.
  */
+export type CryptoPayLink = { asset: string; amount: string; url: string; webUrl: string };
+
+/** Crypto Pay links for this device's subscription. The server creates the invoices. */
+export function fetchCryptoLinks(ctx: SourceContext): Promise<CryptoPayLink[]> {
+  return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/pay/crypto', { asset: '' }, { headers, timeoutMs: 20000 })).then(
+    (res) => {
+      if (res.status === 401) throw billingError(res.status, res.text);
+      if (res.status === 403) {
+        const body = parseBody<ErrorBody>(res.text);
+        if (body.error === 'country') throw new Error(t('sources.billing.cryptoCountry'));
+        throw new Error(t('sources.billing.cryptoOff'));
+      }
+      if (res.status === 429) throw new Error(t('sources.billing.rate'));
+      if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.cryptoDown'));
+      const body = parseBody<{ links?: CryptoPayLink[] }>(res.text);
+      return Array.isArray(body.links) ? body.links : [];
+    },
+    (e) => {
+      throw failure(e);
+    },
+  );
+}
+
 export function clearTelegramLink(ctx: SourceContext): Promise<void> {
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/link/clear', { deviceId: deviceId() }, { headers, timeoutMs: 12000 })).then(
     (res) => {

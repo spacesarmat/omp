@@ -6,6 +6,32 @@ import { secretText } from './envSecrets.mjs';
 import { bitmagnetCapsUrl } from './jackett.mjs';
 import { prefixMbOf, prefixPercentOf, validPrefixMb, validPrefixPercent } from './cacheNodes.mjs';
 
+/** Stars: a whole number 0-1000000. Empty or a bad value keeps the current one. */
+function starField(incoming, current) {
+  if (incoming === undefined || incoming === '') {
+    const n = Number(current);
+    return Number.isInteger(n) && n >= 0 && n <= 1000000 ? n : 0;
+  }
+  const n = Number(String(incoming).trim());
+  if (!Number.isInteger(n) || n < 0 || n > 1000000) {
+    const cur = Number(current);
+    return Number.isInteger(cur) && cur >= 0 && cur <= 1000000 ? cur : 0;
+  }
+  return n;
+}
+
+/** Crypto price or rate: 0 or a positive finite number. Empty or a bad value keeps the current one. */
+function rateField(incoming, current) {
+  const keep = () => {
+    const n = Number(current);
+    return Number.isFinite(n) && n >= 0 && n <= 1e12 ? n : 0;
+  };
+  if (incoming === undefined || incoming === '') return keep();
+  const n = Number(String(incoming).trim().replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > 1e12) return keep();
+  return n;
+}
+
 /** settings.baseDevices from the form: a whole number 1-20. */
 export function validBase(v) {
   const n = Number(String(v).trim());
@@ -79,6 +105,22 @@ export function publicAdminSettings(settings, env) {
     priceRub: s.priceRub || 0,
     periodDays: s.periodDays || 30,
     extraDeviceRub: s.extraDeviceRub || 0,
+    starsEnabled: s.starsEnabled === true,
+    starsPrice: Number(s.starsPrice) || 0,
+    starsExtra: Number(s.starsExtra) || 0,
+    cryptoEnabled: s.cryptoEnabled === true,
+    cryptoTestnet: s.cryptoTestnet === true,
+    cryptoNonRu: s.cryptoNonRu === true,
+    cryptoUsdt: Number(s.cryptoUsdt) || 0,
+    cryptoExtraUsdt: Number(s.cryptoExtraUsdt) || 0,
+    cryptoRateUsdt: Number(s.cryptoRateUsdt) || 0,
+    cryptoTon: Number(s.cryptoTon) || 0,
+    cryptoExtraTon: Number(s.cryptoExtraTon) || 0,
+    cryptoRateTon: Number(s.cryptoRateTon) || 0,
+    cryptoBtc: Number(s.cryptoBtc) || 0,
+    cryptoExtraBtc: Number(s.cryptoExtraBtc) || 0,
+    cryptoRateBtc: Number(s.cryptoRateBtc) || 0,
+    cryptoPayToken: secretText(s.cryptoPayToken),
     baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
@@ -152,6 +194,22 @@ export function mergeSettings(prev, body) {
     priceRub: num(b.priceRub !== undefined ? b.priceRub : cur.priceRub, 0),
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
     extraDeviceRub: num(b.extraDeviceRub !== undefined ? b.extraDeviceRub : cur.extraDeviceRub, 0),
+    starsEnabled: b.starsEnabled !== undefined ? bool(b.starsEnabled, false) : cur.starsEnabled === true,
+    starsPrice: starField(b.starsPrice, cur.starsPrice),
+    starsExtra: starField(b.starsExtra, cur.starsExtra),
+    cryptoEnabled: b.cryptoEnabled !== undefined ? bool(b.cryptoEnabled, false) : cur.cryptoEnabled === true,
+    cryptoTestnet: b.cryptoTestnet !== undefined ? bool(b.cryptoTestnet, false) : cur.cryptoTestnet === true,
+    cryptoNonRu: b.cryptoNonRu !== undefined ? bool(b.cryptoNonRu, false) : cur.cryptoNonRu === true,
+    cryptoUsdt: rateField(b.cryptoUsdt, cur.cryptoUsdt),
+    cryptoExtraUsdt: rateField(b.cryptoExtraUsdt, cur.cryptoExtraUsdt),
+    cryptoRateUsdt: rateField(b.cryptoRateUsdt, cur.cryptoRateUsdt),
+    cryptoTon: rateField(b.cryptoTon, cur.cryptoTon),
+    cryptoExtraTon: rateField(b.cryptoExtraTon, cur.cryptoExtraTon),
+    cryptoRateTon: rateField(b.cryptoRateTon, cur.cryptoRateTon),
+    cryptoBtc: rateField(b.cryptoBtc, cur.cryptoBtc),
+    cryptoExtraBtc: rateField(b.cryptoExtraBtc, cur.cryptoExtraBtc),
+    cryptoRateBtc: rateField(b.cryptoRateBtc, cur.cryptoRateBtc),
+    cryptoPayToken: String(cur.cryptoPayToken || ''),
     // 1-20; an empty or bad value keeps the current one
     baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),

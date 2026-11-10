@@ -291,6 +291,8 @@ export function userPayload(state, accountId, opts) {
       label: p.label || '',
       operationId: p.operationId || '',
       error: p.error || '',
+      provider: p.provider || '',
+      asset: p.asset || '',
     })),
     promos: (card.promos || []).map((p) => ({
       code: p.code,

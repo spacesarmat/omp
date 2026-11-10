@@ -68,6 +68,8 @@ services:
       # indexer keys. Empty = the old value in the database settings is used until it is moved.
       BILLING_BOT_TOKEN: ${BILLING_BOT_TOKEN:-}
       BILLING_YOOMONEY_SECRET: ${BILLING_YOOMONEY_SECRET:-}
+      # Crypto Pay (@CryptoBot). Empty = crypto invoices are not created. The panel never stores this token.
+      CRYPTO_PAY_TOKEN: ${CRYPTO_PAY_TOKEN:-}
       BILLING_SMTP_PASS: ${BILLING_SMTP_PASS:-}
       BILLING_JACKETT_API_KEY: ${BILLING_JACKETT_API_KEY:-}
       BILLING_JACRED_API_KEY: ${BILLING_JACRED_API_KEY:-}

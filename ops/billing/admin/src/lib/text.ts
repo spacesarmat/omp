@@ -100,6 +100,7 @@ const PROBLEM_KIND: Record<string, string> = {
   no_subscription: 'нет подписки',
   unaccepted: 'ждёт подтверждения',
   rejected: 'отклонён',
+  refunded: 'возврат звёзд',
 };
 
 const PURCHASE_KIND: Record<string, string> = {
@@ -128,6 +129,13 @@ export function auditAction(action: string) {
 
 export function problemKind(kind: string) {
   return PROBLEM_KIND[kind] || kind || 'проблема';
+}
+
+/** How the order was paid. Empty provider is a YooMoney row from before this split. */
+export function payMethodLabel(row?: { provider?: string; asset?: string }) {
+  if (row && row.provider === 'stars') return 'Звёзды';
+  if (row && row.provider === 'crypto') return 'Крипта' + (row.asset ? ' ' + row.asset : '');
+  return 'ЮMoney';
 }
 
 export function serviceError(error?: string) {

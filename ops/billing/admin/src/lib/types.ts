@@ -22,6 +22,18 @@ export type PaymentRow = {
   label?: string;
   operationId?: string;
   error?: string;
+  provider?: string;
+  asset?: string;
+  rub?: number;
+};
+
+export type MethodSplit = {
+  count: number;
+  rub: number;
+  stars: number;
+  usdt: number;
+  ton: number;
+  btc: number;
 };
 
 export type ProblemRow = {
@@ -128,7 +140,11 @@ export type HomeData = {
   alerts?: { level: string; text: string; accountId?: string }[];
   events?: FeedEvent[];
   finance?: {
-    summary?: { day?: { sum: number; count: number }; week?: { sum: number; count: number }; month?: { sum: number; count: number } };
+    summary?: {
+      day?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+      week?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+      month?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+    };
     payments?: PaymentRow[];
     problems?: ProblemRow[];
   };

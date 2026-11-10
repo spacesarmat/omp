@@ -12,6 +12,7 @@
 export const ENV_SECRETS = [
   { key: 'botToken', env: 'BILLING_BOT_TOKEN', label: 'Токен бота' },
   { key: 'yoomoneySecret', env: 'BILLING_YOOMONEY_SECRET', label: 'Секрет ЮMoney' },
+  { key: 'cryptoPayToken', env: 'CRYPTO_PAY_TOKEN', label: 'Токен Crypto Pay' },
   { key: 'smtpPass', env: 'BILLING_SMTP_PASS', label: 'SMTP-пароль' },
   { key: 'jackettApiKey', env: 'BILLING_JACKETT_API_KEY', label: 'Ключ API Jackett' },
   { key: 'jacredApiKey', env: 'BILLING_JACRED_API_KEY', label: 'Ключ API JacRed' },

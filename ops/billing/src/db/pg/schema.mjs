@@ -612,6 +612,22 @@ CREATE TABLE watch_best (
 );
 `,
   },
+  {
+    version: '010_pay_methods',
+    sql: `
+-- Telegram Stars and Crypto Pay. Old payments have a null provider and stay YooMoney.
+-- Null columns stay off the state row. Empty strings are not written for missing fields.
+ALTER TABLE payments ADD COLUMN provider text;
+ALTER TABLE payments ADD COLUMN asset text;
+ALTER TABLE payments ADD COLUMN rub double precision;
+ALTER TABLE purchases ADD COLUMN method text;
+ALTER TABLE purchases ADD COLUMN asset text;
+ALTER TABLE purchases ADD COLUMN pay_amount text;
+ALTER TABLE purchases ADD COLUMN invoice_id text;
+ALTER TABLE purchases ADD COLUMN pay_url text;
+ALTER TABLE purchases ADD COLUMN web_url text;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

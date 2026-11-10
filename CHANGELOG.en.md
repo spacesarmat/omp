@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The OMP account has a Crypto button that opens a USDT, TON, or BTC invoice when an admin has turned that method on. Telegram Stars are paid in the bot, with no fee added on top
 - Search puts first the release viewers finish without stalls. A short label explains the pick, and a popular voice-over is suggested until you choose your own. Settings include "Help improve picks", on by default, and you can turn it off
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
 - Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
@@ -14,6 +15,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
 - A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
 - When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] Billing: Telegram Stars (sendInvoice, XTR, no provider token) and Crypto Pay (USDT, TON, BTC). Both stay off until an admin turns them on. Extension matches YooMoney: one order extends once, a repeated webhook does not extend again. A short payment does not turn a subscription on. The Crypto Pay signature is checked against the raw body with CRYPTO_PAY_TOKEN. Star refunds use refundStarPayment on the user card. Migration 010_pay_methods. The billing image was not deployed
 - [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
 - [tech] The download page has one tile each for Android, Android TV, LG webOS and Windows. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl. There is no macOS build
 - [tech] Billing learns from playback: POST /v1/watch-signals, GET /v1/watch-best, migration 009_watch_quality. One vote per account and device. Shared tables keep hashes and counters only. The score blends seeds and DHT with real signals. watchRankEnabled is on: with no signals the search order does not change. The Picks admin tab shows scores and can pin or ban a release. Every 15 minutes the best release of an active series is stored, and when cache nodes are on it is sent once a day into cache_interest (noteInterest). The billing image was not deployed
