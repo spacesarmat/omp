@@ -54,6 +54,7 @@ if (platformKind() === 'androidtv') {
 }
 
 installErrorHooks();
+import('./report/presence').then((m) => m.startPresence(tvSourceContext, platformKind() === 'androidtv' ? 'androidtv' : 'webos')).catch(() => undefined);
 setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 

@@ -506,6 +506,7 @@ export async function buildTasks(ctx) {
   for (const [kind, name] of [
     ['jackett', 'Jackett'],
     ['jacred', 'JacRed'],
+    ['bitmagnet', 'bitmagnet'],
     ['torrserver', 'TorrServer'],
   ]) {
     out.push({

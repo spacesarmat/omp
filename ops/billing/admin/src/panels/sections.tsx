@@ -524,6 +524,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['botUsername', 'Имя бота'],
       ['publicOrigin', 'Публичный адрес'],
       ['adminTelegramIds', 'Telegram id администраторов'],
+      ['adminReaders', 'Telegram id только для просмотра'],
     ],
   },
   {

@@ -222,6 +222,17 @@ export function Advanced() {
             onToggle={() => updateSettings({ betaUpdates: !settings.value.betaUpdates })}
           />
         </div>
+        <div class="m-set-row tm" data-row="diagnostics">
+          <div class="m-set-text">
+            <span>{t('settings.diagnosticsTitle')}</span>
+            <span class="m-small m-muted">{t('settings.diagnosticsHint')}</span>
+          </div>
+          <Switch
+            on={settings.value.diagnostics}
+            label={t('settings.diagnosticsTitle')}
+            onToggle={() => updateSettings({ diagnostics: !settings.value.diagnostics })}
+          />
+        </div>
       </section>
 
       <section class="m-set-group">

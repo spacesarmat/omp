@@ -144,6 +144,10 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
+import { handleDesk } from './deskHttp.mjs';
+import { publishAdmin } from './adminLive.mjs';
+import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
+import { monitorEnv } from './monitorChecks.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -330,10 +334,25 @@ async function accountDevices(store, state, accountId) {
   return out;
 }
 
-function audit(file, action, detail, admin) {
-  return toStore(file).update((state) => ({
-    state: logAudit(state, { action, detail, now: Date.now(), actor: adminActor(admin) }),
-  }));
+function audit(file, action, detail, admin, extra) {
+  const id = (extra && extra.id) || randomId();
+  return toStore(file)
+    .update((state) => {
+      let next = logAudit(state, {
+        id,
+        action,
+        detail,
+        now: Date.now(),
+        actor: adminActor(admin),
+        accountId: extra && extra.accountId,
+      });
+      if (extra && extra.before) next = pushRollback(next, { id, at: Date.now(), before: extra.before });
+      return { state: next, result: { id } };
+    })
+    .then((result) => {
+      publishAdmin({ type: 'audit', action, id });
+      return result;
+    });
 }
 
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
@@ -1177,7 +1196,7 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('cache-control', 'no-store');
         res.setHeader(
           'content-security-policy',
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
         );
       }
       // Phone calls are native HTTP. The admin SPA is same-origin.
@@ -1199,6 +1218,28 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/health') {
         const settings = backups ? (await store.read()).settings : null;
         return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly, monitor: monitor && monitor.health ? monitor.health() : null }));
+      }
+      if (
+        await handleDesk({
+          req,
+          res,
+          path,
+          url,
+          store,
+          json,
+          send,
+          net,
+          env,
+          adminOf,
+          deviceCaller,
+          noteSeen,
+          readOnly,
+          readBody,
+          clientIp,
+          audit: (action, detail, who) => audit(file, action, detail, who),
+        })
+      ) {
+        return;
       }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
@@ -1557,6 +1598,9 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, probed.http, probed.body);
         }
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        if (path !== '/admin/logout' && roleOf((await store.read()).settings, admin) !== 'full') {
+          return json(res, 403, { ok: false, error: 'Режим только просмотра' });
+        }
         if (path === '/admin/monitor/run' || path === '/admin/monitor/config') {
           if (!monitor) return json(res, 200, { ok: false, error: 'Мониторинг недоступен на этом экземпляре' });
           if (path === '/admin/monitor/run') {
@@ -1591,6 +1635,7 @@ export function createApp(file, fetchImpl, opts) {
             : null;
         const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
+          const beforeSnap = snapshotSettings((await store.read()).settings);
           const baseBefore = baseDevices((await store.read()).settings);
           await store.update((state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
@@ -1604,6 +1649,7 @@ export function createApp(file, fetchImpl, opts) {
                   (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
               : 'ok',
             admin,
+            { before: beforeSnap },
           );
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices((await store.read()).settings, net);
@@ -2632,6 +2678,7 @@ export function createApp(file, fetchImpl, opts) {
             }
           }
         }
+        if (!applied.duplicate) publishAdmin({ type: applied.error ? 'error' : 'payment' });
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
           await notifyAdmins(
             freshPay,
@@ -2749,14 +2796,28 @@ export async function pollBot(file, fetchImpl, opts) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
-      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn
-      if (!adminLoginOnly && legacyAlerts && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn.
+      // Disk under 10% and an error spike are sent here too. Samples feed the admin sparklines.
+      if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000) {
         servicesAt = Date.now();
         try {
           const probes = await probeAllServices(state.settings, net);
-          const notes = serviceDownNotices(state.settings, probes, serviceSnap);
-          serviceSnap = notes.snapshot;
-          await notifyAdmins(state, notes.messages, net);
+          await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+          publishAdmin({ type: 'source' });
+          if (adminNotifyEnabled(state.settings)) {
+            if (legacyAlerts) {
+              const notes = serviceDownNotices(state.settings, probes, serviceSnap);
+              serviceSnap = notes.snapshot;
+              await notifyAdmins(state, notes.messages, net);
+            }
+            const disk = await diskRatio(monitorEnv(process.env).diskPaths);
+            const dAlert = diskAlert(serviceSnap.disk, disk && disk.ratio);
+            serviceSnap = { ...serviceSnap, disk: dAlert.snapshot };
+            if (dAlert.text) await notifyAdmins(state, adminBroadcast(state.settings, dAlert.text), net);
+            const spike = spikeAlert(serviceSnap.spikeAt || 0, recentFailCount(state, Date.now()), Date.now());
+            serviceSnap = { ...serviceSnap, spikeAt: spike.at };
+            if (spike.text) await notifyAdmins(state, adminBroadcast(state.settings, spike.text), net);
+          }
         } catch (e) {
           /* probe failure must not stop the bot loop */
         }

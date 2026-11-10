@@ -53,6 +53,7 @@ export function publicAdminSettings(settings, env) {
     botUsername: s.botUsername || '',
     publicOrigin: s.publicOrigin || '',
     adminTelegramIds: s.adminTelegramIds || '',
+    adminReaders: s.adminReaders || '',
     yoomoneyWallet: maskWallet(s.yoomoneyWallet),
     yoomoneySecret: secretText(s.yoomoneySecret),
     adminNotify: s.adminNotify !== false,
@@ -113,6 +114,7 @@ export function mergeSettings(prev, body) {
     ),
     publicOrigin: String(b.publicOrigin !== undefined ? b.publicOrigin : cur.publicOrigin || '').replace(/\/+$/, ''),
     adminTelegramIds: b.adminTelegramIds !== undefined ? b.adminTelegramIds || '' : cur.adminTelegramIds || '',
+    adminReaders: b.adminReaders !== undefined ? b.adminReaders || '' : cur.adminReaders || '',
     yoomoneyWallet:
       b.yoomoneyWallet !== undefined && !walletUnchanged(b.yoomoneyWallet, cur.yoomoneyWallet)
         ? String(b.yoomoneyWallet).replace(/\s/g, '')

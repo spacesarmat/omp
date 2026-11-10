@@ -1000,8 +1000,8 @@ function actorFromAuditDetail(row) {
 }
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
-export function logAudit(state, { action, detail, now, actor, accountId }) {
-  const row = { id: randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+export function logAudit(state, { action, detail, now, actor, accountId, id }) {
+  const row = { id: id || randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
   if (accountId) row.accountId = String(accountId);

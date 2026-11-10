@@ -187,6 +187,7 @@ export function serviceDownNotices(settings, probes, prev) {
   const names = [
     ['jackett', 'Jackett'],
     ['jacred', 'JacRed'],
+    ['bitmagnet', 'bitmagnet'],
     ['torrserver', 'TorrServer'],
   ];
   const snapshot = { ...(prev || {}) };
