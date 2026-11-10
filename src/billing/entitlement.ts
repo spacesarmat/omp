@@ -153,17 +153,18 @@ export function premiumCheckedAt(): number {
  * Null: do not turn paid sources on (no confirmation, or it is older than the window).
  * A fresh active answer that did not name sources turns both on, matching an old server.
  */
-export function freshPremiumSources(now?: number): { jackett: boolean; jacred: boolean } | null {
+export function freshPremiumSources(now?: number): { jackett: boolean; jacred: boolean; bitmagnet: boolean } | null {
   const at = now === undefined ? Date.now() : now;
   if (!ompSubscribed(at)) return null;
   const row = accessForSession();
   if (!row || !row.rec.checkedAt) return null;
   if (row.rec.checkedAt > at + 60000) return null;
   if (at - row.rec.checkedAt > PREMIUM_FRESH_MS) return null;
+  const bitmagnet = row.rec.bitmagnet === true;
   if (row.rec.jackett !== true && row.rec.jackett !== false && row.rec.jacred !== true && row.rec.jacred !== false) {
-    return { jackett: true, jacred: true };
+    return { jackett: true, jacred: true, bitmagnet };
   }
-  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true };
+  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true, bitmagnet };
 }
 
 /**
@@ -177,13 +178,13 @@ export function bitmagnetSourceOn(now?: number): boolean {
   return !!(row && row.rec.bitmagnet === true);
 }
 
-export function confirmedPremiumSources(now?: number): { jackett: boolean; jacred: boolean } | null {
+export function confirmedPremiumSources(now?: number): { jackett: boolean; jacred: boolean; bitmagnet: boolean } | null {
   const at = now === undefined ? Date.now() : now;
   if (!ompSubscribed(at)) return null;
   const row = accessForSession();
   if (!row) return null;
   if (row.rec.jackett !== true && row.rec.jackett !== false && row.rec.jacred !== true && row.rec.jacred !== false) return null;
-  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true };
+  return { jackett: row.rec.jackett === true, jacred: row.rec.jacred === true, bitmagnet: row.rec.bitmagnet === true };
 }
 
 /**

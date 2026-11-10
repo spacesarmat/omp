@@ -518,9 +518,8 @@ export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean; bi
   if (!flags) return;
   if (flags.jackett) registerSource(ompJackettSource());
   if (flags.jacred) registerSource(ompJacredSource());
-  // Clearing the paid sources clears bitmagnet too. An omitted flag must not revive it from the old access row.
-  const clearing = flags.jackett === false && flags.jacred === false;
-  const bitmagnet = flags.bitmagnet === true ? true : flags.bitmagnet === false || clearing ? false : bitmagnetSourceOn();
+  // An omitted flag keeps the saved bitmagnet switch. Callers that clear access pass bitmagnet: false.
+  const bitmagnet = flags.bitmagnet === true ? true : flags.bitmagnet === false ? false : bitmagnetSourceOn();
   if (bitmagnet) registerSource(ompBitmagnetSource());
 }
 

@@ -10,7 +10,7 @@ import {
 } from '../../src/billing/entitlement';
 import { nextRecheckDelay, premiumRecheckDue, recheckPremium, startPremiumRecheck } from '../../src/billing/recheck';
 import { saveBillingSession } from '../../src/billing/session';
-import { OMP_JACRED_ID, OMP_JACKETT_ID, syncOmpJackett } from '../../src/sources/ompJackett';
+import { OMP_BITMAGNET_ID, OMP_JACRED_ID, OMP_JACKETT_ID, syncOmpJackett } from '../../src/sources/ompJackett';
 import { getSource, unregisterSource } from '../../src/sources/registry';
 import type { HttpResponse } from '../../src/sources/types';
 import { fakeSite, page } from '../sources/fakeSite';
@@ -21,11 +21,13 @@ beforeEach(() => {
   localStorage.clear();
   unregisterSource(OMP_JACKETT_ID);
   unregisterSource(OMP_JACRED_ID);
+  unregisterSource(OMP_BITMAGNET_ID);
 });
 
 afterEach(() => {
   unregisterSource(OMP_JACKETT_ID);
   unregisterSource(OMP_JACRED_ID);
+  unregisterSource(OMP_BITMAGNET_ID);
 });
 
 describe('premium confirmation', () => {
@@ -37,7 +39,7 @@ describe('premium confirmation', () => {
     expect(freshPremiumSources(now)).toBeNull();
 
     saveBillingAccess({ active: true, accessUntil: now + 10 * 24 * HOUR, jackett: true, jacred: false, checkedAt: now - HOUR, monitorMax: 0 });
-    expect(freshPremiumSources(now)).toEqual({ jackett: true, jacred: false });
+    expect(freshPremiumSources(now)).toEqual({ jackett: true, jacred: false, bitmagnet: false });
     syncOmpJackett();
     expect(getSource(OMP_JACKETT_ID)?.id).toBe(OMP_JACKETT_ID);
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
@@ -54,6 +56,27 @@ describe('premium confirmation', () => {
     // still subscribed on the server date, but this process has no fresh confirmation, so sources stay off
     expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
     expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+  });
+
+  it('keeps bitmagnet when it is the only paid source', () => {
+    const now = Date.now();
+    saveBillingSession({ token: 'tok', paidUntil: now + 30 * 24 * HOUR });
+    saveBillingAccess({
+      active: true,
+      accessUntil: now + 10 * 24 * HOUR,
+      jackett: false,
+      jacred: false,
+      bitmagnet: true,
+      checkedAt: now - HOUR,
+      monitorMax: 0,
+    });
+    expect(freshPremiumSources(now)).toEqual({ jackett: false, jacred: false, bitmagnet: true });
+    syncOmpJackett();
+    expect(getSource(OMP_BITMAGNET_ID)?.id).toBe(OMP_BITMAGNET_ID);
+    expect(getSource(OMP_JACKETT_ID)).toBeUndefined();
+    expect(getSource(OMP_JACRED_ID)).toBeUndefined();
+    syncOmpJackett({ jackett: false, jacred: false, bitmagnet: false });
+    expect(getSource(OMP_BITMAGNET_ID)).toBeUndefined();
   });
 
   it('uses monitorMax from the server, and 10 when premium is not confirmed', () => {
