@@ -235,8 +235,6 @@ services:
     environment:
       CONTAINERS: "1"
       POST: "0"
-      # Host CPU and RAM for the NUC page. GET /info has no container env.
-      INFO: "1"
       # granted by default in the image; not needed
       EVENTS: "0"
       PING: "0"

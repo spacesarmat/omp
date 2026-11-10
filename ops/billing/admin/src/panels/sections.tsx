@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -616,10 +616,16 @@ export function SettingsCard({
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
+  const dirty = useRef(false);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
   const [lower, setLower] = useState<BaseImpact | null>(null);
-  const save = (confirm: boolean) => run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) });
+  const save = (confirm: boolean) =>
+    run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) }).then((res) => {
+      if (!res?.flash?.error) dirty.current = false;
+      return res;
+    });
   useEffect(() => {
+    if (dirty.current) return;
     const o: Record<string, string> = {};
     for (const group of SETTING_GROUPS) {
       for (const [k] of group.fields) if (!SECRET_KEYS.has(k)) o[k] = String(settings[k] ?? '');
@@ -668,13 +674,27 @@ export function SettingsCard({
               ) : (
                 <div key={name} className="space-y-1">
                   <Label htmlFor={name}>{label}</Label>
-                  <Input id={name} value={form[name] || ''} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />
+                  <Input
+                    id={name}
+                    value={form[name] || ''}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setForm({ ...form, [name]: e.target.value });
+                    }}
+                  />
                 </div>
               ),
             )}
             {group.title === 'Бот' ? (
               <label className="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={notify}
+                  onChange={(e) => {
+                    dirty.current = true;
+                    setNotify(e.target.checked);
+                  }}
+                />
                 Уведомлять администраторов в Telegram (оплата, ошибка оплаты, падение сервиса, новое сообщение поддержки)
               </label>
             ) : null}

@@ -646,16 +646,30 @@ export function openAppUrl(origin, code) {
   return base + '/go/' + encodeURIComponent(formatCode(code));
 }
 
-export function adminChatIds(settings) {
-  return String((settings && settings.adminTelegramIds) || '')
+function idList(raw) {
+  return String(raw || '')
     .split(/[,;\s]+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
+export function adminChatIds(settings) {
+  return idList(settings && settings.adminTelegramIds);
+}
+
+/** Telegram ids that may open the panel but must not change billing. */
+export function readerChatIds(settings) {
+  return idList(settings && settings.adminReaders);
+}
+
+export function isPanelReader(settings, chatId) {
+  const id = String(chatId);
+  return readerChatIds(settings).some((s) => s === id);
+}
+
 export function isAdminChat(settings, chatId) {
   const id = String(chatId);
-  return adminChatIds(settings).some((s) => s === id);
+  return adminChatIds(settings).some((s) => s === id) || isPanelReader(settings, id);
 }
 
 const SUPPORT_CAP = 400;

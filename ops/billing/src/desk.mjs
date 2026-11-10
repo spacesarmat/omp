@@ -1,10 +1,12 @@
 /** Admin desk: dashboard numbers, search, sources, roles, alerts, presence. Pure helpers. */
 import { createHash } from 'node:crypto';
+import { SEEN_EVERY_MS } from './deviceAdmin.mjs';
 import { creditOf, logAudit, mainSubscription } from './logic.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
-export const ONLINE_MS = 5 * 60 * 1000;
+/** last_seen is written at most once per SEEN_EVERY_MS, so online must cover that gap. */
+export const ONLINE_MS = SEEN_EVERY_MS + 5 * 60 * 1000;
 export const FUNNEL = ['install', 'login', 'trial', 'payment', 'renewal'];
 const FUNNEL_SET = new Set(FUNNEL);
 
@@ -84,7 +86,7 @@ export function snapshotSettings(settings) {
   const out = {};
   for (let i = 0; i < ROLLBACK_KEYS.length; i++) {
     const k = ROLLBACK_KEYS[i];
-    if (s[k] !== undefined) out[k] = s[k];
+    out[k] = s[k] === undefined ? null : s[k];
   }
   return out;
 }
@@ -103,7 +105,8 @@ export function applyRollback(settings, before) {
   const src = before || {};
   for (let i = 0; i < ROLLBACK_KEYS.length; i++) {
     const k = ROLLBACK_KEYS[i];
-    if (Object.prototype.hasOwnProperty.call(src, k)) next[k] = src[k];
+    if (!Object.prototype.hasOwnProperty.call(src, k) || src[k] === null) delete next[k];
+    else next[k] = src[k];
   }
   return next;
 }
@@ -459,18 +462,56 @@ function parseJson(text) {
   }
 }
 
+/** Trial, payment and renewal come from billing rows, not from the app's paid flag. */
+export function billingFunnelSteps(state, accountId) {
+  const names = [];
+  const promos = state.promos || [];
+  for (let i = 0; i < promos.length; i++) {
+    const uses = (promos[i] && promos[i].uses) || [];
+    for (let u = 0; u < uses.length; u++) {
+      if (uses[u] && uses[u].accountId === accountId) {
+        names.push('trial');
+        i = promos.length;
+        break;
+      }
+    }
+  }
+  let pays = 0;
+  const payments = state.payments || [];
+  for (let i = 0; i < payments.length; i++) {
+    const p = payments[i];
+    if (p && p.accountId === accountId && !p.error && !p.pending) pays += 1;
+  }
+  if (pays >= 1) names.push('payment');
+  if (pays >= 2) names.push('renewal');
+  return names;
+}
+
 export function ingestPresence(state, input, now) {
   const at = now || Date.now();
   let deskEvents = state.deskEvents || [];
-  if (input.diagnostics && input.events && input.events.length) {
-    const extra = input.events.filter((name) => FUNNEL_SET.has(name)).map((name) => ({
-      name,
-      at,
-      key: input.key,
-      accountId: input.accountId || '',
-      version: input.version || '',
-      platform: input.platform || '',
-    }));
+  const names = (input.events || []).filter((name) => FUNNEL_SET.has(name));
+  if (input.diagnostics && input.accountId) {
+    const facts = billingFunnelSteps(state, input.accountId);
+    for (let i = 0; i < facts.length; i++) if (names.indexOf(facts[i]) < 0) names.push(facts[i]);
+  }
+  if (input.diagnostics && names.length) {
+    const seen = {};
+    for (let i = 0; i < deskEvents.length; i++) {
+      if (deskEvents[i] && deskEvents[i].key === input.key) seen[deskEvents[i].name] = true;
+    }
+    const extra = [];
+    for (let i = 0; i < names.length; i++) {
+      if (seen[names[i]]) continue;
+      extra.push({
+        name: names[i],
+        at,
+        key: input.key,
+        accountId: input.accountId || '',
+        version: input.version || '',
+        platform: input.platform || '',
+      });
+    }
     deskEvents = deskEvents.concat(extra).slice(-2000);
   }
   const deskVersions = { ...(state.deskVersions || {}) };

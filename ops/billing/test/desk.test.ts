@@ -38,6 +38,9 @@ describe('admin desk', () => {
     expect(next.botUsername).toBe('old');
     expect(next.botToken).toBe('secret');
     expect(next.priceRub).toBe(100);
+    const rolled = applyRollback({ adminReaders: '9', botToken: 'secret' }, snapshotSettings({ botToken: 'secret' }));
+    expect(rolled.adminReaders).toBeUndefined();
+    expect(rolled.botToken).toBe('secret');
   });
 
   it('stores funnel steps only when diagnostics are on', () => {
@@ -46,6 +49,10 @@ describe('admin desk', () => {
     expect(off.deskEvents || []).toHaveLength(0);
     const on = ingestPresence(state, { diagnostics: true, events: ['install', 'nope'], key: 'abc', version: '1', platform: 'tv', accountId: 'a1' }, 10);
     expect(on.deskEvents).toEqual([{ name: 'install', at: 10, key: 'abc', accountId: 'a1', version: '1', platform: 'tv' }]);
+    state.payments = [{ accountId: 'a1', amount: '10', at: 1 }];
+    state.payments.push({ accountId: 'a1', amount: '10', at: 2 });
+    const paid = ingestPresence(state, { diagnostics: true, events: ['login'], key: 'abc', version: '1', platform: 'tv', accountId: 'a1' }, 12);
+    expect(paid.deskEvents.map((e) => e.name)).toEqual(['login', 'payment', 'renewal']);
     expect(parsePresence({ events: 'login,payment', diagnostics: '1', version: '2' }).events).toEqual(['login', 'payment']);
   });
 

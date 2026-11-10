@@ -2797,19 +2797,19 @@ export async function pollBot(file, fetchImpl, opts) {
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
       // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn.
-      // Disk under 10% and an error spike are sent here too. Samples feed the admin sparklines.
+      // Disk under 10% and an error spike do not call the indexers.
       if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000) {
         servicesAt = Date.now();
         try {
-          const probes = await probeAllServices(state.settings, net);
-          await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
-          publishAdmin({ type: 'source' });
+          if (legacyAlerts && adminNotifyEnabled(state.settings)) {
+            const probes = await probeAllServices(state.settings, net);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+            const notes = serviceDownNotices(state.settings, probes, serviceSnap);
+            serviceSnap = notes.snapshot;
+            await notifyAdmins(state, notes.messages, net);
+          }
           if (adminNotifyEnabled(state.settings)) {
-            if (legacyAlerts) {
-              const notes = serviceDownNotices(state.settings, probes, serviceSnap);
-              serviceSnap = notes.snapshot;
-              await notifyAdmins(state, notes.messages, net);
-            }
             const disk = await diskRatio(monitorEnv(process.env).diskPaths);
             const dAlert = diskAlert(serviceSnap.disk, disk && disk.ratio);
             serviceSnap = { ...serviceSnap, disk: dAlert.snapshot };

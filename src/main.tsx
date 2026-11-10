@@ -8,7 +8,7 @@ import { readLaunchParams, onRelaunch } from './platform/launch';
 import { installTvTitleLinks } from './titleLink';
 import { runLaunchParams } from './launchActions';
 import { platformKind } from './platform/env';
-import { nativePlugin, nativeSetCleartextHosts, nativeTorrServerTls } from './platform/androidNative';
+import { nativePlugin, nativeSetCleartextHosts, nativeSourceHttp, nativeTorrServerTls } from './platform/androidNative';
 import { nativeTlsProbe, setTlsProbe } from './api/tlsProbe';
 import { certQuestionText, installTorrServerTls } from './api/torrServerTls';
 import { confirmWithBody } from './ui/dialog';
@@ -54,7 +54,10 @@ if (platformKind() === 'androidtv') {
 }
 
 installErrorHooks();
-import('./report/presence').then((m) => m.startPresence(tvSourceContext, platformKind() === 'androidtv' ? 'androidtv' : 'webos')).catch(() => undefined);
+import('./billing/webHttp').then((web) => {
+  const ctx = () => (nativeSourceHttp() ? tvSourceContext() : web.webBillingContext(tvSourceContext()));
+  return import('./report/presence').then((m) => m.startPresence(ctx, platformKind() === 'androidtv' ? 'androidtv' : 'webos'));
+}).catch(() => undefined);
 setCatalogProvider((fresh) => tvCatalog(fresh));
 logStart(platformKind() === 'androidtv' ? 'Android TV' : 'LG webOS');
 

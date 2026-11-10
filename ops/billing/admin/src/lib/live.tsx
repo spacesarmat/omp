@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 type LiveMode = 'live' | 'poll' | 'pause';
 
@@ -27,6 +27,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const [paused, setPaused] = useState(false);
   const [mode, setMode] = useState<LiveMode>('poll');
   const [at, setAt] = useState(0);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   useEffect(() => {
     if (paused) {
@@ -69,6 +71,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
     };
   }, [paused, qc]);
+
+  useEffect(() => {
+    if (paused) return;
+    const timer = window.setInterval(() => {
+      if (modeRef.current !== 'live') window.dispatchEvent(new Event('omp-admin-live'));
+    }, 12000);
+    return () => window.clearInterval(timer);
+  }, [paused]);
 
   return <LiveContext.Provider value={{ paused, setPaused, mode, at }}>{children}</LiveContext.Provider>;
 }

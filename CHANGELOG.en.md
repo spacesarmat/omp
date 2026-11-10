@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Billing admin: sidebar, service and payment overview, tables, sources, release ranking (the screen says watch-rank is not merged yet), settings rollback, NUC, funnel and revenue. Live updates use SSE /admin/api/events, otherwise a poll every 12 seconds. Apps send POST /v1/presence (install, sign-in, payment). Read-only role is a Telegram id list in settings. Container restart is allowlisted and needs a separate proxy. Nothing was deployed to the NUC
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
 - Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
 - If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
