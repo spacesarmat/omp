@@ -108,6 +108,27 @@ describe('seed check apply', () => {
     watch.cancel();
   });
 
+  it('marks every row unverified when the check succeeds with no infohash', async () => {
+    saveBillingSession({ token: 'tok', paidUntil: 1, access: 'a', accessExp: Date.now() + 6 * 60 * 60 * 1000 });
+    let applied: SeedMeasure[] | null = null;
+    const plain = row({ Title: 'No hash' });
+    const watch = watchSeedVerify({
+      query: 'film',
+      ctx: ctx(),
+      getRows: () => [plain],
+      getPending: () => 0,
+      request: () => Promise.resolve([]),
+      onApply: (list) => {
+        applied = list;
+      },
+    });
+    watch.notify();
+    await Promise.resolve();
+    expect(applied).toEqual([]);
+    expect(applySeedRound([plain], applied, true)[0].seedCheck).toBe('unverified');
+    watch.cancel();
+  });
+
   it('does nothing without a billing session', () => {
     let asked = 0;
     const watch = watchSeedVerify({

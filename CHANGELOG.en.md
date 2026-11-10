@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Checked search seeds stay when you leave the screen and come back
+- A release with no infohash is marked "not checked"
 - Search puts releases with checked seeds on top. Tracker counts show first, then the checked numbers arrive within a few seconds and the list reorders. The TV cursor stays on the same row. Unchecked releases stay lower and are marked "not checked". The same infohash from different sources is merged
 - [tech] Billing: POST /v1/seed-check checks seeds for the top 30 releases (HTTP and UDP scrape, one DHT lookup when the sidecar is on). Measurements are stored in Postgres (005_seed_probes): popular 20 minutes, rare 4 hours, an empty answer 10 minutes. A shared concurrency cap and a per-host pause keep the home IP from getting banned. A new billing image is required. There is no background cache refresh
 
