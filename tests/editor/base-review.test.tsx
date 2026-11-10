@@ -20,15 +20,18 @@ describe('BaseReviewPanel', () => {
   it('previews a rebase and applies it only after explicit confirmation', async () => {
     const incoming = createDefaultDraft('draft-1', NEXT);
     incoming.theme.name = 'From Git';
+    const merged = structuredClone(incoming);
+    merged.theme.overrides.push({ id: 'local-only', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
     const client: EditorClient = {
       state: async () => ({ baseCommit: NEXT, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
       getDesign: async () => ({ baseCommit: NEXT, theme: incoming.theme, flow: incoming.flow }),
-      rebaseDraft: vi.fn(async () => ({ draft: incoming, changes: ['design/themes/default.json'] })),
+      rebaseDraft: vi.fn(async () => ({ draft: merged, changes: ['design/themes/default.json'] })),
       exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     };
     const controller = createDraftController({ draft: createDefaultDraft('draft-1', BASE), client });
+    controller.upsertOverride({ id: 'local-only', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
     host = document.createElement('div');
     document.body.appendChild(host);
     await act(async () => {
@@ -44,6 +47,9 @@ describe('BaseReviewPanel', () => {
     expect(client.rebaseDraft).toHaveBeenCalledOnce();
     expect(host.textContent).toContain('design/themes/default.json');
     expect(controller.draft.baseCommit).toBe(BASE);
+    const review = host.querySelector<HTMLPreElement>('.editor-base-proposal pre')!.textContent;
+    expect(review).toContain('From Git');
+    expect(review).toContain('local-only');
 
     act(() => host.querySelector<HTMLButtonElement>('[data-action="apply-base"]')!.click());
     expect(controller.draft.baseCommit).toBe(NEXT);

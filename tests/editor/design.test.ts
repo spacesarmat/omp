@@ -165,6 +165,42 @@ describe('committed editor designs', () => {
     });
   });
 
+  it('rejects an inserted rule whose placement conflicts with the incoming reorder', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    const inserted = { id: 'inserted', screenId: '*', elementId: local.flow.rules[1].elementId, event: 'click' as const, action: { type: 'toast' as const, message: 'Inserted' } };
+    local.flow.rules = [local.flow.rules[0], inserted, ...local.flow.rules.slice(1)];
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules = [incoming.flow.rules[1], incoming.flow.rules[0], ...incoming.flow.rules.slice(2)];
+    await writeDesign(root, incoming);
+    await commit(root, 'reorder around inserted rule');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'flow.rules.order' }],
+    });
+  });
+
+  it('ignores deleted entries when checking placement', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules[0].action = { type: 'toast', message: 'Local edit' };
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules = [incoming.flow.rules[2], incoming.flow.rules[0]];
+    await writeDesign(root, incoming);
+    await commit(root, 'delete unchanged rule');
+
+    const result = await rebaseDraft({ root, draft: local });
+    expect(result.draft.flow.rules.map((entry) => entry.id)).toEqual(['nav-search', 'nav-library']);
+    expect(result.draft.flow.rules[1].action).toEqual({ type: 'toast', message: 'Local edit' });
+  });
+
   it('stops instead of inventing a base when its commit is unavailable', async () => {
     const root = await makeRepo();
     const draft = createDefaultDraft('draft-1', '0000000000000000000000000000000000000000');

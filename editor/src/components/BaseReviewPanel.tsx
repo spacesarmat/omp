@@ -97,7 +97,7 @@ export function BaseReviewPanel({ controller, client }: BaseReviewPanelProps) {
         <div class="editor-base-proposal">
           <strong>Можно применить без потери локальных правок</strong>
           {proposal.changes.length ? <ul>{proposal.changes.map((path) => <li key={path}>{path}</li>)}</ul> : <p>Изменилась только база Git.</p>}
-          {design && <details><summary>Содержимое новой версии</summary><pre>{JSON.stringify(design, null, 2)}</pre></details>}
+          {design && <details><summary>Итоговый черновик после слияния</summary><pre>{JSON.stringify(proposal.draft, null, 2)}</pre></details>}
           <button type="button" data-action="apply-base" onClick={apply}>Применить</button>
         </div>
       )}

@@ -33,28 +33,28 @@ function object(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function reordered(base, current, key) {
-  const baseIds = base.map((entry) => entry[key]);
+function reordered(base, current, key, survivors) {
+  const baseIds = base.map((entry) => entry[key]).filter((id) => survivors.has(id));
   const currentIds = current.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
   const expected = baseIds.filter((id) => currentIds.includes(id));
   return !equal(currentIds, expected);
 }
 
-function mergeOrder(base, local, incoming, key, path, issues) {
-  const localReordered = reordered(base, local, key);
-  const incomingReordered = reordered(base, incoming, key);
+function mergeOrder(base, local, incoming, key, path, issues, survivors) {
+  const localReordered = reordered(base, local, key, survivors);
+  const incomingReordered = reordered(base, incoming, key, survivors);
   if (localReordered && incomingReordered) {
-    const baseIds = base.map((entry) => entry[key]);
+    const baseIds = base.map((entry) => entry[key]).filter((id) => survivors.has(id));
     const localOrder = local.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
     const incomingOrder = incoming.map((entry) => entry[key]).filter((id) => baseIds.includes(id));
     if (!equal(localOrder, incomingOrder)) issues.push({ path: `${path}.order` });
   }
-  const preferred = incomingReordered ? incoming : localReordered ? local : incoming;
-  const secondary = preferred === incoming ? local : incoming;
-  const ordered = preferred.map((entry) => entry[key]);
+  const preferredSource = incomingReordered ? incoming : localReordered ? local : incoming;
+  const secondary = preferredSource === incoming ? local : incoming;
+  const ordered = preferredSource.map((entry) => entry[key]).filter((id) => survivors.has(id));
   for (let index = 0; index < secondary.length; index += 1) {
     const id = secondary[index][key];
-    if (ordered.includes(id)) continue;
+    if (!survivors.has(id) || ordered.includes(id)) continue;
     let insertAt = 0;
     for (let previous = index - 1; previous >= 0; previous -= 1) {
       const position = ordered.indexOf(secondary[previous][key]);
@@ -62,6 +62,18 @@ function mergeOrder(base, local, incoming, key, path, issues) {
         insertAt = position + 1;
         break;
       }
+    }
+    let nextAt = -1;
+    for (let next = index + 1; next < secondary.length; next += 1) {
+      const position = ordered.indexOf(secondary[next][key]);
+      if (position >= 0) {
+        nextAt = position;
+        break;
+      }
+    }
+    if (nextAt >= 0 && insertAt > nextAt) {
+      issues.push({ path: `${path}.order` });
+      continue;
     }
     ordered.splice(insertAt, 0, id);
   }
@@ -83,9 +95,9 @@ function mergeValue(base, local, incoming, path, issues) {
   if (Array.isArray(base) && Array.isArray(local) && Array.isArray(incoming)) {
     const key = path === 'theme.releaseIntents' ? 'target' : path === 'theme.overrides' || path === 'flow.rules' ? 'id' : null;
     if (key) {
-      const result = [];
-      const ids = mergeOrder(base, local, incoming, key, path, issues);
-      for (const id of ids) {
+      const merged = new Map();
+      const allIds = new Set([...base, ...local, ...incoming].map((entry) => entry[key]));
+      for (const id of allIds) {
         const value = mergeValue(
           base.find((entry) => entry[key] === id),
           local.find((entry) => entry[key] === id),
@@ -93,9 +105,10 @@ function mergeValue(base, local, incoming, path, issues) {
           `${path}[${id}]`,
           issues,
         );
-        if (value !== undefined) result.push(value);
+        if (value !== undefined) merged.set(id, value);
       }
-      return result;
+      const ids = mergeOrder(base, local, incoming, key, path, issues, new Set(merged.keys()));
+      return ids.map((id) => merged.get(id));
     }
   }
   issues.push({ path });
