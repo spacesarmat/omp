@@ -75,7 +75,12 @@ export interface OverrideIdentity {
 }
 
 export function overrideId(identity: OverrideIdentity): string {
-  const source = JSON.stringify(identity);
+  const scoped: Partial<OverrideIdentity> = { scope: identity.scope, target: identity.target };
+  if (identity.scope !== 'platform') scoped.screenId = identity.screenId;
+  if (identity.scope === 'element' || identity.scope === 'format' || identity.scope === 'state') scoped.elementId = identity.elementId;
+  if (identity.scope === 'format' || identity.scope === 'state') scoped.format = identity.format;
+  if (identity.scope === 'state') scoped.state = identity.state;
+  const source = JSON.stringify(scoped);
   let hash = 2166136261;
   for (let index = 0; index < source.length; index += 1) hash = Math.imul(hash ^ source.charCodeAt(index), 16777619) >>> 0;
   return `override-${identity.scope}-${hash.toString(16).padStart(8, '0')}`;

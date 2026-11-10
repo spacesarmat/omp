@@ -110,6 +110,16 @@ describe('ThemeInspector', () => {
     expect(controller.undo()).toBe(true);
     expect(controller.draft.theme.overrides).toHaveLength(1);
   });
+
+  it('resets the same element override after changing orientation', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape' }));
+    change('[data-testid="scope"]', 'element');
+    change('[data-token="--omp-color-panel"]', '#112233');
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'portrait' }), host));
+    click('[data-action="reset"]');
+    expect(controller.draft.theme.overrides).toEqual([]);
+  });
 });
 
 describe('editor before and after', () => {
