@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.20.12-beta.2
 
 - The first OMP desktop release for Windows: catalog, search, embedded or external TorrServer, external mpv and updates through an NSIS installer
 - The OMP download page offers the Windows beta: a direct NSIS installer link and the version from the update feed

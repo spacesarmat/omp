@@ -3,7 +3,7 @@ import preact from '@preact/preset-vite';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const pkg = JSON.parse(readFileSync('../package.json', 'utf8')) as { version: string };
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 const torrserverVersion = readFileSync('../torrserver.version', 'utf8').trim();
 
 export default defineConfig({

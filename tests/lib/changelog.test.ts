@@ -79,8 +79,8 @@ describe('parseChangelog', () => {
   it('the real CHANGELOG is embedded and parsed', () => {
     expect(CHANGELOG.length).toBeGreaterThan(0);
     expect(CHANGELOG[0].items.length).toBeGreaterThan(0);
-    // a release must not ship without its changelog section
-    expect(CHANGELOG[0].version).toBe(APP_VERSION);
+    // a release must not ship without its changelog section; a newer desktop-only section may sit above it
+    expect(CHANGELOG.map((e) => e.version)).toContain(APP_VERSION);
   });
   it('keeps the floor release when a newer section is prepended', () => {
     const before = parseChangelog('## 0.18.0\n- tv\n\n## 0.17.0\n- calendar\n\n## 0.16.0\n- old\n');
