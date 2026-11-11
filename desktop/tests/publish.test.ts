@@ -62,7 +62,11 @@ function runPublish(mode: string) {
   const script = workflowStep('desktop.yml', 'Publish release asset and feed').match(/run: \|\n([\s\S]*)$/)?.[1];
   expect(script).toBeTruthy();
   const scriptPath = join(root, 'publish.ps1');
-  writeFileSync(scriptPath, script!.replace(/^ {10}/gm, '').replace(/\$\{\{ github\.repository \}\}/g, 'spacesarmat/omp'));
+  const body = script!
+    .split('\n')
+    .filter((line) => line === '' || line.startsWith('          '))
+    .join('\n');
+  writeFileSync(scriptPath, body.replace(/^ {10}/gm, '').replace(/\$\{\{ github\.repository \}\}/g, 'spacesarmat/omp'));
   const { bin, log } = fakeGh(root, mode);
   const shell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
   const result = spawnSync(shell, ['-NoProfile', '-NonInteractive', '-File', scriptPath], {
