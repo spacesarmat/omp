@@ -62,7 +62,7 @@ interface PreviewShape {
   input: HTMLInputElement;
 }
 
-function buildPreview(): PreviewShape {
+function buildPreview(horizontal = false): PreviewShape {
   const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
   iframe.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
   const doc = iframe.contentDocument!;
@@ -79,14 +79,14 @@ function buildPreview(): PreviewShape {
     element.getBoundingClientRect = () => clientRect(x, y, width, height);
     return element;
   };
-  const grid = make('card-grid', 0, 0, 400, 400);
-  const first = make('server-card', 0, 0, 400, 100);
-  const second = make('server-card', 0, 100, 400, 100);
+  const grid = make('card-grid', 0, 0, 400, horizontal ? 200 : 400);
+  const first = horizontal ? make('server-card', 0, 0, 200, 100) : make('server-card', 0, 0, 400, 100);
+  const second = horizontal ? make('server-card', 200, 0, 200, 100) : make('server-card', 0, 100, 400, 100);
   const settings = { value: 'keep' };
   const input = doc.createElement('input');
   input.dataset.designId = 'settings-continue';
   input.value = 'keep';
-  input.getBoundingClientRect = () => clientRect(0, 200, 400, 50);
+  input.getBoundingClientRect = () => (horizontal ? clientRect(0, 100, 400, 50) : clientRect(0, 200, 400, 50));
   input.addEventListener('input', () => {
     settings.value = input.value;
   });
@@ -288,5 +288,43 @@ describe('layout workspace', () => {
     controller.undo();
     expect(placementOf('server-card')).toBeUndefined();
     expect(orderOf('card-grid')).toEqual([]);
+  });
+
+  it('records the full container order on the first drag into an unrecorded container', () => {
+    buildPreview();
+    const update = vi.spyOn(controller, 'update');
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointermove', 200, 40);
+    pointer(overlay(), 'pointerup', 200, 40);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(orderOf('card-grid')).toEqual(['server-card-2', 'server-card', 'settings-continue']);
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers).toHaveLength(0);
+    expect(controller.draft.theme.layout?.placements).toHaveLength(0);
+  });
+
+  it('uses the recorded row direction of the current parent for the insertion index and guide', () => {
+    buildPreview(true);
+    const context = contextOf();
+    controller.update((draft) => {
+      draft.theme.layout = {
+        containers: [{ id: 'flow-card-grid', ...context, nodeId: 'card-grid', order: ['server-card', 'server-card-2'], direction: 'row' }],
+        placements: [],
+      };
+      return draft;
+    });
+
+    pointer(overlay(), 'pointerdown', 300, 50);
+    pointer(overlay(), 'pointermove', 50, 150);
+    const line = host.querySelector<HTMLElement>('[data-testid="insertion-line"]');
+    expect(line).not.toBeNull();
+    expect(line!.style.width).toBe('2px');
+    expect(line!.style.height).toBe('200px');
+    expect(line!.style.left).toBe('0px');
+    pointer(overlay(), 'pointerup', 50, 150);
+
+    expect(orderOf('card-grid')).toEqual(['server-card-2', 'server-card']);
   });
 });

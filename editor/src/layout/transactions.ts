@@ -132,14 +132,17 @@ export interface MoveNodeTransactionArgs {
   nodeId: string;
   parentId: string;
   index: number;
+  siblings?: string[];
   placement?: LayoutPlacement;
 }
 
 // One call is exactly one undo step: the flow order and the optional mode switch
-// (absolute back to flow) land in a single draft update.
+// (absolute back to flow) land in a single draft update. Siblings seed a container
+// record that does not exist yet, so the first reorder keeps the full document order
+// instead of remembering only the dropped node.
 export function moveNodeTransaction(controller: DraftController, args: MoveNodeTransactionArgs): void {
   controller.update((draft) => {
-    draft.theme = moveLayoutNode(draft.theme, args.context, args.nodeId, args.parentId, args.index);
+    draft.theme = moveLayoutNode(draft.theme, args.context, args.nodeId, args.parentId, args.index, args.siblings);
     if (args.placement) {
       draft.theme = upsertLayoutPlacement(draft.theme, {
         ...args.placement,

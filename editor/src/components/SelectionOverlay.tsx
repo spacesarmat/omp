@@ -102,7 +102,10 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
   const resolveInsertion = (point: ClientPoint, draggedId: string): InsertionTarget | null => {
     const dragged = props.nodes.find((node) => node.nodeId === draggedId);
     const eligible = new Map<string, boolean>();
-    if (dragged?.parentId && props.rects[dragged.parentId]) eligible.set(dragged.parentId, false);
+    if (dragged?.parentId && props.rects[dragged.parentId]) {
+      const recorded = props.containers.find((container) => container.nodeId === dragged!.parentId);
+      eligible.set(dragged.parentId, recorded?.direction === 'row');
+    }
     for (const container of props.containers) {
       if (!eligible.has(container.nodeId) && props.rects[container.nodeId]) {
         eligible.set(container.nodeId, container.direction === 'row');

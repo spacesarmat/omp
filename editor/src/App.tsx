@@ -98,8 +98,11 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       ?? layoutNodes.find((entry) => entry.elementId === elementId);
     setSelectedNodeId(node?.nodeId ?? null);
   };
-  const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement }) => {
-    moveNodeTransaction(controller, { context: layoutContext, ...args });
+  const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement; siblings?: string[] }) => {
+    const siblings = args.siblings ?? layoutNodes
+      .filter((node) => node.parentId === args.parentId)
+      .map((node) => node.nodeId);
+    moveNodeTransaction(controller, { context: layoutContext, ...args, siblings });
   };
   const handlePlaceNode = (placement: LayoutPlacement) => {
     placeNodeTransaction(controller, placement);

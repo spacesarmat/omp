@@ -56,6 +56,7 @@ export function moveLayoutNode(
   nodeId: string,
   parentId: string,
   index: number,
+  seed?: string[],
 ): ThemeDocument {
   const layout = theme.layout ?? emptyLayout();
   const containers: LayoutContainer[] = [];
@@ -74,11 +75,13 @@ export function moveLayoutNode(
     containers.push({ ...container, order });
   });
   if (targetIndex < 0) {
+    const base = seed ? seed.filter((entry) => entry !== nodeId) : [];
+    const at = Math.max(0, Math.min(index, base.length));
     containers.push({
       id: containerId(theme, parentId),
       ...context,
       nodeId: parentId,
-      order: [nodeId],
+      order: [...base.slice(0, at), nodeId, ...base.slice(at)],
     });
   }
   return { ...theme, layout: { ...layout, containers } };

@@ -75,6 +75,26 @@ describe('moveNodeTransaction', () => {
     controller.dispose();
   });
 
+  it('seeds a new container with the document order of all siblings at the insertion index', () => {
+    const controller = createController();
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 0, siblings: ['card-a', 'card-b'] });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-b', 'card-a']);
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers).toHaveLength(0);
+    controller.dispose();
+  });
+
+  it('clamps the seeded insertion index to the sibling bounds', () => {
+    const controller = createController();
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 99, siblings: ['card-a', 'card-b'] });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-a', 'card-b']);
+    controller.dispose();
+  });
+
   it('moves an absolute node back to flow with one placement in a single undo step', () => {
     const controller = createController();
     moveNodeTransaction(controller, { context, nodeId: 'card-a', parentId: 'card-grid', index: 0 });
