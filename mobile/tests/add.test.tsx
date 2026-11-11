@@ -1039,7 +1039,7 @@ describe('Add «Подписаться»', () => {
     click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '4K')!);
     click(el.querySelector('.m-sheet-backdrop')!);
     click(Array.from(el.querySelector('[data-plate="subscribe"]')!.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
-    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('Любое');
+    expect(el.querySelector('.m-sub-quality .on')!.textContent).toBe('Любое');
   });
 
   it('no plate before a search', () => {
@@ -1065,7 +1065,7 @@ describe('Add «Подписаться»', () => {
     expect(plate.textContent).toContain('Сообщить, когда появятся новые раздачи по этому запросу');
     click(Array.from(plate.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
     expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Северный ветер сезон 2');
-    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('1080p+');
+    expect(el.querySelector('.m-sub-quality .on')!.textContent).toBe('1080p+');
     expect(el.querySelector('.m-sheet .m-set-pick')!.textContent).toContain('Фейк ›');
     click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Сохранить')!);
     const subs = JSON.parse(localStorage.getItem('tsp.subs') || '[]');

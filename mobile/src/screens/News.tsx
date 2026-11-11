@@ -498,14 +498,11 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       <div class="m-muted m-small" role="status" data-monitor-status>
         {line}
       </div>
-      <div class="m-set-label">
-        {t('news.subs')}
-        {quota && (
-          <span class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
-            {' · ' + t('monitor.limit.quota', quota)}
-          </span>
-        )}
-      </div>
+      {quota && (
+        <div class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
+          {' · ' + t('monitor.limit.quota', quota)}
+        </div>
+      )}
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
       {subs.length > 0 && (
         <div class="m-subs-search">
