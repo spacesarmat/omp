@@ -4,13 +4,20 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { exportDraft } from '../../editor/export.mjs';
 import { startEditorServer, type RunningEditorServer } from '../../editor/server.mjs';
 import { createEditorClient } from '../../editor/src/client';
 import { createDraftController } from '../../editor/src/drafts';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { checkGeneratedThemes } from '../../design/generate';
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...actual, writeFile: vi.fn(actual.writeFile) };
+});
+
+const actualFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
 
 const execute = promisify(execFile);
 const roots: string[] = [];
@@ -27,6 +34,7 @@ async function makeRepo(): Promise<{ root: string; head: string }> {
 }
 
 afterEach(async () => {
+  vi.mocked(writeFile).mockImplementation(actualFs.writeFile);
   await Promise.all(servers.splice(0).map((server) => server.close()));
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -178,6 +186,40 @@ describe('design export', () => {
     await exportDraft({ root, draft });
     expect(await readFile(join(root, 'design', 'themes', 'renamed.json'), 'utf8')).toContain('Renamed');
     await expect(readFile(join(root, 'design', 'themes', 'default.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('restores removed owned files when the manifest write fails', async () => {
+    const { root } = await makeRepo();
+    await mkdir(join(root, 'design', 'themes'), { recursive: true });
+    await writeFile(join(root, 'design', 'themes', 'committed.json'), '{"committed":true}\n');
+    await execute('git', ['add', 'design/themes/committed.json'], { cwd: root });
+    await execute('git', ['-c', 'user.name=OMP Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'committed theme'], { cwd: root });
+    const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
+    const head = stdout.trim();
+
+    const draft = createDefaultDraft('draft-1', head);
+    await exportDraft({ root, draft });
+    const original = await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8');
+
+    let failed = false;
+    vi.mocked(writeFile).mockImplementation(async (path, data, options) => {
+      if (!failed && String(path).endsWith('.tmp')) {
+        failed = true;
+        throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
+      }
+      return actualFs.writeFile(path, data, options);
+    });
+
+    const renamed = createDefaultDraft('draft-1', head);
+    renamed.theme.id = 'renamed';
+    renamed.theme.name = 'Renamed';
+    await expect(exportDraft({ root, draft: renamed })).rejects.toMatchObject({ code: 'ENOSPC' });
+
+    expect(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8')).toBe(original);
+    await expect(readFile(join(root, 'design', 'themes', 'renamed.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(await readFile(join(root, 'design', 'themes', 'committed.json'), 'utf8')).toBe('{"committed":true}\n');
+    const manifest = JSON.parse(await readFile(join(root, '.omp-editor', 'exports', 'draft-1.json'), 'utf8'));
+    expect(manifest.files.map((file: { path: string }) => file.path)).toContain('design/themes/default.json');
   });
 
   it('blocks unreadable themes before any write', async () => {

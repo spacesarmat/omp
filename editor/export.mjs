@@ -437,9 +437,15 @@ export function exportDraft(options) {
 async function performExport({ root, draft: input, scope: scopeInput }) {
   const plan = createExportPlan(input, scopeInput ?? { kind: 'all' });
   const diff = await createExportDiff(root, plan);
-  const writes = diff.files.filter((file) => file.action !== 'unchanged');
-  const backup = await backupFor(root, writes.map((file) => file.path));
   const manifest = await manifestFor(root, plan.draft.id);
+  const writes = diff.files.filter((file) => file.action !== 'unchanged');
+  const nextPaths = new Set(diff.files.map((file) => file.path));
+  const removed = plan.scope.kind === 'all' && manifest
+    ? manifest.files.map((file) => file.path).filter((path) => !nextPaths.has(path))
+    : [];
+  // Removed files must be backed up before any write: a failure after deletion and before
+  // the manifest rename rolls back to the previous consistent state.
+  const backup = await backupFor(root, [...writes.map((file) => file.path), ...removed]);
   try {
     for (const file of writes) {
       await mkdir(dirname(join(root, file.path)), { recursive: true });
@@ -447,8 +453,6 @@ async function performExport({ root, draft: input, scope: scopeInput }) {
     }
     let entries;
     if (plan.scope.kind === 'all') {
-      const nextPaths = new Set(diff.files.map((file) => file.path));
-      const removed = manifest ? manifest.files.map((file) => file.path).filter((path) => !nextPaths.has(path)) : [];
       for (const path of removed) await rm(join(root, path), { force: true });
       entries = diff.files.map((file) => ({ path: file.path, sha256: sha256(file.after) }));
     } else {
