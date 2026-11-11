@@ -224,7 +224,15 @@ jobs:
           # including the player-core build. They are not in gradle.properties: the release job packages three
           # APKs and does not restore a build cache, so writing one there only costs disk and heap.
           # Configuration cache is org.gradle.configuration-cache in android/gradle.properties.
-          args=(--build-cache --parallel -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64)
+          # Unit-test failures only name the exception unless the Test task prints the full comparison.
+          cat > "$RUNNER_TEMP/test-log.init.gradle" << 'EOF'
+          allprojects {
+              tasks.withType(Test).configureEach {
+                  testLogging.exceptionFormat = "FULL"
+              }
+          }
+          EOF
+          args=(--build-cache --parallel --init-script "$RUNNER_TEMP/test-log.init.gradle" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64)
           if [ "$EVENT_NAME" = "pull_request" ]; then
             args+=(-PompAbi=arm64-v8a)
           fi
