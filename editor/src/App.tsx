@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../design/interaction.ts';
 import type { DesignTarget, DesignFormat, DesignState, LayoutPlacement } from '../../design/schema.ts';
 import { createDefaultTheme } from '../../design/defaults';
@@ -12,8 +12,10 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
-import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, type LayoutRect } from './layout/transactions';
+import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, type LayoutRect } from './layout/transactions';
 import { alignPlacements, distributePlacements, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
+import { copyNodes, duplicateNode, parseLayoutClipboard, pasteNodes, renameNode, setNodeHidden, setNodeLocked } from './layout/layerOperations';
+import type { LayerRowModel } from './components/LayersPanel';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
 import { ThemeInspector } from './components/ThemeInspector';
@@ -34,6 +36,8 @@ export interface AppProps {
   draft?: EditorDraft;
   client?: EditorClient;
 }
+
+export const LAYOUT_CLIPBOARD_KEY = 'omp.editor.layoutClipboard';
 
 function offlineClient(initial: EditorDraft): EditorClient {
   let current = initial;
@@ -80,20 +84,33 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (comparison && !draft.snapshots.some((snapshot) => snapshot.id === comparison.id)) setComparison(null);
   }, [draft.snapshots, comparison]);
   useEffect(() => {
-    setSelection((prev) => reduceSelection(prev, { type: 'prune', liveIds: layoutNodes.map((node) => node.nodeId) }));
-  }, [layoutNodes]);
+    const liveIds = new Set(layoutNodes.map((node) => node.nodeId));
+    for (const placement of draft.theme.layout?.placements ?? []) {
+      if (placement.target === layoutContext.target && placement.screenId === layoutContext.screenId && placement.format === layoutContext.format) {
+        liveIds.add(placement.nodeId);
+      }
+    }
+    setSelection((prev) => reduceSelection(prev, { type: 'prune', liveIds: [...liveIds] }));
+  }, [layoutNodes, draft.theme.layout]);
   const layoutContext = { target: draft.target, screenId: draft.screenId, format: draft.format };
   const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>) => {
     setLayoutNodes(nodes);
     setLayoutRects(rects);
   };
-  const handleSelectNode = (next: SelectionState) => {
+  const applySelection = (next: SelectionState) => {
     setSelection(next);
     const primary = next.anchorId ?? next.ids[next.ids.length - 1] ?? null;
     if (!primary) return;
     const node = layoutNodes.find((entry) => entry.nodeId === primary);
     if (node) setSelected(node.elementId);
   };
+  // Canvas selection never lands on hidden nodes: they stay reachable through the layers panel.
+  const handleSelectNode = (next: SelectionState) => {
+    const ids = next.ids.filter((nodeId) => !getLayoutPlacement(draft.theme, layoutContext, nodeId)?.hidden);
+    const anchorId = next.anchorId && ids.includes(next.anchorId) ? next.anchorId : (ids[ids.length - 1] ?? null);
+    applySelection({ ids, anchorId });
+  };
+  const handlePanelSelectNode = (nodeId: string) => applySelection({ ids: [nodeId], anchorId: nodeId });
   const handleElementSelected = (elementId: string) => {
     setSelected(elementId);
     const node = layoutNodes.find((entry) => entry.nodeId === elementId)
@@ -102,16 +119,19 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     handleSelectNode(node ? { ids: [node.nodeId], anchorId: node.nodeId } : { ids: [], anchorId: null });
   };
   const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement; siblings?: string[] }) => {
+    if (getLayoutPlacement(draft.theme, layoutContext, args.nodeId)?.locked) return;
     const siblings = args.siblings ?? layoutNodes
       .filter((node) => node.parentId === args.parentId)
       .map((node) => node.nodeId);
     moveNodeTransaction(controller, { context: layoutContext, ...args, siblings });
   };
   const handlePlaceNode = (placement: LayoutPlacement) => {
+    if (getLayoutPlacement(draft.theme, layoutContext, placement.nodeId)?.locked) return;
     placeNodeTransaction(controller, placement);
   };
   const handleContainerPatch = (patch: { padding?: string }) => {
     if (!selectedNode) return;
+    if (getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId)?.locked) return;
     const seed = layoutNodes
       .filter((node) => node.parentId === selectedNode.nodeId)
       .map((node) => node.nodeId);
@@ -119,6 +139,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   };
   const handleNodeMargin = (margin: string | undefined) => {
     if (!selectedNode) return;
+    if (getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId)?.locked) return;
     updateNodeMarginTransaction(controller, {
       context: layoutContext,
       nodeId: selectedNode.nodeId,
@@ -167,6 +188,75 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       items: items.map((item) => ({ nodeId: item.node!.nodeId, label: item.node!.label, base: item.placement, margin })),
     });
   };
+  const layerPlacement = (nodeId: string) => getLayoutPlacement(draft.theme, layoutContext, nodeId);
+  const layerLabel = (nodeId: string) => layerPlacement(nodeId)?.label ?? layoutNodes.find((node) => node.nodeId === nodeId)?.label ?? nodeId;
+  const layerRows: LayerRowModel[] = [
+    ...layoutNodes.map((node) => {
+      const placement = layerPlacement(node.nodeId);
+      return { nodeId: node.nodeId, label: placement?.label ?? node.label, hidden: placement?.hidden ?? false, locked: placement?.locked ?? false };
+    }),
+    ...(draft.theme.layout?.placements ?? [])
+      .filter((placement) => placement.target === layoutContext.target
+        && placement.screenId === layoutContext.screenId
+        && placement.format === layoutContext.format
+        && !layoutNodes.some((node) => node.nodeId === placement.nodeId))
+      .map((placement) => ({ nodeId: placement.nodeId, label: placement.label, hidden: placement.hidden, locked: placement.locked })),
+  ];
+  const handleRenameNode = (nodeId: string, name: string) => {
+    renameNode(controller, { context: layoutContext, nodeId, label: layerLabel(nodeId), base: layerPlacement(nodeId), name });
+  };
+  const handleToggleHidden = (nodeId: string, hidden: boolean) => {
+    setNodeHidden(controller, { context: layoutContext, nodeId, label: layerLabel(nodeId), base: layerPlacement(nodeId) }, hidden);
+  };
+  const handleToggleLocked = (nodeId: string, locked: boolean) => {
+    setNodeLocked(controller, { context: layoutContext, nodeId, label: layerLabel(nodeId), base: layerPlacement(nodeId) }, locked);
+  };
+  const handleDuplicateNode = (nodeId: string) => {
+    const copyId = duplicateNode(controller, {
+      context: layoutContext,
+      nodeId,
+      label: layerLabel(nodeId),
+      base: layerPlacement(nodeId),
+      parentId: layoutNodes.find((node) => node.nodeId === nodeId)?.parentId ?? null,
+    });
+    handlePanelSelectNode(copyId);
+  };
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+  const handleCopySelection = () => {
+    const placements = selection.ids
+      .map((nodeId) => layerPlacement(nodeId) ?? createPlacement(layoutContext, nodeId, layerLabel(nodeId)))
+      .filter((placement): placement is LayoutPlacement => Boolean(placement));
+    if (!placements.length) return;
+    try {
+      window.localStorage.setItem(LAYOUT_CLIPBOARD_KEY, JSON.stringify(copyNodes(placements)));
+    } catch {
+      return;
+    }
+    setClipboardError(null);
+  };
+  const handlePaste = () => {
+    let raw: string | null = null;
+    try {
+      raw = window.localStorage.getItem(LAYOUT_CLIPBOARD_KEY);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    let parsed: ReturnType<typeof parseLayoutClipboard>;
+    try {
+      parsed = parseLayoutClipboard(JSON.parse(raw));
+    } catch {
+      parsed = { clipboard: null, errors: ['Clipboard повреждён'] };
+    }
+    if (!parsed.clipboard) {
+      setClipboardError(parsed.errors[0] ?? 'Clipboard недоступен');
+      return;
+    }
+    pasteNodes(controller, { context: layoutContext, clipboard: parsed.clipboard });
+    setClipboardError(null);
+  };
+  const clipboardHandlersRef = useRef({ handleCopySelection, handlePaste });
+  clipboardHandlersRef.current = { handleCopySelection, handlePaste };
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       const target = event.target;
@@ -177,8 +267,24 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         if (controller.canRedo) controller.redo();
       } else if (controller.canUndo) controller.undo();
     };
+    const clipboardListener = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable)) return;
+      if (!event.ctrlKey && !event.metaKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'c') {
+        clipboardHandlersRef.current.handleCopySelection();
+      } else if (key === 'v') {
+        event.preventDefault();
+        clipboardHandlersRef.current.handlePaste();
+      }
+    };
     window.addEventListener('keydown', listener);
-    return () => window.removeEventListener('keydown', listener);
+    window.addEventListener('keydown', clipboardListener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+      window.removeEventListener('keydown', clipboardListener);
+    };
   }, [controller]);
   useEffect(() => {
     if (!isDesignElementAvailable(selected, draft.screenId, draft.target)) setSelected(getDefaultElementId(draft.target));
@@ -269,7 +375,23 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         />
       </div>
       <section class="editor-workspace">
-        <LayersPanel selected={selected} route={draft.screenId} target={draft.target} onSelect={setSelected} onNavigate={(screenId) => setView({ screenId })} />
+        <LayersPanel
+          selected={selected}
+          route={draft.screenId}
+          target={draft.target}
+          layers={layerRows}
+          selectedNodeId={selectedNodeId}
+          clipboardError={clipboardError}
+          onSelect={setSelected}
+          onNavigate={(screenId) => setView({ screenId })}
+          onSelectNode={handlePanelSelectNode}
+          onRenameNode={handleRenameNode}
+          onToggleHidden={handleToggleHidden}
+          onToggleLocked={handleToggleLocked}
+          onDuplicateNode={handleDuplicateNode}
+          onCopySelection={handleCopySelection}
+          onPaste={handlePaste}
+        />
         <section class="editor-canvas-area" aria-label="Холст">
           <div class="editor-canvas-caption"><span>{routeLabel}</span><small>{viewport.width} × {viewport.height}</small></div>
           <PreviewPane

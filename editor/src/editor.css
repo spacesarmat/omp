@@ -480,6 +480,124 @@ h2 svg {
   font-size: 9px;
 }
 
+.editor-layer-tools {
+  display: flex;
+  align-items: center;
+  padding: 4px 7px 6px;
+}
+
+.editor-layer-tools input[type='search'] {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid #3b3b3b;
+  border-radius: 5px;
+  background: #242424;
+  color: #d6d6d6;
+  font-size: 11px;
+}
+
+.editor-layer-tools select {
+  height: 24px;
+  margin-left: 5px;
+  border: 1px solid #3b3b3b;
+  border-radius: 5px;
+  background: #242424;
+  color: #d6d6d6;
+  font-size: 11px;
+}
+
+.editor-layer-tools .editor-icon-button {
+  margin-left: 5px;
+}
+
+.editor-layout-layer-list {
+  flex: none;
+  max-height: 240px;
+}
+
+.editor-layer-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 4px 0 6px;
+  border-radius: 5px;
+  color: var(--editor-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.editor-layer-row[aria-pressed='true'] {
+  background: var(--editor-accent);
+  color: #ffffff;
+}
+
+.editor-layer-row input[type='text'] {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--editor-accent);
+  border-radius: 4px;
+  background: #242424;
+  color: #d6d6d6;
+  font-size: 11px;
+}
+
+.editor-layer-row-name {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+  overflow: hidden;
+}
+
+.editor-layer-row-name svg {
+  flex: none;
+  margin-right: 7px;
+  color: #8b8b8b;
+}
+
+.editor-layer-row-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-layer-row[aria-pressed='true'] .editor-layer-row-name svg {
+  color: #ffffff;
+}
+
+.editor-layer-row-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.editor-layer-row-actions .editor-icon-button {
+  width: 22px;
+  height: 22px;
+}
+
+.editor-layer-muted .editor-layer-row-name span,
+.editor-layer-muted .editor-layer-row-name svg {
+  opacity: 0.55;
+}
+
+.editor-layer-empty {
+  padding: 6px 12px;
+  color: #858585;
+  font-size: 11px;
+}
+
 .editor-canvas-area {
   position: relative;
   display: flex;
