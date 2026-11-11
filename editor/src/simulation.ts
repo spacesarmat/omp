@@ -1,10 +1,11 @@
-import type { FlowDocument } from '../../design/schema.ts';
+import type { DesktopDesignTarget, FlowDocument } from '../../design/schema.ts';
 import { dispatchInteraction, type InteractionTrace } from '../../design/interaction.ts';
 import { isDesktopRouteId, type DesktopRouteId } from '../../desktop/src/shell/routes';
 
 export interface PreviewHarness {
   flow: FlowDocument;
   serverConnected: boolean;
+  target?: DesktopDesignTarget;
   startRoute?: DesktopRouteId;
 }
 
@@ -22,7 +23,7 @@ export async function simulatePreviewClick(harness: PreviewHarness): Promise<Sim
   const trace = dispatchInteraction(
     harness.flow,
     { screenId: route, elementId: 'settings-continue', type: 'click' },
-    { target: 'desktop-windows', screenId: route, serverConnected: harness.serverConnected },
+    { target: harness.target || 'desktop-windows', screenId: route, serverConnected: harness.serverConnected },
     {
       navigate: (screenId) => {
         if (!isDesktopRouteId(screenId)) throw new Error(`UNKNOWN_ROUTE: ${screenId}`);

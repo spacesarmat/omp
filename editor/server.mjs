@@ -6,7 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parseEditorDraft } from './shared/draft.ts';
-import { exportDraft } from './export.mjs';
+import { exportDraft, inheritExportManifest, withRepositoryLock } from './export.mjs';
+import { getCommittedDesign, rebaseDraft } from './design.mjs';
 
 const execute = promisify(execFile);
 const MAX_BODY = 1024 * 1024;
@@ -80,17 +81,51 @@ async function readDraft(root, id) {
   }
 }
 
-async function writeDraft(root, draft) {
-  const path = draftPath(root, draft.id);
-  await mkdir(dirname(path), { recursive: true });
-  const temporary = join(dirname(path), `.${draft.id}.${randomBytes(8).toString('hex')}.tmp`);
+async function readRevision(root, id) {
   try {
-    await writeFile(temporary, JSON.stringify(draft), { mode: 0o600, flag: 'wx' });
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
+    const value = JSON.parse(await readFile(draftPath(root, id), 'utf8'));
+    const revision = value.revision ?? 0;
+    if (!Number.isInteger(revision) || revision < 0) throw new Error('revision');
+    return revision;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return 0;
+    throw new HttpError(400, 'INVALID_DRAFT');
   }
-  return draft;
+}
+
+async function draftExists(root, id) {
+  try {
+    await readFile(draftPath(root, id));
+    return true;
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function writeDraft(root, draft, copyFromId) {
+  return withRepositoryLock(root, async () => {
+    const currentRevision = await readRevision(root, draft.id);
+    if ((draft.revision ?? 0) !== currentRevision) throw new HttpError(409, 'DRAFT_CONFLICT');
+    if (copyFromId && await draftExists(root, draft.id)) throw new HttpError(409, 'DRAFT_CONFLICT');
+    const rollbackManifest = copyFromId ? await inheritExportManifest(root, copyFromId, draft.id) : null;
+    try {
+      const saved = { ...draft, revision: currentRevision + 1 };
+      const path = draftPath(root, draft.id);
+      await mkdir(dirname(path), { recursive: true });
+      const temporary = join(dirname(path), `.${draft.id}.${randomBytes(8).toString('hex')}.tmp`);
+      try {
+        await writeFile(temporary, JSON.stringify(saved), { mode: 0o600, flag: 'wx' });
+        await rename(temporary, path);
+      } finally {
+        await rm(temporary, { force: true });
+      }
+      return saved;
+    } catch (error) {
+      await rollbackManifest?.();
+      throw error;
+    }
+  });
 }
 
 async function gitState(root) {
@@ -147,8 +182,21 @@ export async function startEditorServer({ root, token = randomBytes(32).toString
         json(response, 200, await gitState(root));
         return;
       }
+      if (url.pathname === '/api/design' && request.method === 'GET') {
+        json(response, 200, { design: await getCommittedDesign(root) });
+        return;
+      }
+      if (url.pathname === '/api/rebase' && request.method === 'POST') {
+        json(response, 200, await rebaseDraft({ root, draft: await draftFrom(request) }));
+        return;
+      }
       if (url.pathname === '/api/export' && request.method === 'POST') {
         json(response, 200, await exportDraft({ root, draft: await draftFrom(request) }));
+        return;
+      }
+      const copyMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/copy$/);
+      if (copyMatch && request.method === 'POST') {
+        json(response, 200, await writeDraft(root, await draftFrom(request), decodeURIComponent(copyMatch[1])));
         return;
       }
       const match = url.pathname.match(/^\/api\/drafts\/([^/]+)$/);

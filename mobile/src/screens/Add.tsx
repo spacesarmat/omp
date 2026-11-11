@@ -44,6 +44,8 @@ import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
+import { orderSearch } from '../../../src/sources/seedRank';
+import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
 import { TextField } from '../ui/TextField';
@@ -152,10 +154,20 @@ interface SearchMemo {
   server: string | null;
   /** Rows being added: a request still running when the screen is left keeps its row busy on return. */
   busy: Map<string, RowBusy>;
+  /** Checked seeds for this search. They survive leaving the screen, like the handle. */
+  seedMeasures: SeedMeasure[] | null;
+  /** The check in flight. Left running when the screen unmounts, cancelled with the search. */
+  seedWatch: ReturnType<typeof watchSeedVerify> | null;
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, filters: loadSearchFilters(), sort: 'seeds', handle: null, order: [], similarOrder: [], rowCat: {}, server: null, busy: new Map() };
+  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, filters: loadSearchFilters(), sort: 'seeds', handle: null, order: [], similarOrder: [], rowCat: {}, server: null, busy: new Map(), seedMeasures: null, seedWatch: null };
+}
+
+function rowsOf(m: SearchMemo): SourceResult[] | null {
+  if (!m.handle) return null;
+  const raw = m.handle.results();
+  return m.seedMeasures ? applySeedRound(raw, m.seedMeasures, true) : raw;
 }
 
 let memo: SearchMemo = freshMemo();
@@ -163,6 +175,7 @@ let listener: ((h: SearchHandle) => void) | null = null;
 
 /** Forgets the last search (tests, server change). */
 export function resetAddSearch(): void {
+  if (memo.seedWatch) memo.seedWatch.cancel();
   if (memo.handle) memo.handle.cancel();
   memo = freshMemo();
 }
@@ -218,7 +231,7 @@ export function Add({
   const [sort, setSortState] = useState<SortKey>(memo.sort);
   // «Все / Фильмы / Сериалы / Аудиокниги»: kept while the app runs
   const [kindF, setKindState] = useState<KindFilter>(getKindFilter());
-  const [rows, setRows] = useState<SourceResult[] | null>(memo.handle ? memo.handle.results() : null);
+  const [rows, setRows] = useState<SourceResult[] | null>(rowsOf(memo));
   const [prog, setProg] = useState<Prog | null>(memo.handle ? progOf(memo.handle) : null);
   const [searching, setSearching] = useState(memo.handle ? memo.handle.pending().length > 0 : false);
   const [searchError, setSearchError] = useState('');
@@ -286,7 +299,8 @@ export function Add({
 
   const sync = (h: SearchHandle) => {
     if (!alive.v || memo.handle !== h) return;
-    setRows(h.results());
+    setRows(rowsOf(memo));
+    if (memo.seedWatch) memo.seedWatch.notify();
     setProg(progOf(h));
     setSearching(h.pending().length > 0);
   };
@@ -299,6 +313,7 @@ export function Add({
     const offPrefs = onSourcePrefsChange(bump);
     return () => {
       alive.v = false;
+      // The search and its seed check stay in memo. Cancelling here would drop a check that finishes while the screen is gone.
       if (listener === sync) listener = null;
       offSources();
       offPrefs();
@@ -396,6 +411,9 @@ export function Add({
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
   const runSearch = (q: string, asked: CheckedHosts, kind: KindFilter = getKindFilter()) => {
     if (memo.handle) memo.handle.cancel();
+    if (memo.seedWatch) memo.seedWatch.cancel();
+    memo.seedWatch = null;
+    memo.seedMeasures = null;
     setSearchError('');
     // callbacks come asynchronously, after `h` is assigned; they reach whichever Add screen is open
     const notify = () => {
@@ -425,6 +443,16 @@ export function Add({
     memo.server = server;
     memo.order = [];
     memo.similarOrder = [];
+    memo.seedWatch = watchSeedVerify({
+      query: q,
+      ctx,
+      getRows: () => h.results(),
+      getPending: () => h.pending().length,
+      onApply: (list) => {
+        memo.seedMeasures = list;
+        if (memo.handle === h && listener) listener(h);
+      },
+    });
     sync(h);
   };
 
@@ -517,7 +545,7 @@ export function Add({
   const kindEmpty = kindF !== 'all' && matching.length > 0;
   // the search settled and not one source answered (no network, or every site down)
   const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
-  const ordered = searching ? stableOrder(memo.order, filtered, sort) : sortResults(filtered, sort);
+  const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
   memo.order = visible.map(resultKey);
@@ -708,6 +736,7 @@ export function Add({
               onWatch={() => void addResult(r, 'tv')}
               onPhone={() => void addResult(r, 'phone')}
               seedCode="P07.6"
+              round
             />
           );
         })}
@@ -729,6 +758,7 @@ export function Add({
                   onWatch={() => void addResult(r, 'tv')}
                   onPhone={() => void addResult(r, 'phone')}
                   seedCode="P07.6"
+                  round
                 />
               );
             })}

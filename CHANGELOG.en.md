@@ -13,6 +13,19 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Buttons, inputs, cards and choice rows on phone and TV are marked as editable templates with real overrides and export checks
 - [tech] Default, hover, focus, active, disabled and error states are applied to real previews and state overrides on every platform
 - [tech] Snapshot history supports names, comparison with the current theme, restore, delete and undo
+- [tech] The theme editor shows an autosave error and offers a retry. The error text is not stored in the saved draft and does not return on undo. A background save does not leave an unhandled rejection
+
+## 0.20.12-beta.4
+
+- Search shows checked seeds or "not checked" on its own and reorders the list. A row no longer jumps between "0 seeds", "No tracker address" and DHT peers: that is one result, the same for the automatic check and the Seeds button
+- [tech] The release workflow installs desktop dependencies before npm test, so the build can resolve @tauri-apps/api
+
+## 0.20.12-beta.3
+
+- [phone] Checked search seeds stay when you leave the screen and come back
+- A release with no infohash is marked "not checked"
+- Search puts releases with checked seeds on top. Tracker counts show first, then the checked numbers arrive within a few seconds and the list reorders. The TV cursor stays on the same row. Unchecked releases stay lower and are marked "not checked". The same infohash from different sources is merged
+- [tech] Billing: POST /v1/seed-check checks seeds for the top 30 releases (HTTP and UDP scrape, one DHT lookup when the sidecar is on). Measurements are stored in Postgres (005_seed_probes): popular 20 minutes, rare 4 hours, an empty answer 10 minutes. A shared concurrency cap and a per-host pause keep the home IP from getting banned. A new billing image is required. There is no background cache refresh
 
 ## 0.20.12-beta.2
 

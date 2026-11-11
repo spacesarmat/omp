@@ -857,6 +857,7 @@ export const en: EnDict<typeof ru> = {
     tvFileOnly: 'This release comes only as a .torrent file: add it from the phone',
     /** Indexer seed count, not TorrServer's live swarm. The release date is already on the row. */
     trackerData: 'from the tracker',
+    seedUnverified: 'not checked',
     checkSeeds: 'Check seeds',
     checkSeedsShort: 'Seeds',
     seedsNow: 'now',

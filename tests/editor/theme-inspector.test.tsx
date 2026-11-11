@@ -28,6 +28,8 @@ function createController(): DraftController {
       saved.push(draft);
       return draft;
     },
+    getDesign: async () => null,
+    rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
   return createDraftController({ draft: createDefaultDraft('draft-1', BASE), client, autosaveMs: 20 });
@@ -99,12 +101,12 @@ describe('ThemeInspector', () => {
 
   it('creates an override for the shared interactive state', () => {
     controller = createController();
-    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape', state: 'focus', onStateChange: () => undefined }));
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape', state: 'focus', onStateChange: () => undefined }));
     change('[data-testid="scope"]', 'state');
-    change('[data-token="--omp-color-panel"]', '#112233');
+    change('[data-token="--omp-color-background"]', '#112233');
 
     expect(controller.draft.theme.overrides).toEqual([
-      expect.objectContaining({ scope: 'state', state: 'focus', elementId: 'sidebar', tokens: { '--omp-color-panel': '#112233' } }),
+      expect.objectContaining({ scope: 'state', state: 'focus', elementId: 'settings-continue', tokens: { '--omp-color-background': '#112233' } }),
     ]);
   });
 
@@ -148,6 +150,29 @@ describe('ThemeInspector', () => {
     act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'portrait' }), host));
     click('[data-action="reset"]');
     expect(controller.draft.theme.overrides).toEqual([]);
+  });
+  it('offers only states that exist on the selected control', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape' }));
+    change('[data-testid="scope"]', 'state');
+    const states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover', 'focus', 'active', 'error']);
+    expect(host.querySelector('[data-token="--omp-color-background"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-text"]')).toBeNull();
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'nav-library', format: 'landscape' }), host));
+    expect(host.querySelector('[data-token="--omp-color-muted"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-background"]')).not.toBeNull();
+    expect(host.querySelector('[data-token="--omp-color-text"]')).toBeNull();
+  });
+  it('omits focus for containers that cannot receive keyboard focus', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape' }));
+    change('[data-testid="scope"]', 'state');
+    let states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover']);
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'content', format: 'landscape' }), host));
+    states = Array.from(host.querySelectorAll<HTMLOptionElement>('[data-testid="state"] option')).map((option) => option.value);
+    expect(states).toEqual(['default', 'hover']);
   });
 });
 

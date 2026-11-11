@@ -13,6 +13,7 @@ export interface DesignElementDef {
   componentId: string;
   label: string;
   fields: DesignPropertyDef[];
+  states?: readonly DesignState[];
 }
 
 export const DESIGN_ELEMENTS: DesignElementDef[] = [
@@ -24,6 +25,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-color-panel', label: 'Фон панели', kind: 'color' },
       { token: '--omp-size-sidebar', label: 'Ширина панели', kind: 'px' },
     ],
+    states: ['default', 'hover'],
   },
   {
     id: 'sidebar-item',
@@ -31,7 +33,8 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
     label: 'Пункт меню',
     fields: [
       { token: '--omp-color-accent', label: 'Акцент', kind: 'color' },
-      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-color-muted', label: 'Текст', kind: 'color' },
+      { token: '--omp-color-background', label: 'Текст активного пункта', kind: 'color' },
       { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
     ],
   },
@@ -44,6 +47,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
       { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
     ],
+    states: ['default', 'hover'],
   },
   {
     id: 'settings-continue',
@@ -51,10 +55,11 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
     label: 'Кнопка продолжить',
     fields: [
       { token: '--omp-color-accent', label: 'Акцент', kind: 'color' },
-      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-color-background', label: 'Текст', kind: 'color' },
       { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
       { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
     ],
+    states: ['default', 'hover', 'focus', 'active', 'error'],
   },
   {
     id: 'server-card',

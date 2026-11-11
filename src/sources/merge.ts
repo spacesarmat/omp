@@ -1,4 +1,6 @@
-// Duplicates across sources: by infohash when known, else by normalized title + size within ±1%.
+// Duplicates across sources: by infohash when known (the row, the Hash field, or the magnet), else by
+// normalized title + size within ±1%.
+import { infohashFromMagnet } from './html';
 import type { SourceResult } from './types';
 
 /** Lowercase, ё→е, punctuation and spaces collapsed to single spaces. */
@@ -15,13 +17,24 @@ function sameSize(a: number | undefined, b: number | undefined): boolean {
   return Math.abs(a - b) <= Math.max(a, b) * 0.01;
 }
 
+/** Lowercase infohash: `.hash`, a 40-hex `Hash`, or the magnet. '' when the row has none. */
+function hashKey(r: SourceResult): string {
+  const direct = (r.hash || '').toLowerCase();
+  if (direct) return direct;
+  const field = (r.Hash || '').toLowerCase();
+  if (/^[0-9a-f]{40}$/.test(field)) return field;
+  return infohashFromMagnet(r.Magnet) || '';
+}
+
 interface Item {
   r: SourceResult;
   title: string;
 }
 
 function same(a: Item, b: Item): boolean {
-  if (a.r.hash && b.r.hash) return a.r.hash === b.r.hash;
+  const ha = hashKey(a.r);
+  const hb = hashKey(b.r);
+  if (ha && hb) return ha === hb;
   return a.title !== '' && a.title === b.title && sameSize(a.r.sizeBytes, b.r.sizeBytes);
 }
 
@@ -34,15 +47,19 @@ export function mergeResults(list: SourceResult[]): SourceResult[] {
   const groups: Item[][] = [];
   list.forEach((r) => {
     const item: Item = { r, title: normalizeTitle(r.Title) };
+    const hash = hashKey(r);
     let target: Item[] | null = null;
     // a known infohash wins: the group holding the same hash, before any title + size match
-    if (item.r.hash) {
+    if (hash) {
       for (let i = 0; i < groups.length && !target; i++) {
-        if (groups[i].some((g) => g.r.hash === item.r.hash)) target = groups[i];
+        if (groups[i].some((g) => hashKey(g.r) === hash)) target = groups[i];
       }
     }
     for (let i = 0; i < groups.length && !target; i++) {
-      const conflict = !!item.r.hash && groups[i].some((g) => !!g.r.hash && g.r.hash !== item.r.hash);
+      const conflict = !!hash && groups[i].some((g) => {
+        const gh = hashKey(g.r);
+        return !!gh && gh !== hash;
+      });
       if (!conflict && groups[i].some((g) => same(g, item))) target = groups[i];
     }
     if (target) target.push(item);
@@ -63,6 +80,10 @@ export function mergeResults(list: SourceResult[]): SourceResult[] {
       if (r.source !== best.source && others.indexOf(r.source) < 0) others.push(r.source);
       if (!out.Magnet && r.Magnet) out.Magnet = r.Magnet;
       if (!out.hash && r.hash) out.hash = r.hash;
+      if (!out.hash) {
+        const h = hashKey(r);
+        if (h) out.hash = h;
+      }
     });
     if (others.length) out.sources = others;
     return out;

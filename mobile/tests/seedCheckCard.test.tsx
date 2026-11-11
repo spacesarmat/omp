@@ -13,7 +13,9 @@ vi.mock('../../src/sources/liveSeedsRun', async () => {
   return { ...actual, probeSeeds: vi.fn(() => Promise.resolve({ ok: true, seeders: 12, leechers: 3 })) };
 });
 
+import { liveSeedCache } from '../../src/sources/liveSeeds';
 import { probeSeeds } from '../../src/sources/liveSeedsRun';
+import { useSeedRow } from '../../src/ui/LiveSeeds';
 import { ResultCard, seedCheckable } from '../src/ui/ResultCard';
 import type { SourceResult } from '../../src/sources/types';
 
@@ -151,7 +153,8 @@ describe('seed check on a result card', () => {
     expect(btn.getAttribute('data-code')).toBe('P07.6');
     expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
     expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
-    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('Нет адреса трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('Нет адреса трекера');
     act(() => btn.click());
     expect(probeSeeds).not.toHaveBeenCalled();
     await act(async () => {
@@ -163,7 +166,8 @@ describe('seed check on a result card', () => {
     const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(seen).toContain('/v1/dht-peers?infohash=' + HASH);
     expect(meta).toContain('4 пира онлайн');
-    expect(meta).not.toContain('Нет адреса трекера');
+    expect(meta).toContain('Нет адреса трекера');
+    expect(meta.indexOf('4 пира онлайн')).toBeLessThan(meta.indexOf('Нет адреса трекера'));
     expect(meta).not.toContain('сейчас');
     act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
     const sheet = el.querySelector('.m-rc-sheet-actions .m-sheet-row .seed-check') as HTMLButtonElement;
@@ -207,8 +211,8 @@ describe('seed check on a result card', () => {
       await Promise.resolve();
     });
     let meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
-    expect(meta).toContain('12 сидов');
-    expect(meta).toContain('сейчас');
+    expect(meta).toContain('по данным трекера');
+    expect(meta).not.toContain('сейчас');
     expect(meta).not.toContain('по DHT');
 
     await act(async () => {
@@ -258,6 +262,62 @@ describe('seed check on a result card', () => {
     const webos = el.querySelector('.m-rc-meta-text')!.textContent || '';
     expect(webos).toContain('Трекер не ответил');
     expect(webos).not.toContain('Проверка по DHT');
+  });
+
+  function CacheProbe(p: { active?: boolean }) {
+    const live = useSeedRow(row, p.active);
+    return <div data-mode={live.view.mode} ref={live.bind} />;
+  }
+
+  it('does not read the device scrape when the search round owns the row', () => {
+    liveSeedCache.put(HASH, { seeders: 9, leechers: 2, live: true, at: Date.now() });
+    act(() => render(<CacheProbe active={false} />, el));
+    expect(el.querySelector('[data-mode]')!.getAttribute('data-mode')).toBe('off');
+    act(() => render(<CacheProbe />, el));
+    expect(el.querySelector('[data-mode]')!.getAttribute('data-mode')).toBe('live');
+    liveSeedCache.forget(HASH);
+  });
+
+  it('drops the live dot when a later manual check is not a tracker count', async () => {
+    const http: SourceHttp = {
+      get: () => Promise.resolve({ status: 200, url: '', text: JSON.stringify({ peers: 4, source: 'dht', approx: true }) }),
+      post: () => Promise.resolve({ status: 200, url: '', text: '' }),
+      clearCookies: () => Promise.resolve(),
+    };
+    saveBillingSession({ token: '', paidUntil: 1, access: 'a1.test', accessExp: Date.now() + 3600_000 });
+    setDhtPeersContext(() => ({ http, client: null }));
+    vi.mocked(probeSeeds).mockImplementation(() => Promise.resolve({ ok: false, reason: 'timeout' }));
+    const live = { ...row, Seed: 4, Peer: 1, seedCheck: 'live' as const };
+    act(() => render(<ResultCard r={live} category="tv" round onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    expect(el.querySelector('.seed-live')).toBeTruthy();
+    act(() => (el.querySelector('.m-rc-bottom .seed-check') as HTMLButtonElement).click());
+    await act(async () => {
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    });
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('4 пира онлайн');
+    expect(meta).not.toContain('сейчас');
+    expect(el.querySelector('.seed-live')).toBeNull();
+    act(() => (el.querySelector('.m-rc-open') as HTMLButtonElement).click());
+    expect(el.querySelector('[data-result-details] .seed-live')).toBeNull();
+    expect(el.querySelector('[data-result-details]')!.textContent).toContain('4 пира онлайн');
+  });
+
+  it('shows the server round instead of a raw zero and keeps one manual line', () => {
+    const checked = { ...row, Seed: 0, Peer: 0, seedCheck: 'unverified' as const };
+    act(() => render(<ResultCard r={checked} category="tv" round onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(meta).toContain('не проверено');
+    expect(meta).not.toContain('0 сидов');
+    const live = { ...row, Seed: 4, Peer: 1, seedCheck: 'live' as const, dhtPeers: 2 };
+    act(() => render(<ResultCard r={live} category="tv" round onCategory={() => {}} onAdd={() => {}} onWatch={() => {}} />, el));
+    const again = el.querySelector('.m-rc-meta-text')!.textContent || '';
+    expect(again).toContain('4 сида');
+    expect(again).toContain('1 лич');
+    expect(again).toContain('сейчас');
+    expect(again).toContain('2 пира онлайн');
+    expect(again).not.toContain('по данным трекера');
+    expect(el.querySelector('.seed-live')).toBeTruthy();
   });
 
   it('English short label is Seeds', () => {

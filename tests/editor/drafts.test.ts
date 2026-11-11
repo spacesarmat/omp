@@ -21,6 +21,8 @@ function fakeClient(saved: EditorDraft[], onPut?: OnPut): EditorClient {
       saved.push(draft);
       return draft;
     }),
+    getDesign: async () => null,
+    rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
   };
 }
@@ -101,6 +103,20 @@ describe('DraftController', () => {
     expect(controller.draft.baseCommit).toBe(BASE);
   });
 
+  it('applies a reviewed rebase and clears history from the old base', () => {
+    const controller = create();
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    expect(controller.canUndo).toBe(true);
+    const rebased = createDefaultDraft('draft-1', '1111111111111111111111111111111111111111');
+    rebased.theme.name = 'Reviewed merge';
+    controller.rebase(rebased);
+    expect(controller.draft.baseCommit).toBe('1111111111111111111111111111111111111111');
+    expect(controller.draft.theme.name).toBe('Reviewed merge');
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(false);
+    expect(() => controller.rebase(createDefaultDraft('other', '1111111111111111111111111111111111111111'))).toThrow('REBASE_DRAFT_MISMATCH');
+  });
+
   it('cancels autosave after dispose', () => {
     const saved: EditorDraft[] = [];
     const controller = create(saved);
@@ -132,6 +148,127 @@ describe('DraftController', () => {
     expect(saved).toEqual([]);
   });
 
+  it('uses the latest successful revision when a queued save starts', async () => {
+    let serverRevision = 0;
+    const controller = create([], {
+      onPut: async (draft) => {
+        if ((draft.revision ?? 0) !== serverRevision) throw new Error('DRAFT_CONFLICT');
+        serverRevision += 1;
+        return { ...draft, revision: serverRevision };
+      },
+    });
+    controller.upsertOverride({ id: 'first', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    const first = controller.flush();
+    controller.upsertOverride({ id: 'second', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-muted': '#222222' } });
+    const second = controller.flush();
+    await Promise.all([first, second]);
+    expect(serverRevision).toBe(2);
+    expect(controller.draft.revision).toBe(2);
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['first', 'second']);
+  });
+
+  it('recovers from DRAFT_CONFLICT by saving local edits as a new draft', async () => {
+    const saved = new Map<string, EditorDraft>();
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+        saved.set(draft.id, draft);
+        return { ...draft, revision: 1 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    await controller.saveAsNewDraft();
+    expect(controller.draft.id).not.toBe('draft-1');
+    expect(controller.draft.revision).toBe(1);
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+    expect(controller.lastError).toBeNull();
+    expect(saved.has(controller.draft.id)).toBe(true);
+  });
+
+  it('clears undo and redo history after recovering into a new draft', async () => {
+    const controller = create([], {
+      onPut: async (draft) => ({ ...draft, revision: 1 }),
+    });
+    controller.upsertOverride({ id: 'first', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    controller.upsertOverride({ id: 'second', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    controller.undo();
+    expect(controller.canUndo).toBe(true);
+    expect(controller.canRedo).toBe(true);
+    await controller.saveAsNewDraft();
+    const recoveredId = controller.draft.id;
+    expect(controller.canUndo).toBe(false);
+    expect(controller.canRedo).toBe(false);
+    expect(controller.undo()).toBe(false);
+    expect(controller.redo()).toBe(false);
+    expect(controller.draft.id).toBe(recoveredId);
+  });
+
+  it('persists edits made while a recovered copy is being created', async () => {
+    let finishCopy!: (draft: EditorDraft) => void;
+    const copies = new Map<string, EditorDraft>();
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') throw new Error('DRAFT_CONFLICT');
+        if (!copies.has(draft.id)) {
+          copies.set(draft.id, draft);
+          return new Promise<EditorDraft>((resolve) => {
+            finishCopy = resolve;
+          });
+        }
+        copies.set(draft.id, draft);
+        return { ...draft, revision: 2 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('DRAFT_CONFLICT');
+    const recovered = controller.saveAsNewDraft();
+    controller.upsertOverride({ id: 'later', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    finishCopy({ ...copies.values().next().value!, revision: 1 });
+    await recovered;
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local', 'later']);
+    expect(copies.get(controller.draft.id)?.theme.overrides.map((entry) => entry.id)).toEqual(['local', 'later']);
+    expect(controller.draft.revision).toBe(2);
+  });
+
+  it('skips queued writes for the original draft after recovery', async () => {
+    let rejectOriginal!: (reason: Error) => void;
+    const originalPromise = new Promise<EditorDraft>((_, reject) => {
+      rejectOriginal = reject;
+    });
+    const originalWrites: EditorDraft[] = [];
+    const controller = create([], {
+      onPut: async (draft) => {
+        if (draft.id === 'draft-1') {
+          originalWrites.push(draft);
+          return originalPromise;
+        }
+        return { ...draft, revision: 1 };
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    const first = controller.flush();
+    const second = controller.flush();
+    const recovered = controller.saveAsNewDraft();
+    rejectOriginal(new Error('DRAFT_CONFLICT'));
+    await Promise.allSettled([first, second]);
+    await recovered;
+    expect(originalWrites).toHaveLength(1);
+    expect(controller.draft.id).not.toBe('draft-1');
+  });
+
+  it('stores the saved revision and keeps it through undo', async () => {
+    const controller = create([], {
+      onPut: async (draft) => ({ ...draft, revision: (draft.revision ?? 0) + 1 }),
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await controller.flush();
+    expect(controller.draft.revision).toBe(1);
+    expect(controller.undo()).toBe(true);
+    await controller.flush();
+    expect(controller.draft.revision).toBe(2);
+  });
+
   it('keeps local changes and records write errors', async () => {
     const controller = create([], { onPut: async () => {
       throw new Error('offline');
@@ -139,7 +276,65 @@ describe('DraftController', () => {
     controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
     await expect(controller.flush()).rejects.toThrow('offline');
     expect(controller.lastError).toBe('offline');
+    expect(controller.draft.lastError).toBe('offline');
     expect(controller.draft.theme.overrides[0].id).toBe('local');
+  });
+
+  it('clears a save error on retry and does not persist it', async () => {
+    const saved: EditorDraft[] = [];
+    let attempts = 0;
+    const controller = create(saved, {
+      onPut: async (draft) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('offline');
+        saved.push(draft);
+        return draft;
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('offline');
+    await controller.flush();
+    expect(attempts).toBe(2);
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.lastError).toBeNull();
+    expect(saved).toHaveLength(1);
+    expect(saved[0].lastError).toBeUndefined();
+    expect(saved[0].theme.overrides[0].id).toBe('local');
+  });
+
+  it('does not bring a cleared save error back with undo', async () => {
+    let attempts = 0;
+    const controller = create([], {
+      onPut: async (draft) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('offline');
+        return draft;
+      },
+    });
+    controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+    await expect(controller.flush()).rejects.toThrow('offline');
+    controller.upsertOverride({ id: 'next', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#222222' } });
+    await controller.flush();
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.lastError ?? null).toBeNull();
+    expect(controller.lastError).toBeNull();
+    expect(controller.draft.theme.overrides.map((entry) => entry.id)).toEqual(['local']);
+  });
+
+  it('does not leave a failed autosave as an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const controller = create([], { onPut: async () => { throw new Error('offline'); } });
+      controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
+      await vi.advanceTimersByTimeAsync(50);
+      expect(controller.lastError).toBe('offline');
+      expect(controller.draft.lastError).toBe('offline');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 
   it('changes view and language without replacing theme or flow', () => {

@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { DESIGN_ELEMENTS } from '../design/catalog.ts';
 import { generateThemeCss } from '../design/theme.ts';
@@ -64,6 +65,36 @@ async function manifestFor(root, draftId) {
   } catch {
     throw new ExportError('INVALID_EXPORT_MANIFEST', 409);
   }
+}
+
+export async function inheritExportManifest(root, sourceId, targetId) {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(sourceId) || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(targetId) || sourceId === targetId) {
+    throw new ExportError('INVALID_EXPORT_COPY', 400);
+  }
+  const manifest = await manifestFor(root, sourceId);
+  if (!manifest) return null;
+  const path = join(root, '.omp-editor', 'exports', `${targetId}.json`);
+  let handle;
+  let created = false;
+  try {
+    handle = await open(path, 'wx', 0o600);
+    created = true;
+    await handle.writeFile(json({ schemaVersion: 1, draftId: targetId, files: manifest.files }));
+    await handle.close();
+    handle = null;
+  } catch (error) {
+    if (handle) await handle.close().catch(() => undefined);
+    if (created) {
+      try {
+        await rm(path, { force: true });
+      } catch {}
+    }
+    if (error && typeof error === 'object' && error.code === 'EEXIST') throw new ExportError('EXPORT_MANIFEST_EXISTS', 409);
+    throw error;
+  }
+  return async () => {
+    await rm(path, { force: true });
+  };
 }
 
 async function verifyDirty(root, manifest) {
@@ -141,7 +172,85 @@ async function restore(root, backup) {
   }
 }
 
-export async function exportDraft({ root, draft: input }) {
+function processAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return Boolean(error && typeof error === 'object' && error.code === 'EPERM');
+  }
+}
+
+async function staleLock(path) {
+  try {
+    const owner = JSON.parse(await readFile(path, 'utf8'));
+    if (Number.isInteger(owner.pid) && owner.pid > 0) return !processAlive(owner.pid);
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
+  }
+  try {
+    const info = await stat(path);
+    return Date.now() - info.mtimeMs > 1000;
+  } catch {
+    return false;
+  }
+}
+
+async function acquireRepositoryLock(root) {
+  const path = join(root, '.omp-editor', 'exports', '.lock');
+  await mkdir(dirname(path), { recursive: true });
+  const id = randomBytes(8).toString('hex');
+  const deadline = Date.now() + 30000;
+  while (true) {
+    try {
+      await writeFile(path, JSON.stringify({ id, pid: process.pid, createdAt: Date.now() }), { flag: 'wx', mode: 0o600 });
+      break;
+    } catch (error) {
+      if (!error || typeof error !== 'object' || error.code !== 'EEXIST') throw error;
+    }
+    if (await staleLock(path)) {
+      const stalePath = `${path}.${id}.stale`;
+      try {
+        await rename(path, stalePath);
+        await rm(stalePath, { force: true });
+        continue;
+      } catch {}
+    }
+    if (Date.now() >= deadline) throw new ExportError('EXPORT_LOCK_TIMEOUT', 409);
+    await delay(25);
+  }
+  return async () => {
+    try {
+      const owner = JSON.parse(await readFile(path, 'utf8'));
+      if (owner.id === id) await rm(path, { force: true });
+    } catch {}
+  };
+}
+
+export async function withRepositoryLock(root, operation) {
+  const release = await acquireRepositoryLock(root);
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
+}
+
+const exportQueues = new Map();
+
+export function exportDraft(options) {
+  const key = resolve(options.root);
+  const previous = exportQueues.get(key) || Promise.resolve();
+  const result = previous.then(() => withRepositoryLock(options.root, () => performExport(options)));
+  const settled = result.then(() => undefined, () => undefined);
+  exportQueues.set(key, settled);
+  void settled.then(() => {
+    if (exportQueues.get(key) === settled) exportQueues.delete(key);
+  });
+  return result;
+}
+
+async function performExport({ root, draft: input }) {
   let draft;
   try {
     draft = parseEditorDraft(input);

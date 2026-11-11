@@ -20,6 +20,7 @@ import { ExportPanel } from './components/ExportPanel';
 import { EditorIcon } from './components/EditorIcon';
 import { EditorToolbar } from './components/EditorToolbar';
 import { LayersPanel } from './components/LayersPanel';
+import { BaseReviewPanel } from './components/BaseReviewPanel';
 import { SnapshotPanel } from './components/SnapshotPanel';
 
 export interface AppProps {
@@ -37,6 +38,8 @@ function offlineClient(initial: EditorDraft): EditorClient {
       current = draft;
       return current;
     },
+    getDesign: async () => ({ baseCommit: current.baseCommit, theme: current.theme, flow: current.flow }),
+    rebaseDraft: async () => { throw new Error('OFFLINE_REBASE_UNAVAILABLE'); },
     exportDraft: async () => {
       throw new Error('OFFLINE_EXPORT_UNAVAILABLE');
     },
@@ -45,6 +48,13 @@ function offlineClient(initial: EditorDraft): EditorClient {
 
 function EditorWorkspace({ controller, client }: { controller: DraftController; client?: EditorClient }) {
   const draft = useDraftController(controller);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('omp.editor.activeDraftId', draft.id);
+    } catch {
+      return;
+    }
+  }, [draft.id]);
   const workspaceClient = client || offlineClient(draft);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
@@ -127,6 +137,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         <div class="editor-save-error" role="alert">
           <span>Не удалось сохранить: {draft.lastError}</span>
           <button type="button" data-action="retry-save" onClick={() => { void controller.flush().catch(() => undefined); }}>Повторить</button>
+          {draft.lastError === 'DRAFT_CONFLICT' && (
+            <button type="button" data-action="save-copy" onClick={() => { void controller.saveAsNewDraft().catch(() => undefined); }}>Сохранить как новый черновик</button>
+          )}
         </div>
       )}
       <div class="editor-context-bar">
@@ -171,9 +184,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         <aside class="editor-inspector" aria-label="Инспектор свойств">
           <div class="editor-inspector-heading"><div><strong>{mode === 'design' ? 'Дизайн' : mode === 'logic' ? 'Логика' : 'Проверка'}</strong><span>{selected}</span></div><EditorIcon name="design" /></div>
           <div class="editor-inspector-content">
+            <BaseReviewPanel controller={controller} client={workspaceClient} />
             {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} state={designState} onStateChange={setDesignState} />}
             {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
-            {mode === 'simulate' && <SimulationPanel flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
+            {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
             <ExportPanel controller={controller} client={workspaceClient} />
           </div>
@@ -185,12 +199,13 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
 }
 
 export function App(props: AppProps = {}) {
-  const [controller, setController] = useState<DraftController | null>(props.controller || null);
+  const [createdController, setCreatedController] = useState<DraftController | null>(null);
+  const controller = props.controller || createdController;
   const [apiClient, setApiClient] = useState<EditorClient | undefined>(props.client);
   const [error, setError] = useState('');
   const [ownsController] = useState(!props.controller);
   useEffect(() => {
-    if (props.controller) setController(props.controller);
+    if (props.controller) setCreatedController(props.controller);
   }, [props.controller]);
   useEffect(() => {
     if (props.controller) return;
@@ -201,12 +216,26 @@ export function App(props: AppProps = {}) {
       try {
         if (props.draft) {
           const draft = props.draft;
-          if (active) setController(createDraftController({ draft, client }));
+          if (active) setCreatedController(createDraftController({ draft, client }));
           return;
         }
         const state = await client.state();
-        const saved = await client.getDraft('default');
-        if (active) setController(createDraftController({ draft: saved || createDefaultDraft('default', state.baseCommit), client }));
+        let activeDraftId = 'default';
+        try {
+          const savedId = sessionStorage.getItem('omp.editor.activeDraftId');
+          if (savedId && /^[a-z0-9][a-z0-9-]{0,63}$/.test(savedId)) activeDraftId = savedId;
+        } catch {
+          activeDraftId = 'default';
+        }
+        const selected = await client.getDraft(activeDraftId);
+        const saved = selected || (activeDraftId === 'default' ? null : await client.getDraft('default'));
+        const committed = saved ? null : await client.getDesign();
+        const draft = saved || createDefaultDraft('default', committed?.baseCommit || state.baseCommit);
+        if (!saved && committed) {
+          draft.theme = committed.theme;
+          draft.flow = committed.flow;
+        }
+        if (active) setCreatedController(createDraftController({ draft, client }));
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
       }
@@ -221,8 +250,12 @@ export function App(props: AppProps = {}) {
   }, [controller, ownsController]);
   useEffect(() => {
     if (!controller) return;
-    const flush = () => {
-      void controller.flush({ keepalive: true });
+    const flush = (event: BeforeUnloadEvent) => {
+      if (controller.hasUnsavedChanges()) {
+        event.preventDefault();
+        event.returnValue = 'Changes are still being saved';
+        void controller.flush({ keepalive: true }).catch(() => undefined);
+      }
     };
     window.addEventListener('beforeunload', flush);
     return () => window.removeEventListener('beforeunload', flush);

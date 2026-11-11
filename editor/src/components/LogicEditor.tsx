@@ -6,7 +6,7 @@ import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 
 interface RuleForm {
-  condition: 'none' | 'server-true' | 'server-false';
+  condition: 'none' | 'server-true' | 'server-false' | 'custom';
   action: 'navigate' | 'back' | 'toast';
   destination: string;
   message: string;
@@ -16,14 +16,15 @@ function formOf(rule: InteractionRule): RuleForm {
   return {
     condition: rule.condition?.kind === 'eq' && rule.condition.path === 'server.connected'
       ? rule.condition.value === true ? 'server-true' : 'server-false'
-      : 'none',
+      : rule.condition ? 'custom' : 'none',
     action: rule.action.type,
     destination: rule.action.type === 'navigate' ? rule.action.screenId : 'library',
     message: rule.action.type === 'toast' ? rule.action.message : '',
   };
 }
 
-function conditionOf(form: RuleForm): InteractionCondition | undefined {
+function conditionOf(form: RuleForm, original?: InteractionCondition): InteractionCondition | undefined {
+  if (form.condition === 'custom') return original;
   if (form.condition === 'none') return undefined;
   return { kind: 'eq', path: 'server.connected', value: form.condition === 'server-true' };
 }
@@ -61,6 +62,8 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
   const [error, setError] = useState('');
   const routeIds = DESKTOP_ROUTES.map((route) => route.id);
   const issues = validateFlow(draft.flow, routeIds);
+  const selectedCondition = draft.flow.rules.find((entry) => entry.id === selectedId)?.condition;
+  const hasCustomCondition = selectedCondition && (selectedCondition.kind !== 'eq' || selectedCondition.path !== 'server.connected');
 
   useEffect(() => {
     const rule = draft.flow.rules.find((entry) => entry.id === selectedId);
@@ -83,7 +86,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
       event: 'click',
       action: actionOf(form),
     };
-    const condition = conditionOf(form);
+    const condition = conditionOf(form, draft.flow.rules.find((rule) => rule.id === selectedId)?.condition);
     if (condition) next.condition = condition;
     controller.replaceFlow({
       ...draft.flow,
@@ -131,6 +134,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
           <option value="none">Всегда</option>
           <option value="server-true">server.connected = true</option>
           <option value="server-false">server.connected = false</option>
+          {hasCustomCondition && <option value="custom">Исходное условие</option>}
         </select>
       </label>
       <label>Действие

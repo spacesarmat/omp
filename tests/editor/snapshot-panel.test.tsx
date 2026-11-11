@@ -27,6 +27,8 @@ beforeEach(() => {
       state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
       getDraft: async () => null,
       putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
       exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
     },
   });
@@ -66,11 +68,13 @@ describe('SnapshotPanel', () => {
     expect(controller.draft.snapshots).toHaveLength(0);
   });
 
-  it('shows the snapshot limit without deleting older entries', () => {
+  it('disables creating snapshots at the limit without deleting older entries', () => {
     for (let index = 0; index < 10; index += 1) controller.snapshot(`snapshot-${index}`);
     mount();
-    click('create-snapshot');
-    expect(host.textContent).toContain('SNAPSHOT_LIMIT');
+    const create = host.querySelector<HTMLButtonElement>('[data-action="create-snapshot"]')!;
+    expect(create.disabled).toBe(true);
+    expect(host.textContent).toContain('Лимит 10/10 достигнут');
+    expect(() => create.click()).not.toThrow();
     expect(controller.draft.snapshots).toHaveLength(10);
   });
 });

@@ -25,7 +25,9 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
   if (isDesktopTarget(target) && DESKTOP_SCREEN_SUPPORT[screenId] === 'preview') return <p class="editor-notice">preview only</p>;
   const definition = findDesignElement(elementId);
   if (!definition) return <p class="editor-notice">Unknown element: {elementId}</p>;
-  const identity = { scope, target, screenId, elementId, format, state };
+  const availableStates = definition.states || ['default', 'hover', 'focus', 'active'];
+  const selectedState = availableStates.includes(state) ? state : 'default';
+  const identity = { scope, target, screenId, elementId, format, state: selectedState };
   const currentId = overrideId(identity);
   const currentOverride = draft.theme.overrides.find((entry) => entry.id === currentId);
   const context = {
@@ -34,7 +36,7 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
     componentId: definition.componentId,
     elementId,
     format,
-    state: scope === 'state' ? state : 'default' as DesignState,
+    state: scope === 'state' ? selectedState : 'default' as DesignState,
   };
   const tokens = resolveThemeTokens(draft.theme, context);
   const issues = checkTheme(draft.theme, [context]);
@@ -56,8 +58,8 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
       </label>
       {scope === 'state' && (
         <label>Состояние
-          <select data-testid="state" value={state} onChange={(event) => onStateChange(event.currentTarget.value as DesignState)}>
-            {(['default', 'hover', 'focus', 'active', 'disabled', 'error'] as DesignState[]).map((item) => <option value={item}>{item}</option>)}
+          <select data-testid="state" value={selectedState} onChange={(event) => onStateChange(event.currentTarget.value as DesignState)}>
+            {availableStates.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
       )}

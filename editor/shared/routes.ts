@@ -1,4 +1,4 @@
-import { DESIGN_TARGETS, type DesignFormat, type DesignTarget } from '../../design/schema.ts';
+import { DESIGN_TARGETS, type DesignFormat, type DesignTarget, type DesktopDesignTarget } from '../../design/schema.ts';
 import { DESKTOP_ROUTES, type DesktopRouteId } from '../../desktop/src/shell/routes.ts';
 
 export interface EditorPage {
@@ -24,7 +24,7 @@ export const EDITOR_TARGET_LABELS: Record<DesignTarget, string> = {
   'lg-webos': 'LG webOS',
 };
 
-export function isDesktopTarget(target: DesignTarget): boolean {
+export function isDesktopTarget(target: DesignTarget): target is DesktopDesignTarget {
   return target.startsWith('desktop-');
 }
 

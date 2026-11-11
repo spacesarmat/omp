@@ -57,15 +57,33 @@ describe('editor loopback server', () => {
   it('round-trips a valid draft atomically and supports repeated writes', async () => {
     const { root, head } = await makeRepo();
     const running = await openServer(root);
-    const draft = createDefaultDraft('draft-1', head);
+    let current = createDefaultDraft('draft-1', head);
     for (let count = 0; count < 2; count += 1) {
-      const response = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+      const response = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(current) });
       expect(response.status).toBe(200);
+      current = await response.json();
+      expect(current.revision).toBe(count + 1);
     }
     const response = await request(running, '/api/drafts/draft-1');
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual(draft);
+    expect(await response.json()).toEqual(current);
     expect(await readdir(join(root, '.omp-editor', 'drafts'))).toEqual(['draft-1.json']);
+  });
+
+  it('rejects an outdated draft revision without replacing newer edits', async () => {
+    const { root, head } = await makeRepo();
+    const running = await openServer(root);
+    const draft = createDefaultDraft('draft-1', head);
+    expect((await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) })).status).toBe(200);
+    draft.theme.overrides.push({ id: 'newer-edit', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    expect((await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, revision: 1 }) })).status).toBe(200);
+
+    const stale = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft) });
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: 'DRAFT_CONFLICT' });
+    const current = await (await request(running, '/api/drafts/draft-1')).json();
+    expect(current.revision).toBe(2);
+    expect(current.theme.overrides.map((entry: { id: string }) => entry.id)).toEqual(['newer-edit']);
   });
 
   it('rejects traversal and invalid draft ids without touching outside files', async () => {
@@ -104,7 +122,71 @@ describe('editor loopback server', () => {
     badTheme.theme.tokens['--omp-color-accent'] = 'url(javascript:alert(1))';
     const invalid = await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(badTheme) });
     expect(invalid.status).toBe(400);
-    expect(await (await request(running, '/api/drafts/draft-1')).json()).toEqual(draft);
+    expect(await (await request(running, '/api/drafts/draft-1')).json()).toEqual({ ...draft, revision: 1 });
+  });
+
+  it('serves committed designs and rebases drafts through authorized API routes', async () => {
+    const { root, head: initialHead } = await makeRepo();
+    const running = await openServer(root);
+    await expect((await request(running, '/api/design')).json()).resolves.toEqual({ design: null });
+    expect((await fetch(running.origin + '/api/design')).status).toBe(401);
+
+    const saved = createDefaultDraft('draft-1', initialHead);
+    saved.theme.name = 'From Git';
+    await mkdir(join(root, 'design/themes'), { recursive: true });
+    await mkdir(join(root, 'design/flows'), { recursive: true });
+    await writeFile(join(root, 'design/themes/default.json'), JSON.stringify(saved.theme));
+    await writeFile(join(root, 'design/flows/desktop-default.json'), JSON.stringify(saved.flow));
+    await execute('git', ['add', 'design'], { cwd: root });
+    await execute('git', ['-c', 'user.name=OMP Test', '-c', 'user.email=test@example.invalid', 'commit', '--quiet', '-m', 'design'], { cwd: root });
+    const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
+    const designHead = stdout.trim();
+
+    const designResponse = await request(running, '/api/design');
+    expect(designResponse.status).toBe(200);
+    expect(await designResponse.json()).toMatchObject({ design: { baseCommit: designHead, theme: { name: 'From Git' } } });
+    const local = createDefaultDraft('draft-1', initialHead);
+    local.theme.overrides.push({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#112233' } });
+    const rebaseResponse = await request(running, '/api/rebase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(local),
+    });
+    expect(rebaseResponse.status).toBe(200);
+    expect(await rebaseResponse.json()).toMatchObject({
+      draft: { baseCommit: designHead, theme: { name: 'From Git', overrides: [{ id: 'local' }] } },
+      changes: ['design/flows/desktop-default.json', 'design/themes/default.json'],
+    });
+    expect((await fetch(running.origin + '/api/rebase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(local),
+    })).status).toBe(401);
+  });
+
+  it('does not replace an existing zero-revision draft during copy', async () => {
+    const { root, head } = await makeRepo();
+    const running = await openServer(root);
+    const existing = createDefaultDraft('draft-copy', head);
+    existing.revision = 0;
+    existing.theme.name = 'Existing zero-revision draft';
+    await mkdir(join(root, '.omp-editor', 'drafts'), { recursive: true });
+    await writeFile(join(root, '.omp-editor', 'drafts', 'draft-copy.json'), JSON.stringify(existing));
+    const original = createDefaultDraft('draft-1', head);
+    await request(running, '/api/drafts/draft-1', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(original) });
+    const copy = createDefaultDraft('draft-copy', head);
+    copy.revision = 0;
+    copy.theme.name = 'Replacement';
+
+    const response = await request(running, '/api/drafts/draft-1/copy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(copy),
+    });
+    expect(response.status).toBe(409);
+    const saved = JSON.parse(await readFile(join(root, '.omp-editor', 'drafts', 'draft-copy.json'), 'utf8'));
+    expect(saved.revision).toBe(0);
+    expect(saved.theme.name).toBe('Existing zero-revision draft');
   });
 
   it('returns not found for missing drafts, env files and command endpoints', async () => {

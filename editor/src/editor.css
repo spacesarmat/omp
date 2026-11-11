@@ -1088,3 +1088,60 @@ h2 svg {
     box-shadow: 0 0 0 1px CanvasText;
   }
 }
+
+.editor-base-review,
+.editor-snapshots {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #252a35;
+}
+
+.editor-base-review h3,
+.editor-snapshots h3,
+.editor-export h3 {
+  margin: 0 0 8px;
+}
+
+.editor-base-proposal pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor-snapshots ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.editor-snapshots li {
+  margin-bottom: 8px;
+}
+
+.editor-snapshots time {
+  display: block;
+  color: #9aa1b2;
+  font-size: 11px;
+}
+
+.editor-snapshot-limit {
+  color: #f5b700;
+}
+
+.editor-base-review button,
+.editor-snapshots button,
+.editor-export button {
+  margin: 4px 4px 4px 0;
+  padding: 8px 10px;
+  border: 1px solid #252a35;
+  border-radius: 8px;
+  background: #252a35;
+  color: #e8eaf0;
+}
+
+.editor-base-review button:disabled,
+.editor-snapshots button:disabled,
+.editor-export button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

@@ -76,6 +76,11 @@ export function seedCheckLine(tracker: ProbeResult, dht: DhtPeersResult | null):
     return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow') + ' · ' + dhtText;
   }
   if (tracker.ok) return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow');
+  // No announce URL: the missing address and the DHT sample are one line, not two statuses that replace each other.
+  if (!tracker.ok && (tracker.reason === 'notrackers' || tracker.reason === 'nohash')) {
+    const why = tracker.note || t('sources.seedsNoTracker');
+    return dhtText ? dhtText + ' · ' + why : why;
+  }
   if (dhtText) return dhtText;
   if (!tracker.ok && tracker.note) return tracker.note;
   if (!tracker.ok && tracker.reason === 'timeout') return t('sources.seedsTimeout');

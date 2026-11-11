@@ -1,21 +1,22 @@
 import { useState } from 'preact/hooks';
-import type { FlowDocument } from '../../../design/schema.ts';
+import type { DesktopDesignTarget, FlowDocument } from '../../../design/schema.ts';
 import { simulatePreviewClick, type SimulationResult } from '../simulation';
 
 export interface SimulationPanelProps {
+  target: DesktopDesignTarget;
   flow: FlowDocument;
   serverConnected: boolean;
   onServerConnected(value: boolean): void;
   error?: string;
 }
 
-export function SimulationPanel({ flow, serverConnected, onServerConnected, error }: SimulationPanelProps) {
+export function SimulationPanel({ target, flow, serverConnected, onServerConnected, error }: SimulationPanelProps) {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [localError, setLocalError] = useState('');
   const run = async () => {
     try {
       setLocalError('');
-      setResult(await simulatePreviewClick({ flow, serverConnected }));
+      setResult(await simulatePreviewClick({ target, flow, serverConnected }));
     } catch (reason) {
       setLocalError(reason instanceof Error ? reason.message : String(reason));
     }

@@ -107,6 +107,9 @@ export function fromRpcResult(r: RpcResult, handle: string): TvResult | null {
   const hex = out.Hash.toLowerCase();
   const hash = /^[0-9a-f]{40}$/.test(hex) ? hex : infohashFromMagnet(out.Magnet);
   if (hash) out.hash = hash;
+  if (r.seedCheck === 'live' || r.seedCheck === 'dht' || r.seedCheck === 'unverified') out.seedCheck = r.seedCheck;
+  if (typeof r.seedCheckAt === 'number' && isFinite(r.seedCheckAt)) out.seedCheckAt = r.seedCheckAt;
+  if (typeof r.dhtPeers === 'number' && isFinite(r.dhtPeers)) out.dhtPeers = r.dhtPeers;
   return out;
 }
 

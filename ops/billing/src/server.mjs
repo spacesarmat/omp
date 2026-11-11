@@ -137,6 +137,9 @@ import {
   sourceEnabled,
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
+import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
+import { defaultSeedTransport } from './seedProbeNet.mjs';
+import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
@@ -423,6 +426,36 @@ export function deviceLogId(deviceId) {
   const id = String(deviceId == null ? '' : deviceId);
   if (!id) return '-';
   return sha256(id).slice(0, 8);
+}
+
+/** One line per POST /v1/seed-check. Counts only. No token, no infohash, no tracker address. */
+export function formatSeedLog(status, ms, deviceId, counts) {
+  const code = Number(status);
+  const st = Number.isFinite(code) ? String(Math.max(0, Math.min(599, Math.floor(code)))) : '0';
+  const n = Number(ms);
+  const dur = Number.isFinite(n) && n >= 0 ? String(Math.min(600000, Math.floor(n))) : '0';
+  const c = counts || {};
+  const bit = (v) => {
+    const x = Math.floor(Number(v) || 0);
+    return String(x > 0 ? x : 0);
+  };
+  return (
+    'seed-check status=' +
+    st +
+    ' ms=' +
+    dur +
+    ' asked=' +
+    bit(c.asked) +
+    ' cache=' +
+    bit(c.cache) +
+    ' live=' +
+    bit(c.live) +
+    ' dht=' +
+    bit(c.dht) +
+    ' device=' +
+    deviceLogId(deviceId) +
+    '\n'
+  );
 }
 
 /** One line per GET /v1/dht-peers. Status and duration only. No token, no infohash. */
@@ -850,7 +883,7 @@ export function healthPayload(now, extra) {
 }
 
 /** POST routes that keep working in BILLING_READONLY mode (search/torrent read; admin Telegram login is in-memory). */
-const READ_ONLY_POSTS = new Set(['/v1/search', '/v1/torrent', '/admin/login/telegram']);
+const READ_ONLY_POSTS = new Set(['/v1/search', '/v1/torrent', '/v1/seed-check', '/admin/login/telegram']);
 
 /** An admin settings form with a backupEveryHours / backupKeepDays value outside the allowed range. */
 function badBackupSetting(body) {
@@ -995,6 +1028,12 @@ export function createApp(file, fetchImpl, opts) {
   }
   // «Проверить DHT» on the admin tab. Separate from the per-device cap. Six presses a minute.
   const dhtProbeRate = createRateLimit(6, DHT_WINDOW_MS);
+  // Shared by every device: the scrapes leave from this host's address.
+  const seedRate = createRateLimit(SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS);
+  const seedGate = (opts && opts.seedGate) || createTrackerGate();
+  const seedTransport = (opts && opts.seedTransport) || defaultSeedTransport();
+  const seedCache = (opts && opts.seedCache) || (typeof store.query === 'function' ? createPgSeedCache(store) : createMemorySeedCache());
+  const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
   // «Мониторинг»: the scheduled runner when the server passes it, else one for «Проверить сейчас» only.
@@ -2221,6 +2260,64 @@ export function createApp(file, fetchImpl, opts) {
           // store.read() and deviceCaller() throw into the outer handler as 500. Log that here too.
           if (isReadOnlyError(e)) return finish(503, { error: 'read_only' });
           return finish(500, { error: 'down' });
+        }
+      }
+      if (req.method === 'POST' && path === '/v1/seed-check') {
+        // Device token, no subscription. The answer is counts only. Tracker URLs are not logged.
+        const started = Date.now();
+        const device = String(req.headers['x-device-id'] || '');
+        let status = 500;
+        let counts = null;
+        try {
+          const token = bearer(req);
+          if (!token) {
+            status = 401;
+            return json(res, 401, { error: 'bad_token' });
+          }
+          const body = await readBody(req);
+          const state = await store.read();
+          const caller = await deviceCaller(state, token, device, Date.now());
+          if (!caller || caller.error) {
+            status = 401;
+            return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+          }
+          const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+          if (!seedRate.allow(rateKey)) {
+            const wait = String(seedRate.retryAfter(rateKey) || 1);
+            res.setHeader('retry-after', wait);
+            status = 429;
+            return json(res, 429, { error: 'rate' });
+          }
+          const parsed = parseSeedRequest(body);
+          if (!parsed.ok) {
+            status = 400;
+            return json(res, 400, { error: 'bad_request' });
+          }
+          const cfg = dhtConfig(env);
+          const out = await runSeedCheck({
+            items: parsed.items,
+            cache: seedCacheRead,
+            gate: seedGate,
+            transport: seedTransport,
+            dht: cfg.enabled
+              ? async (hash) => {
+                const found = await queryDhtPeers(cfg, hash, net);
+                return found.status === 200 && found.body ? found.body.peers : 0;
+              }
+              : null,
+          });
+          counts = out.stats;
+          status = 200;
+          return json(res, 200, { items: out.items });
+        } catch (e) {
+          if (isReadOnlyError(e)) {
+            status = 503;
+            return json(res, 503, { error: 'read_only' });
+          }
+          status = 500;
+          return json(res, 500, { error: 'down' });
+        } finally {
+          process.stderr.write(formatSeedLog(status, Date.now() - started, device, counts));
         }
       }
       if (req.method === 'POST' && path === '/v1/search') {
