@@ -645,6 +645,9 @@ describe('Remote with a TV', () => {
   it('touchpad settings sheet: opens from the header, saves each change', () => {
     mount();
     expect(document.querySelector('.m-sheet-host')).toBeNull();
+    const gear = lbl('Настройки пульта').querySelector('svg path') as SVGPathElement;
+    expect(gear.getAttribute('d') || '').toContain('M19.4');
+    expect(gear.getAttribute('d') || '').not.toContain('M12 2v2');
     click(lbl('Настройки пульта'));
     const sheet = document.querySelector('.m-sheet-host')!;
     expect(sheet.textContent).toContain('3 из 5');

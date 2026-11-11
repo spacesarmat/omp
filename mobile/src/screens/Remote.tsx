@@ -138,9 +138,9 @@ const PAUSE = 'M8 5v14M16 5v14';
 const PLAY = 'M7 5l12 7-12 7z';
 const NEXT = 'M6 6l9 6-9 6zM18 6v12';
 const FF10 = 'M20 12a8 8 0 1 1-2.3-5.6M20 4v4h-4';
-/** Gear — remote/touchpad settings (not the sliders of the Settings tab). */
+/** Gear — remote/touchpad settings. A toothed wheel, not a sun. */
 const TUNE =
-  'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4';
+  'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z';
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 const MUTE = 'M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6';
 
@@ -1143,7 +1143,7 @@ export function Remote() {
       {mode !== 'touchpad' && (
         <>
           <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
-          <PowerTools deviceId={tv.mac || tv.ip} showInputs />
+          <PowerTools deviceId={tv.mac || tv.ip} showInputs={state === 'connected'} />
         </>
       )}
       <NoAnswer tv={tv} />
