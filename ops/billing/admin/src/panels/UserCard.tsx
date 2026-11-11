@@ -7,9 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { CopyBtn, FlashBox, SubStatus, toast } from '@/components/chrome';
 import { api, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
-import { personLabel, problemKind } from '@/lib/text';
+import { payMethodLabel, personLabel, problemKind } from '@/lib/text';
 import type { UserData } from '@/lib/types';
-import { DevicesCard, LimitCard, OverLimitAlert, PendingPayments, SubtractDaysCard } from '@/panels/DeviceAdmin';
+import { ConfirmAction, DevicesCard, LimitCard, OverLimitAlert, PendingPayments, SubtractDaysCard } from '@/panels/DeviceAdmin';
 
 const DAY_KEY = 'omp-grant-days';
 
@@ -241,6 +241,7 @@ export function UserCard({
                 <TableRow>
                   <TableHead>Когда, МСК</TableHead>
                   <TableHead>Зачислено</TableHead>
+                  <TableHead>Способ</TableHead>
                   <TableHead>Комиссия</TableHead>
                   <TableHead>Метка</TableHead>
                   <TableHead>Ошибка</TableHead>
@@ -253,9 +254,22 @@ export function UserCard({
                       <Stamp ms={p.at} />
                     </TableCell>
                     <TableCell className="font-mono">{p.amount || '-'}</TableCell>
+                    <TableCell>{payMethodLabel(p)}</TableCell>
                     <TableCell className="font-mono">{p.fee == null ? '-' : p.fee}</TableCell>
                     <TableCell className="font-mono text-xs">{p.label || '-'}</TableCell>
-                    <TableCell>{p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : '-'}</TableCell>
+                    <TableCell>
+                      {p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : null}
+                      {p.provider === 'stars' && !p.error && p.operationId ? (
+                        <ConfirmAction
+                          label="Вернуть звёзды"
+                          question="Вернуть звёзды этому пользователю? Дни подписки останутся, их можно убавить отдельно."
+                          yes="Вернуть"
+                          variant="destructive"
+                          onYes={() => void run('/admin/payment-refund', { operationId: p.operationId, accountId: user.account.id, confirm: 'yes' })}
+                        />
+                      ) : null}
+                      {!p.error && p.provider !== 'stars' ? '-' : null}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

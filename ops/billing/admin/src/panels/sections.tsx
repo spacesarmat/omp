@@ -10,9 +10,9 @@ import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@
 import { api, post, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
-import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
+import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, payMethodLabel, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
-import type { BackupStatus, HomeData, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
+import type { BackupStatus, HomeData, MethodSplit, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
 
 export { HomeFeed } from '@/panels/EventFeed';
 
@@ -370,6 +370,43 @@ function ProblemList({ rows }: { rows: ProblemRow[] }) {
   );
 }
 
+function assetText(n: number) {
+  if (!n) return '';
+  const rounded = Math.round(n * 1e8) / 1e8;
+  return String(rounded);
+}
+
+function MethodSplitCard({ row }: { row?: Record<string, MethodSplit> }) {
+  const yo = row && row.yoomoney;
+  const stars = row && row.stars;
+  const crypto = row && row.crypto;
+  const line = (title: string, parts: string[]) => (
+    <div>
+      <div className="text-sm font-medium">{title}</div>
+      <div className="text-xs text-muted-foreground">{parts.filter(Boolean).join(' · ')}</div>
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Выручка за 30 дней по способам</CardTitle>
+        <CardDescription>Рубли звёзд и крипты - цена заказа на момент оплаты. Возврат звёзд в сумму не входит.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-3">
+        {line('ЮMoney', [Math.round(yo?.rub || 0) + ' ₽', (yo?.count || 0) + ' оплат'])}
+        {line('Звёзды', [Math.round(stars?.stars || 0) + ' звёзд', Math.round(stars?.rub || 0) + ' ₽', (stars?.count || 0) + ' оплат'])}
+        {line('Крипта', [
+          crypto?.usdt ? assetText(crypto.usdt) + ' USDT' : '',
+          crypto?.ton ? assetText(crypto.ton) + ' TON' : '',
+          crypto?.btc ? assetText(crypto.btc) + ' BTC' : '',
+          Math.round(crypto?.rub || 0) + ' ₽',
+          (crypto?.count || 0) + ' оплат',
+        ])}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function FinancePanel({ home }: { home: HomeData }) {
   const [rows, setRows] = useState<PaymentRow[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -439,6 +476,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
           <DayChart rows={series} field="subs" label="Новые подписки по дням" />
         </CardContent>
       </Card>
+      <MethodSplitCard row={home.finance?.summary?.month?.byMethod} />
       <p>
         <a className="text-primary" href="/admin/finance.csv">
           Скачать CSV за 30 дней
@@ -486,6 +524,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
                 <TableRow>
                   <TableHead>Когда, МСК</TableHead>
                   <TableHead>Сумма</TableHead>
+                  <TableHead>Способ</TableHead>
                   <TableHead>Кто</TableHead>
                   <TableHead>Метка</TableHead>
                 </TableRow>
@@ -493,7 +532,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">
+                    <TableCell colSpan={5} className="text-muted-foreground">
                       Нет платежей
                     </TableCell>
                   </TableRow>
@@ -504,6 +543,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
                       <Stamp ms={p.at} />
                     </TableCell>
                     <TableCell>{p.amount || '-'}</TableCell>
+                    <TableCell>{payMethodLabel(p)}</TableCell>
                     <TableCell>
                       {p.accountId ? (
                         <a className="text-primary" href={'/admin/?id=' + encodeURIComponent(p.accountId)}>
@@ -543,6 +583,28 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     fields: [
       ['yoomoneyWallet', 'Кошелёк ЮMoney'],
       ['yoomoneySecret', 'Секрет ЮMoney'],
+      ['cryptoPayToken', 'Токен Crypto Pay'],
+    ],
+  },
+  {
+    title: 'Звёзды',
+    fields: [
+      ['starsPrice', 'Подписка, звёзд'],
+      ['starsExtra', 'Доп. устройство, звёзд'],
+    ],
+  },
+  {
+    title: 'Крипта',
+    fields: [
+      ['cryptoUsdt', 'Подписка, USDT'],
+      ['cryptoExtraUsdt', 'Доп. устройство, USDT'],
+      ['cryptoRateUsdt', 'Курс USDT, ₽ за 1'],
+      ['cryptoTon', 'Подписка, TON'],
+      ['cryptoExtraTon', 'Доп. устройство, TON'],
+      ['cryptoRateTon', 'Курс TON, ₽ за 1'],
+      ['cryptoBtc', 'Подписка, BTC'],
+      ['cryptoExtraBtc', 'Доп. устройство, BTC'],
+      ['cryptoRateBtc', 'Курс BTC, ₽ за 1'],
     ],
   },
   {
@@ -579,7 +641,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
 ];
 
 /** Secrets are read-only in the panel: they live in the server's .env. */
-const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
+const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'cryptoPayToken', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
 
 /** One read-only secret: «задан ✅, ****abcd» or «не задан», and where it changes. */
 function SecretField({ name, label, view, fallback }: { name: string; label: string; view?: SecretView; fallback?: string }) {
@@ -632,11 +694,23 @@ export function SettingsCard({
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
+  const [starsOn, setStarsOn] = useState(false);
+  const [cryptoOn, setCryptoOn] = useState(false);
+  const [cryptoTest, setCryptoTest] = useState(false);
+  const [cryptoAbroad, setCryptoAbroad] = useState(false);
   const dirty = useRef(false);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
   const [lower, setLower] = useState<BaseImpact | null>(null);
   const save = (confirm: boolean) =>
-    run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) }).then((res) => {
+    run('/admin/settings', {
+      ...form,
+      adminNotify: notify ? 'true' : 'false',
+      starsEnabled: starsOn ? 'true' : 'false',
+      cryptoEnabled: cryptoOn ? 'true' : 'false',
+      cryptoTestnet: cryptoTest ? 'true' : 'false',
+      cryptoNonRu: cryptoAbroad ? 'true' : 'false',
+      ...(confirm ? { confirm: 'yes' } : {}),
+    }).then((res) => {
       if (!res?.flash?.error) dirty.current = false;
       return res;
     });
@@ -648,6 +722,10 @@ export function SettingsCard({
     }
     setForm(o);
     setNotify(settings.adminNotify !== false);
+    setStarsOn(settings.starsEnabled === true);
+    setCryptoOn(settings.cryptoEnabled === true);
+    setCryptoTest(settings.cryptoTestnet === true);
+    setCryptoAbroad(settings.cryptoNonRu === true);
   }, [settings]);
   return (
     <form
@@ -713,6 +791,56 @@ export function SettingsCard({
                 />
                 Уведомлять администраторов в Telegram (оплата, ошибка оплаты, падение сервиса, новое сообщение поддержки)
               </label>
+            ) : null}
+            {group.title === 'Звёзды' ? (
+              <label className="flex items-center gap-2 text-sm md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={starsOn}
+                  onChange={(e) => {
+                    dirty.current = true;
+                    setStarsOn(e.target.checked);
+                  }}
+                />
+                Принимать Telegram Stars. По умолчанию выключено. Комиссия сверху не добавляется.
+              </label>
+            ) : null}
+            {group.title === 'Крипта' ? (
+              <div className="space-y-2 md:col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoOn}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoOn(e.target.checked);
+                    }}
+                  />
+                  Принимать Crypto Pay (USDT, TON, BTC). По умолчанию выключено.
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoTest}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoTest(e.target.checked);
+                    }}
+                  />
+                  Тестовая сеть Crypto Pay (testnet-pay.crypt.bot). Токен всё равно берётся из CRYPTO_PAY_TOKEN.
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoAbroad}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoAbroad(e.target.checked);
+                    }}
+                  />
+                  Только пользователям не из РФ. Без кода страны или с кодом RU ссылка не выдаётся.
+                </label>
+              </div>
             ) : null}
           </CardContent>
         </Card>

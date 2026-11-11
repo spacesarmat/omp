@@ -16,6 +16,7 @@ import {
   clearTelegramLink,
   invalidateBillingClaims,
   fetchBillingAccount,
+  fetchCryptoLinks,
   refreshOmpJackettSources,
   signOutBilling,
   startTelegramLink,
@@ -38,6 +39,9 @@ export function OmpJackettCard() {
   const [session, setSession] = useState(billingSession());
   const [account, setAccount] = useState<BillingAccount | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [cryptoBusy, setCryptoBusy] = useState(false);
+  const [cryptoError, setCryptoError] = useState('');
+  const [cryptoLinks, setCryptoLinks] = useState<{ asset: string; amount: string; webUrl: string; url: string }[]>([]);
 
   async function refreshAccount() {
     const ctx = phoneSourceContext();
@@ -203,6 +207,25 @@ export function OmpJackettCard() {
                   })}
             </div>
             {account && account.overLimit ? <div class="m-src-row m-note">{t('sources.billing.overLimit')}</div> : null}
+            {cryptoError ? (
+              <div class="m-src-row m-note" role="alert">
+                {cryptoError}
+              </div>
+            ) : null}
+            {cryptoLinks.length ? (
+              <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+                {cryptoLinks.map((link) => (
+                  <button
+                    type="button"
+                    class="m-btn m-btn-secondary"
+                    key={link.asset}
+                    onClick={() => window.open(link.webUrl || link.url, '_system')}
+                  >
+                    {t('sources.billing.cryptoPay', { asset: link.asset + ' ' + link.amount })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
               <button
                 type="button"
@@ -211,6 +234,29 @@ export function OmpJackettCard() {
                 onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}
               >
                 {t('sources.billing.renew')}
+              </button>
+              <button
+                type="button"
+                class="m-btn m-btn-secondary"
+                data-action="crypto"
+                disabled={cryptoBusy}
+                onClick={() => {
+                  setCryptoBusy(true);
+                  setCryptoError('');
+                  void fetchCryptoLinks(phoneSourceContext()).then(
+                    (links) => {
+                      setCryptoLinks(links);
+                      setCryptoBusy(false);
+                    },
+                    (e: unknown) => {
+                      setCryptoLinks([]);
+                      setCryptoError(e instanceof Error ? e.message : t('sources.billing.cryptoDown'));
+                      setCryptoBusy(false);
+                    },
+                  );
+                }}
+              >
+                {cryptoBusy ? t('sources.billing.cryptoBusy') : t('sources.billing.crypto')}
               </button>
               <button
                 type="button"

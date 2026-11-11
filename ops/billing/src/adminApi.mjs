@@ -296,6 +296,8 @@ export function userPayload(state, accountId, opts) {
         label: p.label || '',
         operationId: p.operationId || '',
         error: p.error || '',
+        provider: p.provider || '',
+        asset: p.asset || '',
         withdrawAmount: p.withdrawAmount || '',
         fee: fee.fee,
         charged: fee.charged,

@@ -94,6 +94,9 @@ import {
 import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
+import { createCryptoInvoice, cryptoPayAuthentic, paidInvoice } from './cryptoPay.mjs';
+import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
+import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
 import {
   confirmPendingPayment,
@@ -378,7 +381,7 @@ function audit(file, action, detail, admin, extra) {
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 const JSON_BODY_LIMIT_BYTES = 256 * 1024;
 
-async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
+async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES, asText) {
   const chunks = [];
   let raw;
   if (typeof req.on === 'function' && typeof req.resume === 'function') {
@@ -432,6 +435,7 @@ async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
     }
     raw = Buffer.concat(chunks).toString('utf8');
   }
+  if (asText) return raw;
   const type = String(req.headers['content-type'] || '');
   if (type.indexOf('application/json') >= 0) {
     try {
@@ -878,7 +882,91 @@ async function telegramMethod(token, method, body, fetchImpl, timeoutMs) {
     { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
     timeoutMs || TG_SEND_TIMEOUT_MS,
   );
-  return { ok: !!(res.ok && data.ok !== false) };
+  return { ok: !!(res.ok && data.ok !== false), description: data && data.description ? String(data.description).slice(0, 180) : '' };
+}
+
+function rememberCountry(state, accountId, country) {
+  if (!country || !accountId) return state;
+  let changed = false;
+  const accounts = (state.accounts || []).map((a) => {
+    if (!a || a.id !== accountId || a.country === country) return a;
+    changed = true;
+    return { ...a, country };
+  });
+  return changed ? { ...state, accounts } : state;
+}
+
+/** Create or reuse the Crypto Pay link for one quote. The token stays in the request header. */
+async function ensureCryptoLink(store, purchaseId, fetchImpl) {
+  const state = await store.read();
+  const quote = (state.purchases || []).find((p) => p.id === purchaseId);
+  if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
+  if (state.settings.cryptoEnabled !== true) return { error: 'disabled' };
+  if (quote.payUrl || quote.webUrl) {
+    return {
+      asset: quote.asset,
+      amount: quote.payAmount,
+      url: quote.payUrl || quote.webUrl,
+      webUrl: quote.webUrl || quote.payUrl,
+    };
+  }
+  if (!state.settings.cryptoPayToken) return { error: 'disabled' };
+  const invoice = await createCryptoInvoice(fetchImpl, {
+    testnet: state.settings.cryptoTestnet === true,
+    token: state.settings.cryptoPayToken,
+    asset: quote.asset,
+    amount: quote.payAmount,
+    payload: 'buy:' + quote.id,
+    description: 'Подписка OMP',
+  });
+  if (!invoice) return { error: 'down' };
+  return store.update((cur) => {
+    const row = (cur.purchases || []).find((p) => p.id === purchaseId);
+    if (!row) return { state: cur, result: { error: 'bad_order' } };
+    if (row.payUrl || row.webUrl) {
+      return {
+        state: cur,
+        result: { asset: row.asset, amount: row.payAmount, url: row.payUrl || row.webUrl, webUrl: row.webUrl || row.payUrl },
+      };
+    }
+    const purchases = cur.purchases.map((p) =>
+      p.id === purchaseId ? { ...p, invoiceId: invoice.invoiceId, payUrl: invoice.botUrl, webUrl: invoice.webUrl } : p,
+    );
+    return {
+      state: { ...cur, purchases },
+      result: {
+        asset: row.asset,
+        amount: row.payAmount,
+        url: invoice.botUrl || invoice.webUrl,
+        webUrl: invoice.webUrl || invoice.botUrl,
+      },
+    };
+  });
+}
+
+/** A bot row that is a Stars invoice or a Crypto Pay link. Other rows stay on telegramSend. */
+async function sendBotRow(token, row, net, timeoutMs, store) {
+  if (row && row.invoice) return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
+  if (row && row.cryptoIssue && store) {
+    const issued = await ensureCryptoLink(store, row.cryptoIssue.purchaseId, net);
+    const webUrl = issued && (issued.webUrl || issued.url);
+    const botUrl = issued && issued.url;
+    const buttons = [];
+    if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
+    if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
+    return telegramSend(token, row.chatId, webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.', net, {
+      keyboard: row.keyboard,
+      inline: buttons.length ? { inline_keyboard: buttons } : undefined,
+      parseMode: row.parseMode,
+      timeoutMs,
+    });
+  }
+  return telegramSend(token, row.chatId, row.text, net, {
+    keyboard: row.keyboard,
+    inline: row.inline,
+    parseMode: row.parseMode,
+    timeoutMs,
+  });
 }
 
 /** Account behind a payment label (buy:/sub:/dev:/new:), '' when unknown. */
@@ -1086,6 +1174,8 @@ export function createApp(file, fetchImpl, opts) {
   const seedCache = (opts && opts.seedCache) || (typeof store.query === 'function' ? createPgSeedCache(store) : createMemorySeedCache());
   const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
   const progressRate = createRateLimit(40, 60 * 1000);
+  // Crypto Pay invoices. Ten creates per device per 10 minutes.
+  const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
@@ -1297,7 +1387,7 @@ export function createApp(file, fetchImpl, opts) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
         // Search and torrent only read, so the apps keep playing; a write that slips through is refused by the store.
         res.setHeader('retry-after', '600');
-        if (path === '/v1/yoomoney') return send(res, 503, 'read only');
+        if (path === '/v1/yoomoney' || path === '/v1/crypto-pay') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
       }
       if (isCachePath(path)) {
@@ -2098,6 +2188,43 @@ export function createApp(file, fetchImpl, opts) {
             else redirectTo = '/admin/?tab=finance';
           }
         }
+        if (path === '/admin/payment-refund') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const operationId = String(body.operationId || '');
+            const cur = await store.read();
+            const payment = (cur.payments || []).find((p) => p.operationId === operationId);
+            const account = payment ? (cur.accounts || []).find((a) => a.id === payment.accountId) : null;
+            const charge = operationId.indexOf('stars:') === 0 ? operationId.slice(6) : '';
+            if (!payment || payment.provider !== 'stars' || !charge || !account || !account.telegramId) flashError = 'Это не оплата звёздами';
+            else if (payment.error === 'refunded') flashError = 'Звёзды уже возвращены';
+            else if (payment.error) flashError = 'Этот платёж не возвратить';
+            else {
+              const sent = await telegramMethod(
+                cur.settings.botToken,
+                'refundStarPayment',
+                { user_id: Number(account.telegramId), telegram_payment_charge_id: charge },
+                net,
+              );
+              const already = /already refunded|CHARGE_ALREADY_REFUNDED/i.test(sent.description || '');
+              if (!sent.ok && !already) flashError = 'Telegram не вернул звёзды';
+              else {
+                await store.update((state) => ({
+                  state: {
+                    ...state,
+                    payments: state.payments.map((p) =>
+                      p.operationId === operationId ? { ...p, error: 'refunded', refundedAt: Date.now() } : p,
+                    ),
+                  },
+                }));
+                await audit(file, 'stars_refund', operationId, admin);
+                flashText = 'Звёзды возвращены. Дни подписки этой кнопкой не снимаются.';
+              }
+            }
+            if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+            else redirectTo = '/admin/?tab=finance';
+          }
+        }
         if (path === '/admin/ads/config') {
           const before = adsConfig((await store.read()).settings);
           const r = applyAdsSettings((await store.read()).settings, body);
@@ -2373,6 +2500,60 @@ export function createApp(file, fetchImpl, opts) {
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
         return json(res, 200, result);
       }
+      if (req.method === 'POST' && path === '/v1/pay/crypto') {
+        const body = await readBody(req);
+        const device = String(req.headers['x-device-id'] || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const rateKey = device || clientIp(req);
+        if (!cryptoPayRate.allow(rateKey)) {
+          res.setHeader('retry-after', String(cryptoPayRate.retryAfter(rateKey) || 60));
+          return json(res, 429, { error: 'rate' });
+        }
+        const state = await store.read();
+        const now = Date.now();
+        const caller = await deviceCaller(state, token, device, now);
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const own = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const account = own ? state.accounts.find((a) => a.id === own.accountId) : null;
+        if (!own || !account) return json(res, 403, { error: 'no_subscription' });
+        const country = countryCode(req.headers['cf-ipcountry']);
+        if (country && account.country !== country) {
+          await store.update((cur) => ({ state: rememberCountry(cur, account.id, country) }));
+        }
+        const live = state.settings.cryptoNonRu === true ? country : country || account.country || '';
+        if (!cryptoOffered(state.settings, live)) {
+          return json(res, 403, { error: state.settings.cryptoEnabled === true ? 'country' : 'disabled' });
+        }
+        const want = String((body && body.asset) || '').trim().toUpperCase();
+        const assets = want ? [want] : ['USDT', 'TON', 'BTC'];
+        const links = [];
+        for (let i = 0; i < assets.length; i++) {
+          const asset = assets[i];
+          const quoted = await store.update((cur) => {
+            const out = quotePurchase(cur, {
+              kind: 'sub',
+              accountId: account.id,
+              subscriptionId: own.id,
+              now,
+              method: 'crypto',
+              asset,
+            });
+            return { state: out.state, result: out.result };
+          });
+          if (!quoted || quoted.error || !quoted.id) continue;
+          const issued = await ensureCryptoLink(store, quoted.id, net);
+          if (issued && (issued.webUrl || issued.url)) {
+            links.push({
+              asset: issued.asset || asset,
+              amount: issued.amount || quoted.payAmount || '',
+              url: issued.url || issued.webUrl,
+              webUrl: issued.webUrl || issued.url,
+            });
+          }
+        }
+        if (!links.length) return json(res, 503, { error: 'down' });
+        return json(res, 200, { links });
+      }
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -2396,6 +2577,12 @@ export function createApp(file, fetchImpl, opts) {
         const viaToken = !!account;
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
+        const seenCountry = countryCode(req.headers['cf-ipcountry']);
+        // Optional. A read-only cutover must still answer /v1/me.
+        if (!readOnly && seenCountry && account.country !== seenCountry) {
+          const accountId = account.id;
+          await store.update((cur) => ({ state: rememberCountry(cur, accountId, seenCountry) }));
+        }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
         const mine = deviceAccess(state, device, now);
@@ -2794,6 +2981,59 @@ export function createApp(file, fetchImpl, opts) {
           controller.abort();
         }
       }
+      if (req.method === 'POST' && path === '/v1/crypto-pay') {
+        const raw = await readBody(req, JSON_BODY_LIMIT_BYTES, true);
+        const state = await store.read();
+        const now = Date.now();
+        const header = req.headers['crypto-pay-api-signature'] || '';
+        if (!cryptoPayAuthentic(raw, header, state.settings.cryptoPayToken)) {
+          await store.update((cur) => ({
+            state: logWebhook(cur, { kind: 'bad_signature', operationId: '', label: '', amount: '', at: now }),
+          }));
+          process.stderr.write('crypto pay bad signature\n');
+          return send(res, 400, 'bad signature');
+        }
+        let body = null;
+        try {
+          body = JSON.parse(raw || '{}');
+        } catch (e) {
+          return send(res, 400, 'bad json');
+        }
+        const paid = paidInvoice(body);
+        if (!paid) return send(res, 200, 'ok');
+        const applied = await store.update((cur) =>
+          applyPayment(cur, {
+            operationId: 'crypto:' + paid.invoiceId,
+            label: paid.payload,
+            amount: paid.paidAmount,
+            currency: paid.asset,
+            now,
+          }),
+        );
+        const freshPay = await store.read();
+        if (!applied.duplicate && !applied.error) {
+          try {
+            await tellPayment(freshPay, applied, net);
+          } catch (e) {
+            /* the payment is stored either way */
+          }
+        }
+        if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
+          await notifyAdmins(
+            freshPay,
+            paymentAdminNotices(freshPay.settings, {
+              ok: !applied.error,
+              pending: false,
+              amount: paid.paidAmount,
+              label: paid.payload,
+              error: applied.error || '',
+              who: paymentWho(freshPay, applied),
+            }),
+            net,
+          );
+        }
+        return send(res, 200, 'ok');
+      }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);
         const state = (await store.read());
@@ -2943,6 +3183,9 @@ export async function pollBot(file, fetchImpl, opts) {
     return;
   }
   let offset = 0;
+  // Earliest Stars payment left unconfirmed during cutover, and updates already answered in this process.
+  let heldStar = 0;
+  const handledUpdates = new Set();
   let sweptAt = 0;
   let servicesAt = 0;
   let serviceSnap = {};
@@ -3038,9 +3281,56 @@ export async function pollBot(file, fetchImpl, opts) {
         await sleep(5000);
         continue;
       }
+      // Stars paid during cutover stay unconfirmed so the next normal poll can apply them.
+      // Later messages in the same queue, including /start admin_TOKEN, are still handled.
+      // The handled set exists only while a payment is held. Once Telegram has acked an update, it is dropped.
+      if (!heldStar && handledUpdates.size) handledUpdates.clear();
+      // pre_checkout must be answered within 10s. Do it before any sendMessage in this batch.
+      // A Stars payment in this batch is not saved yet. Another checkout for that buy: label
+      // would take a second charge and applyPayment would drop it as a duplicate.
+      const paidLabels = new Set();
+      for (let p = 0; p < updates.length; p++) {
+        const paid = updates[p] && updates[p].message && updates[p].message.successful_payment;
+        if (paid && paid.currency === 'XTR' && paid.invoice_payload) paidLabels.add(String(paid.invoice_payload));
+      }
+      const approvedLabels = new Set();
+      for (let p = 0; p < updates.length; p++) {
+        const early = updates[p] && updates[p].pre_checkout_query;
+        if (!early) continue;
+        let decision = { ok: false, error: 'Сейчас обслуживание' };
+        if (!adminLoginOnly) {
+          const payload = String(early.invoice_payload || '');
+          if (payload && (paidLabels.has(payload) || approvedLabels.has(payload))) {
+            decision = { ok: false, error: 'Этот счёт уже оплачен' };
+          } else {
+            try {
+              decision = starCheckoutDecision(await store.read(), early);
+            } catch (e) {
+              decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
+            }
+            if (decision.ok && payload) approvedLabels.add(payload);
+          }
+        }
+        const answer = { pre_checkout_query_id: early.id, ok: !!decision.ok };
+        if (!decision.ok) answer.error_message = decision.error || 'Счёт не найден';
+        await telegramMethod(token, 'answerPreCheckoutQuery', answer, net, sendTimeoutMs).catch(() => ({ ok: false }));
+      }
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
-        offset = u.update_id + 1;
+        if (handledUpdates.has(u.update_id)) {
+          offset = heldStar || u.update_id + 1;
+          continue;
+        }
+        const starMsg = u.message && u.message.successful_payment && u.message.successful_payment.currency === 'XTR' ? u.message.successful_payment : null;
+        const starCharge = starMsg ? String(starMsg.telegram_payment_charge_id || '') : '';
+        const starPayload = starMsg ? String(starMsg.invoice_payload || '') : '';
+        if (adminLoginOnly && starCharge && starPayload) {
+          if (!heldStar || u.update_id < heldStar) heldStar = u.update_id;
+          offset = heldStar;
+          continue;
+        }
+        if (heldStar) handledUpdates.add(u.update_id);
+        offset = heldStar || u.update_id + 1;
         if (u.channel_post) {
           // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
           const notice = pinNotice(u, channel);
@@ -3053,6 +3343,7 @@ export async function pollBot(file, fetchImpl, opts) {
           }
           continue;
         }
+        if (u.pre_checkout_query) continue;
         if (u.callback_query) {
           await handleCallback(file, token, u.callback_query, net, sendTimeoutMs, {
             adminLoginOnly,
@@ -3064,6 +3355,54 @@ export async function pollBot(file, fetchImpl, opts) {
         if (!msg || !msg.chat) continue;
         // Groups and channels: no answer and no account.
         if (!isPrivateChat(msg.chat)) continue;
+        if (msg.successful_payment && msg.successful_payment.currency === 'XTR') {
+          const sp = msg.successful_payment;
+          const charge = String(sp.telegram_payment_charge_id || '');
+          const payload = String(sp.invoice_payload || '');
+          if (charge && payload) {
+            const paidAt = Date.now();
+            let applied;
+            try {
+              applied = await store.update((cur) =>
+                applyPayment(cur, {
+                  operationId: 'stars:' + charge,
+                  label: payload,
+                  amount: String(sp.total_amount),
+                  currency: 'XTR',
+                  now: paidAt,
+                }),
+              );
+            } catch (e) {
+              // The write did not commit. Do not ack the update, so the next poll retries it.
+              handledUpdates.delete(u.update_id);
+              offset = u.update_id;
+              throw e;
+            }
+            const freshStar = await store.read();
+            if (!applied.duplicate && !applied.error) {
+              try {
+                await tellPayment(freshStar, applied, net);
+              } catch (e) {
+                /* the payment is stored either way */
+              }
+            }
+            if (!applied.duplicate && adminNotifyEnabled(freshStar.settings)) {
+              await notifyAdmins(
+                freshStar,
+                paymentAdminNotices(freshStar.settings, {
+                  ok: !applied.error,
+                  pending: false,
+                  amount: String(sp.total_amount),
+                  label: payload,
+                  error: applied.error || '',
+                  who: paymentWho(freshStar, applied),
+                }),
+                net,
+              );
+            }
+          }
+          continue;
+        }
         const chatId = String(msg.chat.id);
         const wait = awaiting.get(chatId) || null;
         const pad = pads.get(chatId) || null;
@@ -3138,12 +3477,7 @@ export async function pollBot(file, fetchImpl, opts) {
           const row = rows[m];
           if (row.await) awaiting.set(chatId, row.await);
           try {
-            const sent = await telegramSend(token, row.chatId, row.text, net, {
-              keyboard: row.keyboard,
-              inline: row.inline,
-              parseMode: row.parseMode,
-              timeoutMs: sendTimeoutMs,
-            });
+            const sent = await sendBotRow(token, row, net, sendTimeoutMs, store);
             if (row.supportNotify && sent.messageId && !adminLoginOnly) {
               await store.update((cur) => ({
                 state: rememberSupportReply(cur, {
@@ -3159,6 +3493,8 @@ export async function pollBot(file, fetchImpl, opts) {
           }
         }
       }
+      // The held payment is still the first result, so Telegram returns at once. Pause instead of spinning.
+      if (heldStar) await sleep(5000);
     } catch (e) {
       pollFailed('loop');
       await sleep(5000);
@@ -3266,12 +3602,7 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const rows = out.messages || [];
   for (let m = 0; m < rows.length; m++) {
     try {
-      await telegramSend(token, rows[m].chatId, rows[m].text, net, {
-        keyboard: rows[m].keyboard,
-        inline: rows[m].inline,
-        parseMode: rows[m].parseMode,
-        timeoutMs,
-      });
+      await sendBotRow(token, rows[m], net, timeoutMs, store);
     } catch (e) {
       /* Telegram unreachable or timed out — keep polling */
     }

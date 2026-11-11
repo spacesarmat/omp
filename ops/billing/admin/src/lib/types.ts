@@ -22,10 +22,22 @@ export type PaymentRow = {
   label?: string;
   operationId?: string;
   error?: string;
+  provider?: string;
+  asset?: string;
+  rub?: number;
   /** Charged sum before the YooMoney fee, when the notice had it. */
   charged?: number | null;
   /** Fee kept by YooMoney: charged minus the amount that landed. */
   fee?: number | null;
+};
+
+export type MethodSplit = {
+  count: number;
+  rub: number;
+  stars: number;
+  usdt: number;
+  ton: number;
+  btc: number;
 };
 
 export type ProblemRow = {
@@ -132,7 +144,11 @@ export type HomeData = {
   alerts?: { level: string; text: string; accountId?: string }[];
   events?: FeedEvent[];
   finance?: {
-    summary?: { day?: { sum: number; count: number }; week?: { sum: number; count: number }; month?: { sum: number; count: number } };
+    summary?: {
+      day?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+      week?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+      month?: { sum: number; count: number; byMethod?: Record<string, MethodSplit> };
+    };
     payments?: PaymentRow[];
     problems?: ProblemRow[];
   };

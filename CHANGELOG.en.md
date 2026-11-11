@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The OMP account has a Crypto button that opens a USDT, TON, or BTC invoice when an admin has turned that method on. Telegram Stars are paid in the bot, with no fee added on top
 - [tech] webOS beta: the browser GET /v1/rollout answers CORS and allows the X-Device-Id header. A crash with no account is stored, and changing the device id does not bypass the IP limit. Until the server says this device is inside the beta percent, the app stays on the stable feed
 - [tech] Billing admin: promo codes with an expiry and a percent discount, broadcasts only after an explicit confirm, a beta percentage, backup archive check, crash groups and an admin login journal. The app sends crash reports and asks whether the device is in the beta percentage. Panel login is confirmed by a Telegram button that shows the IP and device. The one-time shell link still works. Nothing was deployed to the NUC
 - [tech] Billing admin: sidebar, service and payment overview, tables, sources, ranking from watch data, settings rollback, NUC, funnel and revenue. Live updates use SSE /admin/api/events, otherwise a poll every 12 seconds. Apps send POST /v1/presence (install, sign-in, payment). Read-only role is a Telegram id list in settings. Container restart is allowlisted and needs a separate proxy. Nothing was deployed to the NUC
@@ -25,6 +26,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
 - A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
 - When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] Billing: Telegram Stars (sendInvoice, XTR, no provider token) and Crypto Pay (USDT, TON, BTC). Both stay off until an admin turns them on. Extension matches YooMoney: one order extends once, a repeated webhook does not extend again. A short payment does not turn a subscription on. The Crypto Pay signature is checked against the raw body with CRYPTO_PAY_TOKEN. Star refunds use refundStarPayment on the user card. Migration 010_pay_methods. The billing image was not deployed
 - [tech] The android/vendor/2160player submodule is updated to v0.2.25 (cae50cf), player-core coordinate 0.2.25. The player2160-update workflow opens a PR for a new release. The TorrServer update workflow still opens a PR and skips a release that fails the sha256, size or version checks
 - [tech] Installing 2160 Player from the update dialog waits for package tv.p2160.player, deletes the downloaded APK and unregisters the receiver. OMP itself is not relaunched
 - [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
