@@ -533,6 +533,27 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun wakeOnLan(call: PluginCall) = wakeOnLanOp(call)
 
+    @PluginMethod
+    fun irHardware(call: PluginCall) = irHardwareOp(call)
+
+    @PluginMethod
+    fun irTransmit(call: PluginCall) = irTransmitOp(call)
+
+    @PluginMethod
+    fun irLearn(call: PluginCall) = irLearnOp(call)
+
+    @PluginMethod
+    fun samsungClick(call: PluginCall) = samsungClickOp(call)
+
+    @PluginMethod
+    fun discoverNetTvs(call: PluginCall) = discoverNetTvsOp(call)
+
+    @PluginMethod
+    fun discoverLearners(call: PluginCall) = discoverLearnersOp(call)
+
+    @PluginMethod
+    fun setHdmiCec(call: PluginCall) = setHdmiCecOp(call)
+
     // ---- external player ----
 
     /** Which 2160 Player package is installed, or null; embedded: this app carries 2160's screen (playEmbedded2160). */

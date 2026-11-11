@@ -41,7 +41,9 @@ export type BoxKey =
   | 'CHANNELUP'
   | 'CHANNELDOWN'
   | 'DEL'
-  | 'RETURN';
+  | 'RETURN'
+  | 'POWER'
+  | 'INPUT';
 
 /** Android KeyEvent codes (the Google protocol's key codes are the same numbers). */
 export const BOX_KEYCODES: Readonly<Record<BoxKey, number>> = {
@@ -73,6 +75,9 @@ export const BOX_KEYCODES: Readonly<Record<BoxKey, number>> = {
   /** Text field keys (typing over adb): backspace and Enter. */
   DEL: 67,
   RETURN: 66,
+  /** KEYCODE_POWER and KEYCODE_TV_INPUT. */
+  POWER: 26,
+  INPUT: 178,
 };
 
 /** The KeyEvent code of a key name; null for a name the box channel does not send. */

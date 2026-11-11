@@ -4,6 +4,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import { t } from '../../../src/i18n';
+import { browserUdpSend, sendWake } from '../tv/power/wol';
 import { log } from '../../../src/lib/log';
 import { sanitizeP2160, type P2160Result } from '../../../src/player/player2160';
 import type { HttpResponse, NativeBilling, NativeBillingAnswer, SecretStore, SourceHttp } from '../../../src/sources/types';
@@ -33,6 +34,21 @@ export interface FoundCastTv {
   name: string;
   /** TXT `md`, e.g. «Chromecast HD». */
   model?: string;
+}
+
+/** A TV found for network power (SSDP / mDNS), not necessarily running OMP. */
+export interface FoundNetTv {
+  ip: string;
+  kind: 'lg' | 'samsung' | 'google';
+  name: string;
+  mac?: string;
+}
+
+/** ESP IR learner (`_omp-ir._tcp`). */
+export interface FoundLearner {
+  ip: string;
+  port: number;
+  name: string;
 }
 
 /** The embedded TorrServer binary on the phone: the pinned one, an older one (still runs) or none. */
@@ -185,8 +201,17 @@ export interface OmpNativeApi {
   /** 'type:button\nname:UP\n\n' etc. */
   pointerSend(frame: string): Promise<void>;
   tvDisconnect(): Promise<void>;
-  /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
-  wakeOnLan(mac: string, ip: string): Promise<void>;
+  /** Wake-on-LAN magic packet (global and subnet broadcast, UDP 9 and 7), repeated 3 times. */
+  wakeOnLan(mac: string, ip: string, broadcast?: string): Promise<void>;
+  /** IR blaster. receive is true only when the phone exposes a receive API. */
+  irHardware(): Promise<{ transmit: boolean; receive: boolean }>;
+  irTransmit(frequency: number, pulses: number[]): Promise<void>;
+  /** Native IR learn. Rejects when the phone cannot receive. */
+  irLearn(): Promise<{ frequency: number; pulses: number[] } | null>;
+  /** Samsung remote websocket: connect if needed, send the JSON body, return the hello message. */
+  samsungClick(ip: string, path: string, body: string): Promise<{ message: string }>;
+  discoverNetTvs(timeoutMs: number): Promise<FoundNetTv[]>;
+  discoverLearners(timeoutMs: number): Promise<FoundLearner[]>;
   openExternal(url: string, mime: string): Promise<void>;
   /** The installed 2160 Player package; null when it is missing, the app is older or off-device. */
   player2160(): Promise<string | null>;
@@ -358,7 +383,13 @@ interface OmpNativePlugin {
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
   pointerSend(o: { frame: string }): Promise<void>;
-  wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
+  wakeOnLan(o: { mac: string; ip: string; broadcast?: string }): Promise<void>;
+  irHardware?(): Promise<{ transmit?: boolean; receive?: boolean }>;
+  irTransmit?(o: { frequency: number; pulses: number[] }): Promise<void>;
+  irLearn?(): Promise<{ frequency?: number; pulses?: number[] }>;
+  samsungClick?(o: { ip: string; path: string; body: string }): Promise<{ message?: string }>;
+  discoverNetTvs?(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  discoverLearners?(o: { timeoutMs: number }): Promise<{ devices?: unknown }>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
   player2160?(): Promise<{ package?: unknown; version?: unknown; embedded?: unknown }>;
   open2160?(o: Open2160Options): Promise<unknown>;
@@ -706,9 +737,75 @@ export const native: OmpNativeApi = {
     return plugin.tvDisconnect();
   },
 
-  wakeOnLan(mac, ip) {
-    if (!plugin) return unavailable();
-    return logged('wakeOnLan', plugin.wakeOnLan({ mac, ip }));
+  wakeOnLan(mac, ip, broadcast) {
+    if (plugin && typeof plugin.wakeOnLan === 'function') {
+      const o: { mac: string; ip: string; broadcast?: string } = { mac, ip };
+      if (broadcast) o.broadcast = broadcast;
+      return logged('wakeOnLan', plugin.wakeOnLan(o));
+    }
+    const udp = browserUdpSend();
+    if (!udp) return unavailable();
+    return sendWake(mac, ip, broadcast, udp);
+  },
+
+  async irHardware() {
+    if (!plugin || typeof plugin.irHardware !== 'function') return { transmit: false, receive: false };
+    try {
+      const r = await plugin.irHardware();
+      return { transmit: r.transmit === true, receive: r.receive === true };
+    } catch {
+      return { transmit: false, receive: false };
+    }
+  },
+
+  irTransmit(frequency, pulses) {
+    if (!plugin || typeof plugin.irTransmit !== 'function') return unavailable();
+    return plugin.irTransmit({ frequency: frequency > 0 ? frequency : 38000, pulses });
+  },
+
+  async irLearn() {
+    if (!plugin || typeof plugin.irLearn !== 'function') return null;
+    const r = await plugin.irLearn();
+    const pulses = Array.isArray(r.pulses) ? r.pulses.filter((n) => typeof n === 'number') : [];
+    const frequency = typeof r.frequency === 'number' ? r.frequency : 0;
+    if (pulses.length < 2) return null;
+    return { frequency, pulses };
+  },
+
+  async samsungClick(ip, path, body) {
+    if (!plugin || typeof plugin.samsungClick !== 'function') return unavailable();
+    const r = await plugin.samsungClick({ ip, path, body });
+    return { message: typeof r.message === 'string' ? r.message : '' };
+  },
+
+  async discoverNetTvs(timeoutMs) {
+    if (!plugin || typeof plugin.discoverNetTvs !== 'function') return [];
+    const r = await plugin.discoverNetTvs({ timeoutMs });
+    const list = Array.isArray(r.tvs) ? r.tvs : [];
+    const out: FoundNetTv[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as { ip?: unknown; kind?: unknown; name?: unknown; mac?: unknown };
+      if (typeof o.ip !== 'string' || (o.kind !== 'lg' && o.kind !== 'samsung' && o.kind !== 'google')) continue;
+      const row: FoundNetTv = { ip: o.ip, kind: o.kind, name: typeof o.name === 'string' && o.name ? o.name : o.ip };
+      if (typeof o.mac === 'string') row.mac = o.mac;
+      out.push(row);
+    }
+    return out;
+  },
+
+  async discoverLearners(timeoutMs) {
+    if (!plugin || typeof plugin.discoverLearners !== 'function') return [];
+    const r = await plugin.discoverLearners({ timeoutMs });
+    const list = Array.isArray(r.devices) ? r.devices : [];
+    const out: FoundLearner[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as { ip?: unknown; port?: unknown; name?: unknown };
+      if (typeof o.ip !== 'string' || typeof o.port !== 'number') continue;
+      out.push({ ip: o.ip, port: o.port, name: typeof o.name === 'string' ? o.name : o.ip });
+    }
+    return out;
   },
 
   openExternal(url, mime) {

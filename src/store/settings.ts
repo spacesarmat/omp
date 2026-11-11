@@ -59,6 +59,12 @@ export interface AppSettings {
    */
   openOnStartup: boolean;
   /**
+   * Android TV: «Включать телевизор через HDMI-CEC». When the phone wakes the box or launches playback,
+   * OMP asks the HDMI port to turn the TV on and switch the input. Default on. Ignored when the system
+   * does not expose HdmiControlManager.
+   */
+  hdmiCec: boolean;
+  /**
    * Slide tour finished from Settings. The tour is not shown on its own.
    * Raise ONBOARDING_VERSION (src/onboarding/gate.ts) only if a future build should offer it again on its own.
    */
@@ -123,6 +129,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysFfmpeg: false,
   language: 'system',
   openOnStartup: true,
+  hdmiCec: true,
   onboardingVersion: 0,
   setupDone: false,
   seenHints: {},

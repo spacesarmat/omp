@@ -7,6 +7,7 @@ import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
 import { t } from '../../../src/i18n';
+import { browserUdpSend, sendWake } from '../../../mobile/src/tv/power/wol';
 
 export interface DesktopNative {
   native: OmpNativeApi;
@@ -149,6 +150,15 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     setLanguage: async () => undefined,
     setOrientation: async () => undefined,
     setCleartextHosts: async () => undefined,
+    wakeOnLan: async (mac: string, ip: string, broadcast?: string) => {
+      const udp = browserUdpSend();
+      if (!udp) throw new Error(t('remote.wolNeedApp'));
+      await sendWake(mac, ip, broadcast, udp);
+    },
+    irHardware: async () => ({ transmit: false, receive: false }),
+    irLearn: async () => null,
+    discoverNetTvs: async () => [],
+    discoverLearners: async () => [],
     cloudflareClearance: async () => null,
   };
   const native = new Proxy(core, {

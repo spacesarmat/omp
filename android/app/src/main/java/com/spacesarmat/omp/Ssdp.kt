@@ -128,6 +128,73 @@ object Ssdp {
         }
     }
 
+    data class FoundPower(val ip: String, val kind: String, val name: String, val mac: String?)
+
+    /** SSDP ST (or the Server header) of a TV the phone can power on. */
+    fun kindOf(st: String?, server: String?): String? {
+        val s = st?.trim()?.lowercase().orEmpty()
+        if (s == "urn:lge-com:service:webos-second-screen:1") return "lg"
+        if (s == "urn:samsung.com:device:remotecontrolreceiver:1") return "samsung"
+        if (s == "urn:dial-multiscreen-org:service:dial:1") return "google"
+        val srv = server?.lowercase().orEmpty()
+        if (srv.contains("webos")) return "lg"
+        if (srv.contains("tizen") || srv.contains("samsung")) return "samsung"
+        return null
+    }
+
+    /** LG, Samsung and DIAL in one search. Blocking. */
+    fun discoverPower(context: Context, timeoutMs: Long): List<FoundPower> {
+        val searches = listOf(
+            "urn:lge-com:service:webos-second-screen:1",
+            "urn:samsung.com:device:RemoteControlReceiver:1",
+            "urn:dial-multiscreen-org:service:dial:1",
+        ).map { st ->
+            ("M-SEARCH * HTTP/1.1\r\nHOST: $GROUP:$PORT\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: $st\r\n\r\n")
+                .toByteArray(Charsets.US_ASCII)
+        }
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager?
+        val lock = wifi?.createMulticastLock("omp-ssdp-power")?.apply { setReferenceCounted(false) }
+        val found = LinkedHashMap<String, FoundPower>()
+        try {
+            lock?.acquire()
+            DatagramSocket().use { socket ->
+                val group = InetAddress.getByName(GROUP)
+                for (bytes in searches) socket.send(DatagramPacket(bytes, bytes.size, group, PORT))
+                val deadline = System.currentTimeMillis() + timeoutMs
+                val buf = ByteArray(2048)
+                while (true) {
+                    val left = deadline - System.currentTimeMillis()
+                    if (left <= 0) break
+                    socket.soTimeout = left.toInt().coerceAtLeast(1)
+                    val packet = DatagramPacket(buf, buf.size)
+                    try {
+                        socket.receive(packet)
+                    } catch (_: SocketTimeoutException) {
+                        break
+                    }
+                    val ip = packet.address?.hostAddress ?: continue
+                    if (found.containsKey(ip)) continue
+                    val text = String(packet.data, packet.offset, packet.length, Charsets.UTF_8)
+                    val headers = parseHeaders(text) ?: continue
+                    val kind = kindOf(headers["st"], headers["server"]) ?: continue
+                    val mac = Regex("([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}").find(text)?.value
+                    val name = when (kind) {
+                        "samsung" -> "Samsung"
+                        "google" -> "Android TV"
+                        else -> DEFAULT_NAME
+                    }
+                    found[ip] = FoundPower(ip, kind, name, mac)
+                }
+            }
+        } finally {
+            try {
+                lock?.release()
+            } catch (_: RuntimeException) {
+            }
+        }
+        return found.values.toList()
+    }
+
     internal fun xmlTag(xml: String, tag: String): String? {
         val m = Regex("<(?:\\w+:)?$tag[^>]*>([^<]*)</(?:\\w+:)?$tag>").find(xml) ?: return null
         val v = m.groupValues[1]

@@ -158,6 +158,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S05.29.1 | Настройки | Settings | Режим тестирования - Вкл | Test mode - On |
 | S05.29.2 | Настройки | Settings | Режим тестирования - Выкл | Test mode - Off |
 | S05.30 | Настройки | Settings | Размер меток (ползунок, px) | Label size (slider, px) |
+| S05.31 | Настройки | Settings | Включать телевизор через HDMI-CEC | Turn the TV on over HDMI-CEC |
+| S05.31.1 | Настройки | Settings | Включать телевизор через HDMI-CEC - Вкл | Turn the TV on over HDMI-CEC - On |
+| S05.31.2 | Настройки | Settings | Включать телевизор через HDMI-CEC - Выкл | Turn the TV on over HDMI-CEC - Off |
 | S06 | Плеер | Player |  |  |
 | S06.1 | Плеер | Player | Предыдущий | Previous |
 | S06.2 | Плеер | Player | Воспроизведение | Play or pause |
@@ -746,10 +749,21 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P07.7 | Поиск | Search | Похожие результаты | Similar results |
 | P08 | Пульт | Remote |  |  |
 | P08.1 | Пульт | Remote | Сменить телевизор | Switch TV |
+| P08.2 | Пульт | Remote | Включить | Turn on |
+| P08.3 | Пульт | Remote | Как включить по сети | How to enable network power-on |
+| P08.4 | Пульт | Remote | Марка телевизора | TV brand |
+| P08.5 | Пульт | Remote | Проверить код | Test the code |
+| P08.6 | Пульт | Remote | Обучить с телефона | Learn from the phone |
+| P08.7 | Пульт | Remote | Удалить кнопку | Delete the button |
+| P08.8 | Пульт | Remote | Добавить код | Add the code |
+| P08.9 | Пульт | Remote | Обучить приемником | Learn with a receiver |
+| P08.10 | Пульт | Remote | Файл кода | Code file |
 | P09 | Сейчас играет | Now playing |  |  |
 | P09.1 | Сейчас играет | Now playing | Свернуть | Collapse |
 | P10 | Телевизор | TV |  |  |
 | P10.1 | Телевизор | TV | Назад | Back |
+| P10.2 | Телевизор | TV | Добавить по MAC | Add by MAC |
+| P10.3 | Телевизор | TV | Найти телевизоры для включения | Find TVs to power on |
 | P11 | Настройки | Settings |  |  |
 | P11.1 | Настройки | Settings | Аккаунт | Account |
 | P11.2 | Настройки | Settings | Сменить телевизор | Change TV |

@@ -1,6 +1,9 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.CecPower
+import com.spacesarmat.omp.CecPrefs
 import com.spacesarmat.omp.I18n
+import com.spacesarmat.omp.NetIdentity
 
 import android.content.Context
 import android.content.Intent
@@ -216,6 +219,19 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
     override fun info(): JSONObject =
         JSONObject().put("name", name()).put("version", version()).put("foreground", AppForeground.any)
 
+    override fun network(): JSONObject {
+        val net = NetIdentity.read()
+        val o = JSONObject()
+        if (net.mac != null) o.put("mac", net.mac)
+        if (net.broadcast != null) o.put("broadcast", net.broadcast)
+        return o
+    }
+
+    override fun cec() {
+        if (!CecPrefs.enabled(context)) return
+        CecPower.oneTouch(context.getSystemService("hdmi_control"))
+    }
+
     override fun paired(phone: String) {
         emit("phonePaired", JSObject().put("phone", phone), false)
     }
@@ -226,6 +242,7 @@ class TvRemote(private val context: Context, private val emit: (String, JSObject
      * torrent page) closes it first and brings the TV interface to the front.
      */
     override fun launch(params: JSONObject) {
+        cec()
         val navigates = params.has("server") || params.has("magnet") || (params.has("torrent") && !params.has("file"))
         main.post {
             val player = NativePlayerBridge.player
