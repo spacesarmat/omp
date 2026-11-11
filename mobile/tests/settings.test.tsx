@@ -11,7 +11,7 @@ import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
 import { addServer, setActiveServer, removeServer, servers } from '../../src/store/servers';
 import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL, type UpdateInfo } from '../../src/lib/updateInfo';
-import { latestUpdate, updatePrompt } from '../../src/store/updates';
+import { latestUpdate, updatePrompt, resetBetaGate, setBetaGate } from '../../src/store/updates';
 import { APP_VERSION } from '../../src/version';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { toast } from '../src/ui/toast';
@@ -36,11 +36,21 @@ function mount(): HTMLElement {
 }
 const btn = (el: HTMLElement, t: string) => Array.from(el.querySelectorAll('button')).find((b) => b.textContent === t)!;
 
+async function clickUpdate(el: HTMLElement, label: string): Promise<void> {
+  await act(async () => {
+    btn(el, label).click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
   localStorage.clear();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(null);
-  updateSettings({ updateCheck: true });
+  updateSettings({ updateCheck: true, betaUpdates: false });
+  resetBetaGate();
   toast.value = '';
   setUpdateChecker(null);
   setAccountFetcher(async () => null);
@@ -131,10 +141,10 @@ describe('Settings', () => {
     expect(sw.getAttribute('aria-checked')).toBe('false');
     await act(async () => sw.click());
     expect(settings.value.betaUpdates).toBe(true);
+    setBetaGate(() => Promise.resolve(true));
     view = 'settings';
     const el = mount();
-    await act(async () => btn(el, 'Проверить обновления').click());
-    await act(async () => {});
+    await clickUpdate(el, 'Проверить обновления');
     expect(urls).toEqual([ANDROID_BETA_UPDATE_URL]);
     updateSettings({ betaUpdates: false });
   });
@@ -148,14 +158,12 @@ describe('Settings', () => {
       return 'latest';
     });
     const el = mount();
-    await act(async () => btn(el, 'Проверить обновления').click());
-    await act(async () => {});
+    await clickUpdate(el, 'Проверить обновления');
     expect(urls).toEqual([ANDROID_UPDATE_URL]);
     expect(manual).toEqual([true]);
     expect(toast.value).toBe('У вас последняя версия');
     setUpdateChecker(async () => 'error');
-    await act(async () => btn(el, 'Проверить обновления').click());
-    await act(async () => {});
+    await clickUpdate(el, 'Проверить обновления');
     expect(toast.value).toBe('Не удалось проверить обновления');
   });
 
@@ -698,10 +706,10 @@ describe('Settings in English', () => {
   it('manual update check toasts in English', async () => {
     setUpdateChecker(async () => 'latest');
     const el = mount();
-    await act(async () => btn(el, 'Check for updates').click());
+    await clickUpdate(el, 'Check for updates');
     expect(toast.value).toBe('You have the latest version');
     setUpdateChecker(async () => 'error');
-    await act(async () => btn(el, 'Check for updates').click());
+    await clickUpdate(el, 'Check for updates');
     expect(toast.value).toBe('Could not check for updates');
   });
 
