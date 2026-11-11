@@ -465,16 +465,22 @@ describe('TV «Подписки» segment', () => {
       await click(subEl(host, 's1', 'check'));
       expect(calls.filter((c) => c.method === 'subCheck').map((c) => c.params)).toEqual([{ id: 's1' }]);
       expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
-      await act(() => vi.advanceTimersByTimeAsync(subsPoll.gapMs));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
       await flush();
       expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
-      await act(() => vi.advanceTimersByTimeAsync(subsPoll.gapMs));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
       await flush();
       expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
       expect(text(subRows(host)[0].querySelector('.news-sub-fresh'))).toBe('3 новых');
       // the check is over: the list is not asked again
       const n = calls.filter((c) => c.method === 'subs').length;
-      await act(() => vi.advanceTimersByTimeAsync(subsPoll.gapMs));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
       await flush();
       expect(calls.filter((c) => c.method === 'subs').length).toBe(n);
     } finally {
