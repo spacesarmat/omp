@@ -138,6 +138,23 @@ describe('Remote header and layout', () => {
     });
   });
 
+  it('HDMI inputs show only while the LG remote is connected', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    tvState.value = 'idle';
+    mount();
+    const hdmi = () => Array.from(el.querySelectorAll('button')).filter((b) => /^HDMI /.test(b.textContent || '')).map((b) => b.textContent);
+    expect(hdmi()).toEqual([]);
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(hdmi()).toEqual(['HDMI 1', 'HDMI 2', 'HDMI 3']);
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(hdmi()).toEqual([]);
+    tvState.value = 'idle';
+  });
+
   it('buttons mode (Magic Remote): d-pad, colour keys, Back/Home/Menu, volume · play · keyboard/mute', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
