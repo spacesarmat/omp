@@ -620,6 +620,51 @@ h2 svg {
   pointer-events: none;
 }
 
+.editor-marquee-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed var(--editor-accent);
+  background: rgb(77 163 255 / 8%);
+  pointer-events: none;
+}
+
+.editor-multi-inspector {
+  padding: 10px 12px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.editor-multi-inspector h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.editor-multi-align,
+.editor-multi-distribute {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+
+.editor-multi-align button,
+.editor-multi-distribute button {
+  margin: 0 6px 6px 0;
+  padding: 4px 8px;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  background: #26282e;
+  color: #e8e8e8;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.editor-multi-inspector label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #b7b7b7;
+}
+
 .editor-layout-inspector {
   padding: 10px 12px;
   border-top: 1px solid #3a3a3a;

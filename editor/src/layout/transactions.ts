@@ -228,6 +228,57 @@ export function updateNodeMarginTransaction(controller: DraftController, args: N
   });
 }
 
+// Group alignment and distribution stay one undo step: the container record patch and every
+// rewritten placement land in a single draft update, so undo restores the whole group at once.
+export interface AlignSelectionTransactionArgs {
+  context: LayoutContext;
+  placements?: LayoutPlacement[];
+  container?: {
+    nodeId: string;
+    seed?: string[];
+    patch: Partial<Pick<LayoutContainer, 'alignment' | 'distribution'>>;
+  };
+}
+
+export function alignSelectionTransaction(controller: DraftController, args: AlignSelectionTransactionArgs): void {
+  controller.update((draft) => {
+    if (args.container) {
+      const layout = draft.theme.layout ?? { containers: [], placements: [] };
+      const existing = layout.containers.find(
+        (entry) => entry.target === args.context.target
+          && entry.screenId === args.context.screenId
+          && entry.format === args.context.format
+          && entry.nodeId === args.container!.nodeId,
+      );
+      const container = existing
+        ? { ...existing, ...args.container.patch }
+        : createContainer(args.context, args.container.nodeId, args.container.seed ?? [], args.container.patch);
+      draft.theme = upsertLayoutContainer(draft.theme, container);
+    }
+    for (const placement of args.placements ?? []) {
+      draft.theme = upsertLayoutPlacement(draft.theme, { ...placement, id: uniquePlacementId(draft.theme, placement) });
+    }
+    return draft;
+  });
+}
+
+export interface NodesMarginTransactionArgs {
+  context: LayoutContext;
+  items: { nodeId: string; label: string; base?: LayoutPlacement; margin?: string }[];
+}
+
+// One shared margin edit for every selected node is a single undo step, same as a solo margin edit.
+export function updateNodesMarginTransaction(controller: DraftController, args: NodesMarginTransactionArgs): void {
+  controller.update((draft) => {
+    for (const item of args.items) {
+      const placement = createPlacement(args.context, item.nodeId, item.label, { ...(item.base ?? {}), margin: item.margin });
+      if (item.base?.id) placement.id = item.base.id;
+      draft.theme = upsertLayoutPlacement(draft.theme, { ...placement, id: uniquePlacementId(draft.theme, placement) });
+    }
+    return draft;
+  });
+}
+
 // collectLayoutNodes resolves identity by walking the tree in pre-order; repeating the same walk
 // here pairs every descriptor with its element so the editor can stamp data-layout-node and read
 // geometry without a second identity implementation.

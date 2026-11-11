@@ -7,20 +7,21 @@ import { collectLayoutElements, type LayoutRect } from '../layout/transactions.t
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
 import { SelectionOverlay, type MoveNodeArgs } from './SelectionOverlay';
+import type { SelectionState } from '../layout/selection';
 import { getEditorViewport } from '../../shared/routes';
 
 export interface PreviewPaneProps extends PreviewConfiguration {
   sessionId: string;
   zoom: number;
   tool: CanvasTool;
-  selectedNodeId: string | null;
+  selection: SelectionState;
   onZoomChange(zoom: number): void;
   onTool(tool: CanvasTool): void;
   onSelect(elementId: string): void;
   onNavigate(route: DesktopRouteId): void;
   onTrace(trace: InteractionTrace[]): void;
   onNodesChange(nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>): void;
-  onSelectNode(nodeId: string | null): void;
+  onSelectNode(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
   onPlaceNode(placement: LayoutPlacement): void;
 }
@@ -275,7 +276,8 @@ export function PreviewPane(props: PreviewPaneProps) {
                     && placement.screenId === layoutContext.screenId
                     && placement.format === layoutContext.format,
                 )}
-                selectedNodeId={props.selectedNodeId}
+                selectedIds={props.selection.ids}
+                anchorId={props.selection.anchorId}
                 getIframeRect={() => {
                   const box = iframe.current?.getBoundingClientRect();
                   return { x: box?.x ?? 0, y: box?.y ?? 0, width: box?.width ?? 0, height: box?.height ?? 0 };

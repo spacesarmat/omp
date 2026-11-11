@@ -12,11 +12,13 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
-import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, type LayoutRect } from './layout/transactions';
+import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, type LayoutRect } from './layout/transactions';
+import { alignPlacements, distributePlacements, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
 import { ThemeInspector } from './components/ThemeInspector';
 import { LayoutInspector } from './components/LayoutInspector';
+import { MultiSelectInspector } from './components/MultiSelectInspector';
 import { LogicEditor } from './components/LogicEditor';
 import { FlowMap } from './components/FlowMap';
 import { SimulationPanel } from './components/SimulationPanel';
@@ -62,7 +64,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const workspaceClient = client || offlineClient(draft);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SelectionState>({ ids: [], anchorId: null });
   const [layoutNodes, setLayoutNodes] = useState<LayoutNodeDescriptor[]>([]);
   const [layoutRects, setLayoutRects] = useState<Record<string, LayoutRect>>({});
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
@@ -78,17 +80,18 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (comparison && !draft.snapshots.some((snapshot) => snapshot.id === comparison.id)) setComparison(null);
   }, [draft.snapshots, comparison]);
   useEffect(() => {
-    if (selectedNodeId && !layoutNodes.some((node) => node.nodeId === selectedNodeId)) setSelectedNodeId(null);
-  }, [layoutNodes, selectedNodeId]);
+    setSelection((prev) => reduceSelection(prev, { type: 'prune', liveIds: layoutNodes.map((node) => node.nodeId) }));
+  }, [layoutNodes]);
   const layoutContext = { target: draft.target, screenId: draft.screenId, format: draft.format };
   const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>) => {
     setLayoutNodes(nodes);
     setLayoutRects(rects);
   };
-  const handleSelectNode = (nodeId: string | null) => {
-    setSelectedNodeId(nodeId);
-    if (!nodeId) return;
-    const node = layoutNodes.find((entry) => entry.nodeId === nodeId);
+  const handleSelectNode = (next: SelectionState) => {
+    setSelection(next);
+    const primary = next.anchorId ?? next.ids[next.ids.length - 1] ?? null;
+    if (!primary) return;
+    const node = layoutNodes.find((entry) => entry.nodeId === primary);
     if (node) setSelected(node.elementId);
   };
   const handleElementSelected = (elementId: string) => {
@@ -96,7 +99,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     const node = layoutNodes.find((entry) => entry.nodeId === elementId)
       ?? layoutNodes.find((entry) => entry.elementId === elementId && entry.kind === 'element')
       ?? layoutNodes.find((entry) => entry.elementId === elementId);
-    setSelectedNodeId(node?.nodeId ?? null);
+    handleSelectNode(node ? { ids: [node.nodeId], anchorId: node.nodeId } : { ids: [], anchorId: null });
   };
   const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement; siblings?: string[] }) => {
     const siblings = args.siblings ?? layoutNodes
@@ -122,6 +125,46 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       label: selectedNode.label,
       base: getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId),
       margin,
+    });
+  };
+  // Locked nodes and nodes without a live preview element stay out of every group action.
+  const selectedItems = () => selection.ids
+    .map((nodeId) => ({
+      node: layoutNodes.find((entry) => entry.nodeId === nodeId),
+      placement: getLayoutPlacement(draft.theme, layoutContext, nodeId),
+    }))
+    .filter((item) => item.node && item.node.parentId !== null && !item.placement?.locked);
+  // Flow children of one container are aligned through the container record, absolute nodes
+  // through their coordinates; either way the whole group lands in a single draft transaction.
+  const alignSelection = (alignment: SelectionAlignment, axis: 'x' | 'y' | null) => {
+    const items = selectedItems();
+    if (items.length < 2) return;
+    const parentIds = new Set(items.map((item) => item.node!.parentId));
+    const allFlow = items.every((item) => (item.placement?.mode ?? 'flow') === 'flow');
+    if (allFlow && parentIds.size === 1) {
+      const parentId = String([...parentIds][0]);
+      const seed = layoutNodes.filter((node) => node.parentId === parentId).map((node) => node.nodeId);
+      const patch = axis === null
+        ? { alignment: flowAlignmentFor(alignment) }
+        : { distribution: 'space-between' as const };
+      alignSelectionTransaction(controller, { context: layoutContext, container: { nodeId: parentId, seed, patch } });
+      return;
+    }
+    const bases = items
+      .map((item) => item.placement)
+      .filter((placement): placement is LayoutPlacement => Boolean(placement));
+    if (bases.length < 2) return;
+    const placements = axis === null ? alignPlacements(bases, alignment) : distributePlacements(bases, axis);
+    alignSelectionTransaction(controller, { context: layoutContext, placements });
+  };
+  const handleAlignSelection = (alignment: SelectionAlignment) => alignSelection(alignment, null);
+  const handleDistributeSelection = (axis: 'x' | 'y') => alignSelection('left', axis);
+  const handleSelectionMargin = (margin: string | undefined) => {
+    const items = selectedItems();
+    if (!items.length) return;
+    updateNodesMarginTransaction(controller, {
+      context: layoutContext,
+      items: items.map((item) => ({ nodeId: item.node!.nodeId, label: item.node!.label, base: item.placement, margin })),
     });
   };
   useEffect(() => {
@@ -151,7 +194,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (!isDesktopTarget(target) || DESKTOP_SCREEN_SUPPORT[screenId] !== 'logic') setMode('design');
     if (target !== draft.target || screenId !== draft.screenId) {
       setSelected(getDefaultElementId(target));
-      setSelectedNodeId(null);
+      setSelection({ ids: [], anchorId: null });
       setDesignState('default');
     }
     controller.setView({
@@ -165,6 +208,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const canEditLogic = isDesktopTarget(draft.target) && DESKTOP_SCREEN_SUPPORT[draft.screenId] === 'logic';
   const routeLabel = getEditorPages(draft.target).find((route) => route.id === draft.screenId)?.label || draft.screenId;
   const viewport = getEditorViewport(draft.target, draft.format);
+  const selectedNodeId = selection.ids.length ? (selection.anchorId ?? selection.ids[selection.ids.length - 1]) : null;
   const selectedNode = selectedNodeId ? layoutNodes.find((node) => node.nodeId === selectedNodeId) ?? null : null;
   const selectedOrder = selectedNode?.parentId
     ? draft.theme.layout?.containers.find(
@@ -241,7 +285,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             sessionId={sessionId}
             zoom={zoom}
             tool={tool}
-            selectedNodeId={selectedNodeId}
+            selection={selection}
             onZoomChange={setZoom}
             onTool={setTool}
             onSelect={handleElementSelected}
@@ -258,7 +302,21 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <div class="editor-inspector-content">
             <BaseReviewPanel controller={controller} client={workspaceClient} />
             {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} state={designState} onStateChange={setDesignState} />}
-            {mode === 'design' && selectedNode && (
+            {mode === 'design' && selection.ids.length > 1 && (() => {
+              const margins = new Set(selectedItems().map((item) => item.placement?.margin ?? ''));
+              const margin = margins.size === 0 ? undefined : margins.size === 1 ? String([...margins][0]) : 'mixed' as const;
+              return (
+                <MultiSelectInspector
+                  context={layoutContext}
+                  count={selection.ids.length}
+                  margin={margin}
+                  onAlign={handleAlignSelection}
+                  onDistribute={handleDistributeSelection}
+                  onMargin={handleSelectionMargin}
+                />
+              );
+            })()}
+            {mode === 'design' && selection.ids.length === 1 && selectedNode && (
               <LayoutInspector
                 context={layoutContext}
                 node={selectedNode}
