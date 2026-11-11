@@ -9,8 +9,6 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import libtorrent as lt
-
 CONTENT = b"OMP peer download fixture\n"
 
 
@@ -138,7 +136,18 @@ def check_shutdown():
         def log_message(self, *_):
             pass
 
-    tracker = Tracker(("127.0.0.1", 0), BlockingHandler)
+    class Probe(Tracker):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.entered_close = threading.Event()
+            self.left_close = threading.Event()
+
+        def server_close(self):
+            self.entered_close.set()
+            super().server_close()
+            self.left_close.set()
+
+    tracker = Probe(("127.0.0.1", 0), BlockingHandler)
     thread = threading.Thread(
         target=lambda: tracker.serve_forever(poll_interval=0.05),
         name="omp-peer-tracker",
@@ -167,8 +176,20 @@ def check_shutdown():
             raise SystemExit("tracker request thread was not running")
         if any(item.daemon for item in request_threads):
             raise SystemExit("tracker request thread is a daemon and will outlive shutdown")
+        done = threading.Event()
+
+        def closer():
+            close_tracker(tracker, thread)
+            done.set()
+
+        threading.Thread(target=closer, name="omp-peer-closer").start()
+        if not tracker.entered_close.wait(timeout=5):
+            raise SystemExit("shutdown did not reach server_close while the request was blocked")
+        if tracker.left_close.wait(timeout=0.3):
+            raise SystemExit("shutdown returned while a tracker request was still blocked")
         release.set()
-        close_tracker(tracker, thread)
+        if not done.wait(timeout=5):
+            raise SystemExit("shutdown did not finish after the tracker request completed")
         still = [item.name for item in request_threads if item.is_alive()]
         if still:
             raise SystemExit(f"tracker request threads still running after shutdown: {still}")
@@ -191,6 +212,7 @@ def main():
         return
     if not args.origin:
         parser.error("--origin is required")
+    import libtorrent as lt
     info = (
         b"d6:lengthi" + str(len(CONTENT)).encode() + b"e"
         b"4:name11:fixture.bin"
