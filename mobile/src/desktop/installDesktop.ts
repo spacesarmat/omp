@@ -3,7 +3,7 @@ import { linkStatus, nowPlaying, sendCmd } from '../tv/playerLink';
 import { volume } from '../tv/tvClient';
 import { native } from '../platform/native';
 import { showToast } from '../ui/toast';
-import { linksFromDrop } from './drop';
+import { linksFromDrop, magnetFromText } from './drop';
 import { desktopHotkey } from './hotkeys';
 import { installWheelScroll } from './wheel';
 
@@ -111,9 +111,13 @@ export function installDesktopExtras(actions: {
     if (!transfer) return;
     const text = transfer.getData('text/uri-list') || transfer.getData('text/plain') || '';
     const files = Array.from(transfer.files || []).filter((file) => file.name.toLowerCase().endsWith('.torrent') && file.size > 0 && file.size <= MAX_TORRENT_BYTES);
-    void Promise.all(files.map(readFile)).then((read) => {
-      const links = linksFromDrop(text, read);
-      if (links.length > 1) showToast(t('nav.dropFirst'));
+    const magnet = magnetFromText(text);
+    // Only the opened item is read. A magnet wins; otherwise the first .torrent. The stash keeps eight files,
+    // so reading the rest first would drop the one that opens.
+    const chosen = magnet ? [] : files.slice(0, 1);
+    if ((magnet ? 1 : 0) + files.length > 1) showToast(t('nav.dropFirst'));
+    void Promise.all(chosen.map(readFile)).then((read) => {
+      const links = linksFromDrop(magnet || '', read);
       if (links[0]) actions.onOpenLink(links[0]);
     });
   };
