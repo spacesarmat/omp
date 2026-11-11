@@ -15,6 +15,8 @@ export interface IrProfile {
 
 const MAX_NAME = 40;
 const MAX_BUTTONS = 40;
+/** A device can already hold a full list under its IP and another under its MAC. Joining them must not drop either. */
+const MAX_STORED = MAX_BUTTONS * 2;
 
 function cleanName(name: string): string {
   return name.trim().slice(0, MAX_NAME);
@@ -33,7 +35,7 @@ export function addLearned(list: IrProfile[], deviceId: string, button: LearnedB
   return list.map((p, i) => (i === idx ? { deviceId, buttons } : p));
 }
 
-/** Buttons learned before the MAC was known follow the device. The IP profile is removed. */
+/** Buttons learned before the MAC was known follow the device. The IP profile is removed. Every saved button is kept. */
 export function moveLearned(list: IrProfile[], fromId: string, toId: string): IrProfile[] {
   if (!fromId || !toId || fromId === toId) return list;
   const fromIdx = list.findIndex((p) => p.deviceId === fromId);
@@ -42,7 +44,7 @@ export function moveLearned(list: IrProfile[], fromId: string, toId: string): Ir
   let buttons = list[fromIdx].buttons;
   if (toIdx >= 0) {
     const kept = new Set(list[toIdx].buttons.map((b) => b.id));
-    buttons = list[toIdx].buttons.concat(buttons.filter((b) => !kept.has(b.id))).slice(0, MAX_BUTTONS);
+    buttons = list[toIdx].buttons.concat(buttons.filter((b) => !kept.has(b.id)));
   }
   return list.filter((_, i) => i !== fromIdx && i !== toIdx).concat({ deviceId: toId, buttons });
 }
@@ -89,7 +91,7 @@ export function sanitizeProfiles(v: unknown): IrProfile[] {
         frequency,
         pulses: raw.pulses.slice(),
       });
-      if (buttons.length >= MAX_BUTTONS) break;
+      if (buttons.length >= MAX_STORED) break;
     }
     if (buttons.length) out.push({ deviceId: item.deviceId, buttons });
     if (out.length >= 20) break;

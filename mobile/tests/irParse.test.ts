@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addLearned, deleteLearned, moveLearned, renameLearned } from '../src/tv/power/irProfile';
+import { addLearned, deleteLearned, moveLearned, renameLearned, sanitizeProfiles } from '../src/tv/power/irProfile';
 import { brandSignal, necFrame, sircFrame } from '../src/tv/power/irCodes';
 import { parseFlipper, parseIrText, parseLearnerBody, parsePronto, parseRaw } from '../src/tv/power/irParse';
 
@@ -124,6 +124,24 @@ describe('learned buttons', () => {
     const replaced = addLearned(list, 'd', { id: 'b0', name: 'Again', ...signal });
     expect(replaced[0].buttons.some((b) => b.id === 'b0' && b.name === 'Again')).toBe(true);
     expect(replaced[0].buttons).toHaveLength(40);
+  });
+
+  it('keeps every saved button when an IP profile joins a full MAC profile', () => {
+    const one = { frequency: 38000, pulses: [100, 200] };
+    const ip = Array.from({ length: 40 }, (_, i) => ({ id: 'i' + i, name: 'I' + i, ...one }));
+    const mac = Array.from({ length: 40 }, (_, i) => ({ id: 'm' + i, name: 'M' + i, ...one }));
+    const moved = moveLearned(
+      [
+        { deviceId: '192.168.1.20', buttons: ip },
+        { deviceId: 'aa:bb:cc:dd:ee:ff', buttons: mac },
+      ],
+      '192.168.1.20',
+      'aa:bb:cc:dd:ee:ff',
+    );
+    const joined = moved.find((p) => p.deviceId === 'aa:bb:cc:dd:ee:ff');
+    expect(joined?.buttons).toHaveLength(80);
+    expect(moved.some((p) => p.deviceId === '192.168.1.20')).toBe(false);
+    expect(sanitizeProfiles(moved)[0].buttons).toHaveLength(80);
   });
 
   it('moves buttons learned under an IP onto the MAC', () => {

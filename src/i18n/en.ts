@@ -2433,7 +2433,7 @@ export const en: EnDict<typeof ru> = {
       paste: 'Pronto, raw, or a Flipper .ir file',
       sent: 'Code sent. If the TV did not react, press again.',
       saved: 'Button saved',
-      full: 'This device already has 40 buttons',
+      full: 'No more buttons can be saved',
       badCode: 'Could not read the code',
       name: 'Button name',
       lg: 'LG',
