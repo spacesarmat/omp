@@ -1398,6 +1398,125 @@ h2 svg {
   background-clip: padding-box;
 }
 
+.editor-compare {
+  flex: none;
+  max-height: 320px;
+  overflow: auto;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+}
+
+.editor-compare-heading {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid #3b3b3b;
+}
+
+.editor-compare-heading strong {
+  font-size: 11px;
+}
+
+.editor-compare-heading small {
+  margin-left: 10px;
+  color: var(--editor-muted);
+  font-size: 9px;
+}
+
+.editor-compare-close {
+  min-height: 26px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 5px;
+  background: var(--editor-control);
+  color: var(--editor-text);
+  font-size: 10px;
+}
+
+.editor-compare-views {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 14px 12px;
+  overflow-x: auto;
+}
+
+.editor-compare-view {
+  flex: none;
+  margin-right: 14px;
+}
+
+.editor-compare-view:last-child {
+  margin-right: 0;
+}
+
+.editor-compare-controls {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.editor-compare-controls label {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+  color: var(--editor-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.editor-compare-controls label:last-child {
+  margin-right: 0;
+}
+
+.editor-compare-controls select {
+  min-width: 56px;
+  min-height: 24px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  background: var(--editor-control);
+  color: var(--editor-text);
+  font-size: 10px;
+}
+
+.editor-compare-stage {
+  overflow: hidden;
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  background: var(--editor-canvas);
+}
+
+.editor-compare-size {
+  position: relative;
+}
+
+.editor-compare-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.editor-compare-viewport iframe {
+  display: block;
+  border: 0;
+  background: #ffffff;
+}
+
+.editor-compare-selection {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2px solid var(--editor-accent);
+  pointer-events: none;
+}
+
+.editor-canvas-caption .editor-canvas-readonly {
+  color: var(--editor-brand);
+}
+
 @media (hover: hover) {
   .editor-toolbar button:hover:not([aria-disabled="true"]),
   .editor-layer-list button:hover,

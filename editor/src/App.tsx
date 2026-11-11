@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../design/interaction.ts';
 import type { DesignTarget, DesignFormat, DesignState, LayoutPlacement } from '../../design/schema.ts';
 import { createDefaultTheme } from '../../design/defaults';
@@ -30,6 +30,7 @@ import { EditorToolbar } from './components/EditorToolbar';
 import { LayersPanel } from './components/LayersPanel';
 import { BaseReviewPanel } from './components/BaseReviewPanel';
 import { SnapshotPanel } from './components/SnapshotPanel';
+import { CompareWorkspace } from './components/CompareWorkspace';
 
 export interface AppProps {
   controller?: DraftController;
@@ -80,6 +81,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const [designState, setDesignState] = useState<DesignState>('default');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [comparison, setComparison] = useState<DraftSnapshot | null>(null);
+  const [compareOpen, setCompareOpen] = useState(false);
   useEffect(() => {
     if (comparison && !draft.snapshots.some((snapshot) => snapshot.id === comparison.id)) setComparison(null);
   }, [draft.snapshots, comparison]);
@@ -319,7 +321,11 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       language: view.language || draft.language,
     });
   };
-  const previewTheme = comparison?.theme || (previewMode === 'before' ? createDefaultTheme(draft.baseCommit) : draft.theme);
+  const previewTheme = useMemo(
+    () => comparison?.theme || (previewMode === 'before' ? createDefaultTheme(draft.baseCommit) : draft.theme),
+    [comparison, previewMode, draft.baseCommit, draft.theme],
+  );
+  const previewEditable = !comparison && previewMode === 'after';
   const canEditLogic = isDesktopTarget(draft.target) && DESKTOP_SCREEN_SUPPORT[draft.screenId] === 'logic';
   const routeLabel = getEditorPages(draft.target).find((route) => route.id === draft.screenId)?.label || draft.screenId;
   const viewport = getEditorViewport(draft.target, draft.format);
@@ -352,6 +358,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         </EditorToolbar>
         <EditorToolbar label="Действия редактора" class="editor-header-actions">
           <button type="button" data-testid="before-after" class="editor-compare-button" onClick={() => comparison ? setComparison(null) : setPreviewMode((value) => value === 'after' ? 'before' : 'after')} title="Сравнить с исходной темой"><EditorIcon name="compare" /><span>{comparison ? 'Текущий' : previewMode === 'after' ? 'До' : 'После'}</span></button>
+          <button type="button" data-testid="compare-toggle" class="editor-compare-button" aria-pressed={compareOpen} onClick={() => setCompareOpen((value) => !value)} title="Сравнить платформы рядом"><EditorIcon name="frame" /><span>{compareOpen ? 'Скрыть платформы' : 'Платформы'}</span></button>
           <span class="editor-toolbar-separator" role="separator" aria-orientation="vertical" />
           <button type="button" data-action="undo" class="editor-icon-button" aria-label="Отменить" title="Отменить" aria-disabled={!controller.canUndo} onClick={() => { if (controller.canUndo) controller.undo(); }}><EditorIcon name="undo" /></button>
           <button type="button" data-action="redo" class="editor-icon-button" aria-label="Повторить" title="Повторить" aria-disabled={!controller.canRedo} onClick={() => { if (controller.canRedo) controller.redo(); }}><EditorIcon name="redo" /></button>
@@ -383,6 +390,19 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           onLanguage={(language: 'ru' | 'en') => setView({ language })}
         />
       </div>
+      {compareOpen && (
+        <CompareWorkspace
+          controller={controller}
+          route={draft.screenId}
+          state={designState}
+          serverConnected={serverConnected}
+          baseTheme={previewTheme}
+          baseFlow={draft.flow}
+          selectedNodeId={selectedNodeId}
+          onSelectNode={(nodeId) => handleSelectNode({ ids: [nodeId], anchorId: nodeId })}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
       <section class="editor-workspace">
         <LayersPanel
           selected={selected}
@@ -402,7 +422,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           onPaste={handlePaste}
         />
         <section class="editor-canvas-area" aria-label="Холст">
-          <div class="editor-canvas-caption"><span>{routeLabel}</span><small>{viewport.width} × {viewport.height}</small></div>
+          <div class="editor-canvas-caption"><span>{routeLabel}</span><small>{viewport.width} × {viewport.height}</small>{!previewEditable && <small class="editor-canvas-readonly" data-testid="canvas-readonly">Базовая тема - редактирование выключено</small>}</div>
           <PreviewPane
             target={draft.target}
             route={draft.screenId}
@@ -417,6 +437,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             zoom={zoom}
             tool={tool}
             selection={selection}
+            editable={previewEditable}
             nodeSource={nodeSourceRef}
             onZoomChange={setZoom}
             onTool={setTool}

@@ -17,6 +17,7 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   zoom: number;
   tool: CanvasTool;
   selection: SelectionState;
+  editable?: boolean;
   nodeSource?: { current: ((nodeId: string) => string | null) | null };
   onZoomChange(zoom: number): void;
   onTool(tool: CanvasTool): void;
@@ -65,10 +66,15 @@ export function PreviewPane(props: PreviewPaneProps) {
   const autoFit = useRef(true);
   const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const keyTarget = useRef<Document | null>(null);
+  const observer = useRef<MutationObserver | null>(null);
+  const zoomRef = useRef(props.zoom);
   const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect> }>({ nodes: [], rects: {} });
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
   const layoutContext: LayoutContext = { target: props.target, screenId: props.route, format: props.format };
+  useEffect(() => {
+    zoomRef.current = props.zoom;
+  });
 
   const collect = () => {
     const frame = iframe.current;
@@ -77,7 +83,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     const elements = collectLayoutElements(body);
     const nodes = collectLayoutNodes(body);
     const frameBox = frame.getBoundingClientRect();
-    const scale = props.zoom > 0 ? props.zoom : 1;
+    const scale = zoomRef.current > 0 ? zoomRef.current : 1;
     const rects: Record<string, LayoutRect> = {};
     for (const node of nodes) {
       const element = elements.get(node.nodeId);
@@ -141,6 +147,17 @@ export function PreviewPane(props: PreviewPaneProps) {
     autoFit.current = false;
     props.onZoomChange(clampZoom(value));
   };
+  const attachObserver = () => {
+    observer.current?.disconnect();
+    observer.current = null;
+    const body = iframe.current?.contentDocument?.body;
+    if (!body || typeof MutationObserver === 'undefined') return;
+    observer.current = new MutationObserver((mutations) => {
+      if (mutations.every((mutation) => mutation.type === 'attributes' && mutation.attributeName === 'data-layout-node')) return;
+      collect();
+    });
+    observer.current.observe(body, { childList: true, subtree: true, attributes: true });
+  };
 
   useEffect(() => {
     loaded.current = false;
@@ -157,16 +174,10 @@ export function PreviewPane(props: PreviewPaneProps) {
     if (!loaded.current) return;
     collect();
   }, [props.target, props.route, props.format, props.language, props.theme, props.zoom]);
-  useEffect(() => {
-    const body = iframe.current?.contentDocument?.body;
-    if (!body || typeof MutationObserver === 'undefined') return;
-    const observer = new MutationObserver((mutations) => {
-      if (mutations.every((mutation) => mutation.type === 'attributes' && mutation.attributeName === 'data-layout-node')) return;
-      collect();
-    });
-    observer.observe(body, { childList: true, subtree: true, attributes: true });
-    return () => observer.disconnect();
-  }, [props.target, props.language]);
+  useEffect(() => () => {
+    observer.current?.disconnect();
+    observer.current = null;
+  }, []);
   useEffect(() => {
     if (loaded.current) send({ type: 'navigate', route: props.route });
   }, [props.route]);
@@ -272,11 +283,12 @@ export function PreviewPane(props: PreviewPaneProps) {
                   keyTarget.current?.removeEventListener('keydown', forwardPreviewKey);
                   keyTarget.current = iframe.current?.contentDocument || null;
                   keyTarget.current?.addEventListener('keydown', forwardPreviewKey);
+                  attachObserver();
                   collect();
                 }}
               />
               <SelectionOverlay
-                active={props.mode === 'design' && props.tool === 'select'}
+                active={props.editable !== false && props.mode === 'design' && props.tool === 'select'}
                 viewport={viewport}
                 zoom={props.zoom}
                 context={layoutContext}
