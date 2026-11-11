@@ -1,6 +1,6 @@
 {
   "productName": "OMP",
-  "version": "0.30.0",
+  "version": "0.30.1-beta.1",
   "identifier": "com.spacesarmat.omp.desktop",
   "build": {
     "frontendDist": "../dist",
