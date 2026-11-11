@@ -123,4 +123,29 @@ describe('desk http', () => {
     });
     expect(junk.status).toBe(401);
   });
+
+  it('records the signed-in admin on a credit', async () => {
+    const store = memoryStore();
+    const now = Date.now();
+    await store.update((s) => {
+      s.accounts = [{ id: 'a1' }];
+      s.subscriptions = [{ id: 's1', accountId: 'a1', product: 'jackett', paidUntil: now + 86400000, creditRub: 0 }];
+      return { state: s };
+    });
+    const issued = await store.update((s) => issueCliAdminLogin(s, { now }));
+    const app = createApp(store, async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(String((issued as { token: string }).token)));
+    const cookie = String(once.headers['set-cookie'] || '');
+    const desk = await call(app, 'GET', '/admin/api/desk', { cookie });
+    const saved = await call(app, 'POST', '/admin/api/credit', {
+      cookie,
+      body: { csrf: desk.data?.csrf, accountId: 'a1', rub: 15, confirm: 'yes' },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.data?.ok).toBe(true);
+    expect(saved.data?.creditRub).toBe(15);
+    const state = await store.read();
+    const row = (state.audit || []).find((a: { action?: string }) => a.action === 'credit');
+    expect(row && row.actor).toEqual({ kind: 'admin', id: 'cli', label: 'cli' });
+  });
 });

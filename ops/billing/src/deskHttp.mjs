@@ -380,12 +380,19 @@ async function toggleSource(ctx, admin, body) {
   return true;
 }
 
+function creditActor(admin) {
+  if (admin && admin.via === 'cli') return { kind: 'admin', id: 'cli', label: 'cli' };
+  const id = admin && admin.telegramId ? String(admin.telegramId) : '';
+  if (id) return { kind: 'admin', id, label: id };
+  return { kind: 'admin', id: '', label: 'панель' };
+}
+
 async function credit(ctx, admin, body) {
   if (!confirmed(body)) {
     ctx.json(ctx.res, 409, { ok: false, error: 'Нужно подтверждение', needConfirm: true });
     return true;
   }
-  const out = await ctx.store.update((cur) => addCredit(cur, { accountId: body.accountId, rub: body.rub, now: Date.now(), actor: null }));
+  const out = await ctx.store.update((cur) => addCredit(cur, { accountId: body.accountId, rub: body.rub, now: Date.now(), actor: creditActor(admin) }));
   if (!out || out.error) {
     ctx.json(ctx.res, 200, { ok: false, error: (out && out.error) || 'fail' });
     return true;
