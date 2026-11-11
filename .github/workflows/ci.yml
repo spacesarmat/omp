@@ -125,7 +125,7 @@ jobs:
             exit 0
           fi
           git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          files="$(git diff --name-only "$BASE_SHA" HEAD)"
+          files="$(git diff --no-renames --name-only "$BASE_SHA" HEAD)"
           result="$(bash scripts/android-ci-paths.sh <<< "$files")"
           printf '%s\n' "$result" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$result"

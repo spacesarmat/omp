@@ -23,6 +23,7 @@ describe('android CI path filter', () => {
 
   it('marks push and workflow_dispatch as a full run before the classifier', () => {
     const step = job.slice(job.indexOf('EVENT_NAME:'), job.indexOf('Skip unchanged Android paths'));
+    expect(step).toContain('git diff --no-renames --name-only');
     expect(step).toContain('if [ "$EVENT_NAME" != "pull_request" ]; then');
     expect(step).toContain('echo "android=true" >> "$GITHUB_OUTPUT"');
     expect(step.indexOf('echo "android=true"')).toBeLessThan(step.indexOf('exit 0'));
