@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { issueCliAdminLogin } from '../src/logic.mjs';
+import { resetDeskHttp } from '../src/deskHttp.mjs';
 
 function memoryStore() {
   let state = emptyState();
@@ -122,5 +123,48 @@ describe('desk http', () => {
       body: { diagnostics: '1', events: 'login', version: '1.0.0', platform: 'phone' },
     });
     expect(junk.status).toBe(401);
+  });
+
+  it('GET /v1/rollout allows a browser preflight for X-Device-Id and no other route does', async () => {
+    const app = createApp(memoryStore(), async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const opt = await call(app, 'OPTIONS', '/v1/rollout');
+    expect(opt.status).toBe(204);
+    expect(opt.headers['access-control-allow-origin']).toBe('*');
+    expect(String(opt.headers['access-control-allow-headers'])).toContain('X-Device-Id');
+    expect(opt.headers['access-control-allow-credentials']).toBeUndefined();
+    const got = await call(app, 'GET', '/v1/rollout', { headers: { 'x-device-id': 'tv-1' } });
+    expect(got.status).toBe(200);
+    expect(got.headers['access-control-allow-origin']).toBe('*');
+    expect(got.data?.ok).toBe(true);
+    expect(typeof got.data?.beta).toBe('boolean');
+    const missing = await call(app, 'GET', '/v1/rollout');
+    expect(missing.status).toBe(400);
+    expect(missing.headers['access-control-allow-origin']).toBe('*');
+    const closed = await call(app, 'OPTIONS', '/v1/search');
+    expect(closed.status).toBe(204);
+    expect(closed.headers['access-control-allow-origin']).toBeUndefined();
+    const crashOpt = await call(app, 'OPTIONS', '/v1/crash');
+    expect(crashOpt.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('stores a crash with no account and still caps one IP when the device id changes', async () => {
+    resetDeskHttp();
+    const store = memoryStore();
+    const app = createApp(store, async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const body = {
+      diagnostics: '1',
+      payload: JSON.stringify({ message: 'boom', stack: 'at a\nat b', version: '1.2.3', platform: 'phone' }),
+    };
+    const bad = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-1', authorization: 'Bearer nope' }, body });
+    expect(bad.status).toBe(401);
+    for (let i = 1; i <= 5; i++) {
+      const next = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-' + i }, body });
+      expect(next.status).toBe(200);
+      expect(next.data?.stored).toBe(true);
+    }
+    const saved = await store.read();
+    expect(saved.crashGroups).toHaveLength(1);
+    const blocked = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-99' }, body });
+    expect(blocked.status).toBe(429);
   });
 });

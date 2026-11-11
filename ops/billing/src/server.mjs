@@ -144,7 +144,7 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
-import { handleDesk } from './deskHttp.mjs';
+import { browserReadCors, handleDesk, isBrowserRead } from './deskHttp.mjs';
 import { publishAdmin } from './adminLive.mjs';
 import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
 import { loginNote } from './crashIn.mjs';
@@ -1220,6 +1220,11 @@ export function createApp(file, fetchImpl, opts) {
       // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
       // to call bearer or cookie routes.
       if (req.method === 'OPTIONS') {
+        // /v1/rollout is the public webOS read. Every other preflight stays closed.
+        if (isBrowserRead(path)) {
+          res.writeHead(204, browserReadCors(path, { allow: 'GET, OPTIONS' }));
+          return res.end();
+        }
         res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });
         return res.end();
       }

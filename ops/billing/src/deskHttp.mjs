@@ -38,6 +38,26 @@ import { probeAllServices } from './services.mjs';
 const hits = new Map();
 let probeCache = { at: 0, value: null };
 
+/** Public browser reads. webOS calls these with XHR from file:// and a custom header, so the preflight must name it. */
+const BROWSER_READS = { '/v1/rollout': 'X-Device-Id' };
+
+export function isBrowserRead(path) {
+  return Object.prototype.hasOwnProperty.call(BROWSER_READS, path);
+}
+
+/** Any origin, no credentials. Other routes stay closed. */
+export function browserReadCors(path, extra) {
+  if (!isBrowserRead(path)) return extra || {};
+  return Object.assign(
+    {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-headers': BROWSER_READS[path],
+    },
+    extra || {},
+  );
+}
+
 export function resetDeskHttp() {
   hits.clear();
   probeCache = { at: 0, value: null };
@@ -577,26 +597,30 @@ async function crashPost(ctx) {
     ctx.json(ctx.res, 200, { ok: true, stored: false });
     return true;
   }
-  const device = String(ctx.req.headers['x-device-id'] || '');
+  const rawDevice = String(ctx.req.headers['x-device-id'] || '').slice(0, 128);
   const token = String(ctx.req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const now = Date.now();
   const ip = ctx.clientIp ? ctx.clientIp(ctx.req) : '';
-  if (!allowRate('cip:' + ip, now, 6, 60 * 60 * 1000)) {
+  // IP first: changing X-Device-Id cannot buy another slot. A linked device is checked, an install without an account is stored.
+  if (!allowRate('cip:' + (ip || 'unknown'), now, 6, 60 * 60 * 1000)) {
     ctx.json(ctx.res, 429, { error: 'rate' });
     return true;
   }
-  if (!token) {
-    ctx.json(ctx.res, 401, { error: 'token_required' });
-    return true;
+  if (token) {
+    const stateNow = await ctx.store.read();
+    const caller = await ctx.deviceCaller(stateNow, token, rawDevice, now);
+    if (!caller || caller.error) {
+      ctx.json(ctx.res, 401, { error: (caller && caller.error) || 'bad_token' });
+      return true;
+    }
   }
-  const stateNow = await ctx.store.read();
-  const caller = await ctx.deviceCaller(stateNow, token, device, now);
-  if (!caller || caller.error) {
-    ctx.json(ctx.res, 401, { error: (caller && caller.error) || 'bad_token' });
+  const device = rawDevice ? deviceKey(rawDevice) : '';
+  if (device && !allowRate('cdev:' + device, now, 6, 60 * 60 * 1000)) {
+    ctx.json(ctx.res, 429, { error: 'rate' });
     return true;
   }
   const saved = await ctx.store.update((cur) => {
-    const r = ingestCrash(cur, { ...parsed, device: deviceKey(device) }, now);
+    const r = ingestCrash(cur, { ...parsed, device }, now);
     return { state: r.state, result: { alert: r.alert, title: r.group.title } };
   });
   if (saved && saved.alert && ctx.notifyAdmins) {
@@ -644,17 +668,22 @@ async function promoPost(ctx) {
   return true;
 }
 
+function rolloutSend(ctx, status, value) {
+  ctx.send(ctx.res, status, JSON.stringify(value), browserReadCors('/v1/rollout', { 'content-type': 'application/json; charset=utf-8' }));
+}
+
 async function rollout(ctx) {
   const device = String(ctx.req.headers['x-device-id'] || '');
   if (!device) {
-    ctx.json(ctx.res, 400, { error: 'device' });
+    rolloutSend(ctx, 400, { error: 'device' });
     return true;
   }
   const state = await ctx.store.read();
   const percent = state.settings && state.settings.betaPercent !== undefined && state.settings.betaPercent !== ''
     ? Number(state.settings.betaPercent)
     : 100;
-  ctx.json(ctx.res, 200, { ok: true, beta: betaCohort(device, percent), percent: Math.max(0, Math.min(100, Math.floor(percent) || 0)) });
+  const clamped = Math.max(0, Math.min(100, Math.floor(Number.isFinite(percent) ? percent : 100)));
+  rolloutSend(ctx, 200, { ok: true, beta: betaCohort(device, clamped), percent: clamped });
   return true;
 }
 

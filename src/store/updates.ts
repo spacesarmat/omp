@@ -40,10 +40,43 @@ export function reloadUpdateState(): void {
 export type CheckResult = 'update' | 'latest' | 'error' | 'skipped';
 
 let betaGate: (() => Promise<boolean>) | null = null;
+let gateExpectedUntil = 0;
+const gateWaiters: Array<() => void> = [];
 
 /** When set, a user who asked for betas still gets the stable feed if the server says this device is outside the percent. */
-export function setBetaGate(fn: () => Promise<boolean>): void {
+export function setBetaGate(fn: (() => Promise<boolean>) | null): void {
   betaGate = fn;
+  const pending = gateWaiters.slice();
+  gateWaiters.length = 0;
+  for (let i = 0; i < pending.length; i++) pending[i]();
+}
+
+/** Call before the dynamic import that installs the gate. Until it arrives, beta stays closed. */
+export function expectBetaGate(timeoutMs = 4000): void {
+  gateExpectedUntil = Date.now() + timeoutMs;
+}
+
+export function resetBetaGate(): void {
+  betaGate = null;
+  gateExpectedUntil = 0;
+  gateWaiters.length = 0;
+}
+
+function gateReady(): Promise<(() => Promise<boolean>) | null> {
+  if (betaGate || Date.now() >= gateExpectedUntil) return Promise.resolve(betaGate);
+  return new Promise((resolve) => {
+    const timer = setTimeout(finish, gateExpectedUntil - Date.now());
+    function finish() {
+      clearTimeout(timer);
+      const at = gateWaiters.indexOf(wake);
+      if (at >= 0) gateWaiters.splice(at, 1);
+      resolve(betaGate);
+    }
+    function wake() {
+      finish();
+    }
+    gateWaiters.push(wake);
+  });
 }
 
 export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
@@ -56,16 +89,20 @@ export function checkForUpdate(opts: { manual: boolean; now?: number; current?: 
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release
   // Android TV installs the APK (update-android.json), webOS the ipk (update.json), desktop the NSIS installer (update-windows.json)
   // the beta feed with «Получать бета-версии»; without it a beta waits for a release newer than itself
-  if (!opts.url && settings.value.betaUpdates && betaGate) {
-    return allowedBeta(true).then((beta) => checkFeed(opts, now, current, beta));
+  // A local beta flag is not enough: wait for the server gate, and stay on stable if it never answers.
+  if (!opts.url && settings.value.betaUpdates) {
+    return gateReady().then((gate) => {
+      const ask = gate ? gate().catch(() => false) : Promise.resolve(false);
+      return ask.then((beta) => checkFeed(opts, now, current, beta));
+    });
   }
-  return checkFeed(opts, now, current, settings.value.betaUpdates);
+  return checkFeed(opts, now, current, false);
 }
 
-/** False when this device is outside the staged beta percent. A failed check does not open the beta feed. */
+/** False when this device is outside the staged beta percent. No gate, or a failed check, does not open the beta feed. */
 export function allowedBeta(want: boolean): Promise<boolean> {
-  if (!want || !betaGate) return Promise.resolve(!!want);
-  return betaGate().catch(() => false);
+  if (!want) return Promise.resolve(false);
+  return gateReady().then((gate) => (gate ? gate().catch(() => false) : false));
 }
 
 function checkFeed(opts: { manual: boolean; url?: string }, now: number, current: string, beta: boolean): Promise<CheckResult> {

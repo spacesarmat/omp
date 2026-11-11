@@ -3,6 +3,7 @@ import { mockFetch } from '../helpers/fetchMock';
 import {
   checkForUpdate, skipVersion, dismissPrompt, reloadUpdateState, sanitizeUpdateState,
   latestUpdate, updatePrompt, CHECK_INTERVAL_MS, installUpdateChecks,
+  setBetaGate, expectBetaGate, resetBetaGate, allowedBeta,
 } from '../../src/store/updates';
 import { updateSettings, resetSettings } from '../../src/store/settings';
 
@@ -18,6 +19,7 @@ beforeEach(() => {
   localStorage.clear();
   resetSettings();
   reloadUpdateState();
+  resetBetaGate();
 });
 
 describe('checkForUpdate', () => {
@@ -124,12 +126,48 @@ describe('checkForUpdate on Android TV', () => {
 
 describe('beta channel', () => {
   const BASE = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
-  it('reads update-beta.json with «Получать бета-версии» and offers a beta', async () => {
+  it('reads update-beta.json only after the server gate allows this device', async () => {
     updateSettings({ betaUpdates: true });
+    setBetaGate(() => Promise.resolve(true));
     const f = mockFetch(() => ({ body: feed('0.16.0-beta.1') }));
     expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
     expect(f.mock.calls[0][0]).toBe(BASE + 'update-beta.json?t=' + NOW);
     expect(latestUpdate.value!.version).toBe('0.16.0-beta.1');
+  });
+
+  it('a local beta flag stays on the stable feed until the gate is ready', async () => {
+    updateSettings({ betaUpdates: true });
+    const f = mockFetch(() => ({ body: feed('0.16.0') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update.json?t=' + NOW);
+    expect(await allowedBeta(true)).toBe(false);
+  });
+
+  it('waits for a gate that is still loading, then stays stable if it never answers', async () => {
+    updateSettings({ betaUpdates: true });
+    expectBetaGate(40);
+    const f = mockFetch(() => ({ body: feed('0.16.0') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update.json?t=' + NOW);
+  });
+
+  it('uses the beta feed when the gate arrives while the check is waiting', async () => {
+    updateSettings({ betaUpdates: true });
+    expectBetaGate(500);
+    const f = mockFetch(() => ({ body: feed('0.16.0-beta.1') }));
+    const pending = checkForUpdate({ manual: true, now: NOW, current: '0.15.3' });
+    setBetaGate(() => Promise.resolve(true));
+    expect(await pending).toBe('update');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update-beta.json?t=' + NOW);
+  });
+
+  it('a gate that fails does not open the beta feed', async () => {
+    updateSettings({ betaUpdates: true });
+    setBetaGate(() => Promise.reject(new Error('down')));
+    const f = mockFetch(() => ({ body: feed('0.16.0') }));
+    expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
+    expect(f.mock.calls[0][0]).toBe(BASE + 'update.json?t=' + NOW);
+    expect(await allowedBeta(true)).toBe(false);
   });
 
   it('a beta switched off stays until a release newer than itself', async () => {

@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] webOS beta: the browser GET /v1/rollout answers CORS and allows the X-Device-Id header. A crash with no account is stored, and changing the device id does not bypass the IP limit. Until the server says this device is inside the beta percent, the app stays on the stable feed
 - [tech] Billing admin: promo codes with an expiry and a percent discount, broadcasts only after an explicit confirm, a beta percentage, backup archive check, crash groups and an admin login journal. The app sends crash reports and asks whether the device is in the beta percentage. Panel login is confirmed by a Telegram button that shows the IP and device. The one-time shell link still works. Nothing was deployed to the NUC
 - [tech] Billing admin: sidebar, service and payment overview, tables, sources, release ranking (the screen says watch-rank is not merged yet), settings rollback, NUC, funnel and revenue. Live updates use SSE /admin/api/events, otherwise a poll every 12 seconds. Apps send POST /v1/presence (install, sign-in, payment). Read-only role is a Telegram id list in settings. Container restart is allowlisted and needs a separate proxy. Nothing was deployed to the NUC
 - While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it

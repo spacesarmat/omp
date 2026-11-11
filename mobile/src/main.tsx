@@ -28,6 +28,7 @@ import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
+import { expectBetaGate } from '../../src/store/updates';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -58,6 +59,7 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
+expectBetaGate();
 import('../../src/report/presence').then((m) =>
   m.startPresence(phoneSourceContext, typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone'),
 ).catch(() => undefined);
