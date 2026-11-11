@@ -1068,11 +1068,14 @@ class OmpNativePlugin : Plugin() {
             }
         }
 
-        private val TORRENT_URL = Regex("https?://\\S+\\.torrent(?:\\?\\S*)?", RegexOption.IGNORE_CASE)
+        private val HTTP_URL = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
 
+        /** The whole http(s) token, only when its path ends in .torrent. Query and hash stay intact. */
         private fun torrentUrl(raw: String?): String? {
             if (raw.isNullOrBlank()) return null
-            return TORRENT_URL.find(raw.trim())?.value
+            val token = HTTP_URL.find(raw.trim())?.value ?: return null
+            val path = token.substringBefore('?').substringBefore('#')
+            return if (path.endsWith(".torrent", ignoreCase = true)) token else null
         }
 
         private fun linkFromView(intent: Intent): String? {

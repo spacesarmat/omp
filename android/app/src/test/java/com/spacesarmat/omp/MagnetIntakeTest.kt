@@ -37,4 +37,11 @@ class MagnetIntakeTest {
             .putExtra(Intent.EXTRA_TEXT, "see https://x.test/a.TORRENT?dl=1 now")
         assertEquals("https://x.test/a.TORRENT?dl=1", OmpNativePlugin.magnetFrom(intent))
     }
+
+    @Test
+    fun sendTextKeepsEveryQueryParameter() {
+        val url = "https://x.test/a.torrent?file=b.torrent&token=abc"
+        val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "see $url now")
+        assertEquals(url, OmpNativePlugin.magnetFrom(intent))
+    }
 }
