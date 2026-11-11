@@ -3067,6 +3067,9 @@ export async function pollBot(file, fetchImpl, opts) {
     return;
   }
   let offset = 0;
+  // Earliest Stars payment left unconfirmed during cutover, and updates already answered in this process.
+  let heldStar = 0;
+  const handledUpdates = new Set();
   let sweptAt = 0;
   let servicesAt = 0;
   let serviceSnap = {};
@@ -3148,9 +3151,24 @@ export async function pollBot(file, fetchImpl, opts) {
         await sleep(5000);
         continue;
       }
+      // Stars paid during cutover stay unconfirmed so the next normal poll can apply them.
+      // Later messages in the same queue, including /start admin_TOKEN, are still handled.
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
-        offset = u.update_id + 1;
+        if (handledUpdates.has(u.update_id)) {
+          offset = heldStar || u.update_id + 1;
+          continue;
+        }
+        const starMsg = u.message && u.message.successful_payment && u.message.successful_payment.currency === 'XTR' ? u.message.successful_payment : null;
+        const starCharge = starMsg ? String(starMsg.telegram_payment_charge_id || '') : '';
+        const starPayload = starMsg ? String(starMsg.invoice_payload || '') : '';
+        if (adminLoginOnly && starCharge && starPayload) {
+          if (!heldStar || u.update_id < heldStar) heldStar = u.update_id;
+          offset = heldStar;
+          continue;
+        }
+        handledUpdates.add(u.update_id);
+        offset = heldStar || u.update_id + 1;
         if (u.channel_post) {
           // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
           const notice = pinNotice(u, channel);
@@ -3193,12 +3211,6 @@ export async function pollBot(file, fetchImpl, opts) {
           const sp = msg.successful_payment;
           const charge = String(sp.telegram_payment_charge_id || '');
           const payload = String(sp.invoice_payload || '');
-          if (charge && payload && adminLoginOnly) {
-            // Cutover poller must not apply or ack a payment. The next getUpdates sees this update again.
-            offset = u.update_id;
-            await sleep(5000);
-            break;
-          }
           if (charge && payload) {
             const paidAt = Date.now();
             let applied;
@@ -3214,6 +3226,7 @@ export async function pollBot(file, fetchImpl, opts) {
               );
             } catch (e) {
               // The write did not commit. Do not ack the update, so the next poll retries it.
+              handledUpdates.delete(u.update_id);
               offset = u.update_id;
               throw e;
             }

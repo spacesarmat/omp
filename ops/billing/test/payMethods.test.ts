@@ -426,13 +426,20 @@ describe('stars poll durability', () => {
     expect(offsets[1]).toBe(7);
 
     const cutoverOffsets: number[] = [];
-    let cutoverPolls = 0;
+    const sent: string[] = [];
     let writes = 0;
-    const cutoverFetch = async (url: string) => {
-      if (String(url).indexOf('/getUpdates') < 0) return tg({});
-      cutoverOffsets.push(Number(new URL(url).searchParams.get('offset') || 0));
-      cutoverPolls += 1;
-      return tg(cutoverPolls === 1 ? [starUpdate(9)] : []);
+    const login = {
+      update_id: 10,
+      message: { chat: { id: 7, type: 'private' }, text: '/start admin_tok', from: { id: 7 } },
+    };
+    const cutoverFetch = async (url: string, init?: { body?: string }) => {
+      if (String(url).indexOf('/getUpdates') < 0) {
+        sent.push(String(url));
+        return tg({ message_id: 1 });
+      }
+      const next = Number(new URL(url).searchParams.get('offset') || 0);
+      cutoverOffsets.push(next);
+      return tg(next === 0 || next === 9 ? [starUpdate(9), login] : []);
     };
     const cutoverStore = {
       read: async () => state,
@@ -445,12 +452,14 @@ describe('stars poll durability', () => {
     await pollBot(cutoverStore, cutoverFetch, {
       maxLoops: 3,
       adminLoginOnly: true,
+      adminAuthMem: { panelLogins: () => [], replacePanelLogins: () => {} },
       sleep: async () => {},
       now: () => Date.now(),
     });
     expect(writes).toBe(0);
     expect(cutoverOffsets[0]).toBe(0);
     expect(cutoverOffsets[1]).toBe(9);
+    expect(sent.filter((u) => u.indexOf('/sendMessage') >= 0)).toHaveLength(1);
   });
 });
 
