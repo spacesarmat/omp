@@ -34,6 +34,13 @@ describe('desktop native catalog adapter', () => {
     await expect(desktop.native.localServerInfo()).resolves.toMatchObject({ supported: true, running: true });
   });
 
+  it('provides phone identity to shared library screens', async () => {
+    const desktop = createDesktopNative(createBridge(async () => ({})));
+
+    await expect(desktop.native.phoneIdentity()).resolves.toEqual({ name: 'OMP Desktop', model: '' });
+    await expect(desktop.native.phoneName()).resolves.toBe('OMP Desktop');
+  });
+
   it('uses loopback for embedded and preserves an external origin', async () => {
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
     const desktop = createDesktopNative(createBridge(transportWith(calls, async (command) => {

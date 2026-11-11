@@ -65,6 +65,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     discoverOmpTvs: async () => [],
     discoverCastTvs: async () => [],
     scanLan: async () => null,
+    phoneIdentity: async () => ({ name: 'OMP Desktop', model: '' }),
     phoneName: async () => 'OMP Desktop',
     localIpv4: async () => null,
     wifiHint: async () => ({ available: false, ssid: null }),
