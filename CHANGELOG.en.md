@@ -4,8 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.2
 
+- [phone] Catalog chips show that the row scrolls: the right edge fades, the next chip is cut, and the row nudges once on the first open
+- [phone] Continue watching collapses with a chevron. The row can be large cards, mini tiles, or one line. The choice is remembered
+- [phone] In the poster list the quality mark is a ribbon on the right edge of the poster. Swipe left removes the item or marks it watched. Grid items that are already in Continue are marked "watching"
+- [phone] When a TV is paired, the series button and an episode tap play on the TV. "on the phone" stays a separate link. With no TV, playback stays on the phone. Skip and monitoring sit at the bottom of the series page
 - [tech] On a pull request, desktop CI installs apt packages, Python and cargo test only when desktop/src-tauri, Cargo files, this workflow or the Rust test inputs change. Push, tags and manual runs still always run them. Apt packages are cached and installed with --no-install-recommends, the man-db trigger is disabled, mirror retries are capped, and the apt step times out after 10 minutes. The CI apt install (shellcheck, rsync) does the same
 
 ## 0.30.1-beta.1

@@ -4,7 +4,9 @@ import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
 import { Series } from '../src/screens/Series';
 import { currentRoute, navigate, resetTo } from '../src/nav';
-import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import { forgetTv, reloadTvs, saveTv } from '../src/tv/tvStore';
+import * as tvClient from '../src/tv/tvClient';
+import * as watchHere from '../src/watchHere';
 import { groupLibrary, findGroup, seriesKey, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
@@ -358,7 +360,43 @@ describe('Series screen', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG' });
     mount(<Series seriesKey={key()} />);
     expect(el.querySelector('[data-main="tv"]')!.textContent).toContain('на ТВ');
+    expect(el.querySelector('[data-where="phone"]')!.textContent).toBe('на телефоне');
     expect(el.querySelector('[data-code="P26.6"]')).toBeNull();
+  });
+
+  it('a saved TV is the main target: «Смотреть на ТВ», episode taps included; the tail holds skip and monitoring', async () => {
+    const version = vi.spyOn(tvClient, 'ompVersionOnTv').mockResolvedValue('9.9.9');
+    const phone = vi.spyOn(watchHere, 'playOnPhone').mockResolvedValue();
+    try {
+      saveTv({ ip: '192.168.1.5', name: 'LG' });
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      const main = el.querySelector('[data-main="tv"]')!;
+      expect(main.querySelector('.m-btn-title')!.textContent).toBe('Смотреть на ТВ');
+      expect(main.querySelector('.m-btn-sub')!.textContent).toBe('S02E01');
+      expect(el.querySelector('[data-where="phone"]')!.textContent).toBe('на телефоне');
+      const ep = el.querySelector('.m-ep')!;
+      const tail = el.querySelector('[data-series-tail]')!;
+      expect(ep.compareDocumentPosition(tail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(tail.querySelector('[data-block="skip"]')).toBeTruthy();
+      expect(tail.querySelector('[data-block="monitoring"]')).toBeTruthy();
+      expect(tail.textContent || '').not.toContain('Найти в лучшем');
+      act(() => (ep as HTMLElement).click());
+      await flush();
+      expect(version).toHaveBeenCalled();
+      expect(phone).not.toHaveBeenCalled();
+      act(() => render(null, el));
+      forgetTv('192.168.1.5');
+      version.mockClear();
+      mount(<Series seriesKey={key()} />);
+      act(() => (el.querySelector('.m-ep') as HTMLElement).click());
+      await flush();
+      expect(phone).toHaveBeenCalled();
+      expect(version).not.toHaveBeenCalled();
+    } finally {
+      version.mockRestore();
+      phone.mockRestore();
+    }
   });
 
   it('a series gone from the library says so', () => {
