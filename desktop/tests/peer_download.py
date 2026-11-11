@@ -70,10 +70,127 @@ def read_stream(origin, info_hash):
         return response.read()
 
 
+class Tracker(ThreadingHTTPServer):
+    # ThreadingHTTPServer sets daemon_threads = True. server_close() does not
+    # join those request threads, so they can still write to stderr while the
+    # interpreter is finalizing. On Windows Python then aborts with
+    # _enter_buffered_busy after the download has already succeeded.
+    daemon_threads = False
+
+
+def close_tracker(tracker, thread):
+    tracker.shutdown()
+    tracker.server_close()
+    thread.join(timeout=5)
+    if thread.is_alive():
+        raise RuntimeError("tracker thread did not stop")
+
+
+def wait_for_bound_port(seed, attempts=100, pause=0.05):
+    last = 0
+    for _ in range(attempts):
+        last = int(seed.listen_port() or 0)
+        if last and seed.is_listening():
+            return last
+        if pause:
+            time.sleep(pause)
+    raise RuntimeError(f"libtorrent listen port was not bound: {last}")
+
+
+class _FakeSeed:
+    def __init__(self, ports, listening_at):
+        self.ports = ports
+        self.listening_at = listening_at
+        self.calls = 0
+
+    def listen_port(self):
+        port = self.ports[min(self.calls, len(self.ports) - 1)]
+        self.calls += 1
+        return port
+
+    def is_listening(self):
+        return self.calls >= self.listening_at
+
+
+def check_shutdown():
+    ready = wait_for_bound_port(_FakeSeed([0, 0, 4312], 3), attempts=5, pause=0)
+    if ready != 4312:
+        raise SystemExit(f"listen port wait returned {ready}")
+    try:
+        wait_for_bound_port(_FakeSeed([0], 9), attempts=2, pause=0)
+    except RuntimeError as error:
+        if "was not bound" not in str(error):
+            raise
+    else:
+        raise SystemExit("zero listen port was accepted")
+
+    started = threading.Event()
+    release = threading.Event()
+
+    class BlockingHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            started.set()
+            if not release.wait(timeout=5):
+                raise RuntimeError("blocked tracker request was not released")
+            self.send_response(204)
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    tracker = Tracker(("127.0.0.1", 0), BlockingHandler)
+    thread = threading.Thread(
+        target=lambda: tracker.serve_forever(poll_interval=0.05),
+        name="omp-peer-tracker",
+    )
+    thread.start()
+
+    def client():
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{tracker.server_port}/announce", timeout=5).read()
+        except Exception:
+            return
+
+    threading.Thread(target=client, name="omp-peer-client", daemon=True).start()
+    try:
+        if not started.wait(timeout=5):
+            raise RuntimeError("tracker request did not start")
+        request_threads = [
+            item
+            for item in threading.enumerate()
+            if item is not threading.current_thread()
+            and item is not thread
+            and item.name != "omp-peer-client"
+            and item.is_alive()
+        ]
+        if not request_threads:
+            raise SystemExit("tracker request thread was not running")
+        if any(item.daemon for item in request_threads):
+            raise SystemExit("tracker request thread is a daemon and will outlive shutdown")
+        release.set()
+        close_tracker(tracker, thread)
+        still = [item.name for item in request_threads if item.is_alive()]
+        if still:
+            raise SystemExit(f"tracker request threads still running after shutdown: {still}")
+    finally:
+        release.set()
+        if thread.is_alive():
+            tracker.shutdown()
+            tracker.server_close()
+            thread.join(timeout=2)
+    print("shutdown clean")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--origin", required=True)
+    parser.add_argument("--origin")
+    parser.add_argument("--check-shutdown", action="store_true")
     args = parser.parse_args()
+    if args.check_shutdown:
+        check_shutdown()
+        return
+    if not args.origin:
+        parser.error("--origin is required")
     info = (
         b"d6:lengthi" + str(len(CONTENT)).encode() + b"e"
         b"4:name11:fixture.bin"
@@ -81,11 +198,16 @@ def main():
         b"6:pieces20:" + hashlib.sha1(CONTENT).digest() + b"e"
     )
     info_hash = hashlib.sha1(info).hexdigest()
-    tracker = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=tracker.serve_forever, daemon=True).start()
+    tracker = Tracker(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(
+        target=lambda: tracker.serve_forever(poll_interval=0.05),
+        name="omp-peer-tracker",
+    )
+    thread.start()
     announce = f"http://127.0.0.1:{tracker.server_port}/announce"
     torrent = b"d8:announce" + str(len(announce)).encode() + b":" + announce.encode() + b"4:info" + info + b"e"
     seed = None
+    handle = None
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as root:
             (Path(root) / "fixture.bin").write_bytes(CONTENT)
@@ -109,7 +231,7 @@ def main():
                 time.sleep(0.1)
             else:
                 raise RuntimeError(f"libtorrent is not seeding: {status.state}")
-            Handler.peer = seed.listen_port()
+            Handler.peer = wait_for_bound_port(seed)
             isolate(args.origin)
             upload(args.origin, torrent)
             try:
@@ -128,11 +250,13 @@ def main():
                 raise RuntimeError(f"seed uploaded only {uploaded} bytes")
             print(f"Controlled peer download verified: {len(body)} bytes, seed uploaded {uploaded}")
     finally:
-        if seed is not None:
-            del handle
-            del seed
-        tracker.shutdown()
-        tracker.server_close()
+        # Drop the session before the tracker so its native thread is joined
+        # while stderr is still alive, then join every tracker thread.
+        try:
+            handle = None
+            seed = None
+        finally:
+            close_tracker(tracker, thread)
 
 
 if __name__ == "__main__":
