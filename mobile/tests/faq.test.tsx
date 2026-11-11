@@ -425,8 +425,19 @@ describe('Faq screen', () => {
     expect(q(el, 'Как обновить OMP').getAttribute('aria-controls')).toBe('faq-a-lg-update');
     await type(el, 'ёжик-нет-такого');
     expect(el.querySelector('[role="status"]')!.textContent).toContain('Ничего не найдено');
+    expect(el.querySelector('[data-faq-action="ask"]')!.textContent).toBe('Спросить в Telegram');
     await type(el, '');
     expect(el.querySelector('.m-chip')).not.toBeNull();
+  });
+
+  it('action buttons open install and the TV list', () => {
+    const el = mount(<Faq />);
+    act(() => (el.querySelector('[data-faq-action="install"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'install' });
+    resetTo({ name: 'faq' });
+    act(() => render(<Faq />, el));
+    act(() => (el.querySelector('[data-faq-action="tv"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'tv' });
   });
 
   it('the search input is labelled and rows are real buttons', () => {

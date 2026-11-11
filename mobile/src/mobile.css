@@ -1800,6 +1800,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-faq-search input { flex: 1 1 0; min-width: 0; border: none; background: none; color: var(--text); font: inherit; font-size: 14px; outline: none; }
 .m-faq-devices { display: flex; flex-wrap: wrap; gap: 8px; }
 .m-faq-devices .m-chip { height: 36px; padding: 0 14px; border-radius: 18px; }
+.m-faq-devices .m-chip.on { box-shadow: none; background: #252A35; color: var(--text); }
 .m-faq-hint { font-size: 12px; color: var(--muted); }
 /* FAQ screen: even spacing between search, chips, hint and sections */
 .m-screen[data-route="faq"] { display: flex; flex-direction: column; gap: 12px; }

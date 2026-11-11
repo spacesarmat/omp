@@ -12,6 +12,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Remote: the settings button is a gear, not a sun. HDMI inputs stay hidden until the TV is connected
 - [phone] Account: Renew opens card, stars and crypto. There is no separate Crypto button. The promo field and Activate sit on one row, and an empty button stays dark
 - [phone] Settings: each video player option has a subtitle, Built-in is marked recommended, and the yellow outline is gone. The TV list hides the IP and the active TV has a thin yellow frame. Watch-from shows only the selected rule. The bug report opens as a sheet. Stop server is a link
+- [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
 
 ## 0.30.1-beta.3
 
