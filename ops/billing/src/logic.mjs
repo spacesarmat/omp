@@ -2530,16 +2530,18 @@ export function normalizePromo(code) {
  * A promo adds `days` to the subscription and/or `bonusSlots` free device slots: forever (`bonusDays` 0) or for
  * `bonusDays` days from the redemption. A promo with bonus slots may add no days (`days` 0).
  */
-export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const plain = normalizePromo(code) || normalizeCode(randomCode());
   if (plain.length < 4 || plain.length > 24) return { state, result: { error: 'bad_promo' } };
   if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
   const bonus = Math.max(0, Math.min(BASE_DEVICES_MAX, Math.floor(Number(bonusSlots) || 0)));
   const d = Math.floor(Number(days));
+  const discount = Math.floor(Number(discountPercent) || 0);
+  const discountOk = discount > 0 && discount <= 100;
   const row = {
     id: randomId(),
     code: plain,
-    days: d > 0 ? Math.min(3650, d) : bonus ? 0 : 1,
+    days: d > 0 ? Math.min(3650, d) : bonus || discountOk ? 0 : 1,
     maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
     createdAt: now,
     revoked: false,
@@ -2549,11 +2551,14 @@ export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonus
     row.bonusSlots = bonus;
     row.bonusDays = Math.max(0, Math.min(3650, Math.floor(Number(bonusDays) || 0)));
   }
+  const exp = Number(expiresAt) || 0;
+  if (exp > now) row.expiresAt = exp;
+  if (discountOk) row.discountPercent = discount;
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
 }
 
 /** Create `count` promo codes (max 100). A custom code is used only when count is 1. */
-export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
   let cur = state;
   const promos = [];
@@ -2564,6 +2569,8 @@ export function createPromos(state, { count, code, days, maxUses, now, bonusSlot
       maxUses,
       bonusSlots,
       bonusDays,
+      expiresAt,
+      discountPercent,
       now: (now || Date.now()) + i,
     });
     if (out.result.error) return { state: cur, result: { error: out.result.error, promos } };
@@ -2592,6 +2599,7 @@ export function redeemPromo(state, { code, accountId, now }) {
   if (!promo) return { state, result: { error: 'bad_promo' } };
   if (promo.uses.some((u) => u.accountId === accountId)) return { state, result: { error: 'already' } };
   if (promo.uses.length >= promo.maxUses) return { state, result: { error: 'exhausted' } };
+  if (promo.expiresAt && now > promo.expiresAt) return { state, result: { error: 'expired' } };
 
   const existing = anySub(state, accountId);
   const days = Math.max(0, Math.floor(Number(promo.days) || 0));
@@ -2627,8 +2635,20 @@ export function redeemPromo(state, { code, accountId, now }) {
 
   const use = { id: randomId(), accountId, at: now, subscriptionId, code: activationCode };
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
+  let priced = { ...next, promos };
+  const discount = Math.floor(Number(promo.discountPercent) || 0);
+  const price = Math.floor(Number(priced.settings && priced.settings.priceRub) || 0);
+  if (discount > 0 && price > 0 && subscriptionId) {
+    const add = Math.floor((price * Math.min(100, discount)) / 100);
+    if (add > 0) {
+      priced = {
+        ...priced,
+        subscriptions: priced.subscriptions.map((s) => (s.id === subscriptionId ? { ...s, creditRub: creditOf(s) + add } : s)),
+      };
+    }
+  }
   return {
-    state: { ...next, promos },
+    state: priced,
     result: {
       kind: 'promo',
       code: activationCode,

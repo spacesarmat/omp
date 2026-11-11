@@ -29,6 +29,7 @@ import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
+import { expectBetaGate } from '../../src/store/updates';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -60,9 +61,20 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
+expectBetaGate();
 import('../../src/report/presence').then((m) =>
   m.startPresence(phoneSourceContext, typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone'),
 ).catch(() => undefined);
+import('../../src/report/rollout').then((m) => m.installRollout(phoneSourceContext)).catch(() => undefined);
+import('../../src/report/crash').then((m) => {
+  const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
+  m.installCrashHooks(platform, phoneSourceContext);
+  return native.takeNativeCrashes().then((text) => {
+    if (text) m.queueCrash({ kind: 'native', message: text.slice(0, 400), stack: text, platform });
+    m.crumb('start ' + platform);
+    return m.flushCrashes(phoneSourceContext);
+  });
+}).catch(() => undefined);
 startKeyboardWatch();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card
 logStart(t('history.phone'));

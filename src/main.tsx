@@ -20,6 +20,7 @@ import { tvCatalog } from './catalog/tvCatalog';
 import { ensureFirstRun } from './ads/firstRun';
 import { installTvAds } from './ads/tvAds';
 import { tvSourceContext } from './sources/tvContext';
+import { expectBetaGate } from './store/updates';
 import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
@@ -55,10 +56,21 @@ if (platformKind() === 'androidtv') {
 }
 
 installErrorHooks();
-import('./billing/webHttp').then((web) => {
-  const ctx = () => (nativeSourceHttp() ? tvSourceContext() : web.webBillingContext(tvSourceContext()));
-  return import('./report/presence').then((m) => m.startPresence(ctx, platformKind() === 'androidtv' ? 'androidtv' : 'webos'));
-}).catch(() => undefined);
+expectBetaGate();
+import('./billing/webHttp')
+  .then((web) => {
+    const ctx = () => (nativeSourceHttp() ? tvSourceContext() : web.webBillingContext(tvSourceContext()));
+    const platform = platformKind() === 'androidtv' ? 'androidtv' : 'webos';
+    return Promise.all([
+      import('./report/presence').then((m) => m.startPresence(ctx, platform)),
+      import('./report/rollout').then((m) => m.installRollout(ctx)),
+      import('./report/crash').then((m) => {
+        m.installCrashHooks(platform, ctx);
+        return m.flushCrashes(ctx);
+      }),
+    ]);
+  })
+  .catch(() => undefined);
 setWatchDeviceClass('tv');
 setWatchContext(() => tvSourceContext());
 setCatalogProvider((fresh) => tvCatalog(fresh));

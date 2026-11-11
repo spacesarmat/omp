@@ -144,9 +144,10 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
-import { handleDesk } from './deskHttp.mjs';
+import { browserReadCors, handleDesk, isBrowserRead } from './deskHttp.mjs';
 import { publishAdmin } from './adminLive.mjs';
 import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
+import { loginNote } from './crashIn.mjs';
 import { monitorEnv } from './monitorChecks.mjs';
 import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db/pg/watchSql.mjs';
 import { scoreOf, watchRankEnabled } from './watchRank.mjs';
@@ -335,6 +336,22 @@ async function accountDevices(store, state, accountId) {
   const subs = state.subscriptions.filter((s) => s.accountId === account.id);
   for (let i = 0; i < subs.length; i++) out.set(subs[i].id, await store.registry.listDevices(subs[i].id));
   return out;
+}
+
+const loginPromptHits = new Map();
+
+/** At most 3 panel-login prompts per IP per 10 minutes, before any Telegram message is sent. */
+function loginPromptAllowed(ip, now) {
+  const key = String(ip || 'unknown');
+  const prev = loginPromptHits.get(key) || [];
+  const arr = prev.filter((t) => now - t < 10 * 60 * 1000);
+  if (arr.length >= 3) {
+    loginPromptHits.set(key, arr);
+    return false;
+  }
+  arr.push(now);
+  loginPromptHits.set(key, arr);
+  return true;
 }
 
 function audit(file, action, detail, admin, extra) {
@@ -1217,6 +1234,13 @@ export function createApp(file, fetchImpl, opts) {
           });
           return res.end();
         }
+        // webOS reads and crash reports. Every other preflight stays closed.
+        if (isBrowserRead(path)) {
+          const headers = browserReadCors(path);
+          headers.allow = headers['access-control-allow-methods'];
+          res.writeHead(204, headers);
+          return res.end();
+        }
         res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });
         return res.end();
       }
@@ -1251,6 +1275,20 @@ export function createApp(file, fetchImpl, opts) {
           readBody,
           clientIp,
           audit: (action, detail, who) => audit(file, action, detail, who),
+          notifyAdmins: async (state, messages) => {
+            const rows = typeof messages === 'string' ? adminBroadcast(state.settings, messages) : messages || [];
+            let ok = 0;
+            const token = state && state.settings && state.settings.botToken;
+            for (let i = 0; i < rows.length; i++) {
+              try {
+                const sent = await telegramSend(token, rows[i].chatId, rows[i].text, net, { keyboard: rows[i].keyboard, inline: rows[i].inline });
+                if (sent && sent.ok) ok += 1;
+              } catch (e) {
+                /* one chat can fail */
+              }
+            }
+            return ok;
+          },
         })
       ) {
         return;
@@ -1542,9 +1580,31 @@ export function createApp(file, fetchImpl, opts) {
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
         }
+        if (!loginPromptAllowed(clientIp(req), Date.now())) {
+          return json(res, 429, { ok: false, error: 'Слишком много запросов входа. Подождите несколько минут.' });
+        }
         const started = adminAuth
           ? adminAuth.startPanel(Date.now())
           : await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const ip = clientIp(req);
+        const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+        if (!adminAuth && !readOnly) {
+          await store.update((cur) => {
+            const adminLogins = (cur.adminLogins || []).map((l) => (l.token === started.token ? { ...l, ip, ua } : l));
+            return { state: loginNote({ ...cur, adminLogins }, { at: Date.now(), ip, ua, result: 'pending', telegramId: '' }) };
+          });
+        }
+        const ids = String(state.settings.adminTelegramIds || '').split(/[\s,;]+/).filter(Boolean);
+        const ask = 'Подтвердите вход в админку\nIP: ' + (ip || '-') + '\nУстройство: ' + (ua || '-');
+        for (let i = 0; i < ids.length; i++) {
+          try {
+            await telegramSend(state.settings.botToken, ids[i], ask, net, {
+              inline: { inline_keyboard: [[{ text: 'Подтвердить вход', callback_data: 'alin:' + started.token }]] },
+            });
+          } catch (e) {
+            /* one admin chat can fail */
+          }
+        }
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
         if (!readOnly) {
           try {
@@ -1574,6 +1634,11 @@ export function createApp(file, fetchImpl, opts) {
           if (!readOnly) {
             try {
               await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
+              const ip = clientIp(req);
+              const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+              await store.update((cur) => ({
+                state: loginNote(cur, { at: Date.now(), ip, ua, result: 'ok', telegramId: taken.telegramId || '' }),
+              }));
             } catch (e) {
               /* ignore */
             }
@@ -1861,6 +1926,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 })
               : createPromo(state, {
@@ -1869,6 +1936,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 }),
           );
@@ -3151,7 +3220,15 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
   if (adminLoginOnly) {
-    // Admin login is /start admin_TOKEN only; never pretend an unbind or pay button worked.
+    const data = String((cq && cq.data) || '');
+    if (data.indexOf('alin:') === 0 && opts && opts.adminAuthMem) {
+      const state = await store.read();
+      const who = cq && cq.from ? String(cq.from.id) : '';
+      const confirmed = opts.adminAuthMem.confirmPanel(state.settings, { token: data.slice('alin:'.length), telegramId: who, now: Date.now() });
+      await answer(confirmed && confirmed.ok ? 'Вход подтверждён' : 'Ссылка устарела');
+      return;
+    }
+    // Other buttons stay off in read-only mode. Admin login is the exception above.
     await answer('Сейчас обслуживание. Админ-вход - через ссылку в панели.');
     return;
   }

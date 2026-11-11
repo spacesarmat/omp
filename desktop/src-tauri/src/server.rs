@@ -154,6 +154,26 @@ impl ServerCancellation {
     }
 }
 
+/// A loopback UDP port that this process just bound. Port 0 is not used: on Windows the
+/// ephemeral pick can land in an excluded range and TorrServer then exits with WSAEACCES
+/// (`bind: An attempt was made to access a socket in a way forbidden by its access permissions`)
+/// before `/echo` is up.
+fn loopback_udp_addr() -> String {
+    for _ in 0..64 {
+        let Ok(socket) = std::net::UdpSocket::bind("127.0.0.1:0") else {
+            continue;
+        };
+        let Ok(port) = socket.local_addr().map(|addr| addr.port()) else {
+            continue;
+        };
+        drop(socket);
+        if std::net::UdpSocket::bind(("127.0.0.1", port)).is_ok() {
+            return format!("127.0.0.1:{port}");
+        }
+    }
+    "127.0.0.1:0".to_string()
+}
+
 fn torrserver_args(config: &ServerConfig) -> Vec<std::ffi::OsString> {
     vec![
         "--port".into(),
@@ -161,7 +181,7 @@ fn torrserver_args(config: &ServerConfig) -> Vec<std::ffi::OsString> {
         "--ip".into(),
         "127.0.0.1".into(),
         "--torrentaddr".into(),
-        "127.0.0.1:0".into(),
+        loopback_udp_addr().into(),
         "--path".into(),
         config.data_dir.clone().into_os_string(),
         "--logpath".into(),

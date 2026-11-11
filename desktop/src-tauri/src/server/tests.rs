@@ -287,7 +287,21 @@ fn torrserver_arguments_bind_http_and_peer_listeners_to_loopback() {
     };
 
     assert!(has_pair("--ip", "127.0.0.1"));
-    assert!(has_pair("--torrentaddr", "127.0.0.1:0"));
+    let torrent = args
+        .windows(2)
+        .find(|pair| pair[0] == "--torrentaddr")
+        .expect("torrentaddr");
+    let addr = &torrent[1];
+    assert!(addr.starts_with("127.0.0.1:"), "{addr}");
+    let port: u16 = addr
+        .rsplit(':')
+        .next()
+        .expect("port")
+        .parse()
+        .expect("port number");
+    assert_ne!(port, 0, "port 0 is an excluded-range lottery on Windows");
+    let bound = std::net::UdpSocket::bind(("127.0.0.1", port)).expect("reserved peer port binds");
+    assert_eq!(bound.local_addr().expect("addr").port(), port);
 }
 
 #[cfg(windows)]

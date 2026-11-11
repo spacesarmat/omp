@@ -133,7 +133,32 @@ export function backupStatus(dir, settings, now, lastError) {
     totalBytes: list.reduce((n, x) => n + x.size, 0),
     stale: !last || now - last.at > (everyHours + 3) * HOUR,
     lastError: lastError || '',
+    verify: notedVerify,
   };
+}
+
+let notedVerify = null;
+
+export function rememberBackupVerify(row) {
+  notedVerify = row;
+}
+
+/** Reads the archive table of contents. Does not restore into a database. */
+export function verifyDump(file, spawnImpl) {
+  const run = spawnImpl || spawn;
+  return new Promise((resolve) => {
+    let err = '';
+    let child;
+    try {
+      child = run('pg_restore', ['--list', file], { stdio: ['ignore', 'ignore', 'pipe'] });
+    } catch (e) {
+      resolve({ ok: false, at: Date.now(), error: 'pg_restore' });
+      return;
+    }
+    if (child.stderr) child.stderr.on('data', (b) => (err = (err + String(b)).slice(-400)));
+    child.on('error', () => resolve({ ok: false, at: Date.now(), error: 'pg_restore' }));
+    child.on('close', (code) => resolve({ ok: code === 0, at: Date.now(), error: code === 0 ? '' : String(code) + ' ' + err.trim().slice(0, 160) }));
+  });
 }
 
 /** Admin alert text for a failed or stale backup, or ''. */
@@ -264,6 +289,14 @@ export function startPgBackups(cfg, getSettings, opts) {
       if (r.ok) {
         lastError = '';
         const gone = pruneDumps(cfg.dir, backupKeepDays(settings), Date.now());
+        const verified = await verifyDump(join(cfg.dir, r.name), o.spawn);
+        rememberBackupVerify({ ...verified, name: r.name });
+        if (!verified.ok) {
+          lastError = 'архив не читается: ' + (verified.error || 'list');
+          log('pg backup verify failed: ' + lastError);
+          return { ok: false, error: lastError, name: r.name, size: r.size };
+        }
+        lastError = '';
         log('pg backup ' + r.name + ' ' + r.size + ' bytes' + (gone.length ? ', removed ' + gone.length + ' old' : ''));
       } else {
         lastError = r.error;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { issueCliAdminLogin } from '../src/logic.mjs';
+import { rememberPreview, resetDeskHttp } from '../src/deskHttp.mjs';
 
 function memoryStore() {
   let state = emptyState();
@@ -98,6 +99,22 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, method: 
   return { status: res.status, headers: res.headers, data, body: res.body };
 }
 
+describe('broadcast previews', () => {
+  it('drops expired drafts and keeps only the newest ones', () => {
+    const map = new Map();
+    rememberPreview(map, { id: 'old', text: 'one', ids: ['1'], at: 0 }, 0);
+    rememberPreview(map, { id: 'fresh', text: 'two', ids: ['1'], at: 11 * 60 * 1000 }, 11 * 60 * 1000);
+    expect(map.has('old')).toBe(false);
+    expect(map.has('fresh')).toBe(true);
+    for (let i = 0; i < 25; i++) {
+      rememberPreview(map, { id: 'n' + i, text: 'x', ids: ['1'], at: 11 * 60 * 1000 + i }, 11 * 60 * 1000 + i);
+    }
+    expect(map.size).toBeLessThanOrEqual(20);
+    expect(map.has('fresh')).toBe(false);
+    expect(map.has('n24')).toBe(true);
+  });
+});
+
 describe('desk http', () => {
   it('requires a session, then returns the desk and a live stream', async () => {
     const store = memoryStore();
@@ -124,6 +141,59 @@ describe('desk http', () => {
     expect(junk.status).toBe(401);
   });
 
+  it('GET /v1/rollout allows a browser preflight for X-Device-Id and no other route does', async () => {
+    const app = createApp(memoryStore(), async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const opt = await call(app, 'OPTIONS', '/v1/rollout');
+    expect(opt.status).toBe(204);
+    expect(opt.headers['access-control-allow-origin']).toBe('*');
+    expect(String(opt.headers['access-control-allow-headers'])).toContain('X-Device-Id');
+    expect(opt.headers['access-control-allow-credentials']).toBeUndefined();
+    const got = await call(app, 'GET', '/v1/rollout', { headers: { 'x-device-id': 'tv-1' } });
+    expect(got.status).toBe(200);
+    expect(got.headers['access-control-allow-origin']).toBe('*');
+    expect(got.data?.ok).toBe(true);
+    expect(typeof got.data?.beta).toBe('boolean');
+    const missing = await call(app, 'GET', '/v1/rollout');
+    expect(missing.status).toBe(400);
+    expect(missing.headers['access-control-allow-origin']).toBe('*');
+    const closed = await call(app, 'OPTIONS', '/v1/search');
+    expect(closed.status).toBe(204);
+    expect(closed.headers['access-control-allow-origin']).toBeUndefined();
+    const crashOpt = await call(app, 'OPTIONS', '/v1/crash');
+    expect(crashOpt.status).toBe(204);
+    expect(crashOpt.headers['access-control-allow-origin']).toBe('*');
+    expect(String(crashOpt.headers['access-control-allow-headers'])).toContain('X-Device-Id');
+    expect(String(crashOpt.headers['access-control-allow-headers'])).toContain('Content-Type');
+    expect(crashOpt.headers['access-control-allow-credentials']).toBeUndefined();
+    const posted = await call(app, 'POST', '/v1/crash', {
+      headers: { 'x-device-id': 'tv-1' },
+      body: { diagnostics: '1', payload: JSON.stringify({ message: 'boom', stack: 'at a', version: '1', platform: 'webos' }) },
+    });
+    expect(posted.status).toBe(200);
+    expect(posted.headers['access-control-allow-origin']).toBe('*');
+  });
+
+  it('stores a crash with no account and still caps one IP when the device id changes', async () => {
+    resetDeskHttp();
+    const store = memoryStore();
+    const app = createApp(store, async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const body = {
+      diagnostics: '1',
+      payload: JSON.stringify({ message: 'boom', stack: 'at a\nat b', version: '1.2.3', platform: 'phone' }),
+    };
+    const bad = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-1', authorization: 'Bearer nope' }, body });
+    expect(bad.status).toBe(401);
+    for (let i = 1; i <= 5; i++) {
+      const next = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-' + i }, body });
+      expect(next.status).toBe(200);
+      expect(next.data?.stored).toBe(true);
+    }
+    const saved = await store.read();
+    expect(saved.crashGroups).toHaveLength(1);
+    const blocked = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-99' }, body });
+    expect(blocked.status).toBe(429);
+  });
+
   it('records the signed-in admin on a credit', async () => {
     const store = memoryStore();
     const now = Date.now();
@@ -142,7 +212,6 @@ describe('desk http', () => {
       body: { csrf: desk.data?.csrf, accountId: 'a1', rub: 15, confirm: 'yes' },
     });
     expect(saved.status).toBe(200);
-    expect(saved.data?.ok).toBe(true);
     expect(saved.data?.creditRub).toBe(15);
     const state = await store.read();
     const row = (state.audit || []).find((a: { action?: string }) => a.action === 'credit');

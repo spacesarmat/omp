@@ -42,6 +42,7 @@ export const ROLLBACK_KEYS = [
   'cacheNodesEnabled',
   'cachePrefixMb',
   'cachePrefixPercent',
+  'betaPercent',
 ];
 
 const SOURCE_KEYS = ['jackett', 'jacred', 'bitmagnet', 'torrserver'];
