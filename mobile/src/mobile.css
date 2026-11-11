@@ -2230,7 +2230,8 @@ html.m-hint-hold .m-hint { display: none; }
 .m-icon-btn.m-glass { background: rgba(15, 17, 21, 0.6); color: #fff; }
 .m-icon-btn.m-glass.m-danger { color: #FF9EA2; }
 /* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
-.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: none; background: #252A35; }
+.m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); background: var(--panel-2); }
+.m-screen[data-route='video-player'] .m-sub-pick .m-opt[aria-checked='true'] { box-shadow: none; background: #252A35; }
 .m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
 /* phone navigation: search scopes, continue row, release line */
 .m-search-scopes { margin: 4px 0 8px; }
