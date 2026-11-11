@@ -8,7 +8,7 @@ const post = (chat: object, pinned = true, id: unknown = 88) => ({
 
 describe('allowed updates', () => {
   it('asks for messages, button presses and channel posts', () => {
-    expect(ALLOWED_UPDATES).toEqual(['message', 'callback_query', 'channel_post']);
+    expect(ALLOWED_UPDATES).toEqual(['message', 'callback_query', 'channel_post', 'pre_checkout_query']);
   });
 });
 

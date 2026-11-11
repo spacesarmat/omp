@@ -1,3 +1,5 @@
+import { CRYPTO_ASSETS } from './cryptoPay.mjs';
+import { cryptoOffered, labelSettled, starBlurb, starInvoiceBody, starsOffered } from './payMethods.mjs';
 import { payUrl } from './yoomoney.mjs';
 import { sha256 } from './crypto.mjs';
 import { selfUnbind, swapStatus } from './deviceAdmin.mjs';
@@ -661,45 +663,64 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
   out.push({ text: lines.join('\n'), inline: rows(buttons), parseMode: code ? 'Markdown' : undefined });
 
   // One more device: only when no slot is free. Sold alone only while the subscription is paid.
-  if (sub.active && !code && wallet && prices.extra && prices.price) {
+  const country = account.country || '';
+  const deviceYo = !!(wallet && prices.extra && prices.price);
+  const deviceAlt = starsOffered(state.settings, 'dev') || cryptoOffered(state.settings, country);
+  if (sub.active && !code && (deviceYo || deviceAlt)) {
     const subRow = state.subscriptions.find((s) => s.id === sub.id);
     if (sub.paid) {
-      const lapsing = lapsingExtras(state, subRow, now);
-      const offers = payOffers(checkout, state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id });
-      state = offers.state;
-      const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
-      const text =
-        lapsing > 0
-          ? 'Ещё одно устройство - ' +
-            rub(offers.base) +
-            ': ' +
-            rub(prices.extra) +
-            ' за новое и ' +
-            rub(prices.extra) +
-            ' × ' +
-            lapsing +
-            ' за доп. устройство, не продлённое вместе с подпиской. Все доп. устройства будут работать до ' +
-            mskDate(sub.paidUntil) +
-            ', дальше продлеваются вместе с подпиской: продление станет ' +
-            rub(nextRenewal) +
-            '.'
-          : 'Ещё одно устройство - ' +
-            rub(prices.extra) +
-            ' до ' +
-            mskDate(sub.paidUntil) +
-            ' (конец оплаченного периода), дальше продлевается вместе с подпиской: продление станет ' +
-            rub(nextRenewal) +
-            '.';
-      out.push({ text: text + '\n' + offers.text, inline: rows(offers.buttons) });
+      let text = 'Ещё одно устройство.';
+      let buttons = [];
+      if (deviceYo) {
+        const lapsing = lapsingExtras(state, subRow, now);
+        const offers = payOffers(checkout, state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id });
+        state = offers.state;
+        const nextRenewal = prices.price + (sub.extraSlots + 1) * prices.extra;
+        text =
+          (lapsing > 0
+            ? 'Ещё одно устройство - ' +
+              rub(offers.base) +
+              ': ' +
+              rub(prices.extra) +
+              ' за новое и ' +
+              rub(prices.extra) +
+              ' × ' +
+              lapsing +
+              ' за доп. устройство, не продлённое вместе с подпиской. Все доп. устройства будут работать до ' +
+              mskDate(sub.paidUntil) +
+              ', дальше продлеваются вместе с подпиской: продление станет ' +
+              rub(nextRenewal) +
+              '.'
+            : 'Ещё одно устройство - ' +
+              rub(prices.extra) +
+              ' до ' +
+              mskDate(sub.paidUntil) +
+              ' (конец оплаченного периода), дальше продлевается вместе с подпиской: продление станет ' +
+              rub(nextRenewal) +
+              '.') +
+          '\n' +
+          offers.text;
+        buttons = offers.buttons;
+      }
+      const alt = collectAlt(state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id }, now, country);
+      state = alt.state;
+      const merged = appendAlt(text, buttons, alt);
+      out.push({ text: merged.text, inline: rows(merged.buttons) });
     } else {
       // Grace: a standalone slot would die with the grace period. Renewal + one more device, one purchase.
       const r = renewalText(state, subRow, sub, now, { addExtra: 1 });
-      const offers = payOffers(checkout, state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 });
-      state = offers.state;
-      out.push({
-        text: 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text + '\n' + offers.text,
-        inline: rows(offers.buttons),
-      });
+      let text = 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text;
+      let buttons = [];
+      if (deviceYo) {
+        const offers = payOffers(checkout, state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 });
+        state = offers.state;
+        text += '\n' + offers.text;
+        buttons = offers.buttons;
+      }
+      const alt = collectAlt(state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 }, now, country);
+      state = alt.state;
+      const merged = appendAlt(text, buttons, alt);
+      out.push({ text: merged.text, inline: rows(merged.buttons) });
     }
   }
   return { state, out };
@@ -735,6 +756,45 @@ export function botCallback(state, { chatId, data, now, info }) {
     for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode });
   };
   if (!account) return { state, messages, answer: stale, clearMarkup: true };
+
+  if (raw.indexOf('st:') === 0) {
+    const id = raw.slice(3);
+    const quote = (cur.purchases || []).find((p) => p.id === id);
+    if (!quote || quote.method !== 'stars' || quote.accountId !== account.id) {
+      return { state, messages, answer: stale, clearMarkup: true };
+    }
+    if (labelSettled(cur, 'buy:' + id)) return { state, messages, answer: 'Этот счёт уже оплачен', clearMarkup: true };
+    const stars = Number(quote.payAmount);
+    if (!starsOffered(cur.settings, quote.kind === 'dev' ? 'dev' : 'new') || !Number.isInteger(stars) || stars < 1) {
+      return { state, messages, answer: 'Оплата звёздами выключена', clearMarkup: true };
+    }
+    say('Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.', {
+      invoice: starInvoiceBody(chatId, {
+        title: 'Подписка OMP',
+        description: starBlurb(quote, cur.settings.periodDays),
+        payload: 'buy:' + id,
+        stars,
+      }),
+    });
+    return { state: cur, messages, answer: '', clearMarkup: false };
+  }
+
+  if (raw.indexOf('cr:') === 0) {
+    const bits = raw.slice(3).split(':');
+    const asset = bits[0];
+    const id = bits[1] || '';
+    const quote = (cur.purchases || []).find((p) => p.id === id);
+    if (!quote || quote.method !== 'crypto' || quote.asset !== asset || quote.accountId !== account.id) {
+      return { state, messages, answer: stale, clearMarkup: true };
+    }
+    if (!cryptoOffered(cur.settings, account.country || '')) {
+      return { state, messages, answer: 'Крипта недоступна', clearMarkup: true };
+    }
+    if (labelSettled(cur, 'buy:' + id)) return { state, messages, answer: 'Этот счёт уже оплачен', clearMarkup: true };
+    say(asset + ' ' + quote.payAmount + '. Ссылка на оплату:', { cryptoIssue: { purchaseId: id } });
+    return { state: cur, messages, answer: '', clearMarkup: false };
+  }
+
   const sub = subscriptionView(cur, account.id, now);
   const bound = boundList(sub);
   const swapSub = mainSubscription(cur, account.id);
@@ -836,6 +896,43 @@ export function botCallback(state, { chatId, data, now, info }) {
     return { state: cur, messages, answer: 'Отвязано', clearMarkup: true };
   }
   return { state, messages, answer: stale, clearMarkup: true };
+}
+
+/**
+ * Stars and crypto buttons for one order. Quotes are created here; the invoice itself is sent on the tap.
+ * Stars: callback st:<id>. Crypto: callback cr:<asset>:<id>.
+ */
+function collectAlt(state, opts, now, country, prefix) {
+  let cur = state;
+  const buttons = [];
+  const lines = [];
+  const lead = prefix ? prefix + ' ' : '';
+  const note = prefix ? prefix + '. ' : '';
+  if (starsOffered(cur.settings, opts.kind)) {
+    const quoted = quotePurchase(cur, { ...opts, now, method: 'stars' });
+    cur = quoted.state;
+    if (!quoted.result.error) {
+      lines.push(note + 'Звёзды: ' + quoted.result.payAmount + '. Комиссия сверху не добавляется.');
+      buttons.push([{ text: (lead + 'Звёзды - ' + quoted.result.payAmount).slice(0, 64), callback_data: 'st:' + quoted.result.id }]);
+    }
+  }
+  if (cryptoOffered(cur.settings, country)) {
+    for (let i = 0; i < CRYPTO_ASSETS.length; i++) {
+      const asset = CRYPTO_ASSETS[i];
+      const quoted = quotePurchase(cur, { ...opts, now, method: 'crypto', asset });
+      cur = quoted.state;
+      if (quoted.result.error) continue;
+      lines.push(note + asset + ': ' + quoted.result.payAmount);
+      buttons.push([{ text: (lead + asset + ' - ' + quoted.result.payAmount).slice(0, 64), callback_data: 'cr:' + asset + ':' + quoted.result.id }]);
+    }
+  }
+  return { state: cur, buttons, lines };
+}
+
+function appendAlt(text, buttons, alt) {
+  const nextText = alt.lines.length ? text + '\n' + alt.lines.join('\n') : text;
+  const nextButtons = buttons.concat(alt.buttons);
+  return { text: nextText, buttons: nextButtons };
 }
 
 /** Quote + YooMoney link. `{ state, url, price }`; url is '' when the quote failed. */
@@ -1144,29 +1241,53 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         trialLine(cur),
     );
   } else if (action === 'pay') {
-    if (!wallet || !prices.price) say('Оплата ещё не настроена.' + trialLine(cur));
+    const country = account.country || '';
+    const yo = !!(wallet && prices.price);
+    const altOn = starsOffered(cur.settings, 'new') || cryptoOffered(cur.settings, country);
+    if (!yo && !altOn) say('Оплата ещё не настроена.' + trialLine(cur));
     else if (!sub) {
-      const offers = payOffers(pay, cur, { kind: 'new', accountId: account.id, now });
-      cur = offers.state;
-      say(
-        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.\n' +
-          offers.text +
-          '\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.',
-        { inline: rows(offers.buttons) },
-      );
+      let text =
+        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.';
+      let buttons = [];
+      if (yo) {
+        const offers = payOffers(pay, cur, { kind: 'new', accountId: account.id, now });
+        cur = offers.state;
+        text += '\n' + offers.text;
+        buttons = offers.buttons;
+      }
+      const alt = collectAlt(cur, { kind: 'new', accountId: account.id }, now, country);
+      cur = alt.state;
+      const merged = appendAlt(text, buttons, alt);
+      say(merged.text + '\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.', { inline: rows(merged.buttons) });
     } else {
       const subRow = cur.subscriptions.find((s) => s.id === sub.id);
       const renewal = renewalText(cur, subRow, sub, now);
       const head = sub.active ? (sub.inGrace ? subscriptionHead(sub) + '\n\n' : '') : subscriptionHead(sub) + '\n\n';
-      const full = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, now });
-      cur = full.state;
-      const buttons = full.buttons.slice();
-      let tail = '\n' + full.text;
+      let buttons = [];
+      let tail = '';
+      if (yo) {
+        const full = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, now });
+        cur = full.state;
+        buttons = full.buttons.slice();
+        tail = '\n' + full.text;
+      }
+      const alt = collectAlt(cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id }, now, country);
+      cur = alt.state;
+      const merged = appendAlt('', buttons, alt);
+      buttons = merged.buttons;
+      tail += merged.text ? '\n' + merged.text.trim() : '';
       if (renewal.quote.extras > 0) {
-        const base = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false, now });
-        cur = base.state;
-        buttons.push([urlButton('Только подписка, кошелёк - ' + moneyRub(base.pc.gross), base.pc.url)]);
-        buttons.push([urlButton('Только подписка, карта - ' + moneyRub(base.ac.gross), base.ac.url)]);
+        if (yo) {
+          const base = payOffers(pay, cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false, now });
+          cur = base.state;
+          buttons.push([urlButton('Только подписка, кошелёк - ' + moneyRub(base.pc.gross), base.pc.url)]);
+          buttons.push([urlButton('Только подписка, карта - ' + moneyRub(base.ac.gross), base.ac.url)]);
+          tail += '\n' + base.text;
+        }
+        const baseAlt = collectAlt(cur, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, withExtras: false }, now, country, 'Только подписка');
+        cur = baseAlt.state;
+        buttons = buttons.concat(baseAlt.buttons);
+        if (baseAlt.lines.length) tail += '\n' + baseAlt.lines.join('\n');
         const extraUntil = Number(subRow && subRow.extraUntil) || 0;
         let note = '\nТолько подписка: доп. устройство перестанет работать после окончания текущего периода (привязка сохранится).';
         if (!sub.active) note = '\nТолько подписка: доп. устройство останется отключённым (привязка сохранится).';
@@ -1181,7 +1302,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
             mskDateTime(Number(sub.paidUntil) + graceDays(cur.settings) * 86400000) +
             ' (привязка сохранится).';
         }
-        tail += note + '\n' + base.text;
+        tail += note;
       }
       say(head + renewal.text + tail, { inline: rows(buttons) });
     }

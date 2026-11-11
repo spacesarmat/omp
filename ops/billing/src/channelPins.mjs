@@ -4,7 +4,7 @@
 // Only the configured channel is touched; other channels and ordinary posts are left alone.
 
 /** Update types the bot polls. Telegram remembers the last list, so it is always sent explicitly. */
-export const ALLOWED_UPDATES = ['message', 'callback_query', 'channel_post'];
+export const ALLOWED_UPDATES = ['message', 'callback_query', 'channel_post', 'pre_checkout_query'];
 
 /** The OMP channel; BILLING_CHANNEL overrides it (@name or numeric id), an empty value turns pin cleanup off. */
 export const DEFAULT_CHANNEL = '@ompplyaer';

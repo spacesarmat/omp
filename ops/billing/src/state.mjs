@@ -66,6 +66,25 @@ export function emptyState() {
       periodDays: 30,
       /** Monthly price of one extra device slot; renewed together with the subscription. */
       extraDeviceRub: 0,
+      /** Telegram Stars. Off until an admin turns it on. Prices are whole stars, with no fee on top. */
+      starsEnabled: false,
+      starsPrice: 0,
+      starsExtra: 0,
+      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. The token is CRYPTO_PAY_TOKEN, not stored here. */
+      cryptoEnabled: false,
+      cryptoTestnet: false,
+      /** When true, crypto is offered only when the country code is present and is not RU. */
+      cryptoNonRu: false,
+      cryptoUsdt: 0,
+      cryptoExtraUsdt: 0,
+      cryptoRateUsdt: 0,
+      cryptoTon: 0,
+      cryptoExtraTon: 0,
+      cryptoRateTon: 0,
+      cryptoBtc: 0,
+      cryptoExtraBtc: 0,
+      cryptoRateBtc: 0,
+      cryptoPayToken: '',
       /** Devices every subscription includes (1-20) unless an admin set an individual limit (limitOverride). */
       baseDevices: BASE_DEVICES_DEFAULT,
       /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */

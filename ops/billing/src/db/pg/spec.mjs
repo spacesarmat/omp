@@ -123,6 +123,9 @@ export const COLLECTIONS = [
       ['confirmedBy', 'confirmed_by', 'text'],
       ['heldAt', 'held_at', 'int'],
       ['rejectedAt', 'rejected_at', 'int'],
+      ['provider', 'provider', 'text'],
+      ['asset', 'asset', 'text'],
+      ['rub', 'rub', 'num'],
     ],
   },
   {
@@ -255,6 +258,12 @@ export const COLLECTIONS = [
       ['paidUntil', 'paid_until', 'int'],
       ['currency', 'currency', 'text'],
       ['at', 'at', 'int'],
+      ['method', 'method', 'text'],
+      ['asset', 'asset', 'text'],
+      ['payAmount', 'pay_amount', 'text'],
+      ['invoiceId', 'invoice_id', 'text'],
+      ['payUrl', 'pay_url', 'text'],
+      ['webUrl', 'web_url', 'text'],
     ],
   },
 ];
