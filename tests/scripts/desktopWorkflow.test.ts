@@ -89,6 +89,11 @@ describe('desktop CI apt install', () => {
     expect(smoke).toContain('timeout-minutes: 45');
     expect(linux).toContain('timeout-minutes: 60');
     expect(linux).toContain('patchelf libfuse2');
+    for (const text of [smoke, linux, ci]) {
+      expect(text).toContain('steps.apt-image.outputs.image');
+      expect(text).toContain('steps.apt-image.outputs.week');
+      expect(text).toContain('restore-keys:');
+    }
     expect(smoke).not.toContain('patchelf');
     const apt = readFileSync('scripts/ci-apt-install.sh', 'utf8');
     expect(apt).toContain('--no-install-recommends');

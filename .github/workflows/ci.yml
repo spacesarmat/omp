@@ -53,11 +53,20 @@ jobs:
         run: npm ci --prefix desktop
       - name: Verify lockfiles
         run: git diff --exit-code -- package-lock.json desktop/package-lock.json
+      - name: Apt cache identity
+        id: apt-image
+        run: |
+          image=$(printf '%s' "${ImageVersion:-unknown}" | tr -c 'A-Za-z0-9_-' '-')
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Cache apt packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .apt-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-apt-ci-v1
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-ci-${{ steps.apt-image.outputs.image }}-${{ steps.apt-image.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-apt-ci-${{ steps.apt-image.outputs.image }}-
+            ${{ runner.os }}-${{ runner.arch }}-apt-ci-
       - name: Install shellcheck
         timeout-minutes: 10
         env:

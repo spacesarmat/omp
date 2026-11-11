@@ -146,12 +146,22 @@ jobs:
       - name: Build desktop
         if: needs.changes.outputs.desktop == 'true'
         run: npm run build:desktop
+      - name: Apt cache identity
+        id: apt-image
+        if: needs.changes.outputs.rust == 'true' && matrix.os == 'ubuntu-latest'
+        run: |
+          image=$(printf '%s' "${ImageVersion:-unknown}" | tr -c 'A-Za-z0-9_-' '-')
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Cache Linux apt packages
         if: needs.changes.outputs.rust == 'true' && matrix.os == 'ubuntu-latest'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .apt-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-apt-desktop-smoke-v1
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-desktop-smoke-${{ steps.apt-image.outputs.image }}-${{ steps.apt-image.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-apt-desktop-smoke-${{ steps.apt-image.outputs.image }}-
+            ${{ runner.os }}-${{ runner.arch }}-apt-desktop-smoke-
       - name: Install Linux dependencies
         if: needs.changes.outputs.rust == 'true' && matrix.os == 'ubuntu-latest'
         timeout-minutes: 10
@@ -507,11 +517,20 @@ jobs:
         run: npm ci --prefix desktop
       - name: Verify lockfiles
         run: git diff --exit-code -- package-lock.json desktop/package-lock.json
+      - name: Apt cache identity
+        id: apt-image
+        run: |
+          image=$(printf '%s' "${ImageVersion:-unknown}" | tr -c 'A-Za-z0-9_-' '-')
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
       - name: Cache Linux apt packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .apt-cache
-          key: ${{ runner.os }}-${{ runner.arch }}-apt-desktop-package-v1
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-desktop-package-${{ steps.apt-image.outputs.image }}-${{ steps.apt-image.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-apt-desktop-package-${{ steps.apt-image.outputs.image }}-
+            ${{ runner.os }}-${{ runner.arch }}-apt-desktop-package-
       - name: Install Linux dependencies
         timeout-minutes: 10
         env:
