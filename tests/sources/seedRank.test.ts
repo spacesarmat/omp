@@ -83,7 +83,7 @@ describe('one seed status', () => {
 
   it('puts the mark first and keeps a missing tracker address with the DHT count', () => {
     lang.value = 'ru';
-    expect(seedStatusLine(row({ Title: 'A', Seed: 4, seedCheck: 'unverified' }))).toBe('не проверено · 4 сида · по данным трекера');
+    expect(seedStatusLine(row({ Title: 'A', Seed: 4, seedCheck: 'unverified' }))).toBe('не проверено · 4 сида');
     expect(seedStatusLine(row({ Title: 'B', Seed: 0, seedCheck: 'unverified' }))).toBe('не проверено');
     expect(seedStatusLine(row({ Title: 'C', Seed: 2, Peer: 1, seedCheck: 'live' }))).toBe('2 сида · 1 лич · сейчас');
     expect(seedStatusLine(row({ Title: 'D', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }))).toBe(
@@ -99,19 +99,19 @@ describe('one seed status', () => {
     lang.value = 'ru';
     const unverified = row({ Title: 'A', Seed: 4, seedCheck: 'unverified' });
     const opts = {
-      indexerText: '4 сида · по данным трекера',
+      indexerText: '4 сида',
       liveText: '0 сидов · 0 личей',
       liveMode: 'live',
       probe: { phase: 'idle', line: '' },
       trackers: true,
       canCheck: true,
     };
-    expect(visibleSeedLine(unverified, opts)).toBe('не проверено · 4 сида · по данным трекера');
-    expect(visibleSeedLine(row({ Title: 'A', Seed: 4 }), { ...opts, probe: { phase: 'busy', line: '' } })).toBe('4 сида · по данным трекера');
+    expect(visibleSeedLine(unverified, opts)).toBe('не проверено · 4 сида');
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 4 }), { ...opts, probe: { phase: 'busy', line: '' } })).toBe('4 сида');
     expect(visibleSeedLine(row({ Title: 'A', Seed: 4 }), { ...opts, probe: { phase: 'done', line: '≈0 пиров онлайн · по DHT · Нет адреса трекера' } })).toBe(
       '≈0 пиров онлайн · по DHT · Нет адреса трекера',
     );
     expect(visibleSeedLine(row({ Title: 'A', Seed: 3 }), { ...opts, trackers: false, canCheck: false, liveMode: 'search' })).toBe('Нет адреса трекера');
-    expect(visibleSeedLine(row({ Title: 'A', Seed: 3 }), { ...opts, trackers: false, canCheck: true, liveMode: 'search' })).toBe('4 сида · по данным трекера');
+    expect(visibleSeedLine(row({ Title: 'A', Seed: 3 }), { ...opts, trackers: false, canCheck: true, liveMode: 'search' })).toBe('4 сида');
   });
 });

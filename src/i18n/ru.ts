@@ -2224,6 +2224,8 @@ export const ru = {
     badLink: 'Вставьте magnet-ссылку или хеш из 40 символов',
     magnetLabel: 'Magnet-ссылка или хеш',
     byMagnet: 'Добавить по magnet-ссылке',
+    pasteMagnet: 'Вставить magnet',
+    openTorrent: 'Открыть .torrent файл',
     openSourceSettings: 'Открыть настройки {name}',
     fixHint: 'Войдите на сайте или включите обход проверки - это на его странице.',
     sourcesAll: 'Все источники · {n}',
