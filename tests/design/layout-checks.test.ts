@@ -322,4 +322,72 @@ describe('checkLayoutAccessibility', () => {
     const snapshot = collectGeometrySnapshot(root, { target: 'desktop-windows', screenId: 'library', format: 'landscape', viewport: DESKTOP_VIEWPORT });
     expect(checkLayoutAccessibility(snapshot, createDefaultTheme(BASE))).toEqual([]);
   });
+
+  it('ignores viewport overflow that a scrolling carousel ancestor clips away', () => {
+    const root = mountDom([
+      '<div data-design-id="screen">',
+      '<div data-design-id="carousel" style="overflow-x: auto; background: #000000;">',
+      '<div data-design-id="item-a" style="font-size: 24px; color: #ffffff; background: #000000;">A</div>',
+      '<div data-design-id="item-b" style="font-size: 24px; color: #ffffff; background: #000000;">B</div>',
+      '<div data-design-id="item-c" style="font-size: 24px; color: #ffffff; background: #000000;">C</div>',
+      '</div>',
+      '</div>',
+    ].join(''));
+    stubRect(root.querySelector('[data-design-id="carousel"]')!, { x: 100, y: 400, width: 1600, height: 300 });
+    stubRect(root.querySelector('[data-design-id="item-a"]')!, { x: 100, y: 400, width: 400, height: 300 });
+    stubRect(root.querySelector('[data-design-id="item-b"]')!, { x: 1500, y: 400, width: 600, height: 300 });
+    stubRect(root.querySelector('[data-design-id="item-c"]')!, { x: 2500, y: 400, width: 400, height: 300 });
+    const snapshot = collectTv(root);
+    const itemB = snapshot.nodes.find((node) => node.nodeId === 'item-b')!;
+    expect(itemB.clip.x).toBe(true);
+    expect(itemB.clip.y).toBe(true);
+    expect(itemB.clip.ancestorId).toBe('carousel');
+    const screen = snapshot.nodes.find((node) => node.nodeId === 'screen')!;
+    expect(screen.clip.x).toBe(false);
+    expect(screen.clip.ancestorId).toBeNull();
+    const issues = checkLayoutAccessibility(snapshot, createDefaultTheme(BASE));
+    expect(issues.filter((issue) => issue.code === 'OVERFLOW')).toEqual([]);
+  });
+
+  it('still reports overflow that stays visible outside the clipping chain', () => {
+    const root = mountDom([
+      '<div data-design-id="screen">',
+      '<div data-design-id="carousel" style="overflow-x: auto; background: #000000;">',
+      '<div data-design-id="item" style="font-size: 24px; color: #ffffff; background: #000000;">Item</div>',
+      '</div>',
+      '<div data-design-id="loose" style="font-size: 24px; color: #ffffff; background: #000000;">Loose</div>',
+      '</div>',
+    ].join(''));
+    stubRect(root.querySelector('[data-design-id="carousel"]')!, { x: 0, y: 400, width: 2400, height: 300 });
+    stubRect(root.querySelector('[data-design-id="item"]')!, { x: 100, y: 400, width: 400, height: 300 });
+    stubRect(root.querySelector('[data-design-id="loose"]')!, { x: 1800, y: 900, width: 300, height: 100 });
+    const issues = checkLayoutAccessibility(collectTv(root), createDefaultTheme(BASE));
+    const overflow = issues.filter((issue) => issue.code === 'OVERFLOW');
+    expect(overflow.map((issue) => issue.nodeId).sort()).toEqual(['carousel', 'loose']);
+    expect(overflow.every((issue) => issue.severity === 'error')).toBe(true);
+  });
+
+  it('keeps carousel clipping exact through zoom-normalized rects', () => {
+    const root = mountDom([
+      '<div data-design-id="screen">',
+      '<div data-design-id="carousel" style="overflow-x: hidden; background: #000000;">',
+      '<div data-design-id="item" style="font-size: 24px; color: #ffffff; background: #000000;">Item</div>',
+      '</div>',
+      '<div data-design-id="loose" style="font-size: 24px; color: #ffffff; background: #000000;">Loose</div>',
+      '</div>',
+    ].join(''));
+    stubRect(root, { x: 0, y: 0, width: 960, height: 540 });
+    stubRect(root.querySelector('[data-design-id="carousel"]')!, { x: 0, y: 200, width: 800, height: 150 });
+    stubRect(root.querySelector('[data-design-id="item"]')!, { x: 900, y: 200, width: 500, height: 150 });
+    stubRect(root.querySelector('[data-design-id="loose"]')!, { x: 900, y: 500, width: 200, height: 100 });
+    const snapshot = collectGeometrySnapshot(root, { target: 'lg-webos', screenId: 'home', format: 'landscape', viewport: TV_VIEWPORT });
+    const item = snapshot.nodes.find((node) => node.nodeId === 'item')!;
+    expect(item.rect).toEqual({ x: 1800, y: 400, width: 1000, height: 300 });
+    expect(item.clip.ancestorId).toBe('carousel');
+    const loose = snapshot.nodes.find((node) => node.nodeId === 'loose')!;
+    expect(loose.clip.ancestorId).toBeNull();
+    const issues = checkLayoutAccessibility(snapshot, createDefaultTheme(BASE));
+    const overflow = issues.filter((issue) => issue.code === 'OVERFLOW');
+    expect(overflow.map((issue) => issue.nodeId)).toEqual(['loose']);
+  });
 });

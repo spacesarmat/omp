@@ -64,6 +64,10 @@ export interface GeometryNodeSnapshot {
   hasText: boolean;
   rect: GeometryRect;
   styles: GeometryNodeStyle;
+  // Whether an ancestor clips this node's overflow on each axis (nearest clipping ancestor's
+  // nodeId), so offscreen content of scroll rows and carousels is not mistaken for viewport
+  // overflow: the part beyond the viewport is clipped away and the user never sees it cut.
+  clip: { x: boolean; y: boolean; ancestorId: string | null };
 }
 
 export interface GeometrySnapshot {
@@ -124,8 +128,8 @@ function fontWeightValue(value: string): number {
   return value === 'bold' ? 700 : 400;
 }
 
-function readStyles(element: HTMLElement, interactive: boolean): GeometryNodeStyle {
-  const base = getComputedStyle(element);
+function readStyles(element: HTMLElement, computed: CSSStyleDeclaration, interactive: boolean): GeometryNodeStyle {
+  const base = computed;
   // jsdom accepts a pseudo-class argument but ignores it and logs a console error, so the focus
   // styles are read there only from the base styles - a focused element already carries its
   // :focus rules in them. Real browsers force the :focus state through the pseudo argument.
@@ -156,24 +160,55 @@ function focusStyles(element: HTMLElement): CSSStyleDeclaration {
   }
 }
 
+function usedOverflow(overflowX: string, overflowY: string): { x: string; y: string } {
+  const clips = (value: string) => value !== '' && value !== 'visible';
+  let x = overflowX || 'visible';
+  let y = overflowY || 'visible';
+  // Spec used-value rule: an axis specified as visible next to a clipping axis computes to
+  // auto, so such an element clips both axes. jsdom reports specified values, so the rule is
+  // applied here; engines that already return used values pass through unchanged.
+  if (x === 'visible' && clips(y)) x = 'auto';
+  if (y === 'visible' && clips(x)) y = 'auto';
+  return { x, y };
+}
+
 // The descriptor walk in collectLayoutNodes pairs with a plain pre-order element walk, so the
 // same pairing here keeps node identity identical to the editor canvas and the layout runtime.
 export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapshotInit): GeometrySnapshot {
   const rootBox = root.getBoundingClientRect();
   const scale = rootBox.width > 0 ? init.viewport.width / rootBox.width : 1;
   const elements: HTMLElement[] = [];
-  const visit = (element: HTMLElement): void => {
+  const computedList: CSSStyleDeclaration[] = [];
+  const clipList: { x: boolean; y: boolean; ancestor: HTMLElement | null }[] = [];
+  const visit = (
+    element: HTMLElement,
+    inherited: { x: boolean; y: boolean; ancestor: HTMLElement | null },
+  ): void => {
+    const computed = getComputedStyle(element);
+    const overflow = usedOverflow(computed.overflowX || '', computed.overflowY || '');
+    const clipsX = overflow.x !== 'visible';
+    const clipsY = overflow.y !== 'visible';
     elements.push(element);
-    for (const child of element.children) visit(child as HTMLElement);
+    computedList.push(computed);
+    clipList.push(inherited);
+    const next = {
+      x: inherited.x || clipsX,
+      y: inherited.y || clipsY,
+      ancestor: clipsX || clipsY ? element : inherited.ancestor,
+    };
+    for (const child of element.children) visit(child as HTMLElement, next);
   };
-  visit(root);
+  visit(root, { x: false, y: false, ancestor: null });
   const nodes = collectLayoutNodes(root);
+  const nodeIdByElement = new Map<HTMLElement, string>();
   const snapshotNodes: GeometryNodeSnapshot[] = [];
   nodes.forEach((node, index) => {
     const element = elements[index];
     if (!element) return;
+    nodeIdByElement.set(element, node.nodeId);
     const box = element.getBoundingClientRect();
     const interactive = isInteractive(element);
+    const clip = clipList[index];
     snapshotNodes.push({
       nodeId: node.nodeId,
       elementId: node.elementId,
@@ -188,7 +223,12 @@ export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapsho
         width: box.width * scale,
         height: box.height * scale,
       },
-      styles: readStyles(element, interactive),
+      styles: readStyles(element, computedList[index], interactive),
+      clip: {
+        x: clip.x,
+        y: clip.y,
+        ancestorId: clip.ancestor ? nodeIdByElement.get(clip.ancestor) ?? null : null,
+      },
     });
   });
   return {
@@ -388,15 +428,21 @@ export function checkLayoutAccessibility(snapshot: GeometrySnapshot, theme: Them
       }
     }
     const rect = node.rect;
-    if (rect.x < -SUB_PIXEL_EPSILON
-      || rect.y < -SUB_PIXEL_EPSILON
-      || rect.x + rect.width > snapshot.viewport.width + SUB_PIXEL_EPSILON
-      || rect.y + rect.height > snapshot.viewport.height + SUB_PIXEL_EPSILON) {
+    const edges: string[] = [];
+    if (!node.clip.x) {
+      if (rect.x < -SUB_PIXEL_EPSILON) edges.push(`left edge ${Math.round(rect.x)} < 0`);
+      if (rect.x + rect.width > snapshot.viewport.width + SUB_PIXEL_EPSILON) edges.push(`right edge ${Math.round(rect.x + rect.width)} > ${snapshot.viewport.width}`);
+    }
+    if (!node.clip.y) {
+      if (rect.y < -SUB_PIXEL_EPSILON) edges.push(`top edge ${Math.round(rect.y)} < 0`);
+      if (rect.y + rect.height > snapshot.viewport.height + SUB_PIXEL_EPSILON) edges.push(`bottom edge ${Math.round(rect.y + rect.height)} > ${snapshot.viewport.height}`);
+    }
+    if (edges.length > 0) {
       issues.push({
         code: 'OVERFLOW',
         nodeId: node.nodeId,
         severity: 'error',
-        message: `rect extends beyond the ${snapshot.viewport.width}x${snapshot.viewport.height} viewport`,
+        message: `rect extends beyond the ${snapshot.viewport.width}x${snapshot.viewport.height} viewport (${edges.join('; ')})`,
       });
     }
   }
