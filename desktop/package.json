@@ -1,7 +1,7 @@
 {
   "name": "omp-desktop",
   "private": true,
-  "version": "0.20.12-beta.2",
+  "version": "0.30.0",
   "type": "module",
   "scripts": {
     "build": "vite build",
