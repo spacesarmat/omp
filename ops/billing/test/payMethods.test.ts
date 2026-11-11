@@ -274,6 +274,41 @@ describe('one order, one extension', () => {
     expect(second.state.subscriptions[0].paidUntil).toBe(until);
   });
 
+  it('credits the ruble value when a crypto device is paid after the subscription ended', () => {
+    const b = boot();
+    b.state.settings.extraDeviceRub = 0;
+    b.state.settings.cryptoExtraUsdt = 2;
+    b.state.settings.cryptoRateUsdt = 90;
+    const opened = applyPayment(b.state, {
+      operationId: 'ym-new',
+      label: 'new:' + b.accountId,
+      amount: '150.00',
+      currency: '643',
+      now: b.now - 40 * DAY,
+    });
+    const subId = opened.state.subscriptions[0].id;
+    const quoted = quotePurchase(opened.state, {
+      kind: 'dev',
+      accountId: b.accountId,
+      subscriptionId: subId,
+      now: b.now,
+      method: 'crypto',
+      asset: 'USDT',
+    });
+    expect(quoted.result.payAmount).toBe('2.00');
+    expect(quoted.result.rub).toBe(180);
+    const paid = applyPayment(quoted.state, {
+      operationId: 'crypto:late-dev',
+      label: quoted.result.label,
+      amount: '2.00',
+      currency: 'USDT',
+      now: b.now,
+    });
+    expect(paid.result.kind).toBe('credit');
+    expect(paid.result.credit).toBe(180);
+    expect(paid.state.subscriptions[0].extraSlots || 0).toBe(0);
+  });
+
   it('pre_checkout does not extend the subscription', () => {
     const b = boot();
     const quoted = quotePurchase(b.state, { kind: 'new', accountId: b.accountId, now: b.now, method: 'stars' });
@@ -460,6 +495,54 @@ describe('stars poll durability', () => {
     expect(cutoverOffsets[0]).toBe(0);
     expect(cutoverOffsets[1]).toBe(9);
     expect(sent.filter((u) => u.indexOf('/sendMessage') >= 0)).toHaveLength(1);
+  });
+});
+
+describe('stars checkout is answered first', () => {
+  it('answers pre_checkout before a preceding message is sent', async () => {
+    const state = emptyState();
+    state.settings.botToken = '123456:poll';
+    const calls: string[] = [];
+    let polls = 0;
+    const fetchImpl = async (url: string) => {
+      const path = String(url);
+      if (path.indexOf('/getUpdates') >= 0) {
+        polls += 1;
+        const batch =
+          polls === 1
+            ? [
+                { update_id: 1, message: { chat: { id: 5, type: 'private' }, text: 'Привет', from: { id: 5 } } },
+                {
+                  update_id: 2,
+                  pre_checkout_query: {
+                    id: 'pq-1',
+                    from: { id: 5 },
+                    currency: 'XTR',
+                    total_amount: 1,
+                    invoice_payload: 'buy:missing',
+                  },
+                },
+              ]
+            : [];
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: batch }), text: async () => '' };
+      }
+      calls.push(path);
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
+    };
+    const store = {
+      read: async () => state,
+      update: async (fn: (s: typeof state) => { state: typeof state; result?: unknown }) => {
+        const out = fn(state);
+        return out && out.result !== undefined ? out.result : out;
+      },
+      registry: {},
+    };
+    await pollBot(store, fetchImpl, { maxLoops: 2, sleep: async () => {}, now: () => Date.now() });
+    const checkout = calls.findIndex((u) => u.indexOf('/answerPreCheckoutQuery') >= 0);
+    const message = calls.findIndex((u) => u.indexOf('/sendMessage') >= 0);
+    expect(checkout).toBeGreaterThanOrEqual(0);
+    expect(message).toBeGreaterThanOrEqual(0);
+    expect(checkout).toBeLessThan(message);
   });
 });
 

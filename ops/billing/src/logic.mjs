@@ -1359,7 +1359,10 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     // after the end (an old message) becomes a credit toward the next renewal instead of a dead slot (P1-2).
     const access = subAccess(state, own, now);
     if (!access.paid) {
-      const credit = Math.round(quoted !== null ? quoted : priceOf(state, act));
+      const priced = quoted !== null ? quoted : priceOf(state, act);
+      // A crypto or Stars slot can have no ruble tariff. quote.rub is the value frozen at checkout.
+      const fromRub = quote && Number(quote.rub) > 0 ? Number(quote.rub) : 0;
+      const credit = Math.round(priced > 0 ? priced : fromRub);
       const total = creditOf(own) + credit;
       const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, creditRub: total } : s));
       return {

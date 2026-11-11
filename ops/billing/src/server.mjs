@@ -3285,6 +3285,22 @@ export async function pollBot(file, fetchImpl, opts) {
       // Later messages in the same queue, including /start admin_TOKEN, are still handled.
       // The handled set exists only while a payment is held. Once Telegram has acked an update, it is dropped.
       if (!heldStar && handledUpdates.size) handledUpdates.clear();
+      // pre_checkout must be answered within 10s. Do it before any sendMessage in this batch.
+      for (let p = 0; p < updates.length; p++) {
+        const early = updates[p] && updates[p].pre_checkout_query;
+        if (!early) continue;
+        let decision = { ok: false, error: 'Сейчас обслуживание' };
+        if (!adminLoginOnly) {
+          try {
+            decision = starCheckoutDecision(await store.read(), early);
+          } catch (e) {
+            decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
+          }
+        }
+        const answer = { pre_checkout_query_id: early.id, ok: !!decision.ok };
+        if (!decision.ok) answer.error_message = decision.error || 'Счёт не найден';
+        await telegramMethod(token, 'answerPreCheckoutQuery', answer, net, sendTimeoutMs).catch(() => ({ ok: false }));
+      }
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
         if (handledUpdates.has(u.update_id)) {
@@ -3313,21 +3329,7 @@ export async function pollBot(file, fetchImpl, opts) {
           }
           continue;
         }
-        if (u.pre_checkout_query) {
-          const q = u.pre_checkout_query;
-          let decision = { ok: false, error: 'Сейчас обслуживание' };
-          if (!adminLoginOnly) {
-            try {
-              decision = starCheckoutDecision(await store.read(), q);
-            } catch (e) {
-              decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
-            }
-          }
-          const answer = { pre_checkout_query_id: q.id, ok: !!decision.ok };
-          if (!decision.ok) answer.error_message = decision.error || 'Счёт не найден';
-          await telegramMethod(token, 'answerPreCheckoutQuery', answer, net, sendTimeoutMs).catch(() => ({ ok: false }));
-          continue;
-        }
+        if (u.pre_checkout_query) continue;
         if (u.callback_query) {
           await handleCallback(file, token, u.callback_query, net, sendTimeoutMs, {
             adminLoginOnly,
