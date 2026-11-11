@@ -768,7 +768,7 @@ export function Add({
             if (box) box.setAttribute('data-open', box.getAttribute('data-open') === '1' ? '0' : '1');
           }}>+</button>
           <div class="m-add-plus-menu">
-            <button type="button" class="tm" data-code="P07.2" data-magnet-open onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
+            <button type="button" class="tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
             <button type="button" onClick={() => fileRef.current && fileRef.current.click()}>{t('add.openTorrent')}</button>
           </div>
           <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden onChange={(e) => {

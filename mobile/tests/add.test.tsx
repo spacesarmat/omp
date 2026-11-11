@@ -387,7 +387,7 @@ describe('Add category', () => {
     expect(el.querySelector(MAGNET)).toBeNull();
     expect(el.querySelector('[data-magnet-block]')).toBeNull();
     const open = el.querySelector('[data-magnet-open]')!;
-    expect(open.textContent).toBe('Добавить по magnet-ссылке');
+    expect(open.textContent).toBe('Вставить magnet');
     expect(open.getAttribute('aria-expanded')).toBe('false');
     expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1048,7 +1048,7 @@ describe('Add in English', () => {
     expect(el.textContent).not.toContain('Category');
     expect(el.querySelector('input[aria-label="Search in sources"]')).toBeTruthy();
     expect(el.querySelector('[data-scope="sources"]')!.textContent).toBe('Sources');
-    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
+    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Paste magnet');
     click(el.querySelector('[data-magnet-open]')!);
     expect(byText('Add')).toBeTruthy();
     expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own - via “Share”.');
