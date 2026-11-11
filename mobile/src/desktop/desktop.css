@@ -104,12 +104,15 @@ html.omp-desktop .m-disc-grid.m-cards-medium { grid-template-columns: repeat(aut
 }
 html.omp-desktop .m-disc-rail-tile { flex-basis: 104px; width: 104px; }
 
+html.omp-desktop .m-mini {
+  left: calc(var(--omp-side) + 8px);
+}
 html.omp-desktop .m-mini.m-mini-float {
   left: auto;
   right: 24px;
   bottom: 24px;
   width: 360px;
-  z-index: 25;
+  z-index: 6;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   cursor: grab;
 }
