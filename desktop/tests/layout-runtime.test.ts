@@ -166,6 +166,32 @@ describe('production layout runtime', () => {
     expect(keys(root)).toEqual(['hash-1', 'hash-3', 'hash-2']);
   });
 
+  it('observes a production root only once with correct cleanup semantics', () => {
+    const observe = vi.spyOn(MutationObserver.prototype, 'observe');
+    const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
+    try {
+      const root = mount(GRID);
+      const first = observeProductionLayout(root);
+      const second = observeProductionLayout(root);
+      expect(observe).toHaveBeenCalledTimes(1);
+
+      second();
+      expect(disconnect).not.toHaveBeenCalled();
+      expect(keys(root)).toEqual(['hash-1', 'hash-2']);
+
+      first();
+      expect(disconnect).toHaveBeenCalledTimes(1);
+
+      const third = observeProductionLayout(root);
+      expect(observe).toHaveBeenCalledTimes(2);
+      third();
+      expect(disconnect).toHaveBeenCalledTimes(2);
+    } finally {
+      observe.mockRestore();
+      disconnect.mockRestore();
+    }
+  });
+
   it('is a no-op when the root carries no design context', async () => {
     generated.layout.containers = [container({ order: ['key-hash-2', 'key-hash-1'] })];
     generated.layout.placements = [placement({ mode: 'absolute', x: 40, y: 24 })];

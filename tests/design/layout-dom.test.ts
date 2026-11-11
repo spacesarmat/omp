@@ -108,14 +108,16 @@ describe('layout dom runtime', () => {
 
     const nodes = collectLayoutNodes(root);
 
+    const rootNode = nodes.find((node) => node.nodeId === 'path-root')!;
+    expect(rootNode.parentId).toBeNull();
     const toolbar = nodes.find((node) => node.nodeId === 'toolbar')!;
     expect(toolbar.kind).toBe('element');
-    expect(toolbar.parentId).toBe('/');
+    expect(toolbar.parentId).toBe('path-root');
     const button = nodes.find((node) => node.nodeId === 'button')!;
     expect(button.parentId).toBe('toolbar');
     expect(button.label).toBe('Go');
     const caption = nodes.find((node) => node.label === 'Caption')!;
-    expect(caption.nodeId).toBe('/0/1');
+    expect(caption.nodeId).toBe('path-0-1');
     expect(caption.parentId).toBe('toolbar');
   });
 
@@ -125,7 +127,71 @@ describe('layout dom runtime', () => {
     const nodes = collectLayoutNodes(root);
     const ids = nodes.filter((node) => node.elementId === 'button').map((node) => node.nodeId);
 
-    expect(ids).toEqual(['button', 'button#2']);
+    expect(ids).toEqual(['button', 'button-2']);
+  });
+
+  it('round-trips every identity class through theme validation', () => {
+    const root = mount(`
+      <div data-design-id="toolbar">
+        <button data-design-id="button">One</button>
+        <button data-design-id="button">Two</button>
+        <span>Caption</span>
+        <div data-design-id="badge">N</div>
+        <div data-key="hash-1">A</div>
+        <div data-key="Длинный Ключ Ω">B</div>
+        <div data-key="${'a'.repeat(80)}">C</div>
+      </div>`);
+
+    const nodes = collectLayoutNodes(root);
+    const nodeIds = nodes.map((node) => node.nodeId);
+    expect(new Set(nodeIds).size).toBe(nodeIds.length);
+    for (const nodeId of nodeIds) expect(nodeId).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+
+    let theme = createDefaultTheme(BASE);
+    for (const node of nodes) theme = upsertLayoutPlacement(theme, placement(node.nodeId, { label: node.nodeId }));
+    const layout = theme.layout!;
+    layout.containers.push({
+      id: 'flow-toolbar',
+      target: context.target,
+      screenId: context.screenId,
+      format: context.format,
+      nodeId: 'toolbar',
+      order: nodeIds,
+    });
+
+    expect(() => parseThemeDocument(theme)).not.toThrow();
+    expect(parseThemeDocument(theme)).toEqual(theme);
+    expect(() => parseThemeDocument(structuredClone(theme))).not.toThrow();
+  });
+
+  it('keeps safe data keys literal and hashes unsafe or long ones deterministically', () => {
+    const root = mount(`
+      <div>
+        <div data-key="hash-1">A</div>
+        <div data-key="${'b'.repeat(60)}">B</div>
+        <div data-key="${'c'.repeat(61)}">C</div>
+        <div data-key="HASH-1">D</div>
+        <div data-key="Ключ Ω">E</div>
+      </div>`);
+
+    const nodes = collectLayoutNodes(root);
+    const nodeIdOf = (key: string) => nodes.find((node) => node.kind === 'dynamic' && node.label === key)!.nodeId;
+
+    expect(nodeIdOf('A')).toBe('key-hash-1');
+    expect(nodeIdOf('B')).toBe(`key-${'b'.repeat(60)}`);
+    const longId = nodeIdOf('C');
+    const upperId = nodeIdOf('D');
+    const unicodeId = nodeIdOf('E');
+    for (const nodeId of [longId, upperId, unicodeId]) {
+      expect(nodeId).toMatch(/^keyh-[a-z0-9-]{0,63}$/);
+      expect(nodeId).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    }
+    expect(new Set([longId, upperId, unicodeId]).size).toBe(3);
+    expect(nodeIdOf('E')).toBe(unicodeId);
+
+    const again = collectLayoutNodes(root);
+    const againId = again.find((node) => node.kind === 'dynamic' && node.label === 'E')!.nodeId;
+    expect(againId).toBe(unicodeId);
   });
 
   it('marks dynamic items and keeps them addressable by data key', () => {

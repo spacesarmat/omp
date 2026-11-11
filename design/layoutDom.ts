@@ -36,20 +36,45 @@ interface IdentityCandidate {
   source: IdentitySource;
 }
 
-function identityOf(element: HTMLElement, path: string, seenKeys: Set<string>, adapterCounts: Map<string, number>): IdentityCandidate {
+// Node ids must stay inside the schema id space /^[a-z0-9][a-z0-9-]{0,63}$/ so a layout document
+// that references them round-trips through parseThemeDocument. Safe data keys stay literal;
+// unsafe or long ones get a deterministic hash fallback (prefixes key- and keyh- are disjoint).
+const SAFE_DATA_KEY = /^[a-z0-9][a-z0-9-]*$/;
+
+function fnv1a64(text: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (const char of text) {
+    hash ^= BigInt(char.codePointAt(0)!);
+    hash = (hash * prime) & mask;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+export function layoutKeyNodeId(dataKey: string): string {
+  if (SAFE_DATA_KEY.test(dataKey) && `key-${dataKey}`.length <= 64) return `key-${dataKey}`;
+  return `keyh-${fnv1a64(dataKey)}`;
+}
+
+function pathNodeId(indices: number[]): string {
+  return indices.length ? `path-${indices.join('-')}` : 'path-root';
+}
+
+function identityOf(element: HTMLElement, indices: number[], seenKeys: Set<string>, adapterCounts: Map<string, number>): IdentityCandidate {
   const key = element.dataset.key;
   if (key) {
     if (seenKeys.has(key)) throw new Error(`duplicate data key "${key}"`);
     seenKeys.add(key);
-    return { nodeId: `key-${key}`, kind: 'dynamic', source: 'key' };
+    return { nodeId: layoutKeyNodeId(key), kind: 'dynamic', source: 'key' };
   }
   const adapter = element.dataset.designId || element.dataset.designComponent || null;
   if (adapter) {
     const count = (adapterCounts.get(adapter) ?? 0) + 1;
     adapterCounts.set(adapter, count);
-    return { nodeId: count === 1 ? adapter : `${adapter}#${count}`, kind: 'element', source: 'adapter' };
+    return { nodeId: count === 1 ? adapter : `${adapter}-${count}`, kind: 'element', source: 'adapter' };
   }
-  return { nodeId: path || '/', kind: 'element', source: 'path' };
+  return { nodeId: pathNodeId(indices), kind: 'element', source: 'path' };
 }
 
 function labelOf(element: HTMLElement, elementId: string): string {
@@ -63,17 +88,17 @@ function resolveNodes(root: HTMLElement): ResolvedNode[] {
   const nodes: ResolvedNode[] = [];
   const seenKeys = new Set<string>();
   const adapterCounts = new Map<string, number>();
-  const visit = (element: HTMLElement, parentId: string | null, path: string): void => {
-    const candidate = identityOf(element, path, seenKeys, adapterCounts);
+  const visit = (element: HTMLElement, parentId: string | null, indices: number[]): void => {
+    const candidate = identityOf(element, indices, seenKeys, adapterCounts);
     const elementId = element.dataset.designId || element.dataset.designComponent || candidate.nodeId;
     nodes.push({ element, nodeId: candidate.nodeId, elementId, parentId, kind: candidate.kind });
     let childIndex = 0;
     for (const child of element.children) {
-      visit(child as HTMLElement, candidate.nodeId, `${path}/${childIndex}`);
+      visit(child as HTMLElement, candidate.nodeId, [...indices, childIndex]);
       childIndex += 1;
     }
   };
-  visit(root, null, '');
+  visit(root, null, []);
   return nodes;
 }
 
@@ -212,6 +237,14 @@ function readProductionContext(root: HTMLElement): LayoutContext | null {
   return { target: target as DesignTarget, screenId, format: format as DesignFormat };
 }
 
+const observedProductionRoots = new WeakSet<HTMLElement>();
+
 export function observeProductionLayout(root: HTMLElement): () => void {
-  return createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root), { production: true });
+  if (observedProductionRoots.has(root)) return () => undefined;
+  observedProductionRoots.add(root);
+  const stop = createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root), { production: true });
+  return () => {
+    observedProductionRoots.delete(root);
+    stop();
+  };
 }
