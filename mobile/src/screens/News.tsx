@@ -500,7 +500,7 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       </div>
       {quota && (
         <div class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
-          {t('monitor.limit.quota', quota)}
+          {' · ' + t('monitor.limit.quota', quota)}
         </div>
       )}
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
