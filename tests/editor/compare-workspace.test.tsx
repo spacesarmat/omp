@@ -444,6 +444,45 @@ describe('inspector read-only guard', () => {
     expect(update).toHaveBeenCalled();
   });
 
+  it('blocks LogicEditor edits in before mode and restores them in after mode', () => {
+    click('mode-logic');
+    click('before-after');
+
+    const update = vi.spyOn(controller, 'replaceFlow');
+    const save = host.querySelector<HTMLButtonElement>('[data-action="save-rule"]')!;
+    const moveUp = host.querySelector<HTMLButtonElement>('[data-action="move-up"]')!;
+    const addRule = host.querySelector<HTMLButtonElement>('[data-action="add-rule"]')!;
+    const condition = host.querySelector<HTMLSelectElement>('[data-testid="condition"]')!;
+    expect(save.disabled).toBe(true);
+    expect(moveUp.disabled).toBe(true);
+    expect(addRule.disabled).toBe(true);
+    expect(condition.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="inspector-readonly"]')).not.toBeNull();
+
+    act(() => {
+      condition.value = 'server-true';
+      condition.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => {
+      save.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(update).not.toHaveBeenCalled();
+
+    click('before-after');
+    const editableSave = host.querySelector<HTMLButtonElement>('[data-action="save-rule"]')!;
+    const editableCondition = host.querySelector<HTMLSelectElement>('[data-testid="condition"]')!;
+    expect(editableSave.disabled).toBe(false);
+    expect(editableCondition.disabled).toBe(false);
+    act(() => {
+      editableCondition.value = 'server-true';
+      editableCondition.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    act(() => {
+      editableSave.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(update).toHaveBeenCalled();
+  });
+
   it('blocks clipboard paste in before mode and restores it in after mode', () => {
     buildMainPreview();
     selectNodeInPreview('server-card');

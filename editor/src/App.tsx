@@ -493,7 +493,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                 onMargin={handleNodeMargin}
               />
             )}
-            {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
+            {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" readOnly={!previewEditable} /><FlowMap flow={draft.flow} /></>}
             {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
             <ExportPanel controller={controller} client={workspaceClient} />
