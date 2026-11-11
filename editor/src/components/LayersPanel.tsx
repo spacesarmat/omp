@@ -19,6 +19,7 @@ export interface LayersPanelProps {
   layers?: LayerRowModel[];
   selectedNodeId?: string | null;
   clipboardError?: string | null;
+  readOnly?: boolean;
   onSelect(elementId: string): void;
   onNavigate(route: DesktopRouteId): void;
   onSelectNode?(nodeId: string): void;
@@ -46,6 +47,7 @@ export function LayersPanel({
   layers = [],
   selectedNodeId = null,
   clipboardError = null,
+  readOnly = false,
   onSelect,
   onNavigate,
   onSelectNode,
@@ -73,7 +75,7 @@ export function LayersPanel({
   });
   const commitRename = (layer: LayerRowModel, name: string) => {
     setRenamingId(null);
-    if (onRenameNode && name.trim()) onRenameNode(layer.nodeId, name);
+    if (!readOnly && onRenameNode && name.trim()) onRenameNode(layer.nodeId, name);
   };
   return (
     <aside class="editor-layers-panel" aria-label="Слои">
@@ -134,7 +136,7 @@ export function LayersPanel({
                 <option value="locked">Заблокированные</option>
               </select>
               <button type="button" data-testid="layout-copy" class="editor-icon-button" aria-label="Копировать выделенные слои" title="Копировать выделенные слои" onClick={() => onCopySelection?.()}><EditorIcon name="copy" /></button>
-              <button type="button" data-testid="layout-paste" class="editor-icon-button" aria-label="Вставить слои" title="Вставить слои" onClick={() => onPaste?.()}><EditorIcon name="plus" /></button>
+              <button type="button" data-testid="layout-paste" class="editor-icon-button" aria-label="Вставить слои" title="Вставить слои" disabled={readOnly} onClick={() => { if (!readOnly) onPaste?.(); }}><EditorIcon name="plus" /></button>
             </div>
             <ul class="editor-layer-list editor-layout-layer-list">
               {visibleLayers.map((layer) => (
@@ -154,6 +156,7 @@ export function LayersPanel({
                         data-testid="layout-rename-input"
                         value={draftName}
                         maxLength={60}
+                        disabled={readOnly}
                         onInput={(event) => setDraftName((event.target as HTMLInputElement).value)}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter') commitRename(layer, (event.target as HTMLInputElement).value);
@@ -183,8 +186,10 @@ export function LayersPanel({
                           class="editor-icon-button"
                           aria-label="Переименовать слой"
                           title="Переименовать слой"
+                          disabled={readOnly}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (readOnly) return;
                             setDraftName(layer.label);
                             setRenamingId(layer.nodeId);
                           }}
@@ -200,8 +205,10 @@ export function LayersPanel({
                           aria-label={layer.hidden ? 'Показать слой' : 'Скрыть слой'}
                           title={layer.hidden ? 'Показать слой' : 'Скрыть слой'}
                           aria-pressed={layer.hidden}
+                          disabled={readOnly}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (readOnly) return;
                             onToggleHidden(layer.nodeId, !layer.hidden);
                           }}
                         >
@@ -216,8 +223,10 @@ export function LayersPanel({
                           aria-label={layer.locked ? 'Разблокировать слой' : 'Заблокировать слой'}
                           title={layer.locked ? 'Разблокировать слой' : 'Заблокировать слой'}
                           aria-pressed={layer.locked}
+                          disabled={readOnly}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (readOnly) return;
                             onToggleLocked(layer.nodeId, !layer.locked);
                           }}
                         >
@@ -231,8 +240,10 @@ export function LayersPanel({
                           class="editor-icon-button"
                           aria-label="Дублировать слой"
                           title="Дублировать слой"
+                          disabled={readOnly}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (readOnly) return;
                             onDuplicateNode(layer.nodeId);
                           }}
                         >

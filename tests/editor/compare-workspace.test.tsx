@@ -42,8 +42,8 @@ function clickAction(action: string): void {
   });
 }
 
-function pointer(target: EventTarget, type: string, x: number, y: number): void {
-  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
+function pointer(target: EventTarget, type: string, x: number, y: number, options: MouseEventInit = {}): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, ...options });
   Object.defineProperty(event, 'pointerId', { value: 7 });
   act(() => {
     (target as HTMLElement).dispatchEvent(event);
@@ -310,6 +310,153 @@ describe('non-draft preview editing guard', () => {
 
     expect(host.querySelector('[data-testid="canvas-readonly"]')).toBeNull();
     expect(host.querySelector<HTMLElement>('[data-testid="selection-overlay"]')!.dataset.active).toBe('true');
+  });
+});
+
+function selectNodeInPreview(elementId: string): void {
+  const iframe = mainFrame();
+  act(() => {
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      source: iframe.contentWindow,
+      data: { type: 'element-selected', elementId, messageId: `msg-${elementId}`, sessionId: iframe.name },
+    }));
+  });
+}
+
+function setFieldValue(input: HTMLInputElement, value: string): void {
+  act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+function pressCtrlV(): void {
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true }));
+  });
+}
+
+describe('inspector read-only guard', () => {
+  it('blocks ThemeInspector edits in before mode and restores them in after mode', () => {
+    buildMainPreview();
+    selectNodeInPreview('server-card');
+    const field = () => host.querySelector<HTMLInputElement>('.editor-theme-inspector [data-token][inputmode="decimal"]')
+      ?? host.querySelector<HTMLInputElement>('.editor-theme-inspector [data-token]')!;
+    const fill = (input: HTMLInputElement) => setFieldValue(input, input.getAttribute('inputmode') === 'decimal' ? '24' : '#112233');
+
+    click('before-after');
+    expect(host.querySelector('[data-testid="inspector-readonly"]')).not.toBeNull();
+    const update = vi.spyOn(controller, 'upsertOverride');
+    const readOnlyInput = field();
+    expect(readOnlyInput.disabled).toBe(true);
+    fill(readOnlyInput);
+    expect(update).not.toHaveBeenCalled();
+
+    click('before-after');
+    const editableInput = field();
+    expect(editableInput.disabled).toBe(false);
+    fill(editableInput);
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('blocks LayoutInspector edits in before mode and restores them in after mode', () => {
+    buildMainPreview();
+    selectNodeInPreview('server-card');
+    click('before-after');
+
+    const update = vi.spyOn(controller, 'update');
+    const margin = host.querySelector<HTMLInputElement>('[data-testid="layout-margin"]')!;
+    const mode = host.querySelector<HTMLSelectElement>('[data-testid="layout-mode"]')!;
+    expect(margin.disabled).toBe(true);
+    expect(mode.disabled).toBe(true);
+    setFieldValue(margin, '12');
+    act(() => {
+      mode.value = 'absolute';
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(update).not.toHaveBeenCalled();
+
+    click('before-after');
+    setFieldValue(host.querySelector<HTMLInputElement>('[data-testid="layout-margin"]')!, '12');
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('blocks MultiSelectInspector edits in before mode and restores them in after mode', () => {
+    buildMainPreview();
+    const surface = host.querySelector<HTMLElement>('[data-testid="selection-overlay"]')!;
+    pointer(surface, 'pointerdown', 200, 50);
+    pointer(surface, 'pointerup', 200, 50);
+    pointer(surface, 'pointerdown', 200, 150, { shiftKey: true });
+    pointer(surface, 'pointerup', 200, 150, { shiftKey: true });
+    expect(host.querySelector('[data-testid="multi-select-inspector"]')).not.toBeNull();
+
+    click('before-after');
+    const update = vi.spyOn(controller, 'update');
+    const align = host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!;
+    const margin = host.querySelector<HTMLInputElement>('[data-testid="multi-margin"]')!;
+    expect(align.disabled).toBe(true);
+    expect(margin.disabled).toBe(true);
+    act(() => {
+      align.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    setFieldValue(margin, '12');
+    expect(update).not.toHaveBeenCalled();
+
+    click('before-after');
+    const editableAlign = host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!;
+    expect(editableAlign.disabled).toBe(false);
+    act(() => {
+      editableAlign.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('blocks LayersPanel mutations in snapshot comparison and restores them after', () => {
+    buildMainPreview();
+    clickAction('snapshot');
+    const name = host.querySelector<HTMLInputElement>('[data-testid="snapshot-name"]')!;
+    act(() => {
+      name.value = 'inspector guard';
+      name.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    clickAction('create-snapshot');
+    clickAction('compare-snapshot');
+
+    const update = vi.spyOn(controller, 'update');
+    const hide = host.querySelector<HTMLButtonElement>('[data-testid="layout-hide-server-card"]')!;
+    const rename = host.querySelector<HTMLButtonElement>('[data-testid="layout-rename-server-card"]')!;
+    const duplicate = host.querySelector<HTMLButtonElement>('[data-testid="layout-duplicate-server-card"]')!;
+    const paste = host.querySelector<HTMLButtonElement>('[data-testid="layout-paste"]')!;
+    for (const button of [hide, rename, duplicate, paste]) expect(button.disabled).toBe(true);
+    act(() => {
+      hide.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      paste.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(update).not.toHaveBeenCalled();
+
+    clickAction('compare-snapshot');
+    const editableHide = host.querySelector<HTMLButtonElement>('[data-testid="layout-hide-server-card"]')!;
+    expect(editableHide.disabled).toBe(false);
+    act(() => {
+      editableHide.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(update).toHaveBeenCalled();
+  });
+
+  it('blocks clipboard paste in before mode and restores it in after mode', () => {
+    buildMainPreview();
+    selectNodeInPreview('server-card');
+    click('layout-copy');
+    click('before-after');
+
+    const update = vi.spyOn(controller, 'update');
+    pressCtrlV();
+    expect(update).not.toHaveBeenCalled();
+
+    click('before-after');
+    pressCtrlV();
+    expect(update).toHaveBeenCalled();
   });
 });
 

@@ -246,6 +246,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     setClipboardError(null);
   };
   const handlePaste = () => {
+    if (!previewEditable) return;
     let raw: string | null = null;
     try {
       raw = window.localStorage.getItem(LAYOUT_CLIPBOARD_KEY);
@@ -411,6 +412,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           layers={layerRows}
           selectedNodeId={selectedNodeId}
           clipboardError={clipboardError}
+          readOnly={!previewEditable}
           onSelect={setSelected}
           onNavigate={(screenId) => setView({ screenId })}
           onSelectNode={handlePanelSelectNode}
@@ -454,7 +456,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <div class="editor-inspector-heading"><div><strong>{mode === 'design' ? 'Дизайн' : mode === 'logic' ? 'Логика' : 'Проверка'}</strong><span>{selected}</span></div><EditorIcon name="design" /></div>
           <div class="editor-inspector-content">
             <BaseReviewPanel controller={controller} client={workspaceClient} />
-            {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} state={designState} onStateChange={setDesignState} />}
+            {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} state={designState} readOnly={!previewEditable} onStateChange={setDesignState} />}
             {mode === 'design' && selection.ids.length > 1 && (() => {
               const margins = new Set(selectedItems().map((item) => item.placement?.margin ?? ''));
               const margin = margins.size === 0 ? undefined : margins.size === 1 ? String([...margins][0]) : 'mixed' as const;
@@ -463,6 +465,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                   context={layoutContext}
                   count={selection.ids.length}
                   margin={margin}
+                  readOnly={!previewEditable}
                   onAlign={handleAlignSelection}
                   onDistribute={handleDistributeSelection}
                   onMargin={handleSelectionMargin}
@@ -477,6 +480,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                 rect={layoutRects[selectedNode.nodeId] ?? null}
                 parentRect={selectedNode.parentId ? layoutRects[selectedNode.parentId] ?? null : null}
                 order={selectedOrder}
+                readOnly={!previewEditable}
                 container={draft.theme.layout?.containers.find(
                   (container) => container.target === layoutContext.target
                     && container.screenId === layoutContext.screenId

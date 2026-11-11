@@ -36,6 +36,7 @@ export interface LayoutInspectorProps {
   parentRect: LayoutRect | null;
   order: string[];
   container?: LayoutContainer;
+  readOnly?: boolean;
   onPlace(placement: LayoutPlacement): void;
   onMove(args: MoveNodeArgs): void;
   onContainerPatch(patch: { padding?: string }): void;
@@ -46,6 +47,7 @@ interface NumberFieldProps {
   testId: string;
   label: string;
   value: number;
+  disabled?: boolean;
   onCommit(value: number): void;
 }
 
@@ -56,7 +58,9 @@ function NumberField(props: NumberFieldProps) {
         type="number"
         data-testid={props.testId}
         value={String(props.value)}
+        disabled={props.disabled ?? false}
         onChange={(event) => {
+          if (props.disabled) return;
           const next = Number(event.currentTarget.value);
           if (Number.isFinite(next) && next !== props.value) props.onCommit(Math.round(next));
         }}
@@ -70,6 +74,7 @@ interface SpacingFieldProps {
   label: string;
   value: string | undefined;
   placeholder?: string;
+  disabled?: boolean;
   onCommit(value: string | undefined): void;
 }
 
@@ -81,7 +86,9 @@ function SpacingField(props: SpacingFieldProps) {
         data-testid={props.testId}
         value={props.value ?? ''}
         placeholder={props.placeholder}
+        disabled={props.disabled ?? false}
         onChange={(event) => {
+          if (props.disabled) return;
           const parsed = parseSpacingField(event.currentTarget.value);
           if (parsed === null || parsed === 'mixed') return;
           props.onCommit(parsed === '' ? undefined : parsed);
@@ -93,6 +100,7 @@ function SpacingField(props: SpacingFieldProps) {
 
 export function LayoutInspector(props: LayoutInspectorProps) {
   const { node, placement, rect, parentRect } = props;
+  const readOnly = props.readOnly ?? false;
   const mode = placement?.mode ?? 'flow';
   const currentIndex = props.order.indexOf(node.nodeId);
   const position = currentIndex >= 0 ? currentIndex : props.order.length;
@@ -102,7 +110,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     : null;
 
   const switchMode = (next: 'flow' | 'absolute') => {
-    if (next === mode) return;
+    if (readOnly || next === mode) return;
     if (next === 'absolute') {
       if (!rect) return;
       const base = placement ?? createPlacement(props.context, node.nodeId, label);
@@ -115,13 +123,13 @@ export function LayoutInspector(props: LayoutInspectorProps) {
   };
 
   const moveTo = (index: number) => {
-    if (!node.parentId) return;
+    if (readOnly || !node.parentId) return;
     const base = placement?.mode === 'absolute' ? createPlacement(props.context, node.nodeId, label, { ...placement, mode: 'flow', x: 0, y: 0 }) : placement;
     props.onMove({ nodeId: node.nodeId, parentId: node.parentId, index, placement: base });
   };
 
   const commitGeometry = (patch: Partial<LayoutRect>) => {
-    if (!geometryRect || !parentRect) return;
+    if (readOnly || !geometryRect || !parentRect) return;
     const next = { ...geometryRect, ...patch };
     const base = placement ?? createPlacement(props.context, node.nodeId, label);
     const placed = absolutePlacementFromRect(next, parentRect, props.context, node.nodeId, label, base);
@@ -139,6 +147,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
         <select
           data-testid="layout-mode"
           value={mode}
+          disabled={readOnly}
           onChange={(event) => switchMode(event.currentTarget.value as 'flow' | 'absolute')}
         >
           <option value="flow" disabled={!node.parentId}>flow</option>
@@ -147,7 +156,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
       </label>
       {mode === 'flow' && node.parentId && (
         <label>Позиция
-          <select data-testid="layout-index" value={position} onChange={(event) => moveTo(Number(event.currentTarget.value))}>
+          <select data-testid="layout-index" value={position} disabled={readOnly} onChange={(event) => moveTo(Number(event.currentTarget.value))}>
             {Array.from({ length: props.order.length + 1 }, (_, index) => (
               <option key={index} value={index}>{index + 1}</option>
             ))}
@@ -156,10 +165,10 @@ export function LayoutInspector(props: LayoutInspectorProps) {
       )}
       {geometryRect && (
         <div class="editor-layout-geometry">
-          <NumberField testId="layout-x" label="X" value={Math.round(geometryRect.x)} onCommit={(x) => commitGeometry({ x })} />
-          <NumberField testId="layout-y" label="Y" value={Math.round(geometryRect.y)} onCommit={(y) => commitGeometry({ y })} />
-          <NumberField testId="layout-width" label="Ширина" value={Math.round(geometryRect.width)} onCommit={(width) => commitGeometry({ width })} />
-          <NumberField testId="layout-height" label="Высота" value={Math.round(geometryRect.height)} onCommit={(height) => commitGeometry({ height })} />
+          <NumberField testId="layout-x" label="X" value={Math.round(geometryRect.x)} disabled={readOnly} onCommit={(x) => commitGeometry({ x })} />
+          <NumberField testId="layout-y" label="Y" value={Math.round(geometryRect.y)} disabled={readOnly} onCommit={(y) => commitGeometry({ y })} />
+          <NumberField testId="layout-width" label="Ширина" value={Math.round(geometryRect.width)} disabled={readOnly} onCommit={(width) => commitGeometry({ width })} />
+          <NumberField testId="layout-height" label="Высота" value={Math.round(geometryRect.height)} disabled={readOnly} onCommit={(height) => commitGeometry({ height })} />
         </div>
       )}
       {mode === 'absolute' && !geometryRect && rect && (
@@ -175,6 +184,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
           testId="layout-padding"
           label="Внутренние поля"
           value={props.container?.padding}
+          disabled={readOnly}
           onCommit={(padding) => props.onContainerPatch({ padding })}
         />
         <SpacingField
@@ -182,6 +192,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
           label="Внешние поля"
           value={placement?.margin}
           placeholder="0px"
+          disabled={readOnly}
           onCommit={(margin) => props.onMargin(margin)}
         />
       </div>
