@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { pickSeasonVoice, playbackStudio, readVoice, withSeasonVoice, voiceDiffers } from '../../src/lib/seasonVoice';
 import { withSeriesTracks } from '../../src/lib/seriesTracks';
+import { seasonForTrackPatch } from '../../src/store/seriesTracks';
 
 function dataWith(studio: string, at = 10): string {
   const obj = withSeriesTracks({}, { at, l: studio, g: 'ru', k: [{ l: studio, g: 'ru' }, { l: 'NewStudio', g: 'ru' }] });
@@ -52,6 +53,12 @@ describe('season voice', () => {
     expect(picked.studio).toBe('NewStudio');
     expect(picked.source).toBe('priority');
     expect(readVoice([JSON.stringify(saved)]).priority).toEqual(['NewStudio', 'LostFilm']);
+  });
+
+  it('does not treat a subtitle change as a new season studio', () => {
+    expect(seasonForTrackPatch([1], { s: 'off' })).toBeUndefined();
+    expect(seasonForTrackPatch([1], { l: 'LostFilm', g: 'ru' })).toBe(1);
+    expect(seasonForTrackPatch([1, 2], { l: 'LostFilm' })).toBeUndefined();
   });
 
   it('plays the season choice, not a newer choice of another season', () => {

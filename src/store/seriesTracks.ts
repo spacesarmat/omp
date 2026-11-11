@@ -58,6 +58,17 @@ export function seriesTracksFor(hash: string | undefined, list: Torrent[] = torr
   return copy;
 }
 
+/**
+ * Season written with a player choice. Subtitles alone must not copy another season's studio into this season.
+ * Reset and an audio change do update this season.
+ */
+export function seasonForTrackPatch(seasons: number[], patch: SeriesTracksPatch): number | undefined {
+  if (seasons.length !== 1) return undefined;
+  if (patch === 'reset') return seasons[0];
+  if (patch.l !== undefined || patch.g !== undefined || typeof patch.e === 'number') return seasons[0];
+  return undefined;
+}
+
 /** Prefer the season's own studio (`omp.as`) over the latest series-wide record. */
 function seasonChoice(rec: SeriesTracks | null, hash: string | undefined, list: Torrent[], members: Torrent[]): SeriesTracks | null {
   if (!hash) return rec;
@@ -97,8 +108,7 @@ export function rememberSeriesTracks(c: JournalClient | null, hash: string | und
     const ids = members.map((m) => m.hash).join(',');
     warnTracks('omp.tracks hash=' + hash + ' members=' + ids + ' patch=' + JSON.stringify(patch));
     const tor = list.filter((x) => sameHash(x.hash, hash))[0];
-    const seasons = tor ? seasonsOf(tor) : [];
-    const season = seasons.length === 1 ? seasons[0] : undefined;
+    const season = seasonForTrackPatch(tor ? seasonsOf(tor) : [], patch);
     return saveSeriesTracks(c, hash, members.map((m) => m.hash), patch, Date.now(), season).then(
       () => {
         if (torrents.peek().some((x) => sameHash(x.hash, hash))) return undefined;
