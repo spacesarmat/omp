@@ -503,6 +503,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         at,
         duration: getLocalProgress(main.hash, file.id)?.duration || undefined,
         label: [episodeLabel(file.path), stripExt(baseName(file.path))].filter(Boolean).join(' · '),
+        seasonTotal: info && info.episodes > 0 ? info.episodes : undefined,
         season: season !== NO_SEASON ? season : undefined,
         files: filesOf(main),
         onError: setError,
@@ -510,7 +511,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       return;
     }
     setError('');
-    playOnPhone(main, file, at).catch((e) => setError(errorMessage(e)));
+    playOnPhone(main, file, at, info && info.episodes > 0 ? info.episodes : undefined).catch((e) => setError(errorMessage(e)));
   };
   const watchHere = () => {
     if (!main || !mainFile) return;
@@ -675,7 +676,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         </>
       )}
       {card && <CastStrip cast={card.cast} />}
-      {main && <SeriesExtras tor={main} files={files} />}
+      {main && <SeriesExtras key={(client.value ? client.value.baseUrl : 'off') + ':' + main.hash} tor={main} files={files} />}
       {menuFor && (
         <TorrentMenu
           tor={menuFor}

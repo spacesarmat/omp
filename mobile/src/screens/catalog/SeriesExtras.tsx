@@ -15,9 +15,9 @@ import type { TorrentFile } from '../../../../src/lib/episodes';
 const CHEVRON_UP = 'M6 14l6-6 6 6';
 const CHEVRON_DOWN = 'M6 10l6 6 6-6';
 
-function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
+function Switch({ on, label, onToggle, disabled }: { on: boolean; label: string; onToggle: () => void; disabled?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} class={'m-switch' + (on ? ' on' : '')} onClick={onToggle}>
+    <button type="button" role="switch" aria-checked={on} aria-label={label} class={'m-switch' + (on ? ' on' : '')} disabled={disabled} onClick={onToggle}>
       <span class="m-switch-knob" />
     </button>
   );
@@ -61,11 +61,11 @@ export function SeriesExtras({ tor, files }: { tor: Torrent; files: TorrentFile[
           <>
             <div class="m-skip-row">
               <span class="m-skip-text">{t('torrent.screen.skipIntroSwitch')}</span>
-              <Switch on={skip.prefs.i} label={t('torrent.screen.skipIntroSwitch')} onToggle={() => toggleSkip('i')} />
+              <Switch on={skip.prefs.i} label={t('torrent.screen.skipIntroSwitch')} disabled={!skip.ready} onToggle={() => toggleSkip('i')} />
             </div>
             <div class="m-skip-row">
               <span class="m-skip-text">{t('torrent.skipCreditsShort')}</span>
-              <Switch on={skip.prefs.c} label={t('torrent.skipCreditsShort')} onToggle={() => toggleSkip('c')} />
+              <Switch on={skip.prefs.c} label={t('torrent.skipCreditsShort')} disabled={!skip.ready} onToggle={() => toggleSkip('c')} />
             </div>
           </>
         )}
@@ -78,7 +78,8 @@ export function SeriesExtras({ tor, files }: { tor: Torrent; files: TorrentFile[
           <div class="m-skip-row" data-block="watch-new">
             <span class="m-skip-text">{t('monitor.settings.episodes')}</span>
             <Switch
-              on={watchNew !== false}
+              on={watchNew === true}
+              disabled={watchNew === null}
               label={t('monitor.settings.episodes')}
               onToggle={() => {
                 if (!c || watchNew === null) return;
@@ -96,7 +97,8 @@ export function SeriesExtras({ tor, files }: { tor: Torrent; files: TorrentFile[
           <div class="m-skip-row" data-block="watch-quality">
             <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
             <Switch
-              on={watchQuality !== false}
+              on={watchQuality === true}
+              disabled={watchQuality === null}
               label={t('torrent.screen.watchQuality')}
               onToggle={() => {
                 if (!c || watchQuality === null) return;

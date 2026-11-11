@@ -606,10 +606,14 @@ export function Library() {
       </span>
     ) : null;
   const sel = (it: PhoneItem) => (selecting && isChosen(it) ? ' selected' : '');
+  const markCurrent = (tor: Torrent) => {
+    const f = watchTarget(tor.hash, playableFiles(filesOf(tor)));
+    if (f) markWatched(tor.hash, f.id);
+  };
   const swipeBtns = (tor: Torrent, key: string) => (
     <span class="m-swipe-actions">
       <button type="button" onClick={() => { hideHistory(key); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-      <button type="button" onClick={() => { const f = filesOf(tor)[0]; if (f) markWatched(tor.hash, f.id); }}>{t('history.markWatched')}</button>
+      <button type="button" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
     </span>
   );
 
@@ -935,7 +939,7 @@ export function Library() {
                     if (key) navigate({ name: 'series', key });
                     else navigate(routeForTorrent(tor));
                   };
-                  const line = [e.code, line3].filter(Boolean).join(', ');
+                  const line = [displayTitle(tor), e.code, line3].filter(Boolean).join(', ');
                   if (settings.value.continueLayout === 'line') {
                     return (
                       <button
@@ -949,19 +953,31 @@ export function Library() {
                       </button>
                     );
                   }
+                  const openMenu = (ev: Event) => {
+                    ev.preventDefault();
+                    setResumeMenu(e);
+                  };
                   return (
                     <div key={e.showKey + ':' + e.fileIndex} class="m-resume-card" data-resume-hash={e.hash}>
-                      <button type="button" class="m-resume-poster" aria-label={displayTitle(tor)} onClick={openCard}>
-                        <Poster torrent={tor} class="m-poster-mini" />
-                        <span class="m-resume-play" aria-hidden="true">
+                      <div class="m-resume-poster-wrap">
+                        <button type="button" class="m-resume-poster" aria-label={displayTitle(tor)} onClick={openCard} onContextMenu={openMenu}>
+                          <Poster torrent={tor} class="m-poster-mini" />
+                          {e.kind === 'resume' && e.duration > 0 && (
+                            <span class="m-resume-edge">
+                              <span style={{ width: Math.min(100, (e.time / e.duration) * 100) + '%' }} />
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          class="m-resume-play"
+                          aria-label={(tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')) + ': ' + label}
+                          onClick={() => void continueOnTv(e.hash, e.fileIndex, e.time, e.duration, label)}
+                          onContextMenu={openMenu}
+                        >
                           <Icon d={ICONS.play} size={18} />
-                        </span>
-                        {e.kind === 'resume' && e.duration > 0 && (
-                          <span class="m-resume-edge">
-                            <span style={{ width: Math.min(100, (e.time / e.duration) * 100) + '%' }} />
-                          </span>
-                        )}
-                      </button>
+                        </button>
+                      </div>
                       <button
                         type="button"
                         class="m-resume-text"
@@ -1132,7 +1148,7 @@ export function Library() {
                       </button>
                       <span class="m-swipe-actions">
                         <button type="button" onClick={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-                        <button type="button" onClick={() => { const f = filesOf(tor)[0]; if (f) markWatched(tor.hash, f.id); }}>{t('history.markWatched')}</button>
+                        <button type="button" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
                       </span>
                       {moreBtn(it)}
                     </div>
