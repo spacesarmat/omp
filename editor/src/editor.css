@@ -574,6 +574,85 @@ h2 svg {
   background: #0f1115;
 }
 
+.editor-selection-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.editor-selection-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--editor-accent);
+  background: rgb(77 163 255 / 8%);
+  pointer-events: none;
+}
+
+.editor-insertion-line {
+  position: absolute;
+  background: var(--editor-accent);
+  pointer-events: none;
+}
+
+.editor-free-mode {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: #2c2c2c;
+  border: 1px solid var(--editor-accent);
+  color: #e8e8e8;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.editor-layout-inspector {
+  padding: 10px 12px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.editor-layout-inspector h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.editor-layout-inspector label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #bdbdbd;
+}
+
+.editor-layout-inspector select {
+  max-width: 140px;
+}
+
+.editor-layout-geometry {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 8px 0 0;
+}
+
+.editor-layout-geometry div {
+  width: 50%;
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 8px 2px 0;
+  font-size: 12px;
+}
+
+.editor-layout-geometry dt {
+  color: #777777;
+}
+
+.editor-layout-geometry dd {
+  margin: 0;
+  color: #e8e8e8;
+}
+
 .editor-canvas-tools,
 .editor-zoom-controls {
   position: absolute;

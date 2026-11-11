@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../design/interaction.ts';
-import type { DesignTarget, DesignFormat, DesignState } from '../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState, LayoutPlacement } from '../../design/schema.ts';
 import { createDefaultTheme } from '../../design/defaults';
+import { getLayoutPlacement } from '../../design/layout';
+import type { LayoutNodeDescriptor } from '../../design/layoutDom.ts';
 import { isDesignElementAvailable } from '../../design/catalog';
 import { DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from '../../desktop/src/shell/routes';
 import { getDefaultElementId, getEditorPages, getEditorViewport, isDesktopTarget, isEditorRoute, isTvTarget } from '../shared/routes';
@@ -10,9 +12,11 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
+import { moveNodeTransaction, placeNodeTransaction, type LayoutRect } from './layout/transactions';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
 import { ThemeInspector } from './components/ThemeInspector';
+import { LayoutInspector } from './components/LayoutInspector';
 import { LogicEditor } from './components/LogicEditor';
 import { FlowMap } from './components/FlowMap';
 import { SimulationPanel } from './components/SimulationPanel';
@@ -58,6 +62,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const workspaceClient = client || offlineClient(draft);
   const [sessionId] = useState(createSessionId);
   const [selected, setSelected] = useState('sidebar');
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [layoutNodes, setLayoutNodes] = useState<LayoutNodeDescriptor[]>([]);
+  const [layoutRects, setLayoutRects] = useState<Record<string, LayoutRect>>({});
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
   const [serverConnected, setServerConnected] = useState(false);
   const [previewMode, setPreviewMode] = useState<'before' | 'after'>('after');
@@ -70,6 +77,33 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   useEffect(() => {
     if (comparison && !draft.snapshots.some((snapshot) => snapshot.id === comparison.id)) setComparison(null);
   }, [draft.snapshots, comparison]);
+  useEffect(() => {
+    if (selectedNodeId && !layoutNodes.some((node) => node.nodeId === selectedNodeId)) setSelectedNodeId(null);
+  }, [layoutNodes, selectedNodeId]);
+  const layoutContext = { target: draft.target, screenId: draft.screenId, format: draft.format };
+  const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>) => {
+    setLayoutNodes(nodes);
+    setLayoutRects(rects);
+  };
+  const handleSelectNode = (nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (!nodeId) return;
+    const node = layoutNodes.find((entry) => entry.nodeId === nodeId);
+    if (node) setSelected(node.elementId);
+  };
+  const handleElementSelected = (elementId: string) => {
+    setSelected(elementId);
+    const node = layoutNodes.find((entry) => entry.nodeId === elementId)
+      ?? layoutNodes.find((entry) => entry.elementId === elementId && entry.kind === 'element')
+      ?? layoutNodes.find((entry) => entry.elementId === elementId);
+    setSelectedNodeId(node?.nodeId ?? null);
+  };
+  const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement }) => {
+    moveNodeTransaction(controller, { context: layoutContext, ...args });
+  };
+  const handlePlaceNode = (placement: LayoutPlacement) => {
+    placeNodeTransaction(controller, placement);
+  };
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       const target = event.target;
@@ -97,6 +131,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (!isDesktopTarget(target) || DESKTOP_SCREEN_SUPPORT[screenId] !== 'logic') setMode('design');
     if (target !== draft.target || screenId !== draft.screenId) {
       setSelected(getDefaultElementId(target));
+      setSelectedNodeId(null);
       setDesignState('default');
     }
     controller.setView({
@@ -110,6 +145,15 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const canEditLogic = isDesktopTarget(draft.target) && DESKTOP_SCREEN_SUPPORT[draft.screenId] === 'logic';
   const routeLabel = getEditorPages(draft.target).find((route) => route.id === draft.screenId)?.label || draft.screenId;
   const viewport = getEditorViewport(draft.target, draft.format);
+  const selectedNode = selectedNodeId ? layoutNodes.find((node) => node.nodeId === selectedNodeId) ?? null : null;
+  const selectedOrder = selectedNode?.parentId
+    ? draft.theme.layout?.containers.find(
+      (container) => container.target === layoutContext.target
+        && container.screenId === layoutContext.screenId
+        && container.format === layoutContext.format
+        && container.nodeId === selectedNode.parentId,
+    )?.order ?? layoutNodes.filter((node) => node.parentId === selectedNode.parentId).map((node) => node.nodeId)
+    : [];
 
   return (
     <main class="editor-app">
@@ -177,11 +221,16 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             sessionId={sessionId}
             zoom={zoom}
             tool={tool}
+            selectedNodeId={selectedNodeId}
             onZoomChange={setZoom}
             onTool={setTool}
-            onSelect={setSelected}
+            onSelect={handleElementSelected}
             onNavigate={(screenId) => setView({ screenId })}
             onTrace={setTrace}
+            onNodesChange={handleNodesChange}
+            onSelectNode={handleSelectNode}
+            onMoveNode={handleMoveNode}
+            onPlaceNode={handlePlaceNode}
           />
         </section>
         <aside class="editor-inspector" aria-label="Инспектор свойств">
@@ -189,6 +238,18 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           <div class="editor-inspector-content">
             <BaseReviewPanel controller={controller} client={workspaceClient} />
             {mode === 'design' && <ThemeInspector controller={controller} target={draft.target} screenId={draft.screenId} elementId={selected} format={draft.format} state={designState} onStateChange={setDesignState} />}
+            {mode === 'design' && selectedNode && (
+              <LayoutInspector
+                context={layoutContext}
+                node={selectedNode}
+                placement={getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId)}
+                rect={layoutRects[selectedNode.nodeId] ?? null}
+                parentRect={selectedNode.parentId ? layoutRects[selectedNode.parentId] ?? null : null}
+                order={selectedOrder}
+                onPlace={handlePlaceNode}
+                onMove={handleMoveNode}
+              />
+            )}
             {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}
             {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
