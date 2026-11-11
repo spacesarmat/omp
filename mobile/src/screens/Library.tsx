@@ -21,7 +21,7 @@ import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, localFileIds, markWatched, saveProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
-import { continueCards, continueSourceLine, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
+import { continueCards, continueSourceLine, isLocalWatch, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
 import { movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
 import { hiddenHistory, hideHistory, isHistoryHidden } from '../../../src/store/historyHide';
 import { settings, updateSettings } from '../../../src/store/settings';
@@ -138,17 +138,29 @@ function watchFrom(it: HistoryItem): ContinueWatch {
   return row;
 }
 
+function localItems(list: Torrent[], phoneName: string): HistoryItem[] {
+  const out: HistoryItem[] = [];
+  list.forEach((tor) => {
+    localFileIds(tor.hash).forEach((id) => {
+      const p = getLocalProgress(tor.hash, id);
+      if (!p || !isLocalWatch(p.time, p.duration)) return;
+      out.push({
+        torrent: tor,
+        fileIndex: id,
+        progress: p,
+        source: { src: 'phone', name: phoneName, at: p.updated },
+      });
+    });
+  });
+  out.sort((a, b) => (b.source.at || 0) - (a.source.at || 0));
+  return out;
+}
+
 function watchesOf(list: Torrent[], shared: boolean, phoneName: string): ContinueWatch[] {
   if (!shared) {
-    return continueWatching(list, 80)
-      .filter((e) => !!getLocalProgress(e.torrent.hash, e.fileIndex))
-      .filter((e) => !restarted(e.torrent.hash, e.progress.updated || 0))
-      .map((e) => watchFrom({
-        torrent: e.torrent,
-        fileIndex: e.fileIndex,
-        progress: e.progress,
-        source: { src: 'phone', name: phoneName, at: e.progress.updated },
-      }));
+    return localItems(list, phoneName)
+      .filter((it) => !restarted(it.torrent.hash, it.source.at || 0))
+      .map(watchFrom);
   }
   const rows = buildHistory(list, 'all', continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName });
   return collapseHistoryShows(rows).filter((it) => !restarted(it.torrent.hash, it.source.at || it.progress.updated || 0)).map(watchFrom);
@@ -433,14 +445,7 @@ export function Library() {
     if (!isHistory) return [];
     const rows = sharedHistory
       ? buildHistory(list, hfilter, continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName })
-      : continueWatching(list, 80)
-        .filter((e) => !!getLocalProgress(e.torrent.hash, e.fileIndex))
-        .map((e): HistoryItem => ({
-          torrent: e.torrent,
-          fileIndex: e.fileIndex,
-          progress: e.progress,
-          source: { src: 'phone', name: phoneName, at: e.progress.updated },
-        }));
+      : localItems(list, phoneName);
     const grouped = collapseHistoryShows(rows).filter((it) => !restarted(it.torrent.hash, it.source.at || it.progress.updated || 0) && !isHistoryHidden(showKeyOf(it.torrent)) && !isHistoryHidden(it.torrent.hash + ':' + it.fileIndex));
     return unfinishedFirst(grouped, (it: HistoryItem) => phoneHistoryFinished(it.progress.time, it.progress.duration, it.progress.open));
   }, [list, isHistory, hfilter, pv, sv, phoneName, sharedHistory, hideTick]);

@@ -98,8 +98,9 @@ export function watchedCount(rows: SeasonEpModel[], ratio: (fileId: number) => n
   let numbered = 0;
   rows.forEach((r) => {
     if (r.missing) return;
-    numbered += r.numbers.length;
-    if (r.fileId !== null && ratio(r.fileId) >= 0.9) have += r.numbers.length;
+    const n = r.numbers.length || 1;
+    numbered += n;
+    if (r.fileId !== null && ratio(r.fileId) >= 0.9) have += n;
   });
   const announced = rows.reduce((n, r) => n + (r.missing ? 1 : 0), 0) + numbered;
   return { have, total: announced };

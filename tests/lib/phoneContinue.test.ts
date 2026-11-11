@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { continueCards, deviceKind, continueSourceLine, mainButtonLines, type ContinueFile, type ContinueWatch } from '../../src/lib/phoneContinue';
+import { continueCards, deviceKind, continueSourceLine, isLocalWatch, mainButtonLines, type ContinueFile, type ContinueWatch } from '../../src/lib/phoneContinue';
 
 const NOW = new Date(2026, 10, 11, 12, 0).getTime();
 const DAY = 24 * 60 * 60 * 1000;
@@ -84,6 +84,13 @@ describe('continueCards', () => {
       NOW,
     );
     expect(cards).toHaveLength(0);
+  });
+});
+
+describe('isLocalWatch', () => {
+  it('keeps a finished watch and drops a restart at zero', () => {
+    expect(isLocalWatch(2400, 2400)).toBe(true);
+    expect(isLocalWatch(0, 2400)).toBe(false);
   });
 });
 

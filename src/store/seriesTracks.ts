@@ -96,7 +96,10 @@ export function rememberSeriesTracks(c: JournalClient | null, hash: string | und
     }
     const ids = members.map((m) => m.hash).join(',');
     warnTracks('omp.tracks hash=' + hash + ' members=' + ids + ' patch=' + JSON.stringify(patch));
-    return saveSeriesTracks(c, hash, members.map((m) => m.hash), patch).then(
+    const tor = list.filter((x) => sameHash(x.hash, hash))[0];
+    const seasons = tor ? seasonsOf(tor) : [];
+    const season = seasons.length === 1 ? seasons[0] : undefined;
+    return saveSeriesTracks(c, hash, members.map((m) => m.hash), patch, Date.now(), season).then(
       () => {
         if (torrents.peek().some((x) => sameHash(x.hash, hash))) return undefined;
         // the choice was written on the server, but this device's library copy did not have the torrent yet

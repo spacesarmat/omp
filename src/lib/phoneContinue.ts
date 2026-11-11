@@ -39,6 +39,11 @@ export interface ContinueCard {
   code: string;
 }
 
+/** A local stop this device made, including a finished one. A zero position is a restart, not a watch. */
+export function isLocalWatch(time: number, duration: number): boolean {
+  return time >= 1 || (duration > 0 && time > 0 && time < 1);
+}
+
 const MIN_RATIO = 0.02;
 const DONE_RATIO = 0.9;
 export const CONTINUE_STALE_MS = 30 * 24 * 60 * 60 * 1000;

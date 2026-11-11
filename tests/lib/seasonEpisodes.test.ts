@@ -44,5 +44,7 @@ describe('seasonEpisodeModels', () => {
     const rows = seasonEpisodeModels(files, 1, tmdb);
     const ratio = (id: number) => (id === 1 ? 1 : 0);
     expect(watchedCount(rows, ratio)).toEqual({ have: 2, total: 5 });
+    const plain = seasonEpisodeModels([{ id: 9, path: 'extras/interview.mkv', length: 1 }], 0, []);
+    expect(watchedCount(plain, () => 1)).toEqual({ have: 1, total: 1 });
   });
 });
