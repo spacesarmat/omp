@@ -544,6 +544,107 @@ describe('stars checkout is answered first', () => {
     expect(message).toBeGreaterThanOrEqual(0);
     expect(checkout).toBeLessThan(message);
   });
+
+  it('refuses a second checkout when that order is already paid in the same batch', async () => {
+    const now = Date.now();
+    const opened = openAccount(emptyState(), { telegramId: '42', email: '', now });
+    opened.state.settings.priceRub = 150;
+    opened.state.settings.starsEnabled = true;
+    opened.state.settings.starsPrice = 100;
+    opened.state.settings.botToken = '123456:poll';
+    const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now, method: 'stars' });
+    let state = quoted.state;
+    const label = String(quoted.result.label);
+    const answers: Array<{ ok?: boolean }> = [];
+    let polls = 0;
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      const path = String(url);
+      if (path.indexOf('/getUpdates') >= 0) {
+        polls += 1;
+        const batch =
+          polls === 1
+            ? [
+                {
+                  update_id: 1,
+                  message: {
+                    chat: { id: 42, type: 'private' },
+                    from: { id: 42 },
+                    successful_payment: {
+                      currency: 'XTR',
+                      total_amount: 100,
+                      invoice_payload: label,
+                      telegram_payment_charge_id: 'charge-1',
+                    },
+                  },
+                },
+                {
+                  update_id: 2,
+                  pre_checkout_query: {
+                    id: 'pq-2',
+                    from: { id: 42 },
+                    currency: 'XTR',
+                    total_amount: 100,
+                    invoice_payload: label,
+                  },
+                },
+              ]
+            : [];
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: batch }), text: async () => '' };
+      }
+      if (path.indexOf('/answerPreCheckoutQuery') >= 0 && init && init.body) answers.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
+    };
+    const store = {
+      read: async () => state,
+      update: async (fn: (s: typeof state) => { state: typeof state }) => {
+        const out = fn(state);
+        if (out && out.state) state = out.state;
+        return out;
+      },
+      registry: {},
+    };
+    await pollBot(store, fetchImpl, { maxLoops: 2, sleep: async () => {}, now: () => now });
+    expect(answers).toEqual([expect.objectContaining({ ok: false, pre_checkout_query_id: 'pq-2' })]);
+    expect(state.subscriptions).toHaveLength(1);
+    expect(state.subscriptions[0].paidUntil).toBeGreaterThan(now);
+  });
+
+  it('approves only the first checkout for one order in a batch', async () => {
+    const now = Date.now();
+    const opened = openAccount(emptyState(), { telegramId: '42', email: '', now });
+    opened.state.settings.priceRub = 150;
+    opened.state.settings.starsEnabled = true;
+    opened.state.settings.starsPrice = 100;
+    opened.state.settings.botToken = '123456:poll';
+    const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now, method: 'stars' });
+    const state = quoted.state;
+    const label = String(quoted.result.label);
+    const answers: Array<{ ok?: boolean; pre_checkout_query_id?: string }> = [];
+    let polls = 0;
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      const path = String(url);
+      if (path.indexOf('/getUpdates') >= 0) {
+        polls += 1;
+        const checkout = (id: string, updateId: number) => ({
+          update_id: updateId,
+          pre_checkout_query: { id, from: { id: 42 }, currency: 'XTR', total_amount: 100, invoice_payload: label },
+        });
+        const batch = polls === 1 ? [checkout('pq-a', 1), checkout('pq-b', 2)] : [];
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: batch }), text: async () => '' };
+      }
+      if (path.indexOf('/answerPreCheckoutQuery') >= 0 && init && init.body) answers.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: {} }), text: async () => '' };
+    };
+    await pollBot(
+      { read: async () => state, update: async (fn: (s: typeof state) => unknown) => fn(state), registry: {} },
+      fetchImpl,
+      { maxLoops: 1, sleep: async () => {}, now: () => now },
+    );
+    expect(answers.map((a) => ({ id: a.pre_checkout_query_id, ok: a.ok }))).toEqual([
+      { id: 'pq-a', ok: true },
+      { id: 'pq-b', ok: false },
+    ]);
+  });
 });
 
 describe('bot stars invoice', () => {

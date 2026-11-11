@@ -3286,15 +3286,29 @@ export async function pollBot(file, fetchImpl, opts) {
       // The handled set exists only while a payment is held. Once Telegram has acked an update, it is dropped.
       if (!heldStar && handledUpdates.size) handledUpdates.clear();
       // pre_checkout must be answered within 10s. Do it before any sendMessage in this batch.
+      // A Stars payment in this batch is not saved yet. Another checkout for that buy: label
+      // would take a second charge and applyPayment would drop it as a duplicate.
+      const paidLabels = new Set();
+      for (let p = 0; p < updates.length; p++) {
+        const paid = updates[p] && updates[p].message && updates[p].message.successful_payment;
+        if (paid && paid.currency === 'XTR' && paid.invoice_payload) paidLabels.add(String(paid.invoice_payload));
+      }
+      const approvedLabels = new Set();
       for (let p = 0; p < updates.length; p++) {
         const early = updates[p] && updates[p].pre_checkout_query;
         if (!early) continue;
         let decision = { ok: false, error: 'Сейчас обслуживание' };
         if (!adminLoginOnly) {
-          try {
-            decision = starCheckoutDecision(await store.read(), early);
-          } catch (e) {
-            decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
+          const payload = String(early.invoice_payload || '');
+          if (payload && (paidLabels.has(payload) || approvedLabels.has(payload))) {
+            decision = { ok: false, error: 'Этот счёт уже оплачен' };
+          } else {
+            try {
+              decision = starCheckoutDecision(await store.read(), early);
+            } catch (e) {
+              decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
+            }
+            if (decision.ok && payload) approvedLabels.add(payload);
           }
         }
         const answer = { pre_checkout_query_id: early.id, ok: !!decision.ok };
