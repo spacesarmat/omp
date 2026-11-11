@@ -7,7 +7,7 @@ import { brandSignal, type IrButton } from '../tv/power/irCodes';
 import { parseIrText } from '../tv/power/irParse';
 import { forgetButton, irProfiles, rememberButton } from '../tv/power/irProfile';
 import { manualDevices } from '../tv/power/manual';
-import { captureLearner, learnerOrigin } from '../tv/power/learn';
+import { captureLearner, learnerOrigin, type LearnerHttp } from '../tv/power/learn';
 import { loadNetToken, saveNetToken } from '../tv/power/tokens';
 import { markNetToken, netTvs, type NetDevice } from '../tv/power/netStore';
 import { samsungKey, samsungSocketPath, samsungToken } from '../tv/power/protocols';
@@ -28,10 +28,14 @@ async function wake(mac: string, ip: string | undefined, broadcast: string | und
   else await native.wakeOnLan(mac, host);
 }
 
-function googleKey(d: NetDevice, key: BoxKey): Promise<void> {
+async function googleKey(d: NetDevice, key: BoxKey): Promise<void> {
   const tv = deviceOf(d.ip);
-  if (!tv) return Promise.resolve();
-  return sendBoxKey(tv, key);
+  if (!tv) return;
+  if (boxIp.value !== d.ip || boxState.value !== 'connected') {
+    await connectBox(tv, { setup: true });
+    if (boxState.value !== 'connected') return;
+  }
+  await sendBoxKey(tv, key);
 }
 
 async function samsungPress(d: NetDevice, key: string): Promise<void> {
@@ -52,7 +56,7 @@ async function samsungPress(d: NetDevice, key: string): Promise<void> {
 }
 
 /** IR, manual Wake-on-LAN and network TV keys. The OMP remote stays above this block. */
-export function PowerTools({ deviceId }: { deviceId: string }) {
+export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInputs: boolean }) {
   const [hw, setHw] = useState<IrHardware>({ transmit: false, receive: false });
   const tried = useRef<{ [brand: string]: number }>({});
   useEffect(() => {
@@ -114,8 +118,11 @@ export function PowerTools({ deviceId }: { deviceId: string }) {
       }
       const origin = learnerOrigin(one.ip, one.port);
       const known = await loadNetToken('learner:' + one.ip);
-      const got = await captureLearner(origin, known);
-      await saveNetToken('learner:' + one.ip, got.token);
+      const http: LearnerHttp = async (req) => {
+        const r = await native.http({ url: req.url, method: req.method, headers: req.headers, timeoutMs: 8000 });
+        return { status: r.status, text: r.text || '' };
+      };
+      const got = await captureLearner(origin, known, http, (token) => saveNetToken('learner:' + one.ip, token));
       const name = typeof prompt === 'function' ? prompt(t('remote.ir.name')) || t('remote.ir.name') : t('remote.ir.name');
       rememberButton(deviceId, { id: 'l' + Date.now().toString(36), name, frequency: got.signal.frequency, pulses: got.signal.pulses });
       showToast(t('remote.ir.saved'));
@@ -140,24 +147,15 @@ export function PowerTools({ deviceId }: { deviceId: string }) {
   }
 
   async function power(d: NetDevice): Promise<void> {
+    if (!d.mac) {
+      showToast(t('remote.needOnToConnect'));
+      return;
+    }
     try {
-      if (d.mac) await wake(d.mac, d.ip, d.broadcast);
-      if (d.kind === 'samsung') await samsungPress(d, 'KEY_POWER');
-      else {
-        const tv = deviceOf(d.ip);
-        if (tv) {
-          await connectBox(tv, { setup: true });
-          if (boxState.value === 'code' || boxState.value === 'confirm') return;
-          if (boxState.value !== 'connected') {
-            showToast(t('remote.box.err.failed'));
-            return;
-          }
-          await sendBoxKey(tv, 'POWER');
-        }
-      }
+      await wake(d.mac, d.ip, d.broadcast);
       showToast(t('remote.turningOn', { name: d.name }));
     } catch (e) {
-      showToast(e instanceof Error && !d.mac ? e.message : t('remote.turningOn', { name: d.name }));
+      showToast(e instanceof Error ? e.message : t('remote.wolNeedApp'));
     }
   }
 
@@ -181,7 +179,7 @@ export function PowerTools({ deviceId }: { deviceId: string }) {
           {t('remote.powerOn')} {d.name}
         </button>
       ))}
-      {tvKind() !== 'atv' && (
+      {showInputs && tvKind() !== 'atv' && (
         <div class="m-tv-row">
           {['HDMI_1', 'HDMI_2', 'HDMI_3'].map((id) => (
             <button key={id} type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void switchInput(id).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>

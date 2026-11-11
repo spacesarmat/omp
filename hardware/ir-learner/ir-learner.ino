@@ -85,18 +85,31 @@ static void takeCapture() {
     for (int i = 0; i < readyCount; i++) readyPulses[i] = pulses[i];
     pulseCount = 0;
     capturing = false;
+    wsSent = false;
   }
   interrupts();
 }
 
+static bool wsSent = false;
+
 static void sendWsText(const String &text) {
   if (!wsClient || !wsClient.connected()) return;
-  uint8_t hdr[4];
   int n = text.length();
-  hdr[0] = 0x81;
-  hdr[1] = (uint8_t)n;
-  wsClient.write(hdr, 2);
+  wsClient.write((uint8_t)0x81);
+  if (n < 126) {
+    wsClient.write((uint8_t)n);
+  } else if (n < 65536) {
+    wsClient.write((uint8_t)126);
+    wsClient.write((uint8_t)((n >> 8) & 255));
+    wsClient.write((uint8_t)(n & 255));
+  } else {
+    return;
+  }
   wsClient.write(text.c_str(), n);
+}
+
+static void dropListener() {
+  if (wsClient) wsClient.stop();
 }
 
 static void handleInfo() {
@@ -109,6 +122,7 @@ static void handlePair() {
     return;
   }
   if (!token[0]) randomToken();
+  dropListener();
   server.send(200, "application/json", String("{\"token\":\"") + token + "\"}");
 }
 
@@ -124,8 +138,8 @@ static void handleCapture() {
   }
   String body = captureJson();
   readyCount = 0;
+  wsSent = false;
   server.send(200, "application/json", body);
-  sendWsText(body);
 }
 
 static bool wsAccept(WiFiClient &c, const String &key) {
@@ -186,25 +200,34 @@ void loop() {
 #endif
   server.handleClient();
   takeCapture();
+  if (readyCount >= 4 && !wsSent) {
+    sendWsText(captureJson());
+    wsSent = true;
+  }
   if (wsServer.hasClient()) {
-    if (wsClient) wsClient.stop();
-    wsClient = wsServer.available();
+    WiFiClient incoming = wsServer.available();
     String req;
     unsigned long start = millis();
-    while (wsClient.connected() && millis() - start < 1000 && req.indexOf("\r\n\r\n") < 0) {
-      while (wsClient.available()) req += (char)wsClient.read();
+    const int MAX_REQ = 1024;
+    while (incoming.connected() && (long)(millis() - start) < 1000 && req.length() < MAX_REQ && req.indexOf("\r\n\r\n") < 0) {
+      if (!incoming.available()) {
+        delay(1);
+        continue;
+      }
+      req += (char)incoming.read();
     }
-    int auth = req.indexOf("Authorization: Bearer " + String(token));
+    String want = String("Authorization: Bearer ") + token;
     int k = req.indexOf("Sec-WebSocket-Key: ");
-    if (token[0] && auth < 0) {
-      wsClient.stop();
-    } else if (k >= 0) {
+    bool ok = token[0] && req.indexOf(want) >= 0 && k >= 0 && req.length() <= MAX_REQ;
+    if (!ok) {
+      incoming.stop();
+    } else {
+      if (wsClient) wsClient.stop();
+      wsClient = incoming;
       int end = req.indexOf("\r\n", k);
-      String key = req.substring(k + 19, end);
+      String key = req.substring(k + 19, end < 0 ? req.length() : end);
       key.trim();
       wsAccept(wsClient, key);
-    } else if (wsClient) {
-      wsClient.stop();
     }
   }
 }

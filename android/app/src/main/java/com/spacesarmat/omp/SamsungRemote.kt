@@ -3,6 +3,7 @@ package com.spacesarmat.omp
 import java.security.SecureRandom
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLContext
 import okhttp3.OkHttpClient
@@ -23,20 +24,36 @@ object SamsungRemote {
     private var client: OkHttpClient? = null
     private var host: String? = null
     private var hello: String = ""
+    private val dead = AtomicBoolean(false)
 
     fun click(ip: String, path: String, body: String): String {
         if (!OmpNativePlugin.IPV4.matches(ip) || !path.startsWith(PATH)) throw IllegalArgumentException("bad")
         synchronized(lock) {
-            if (socket == null || host != ip) {
+            try {
+                if (socket == null || host != ip || dead.get()) {
+                    closeLocked()
+                    dead.set(false)
+                    val opened = connect(ip, path)
+                    if (dead.get()) {
+                        opened.first.cancel()
+                        throw IllegalStateException("closed")
+                    }
+                    socket = opened.first
+                    host = ip
+                    hello = opened.second
+                }
+                val live = socket ?: throw IllegalStateException("closed")
+                if (!live.send(body)) {
+                    dead.set(true)
+                    closeLocked()
+                    throw IllegalStateException("send")
+                }
+                return hello
+            } catch (e: Exception) {
+                dead.set(true)
                 closeLocked()
-                val opened = connect(ip, path)
-                socket = opened.first
-                host = ip
-                hello = opened.second
+                throw e
             }
-            val live = socket ?: throw IllegalStateException("closed")
-            if (!live.send(body)) throw IllegalStateException("send")
-            return hello
         }
     }
 
@@ -69,7 +86,6 @@ object SamsungRemote {
             builder.hostnameVerifier { host, _ -> host == ip }
         }
         val http = builder.build()
-        client?.dispatcher?.executorService()?.shutdown()
         client = http
         val url = "$scheme://$ip:$port$path"
         val hello = AtomicReference<String>("")
@@ -81,16 +97,23 @@ object SamsungRemote {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                dead.set(true)
                 fail.set(t)
                 latch.countDown()
             }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                dead.set(true)
+            }
         })
         if (!latch.await(8, TimeUnit.SECONDS)) {
+            dead.set(true)
             ws.cancel()
             throw IllegalStateException("timeout")
         }
         val err = fail.get()
         if (hello.get().isEmpty() && err != null) throw err
+        if (scheme == "wss") CertPins.commit(ip)
         return ws to hello.get()
     }
 }

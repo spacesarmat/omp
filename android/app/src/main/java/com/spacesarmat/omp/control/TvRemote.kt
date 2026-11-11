@@ -1,6 +1,9 @@
 package com.spacesarmat.omp.control
 
+import com.spacesarmat.omp.CecPower
+import com.spacesarmat.omp.CecPrefs
 import com.spacesarmat.omp.I18n
+import com.spacesarmat.omp.NetIdentity
 
 import android.content.Context
 import android.content.Intent

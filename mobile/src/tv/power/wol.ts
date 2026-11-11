@@ -87,6 +87,7 @@ export async function sendWake(mac: string, ip: string, broadcast: string | unde
 interface ChromeUdp {
   create: (props: object, cb: (info: { socketId: number }) => void) => void;
   send: (socketId: number, data: ArrayBuffer, address: string, port: number, cb: (r: { resultCode?: number }) => void) => void;
+  close?: (socketId: number, cb: () => void) => void;
 }
 
 /** A browser can send UDP only through chrome.sockets.udp (Chrome apps). Otherwise null. */
@@ -102,9 +103,14 @@ export function browserUdpSend(): UdpSend | null {
           return;
         }
         const copy = packet.slice().buffer;
+        const finish = (err?: Error) => {
+          const done = () => (err ? reject(err) : resolve());
+          if (typeof udp.close === 'function') udp.close(info.socketId, done);
+          else done();
+        };
         udp.send(info.socketId, copy, host, port, (r) => {
-          if (r && typeof r.resultCode === 'number' && r.resultCode < 0) reject(new Error('udp'));
-          else resolve();
+          if (r && typeof r.resultCode === 'number' && r.resultCode < 0) finish(new Error('udp'));
+          else finish();
         });
       });
     });

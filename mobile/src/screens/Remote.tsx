@@ -818,7 +818,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       fail(e);
       return;
     }
-    armCecAfterWake();
+    armCecAfterWake(tv.ip);
     showToast(t('remote.turningOn', { name: tv.name }));
     void act.warmUp();
   };
@@ -834,8 +834,12 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </span>
         }
       />
-      <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
-      <PowerTools deviceId={tv.mac || tv.ip} />
+      {mode !== 'touchpad' && (
+        <>
+          <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
+          <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />
+        </>
+      )}
       {!forgot && !box && <NoAnswer tv={tv} />}
       {forgot && !box && (
         <div class="m-remote-forgot">
@@ -1004,6 +1008,7 @@ export function Remote() {
         <ScreenHeader title={t('nav.remote')} />
         {/* one block, not «Ищу…» above «Подключите телевизор» (QA B18): found TVs still show above, the search is a line in the card */}
         <FoundTvs quiet />
+        <PowerTools deviceId="local" showInputs={false} />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>
@@ -1130,8 +1135,12 @@ export function Remote() {
           <Icon d={POWER} />
         </button>
       </ScreenHeader>
-      <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
-      <PowerTools deviceId={tv.mac || tv.ip} />
+      {mode !== 'touchpad' && (
+        <>
+          <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
+          <PowerTools deviceId={tv.mac || tv.ip} showInputs />
+        </>
+      )}
       <NoAnswer tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>

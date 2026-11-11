@@ -556,7 +556,10 @@ export function warmUp(): Promise<void> {
   warmError = '';
   const watch = effect(() => {
     if (tvState.value === 'pairing') pairing = true;
-    if (activeTv.value?.ip !== tv.ip) stop();
+    if (activeTv.value?.ip !== tv.ip) {
+      if (cecTarget === tv.ip) cecTarget = null;
+      stop();
+    }
     // another session (a user connect to a different TV) took over: do not fight it
     const ip = sessionIp.value;
     if (ip && ip !== tv.ip) stop();
@@ -602,6 +605,7 @@ export function warmUp(): Promise<void> {
         if (stopped || pairing) return;
       }
     } finally {
+      if (cecTarget === tv.ip && sessionIp.value !== tv.ip) cecTarget = null;
       watch();
       tvWaking.value = false;
       if (cancelWarm === stop) warmActive = false;
@@ -817,17 +821,16 @@ export async function switchInput(inputId: string): Promise<void> {
   await request(msg.uri, msg.payload);
 }
 
-let cecArmed = false;
+/** IP of the box whose next successful connect should turn its TV on. Other boxes do not consume it. */
+let cecTarget: string | null = null;
 
-/** The next successful Android TV connect asks the box to turn the TV on over HDMI-CEC. */
-export function armCecAfterWake(): void {
-  cecArmed = true;
+/** The next successful connect to this Android TV asks the box to turn its TV on over HDMI-CEC. */
+export function armCecAfterWake(ip: string): void {
+  cecTarget = ip;
 }
 
-function takeCecAfterWake(): boolean {
-  const on = cecArmed;
-  cecArmed = false;
-  return on;
+export function clearCecWake(): void {
+  cecTarget = null;
 }
 
 export async function turnOffTv(): Promise<void> {
@@ -1012,7 +1015,10 @@ function connectAtv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
     tvState.value = 'connected';
     tvError.value = '';
     saveTv(s.tv, opts);
-    if (takeCecAfterWake()) atvFetch(s.tv, 'POST', '/omp/cec', {}).catch(noop);
+    if (cecTarget === s.tv.ip) {
+      cecTarget = null;
+      atvFetch(s.tv, 'POST', '/omp/cec', {}).catch(noop);
+    }
     if (!opts.keepActive) setActiveTv(s.tv.ip);
   })();
   atvConnecting = p;
