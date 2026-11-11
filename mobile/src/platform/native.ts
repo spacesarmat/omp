@@ -219,6 +219,8 @@ export interface OmpNativeApi {
   /** «Установка неизвестных приложений» is allowed for OMP (true when it cannot be told: nothing to explain). */
   canInstallApks(): Promise<boolean>;
   takePendingMagnet(): Promise<string | null>;
+  /** Native crash and hang text, or '' when this build has no watcher. */
+  takeNativeCrashes(): Promise<string>;
   onMagnet(cb: (link: string) => void): () => void;
   /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
   startPlayerServer(tvIp: string): Promise<string>;
@@ -369,6 +371,7 @@ interface OmpNativePlugin {
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
+  takeNativeCrashes?: () => Promise<{ text?: string }>;
   takePendingAudioOpen?(): Promise<{ hash?: string | null }>;
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
@@ -853,6 +856,16 @@ export const native: OmpNativeApi = {
     if (!plugin) return unavailable();
     const r = await plugin.takePendingMagnet();
     return r.link ?? null;
+  },
+
+  async takeNativeCrashes() {
+    if (!plugin || typeof plugin.takeNativeCrashes !== 'function') return '';
+    try {
+      const r = await plugin.takeNativeCrashes();
+      return r && r.text ? String(r.text) : '';
+    } catch {
+      return '';
+    }
   },
 
   onMagnet(cb) {

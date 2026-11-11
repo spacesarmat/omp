@@ -11,6 +11,7 @@ import {
   adminChatIds,
   appendSupportMessage,
   confirmAdminPanelLogin,
+  isPanelReader,
   confirmDeviceLink,
   createPromo,
   baseDevices,
@@ -189,6 +190,7 @@ export function serviceDownNotices(settings, probes, prev) {
   const names = [
     ['jackett', 'Jackett'],
     ['jacred', 'JacRed'],
+    ['bitmagnet', 'bitmagnet'],
     ['torrserver', 'TorrServer'],
   ];
   const snapshot = { ...(prev || {}) };
@@ -730,6 +732,15 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
  * @returns {{ state, messages, answer: string, clearMarkup: boolean }}
  */
 export function botCallback(state, { chatId, data, now, info }) {
+  const rawData = String(data || '');
+  if (rawData.indexOf('alin:') === 0) {
+    const token = rawData.slice('alin:'.length);
+    const out = confirmAdminPanelLogin(state, { token, telegramId: chatId, now });
+    if (out.result && out.result.ok) {
+      return { state: out.state, answer: 'Вход подтверждён', messages: [{ chatId, text: 'Вход в админ-панель подтверждён. Вернитесь в браузер.' }], clearMarkup: true };
+    }
+    return { state: out.state, answer: 'Ссылка устарела', messages: [], clearMarkup: true };
+  }
   const raw = String(data || '');
   const account = accountByTelegram(state, chatId);
   const messages = [];
@@ -1122,6 +1133,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       return { state: cur, messages, pad: 'user' };
     }
   }
+  if ((action === 'admin_grant' || action === 'admin_promo') && isPanelReader(cur.settings, chatId)) {
+    say('Режим только просмотра. Выдача дней и промокоды недоступны.', { adminPad: true });
+    return { state: cur, messages, pad: 'admin' };
+  }
 
   if (action === 'user_mode') {
     say(
@@ -1202,6 +1217,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (out.result.error === 'bad_promo') say('Промокод не найден или уже не действует.');
     else if (out.result.error === 'already') say('Вы уже активировали этот промокод.');
     else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
+    else if (out.result.error === 'expired') say('Срок промокода истёк.');
     else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку - «Оплатить».');
     else {
       const b = out.result.bonus;

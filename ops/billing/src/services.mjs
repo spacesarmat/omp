@@ -79,6 +79,8 @@ export function publicAdminSettings(settings, env) {
     botUsername: s.botUsername || '',
     publicOrigin: s.publicOrigin || '',
     adminTelegramIds: s.adminTelegramIds || '',
+    adminReaders: s.adminReaders || '',
+    betaPercent: s.betaPercent === undefined || s.betaPercent === '' ? 100 : Number(s.betaPercent),
     yoomoneyWallet: maskWallet(s.yoomoneyWallet),
     yoomoneySecret: secretText(s.yoomoneySecret),
     adminNotify: s.adminNotify !== false,
@@ -156,6 +158,13 @@ export function mergeSettings(prev, body) {
     ),
     publicOrigin: String(b.publicOrigin !== undefined ? b.publicOrigin : cur.publicOrigin || '').replace(/\/+$/, ''),
     adminTelegramIds: b.adminTelegramIds !== undefined ? b.adminTelegramIds || '' : cur.adminTelegramIds || '',
+    adminReaders: b.adminReaders !== undefined ? b.adminReaders || '' : cur.adminReaders || '',
+    betaPercent:
+      b.betaPercent !== undefined && b.betaPercent !== '' && Number.isInteger(Number(b.betaPercent)) && Number(b.betaPercent) >= 0 && Number(b.betaPercent) <= 100
+        ? Number(b.betaPercent)
+        : cur.betaPercent === undefined
+          ? 100
+          : cur.betaPercent,
     yoomoneyWallet:
       b.yoomoneyWallet !== undefined && !walletUnchanged(b.yoomoneyWallet, cur.yoomoneyWallet)
         ? String(b.yoomoneyWallet).replace(/\s/g, '')

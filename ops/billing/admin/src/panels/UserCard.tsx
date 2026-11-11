@@ -23,6 +23,7 @@ export function UserCard({
   const tg = user.account.telegramId || '';
   const [msg, setMsg] = useState('');
   const [grantDays, setGrantDays] = useState(() => sessionStorage.getItem(DAY_KEY) || '30');
+  const [creditRub, setCreditRub] = useState('100');
   const [shown, setShown] = useState<Record<string, { formatted: string; openUrl?: string }>>({});
 
   async function reveal(codeId: string) {
@@ -82,10 +83,18 @@ export function UserCard({
               </span>
               <SubStatus status={status} />
               {(user.subscription.creditRub || 0) > 0 ? (
-                <span className="text-muted-foreground">
-                  зачёт {user.subscription.creditRub} ₽
-                </span>
+                <span className="text-muted-foreground">зачёт {user.subscription.creditRub} ₽</span>
               ) : null}
+              <input className="h-8 w-20 rounded-md border border-input bg-secondary px-2 text-sm" value={creditRub} onChange={(e) => setCreditRub(e.target.value)} aria-label="Зачёт, рубли" />
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!window.confirm('Начислить зачёт ' + creditRub + ' ₽?')) return;
+                  void run('/admin/api/credit', { accountId: user.account.id, rub: creditRub, confirm: 'yes' });
+                }}
+              >
+                Зачёт
+              </Button>
               {inGrace && user.subscription.accessUntil ? (
                 <span className="text-muted-foreground">
                   льготный период до <Stamp ms={user.subscription.accessUntil} />
@@ -231,8 +240,9 @@ export function UserCard({
               <TableHeader>
                 <TableRow>
                   <TableHead>Когда, МСК</TableHead>
-                  <TableHead>Сумма</TableHead>
+                  <TableHead>Зачислено</TableHead>
                   <TableHead>Способ</TableHead>
+                  <TableHead>Комиссия</TableHead>
                   <TableHead>Метка</TableHead>
                   <TableHead>Ошибка</TableHead>
                 </TableRow>
@@ -243,8 +253,9 @@ export function UserCard({
                     <TableCell className="whitespace-nowrap">
                       <Stamp ms={p.at} />
                     </TableCell>
-                    <TableCell>{p.amount || '-'}</TableCell>
+                    <TableCell className="font-mono">{p.amount || '-'}</TableCell>
                     <TableCell>{payMethodLabel(p)}</TableCell>
+                    <TableCell className="font-mono">{p.fee == null ? '-' : p.fee}</TableCell>
                     <TableCell className="font-mono text-xs">{p.label || '-'}</TableCell>
                     <TableCell>
                       {p.error ? <Badge variant="bad">{problemKind(p.error)}</Badge> : null}
@@ -263,6 +274,27 @@ export function UserCard({
                 ))}
               </TableBody>
             </Table>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>История просмотра</CardTitle>
+          <CardDescription>Шаги, которые приложение прислало с этого аккаунта. Без диагностики список пуст.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(user.watch || []).length === 0 ? <p className="text-sm text-muted-foreground">Нет сигналов</p> : null}
+          {(user.watch || []).length > 0 ? (
+            <ul className="space-y-1 text-sm">
+              {(user.watch || []).map((w, i) => (
+                <li key={i} className="flex flex-wrap gap-2">
+                  <Stamp ms={w.at} />
+                  <span>{w.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{w.version || ''} {w.platform || ''}</span>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </CardContent>
       </Card>

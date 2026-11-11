@@ -648,16 +648,30 @@ export function openAppUrl(origin, code) {
   return base + '/go/' + encodeURIComponent(formatCode(code));
 }
 
-export function adminChatIds(settings) {
-  return String((settings && settings.adminTelegramIds) || '')
+function idList(raw) {
+  return String(raw || '')
     .split(/[,;\s]+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
+export function adminChatIds(settings) {
+  return idList(settings && settings.adminTelegramIds);
+}
+
+/** Telegram ids that may open the panel but must not change billing. */
+export function readerChatIds(settings) {
+  return idList(settings && settings.adminReaders);
+}
+
+export function isPanelReader(settings, chatId) {
+  const id = String(chatId);
+  return readerChatIds(settings).some((s) => s === id);
+}
+
 export function isAdminChat(settings, chatId) {
   const id = String(chatId);
-  return adminChatIds(settings).some((s) => s === id);
+  return adminChatIds(settings).some((s) => s === id) || isPanelReader(settings, id);
 }
 
 const SUPPORT_CAP = 400;
@@ -1009,8 +1023,8 @@ function actorFromAuditDetail(row) {
 }
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
-export function logAudit(state, { action, detail, now, actor, accountId }) {
-  const row = { id: randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+export function logAudit(state, { action, detail, now, actor, accountId, id }) {
+  const row = { id: id || randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
   if (accountId) row.accountId = String(accountId);
@@ -2612,16 +2626,18 @@ export function normalizePromo(code) {
  * A promo adds `days` to the subscription and/or `bonusSlots` free device slots: forever (`bonusDays` 0) or for
  * `bonusDays` days from the redemption. A promo with bonus slots may add no days (`days` 0).
  */
-export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const plain = normalizePromo(code) || normalizeCode(randomCode());
   if (plain.length < 4 || plain.length > 24) return { state, result: { error: 'bad_promo' } };
   if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
   const bonus = Math.max(0, Math.min(BASE_DEVICES_MAX, Math.floor(Number(bonusSlots) || 0)));
   const d = Math.floor(Number(days));
+  const discount = Math.floor(Number(discountPercent) || 0);
+  const discountOk = discount > 0 && discount <= 100;
   const row = {
     id: randomId(),
     code: plain,
-    days: d > 0 ? Math.min(3650, d) : bonus ? 0 : 1,
+    days: d > 0 ? Math.min(3650, d) : bonus || discountOk ? 0 : 1,
     maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
     createdAt: now,
     revoked: false,
@@ -2631,11 +2647,14 @@ export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonus
     row.bonusSlots = bonus;
     row.bonusDays = Math.max(0, Math.min(3650, Math.floor(Number(bonusDays) || 0)));
   }
+  const exp = Number(expiresAt) || 0;
+  if (exp > now) row.expiresAt = exp;
+  if (discountOk) row.discountPercent = discount;
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
 }
 
 /** Create `count` promo codes (max 100). A custom code is used only when count is 1. */
-export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
   let cur = state;
   const promos = [];
@@ -2646,6 +2665,8 @@ export function createPromos(state, { count, code, days, maxUses, now, bonusSlot
       maxUses,
       bonusSlots,
       bonusDays,
+      expiresAt,
+      discountPercent,
       now: (now || Date.now()) + i,
     });
     if (out.result.error) return { state: cur, result: { error: out.result.error, promos } };
@@ -2674,6 +2695,7 @@ export function redeemPromo(state, { code, accountId, now }) {
   if (!promo) return { state, result: { error: 'bad_promo' } };
   if (promo.uses.some((u) => u.accountId === accountId)) return { state, result: { error: 'already' } };
   if (promo.uses.length >= promo.maxUses) return { state, result: { error: 'exhausted' } };
+  if (promo.expiresAt && now > promo.expiresAt) return { state, result: { error: 'expired' } };
 
   const existing = anySub(state, accountId);
   const days = Math.max(0, Math.floor(Number(promo.days) || 0));
@@ -2709,8 +2731,20 @@ export function redeemPromo(state, { code, accountId, now }) {
 
   const use = { id: randomId(), accountId, at: now, subscriptionId, code: activationCode };
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
+  let priced = { ...next, promos };
+  const discount = Math.floor(Number(promo.discountPercent) || 0);
+  const price = Math.floor(Number(priced.settings && priced.settings.priceRub) || 0);
+  if (discount > 0 && price > 0 && subscriptionId) {
+    const add = Math.floor((price * Math.min(100, discount)) / 100);
+    if (add > 0) {
+      priced = {
+        ...priced,
+        subscriptions: priced.subscriptions.map((s) => (s.id === subscriptionId ? { ...s, creditRub: creditOf(s) + add } : s)),
+      };
+    }
+  }
   return {
-    state: { ...next, promos },
+    state: priced,
     result: {
       kind: 'promo',
       code: activationCode,

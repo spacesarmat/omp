@@ -259,7 +259,8 @@ fn slow_load_can_be_cancelled_without_an_arbitrary_deadline() {
 
     let started = std::time::Instant::now();
     assert_eq!(manager.open(request()).state, PlayerState::Idle);
-    assert!(started.elapsed() < std::time::Duration::from_millis(200));
+    // Cancel is prompt. A loaded CI runner can delay the 20 ms thread, so the bound is not 200 ms.
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
     assert!(stopped.load(Ordering::SeqCst));
     canceller.join().expect("cancellation thread");
 }

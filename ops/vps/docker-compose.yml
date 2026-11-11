@@ -81,7 +81,7 @@ services:
       # Datacenter IPs often cannot reach api.telegram.org — route bot via WARP HTTP proxy
       HTTP_PROXY: http://warp:1080
       HTTPS_PROXY: http://warp:1080
-      NO_PROXY: jackett,jacred,torrserver,caddy,docker-proxy,dht-peers,localhost,127.0.0.1
+      NO_PROXY: jackett,jacred,torrserver,caddy,docker-proxy,docker-restart,dht-peers,localhost,127.0.0.1
       # «Проверить сиды» DHT counts. Empty DHT_PEERS_TOKEN: GET /v1/dht-peers answers 503 disabled.
       # Profile "dht". deploy.sh recreates the sidecar only when its build context changed,
       # or when this file changed and the container is already running.
@@ -94,6 +94,9 @@ services:
       # «Мониторинг» tab (ops/billing/src/monitor.mjs): container state, restarts and memory through the
       # read-only proxy below. Alerts go to BILLING_MONITOR_CHAT_ID (default 536445442), sendMessage only.
       BILLING_DOCKER_PROXY_URL: http://docker-proxy:2375
+      # Optional. Set to http://docker-restart:8789 and start the restart profile.
+      # The read-only proxy cannot POST, so restart stays off until this is set.
+      BILLING_DOCKER_RESTART_URL: ${BILLING_DOCKER_RESTART_URL:-}
       BILLING_MONITOR: ${BILLING_MONITOR:-1}
       BILLING_MONITOR_CHAT_ID: ${BILLING_MONITOR_CHAT_ID:-536445442}
       # 1 brings back the old admin notices the monitor duplicates (service down, Postgres backup)
@@ -256,6 +259,26 @@ services:
     networks:
       - dockerapi
     # no ports
+
+  # Restart only, for the admin NUC page. Billing still checks the allowlist.
+  # The read-only proxy stays POST=0. This process accepts one route.
+  docker-restart:
+    profiles: ["restart"]
+    image: node:24-alpine
+    container_name: omp-docker-restart
+    restart: unless-stopped
+    command: ["node", "/srv/server.mjs"]
+    environment:
+      ALLOW: omp-jackett,omp-jacred,omp-torrserver,omp-flaresolverr,omp-bitmagnet
+      PORT: "8789"
+    volumes:
+      - ./docker-restart/server.mjs:/srv/server.mjs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    read_only: true
+    tmpfs:
+      - /tmp
+    networks:
+      - dockerapi
 
   # On-demand DHT peer counts for «Проверить сиды». Profile "dht": a plain `up -d` does not start it.
   # deploy.sh starts it only when the build context changed. No published port. Billing calls it on the omp network.

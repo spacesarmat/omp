@@ -888,6 +888,16 @@ class OmpNativePlugin : Plugin() {
     @PluginMethod
     fun takePendingMagnet(call: PluginCall) = takePendingMagnetOp(call)
 
+    /** Native crash and ANR lines queued before the page started. Cleared after the read. */
+    @PluginMethod
+    fun takeNativeCrashes(call: PluginCall) {
+        val app = context.applicationContext
+        val text = if (app is android.app.Application) CrashWatch.take(app) else ""
+        val ret = JSObject()
+        ret.put("text", text)
+        call.resolve(ret)
+    }
+
     companion object {
         internal val NOT_SUPPORTED: String get() = I18n.s("plugin.notSupported")
         internal val START_FAILED: String get() = I18n.s("ts.startFailed")
