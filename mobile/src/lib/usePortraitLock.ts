@@ -10,14 +10,7 @@ export function usePortraitLock(): void {
       void o.lock('portrait').catch(() => {});
     }
     return () => {
-      void native.setOrientation('unlock');
-      if (o && typeof o.unlock === 'function') {
-        try {
-          o.unlock();
-        } catch {
-          /* older browsers */
-        }
-      }
+      // The phone stays portrait after the player closes. TV never calls this hook.
     };
   }, []);
 }

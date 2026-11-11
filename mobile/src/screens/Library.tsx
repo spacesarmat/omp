@@ -23,6 +23,7 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
 import { continueCards, continueSourceLine, isLocalWatch, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
 import { movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
+import { nextHeaderCollapsed } from '../../../src/lib/headerCollapse';
 import { hiddenHistory, hideHistory, isHistoryHidden } from '../../../src/store/historyHide';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, phoneSortOptions } from '../../../src/lib/librarySearch';
@@ -174,11 +175,12 @@ function rowBottom(it: PhoneItem): string {
   const seasons = it.kind === 'series' ? it.seasons.filter((s) => s !== NO_SEASON) : [];
   const files = it.kind === 'series' ? it.members.reduce<ReturnType<typeof filesOf>>((all, m) => all.concat(filesOf(m)), []) : filesOf(tor);
   const counted = episodeCountOf(files) || 0;
-  const episodes = counted || (range.from && range.to ? range.to - range.from + 1 : 0);
+  const seasonsNow = it.kind === 'series' ? it.seasons.filter((s) => s !== NO_SEASON).length : 0;
+  const episodes = counted || (seasonsNow > 1 ? 0 : range.from && range.to ? range.to - range.from + 1 : 0);
   const card = it.kind === 'series' ? cachedSeriesMatch(it.key) : null;
   const ended = !!(card && card.status === 'ended');
   const seasonCount = seasons.length || (range.seasonTo && range.season ? range.seasonTo - range.season + 1 : range.season ? 1 : 0);
-  if (seasonCount > 1) return seriesRowLine(seasonCount, 0, ended);
+  if (seasonCount > 1) return seriesRowLine(seasonCount, episodes, ended);
   const one = seasons.length === 1 ? seasons[0] : range.season || 0;
   const head = one ? t('filters.season', { n: one }) : '';
   const eps = episodes > 1 ? tp('library.episodes', episodes) : '';
@@ -253,10 +255,15 @@ export function Library() {
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
 
+  const collapsed = useRef(false);
   useEffect(() => {
     const onScroll = () => {
       const y = window.scrollY || document.documentElement.scrollTop || 0;
-      const on = y > 48;
+      const on = nextHeaderCollapsed(collapsed.current, y);
+      collapsed.current = on;
+      document.querySelectorAll('.m-row-wrap[data-open="1"]').forEach((n) => {
+        delete (n as HTMLElement).dataset.open;
+      });
       const node = rootRef.current;
       if (!node || node.getAttribute('data-collapsed') === (on ? '1' : '0')) return;
       node.setAttribute('data-collapsed', on ? '1' : '0');
@@ -606,14 +613,20 @@ export function Library() {
       </span>
     ) : null;
   const sel = (it: PhoneItem) => (selecting && isChosen(it) ? ' selected' : '');
+  const openSwipe = (el: HTMLElement) => {
+    document.querySelectorAll('.m-row-wrap[data-open="1"]').forEach((n) => {
+      if (n !== el) delete (n as HTMLElement).dataset.open;
+    });
+    el.dataset.open = '1';
+  };
   const markCurrent = (tor: Torrent) => {
     const f = watchTarget(tor.hash, playableFiles(filesOf(tor)));
     if (f) markWatched(tor.hash, f.id);
   };
   const swipeBtns = (tor: Torrent, key: string) => (
     <span class="m-swipe-actions">
-      <button type="button" onClick={() => { hideHistory(key); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-      <button type="button" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
+      <button type="button" class="danger" onClick={() => { hideHistory(key); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
+      <button type="button" class="ok" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
     </span>
   );
 
@@ -912,17 +925,6 @@ export function Library() {
                     </button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  class="m-btn-text tm"
-                  data-code="P02.21"
-                  onClick={() => {
-                    libraryTab.value = 'history';
-                    scrollToTop();
-                  }}
-                >
-                  {t('nav.historyAll')}
-                </button>
               </div>
               {settings.value.continueOpen && (
               <div class={'m-resume-row m-scroll-x m-resume-' + settings.value.continueLayout}>
@@ -1062,7 +1064,7 @@ export function Library() {
                         onTouchEnd={(ev) => {
                           const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
                           const dx = ev.changedTouches[0].clientX - start;
-                          if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                          if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
                           else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
                         }}
                       >
@@ -1090,7 +1092,7 @@ export function Library() {
                       onTouchEnd={(ev) => {
                         const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
                         const dx = ev.changedTouches[0].clientX - start;
-                        if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                        if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
                         else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
                       }}
                     >
@@ -1128,7 +1130,7 @@ export function Library() {
                       onTouchEnd={(ev) => {
                         const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
                         const dx = ev.changedTouches[0].clientX - start;
-                        if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                        if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
                         else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
                       }}
                     >
@@ -1147,8 +1149,8 @@ export function Library() {
                         </span>
                       </button>
                       <span class="m-swipe-actions">
-                        <button type="button" onClick={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-                        <button type="button" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
+                        <button type="button" class="danger" onClick={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
+                        <button type="button" class="ok" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
                       </span>
                       {moreBtn(it)}
                     </div>

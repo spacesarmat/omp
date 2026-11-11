@@ -706,7 +706,6 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P02.18 | Каталог | Library | Не напоминать | Do not remind |
 | P02.19 | Каталог | Library | Продолжить просмотр | Continue watching |
 | P02.20 | Каталог | Library | История | History |
-| P02.21 | Каталог | Library | Вся история | All history |
 | P03 | Новое | News |  |  |
 | P03.1 | Новое | News | Находки | Findings |
 | P03.2 | Новое | News | Подписки | Subscriptions |
