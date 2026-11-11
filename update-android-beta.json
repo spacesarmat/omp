@@ -1,18 +1,18 @@
 {
-  "version": "0.30.1-beta.2",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.2/OMP-0.30.1-beta.2.apk",
-  "ipkHash": "cfae5a959cb3521f2e0195edcbc8d8bac4e1886197adc39315a7306fae224bdc",
-  "ipkSize": 93347080,
+  "version": "0.30.1-beta.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.3/OMP-0.30.1-beta.3.apk",
+  "ipkHash": "84ae6505ceb00df15636c6171403f1e98af25fd09c4ae280cda5eec457c0f3be",
+  "ipkSize": 93347948,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.2/OMP-0.30.1-beta.2-arm64.apk",
-      "sha256": "3efbe7f96a10e3c783f8bf816820e5f86300f1d42fda6d2860b7f02c0d58e019",
-      "size": 58798818
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.3/OMP-0.30.1-beta.3-arm64.apk",
+      "sha256": "81dc61f71411be9e3071976a7a3ad43c7551a6e8cd2b99585a43e21a38dbb608",
+      "size": 58799682
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.2/OMP-0.30.1-beta.2-armv7.apk",
-      "sha256": "761de115b10e55137ef9f2112992965466d9963de1c57328317138aff75069a6",
-      "size": 54617842
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.3/OMP-0.30.1-beta.3-armv7.apk",
+      "sha256": "6c61f6a1dcb7e48b00e0d0ade623f1fc87a75518d3e8a3c45b07f662b394988b",
+      "size": 54618710
     }
   },
   "notes": [
@@ -20,10 +20,8 @@
   ],
   "notesTv": [],
   "notesPhone": [
-    "Чипы каталога показывают, что ряд листается: край гаснет, следующий чип обрезан, при первом открытии ряд слегка сдвигается",
-    "«Продолжить просмотр» сворачивается стрелкой. Вид ряда: крупно, плитки или одна строка. Выбор запоминается",
-    "В списке с постерами значок качества лежит лентой у правого края. Свайп влево убирает или отмечает просмотренным. В сетке то, что уже в «Продолжить», помечено «смотрите»",
-    "Если телевизор сопряжен, главная кнопка сериала и нажатие на серию открывают просмотр на ТВ. «на телефоне» остается отдельной ссылкой. Без телевизора смотрит телефон. «Пропуск» и «Мониторинг» стоят внизу страницы сериала"
+    "Каталог: шапка прячется с гистерезисом 24px, чипы остаются на месте. «Крупно / Плитки / Строки» стоят в строке «Продолжить просмотр», «Вся история» убрана. Свайп в списке: темные кнопки, красное «удалить», зеленое «просмотрено», открыта одна строка",
+    "Телефон держит портрет, в том числе после плеера. На ТВ ориентация не меняется"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.2"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.3"
 }
