@@ -298,13 +298,27 @@ describe('download page languages and fallbacks', () => {
         expect(doc.querySelectorAll('[data-platform]')).toHaveLength(6);
         expect(doc.querySelector('[data-platform="macos"]')!.hasAttribute('hidden')).toBe(false);
         expect(doc.querySelector('[data-platform="linux"]')!.hasAttribute('hidden')).toBe(false);
+        const tileRule = styleRule('.tile')[0];
+        expect(tileRule.style.display).toBe('grid');
+        expect(tileRule.style.gridTemplateRows).toBe('subgrid');
+        expect(tileRule.style.gridRow).toBe('span 6');
+        for (const tile of doc.querySelectorAll('article.tile')) {
+          const slots = [...tile.children].map((el) => el.className);
+          expect(slots).toHaveLength(6);
+          expect(slots[0]).toContain('tile-top');
+          expect(slots[1]).toContain('meta');
+          expect(slots[2]).toContain('button');
+          expect(slots[3]).toContain('abis');
+          expect(slots[4]).toContain('hash');
+          expect(slots[5]).toMatch(/beta/);
+        }
         const hiddenTile = document.createElement('article');
         hiddenTile.className = 'tile';
         hiddenTile.hidden = true;
         document.body.append(hiddenTile);
         expect(getComputedStyle(hiddenTile).display).toBe('none');
         hiddenTile.hidden = false;
-        expect(getComputedStyle(hiddenTile).display).toBe('flex');
+        expect(getComputedStyle(hiddenTile).display).toBe('grid');
         hiddenTile.remove();
       } finally {
         style.remove();

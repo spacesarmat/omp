@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links
+- [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
 
 ## 0.30.0
 
