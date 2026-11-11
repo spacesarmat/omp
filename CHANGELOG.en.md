@@ -6,6 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The local theme editor became a visual layout editor: flow and absolute placement with dragging, snapping guides, resize handles, and multi-select with alignment and distribution
+- [tech] The editor gained a layers panel with filtering, renaming, hiding, locking, duplicating and pasting clones, plus a style library with presets, style copy and token usage search
+- [tech] The editor compares the current theme with the original via the Before/After button and shows platforms side by side; the Accessibility panel checks contrast, font size and geometry, and geometry warnings must be confirmed before export
+- [tech] Editor export became scoped: everything, one page or one component by node id, with a diff preview and a list of affected platforms. Production applies the reviewed layout through the generated module design/generated/layout.ts only on explicit export
 - [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
 
 ## 0.30.0
