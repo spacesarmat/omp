@@ -188,7 +188,7 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpe
         setPicked(isoDay(Date.now()));
       }}>{t('date.today')}</button>
       <div class="m-cal-picked" data-cal-picked={picked}>
-        {picked && <div class="m-cal-dayhead">{dayHeader(picked) + (rows.length ? ' · ' + tp('news.calReleases', rows.length) : '')}</div>}
+        {picked && <div class="m-cal-dayhead">{dayHeader(picked) + (dayEntries.length ? ' · ' + tp('news.calReleases', dayEntries.length) : '')}</div>}
         {rows.length ? rows.map((r) => (
           <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} onOpen={p.onOpen} />
         )) : picked ? <div class="m-muted m-small">{t('news.calDayEmpty')}</div> : null}

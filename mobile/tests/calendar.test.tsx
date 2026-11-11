@@ -607,6 +607,19 @@ describe('the «Календарь» tab', () => {
     expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 4), run: true });
   });
 
+  it('a same-day batch counts every episode in the month dots and the heading', async () => {
+    fake({ sameDay: true });
+    torrents.value = [TOR];
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Месяц')!.click());
+    await flush();
+    const cell = el.querySelector('[data-cal-cell="2026-10-04"]')!;
+    expect(cell.querySelectorAll('.m-cal-dot').length).toBe(2);
+    act(() => (cell as HTMLButtonElement).click());
+    expect(el.querySelector('.m-cal-dayhead')!.textContent).toContain('2 релиза');
+  });
+
   it('a day with two episodes of one show lets List choose each one', async () => {
     fake({ sameDay: true });
     torrents.value = [TOR];

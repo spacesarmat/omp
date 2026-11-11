@@ -398,7 +398,7 @@ export function listDaySections(entries: CalEntry[], now: number = Date.now()): 
   });
   if (earlier.length) {
     const rows = dayRows(earlier);
-    out.unshift({ id: 'earlier', label: t('news.calEarlier', { n: String(rows.length) }), rows, collapsed: true });
+    out.unshift({ id: 'earlier', label: t('news.calEarlier', { n: String(earlier.length) }), rows, collapsed: true });
   }
   return out;
 }
