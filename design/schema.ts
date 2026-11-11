@@ -11,6 +11,63 @@ export type DesignState = (typeof DESIGN_STATES)[number];
 export type TokenMap = Record<string, string>;
 export type OverrideScope = 'target' | 'component' | 'screen' | 'element' | 'format' | 'state';
 
+export const LAYOUT_MODES = ['flow', 'absolute'] as const;
+export type LayoutMode = (typeof LAYOUT_MODES)[number];
+export const LAYOUT_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+export type LayoutAnchor = (typeof LAYOUT_ANCHORS)[number];
+export const LAYOUT_DIRECTIONS = ['row', 'column', 'auto'] as const;
+export type LayoutDirection = (typeof LAYOUT_DIRECTIONS)[number];
+export const LAYOUT_ALIGNMENTS = ['start', 'center', 'end', 'stretch'] as const;
+export type LayoutAlignment = (typeof LAYOUT_ALIGNMENTS)[number];
+export const LAYOUT_DISTRIBUTIONS = ['start', 'center', 'end', 'space-between', 'space-around'] as const;
+export type LayoutDistribution = (typeof LAYOUT_DISTRIBUTIONS)[number];
+
+export interface LayoutContext {
+  target: DesignTarget;
+  screenId: string;
+  format: DesignFormat;
+}
+
+export interface LayoutContainer extends LayoutContext {
+  id: string;
+  nodeId: string;
+  order: string[];
+  direction?: LayoutDirection;
+  padding?: string;
+  alignment?: LayoutAlignment;
+  distribution?: LayoutDistribution;
+}
+
+export interface LayoutPlacement extends LayoutContext {
+  id: string;
+  nodeId: string;
+  mode: LayoutMode;
+  x: number;
+  y: number;
+  anchor: LayoutAnchor;
+  width: number | 'auto';
+  height: number | 'auto';
+  minWidth?: number | 'auto';
+  maxWidth?: number | 'auto';
+  minHeight?: number | 'auto';
+  maxHeight?: number | 'auto';
+  zIndex: number;
+  hidden: boolean;
+  locked: boolean;
+  label: string;
+}
+
+export interface LayoutDocument {
+  containers: LayoutContainer[];
+  placements: LayoutPlacement[];
+}
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  tokens: TokenMap;
+}
+
 export interface ThemeOverride {
   id: string;
   scope: OverrideScope;
@@ -37,6 +94,8 @@ export interface ThemeDocument {
   tokens: TokenMap;
   overrides: ThemeOverride[];
   releaseIntents: ReleaseIntent[];
+  layout?: LayoutDocument;
+  stylePresets?: StylePreset[];
 }
 
 export type ConditionPath = 'server.connected' | 'target' | 'screen.current';
