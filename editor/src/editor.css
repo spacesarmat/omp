@@ -1117,6 +1117,103 @@ h2 svg {
   background: transparent;
 }
 
+.editor-token-library {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #3b3b3b;
+}
+
+.editor-token-library h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.editor-token-library h4 {
+  margin: 14px 0 8px;
+  color: var(--editor-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.editor-token-actions {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.editor-token-library input {
+  min-height: 30px;
+  margin: 0 0 8px;
+  padding: 5px 8px;
+  border: 1px solid #4a4a4a;
+  border-radius: 5px;
+  background: var(--editor-control);
+  color: var(--editor-text);
+  font-size: 10px;
+}
+
+.editor-token-list,
+.editor-preset-list,
+.editor-usage-list,
+.editor-incompatible {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-token-list li,
+.editor-preset-list li,
+.editor-usage-list li,
+.editor-incompatible li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #333;
+  color: var(--editor-text);
+  font-size: 10px;
+}
+
+.editor-token-list li > * + *,
+.editor-preset-list li > * + * {
+  margin-left: 6px;
+}
+
+.editor-token-list code {
+  color: var(--editor-muted);
+  font-size: 9px;
+}
+
+.editor-token-list li.is-overridden span {
+  color: var(--editor-text);
+  font-weight: 600;
+}
+
+.editor-preset-save {
+  display: flex;
+  align-items: center;
+}
+
+.editor-preset-save input {
+  flex: 1;
+  margin-right: 6px;
+}
+
+.editor-preset-list li span {
+  flex: 1;
+}
+
+.editor-usage-list li,
+.editor-incompatible li {
+  justify-content: flex-start;
+  color: var(--editor-muted);
+}
+
+.editor-incompatible li {
+  color: #d29922;
+}
+
 .editor-snapshot-panel {
   padding: 14px;
   border-bottom: 1px solid #3b3b3b;

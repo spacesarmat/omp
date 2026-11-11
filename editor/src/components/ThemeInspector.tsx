@@ -8,6 +8,7 @@ import { isDesktopTarget } from '../../shared/routes';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { PropertyField } from './PropertyField';
+import { TokenLibrary } from './TokenLibrary';
 
 export interface ThemeInspectorProps {
   controller: DraftController;
@@ -67,6 +68,7 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
       {stateUnsupported && <p class="editor-notice" role="alert">Состояние {state} недоступно для этого элемента</p>}
       {!stateUnsupported && definition.fields.map((field) => <PropertyField key={`${scope}-${field.token}`} {...field} value={tokens[field.token]} onChange={change} />)}
       <button type="button" data-action="reset" disabled={stateUnsupported || !currentOverride} onClick={() => controller.removeOverride(currentId)}>Сбросить override</button>
+      {!stateUnsupported && <TokenLibrary controller={controller} identity={identity} fields={definition.fields} values={tokens} />}
       {issues.length > 0 && (
         <div class="editor-issues" role="alert">
           {issues.map((issue) => <div key={`${issue.code}-${issue.token}`}>{issue.code}: {issue.token}</div>)}
