@@ -171,7 +171,9 @@ describe('pinch step', () => {
     expect(zoomView('compact', 1)).toBe('list');
     expect(zoomView('list', 1)).toBe('small');
     expect(zoomView('small', 1)).toBe('large');
-    expect(zoomView('large', 1)).toBe('large');
+    expect(zoomView('large', 1)).toBe('one');
+    expect(zoomView('one', 1)).toBe('one');
+    expect(zoomView('one', -1)).toBe('large');
     expect(zoomView('large', -1)).toBe('small');
     expect(zoomView('small', -1)).toBe('list');
     expect(zoomView('list', -1)).toBe('compact');

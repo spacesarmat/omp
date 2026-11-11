@@ -60,7 +60,7 @@ export interface TvAdSlotOptions {
 }
 
 /** About how many cards one TV screen holds (the spacing of «at most one ad per screen»). */
-export const TV_PER_SCREEN = { large: 12, small: 18, list: 7, compact: 14, disc: 16 };
+export const TV_PER_SCREEN = { one: 8, large: 12, small: 18, list: 7, compact: 14, disc: 16 };
 
 export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
   installTvAds();
