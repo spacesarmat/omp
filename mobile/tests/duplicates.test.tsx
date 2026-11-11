@@ -245,7 +245,8 @@ describe('series screen', () => {
     act(() => (document.querySelector('[data-release="' + SPIRIT_1080.hash + '"]') as HTMLElement).click());
     await flush();
     expect(el.querySelector('[data-release-switch]')!.textContent).toContain('1080p WEB-DL · 5,4 ГБ');
-    act(() => (el.querySelector('.m-release-more') as HTMLElement).click());
+    openReleases();
+    act(() => (document.querySelector('[data-release-actions]') as HTMLElement).click());
     // the menu names the release
     expect(document.querySelector('.m-sheet-title')!.textContent).toMatch(/ · 1080p WEB-DL$/);
     // only the normal manual actions of a release (deleting asks its own confirm)

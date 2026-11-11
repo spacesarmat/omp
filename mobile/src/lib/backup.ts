@@ -154,6 +154,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.torrentsAt',
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
+  'tsp.historyHide', // phone: shows hidden from continue and history on this device
   'tsp.linkSpeed', // last measured download speed: rebuilt while watching
   'tsp.update', // update-check state
   'tsp.localServer.skipPin', // skipped TorrServer pin offer: per device, like tsp.update
