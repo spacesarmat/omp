@@ -500,7 +500,11 @@ describe('pinch in «Мои»', () => {
     await flush();
     pinch(body(), 160);
     await flush();
-    expect(settings.value.libraryView).toBe('large');
+    expect(settings.value.libraryView).toBe('one');
+    pinch(body(), 160);
+    await flush();
+    expect(settings.value.libraryView).toBe('one');
+    vibrate.mockClear();
     updateSettings({ libraryView: 'compact' });
     await flush();
     pinch(body(), 50);

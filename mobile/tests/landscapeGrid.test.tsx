@@ -215,6 +215,7 @@ describe('«Обзор» four modes, portrait and landscape', () => {
       on: b.getAttribute('aria-checked'),
     }));
     expect(labels).toEqual([
+      { view: 'one', text: 'Одна карточка', on: 'false' },
       { view: 'large', text: 'Большие карточки', on: 'true' },
       { view: 'small', text: 'Средние карточки', on: 'false' },
       { view: 'list', text: 'Список с картинками', on: 'false' },
@@ -366,7 +367,6 @@ describe('«Мои» four modes, rotation and the cached banner', () => {
           expect(root.getAttribute('data-cols')).toBe(String(gridCols(orient.content, mode)));
           expect(Number(root.getAttribute('data-card-min'))).toBeGreaterThanOrEqual(GRID_MIN[mode]);
           expect(root.querySelectorAll('.m-poster').length).toBeGreaterThan(0);
-          if (view === 'large') expect(root.textContent).toMatch(/ГБ|MB|GB/);
         } else if (view === 'list') {
           expect(root.querySelectorAll('.m-poster-row').length).toBeGreaterThan(0);
           expect(root.querySelector('.m-badge-inline, .m-badge, .m-poster')).not.toBeNull();

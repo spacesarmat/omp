@@ -503,7 +503,7 @@ export function Library() {
   // poster grids: columns from the content width, the same rule in portrait and landscape
   const gridView = mine && !isHistory && (view === 'one' || view === 'large' || view === 'small');
   const gridMode: GridMode = view === 'small' ? 'small' : 'large';
-  const fixedCols = view === 'one' ? 1 : view === 'large' ? 2 : view === 'small' ? 3 : 0;
+  const fixedCols = view === 'one' ? 1 : 0;
   const gridWidth = useContentWidth(gridRef, gridView);
   const gridColsNow = gridView && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
   const gridStyle = gridView ? { gridTemplateColumns: fixedCols ? 'repeat(' + fixedCols + ', minmax(0, 1fr))' : gridTemplate(gridMode) } : undefined;
