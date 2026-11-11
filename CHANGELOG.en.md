@@ -7,9 +7,9 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - Desktop: macOS (Intel and Apple Silicon) and Linux (AppImage and deb) join Windows. Auto-update uses the same feed: NSIS, DMG or AppImage. macOS is not signed by Apple: right-click and Open, or System Settings - Privacy and Security - Open Anyway
-- On a computer the menu is on the left: labels, an icon rail, or hidden. A button and Ctrl+B (Cmd+B on Mac). The choice is remembered. On a narrow window the menu covers the content
+- On a computer the menu is on the left: labels, an icon rail, or hidden. A button and Ctrl+B (Cmd+B on Mac). The choice is remembered. On a narrow window the menu covers the content. Sheets and confirmations open above the menu
 - On a computer posters highlight, and a right click opens the same menu as a long press. Space pauses, arrows seek and change volume, F is fullscreen, Ctrl+K or Cmd+K opens search, Esc goes back. Rows scroll with the wheel
-- A wide screen shows more catalog columns. The mini player can float with the PiP button. A .torrent file or a magnet can be dropped on the window. The tray can show, hide and quit
+- A wide screen shows more catalog columns. The mini player can float with the PiP button. A .torrent file or a magnet can be dropped on the window. Several files: the first one opens, and the queue does not drop it. The tray can show, hide and quit
 - The download page and omp-player.online list macOS and Linux. A tile stays hidden when the feed has no file
 - On launch OMP compares the installed 2160 Player and TorrServer with the latest release. When a newer one exists it asks: Update or Later. Later is remembered for that version. If the installed version cannot be read, nothing is asked
 - [phone] The embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes

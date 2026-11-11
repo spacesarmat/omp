@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { takeStashedFile } from '../../src/api/torrentFiles';
 import { desktopHotkey } from '../../mobile/src/desktop/hotkeys';
 import { linksFromDrop, magnetFromText } from '../../mobile/src/desktop/drop';
 import { nextSidebarMode, readSidebarMode, sidebarIsNarrow, sidebarShortcut, writeSidebarMode } from '../../mobile/src/desktop/sidebarState';
@@ -71,5 +73,41 @@ describe('desktop wheel and drop', () => {
     expect(links[0]).toContain('magnet:');
     expect(links[1]).toMatch(/^omp-file:/);
     expect(linksFromDrop('hello', [{ name: 'notes.txt', bytes: new Uint8Array([1]) }])).toEqual([]);
+  });
+
+  it('keeps the first torrent when more than eight files are dropped', () => {
+    const files = [];
+    for (let i = 0; i < 9; i++) files.push({ name: 'Show-' + i + '.torrent', bytes: new Uint8Array([i + 1]) });
+    const links = linksFromDrop('', files);
+    expect(links).toHaveLength(9);
+    expect(links[0]).toMatch(/^omp-file:/);
+    expect(Array.from(takeStashedFile(links[0]) || [])).toEqual([1]);
+  });
+});
+
+describe('desktop layers', () => {
+  it('paints sheets and confirmations above the sidebar', () => {
+    const mobile = document.createElement('style');
+    const desk = document.createElement('style');
+    mobile.textContent = readFileSync('mobile/src/mobile.css', 'utf8');
+    desk.textContent = readFileSync('mobile/src/desktop/desktop.css', 'utf8');
+    document.head.append(mobile, desk);
+    document.documentElement.className = 'omp-desktop';
+    const side = document.createElement('aside');
+    side.className = 'omp-side';
+    const sheet = document.createElement('div');
+    sheet.className = 'm-sheet-host';
+    const confirm = document.createElement('div');
+    confirm.className = 'm-sheet-host m-dialog-host m-confirm-host';
+    document.body.append(side, sheet, confirm);
+    const sideZ = Number(getComputedStyle(side).zIndex);
+    expect(Number(getComputedStyle(sheet).zIndex)).toBeGreaterThan(sideZ);
+    expect(Number(getComputedStyle(confirm).zIndex)).toBeGreaterThan(sideZ);
+    side.remove();
+    sheet.remove();
+    confirm.remove();
+    mobile.remove();
+    desk.remove();
+    document.documentElement.className = '';
   });
 });

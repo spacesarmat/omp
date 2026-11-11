@@ -264,6 +264,14 @@ describe('download page languages and fallbacks', () => {
         expect(doc.querySelectorAll('[data-platform]')).toHaveLength(6);
         expect(doc.querySelector('[data-platform="macos"]')!.hasAttribute('hidden')).toBe(true);
         expect(doc.querySelector('[data-platform="linux"]')!.hasAttribute('hidden')).toBe(true);
+        const hiddenTile = document.createElement('article');
+        hiddenTile.className = 'tile';
+        hiddenTile.hidden = true;
+        document.body.append(hiddenTile);
+        expect(getComputedStyle(hiddenTile).display).toBe('none');
+        hiddenTile.hidden = false;
+        expect(getComputedStyle(hiddenTile).display).toBe('flex');
+        hiddenTile.remove();
       } finally {
         style.remove();
       }

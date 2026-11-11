@@ -116,6 +116,11 @@ html.omp-desktop .m-mini.m-mini-float {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   cursor: grab;
 }
+/* Sheets and confirmations sit above the sidebar (40) and its backdrop (30). */
+html.omp-desktop .m-sheet-host,
+html.omp-desktop .m-confirm-host {
+  z-index: 60;
+}
 html.omp-desktop.omp-context .m-sheet-host {
   justify-content: flex-start;
   align-items: flex-start;
