@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.0
 
 - [phone] The remote can turn a TV or a box on. OMP remembers the MAC and broadcast address of a paired device, and a device can be added by MAC. Turn on sends Wake-on-LAN. LG, Samsung and Android TV get power, volume and input commands. A phone with an IR blaster offers brands and a code test, and a button can be learned with an ESP receiver or pasted as Flipper, Pronto or raw
 - [atv] When the remote wakes the box or starts playback on it, OMP turns the TV on over HDMI-CEC and switches the input. Settings include Turn the TV on over HDMI-CEC. If the system rejects the command, OMP keeps going

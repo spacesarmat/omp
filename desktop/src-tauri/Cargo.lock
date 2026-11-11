@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "omp-desktop"
-version = "0.20.12-beta.2"
+version = "0.30.0"
 dependencies = [
  "base64 0.23.1",
  "dirs",
