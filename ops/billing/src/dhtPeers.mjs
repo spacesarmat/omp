@@ -77,6 +77,14 @@ export function dhtPeersLimitConfig(env) {
   };
 }
 
+const MAX_ESTIMATE = 1000000;
+
+function wholeCount(n, max) {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n !== Math.floor(n)) return null;
+  if (n > max) return max;
+  return n;
+}
+
 /** The only shape the app may see. Extra upstream fields (addresses) are dropped. */
 export function publicDhtBody(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
@@ -84,7 +92,16 @@ export function publicDhtBody(body) {
   if (typeof peers !== 'number' || !Number.isFinite(peers) || peers < 0 || peers > MAX_PEERS) return null;
   if (peers !== Math.floor(peers)) return null;
   if (body.approx !== true || body.source !== 'dht') return null;
-  return { peers, source: 'dht', approx: true };
+  const out = { peers, source: 'dht', approx: true };
+  // BEP 33 seed and peer estimates. The address sample in `peers` is not a seed count.
+  if (body.estimate === true) {
+    const seeds = wholeCount(body.seedsEstimate, MAX_ESTIMATE);
+    const swarm = wholeCount(body.peerEstimate, MAX_ESTIMATE);
+    out.seedsEstimate = seeds === null ? 0 : seeds;
+    out.peerEstimate = swarm === null ? 0 : swarm;
+    out.estimate = true;
+  }
+  return out;
 }
 
 function retrySeconds(headers, body) {

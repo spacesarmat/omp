@@ -6,8 +6,10 @@ import { subSizeOptions, formatOffset, subtitleOffsetOptions } from '../player/s
 import { decideStart } from '../player/resume';
 import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
-import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { rememberTracks, prefForStart } from '../viewer/tracks';
 import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
+import { communityVoiceFor } from '../viewer/communityRank';
+import { watchBuffer, watchClose, watchFrame, watchOpen } from '../viewer/watchReport';
 import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
@@ -29,7 +31,15 @@ import type { SkipPrefs } from '../lib/journal';
 import { formatDuration } from '../lib/format';
 import { useVideoState } from '../player/useVideoState';
 import { classifyFailure, failureText, faultFromMediaCode, swarmFromCache, SWARM_RETRY_MS } from '../player/playbackFailure';
+import { startupReason, failureActions } from '../viewer/startup';
+import { fallbackAction, fallbackDue } from '../viewer/fallback';
+import { nextAlternate, requestAutoplay, stashResume } from '../viewer/alternates';
+import { progressIdentity } from '../viewer/progressSync';
+import { noteLinkSpeed } from '../viewer/linkSpeed';
+import { episodeLabel } from '../lib/episodes';
+import { torrents } from '../store/library';
 import { openAnotherRelease } from '../player/anotherRelease';
+import { replaceRoute } from '../ui/nav';
 import { usePlaybackDead } from '../lib/swarmWatch';
 import { HideTimer, canHideControls, pointerMoveCounts } from '../player/hideTimer';
 import { useProgressSync } from '../player/useProgressSync';
@@ -142,11 +152,91 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   const swarm = swarmFromCache(cacheRead.status, cache, !!(c && item.hash));
   const failure = classifyFailure(faultFromMediaCode(vs.errorCode), swarm, vs.played);
   const blocked = vs.errorCode !== null && failure !== 'buffering';
+  const openedAt = useRef(Date.now());
+  const switched = useRef(false);
+  const [stallTick, setStallTick] = useState(0);
+  useEffect(() => {
+    openedAt.current = Date.now();
+    switched.current = false;
+    setStallTick(0);
+  }, [index, reloadKey, ready]);
+  useEffect(() => {
+    if (!ready || vs.played) return undefined;
+    const id = setInterval(() => setStallTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [ready, vs.played, index, reloadKey]);
+  const elapsedMs = !ready || vs.played ? 0 : Date.now() - openedAt.current;
+  void stallTick;
+  const reason = !ready ? 'none' : startupReason({ elapsedMs: elapsedMs, fault: faultFromMediaCode(vs.errorCode), swarm: swarm, played: vs.played });
+  const stallActions = failureActions(reason);
+  const showFail = blocked || (ready && reason !== 'none' && !vs.played);
+  const bytesNow = swarm.kind === 'ok' ? Math.max(swarm.stats.preloadedBytes, swarm.stats.loadedBytes) : 0;
+  const speedNow = swarm.kind === 'ok' ? swarm.stats.downloadSpeed : 0;
+  useEffect(() => {
+    if (speedNow > 0) noteLinkSpeed(speedNow);
+  }, [speedNow]);
   const dead = usePlaybackDead(item.hash, cache);
   const deadNow = dead && !blocked;
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
+  const watchVoice = useRef('');
+  useEffect(() => {
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    const hash = item.hash;
+    const file = item.fileIndex;
+    const title = item.torrentTitle || item.title;
+    watchOpen({ infohash: hash, file, title, fileTitle: item.title });
+    return () => {
+      watchClose({
+        infohash: hash,
+        file,
+        title,
+        fileTitle: item.title,
+        time: posRef.current.time,
+        duration: posRef.current.duration,
+        voice: watchVoice.current,
+      });
+    };
+  }, [item]);
+  useEffect(() => {
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    if (vs.played) watchFrame(item.hash, item.fileIndex);
+    watchBuffer(item.hash, item.fileIndex, !!vs.buffering);
+    const audio = listAudio(videoRef.current, probe)[audioIdx];
+    watchVoice.current = audio && audio.label ? audio.label : '';
+  }, [vs.played, vs.buffering, audioIdx, item]);
+  const goAlt = (bias: 'any' | 'lower') => {
+    const pos = posRef.current.time >= 1 ? posRef.current.time : startPos.current;
+    const title = item.torrentTitle || item.title;
+    const film = !episodeLabel(item.title);
+    const id = progressIdentity(title, item.title, film);
+    stashResume(id.titleKey, id.episodeKey, pos);
+    const known: { [hash: string]: boolean } = {};
+    torrents.value.forEach((x) => {
+      if (x.hash) known[x.hash.toLowerCase()] = true;
+    });
+    const alt = item.hash ? nextAlternate(item.hash, bias, known) : '';
+    if (alt) {
+      requestAutoplay(alt, pos, id.episodeKey);
+      replaceRoute({ name: 'torrent', hash: alt });
+      return;
+    }
+    openAnotherRelease(item.hash);
+  };
+  useEffect(() => {
+    if (!ready || switched.current || !settings.value.fallbackAuto) return;
+    if (reason !== 'slow' && reason !== 'no-seeds') return;
+    if (fallbackAction(fallbackDue(elapsedMs, vs.played, bytesNow, speedNow), true) !== 'switch') return;
+    const known: { [hash: string]: boolean } = {};
+    torrents.value.forEach((x) => {
+      if (x.hash) known[x.hash.toLowerCase()] = true;
+    });
+    const alt = item.hash ? nextAlternate(item.hash, 'sameOrLower', known) : '';
+    if (!alt) return;
+    switched.current = true;
+    goAlt('any');
+  }, [ready, reason, stallTick]);
   // watch journal on TorrServer: an entry when the item starts (below) and when it is left
   const journal = useMemo(() => new WatchJournal((h, e) => { recordWatch(c, h, e); }, journalSource(from)), []);
   useEffect(() => () => journal.end(item, posRef.current.time, posRef.current.duration), [item]);
@@ -489,7 +579,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       if (i >= 0) selectAudioTrack(v, i);
     }
     if (!item.hash || !opt) return;
-    saveTrackPref(item.hash, { audioLang: opt.language, audioLabel: opt.label });
+    rememberTracks(item.hash, item.torrentTitle || item.title, { audioLang: opt.language, audioLabel: opt.label });
     void rememberSeriesTracks(c, item.hash, webosSeriesAudioPatch(audio, i));
   };
 
@@ -498,7 +588,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     applySubChoice(choice);
     if (!item.hash) return;
     const embedded = embeddedSubOptions(probeRef.current, v);
-    saveTrackPref(item.hash, { sub: subPrefFromChoice(choice, embedded, item.subtitles || []) });
+    rememberTracks(item.hash, item.torrentTitle || item.title, { sub: subPrefFromChoice(choice, embedded, item.subtitles || []) });
     void rememberSeriesTracks(c, item.hash, { s: seriesSubFromChoice(choice, embedded, item.subtitles || []) });
   };
 
@@ -506,16 +596,17 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     const v = videoRef.current;
     if (!v || userTracks.current) return;
     const s = settings.value;
-    const pref = item.hash ? getTrackPref(item.hash) : null;
+    const voice = communityVoiceFor(item.hash, item.torrentTitle || item.title);
+    const pref = prefForStart(item.hash, item.torrentTitle || item.title);
     const series = seriesTracksFor(item.hash);
     const builtin = audioOptions(probeRef.current, v);
     const list = listAudio(v, probeRef.current);
-    let ai = webosAudioIndex(builtin, extTracks, series, pref, s.audioLang);
+    let ai = webosAudioIndex(builtin, extTracks, series, pref, s.audioLang, voice);
     const picked = ai >= 0 ? list[ai] : undefined;
     // ffprobe (or the file list) may still be on the way: do not start a dub over a built-in track we have not seen yet
-    if (!probed && picked && picked.externalId) ai = builtin.length ? pickAudioFor(builtin, series, pref, s.audioLang) : -1;
+    if (!probed && picked && picked.externalId) ai = builtin.length ? pickAudioFor(builtin, series, pref, s.audioLang, voice) : -1;
     const pickedId = ai >= 0 && list[ai] ? list[ai].externalId : '';
-    if (pickedId && failedDub.current[pickedId]) ai = pickAudioFor(builtin, series, pref, s.audioLang);
+    if (pickedId && failedDub.current[pickedId]) ai = pickAudioFor(builtin, series, pref, s.audioLang, voice);
     const opt = ai >= 0 ? list[ai] : undefined;
     const useExternal = !!(opt && opt.externalId && opt.externalUrl && !failedDub.current[opt.externalId]);
     if (useExternal) {
@@ -524,7 +615,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     } else if (dubRef.current) {
       dubRef.current.stop();
       let bi = ai;
-      if (!(bi >= 0 && bi < builtin.length)) bi = pickAudioFor(builtin, series, pref, s.audioLang);
+      if (!(bi >= 0 && bi < builtin.length)) bi = pickAudioFor(builtin, series, pref, s.audioLang, voice);
       if (bi >= 0 && bi < builtin.length) {
         setAudioIdx(bi);
         if (bi !== defaultAudioIndex(builtin)) selectAudioTrack(v, bi);
@@ -545,8 +636,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     if (cur && cur.externalId) failedDub.current[cur.externalId] = true;
     const builtin = audioOptions(probeRef.current, v);
     const series = seriesTracksFor(item && item.hash);
-    const pref = item && item.hash ? getTrackPref(item.hash) : null;
-    let ai = pickAudioFor(builtin, series, pref, settings.value.audioLang);
+    const pref = item ? prefForStart(item.hash, item.torrentTitle || item.title) : null;
+    const voice = communityVoiceFor(item && item.hash, item && (item.torrentTitle || item.title));
+    let ai = pickAudioFor(builtin, series, pref, settings.value.audioLang, voice);
     if (ai < 0 && builtin.length) ai = 0;
     setAudioIdx(builtin.length && ai >= 0 ? ai : -1);
     if (v && ai >= 0 && builtin.length) selectAudioTrack(v, ai);
@@ -731,7 +823,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   }, 110);
 
   useKeys((a) => {
-    if (blocked) return false; // error view buttons use spatial navigation
+    if (blocked || showFail || deadNow) return false; // error view buttons use spatial navigation
     lastKeyAt.current = Date.now();
     taps.cancel();
     if (next.countdown !== null) {
@@ -825,7 +917,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       <audio ref={audioRef} preload="auto" />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
-      {ready && !blocked && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null || dubBuffering) && (
+      {ready && !showFail && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null || dubBuffering) && (
         <BufferingOverlay cache={cache} waiting={!vs.played || vs.errorCode !== null} />
       )}
       {infoOn && (
@@ -837,7 +929,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       )}
       {showSkip && intro && <SkipBanner lift={donate === 'pause'} onSkip={() => { seekTo(introSkipTarget(intro, vs.duration)); setSkippedIntro(intro.start); }} />}
       {undo && next.countdown === null && <UndoBanner text={undo.text} lift={donate === 'pause'} onUndo={undoSkip} />}
-      {(controls || vs.paused) && !blocked && (
+      {(controls || vs.paused) && !showFail && !deadNow && (
         <Controls
           title={tvGlyphs(heading)}
           time={vs.time}
@@ -856,15 +948,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
           onChapters={openChapters}
         />
       )}
-      {(blocked || deadNow) && (
+      {(showFail || deadNow) && (
         <PlayerError
-          message={deadNow ? t('torrent.deadRelease') : failureText(failure, vs.errorCode)}
+          message={deadNow ? t('torrent.deadRelease') : reason === 'no-seeds' ? t('viewer.errSeeds') : reason === 'slow' ? t('viewer.errSlow') : reason === 'server' ? t('viewer.errServer') : reason === 'codec' ? t('viewer.errCodec') : failureText(failure, vs.errorCode)}
           probe={probe}
-          showProbe={!deadNow && failure === 'codec'}
+          showProbe={!deadNow && (failure === 'codec' || reason === 'codec')}
           onRetry={retry}
           onBack={() => goBack()}
-          onAnother={deadNow || failure === 'no-seeders' ? () => openAnotherRelease(item.hash) : undefined}
+          onAnother={deadNow || stallActions.indexOf('another') >= 0 ? () => goAlt('any') : undefined}
           anotherLabel={deadNow ? t('torrent.better.find') : undefined}
+          onLower={!deadNow && stallActions.indexOf('lower') >= 0 ? () => goAlt('lower') : undefined}
         />
       )}
     </div>

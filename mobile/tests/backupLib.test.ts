@@ -65,6 +65,9 @@ describe('collectBackup', () => {
     put('tsp.servers', [SERVER]);
     put('tsp.activeServer', 's1');
     put('tsp.tvs', [TV_LG, TV_ATV]);
+    put('tsp.wolManual', [{ mac: 'aa:bb:cc:dd:ee:ff', name: 'Box' }]);
+    put('tsp.irProfiles', [{ deviceId: 'aa:bb:cc:dd:ee:ff', buttons: [{ id: 'b', name: 'P', frequency: 38000, pulses: [100, 200] }] }]);
+    put('tsp.netTvs', [{ id: 'samsung:192.168.1.9', kind: 'samsung', ip: '192.168.1.9', name: 'Samsung' }]);
     put('tsp.activeTv', TV_LG.ip);
     put('tsp.subs', [SUB]);
     put('tsp.monitor', { enabled: false, hours: 6, wifiOnly: true, episodes: true });
@@ -76,6 +79,7 @@ describe('collectBackup', () => {
     put('tsp.localServer', { autostart: true });
     put('tsp.playlists', [{ url: 'http://x/p.m3u', title: 'P' }]);
     put('tsp.trackPrefs', { h1: { audioLang: 'ru' } });
+    put('tsp.titleTracks', { dune: { audioLang: 'ru' } });
     put('tsp.support', { until: 1798934400000 });
     put('tsp.catalogMode', 'discover');
     put('tsp.catalogArt', { 'tv:21': 'https://img.test/a.jpg' });

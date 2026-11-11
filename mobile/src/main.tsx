@@ -9,8 +9,10 @@ import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
 import { ensureLinkedBilling } from '../../src/sources/ompJackett';
 import { setDhtPeersContext } from '../../src/sources/dhtPeers';
+import { setProgressContext } from '../../src/viewer/progressSync';
 import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
+import { setWatchContext, setWatchDeviceClass } from '../../src/viewer/watchReport';
 import { setTorrServerTransport, TorrServerClient } from '../../src/api/torrserver';
 import { scanLan } from './screens/Connect';
 import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWifiPrefs, watchPlaybackEnd } from './servers/wifiRun';
@@ -27,6 +29,7 @@ import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
+import { expectBetaGate } from '../../src/store/updates';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -34,6 +37,7 @@ installCleartextSync(
 );
 
 if (typeof __DESKTOP__ !== 'undefined' && __DESKTOP__) {
+  document.documentElement.classList.add('omp-desktop');
   setTorrServerTransport({
     send: async (url, req) => {
       const response = await native.http({
@@ -57,6 +61,20 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
+expectBetaGate();
+import('../../src/report/presence').then((m) =>
+  m.startPresence(phoneSourceContext, typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone'),
+).catch(() => undefined);
+import('../../src/report/rollout').then((m) => m.installRollout(phoneSourceContext)).catch(() => undefined);
+import('../../src/report/crash').then((m) => {
+  const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
+  m.installCrashHooks(platform, phoneSourceContext);
+  return native.takeNativeCrashes().then((text) => {
+    if (text) m.queueCrash({ kind: 'native', message: text.slice(0, 400), stack: text, platform });
+    m.crumb('start ' + platform);
+    return m.flushCrashes(phoneSourceContext);
+  });
+}).catch(() => undefined);
 startKeyboardWatch();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card
 logStart(t('history.phone'));
@@ -68,8 +86,11 @@ registerBuiltinSources();
 startBillingKeepAlive(phoneSourceContext, { keystore: native.available });
 // «Проверить сиды» asks billing for a DHT count with the same device token. webOS has no native HTTP and skips it.
 setDhtPeersContext(phoneSourceContext);
+setProgressContext(phoneSourceContext);
 // A feed row without a magnet (NNM-Club) loads the announce list from its topic page. No invented tracker URL.
 setProbeContext(() => phoneSourceContext());
+setWatchDeviceClass('phone');
+setWatchContext(() => phoneSourceContext());
 bindWifiRuntime({
   hint: () => native.wifiHint(),
   prefs: loadWifiPrefs,

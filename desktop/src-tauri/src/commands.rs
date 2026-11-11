@@ -181,6 +181,18 @@ pub async fn player_pause(
 }
 
 #[tauri::command]
+pub async fn player_control(
+    action: String,
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), move |manager| match manager.control(&action) {
+        Ok(status) => status,
+        Err(_) => manager.status(),
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn player_stop(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
     cancellation: State<'_, PlayerCancellation>,
@@ -212,6 +224,11 @@ where
     })
     .await
     .map_err(|error| format!("update worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub fn update_supported() -> bool {
+    crate::update::updates_are_automatic()
 }
 
 #[tauri::command]
@@ -250,6 +267,46 @@ pub async fn update_apply(
         app.exit(0);
     }
     result
+}
+
+fn native_crash_path() -> std::path::PathBuf {
+    std::env::temp_dir().join("omp-native-crash.txt")
+}
+
+fn scrub_native(text: &str) -> String {
+    let mut out = String::new();
+    for line in text.lines() {
+        if line.to_ascii_lowercase().contains("magnet:?") || line.to_ascii_lowercase().contains("bearer ") {
+            out.push_str("[скрыто]\n");
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    if out.len() > 4000 {
+        let mut end = 4000;
+        while end > 0 && !out.is_char_boundary(end) {
+            end -= 1;
+        }
+        out.truncate(end);
+    }
+    out
+}
+
+pub fn install_native_crash_hook() {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = std::fs::write(native_crash_path(), scrub_native(&format!("{info}")));
+        prev(info);
+    }));
+}
+
+#[tauri::command]
+pub fn take_native_crashes() -> String {
+    let path = native_crash_path();
+    let text = std::fs::read_to_string(&path).unwrap_or_default();
+    let _ = std::fs::remove_file(path);
+    text
 }
 
 #[tauri::command]

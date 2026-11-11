@@ -19,7 +19,17 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/admin/api': 'http://127.0.0.1:8787',
+      '/admin/api': {
+        target: 'http://127.0.0.1:8787',
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes, req) => {
+            if (String(req.url || '').indexOf('/events') >= 0) {
+              proxyRes.headers['cache-control'] = 'no-cache, no-transform';
+              proxyRes.headers['x-accel-buffering'] = 'no';
+            }
+          });
+        },
+      },
       '/admin/login': 'http://127.0.0.1:8787',
       '/admin/find': 'http://127.0.0.1:8787',
       '/admin/issue': 'http://127.0.0.1:8787',
@@ -40,6 +50,7 @@ export default defineConfig({
       '/admin/session-revoke': 'http://127.0.0.1:8787',
       '/admin/settings': 'http://127.0.0.1:8787',
       '/admin/services': 'http://127.0.0.1:8787',
+      '/admin/cache': 'http://127.0.0.1:8787',
       '/admin/monitor': 'http://127.0.0.1:8787',
       '/admin/support': 'http://127.0.0.1:8787',
       '/admin/support-close': 'http://127.0.0.1:8787',

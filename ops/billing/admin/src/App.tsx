@@ -14,7 +14,14 @@ import { AdsPanel } from '@/panels/AdsPanel';
 import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
 import { DhtPanel } from '@/panels/DhtPanel';
+import { CachePanel } from '@/panels/CachePanel';
+import { WatchPanel } from '@/panels/WatchPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
+import { DeskHome, DevicesDesk, FunnelDesk, RevenueDesk, RollbackCard, SourcesDesk, UsersDesk, NucDesk } from '@/panels/DeskViews';
+import { BroadcastDesk, CrashesDesk, LoginsDesk, VersionsDesk } from '@/panels/OpsExtra';
+import { NAV, Palette } from '@/components/palette';
+import { useDesk } from '@/lib/desk';
+import { LiveBar, useLive } from '@/lib/live';
 import type { HomeData, UserData } from '@/lib/types';
 
 function AlertsPanel({ alerts }: { alerts?: { level: string; text: string; accountId?: string }[] }) {
@@ -52,7 +59,11 @@ export function App() {
   const [tab, setTab] = useState(() => params.get('tab') || 'home');
   const [filter, setFilter] = useState('all');
   const [q, setQ] = useState('');
+  const [navOpen, setNavOpen] = useState(false);
+  const [palette, setPalette] = useState(false);
   const supportTg = params.get('tg') || '';
+  const live = useLive();
+  const desk = useDesk(auth === true && !user, live.paused);
 
   async function reload() {
     const id = new URLSearchParams(location.search).get('id');
@@ -85,6 +96,12 @@ export function App() {
 
   useEffect(() => {
     void reload();
+  }, []);
+
+  useEffect(() => {
+    const onLive = () => void reload();
+    window.addEventListener('omp-admin-live', onLive);
+    return () => window.removeEventListener('omp-admin-live', onLive);
   }, []);
 
   useEffect(() => {
@@ -138,6 +155,12 @@ export function App() {
   if (user) {
     return (
       <>
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-3">
+          <LiveBar />
+          <Button variant="secondary" onClick={() => (location.href = '/admin/')}>
+            К списку
+          </Button>
+        </div>
         <UserCard user={user} run={run} />
         <Toast />
       </>
@@ -146,17 +169,59 @@ export function App() {
 
   const d = data || ({} as HomeData);
 
+  const deskData = desk.data && desk.data.auth !== false ? desk.data : undefined;
+
   return (
-    <main className="mx-auto w-full max-w-[1200px] space-y-4 px-4 py-6 lg:px-8">
+    <main className="min-h-screen lg:flex">
+      <aside className={(navOpen ? 'block' : 'hidden') + ' w-full border-b border-border bg-card lg:block lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r'}>
+        <div className="px-3 py-3">
+          <Brand />
+        </div>
+        <nav className="px-2 pb-4">
+          {NAV.map((group) => (
+            <div key={group.title} className="mb-3">
+              <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">{group.title}</div>
+              {group.items.map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={'block w-full rounded-md px-2 py-1.5 text-left text-sm ' + (tab === id ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary')}
+                  onClick={() => {
+                    setTab(id);
+                    setNavOpen(false);
+                  }}
+                >
+                  {label}
+                  {id === 'support' && (d.support || []).length > 0 ? ' ' + (d.support || []).length : ''}
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+      <div className="min-w-0 flex-1 space-y-4 px-4 py-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <Brand />
-        <Button variant="secondary" onClick={() => void run('/admin/logout')}>
-          Выйти
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" className="lg:hidden" onClick={() => setNavOpen((v) => !v)}>
+            Меню
+          </Button>
+          <Button variant="secondary" onClick={() => setPalette(true)}>
+            Поиск
+          </Button>
+          <span className="text-xs text-muted-foreground">Ctrl+K</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <LiveBar />
+          <span className="text-xs text-muted-foreground">{deskData?.role === 'read' ? 'только просмотр' : 'полный доступ'}</span>
+          <Button variant="secondary" onClick={() => void run('/admin/logout')}>
+            Выйти
+          </Button>
+        </div>
       </header>
+      <Palette open={palette} onOpen={setPalette} go={setTab} />
       <FlashBox flash={d.flash} />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="w-full">
+        <TabsList className="hidden">
           <TabsTrigger value="home">
             Главная
             {(d.alerts || []).length > 0 ? (
@@ -180,11 +245,22 @@ export function App() {
           <TabsTrigger value="audit">Журнал</TabsTrigger>
           <TabsTrigger value="ads">Реклама</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
+          <TabsTrigger value="cache">Кэш</TabsTrigger>
           <TabsTrigger value="dht">DHT</TabsTrigger>
           <TabsTrigger value="monitor">Мониторинг</TabsTrigger>
           <TabsTrigger value="changes">Изменения</TabsTrigger>
           <TabsTrigger value="settings">Настройки</TabsTrigger>
           <TabsTrigger value="security">Доступ</TabsTrigger>
+          <TabsTrigger value="users">Пользователи</TabsTrigger>
+          <TabsTrigger value="devices">Устройства</TabsTrigger>
+          <TabsTrigger value="sources">Источники</TabsTrigger>
+          <TabsTrigger value="rank">Подбор</TabsTrigger>
+          <TabsTrigger value="funnel">Воронка</TabsTrigger>
+          <TabsTrigger value="revenue">Выручка</TabsTrigger>
+          <TabsTrigger value="nuc">NUC</TabsTrigger>
+          <TabsTrigger value="crashes">Сбои</TabsTrigger>
+          <TabsTrigger value="broadcast">Рассылка</TabsTrigger>
+          <TabsTrigger value="versions">Версии</TabsTrigger>
         </TabsList>
 
         <TabsContent value="support">
@@ -192,6 +268,7 @@ export function App() {
         </TabsContent>
 
         <TabsContent value="home" className="space-y-4">
+          <DeskHome data={deskData} csrf={d.csrf || ''} />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
             {(
               [
@@ -247,6 +324,26 @@ export function App() {
           <HomeFeed events={d.events || []} />
         </TabsContent>
 
+        <TabsContent value="users">
+          <UsersDesk users={deskData?.users || []} go={(id) => (location.href = '/admin/?id=' + encodeURIComponent(id))} />
+        </TabsContent>
+        <TabsContent value="devices">
+          <DevicesDesk rows={deskData?.devices || []} />
+        </TabsContent>
+        <TabsContent value="sources" className="space-y-4">
+          <SourcesDesk data={deskData} csrf={d.csrf || ''} />
+          <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
+        </TabsContent>
+        <TabsContent value="rank">{tab === 'rank' ? <WatchPanel csrf={d.csrf || ''} /> : null}</TabsContent>
+        <TabsContent value="funnel">
+          <FunnelDesk data={deskData} />
+        </TabsContent>
+        <TabsContent value="revenue">
+          <RevenueDesk data={deskData} />
+        </TabsContent>
+        <TabsContent value="nuc">
+          <NucDesk csrf={d.csrf || ''} />
+        </TabsContent>
         <TabsContent value="subs">
           <SubsPanel subs={d.subscriptions || []} filter={filter} setFilter={setFilter} csrf={d.csrf || ''} />
         </TabsContent>
@@ -260,7 +357,15 @@ export function App() {
         <TabsContent value="fails">
           <FailsPanel />
         </TabsContent>
-        <TabsContent value="audit">
+        <TabsContent value="audit" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Откат настройки</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RollbackCard rows={deskData?.rollbacks || []} csrf={d.csrf || ''} />
+            </CardContent>
+          </Card>
           <AuditPanel />
         </TabsContent>
         <TabsContent value="changes">
@@ -273,15 +378,27 @@ export function App() {
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>
+        <TabsContent value="cache">{tab === 'cache' ? <CachePanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="dht">{tab === 'dht' ? <DhtPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="monitor">
           <MonitorPanel csrf={d.csrf || ''} />
         </TabsContent>
-        <TabsContent value="security">
+        <TabsContent value="security" className="space-y-4">
           <SecurityCard run={run} sessions={d.sessions || []} sessionId={d.sessionId || ''} />
+          <LoginsDesk />
+        </TabsContent>
+        <TabsContent value="crashes">
+          <CrashesDesk csrf={d.csrf || ''} />
+        </TabsContent>
+        <TabsContent value="broadcast">
+          <BroadcastDesk csrf={d.csrf || ''} />
+        </TabsContent>
+        <TabsContent value="versions">
+          <VersionsDesk data={deskData} />
         </TabsContent>
       </Tabs>
       <Toast />
+      </div>
     </main>
   );
 }

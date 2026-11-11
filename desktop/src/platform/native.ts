@@ -7,6 +7,7 @@ import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../
 import type { NativeBilling, SecretStore, SourceHttp } from '../../../src/sources/types';
 import type { LocalDownloadProgress, LocalServerInfo, LocalServerState, OmpNativeApi } from '../../../mobile/src/platform/native';
 import { t } from '../../../src/i18n';
+import { browserUdpSend, sendWake } from '../../../mobile/src/tv/power/wol';
 
 export interface DesktopNative {
   native: OmpNativeApi;
@@ -70,15 +71,20 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     wifiCurrent: async () => ({ kind: 'unsupported', ssid: null }),
     requestWifiName: async () => ({ kind: 'unsupported', ssid: null }),
     player2160: async () => null,
+    player2160Version: async () => null,
     embedded2160: async () => false,
     audioState: async () => null,
     takePendingAudioOpen: async () => null,
     takePendingMagnet: async () => null,
+    takeNativeCrashes: async () => '',
     takePendingUpdateResult: () => updateApi.takePendingUpdateResult(),
     deviceAbiKey: async () => null,
-    canInstallApks: async () => currentTargetPlatform() === TargetPlatform.WindowsX64,
+    canInstallApks: async () => bridge.invoke<boolean>('update_supported'),
     downloadAndInstallApk: async (url: string, sha256: string, onProgress: (percent: number) => void) => {
-      if (currentTargetPlatform() !== TargetPlatform.WindowsX64) throw new Error('unsupported update target');
+      const platform = currentTargetPlatform();
+      if (platform !== TargetPlatform.WindowsX64 && platform !== TargetPlatform.MacOsX64 && platform !== TargetPlatform.MacOsArm64 && platform !== TargetPlatform.LinuxX64 && platform !== TargetPlatform.LinuxArm64) {
+        throw new Error('unsupported update target');
+      }
       const info = updateInfoFromPackage(url, sha256);
       await updateApi.updateDownload(info);
       onProgress(50);
@@ -120,6 +126,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     },
     http,
     httpClearCookies: clearCookies,
+    playerControl: (action: string) => playerApi.playerControl(action),
     openExternal: async (url: string, mime: string) => {
       if (!mime.startsWith('video/')) {
         window.open(url, '_blank', 'noopener');
@@ -143,6 +150,15 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     setLanguage: async () => undefined,
     setOrientation: async () => undefined,
     setCleartextHosts: async () => undefined,
+    wakeOnLan: async (mac: string, ip: string, broadcast?: string) => {
+      const udp = browserUdpSend();
+      if (!udp) throw new Error(t('remote.wolNeedApp'));
+      await sendWake(mac, ip, broadcast, udp);
+    },
+    irHardware: async () => ({ transmit: false, receive: false }),
+    irLearn: async () => null,
+    discoverNetTvs: async () => [],
+    discoverLearners: async () => [],
     cloudflareClearance: async () => null,
   };
   const native = new Proxy(core, {

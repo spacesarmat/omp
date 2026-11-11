@@ -1,6 +1,6 @@
 {
   "productName": "OMP",
-  "version": "0.20.12-beta.2",
+  "version": "0.30.0",
   "identifier": "com.spacesarmat.omp.desktop",
   "build": {
     "frontendDist": "../dist",
@@ -15,7 +15,8 @@
         "minWidth": 960,
         "minHeight": 600,
         "resizable": true,
-        "center": true
+        "center": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -23,8 +24,14 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all",
-    "icon": []
+    "active": true,
+    "targets": ["nsis", "dmg", "appimage", "deb"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

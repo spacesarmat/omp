@@ -23,6 +23,12 @@ interface RemoteActions {
     fun cloudflarePoll(token: String, phone: String, waitMs: Long): JSONObject
     /** The phone's answer to a check, already parsed as JSON ([CloudflareRelay.answer]). */
     fun cloudflareAnswer(token: String, body: JSONObject): CloudflareRelay.Reply
+
+    /** Turn the TV on over HDMI-CEC. Default no-op so a test double does not have to implement it. */
+    fun cec() {}
+
+    /** MAC and broadcast. The router adds this only for a paired phone. */
+    fun network(): JSONObject = JSONObject()
 }
 
 /**
@@ -54,7 +60,14 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         when (req.path) {
             "/omp/info" -> {
                 if (req.method != "GET") return methodNotAllowed()
-                return ok(actions.info().put("paired", pairing.isPaired(req.token)))
+                val paired = pairing.isPaired(req.token)
+                val body = actions.info().put("paired", paired)
+                if (paired) {
+                    val net = actions.network()
+                    if (net.has("mac")) body.put("mac", net.get("mac"))
+                    if (net.has("broadcast")) body.put("broadcast", net.get("broadcast"))
+                }
+                return ok(body)
             }
             "/omp/pair" -> {
                 if (req.method != "POST") return methodNotAllowed()
@@ -75,6 +88,10 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         val body = parse(req.body) ?: return badRequest()
         return when (req.path) {
             "/omp/launch" -> launch(body)
+            "/omp/cec" -> {
+                actions.cec()
+                okEmpty()
+            }
             "/omp/attach" -> attach(body)
             "/omp/key" -> key(body)
             "/omp/text" -> text(body)
@@ -194,7 +211,7 @@ class ControlRouter(private val pairing: Pairing, private val actions: RemoteAct
         private const val MAX_TEXT = 1000
         private const val MAX_REPORT = 200
         private val PROTECTED = setOf(
-            "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources",
+            "/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/cec", "/omp/sources",
             CloudflareProtocol.POLL, CloudflareProtocol.ANSWER,
         )
         val KEYS = setOf("UP", "DOWN", "LEFT", "RIGHT", "ENTER", "BACK", "CATALOG", "NOWPLAYING", "MENU", "INFO", "RED", "GREEN", "YELLOW", "BLUE")

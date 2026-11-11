@@ -59,7 +59,7 @@ describe('seed ranking', () => {
       row({ Title: 'Show S02 1080p', Seed: 20, seedCheck: 'live', seedCheckAt: NOW }),
       row({ Title: 'Show S02', Seed: 0, seedCheck: 'live', seedCheckAt: NOW }),
       row({ Title: 'Show S02 WEB-DL', Seed: 400, seedCheck: 'unverified' }),
-      row({ Title: 'Show S02', Seed: 3, seedCheck: 'dht', dhtPeers: 8 }),
+      row({ Title: 'Show S02', Seed: 3, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }),
     ];
     const titles = rankSearchResults(list, query, NOW).map((r) => r.Title);
     expect(titles[0]).toBe('Show S02 1080p');
@@ -86,10 +86,12 @@ describe('one seed status', () => {
     expect(seedStatusLine(row({ Title: 'A', Seed: 4, seedCheck: 'unverified' }))).toBe('не проверено · 4 сида · по данным трекера');
     expect(seedStatusLine(row({ Title: 'B', Seed: 0, seedCheck: 'unverified' }))).toBe('не проверено');
     expect(seedStatusLine(row({ Title: 'C', Seed: 2, Peer: 1, seedCheck: 'live' }))).toBe('2 сида · 1 лич · сейчас');
-    expect(seedStatusLine(row({ Title: 'D', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 8 }))).toBe(
-      '≈8 пиров онлайн · по DHT · Нет адреса трекера',
+    expect(seedStatusLine(row({ Title: 'D', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }))).toBe(
+      'Нет адреса трекера · ~8 сидов по DHT',
     );
-    expect(seedStatusLine(row({ Title: 'E', hash: HASH, Magnet: magnet, seedCheck: 'dht', dhtPeers: 8 }))).toBe('≈8 пиров онлайн · по DHT');
+    expect(seedStatusLine(row({ Title: 'E', hash: HASH, Magnet: magnet, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }))).toBe('~8 сидов по DHT');
+    expect(seedStatusLine(row({ Title: 'P', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 8 }))).toBe('Нет адреса трекера');
+    expect(seedStatusLine(row({ Title: 'U', hash: HASH, Seed: 4, seedCheck: 'unverified', noTracker: true }))).toBe('Нет адреса трекера');
     expect(seedStatusLine(row({ Title: 'F', Seed: 9 }))).toBe('');
   });
 

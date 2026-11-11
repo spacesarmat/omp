@@ -14,15 +14,17 @@ import {
   type BillingAccount,
   type BillingSession,
 } from '../billing/session';
-import { billingAccessMatches, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
+import { billingAccessMatches, bitmagnetSourceOn, confirmedPremiumSources, freshPremiumSources, MONITOR_FREE_MAX, ompSubscribed, sameLogin, saveBillingAccess } from '../billing/entitlement';
 import { deviceNameField, dropDeviceTokens, errorOf, isTokenError, pairOf, savePair, withDeviceToken } from '../billing/tokens';
 import { t } from '../i18n';
+import { watchDeviceClass } from '../viewer/watchReport';
 import { audiobookSearch, parseTorznab } from './indexer';
 import { registerSource, unregisterSource } from './registry';
 import type { Source, SourceContext, SourceResult } from './types';
 
 export const OMP_JACKETT_ID = 'omp-jackett';
 export const OMP_JACRED_ID = 'omp-jacred';
+export const OMP_BITMAGNET_ID = 'omp-bitmagnet';
 
 interface LinkStartBody {
   error?: string;
@@ -39,9 +41,11 @@ interface MeBody {
   accessUntil?: number;
   overLimit?: boolean;
   deviceLimit?: number;
-  sources?: { jackett?: boolean; jacred?: boolean };
+  sources?: { jackett?: boolean; jacred?: boolean; bitmagnet?: boolean };
   /** 0: no monitoring cap. Omitted by a server from before this field. */
   monitorMax?: number;
+  /** Popular-release cache. Omitted or false: the player keeps the local TorrServer. */
+  cache?: { enabled?: boolean };
 }
 
 interface ErrorBody {
@@ -269,6 +273,29 @@ export function startTelegramLink(ctx: SourceContext): Promise<string> {
  * Unlinks this install from the Telegram account on the billing server. Sends the device token when there is a
  * session (ready for BILLING_LINK_CLEAR_REQUIRE_TOKEN=1); a phone linked to Telegram without a code has none.
  */
+export type CryptoPayLink = { asset: string; amount: string; url: string; webUrl: string };
+
+/** Crypto Pay links for this device's subscription. The server creates the invoices. */
+export function fetchCryptoLinks(ctx: SourceContext): Promise<CryptoPayLink[]> {
+  return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/pay/crypto', { asset: '' }, { headers, timeoutMs: 20000 })).then(
+    (res) => {
+      if (res.status === 401) throw billingError(res.status, res.text);
+      if (res.status === 403) {
+        const body = parseBody<ErrorBody>(res.text);
+        if (body.error === 'country') throw new Error(t('sources.billing.cryptoCountry'));
+        throw new Error(t('sources.billing.cryptoOff'));
+      }
+      if (res.status === 429) throw new Error(t('sources.billing.rate'));
+      if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.cryptoDown'));
+      const body = parseBody<{ links?: CryptoPayLink[] }>(res.text);
+      return Array.isArray(body.links) ? body.links : [];
+    },
+    (e) => {
+      throw failure(e);
+    },
+  );
+}
+
 export function clearTelegramLink(ctx: SourceContext): Promise<void> {
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/link/clear', { deviceId: deviceId() }, { headers, timeoutMs: 12000 })).then(
     (res) => {
@@ -328,16 +355,16 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           overLimit: !!body.overLimit,
           deviceLimit: body.deviceLimit || 0,
           sources: body.sources
-            ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred }
-            : { jackett: !!body.active, jacred: !!body.active },
+            ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
+            : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
       if (!(signedOut && !session)) saveSeenAccount({ paidUntil });
       const listed = body.sources;
       const flags = listed
-        ? { jackett: !!listed.jackett, jacred: !!listed.jacred }
-        : { jackett: !!body.active, jacred: !!body.active };
+        ? { jackett: !!listed.jackett, jacred: !!listed.jacred, bitmagnet: listed.bitmagnet === true }
+        : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false };
       // the monitoring limit (src/monitor/limit.ts) reads this in the background page too
       let changed = false;
       if (session && typeof paidUntil === 'number' && paidUntil !== session.paidUntil) {
@@ -352,13 +379,15 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           accessUntil: body.accessUntil || 0,
           jackett: flags.jackett,
           jacred: flags.jacred,
+          bitmagnet: flags.bitmagnet === true,
           monitorMax: cap,
+          cacheNodes: !!(body.cache && body.cache.enabled === true),
         };
         // The account screen refetches on this event. An unchanged answer must not emit, or the two call each other.
         if (!billingAccessMatches(next)) changed = true;
         saveBillingAccess(next);
         // A denial cleared both sources. This answer is the same binding, so put back what the server allows.
-        syncOmpJackett(body.active ? flags : { jackett: false, jacred: false });
+        syncOmpJackett(body.active ? flags : { jackett: false, jacred: false, bitmagnet: false });
       }
       if (changed) emitBillingChange();
       return {
@@ -385,7 +414,7 @@ function bytesOf(s: string): Uint8Array {
 }
 
 function isProxyLink(link: string): boolean {
-  return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0;
+  return link.indexOf('omp-fetch:') === 0 || link.indexOf('omp-jacred:') === 0 || link.indexOf('omp-bitmagnet:') === 0;
 }
 
 /** `{ "magnet": "magnet:..." }` from the billing proxy, when Jackett redirected the download. */
@@ -409,14 +438,14 @@ function noteAccessDenied(status: number, text: string, startedFor: string): voi
   if (status !== 403 || !sameLogin(startedFor, bindingKey())) return;
   const code = errorOf(text);
   if (code !== 'expired' && code !== 'device_limit' && code !== 'extra_expired') return;
-  saveBillingAccess({ active: false, accessUntil: 0 });
-  syncOmpJackett({ jackett: false, jacred: false });
+  saveBillingAccess({ active: false, accessUntil: 0, bitmagnet: false });
+  syncOmpJackett({ jackett: false, jacred: false, bitmagnet: false });
   emitBillingChange();
 }
 
 function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, query: string, cat?: string): Promise<SourceResult[]> {
   const startedFor = bindingKey();
-  const body: { [key: string]: string } = { source, q: query, deviceId: deviceId() };
+  const body: { [key: string]: string } = { source, q: query, deviceId: deviceId(), deviceClass: watchDeviceClass() };
   if (cat) body.cat = cat;
   return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/search', body, { headers, timeoutMs: 25000 })).then(
     (res) => {
@@ -426,7 +455,7 @@ function paidSearch(ctx: SourceContext, id: string, source: OmpIndexerSource, qu
       if (res.status === 401 || res.status === 403 || res.status === 502) throw billingError(res.status, res.text);
       if (res.status < 200 || res.status >= 300) throw new Error(t('sources.billing.down'));
       if (type.charAt(0) === '{') throw billingError(res.status, res.text);
-      return parseTorznab(res.text, id);
+      return parseTorznab(res.text, id, source === 'bitmagnet' ? 'bitmagnet' : 'jackett');
     },
     (e) => {
       throw failure(e);
@@ -486,17 +515,22 @@ export function ompJacredSource(): Source {
   return paidSource(OMP_JACRED_ID, t('sources.billing.jacred'), 'jacred');
 }
 
+export function ompBitmagnetSource(): Source {
+  return paidSource(OMP_BITMAGNET_ID, t('sources.billing.bitmagnet'), 'bitmagnet');
+}
+
 let watching = false;
 /**
  * Flags already applied in this process. Null until a confirmation: a cold start does not turn both sources on.
  * A /v1/me from the last PREMIUM_FRESH_MS (freshPremiumSources) fills it. While this process is open and the
  * server date is still in the future, a failed recheck keeps these flags (the search itself needs the network).
  */
-let lastSources: { jackett: boolean; jacred: boolean } | null = null;
+let lastSources: { jackett: boolean; jacred: boolean; bitmagnet?: boolean } | null = null;
 
-export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } | null): void {
+export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean; bitmagnet?: boolean } | null): void {
   unregisterSource(OMP_JACKETT_ID);
   unregisterSource(OMP_JACRED_ID);
+  unregisterSource(OMP_BITMAGNET_ID);
   if (!billingSession()) {
     lastSources = null;
     return;
@@ -511,6 +545,9 @@ export function syncOmpJackett(sources?: { jackett: boolean; jacred: boolean } |
   if (!flags) return;
   if (flags.jackett) registerSource(ompJackettSource());
   if (flags.jacred) registerSource(ompJacredSource());
+  // An omitted flag keeps the saved bitmagnet switch. Callers that clear access pass bitmagnet: false.
+  const bitmagnet = flags.bitmagnet === true ? true : flags.bitmagnet === false ? false : bitmagnetSourceOn();
+  if (bitmagnet) registerSource(ompBitmagnetSource());
 }
 
 export function startOmpJackett(): void {
@@ -564,7 +601,7 @@ export function refreshOmpJackettSources(ctx: SourceContext): Promise<void> {
         return;
       }
       if (!acc || !acc.active) {
-        syncOmpJackett({ jackett: false, jacred: false });
+        syncOmpJackett({ jackett: false, jacred: false, bitmagnet: false });
         return;
       }
       syncOmpJackett(acc.sources || { jackett: true, jacred: true });

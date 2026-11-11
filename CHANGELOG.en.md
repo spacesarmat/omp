@@ -4,8 +4,43 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.0
 
+- [phone] The remote can turn a TV or a box on. OMP remembers the MAC and broadcast address of a paired device, and a device can be added by MAC. Turn on sends Wake-on-LAN. LG, Samsung and Android TV get power, volume and input commands. A phone with an IR blaster offers brands and a code test, and a button can be learned with an ESP receiver or pasted as Flipper, Pronto or raw
+- [atv] When the remote wakes the box or starts playback on it, OMP turns the TV on over HDMI-CEC and switches the input. Settings include Turn the TV on over HDMI-CEC. If the system rejects the command, OMP keeps going
+- The OMP account has a Crypto button that opens a USDT, TON, or BTC invoice when an admin has turned that method on. Telegram Stars are paid in the bot, with no fee added on top
+- Desktop: macOS (Intel and Apple Silicon) and Linux (AppImage and deb) join Windows. Auto-update uses the same feed: NSIS, DMG or AppImage. macOS is not signed by Apple: right-click and Open, or System Settings - Privacy and Security - Open Anyway
+- On a computer the menu is on the left: labels, an icon rail, or hidden. A button and Ctrl+B (Cmd+B on Mac). The choice is remembered. On a narrow window the menu covers the content. Sheets and confirmations open above the menu
+- On a computer posters highlight, and a right click opens the same menu as a long press. Space pauses, arrows seek and change volume, F is fullscreen, Ctrl+K or Cmd+K opens search, Esc goes back. Rows scroll with the wheel
+- A wide screen shows more catalog columns. The mini player can float with the PiP button. A .torrent file or a magnet can be dropped on the window. Several files: the first one opens, and the queue does not drop it. The tray can show, hide and quit
+- The download page and omp-player.online list macOS and Linux. A tile stays hidden when the feed has no file
+- On launch OMP compares the installed 2160 Player and TorrServer with the latest release. When a newer one exists it asks: Update or Later. Later is remembered for that version. If the installed version cannot be read, nothing is asked
+- [phone] The embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
+- [atv] On Android TV the embedded 2160 Player is updated to 0.2.25. On Realtek devices with Android 9, AC3 audio stays in sync when a file opens and when the audio track changes
+- Search puts first the release viewers finish without stalls. A short label explains the pick, and a popular voice-over is suggested until you choose your own. Settings include "Help improve picks", on by default, and you can turn it off
+- While a release card or the chosen search row is open, OMP asks TorrServer to fetch the start of the file. An MKV also requests the index at the end. Leaving the screen stops the request. On mobile data this stays off until the setting allows it
+- Search marks the best release: tracker seeds or a DHT estimate, quality, a codec that fits the TV or the phone, and size against the measured link speed. A short badge says why. Any other row can still be chosen
+- If speed and buffer are still not playable after 18 seconds, OMP offers another release of the same title from the same position. The TV's built-in player can open one already in the library. 2160 Player does not switch by itself
+- Billing progress keeps the year, so two films with the same name do not resume each other. Phone and TV use the same episode key. A finished file does not resume at the end on another device
+- Before playback, when TorrServer can read the file, audio and subtitle tracks are listed. The choice is remembered for the series or title and applied on the next episodes
+- A signed-in account stores the episode position in billing. Another device offers "Continue from mm:ss"
+- When playback cannot start, the screen says why: few seeds, the codec, a slow network, or TorrServer is not responding. Buttons: another release, lower quality, retry
+- [tech] Billing: Telegram Stars (sendInvoice, XTR, no provider token) and Crypto Pay (USDT, TON, BTC). Both stay off until an admin turns them on. Extension matches YooMoney: one order extends once, a repeated webhook does not extend again. A short payment does not turn a subscription on. The Crypto Pay signature is checked against the raw body with CRYPTO_PAY_TOKEN. Star refunds use refundStarPayment on the user card. Migration 010_pay_methods. The billing image was not deployed
+- [tech] webOS beta: the browser GET /v1/rollout answers CORS and allows the X-Device-Id header. A crash with no account is stored, and changing the device id does not bypass the IP limit. Until the server says this device is inside the beta percent, the app stays on the stable feed
+- [tech] Billing admin: promo codes with an expiry and a percent discount, broadcasts only after an explicit confirm, a beta percentage, backup archive check, crash groups and an admin login journal. The app sends crash reports and asks whether the device is in the beta percentage. Panel login is confirmed by a Telegram button that shows the IP and device. The one-time shell link still works. Nothing was deployed to the NUC
+- [tech] Billing admin: sidebar, service and payment overview, tables, sources, ranking from watch data, settings rollback, NUC, funnel and revenue. Live updates use SSE /admin/api/events, otherwise a poll every 12 seconds. Apps send POST /v1/presence (install, sign-in, payment). Read-only role is a Telegram id list in settings. Container restart is allowlisted and needs a separate proxy. Nothing was deployed to the NUC
+- [tech] The android/vendor/2160player submodule is updated to v0.2.25 (cae50cf), player-core coordinate 0.2.25. The player2160-update workflow opens a PR for a new release. The TorrServer update workflow still opens a PR and skips a release that fails the sha256, size or version checks
+- [tech] Installing 2160 Player from the update dialog waits for package tv.p2160.player, deletes the downloaded APK and unregisters the receiver. OMP itself is not relaunched
+- [tech] The omp-player.online site and the download page share one dark grid: header, hero, features, platforms, subscription, questions and footer
+- [tech] The download page has one tile each for Android, Android TV, LG webOS, Windows, macOS and Linux. Version, size and sha256 come from the feed, the date from GitHub Releases via releaseUrl
+- [tech] Desktop CI builds an NSIS installer and a portable exe, two DMGs (Intel and Apple Silicon, ad-hoc) and a Linux AppImage with a deb. Feeds update-windows.json, update-macos.json and update-linux.json include sha256 and size
+- [tech] Billing learns from playback: POST /v1/watch-signals, GET /v1/watch-best, migration 009_watch_quality. One vote per account and device. Shared tables keep hashes and counters only. The score blends seeds and DHT with real signals. watchRankEnabled is on: with no signals the search order does not change. The Picks admin tab shows scores and can pin or ban a release. Every 15 minutes the best release of an active series is stored, and when cache nodes are on it is sent once a day into cache_interest (noteInterest). The billing image was not deployed
+- [tech] Billing: GET and POST /v1/progress, table playback_progress, migration 008_playback_progress. 007 is taken by cache nodes. A new billing image is required. Nothing was deployed to the NUC
+- [tech] Foundation for popular-release cache nodes: migration 007 (nodes, assignments, interest), registration and heartbeat with a per-node token (only the hash is stored), assignment pull and a popularity pass. The flag stays off until an admin turns it on. The Cache admin tab covers nodes, a one-time token, disk, heartbeat and pinning. A separate server is documented in ops/cache-node and is not part of deploy.sh. The app switches source only when billing returns a node and the flag is on. The billing image was not deployed
+
+## 0.20.12-beta.5
+
+- A search row with no tracker address says "No tracker address". When DHT returns an estimate, the same line adds "~N seeds via DHT". That is an estimate, not a tracker check. A count of DHT addresses is not a seed count. Phone, TV and the Windows app use the same line
 - [tech] Added a local preview editor for themes and interaction rules with independent Windows, macOS and Linux styling, simulation, drafts and protected export
 - [tech] Added a Figma-inspired editor workspace with a layers panel, canvas zoom and panning, a compact inspector and keyboard shortcuts
 - [tech] All desktop pages, including Connect, and shared or legacy templates are editable through theme tokens applied in the real preview
@@ -14,6 +49,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Default, hover, focus, active, disabled and error states are applied to real previews and state overrides on every platform
 - [tech] Snapshot history supports names, comparison with the current theme, restore, delete and undo
 - [tech] The theme editor shows an autosave error and offers a retry. The error text is not stored in the saved draft and does not return on undo. A background save does not leave an unhandled rejection
+- [tech] omp-dht-peers sends get_peers with scrape=1 (BEP 33), merges the BFsd and BFpe filters, and estimates seeds and peers. POST /v1/seed-check uses that for a release with no tracker (one lookup per batch, seed_probes cache, migration 006_seed_probe_dht). A new billing image and an omp-dht-peers rebuild are required. Nothing was deployed to the NUC
+- [tech] bitmagnet is an extra Torznab source next to Jackett and JacRed. It stays off until the settings have a URL and the switch is on. Its seed and leech counts go through the same check, and the same infohash is merged. The test compose in ops/vps/bitmagnet is not part of deploy.sh
 
 ## 0.20.12-beta.4
 

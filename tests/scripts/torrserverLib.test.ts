@@ -15,6 +15,15 @@ import {
   parsePin,
   formatPin,
   PIN_PATH,
+  assessRelease,
+  compareMatrix,
+  windowsPin,
+  readRustPin,
+  writeRustPin,
+  patchPinLiteral,
+  patchDesktopTest,
+  rustNum,
+  releaseSummary,
 } from '../../scripts/torrserver-lib.mjs';
 
 describe('torrserver-lib', () => {
@@ -118,5 +127,65 @@ describe('torrserver-lib', () => {
     const crlf = insertUnreleased(ru.replace(/\n/g, '\r\n'), 'x');
     expect(crlf).toContain('## Не выпущено\r\n\r\n- x\r\n\r\n## 0.20.6-beta.4');
     expect(crlf).not.toMatch(/[^\r]\n/);
+  });
+
+  it('compares MatriX tags and skips a release that is not a sane upgrade', () => {
+    expect(compareMatrix('MatriX.150', 'MatriX.149')).toBe(1);
+    expect(compareMatrix('MatriX.147.2', 'MatriX.147')).toBe(1);
+    expect(compareMatrix('MatriX.147.2', 'MatriX.147.2')).toBe(0);
+    expect(compareMatrix('MatriX.147', 'nope')).toBeNull();
+    const winSha = 'd'.repeat(64);
+    const winUrl = 'https://github.com/YouROK/TorrServer/releases/download/MatriX.151/TorrServer-windows-amd64.exe';
+    const armUrl = 'https://github.com/YouROK/TorrServer/releases/download/MatriX.151/TorrServer-android-arm64';
+    const sane = {
+      tag_name: 'MatriX.151',
+      assets: [
+        { name: ASSET_NAME, size: 64_000_000, digest: 'sha256:' + sha, browser_download_url: armUrl },
+        { name: 'TorrServer-windows-amd64.exe', size: 63_000_000, digest: 'sha256:' + winSha, browser_download_url: winUrl },
+      ],
+    };
+    expect(assessRelease(sane, 'MatriX.150').ok).toBe(true);
+    expect(assessRelease(sane, 'MatriX.151').ok).toBe(false);
+    expect(assessRelease({ ...sane, prerelease: true }, 'MatriX.150').reason).toMatch(/stable/);
+    expect(assessRelease({ ...sane, tag_name: 'nightly' }, 'MatriX.150').ok).toBe(false);
+    expect(assessRelease({ ...sane, assets: [sane.assets[0]] }, 'MatriX.150').ok).toBe(false);
+    expect(windowsPin(sane, 'MatriX.151').sha256).toBe(winSha);
+    expect(rustNum(63884288)).toBe('63_884_288');
+  });
+
+  it('rewrites the desktop Windows pin without touching other assets', () => {
+    const rust = [
+      'id: "torrserver".to_string(),',
+      '            version: "MatriX.150".to_string(),',
+      '            url: "https://github.com/YouROK/TorrServer/releases/download/MatriX.150/TorrServer-windows-amd64.exe".to_string(),',
+      '            sha256: "' + 'a'.repeat(64) + '".to_string(),',
+      '            max_bytes: 63_884_288,',
+      'id: "mpv".to_string(),',
+      '            version: "keep".to_string(),',
+    ].join('\n');
+    const prev = readRustPin(rust);
+    expect(prev.tag).toBe('MatriX.150');
+    expect(prev.size).toBe(63884288);
+    const pin = {
+      tag: 'MatriX.151',
+      url: 'https://github.com/YouROK/TorrServer/releases/download/MatriX.151/TorrServer-windows-amd64.exe',
+      sha256: 'b'.repeat(64),
+      size: 64000000,
+    };
+    const next = writeRustPin(rust, pin);
+    expect(next).toContain('version: "MatriX.151"');
+    expect(next).toContain('max_bytes: 64_000_000,');
+    expect(next).toContain('version: "keep"');
+    expect(patchPinLiteral("pinVersion: 'MatriX.150',\n", 'MatriX.150', 'MatriX.151')).toContain("pinVersion: 'MatriX.151'");
+    const test = 'assert_eq!(asset.version, "MatriX.150");\nassert_eq!(asset.max_bytes, 63_884_288);\n';
+    expect(patchDesktopTest(test, prev, pin)).toContain('MatriX.151');
+    expect(patchDesktopTest(test, prev, pin)).toContain('64_000_000');
+    expect(readRustPin(readFileSync('desktop/src-tauri/src/platform.rs', 'utf8')).tag).toBe(
+      parseVersionFile(readFileSync('torrserver.version', 'utf8')),
+    );
+  });
+
+  it('flattens a release body onto hyphens', () => {
+    expect(releaseSummary('Hello \u2014 world\n\n* fix ([#1](https://example.com))')).toBe('Hello - world fix');
   });
 });

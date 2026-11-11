@@ -449,7 +449,9 @@ describe('TV «Подписки» segment', () => {
   });
 
   it('«Проверить сейчас» shows «Проверяю…» until the phone says the check is over', async () => {
-    subsPoll.gapMs = 20;
+    // One poll per step. A real 30 ms pause can cover two 20 ms polls when the runner is busy, and the
+    // button is already back to «Проверить сейчас» on the first look.
+    subsPoll.gapMs = 2000;
     const busy = SUBS.map((x) => (x.id === 's1' ? { ...x, checking: true } : x));
     const done = SUBS.map((x) => (x.id === 's1' ? { ...x, unseen: 3 } : x));
     useScript({
@@ -458,21 +460,32 @@ describe('TV «Подписки» segment', () => {
       subCheck: [{ started: true }],
     });
     const host = await mountSubs();
-    await click(subEl(host, 's1', 'check'));
-    expect(calls.filter((c) => c.method === 'subCheck').map((c) => c.params)).toEqual([{ id: 's1' }]);
-    expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
-    await act(() => pause(30));
-    await flush();
-    expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
-    await act(() => pause(30));
-    await flush();
-    expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
-    expect(text(subRows(host)[0].querySelector('.news-sub-fresh'))).toBe('3 новых');
-    // the check is over: the list is not asked again
-    const n = calls.filter((c) => c.method === 'subs').length;
-    await act(() => pause(60));
-    await flush();
-    expect(calls.filter((c) => c.method === 'subs').length).toBe(n);
+    vi.useFakeTimers();
+    try {
+      await click(subEl(host, 's1', 'check'));
+      expect(calls.filter((c) => c.method === 'subCheck').map((c) => c.params)).toEqual([{ id: 's1' }]);
+      expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
+      await flush();
+      expect(text(subEl(host, 's1', 'check'))).toBe('Проверяю…');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
+      await flush();
+      expect(text(subEl(host, 's1', 'check'))).toBe('Проверить сейчас');
+      expect(text(subRows(host)[0].querySelector('.news-sub-fresh'))).toBe('3 новых');
+      // the check is over: the list is not asked again
+      const n = calls.filter((c) => c.method === 'subs').length;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(subsPoll.gapMs);
+      });
+      await flush();
+      expect(calls.filter((c) => c.method === 'subs').length).toBe(n);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('the poll stops when the tab goes away', async () => {

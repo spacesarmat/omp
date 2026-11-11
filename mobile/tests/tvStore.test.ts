@@ -200,13 +200,13 @@ describe('mac', () => {
     expect(normalizeMac(5)).toBeUndefined();
   });
 
-  it('sanitizeTvs keeps only a well-formed lower-case MAC', () => {
+  it('sanitizeTvs keeps a MAC in any spelling, stored lower-case', () => {
     const out = sanitizeTvs([
       { ip: '192.168.1.5', name: 'A', mac: 'aa:bb:cc:dd:ee:ff' },
       { ip: '192.168.1.6', name: 'B', mac: 'AA:BB:CC:DD:EE:FF' },
       { ip: '192.168.1.7', name: 'C', mac: 7 },
     ]);
-    expect(out.map((t) => t.mac)).toEqual(['aa:bb:cc:dd:ee:ff', undefined, undefined]);
+    expect(out.map((t) => t.mac)).toEqual(['aa:bb:cc:dd:ee:ff', 'aa:bb:cc:dd:ee:ff', undefined]);
   });
 
   it('saveTv keeps the MAC when a later save has none', () => {
@@ -226,7 +226,7 @@ describe('mac', () => {
       { ip: '192.168.1.43', name: 'LG', kind: 'lg', port: 3001 },
     ]);
     expect(out).toEqual([
-      { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token, ctlPort: 8095 },
+      { ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token, ctlPort: 8095, mac: 'aa:bb:cc:dd:ee:ff' },
       { ip: '192.168.1.41', name: 'Bad token', kind: 'atv' },
       { ip: '192.168.1.42', name: 'Odd kind' },
       { ip: '192.168.1.43', name: 'LG', port: 3001 },
@@ -280,5 +280,15 @@ describe('the TV the remote uses', () => {
     localStorage.setItem('tsp.activeTv', JSON.stringify('10.0.0.9'));
     reloadTvs();
     expect(activeTv.value).toMatchObject({ ip: DUNE.ip, token: DUNE.token });
+  });
+
+  it('keeps the MAC and broadcast of an Android TV', () => {
+    const token = 'a'.repeat(32);
+    const list = sanitizeTvs([{ ip: '192.168.1.8', name: 'Box', kind: 'atv', mac: 'AA:BB:CC:DD:EE:FF', broadcast: '192.168.1.255', token }]);
+    expect(list[0]).toMatchObject({ mac: 'aa:bb:cc:dd:ee:ff', broadcast: '192.168.1.255', token });
+    saveTv({ ip: '192.168.1.8', name: 'Box', kind: 'atv', mac: 'aa:bb:cc:dd:ee:ff', broadcast: '192.168.1.255', token });
+    expect(tvs.value[0]).toMatchObject({ mac: 'aa:bb:cc:dd:ee:ff', broadcast: '192.168.1.255' });
+    reloadTvs();
+    expect(tvs.value[0].mac).toBe('aa:bb:cc:dd:ee:ff');
   });
 });

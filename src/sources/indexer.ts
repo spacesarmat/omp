@@ -8,6 +8,7 @@ import { stashFile } from '../api/torrentFiles';
 import { formatBytes } from '../lib/format';
 import { ebookTitle, looseAudiobookTitle, movieCategoryAudiobook, strongAudiobookTitle } from '../lib/releaseKind';
 import { infohashFromMagnet } from './html';
+import { rememberCommunityVoice } from '../viewer/communityRank';
 import { hostKey, indexerConnections, indexerKeyName, INDEXER_SOURCE_PREFIX, onIndexersChange, setTorznabHosts, torznabHosts } from './indexerStore';
 import type { IndexerConn } from './indexerStore';
 import { builtinSources, registerSource, setHideRule, unregisterSource } from './registry';
@@ -47,9 +48,9 @@ export function stripKey(url: string): string {
   return rest.slice(0, q) + (kept.length ? '?' + kept.join('&') : '') + hash;
 }
 
-type Kind = 'jackett' | 'prowlarr';
+type Kind = 'jackett' | 'prowlarr' | 'bitmagnet';
 
-const KIND_LABEL: { [k in Kind]: string } = { jackett: 'Jackett', prowlarr: 'Prowlarr' };
+const KIND_LABEL: { [k in Kind]: string } = { jackett: 'Jackett', prowlarr: 'Prowlarr', bitmagnet: 'bitmagnet' };
 
 function num(v: string | null | undefined): number | undefined {
   if (v === null || v === undefined || !/^\s*\d+\s*$/.test(v)) return undefined;
@@ -91,7 +92,7 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   // omp-fetch: / omp-jacred: stand in for a billing download URL (no host, no key)
   const remote =
     !!f.torrent &&
-    (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0);
+    (/^https?:\/\//i.test(f.torrent) || f.torrent.indexOf('omp-fetch:') === 0 || f.torrent.indexOf('omp-jacred:') === 0 || f.torrent.indexOf('omp-bitmagnet:') === 0);
   // kept even when a magnet exists: add prefers the file so its announce-list reaches TorrServer
   const torrentUrl = remote ? stripKey(f.torrent!) : '';
   const link = !magnet && torrentUrl ? torrentUrl : '';
@@ -197,7 +198,17 @@ export function parseTorznab(xml: string, sourceId: string, kind: Kind = 'jacket
       detailUrl: childText(item, 'comments') || undefined,
       categories: cats.join(', '),
     });
-    if (r) out.push(r);
+    if (r) {
+      const rank = num(attrs.omp_rank);
+      if (rank !== undefined) r.communityRank = rank;
+      const reason = attrs.omp_reason;
+      if (reason === 'community' || reason === 'blend' || reason === 'pinned' || reason === 'seeds' || reason === 'dht') r.communityReason = reason;
+      if (attrs.omp_voice) {
+        r.suggestedVoice = attrs.omp_voice.slice(0, 40);
+        rememberCommunityVoice(r.hash || r.Hash, r.Title, r.suggestedVoice);
+      }
+      out.push(r);
+    }
   }
   return out;
 }

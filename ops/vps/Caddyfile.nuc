@@ -63,6 +63,9 @@ http://omp-player.online {
 	# is still a real 404. /title-link.js and /.well-known/assetlinks.json are files.
 	@title path_regexp share ^/t/(?:movie|tv)/[0-9]+(?:/s/[0-9]+)?/?$
 	rewrite @title /t/index.html
+	# Pairing QR from the TV. The query (server address) stays on the rewrite.
+	@pair path /pair /pair/
+	rewrite @pair /pair/index.html
 	file_server
 	# Unknown paths get a real 404 with site/404.html (no SPA fallback, so
 	# search engines do not index soft-404 copies of the home page).
@@ -85,12 +88,21 @@ http://www.omp-player.online {
 }
 
 http://billing.omp-player.online {
-	encode gzip
 	import security_headers
 	handle_errors {
 		import security_headers
 	}
-	reverse_proxy billing:8787
+	# SSE must not be gzipped or buffered (Cloudflare honors no-transform).
+	@sse path /admin/api/events
+	handle @sse {
+		reverse_proxy billing:8787 {
+			flush_interval -1
+		}
+	}
+	handle {
+		encode gzip
+		reverse_proxy billing:8787
+	}
 }
 
 # INDEXER_HASH = bcrypt from: caddy hash-password --plaintext '…'

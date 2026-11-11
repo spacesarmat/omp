@@ -815,6 +815,8 @@ describe('services settings', () => {
     expect(next.jacredEnabled).toBe(true);
     expect(next.torrserverUrl).toBe('http://torrserver:8090');
     expect(sourceEnabled(next, 'jackett')).toBe(false);
+    expect(sourceEnabled(emptyState().settings, 'bitmagnet')).toBe(false);
+    expect(sourceEnabled(mergeSettings(emptyState().settings, { bitmagnetEnabled: 'true', bitmagnetUrl: 'http://127.0.0.1:3333' }), 'bitmagnet')).toBe(true);
   });
 
   it('rate-limits and caches search answers', () => {

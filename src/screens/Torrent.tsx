@@ -19,6 +19,7 @@ import { seriesGroupOf, torrentName } from '../lib/cleanNames';
 import { requestSeriesMatch, seriesMatchVersion } from '../lib/seriesMatch';
 import { parseReleaseInfo, releaseBadges } from '../lib/releaseInfo';
 import { buildTorrentQueue } from '../player/queue';
+import { cacheNodesOn } from '../billing/entitlement';
 import { navigate, goBack, replaceRoute } from '../ui/nav';
 import { FocusGroup, Focusable, Button, Spinner, ProgressBar } from '../ui/components';
 import { Icon, KeyDot } from '../ui/icons';
@@ -35,6 +36,12 @@ import { BetterDialog, canUpgrade } from '../ui/BetterDialog';
 import { PosterPicker } from '../ui/PosterPicker';
 import { posterTargets } from '../lib/posterPick';
 import { pendingBetterHash } from '../player/anotherRelease';
+import { startFileWarm, shouldPrebuffer, connectionMetered } from '../viewer/prebuffer';
+import { asWarm } from '../viewer/warmClient';
+import { useContinue } from '../viewer/useContinue';
+import { useTrackChoice } from '../viewer/useTracks';
+import { stashedResume, takeAutoplay } from '../viewer/alternates';
+import { episodeProgressKey, progressTitleKey } from '../viewer/tracks';
 import { isDeadRelease, useLiveSwarm } from '../lib/swarmWatch';
 import { knownSwarmText } from '../lib/torrentStatus';
 import { getCurrentFocusKey, setFocus } from '@noriginmedia/norigin-spatial-navigation';
@@ -142,7 +149,22 @@ export function TorrentScreen({ hash }: { hash: string }) {
     setSeasonPick(null);
   }, [hash]);
 
-  const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files]);
+  const [cacheGen, setCacheGen] = useState(0);
+  useEffect(() => {
+    if (!cacheNodesOn()) return;
+    let dead = false;
+    // Loaded only when the feature is on, so the TV bundle does not gain this path while the flag is off.
+    import('../cache/lookup').then((mod) => import('../sources/tvContext').then((tv) => mod.prepareCachePlayback(hash, tv.tvSourceContext()))).then(
+      (src) => {
+        if (!dead) setCacheGen((n) => n + 1);
+      },
+      () => undefined,
+    );
+    return () => {
+      dead = true;
+    };
+  }, [hash]);
+  const queue = useMemo(() => (tor ? buildTorrentQueue(c, tor, files) : []), [tor ? tor.hash : '', files, cacheGen]);
   const groups = useMemo(() => groupBySeason(playableFiles(files)), [files]);
   const packSeasons = useMemo(() => seasonsInFiles(playableFiles(files)), [files]);
   const loose = useMemo(() => hasLooseFiles(playableFiles(files)), [files]);
@@ -276,9 +298,49 @@ export function TorrentScreen({ hash }: { hash: string }) {
       bestUpdated = u !== undefined ? u : bestUpdated;
     }
   });
-  const targetPos = target >= 0 ? resumePosition(hash, queue[target].fileIndex!) : 0;
-  if (target < 0) target = queue.findIndex((q) => !isWatched(hash, q.fileIndex!));
+  const chosen = target;
+  if (target < 0) target = queue.findIndex((q) => q.fileIndex !== undefined && !isWatched(hash, q.fileIndex));
   if (target < 0) target = 0;
+  const chosenItem = chosen >= 0 ? queue[chosen] : undefined;
+  const localPos = chosenItem && chosenItem.fileIndex !== undefined ? resumePosition(hash, chosenItem.fileIndex) : 0;
+  const playItem = queue[target];
+  const playPath = playItem ? playItem.title : '';
+  const titleForKey = tor ? displayTitle(tor) : '';
+  const film = !!tor && !isSeries(tor);
+  const remote = useContinue(titleForKey, playPath, film, localPos);
+  let jumped = false;
+  if (localPos <= 0 && remote.episodeKey) {
+    for (let i = 0; i < queue.length; i++) {
+      if (episodeProgressKey(queue[i].title, film) === remote.episodeKey) {
+        target = i;
+        jumped = true;
+      }
+    }
+  }
+  const stashed = stashedResume(progressTitleKey(titleForKey), episodeProgressKey(queue[target] ? queue[target].title : playPath, film));
+  const targetPos = jumped ? remote.remoteSec : Math.max(localPos, remote.sec, stashed);
+  const fileForWarm = queue[target] ? files.filter((f) => f.id === queue[target].fileIndex)[0] : null;
+  const tracks = useTrackChoice(c, hash, titleForKey, fileForWarm ? fileForWarm.id : null);
+  useEffect(() => {
+    return startFileWarm(
+      asWarm(c),
+      hash,
+      fileForWarm ? { id: fileForWarm.id, path: fileForWarm.path, length: fileForWarm.length } : null,
+      shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered),
+    );
+  }, [hash, fileForWarm ? fileForWarm.id : -1, settings.value.prebufferOnMetered]);
+  useEffect(() => {
+    if (!queue.length) return;
+    const job = takeAutoplay(hash);
+    if (!job) return;
+    let index = target >= 0 ? target : 0;
+    if (job.episodeKey) {
+      for (let i = 0; i < queue.length; i++) {
+        if (episodeProgressKey(queue[i].title, false) === job.episodeKey) index = i;
+      }
+    }
+    navigate({ name: 'player', queue: queue, index: index, startAt: job.positionSec || undefined });
+  }, [hash, queue.length]);
   const targetLabel = queue[target] ? episodeLabel(queue[target].title) : '';
   const book = !!tor && isAudiobookTorrent(tor);
   const showSkip = queue.length > 0 && !!tor && isSeries(tor) && !book;
@@ -293,7 +355,9 @@ export function TorrentScreen({ hash }: { hash: string }) {
       if (next && next !== tor.hash) replaceRoute({ name: 'torrent', hash: next });
     });
   };
-  const playLabel = book
+  const playLabel = remote.other
+    ? t('viewer.continueOther', { time: formatDuration(targetPos) })
+    : book
     ? (targetPos > 0
       ? t('torrent.continueListen', { ep: targetLabel ? targetLabel + ' ' : '', time: formatDuration(targetPos) })
       : targetLabel ? t('torrent.listenEp', { ep: targetLabel }) : t('torrent.listen'))
@@ -321,6 +385,18 @@ export function TorrentScreen({ hash }: { hash: string }) {
           })()}
           <div class="muted torrent-status">{tor ? tvGlyphs(statusLine(tor)) : ''}</div>
           {extras && <div class="muted torrent-extras" data-extras>{extras}</div>}
+          {(tracks.audio.length > 0 || tracks.subs.length > 0) && (
+            <div class="torrent-tracks" data-tracks>
+              {tracks.audio.length > 0 && (
+                <Button focusKey="torrent-audio" label={t('viewer.tracksAudio') + ': ' + tracks.audio[tracks.audioI].label} onPress={tracks.cycleAudio} />
+              )}
+              <Button
+                focusKey="torrent-subs"
+                label={t('viewer.tracksSub') + ': ' + (tracks.subI >= 0 && tracks.subs[tracks.subI] ? tracks.subs[tracks.subI].label : t('viewer.tracksOff'))}
+                onPress={tracks.cycleSub}
+              />
+            </div>
+          )}
           {extNote && <div class="muted torrent-extras" data-extras-note>{extNote}</div>}
           {tor && knownSwarmText(tor) ? <div class="muted series-swarm">{knownSwarmText(tor)}</div> : null}
           {tor && isDeadRelease(tor.hash) && (

@@ -17,6 +17,7 @@ import {
   telegramDisplay,
 } from './logic.mjs';
 import { publicAdminSettings } from './services.mjs';
+import { paymentFee, watchFor } from './desk.mjs';
 import { backupAlert } from './pgBackup.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -87,6 +88,8 @@ function promoRows(state) {
       maxUses: p.maxUses,
       revoked: !!p.revoked,
       createdAt: p.createdAt || 0,
+      expiresAt: p.expiresAt || 0,
+      discountPercent: p.discountPercent || 0,
     }));
 }
 
@@ -285,13 +288,22 @@ export function userPayload(state, accountId, opts) {
       createdAt: c.createdAt || 0,
       boundAt: c.boundAt || 0,
     })),
-    payments: (card.payments || []).map((p) => ({
-      at: p.at || 0,
-      amount: p.amount || '',
-      label: p.label || '',
-      operationId: p.operationId || '',
-      error: p.error || '',
-    })),
+    payments: (card.payments || []).map((p) => {
+      const fee = paymentFee(p);
+      return {
+        at: p.at || 0,
+        amount: p.amount || '',
+        label: p.label || '',
+        operationId: p.operationId || '',
+        error: p.error || '',
+        provider: p.provider || '',
+        asset: p.asset || '',
+        withdrawAmount: p.withdrawAmount || '',
+        fee: fee.fee,
+        charged: fee.charged,
+      };
+    }),
+    watch: watchFor(state, card.account.id),
     promos: (card.promos || []).map((p) => ({
       code: p.code,
       days: p.days,

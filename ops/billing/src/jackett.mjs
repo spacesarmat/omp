@@ -3,6 +3,7 @@ import { readCappedBody } from './httpBody.mjs';
 
 export const JACKETT_MARK = 'omp-fetch:';
 export const JACRED_MARK = 'omp-jacred:';
+export const BITMAGNET_MARK = 'omp-bitmagnet:';
 
 /** Per-indexer Torznab search cap. One slow tracker must not hold the rest. */
 export const JACKETT_INDEXER_TIMEOUT_MS = 12000;
@@ -25,11 +26,16 @@ export function indexerOf(settings, source) {
   if (source === 'jacred') {
     return { name: 'jacred', url: s.jacredUrl || '', key: s.jacredApiKey || '', mark: JACRED_MARK };
   }
+  if (source === 'bitmagnet') {
+    return { name: 'bitmagnet', url: s.bitmagnetUrl || '', key: s.bitmagnetApiKey || '', mark: BITMAGNET_MARK };
+  }
   return { name: 'jackett', url: s.jackettUrl || '', key: s.jackettApiKey || '', mark: JACKETT_MARK };
 }
 
 export function indexerByLink(settings, link) {
-  if (String(link || '').indexOf(JACRED_MARK) === 0) return indexerOf(settings, 'jacred');
+  const raw = String(link || '');
+  if (raw.indexOf(JACRED_MARK) === 0) return indexerOf(settings, 'jacred');
+  if (raw.indexOf(BITMAGNET_MARK) === 0) return indexerOf(settings, 'bitmagnet');
   return indexerOf(settings, 'jackett');
 }
 
@@ -152,6 +158,25 @@ function appendCat(url, cat) {
   const c = safeTorznabCat(cat);
   if (!c) return url;
   return url + '&cat=' + encodeURIComponent(c);
+}
+
+/** bitmagnet Torznab. The key is optional. A base that already ends in /torznab is not doubled. */
+export function bitmagnetSearchUrl(origin, apiKey, query, cat) {
+  let base = indexerOrigin(origin);
+  if (!/\/torznab$/i.test(base)) base += '/torznab';
+  let url = base + '?t=search&q=' + encodeURIComponent(query || '');
+  const key = String(apiKey || '');
+  if (key) url += '&apikey=' + encodeURIComponent(key);
+  return appendCat(url, cat);
+}
+
+export function bitmagnetCapsUrl(origin, apiKey) {
+  let base = indexerOrigin(origin);
+  if (!/\/torznab$/i.test(base)) base += '/torznab';
+  let url = base + '?t=caps';
+  const key = String(apiKey || '');
+  if (key) url += '&apikey=' + encodeURIComponent(key);
+  return url;
 }
 
 export function jackettSearchUrl(origin, apiKey, query, cat) {
@@ -612,4 +637,27 @@ export async function searchJacRed(opts) {
   });
   if (second.aborted || !feedOk(second.status, second.text)) return { ok: true, xml: first.text };
   return { ok: true, xml: mergeTorznabFeeds([first.text, second.text]) };
+}
+
+/**
+ * One Torznab search against bitmagnet. No API key is required. Seed and leech counts in the
+ * feed are indexer numbers: the phone still runs them through /v1/seed-check.
+ * @returns {Promise<{ ok: boolean, xml: string }>}
+ */
+export async function searchBitmagnet(opts) {
+  const o = opts || {};
+  const origin = indexerOrigin(o.origin);
+  const query = String(o.query || '');
+  const cat = o.cat;
+  const headers = o.headers || {};
+  const fetchImpl = o.fetchImpl || fetch;
+  const deadlineMs = positiveInt(o.deadlineMs, JACRED_SEARCH_DEADLINE_MS);
+  if (!origin || deadlineMs < MIN_REQUEST_MS) return { ok: false, xml: '' };
+  const first = await fetchText(bitmagnetSearchUrl(origin, o.apiKey, query, cat), {
+    headers,
+    timeoutMs: deadlineMs,
+    fetchImpl,
+  });
+  if (first.aborted || !feedOk(first.status, first.text)) return { ok: false, xml: '' };
+  return { ok: true, xml: first.text };
 }

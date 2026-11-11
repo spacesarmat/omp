@@ -2,9 +2,77 @@
 // It answers get_peers only. It does not announce, and it does not keep a database.
 // While the socket is open the process replies to routing pings. After idle it sends nothing.
 import DHT from 'bittorrent-dht';
+import { estimateBloom, mergeBloom, parseScrapeFilters } from './bloom.mjs';
 import { peerTotal, rememberPeer, waitForReady } from './peers.mjs';
 
-function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
+function sampleResult(failed, dht, seen, seeds, peersF, scraped) {
+  if (failed) return { ok: false, error: 'down' };
+  const peers = peerTotal(seen);
+  if (peers === 0 && scraped === 0 && !dht.ready) return { ok: false, error: 'not_ready' };
+  return {
+    ok: true,
+    peers: peers,
+    seedsEstimate: seeds ? estimateBloom(seeds) || 0 : 0,
+    peerEstimate: peersF ? estimateBloom(peersF) || 0 : 0,
+    scraped: scraped > 0,
+  };
+}
+
+function rememberValues(seen, values, maxPeers) {
+  const list = values || [];
+  for (let i = 0; i < list.length; i++) rememberPeer(seen, list[i], maxPeers);
+}
+
+/** get_peers with scrape=1. Bloom filters from every reply are OR-merged, then estimated once. */
+function collectScrape(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
+  const set = schedule || ((fn, ms) => setTimeout(fn, ms));
+  const clear = clearTimer || ((timer) => clearTimeout(timer));
+  return new Promise((resolve) => {
+    const seen = Object.create(null);
+    let seeds = null;
+    let peersF = null;
+    let scraped = 0;
+    let settled = false;
+    const finish = (failed) => {
+      if (settled) return;
+      settled = true;
+      clear(timer);
+      resolve(sampleResult(failed, dht, seen, seeds, peersF, scraped));
+    };
+    const timer = set(() => finish(false), timeoutMs);
+    try {
+      const infoHash = Buffer.from(hash, 'hex');
+      dht._closest(
+        infoHash,
+        {
+          q: 'get_peers',
+          a: {
+            id: dht._rpc.id,
+            info_hash: infoHash,
+            scrape: 1,
+          },
+        },
+        (message) => {
+          if (settled) return false;
+          const r = message && message.r;
+          if (r && r.values) rememberValues(seen, r.values, maxPeers);
+          const filters = parseScrapeFilters(message);
+          if (filters && (filters.seeds || filters.peers)) {
+            if (filters.seeds) seeds = mergeBloom(seeds, filters.seeds);
+            if (filters.peers) peersF = mergeBloom(peersF, filters.peers);
+            scraped++;
+          }
+          return true;
+        },
+        () => finish(false),
+      );
+    } catch (e) {
+      finish(true);
+    }
+  });
+}
+
+function collectLookup(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
   const set = schedule || ((fn, ms) => setTimeout(fn, ms));
   const clear = clearTimer || ((timer) => clearTimeout(timer));
   return new Promise((resolve) => {
@@ -21,10 +89,7 @@ function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
       settled = true;
       clear(timer);
       dht.removeListener('peer', onPeer);
-      if (failed) return resolve({ ok: false, error: 'down' });
-      const peers = peerTotal(seen);
-      if (peers === 0 && !dht.ready) return resolve({ ok: false, error: 'not_ready' });
-      resolve({ ok: true, peers: peers });
+      resolve(sampleResult(failed, dht, seen, null, null, 0));
     };
     let abort = () => {};
     const timer = set(() => {
@@ -42,6 +107,13 @@ function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
       finish(true);
     }
   });
+}
+
+function collectPeers(dht, hash, timeoutMs, maxPeers, schedule, clearTimer) {
+  if (dht && typeof dht._closest === 'function' && dht._rpc) {
+    return collectScrape(dht, hash, timeoutMs, maxPeers, schedule, clearTimer);
+  }
+  return collectLookup(dht, hash, timeoutMs, maxPeers, schedule, clearTimer);
 }
 
 export function createDhtLookup(opts) {

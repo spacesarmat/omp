@@ -19,6 +19,9 @@ import { cleanDiscoverView } from '../screens/catalog/discoverCols';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
+import { sanitizeManual } from '../tv/power/manual';
+import { sanitizeProfiles } from '../tv/power/irProfile';
+import { sanitizeNet } from '../tv/power/netStore';
 import { sanitizeTouchpad } from '../tv/touchpad';
 import { sanitizeSupportState } from '../donate';
 import { APP_VERSION } from '../../../src/version';
@@ -107,6 +110,9 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.servers', clean: cleanServers },
   { key: 'tsp.activeServer', clean: cleanActive },
   { key: 'tsp.tvs', clean: (v) => cleanList(v, sanitizeTvs(v)) },
+  { key: 'tsp.wolManual', clean: (v) => cleanList(v, sanitizeManual(v)) },
+  { key: 'tsp.irProfiles', clean: (v) => cleanList(v, sanitizeProfiles(v)) },
+  { key: 'tsp.netTvs', clean: (v) => cleanList(v, sanitizeNet(v)) },
   { key: 'tsp.activeTv', clean: cleanActive },
   { key: 'tsp.subs', clean: (v) => cleanList(v, sanitizeSubs(v)) },
   { key: 'tsp.monitor', clean: cleanObject(sanitizeMonitorSettings) },
@@ -120,6 +126,8 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.localServer', clean: (v) => (isObject(v) && typeof v.autostart === 'boolean' ? { autostart: v.autostart } : undefined) },
   { key: 'tsp.playlists', clean: (v) => cleanList(v, sanitizeFavorites(v)) },
   { key: 'tsp.trackPrefs', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
+  // audio and subtitles remembered per series or title
+  { key: 'tsp.titleTracks', clean: (v) => cleanMap(v, sanitizeTrackPrefs(v)) },
   // «Каталог»: the «Мои / Обзор» switch and the «Обзор» view (large, medium, list, plain list)
   { key: 'tsp.catalogMode', clean: (v) => (v === 'mine' || v === 'discover' ? v : undefined) },
   // a poster picked on a series or season card (`tv:21`, `tv:21:s2` → image URL)
@@ -146,6 +154,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.torrentsAt',
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
+  'tsp.linkSpeed', // last measured download speed: rebuilt while watching
   'tsp.update', // update-check state
   'tsp.localServer.skipPin', // skipped TorrServer pin offer: per device, like tsp.update
   'tsp.seenVersion', // «Что нового» was shown

@@ -3,6 +3,7 @@ import { effect } from '@preact/signals';
 import { App as CapApp } from '@capacitor/app';
 import { parseBillingDeepLink } from '../../src/billing/deepLink';
 import { flushTitleLink, queueTitleLink } from './share/open';
+import { applyPairUrl, isPairUrl } from './share/pairOpen';
 import { setPendingBillingCode } from '../../src/billing/session';
 import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
@@ -10,13 +11,17 @@ import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { audioLaunch, rememberAudio } from './audiobooks/launch';
 import { NavBar, TAB_IDS, visibleTabIds, type Tab } from './ui/NavBar';
+import { isDesktopBuild } from './desktop/runtime';
+import { DesktopSidebar } from './desktop/DesktopSidebar';
+import { installDesktopExtras } from './desktop/installDesktop';
+import './desktop/desktop.css';
 import { Toast, showToast } from './ui/toast';
 import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
 import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
 import { Library } from './screens/Library';
-import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { Settings, runBackgroundPhoneUpdate } from './screens/Settings';
 import { installPhoneCloudflare } from './cloudflare';
 import {
   autostartLocal,
@@ -25,9 +30,12 @@ import {
   localUpdatePrompt,
   watchLocalServer,
 } from './server/localServer';
+import { readPhoneAbi, readPhonePlayerVersion, readPhoneTorr } from './server/componentProbe';
+import { checkComponentUpdates, componentPrompt, installComponentChecks } from '../../src/store/componentUpdates';
 import { MiniPlayer } from './ui/MiniPlayer';
 import { UpdateSheet } from './ui/UpdateSheet';
 import { LocalUpdateSheet } from './ui/LocalUpdateSheet';
+import { ComponentUpdateSheet } from './ui/ComponentUpdateSheet';
 import { runBack } from './ui/backStack';
 import { WhatsNewSheet } from './ui/WhatsNewSheet';
 import { DonateSheet } from './ui/DonateSheet';
@@ -159,6 +167,14 @@ export function syncNativeLanguage(set: (l: Lang) => Promise<void> = (l) => nati
 export function App() {
   // the native copy (notifications, install assistant…) follows the page's language
   useEffect(() => syncNativeLanguage(), []);
+  useEffect(() => {
+    if (!isDesktopBuild()) return;
+    return installDesktopExtras({
+      onSearch: () => switchTab({ name: 'add' }),
+      onBack: () => handleBack(),
+      onOpenLink: (link) => intakeMagnet(link),
+    });
+  }, []);
   useEffect(() => {
     if (typeof native.takePendingUpdateResult !== 'function') return;
     let active = true;
@@ -295,12 +311,20 @@ export function App() {
             flushTitleLink();
             return;
           }
+          if (isPairUrl(res.url)) {
+            void applyPairUrl(res.url);
+            return;
+          }
           intakeBilling(res.url);
         }),
       ).catch(() => {});
       CapApp.addListener('appUrlOpen', (ev) => {
         if (queueTitleLink(ev.url)) {
           flushTitleLink();
+          return;
+        }
+        if (isPairUrl(ev.url)) {
+          void applyPairUrl(ev.url);
           return;
         }
         intakeBilling(ev.url);
@@ -379,13 +403,26 @@ export function App() {
 
   // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
   useEffect(
-    () => installUpdateChecks((gap) => void runUpdateCheck({ manual: false, url: phoneFeedUrl(), minIntervalMs: gap }).catch(() => {})),
+    () => installUpdateChecks((gap) => void runBackgroundPhoneUpdate(gap).catch(() => {})),
     [],
   );
 
   // TorrServer pin shipped with OMP: offer download when the on-disk binary is outdated
   useEffect(
     () => installLocalUpdateChecks(() => void checkLocalServerUpdate().catch(() => {})),
+    [],
+  );
+
+  // 2160 Player on the device and the user's TorrServer, against the latest GitHub release
+  useEffect(
+    () => installComponentChecks((gap) => {
+      void checkComponentUpdates({
+        playerVersion: readPhonePlayerVersion,
+        torr: readPhoneTorr,
+        abi: readPhoneAbi,
+        minIntervalMs: gap,
+      }).catch(() => {});
+    }),
     [],
   );
 
@@ -409,6 +446,7 @@ export function App() {
   });
   const prompt = updatePrompt.value;
   const localPrompt = localUpdatePrompt.value;
+  const componentOffer = componentPrompt.value;
   const tabRoot = TABS.includes(route.name);
   // a «Обзор» title card keeps the bottom tabs with «Каталог» highlighted
   const showNav = tabRoot || route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person';
@@ -424,8 +462,11 @@ export function App() {
   }, [tabRoot, !!activeTv.value]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   // a language change remounts the whole UI (t() does not subscribe components to the language)
+  const desktop = isDesktopBuild();
+  const navActive: Tab = route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab);
   return (
     <Fragment key={lang.value}>
+      {desktop && <DesktopSidebar active={navActive} />}
       {route.name === 'connect' ? (
         <Connect />
       ) : route.name === 'tv' ? (
@@ -499,8 +540,11 @@ export function App() {
       {prompt && tabRoot && !showTour && !showSetup && <UpdateSheet info={prompt} />}
       {/* TorrServer after OMP sheet: pin arrives with the APK, binary still needs a separate download */}
       {!prompt && localPrompt && tabRoot && !showTour && !showSetup && <LocalUpdateSheet info={localPrompt} />}
+      {!prompt && !localPrompt && componentOffer && tabRoot && !showTour && !showSetup && (
+        <ComponentUpdateSheet key={componentOffer.kind + ':' + componentOffer.latest} offer={componentOffer} />
+      )}
       {/* after an update: waits for the update sheet and for the connect/pairing flows (no nav bar there) */}
-      {tabRoot && !prompt && !localPrompt && !showTour && !showSetup && <WhatsNewSheet />}
+      {tabRoot && !prompt && !localPrompt && !componentOffer && !showTour && !showSetup && <WhatsNewSheet />}
       {tabRoot && <DonateSheet />}
       <CertChangedSheet />
       <ConfirmHost />
@@ -510,7 +554,7 @@ export function App() {
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
-      {showNav && <NavBar active={route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
+      {showNav && !desktop && <NavBar active={navActive} />}
     </Fragment>
   );
 }

@@ -337,7 +337,7 @@ describe('pollBot: update types and the channel pin notice', () => {
     };
     await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW });
     const poll = urls.find((u) => u.indexOf('/getUpdates') >= 0)!;
-    expect(decodeURIComponent(poll.split('allowed_updates=')[1])).toBe('["message","callback_query","channel_post"]');
+    expect(decodeURIComponent(poll.split('allowed_updates=')[1])).toBe('["message","callback_query","channel_post","pre_checkout_query"]');
   });
 
   it('deletes the «pinned a message» post of the OMP channel and nothing else', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,9 @@ import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@
 import { api, post, type PostResult } from '@/lib/api';
 import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
-import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, problemKind, serviceError, when } from '@/lib/text';
+import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, payMethodLabel, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
-import type { BackupStatus, HomeData, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
+import type { BackupStatus, HomeData, MethodSplit, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
 
 export { HomeFeed } from '@/panels/EventFeed';
 
@@ -86,6 +86,8 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
   const [count, setCount] = useState('1');
   const [bonusSlots, setBonusSlots] = useState('0');
   const [bonusDays, setBonusDays] = useState('');
+  const [expiresDays, setExpiresDays] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('0');
   return (
     <Card>
       <CardHeader>
@@ -114,6 +116,14 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <Input type="number" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
           </label>
           <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Истекает, дней</span>
+            <Input type="number" min={0} placeholder="пусто = без срока" value={expiresDays} onChange={(e) => setExpiresDays(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Скидка, %</span>
+            <Input type="number" min={0} max={100} value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
             <span className="text-muted-foreground">Количество</span>
             <Input type="number" min={1} max={100} value={count} onChange={(e) => setCount(e.target.value)} />
           </label>
@@ -121,7 +131,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <Button
               onClick={() => {
                 const n = Number(count) || 1;
-                void run('/admin/promo', { code, days, maxUses, count: n, bonusSlots, bonusDays }).then((res) => {
+                void run('/admin/promo', { code, days, maxUses, count: n, bonusSlots, bonusDays, expiresDays, discountPercent }).then((res) => {
                   const list = res?.extra?.promos || [];
                   if (list.length > 1) {
                     downloadCsv(
@@ -360,6 +370,43 @@ function ProblemList({ rows }: { rows: ProblemRow[] }) {
   );
 }
 
+function assetText(n: number) {
+  if (!n) return '';
+  const rounded = Math.round(n * 1e8) / 1e8;
+  return String(rounded);
+}
+
+function MethodSplitCard({ row }: { row?: Record<string, MethodSplit> }) {
+  const yo = row && row.yoomoney;
+  const stars = row && row.stars;
+  const crypto = row && row.crypto;
+  const line = (title: string, parts: string[]) => (
+    <div>
+      <div className="text-sm font-medium">{title}</div>
+      <div className="text-xs text-muted-foreground">{parts.filter(Boolean).join(' · ')}</div>
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Выручка за 30 дней по способам</CardTitle>
+        <CardDescription>Рубли звёзд и крипты - цена заказа на момент оплаты. Возврат звёзд в сумму не входит.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-3">
+        {line('ЮMoney', [Math.round(yo?.rub || 0) + ' ₽', (yo?.count || 0) + ' оплат'])}
+        {line('Звёзды', [Math.round(stars?.stars || 0) + ' звёзд', Math.round(stars?.rub || 0) + ' ₽', (stars?.count || 0) + ' оплат'])}
+        {line('Крипта', [
+          crypto?.usdt ? assetText(crypto.usdt) + ' USDT' : '',
+          crypto?.ton ? assetText(crypto.ton) + ' TON' : '',
+          crypto?.btc ? assetText(crypto.btc) + ' BTC' : '',
+          Math.round(crypto?.rub || 0) + ' ₽',
+          (crypto?.count || 0) + ' оплат',
+        ])}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function FinancePanel({ home }: { home: HomeData }) {
   const [rows, setRows] = useState<PaymentRow[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -429,6 +476,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
           <DayChart rows={series} field="subs" label="Новые подписки по дням" />
         </CardContent>
       </Card>
+      <MethodSplitCard row={home.finance?.summary?.month?.byMethod} />
       <p>
         <a className="text-primary" href="/admin/finance.csv">
           Скачать CSV за 30 дней
@@ -476,6 +524,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
                 <TableRow>
                   <TableHead>Когда, МСК</TableHead>
                   <TableHead>Сумма</TableHead>
+                  <TableHead>Способ</TableHead>
                   <TableHead>Кто</TableHead>
                   <TableHead>Метка</TableHead>
                 </TableRow>
@@ -483,7 +532,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-muted-foreground">
+                    <TableCell colSpan={5} className="text-muted-foreground">
                       Нет платежей
                     </TableCell>
                   </TableRow>
@@ -494,6 +543,7 @@ export function FinancePanel({ home }: { home: HomeData }) {
                       <Stamp ms={p.at} />
                     </TableCell>
                     <TableCell>{p.amount || '-'}</TableCell>
+                    <TableCell>{payMethodLabel(p)}</TableCell>
                     <TableCell>
                       {p.accountId ? (
                         <a className="text-primary" href={'/admin/?id=' + encodeURIComponent(p.accountId)}>
@@ -524,6 +574,8 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['botUsername', 'Имя бота'],
       ['publicOrigin', 'Публичный адрес'],
       ['adminTelegramIds', 'Telegram id администраторов'],
+      ['adminReaders', 'Telegram id только для просмотра'],
+      ['betaPercent', 'Процент беты (0-100)'],
     ],
   },
   {
@@ -531,6 +583,28 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     fields: [
       ['yoomoneyWallet', 'Кошелёк ЮMoney'],
       ['yoomoneySecret', 'Секрет ЮMoney'],
+      ['cryptoPayToken', 'Токен Crypto Pay'],
+    ],
+  },
+  {
+    title: 'Звёзды',
+    fields: [
+      ['starsPrice', 'Подписка, звёзд'],
+      ['starsExtra', 'Доп. устройство, звёзд'],
+    ],
+  },
+  {
+    title: 'Крипта',
+    fields: [
+      ['cryptoUsdt', 'Подписка, USDT'],
+      ['cryptoExtraUsdt', 'Доп. устройство, USDT'],
+      ['cryptoRateUsdt', 'Курс USDT, ₽ за 1'],
+      ['cryptoTon', 'Подписка, TON'],
+      ['cryptoExtraTon', 'Доп. устройство, TON'],
+      ['cryptoRateTon', 'Курс TON, ₽ за 1'],
+      ['cryptoBtc', 'Подписка, BTC'],
+      ['cryptoExtraBtc', 'Доп. устройство, BTC'],
+      ['cryptoRateBtc', 'Курс BTC, ₽ за 1'],
     ],
   },
   {
@@ -567,7 +641,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
 ];
 
 /** Secrets are read-only in the panel: they live in the server's .env. */
-const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
+const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'cryptoPayToken', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
 
 /** One read-only secret: «задан ✅, ****abcd» or «не задан», and where it changes. */
 function SecretField({ name, label, view, fallback }: { name: string; label: string; view?: SecretView; fallback?: string }) {
@@ -594,6 +668,11 @@ export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
       {' · всего ' + backup.count + ' (' + bytesText(backup.totalBytes) + ')'}
       {backup.stale ? <span className="text-destructive"> · бэкап устарел</span> : null}
       {backup.lastError ? <span className="text-destructive"> · ошибка: {backup.lastError}</span> : null}
+      {backup.verify ? (
+        <span className={backup.verify.ok ? '' : 'text-destructive'}>
+          {' · проверка архива: ' + (backup.verify.ok ? 'список читается' : backup.verify.error || 'ошибка')}
+        </span>
+      ) : null}
     </CardDescription>
   );
 }
@@ -615,16 +694,38 @@ export function SettingsCard({
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
+  const [starsOn, setStarsOn] = useState(false);
+  const [cryptoOn, setCryptoOn] = useState(false);
+  const [cryptoTest, setCryptoTest] = useState(false);
+  const [cryptoAbroad, setCryptoAbroad] = useState(false);
+  const dirty = useRef(false);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
   const [lower, setLower] = useState<BaseImpact | null>(null);
-  const save = (confirm: boolean) => run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) });
+  const save = (confirm: boolean) =>
+    run('/admin/settings', {
+      ...form,
+      adminNotify: notify ? 'true' : 'false',
+      starsEnabled: starsOn ? 'true' : 'false',
+      cryptoEnabled: cryptoOn ? 'true' : 'false',
+      cryptoTestnet: cryptoTest ? 'true' : 'false',
+      cryptoNonRu: cryptoAbroad ? 'true' : 'false',
+      ...(confirm ? { confirm: 'yes' } : {}),
+    }).then((res) => {
+      if (!res?.flash?.error) dirty.current = false;
+      return res;
+    });
   useEffect(() => {
+    if (dirty.current) return;
     const o: Record<string, string> = {};
     for (const group of SETTING_GROUPS) {
       for (const [k] of group.fields) if (!SECRET_KEYS.has(k)) o[k] = String(settings[k] ?? '');
     }
     setForm(o);
     setNotify(settings.adminNotify !== false);
+    setStarsOn(settings.starsEnabled === true);
+    setCryptoOn(settings.cryptoEnabled === true);
+    setCryptoTest(settings.cryptoTestnet === true);
+    setCryptoAbroad(settings.cryptoNonRu === true);
   }, [settings]);
   return (
     <form
@@ -667,15 +768,79 @@ export function SettingsCard({
               ) : (
                 <div key={name} className="space-y-1">
                   <Label htmlFor={name}>{label}</Label>
-                  <Input id={name} value={form[name] || ''} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />
+                  <Input
+                    id={name}
+                    value={form[name] || ''}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setForm({ ...form, [name]: e.target.value });
+                    }}
+                  />
                 </div>
               ),
             )}
             {group.title === 'Бот' ? (
               <label className="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={notify}
+                  onChange={(e) => {
+                    dirty.current = true;
+                    setNotify(e.target.checked);
+                  }}
+                />
                 Уведомлять администраторов в Telegram (оплата, ошибка оплаты, падение сервиса, новое сообщение поддержки)
               </label>
+            ) : null}
+            {group.title === 'Звёзды' ? (
+              <label className="flex items-center gap-2 text-sm md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={starsOn}
+                  onChange={(e) => {
+                    dirty.current = true;
+                    setStarsOn(e.target.checked);
+                  }}
+                />
+                Принимать Telegram Stars. По умолчанию выключено. Комиссия сверху не добавляется.
+              </label>
+            ) : null}
+            {group.title === 'Крипта' ? (
+              <div className="space-y-2 md:col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoOn}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoOn(e.target.checked);
+                    }}
+                  />
+                  Принимать Crypto Pay (USDT, TON, BTC). По умолчанию выключено.
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoTest}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoTest(e.target.checked);
+                    }}
+                  />
+                  Тестовая сеть Crypto Pay (testnet-pay.crypt.bot). Токен всё равно берётся из CRYPTO_PAY_TOKEN.
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cryptoAbroad}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setCryptoAbroad(e.target.checked);
+                    }}
+                  />
+                  Только пользователям не из РФ. Без кода страны или с кодом RU ссылка не выдаётся.
+                </label>
+              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -724,6 +889,7 @@ type ServiceProbe = {
 type ServicesPayload = {
   jackett: ServiceProbe;
   jacred: ServiceProbe;
+  bitmagnet?: ServiceProbe;
   torrserver: ServiceProbe;
 };
 
@@ -752,6 +918,8 @@ export function ServicesCard({
     jackettEnabled: settings.jackettEnabled !== false,
     jacredUrl: String(settings.jacredUrl ?? ''),
     jacredEnabled: settings.jacredEnabled !== false,
+    bitmagnetUrl: String(settings.bitmagnetUrl ?? ''),
+    bitmagnetEnabled: settings.bitmagnetEnabled === true,
     torrserverUrl: String(settings.torrserverUrl ?? ''),
     indexerUser: String(settings.indexerUser ?? ''),
   });
@@ -767,6 +935,8 @@ export function ServicesCard({
       jackettEnabled: settings.jackettEnabled !== false,
       jacredUrl: String(settings.jacredUrl ?? ''),
       jacredEnabled: settings.jacredEnabled !== false,
+      bitmagnetUrl: String(settings.bitmagnetUrl ?? ''),
+      bitmagnetEnabled: settings.bitmagnetEnabled === true,
       torrserverUrl: String(settings.torrserverUrl ?? ''),
       indexerUser: String(settings.indexerUser ?? ''),
     });
@@ -808,6 +978,7 @@ export function ServicesCard({
         ...form,
         jackettEnabled: form.jackettEnabled ? 'true' : 'false',
         jacredEnabled: form.jacredEnabled ? 'true' : 'false',
+        bitmagnetEnabled: form.bitmagnetEnabled ? 'true' : 'false',
       });
       if (res.auth === false) {
         setErr('Нужен вход');
@@ -851,6 +1022,7 @@ export function ServicesCard({
               <>
                 <ServiceBox title="Jackett" row={services?.jackett} fallback={form.jackettUrl} note={'подписчикам: ' + (form.jackettEnabled ? 'вкл' : 'выкл')} checking={busy} />
                 <ServiceBox title="JacRed" row={services?.jacred} fallback={form.jacredUrl} note={'подписчикам: ' + (form.jacredEnabled ? 'вкл' : 'выкл')} checking={busy} />
+                <ServiceBox title="bitmagnet" row={services?.bitmagnet} fallback={form.bitmagnetUrl} note={'подписчикам: ' + (form.bitmagnetEnabled ? 'вкл' : 'выкл')} checking={busy} />
                 <ServiceBox title="TorrServer" row={services?.torrserver} fallback={form.torrserverUrl} note="только мониторинг" checking={busy} />
               </>
             )}
@@ -871,6 +1043,9 @@ export function ServicesCard({
               <Field id="jacredUrl" label="Адрес JacRed" value={form.jacredUrl} onChange={(v) => setForm({ ...form, jacredUrl: v })} placeholder="http://jacred:9117" />
               <SecretField name="jacredApiKey" label="Ключ API JacRed" view={secretView('jacredApiKey')} fallback={String(settings.jacredApiKey ?? '')} />
               <Check label="JacRed доступен подписчикам" checked={form.jacredEnabled} onChange={(v) => setForm({ ...form, jacredEnabled: v })} />
+              <Field id="bitmagnetUrl" label="Адрес bitmagnet" value={form.bitmagnetUrl} onChange={(v) => setForm({ ...form, bitmagnetUrl: v })} placeholder="http://127.0.0.1:3333" />
+              <SecretField name="bitmagnetApiKey" label="Ключ API bitmagnet" view={secretView('bitmagnetApiKey')} fallback={String(settings.bitmagnetApiKey ?? '')} />
+              <Check label="bitmagnet доступен подписчикам" checked={form.bitmagnetEnabled} onChange={(v) => setForm({ ...form, bitmagnetEnabled: v })} />
               <Field id="torrserverUrl" label="Адрес TorrServer (только мониторинг)" value={form.torrserverUrl} onChange={(v) => setForm({ ...form, torrserverUrl: v })} placeholder="http://torrserver:8090" wide />
               <Field id="indexerUser" label="Логин basic-авторизации" value={form.indexerUser} onChange={(v) => setForm({ ...form, indexerUser: v })} placeholder="omp" />
               <SecretField name="indexerPass" label="Пароль basic-авторизации" view={secretView('indexerPass')} fallback={String(settings.indexerPass ?? '')} />

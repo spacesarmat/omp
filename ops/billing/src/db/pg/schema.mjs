@@ -414,6 +414,220 @@ CREATE TABLE seed_probes (
 CREATE INDEX seed_probes_measured ON seed_probes (measured_at);
 `,
   },
+  {
+    version: '006_seed_probe_dht',
+    sql: `
+-- BEP 33 estimates next to the address sample in peers.
+-- dht_seeds is the seed estimate. peer_estimate is the peer bloom estimate.
+-- dht_estimate is true only when filters were merged. A plain peer count is not a seed count.
+ALTER TABLE seed_probes ADD COLUMN dht_seeds integer NOT NULL DEFAULT 0;
+ALTER TABLE seed_probes ADD COLUMN peer_estimate integer NOT NULL DEFAULT 0;
+ALTER TABLE seed_probes ADD COLUMN dht_estimate boolean NOT NULL DEFAULT false;
+`,
+  },
+  {
+    version: '007_cache_nodes',
+    sql: `
+-- Popular-release cache nodes (src/cacheNodes.mjs). Off until settings.cacheNodesEnabled is true.
+-- token_hash is sha256 of the node token. The token itself is never stored.
+-- A revoked node has an empty token_hash and cannot call the API.
+CREATE TABLE cache_nodes (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  url text NOT NULL,
+  region text NOT NULL DEFAULT '',
+  capacity_bytes bigint NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  last_heartbeat bigint,
+  token_hash text NOT NULL DEFAULT '',
+  disk_used_bytes bigint NOT NULL DEFAULT 0,
+  disk_total_bytes bigint NOT NULL DEFAULT 0,
+  torrserver_ok boolean NOT NULL DEFAULT false,
+  prefix_mb integer NOT NULL DEFAULT 0,
+  prefix_percent integer NOT NULL DEFAULT 0,
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL
+);
+CREATE INDEX cache_nodes_token ON cache_nodes (token_hash) WHERE token_hash <> '';
+CREATE TABLE cache_assignments (
+  id text PRIMARY KEY,
+  node_id text NOT NULL REFERENCES cache_nodes (id) ON DELETE CASCADE,
+  infohash text NOT NULL,
+  title text NOT NULL DEFAULT '',
+  magnet text NOT NULL DEFAULT '',
+  size_bytes bigint NOT NULL DEFAULT 0,
+  prefix_bytes bigint NOT NULL DEFAULT 0,
+  prefix_percent integer NOT NULL DEFAULT 0,
+  status text NOT NULL DEFAULT 'assigned' CHECK (status IN ('assigned', 'caching', 'cached', 'failed', 'removed')),
+  pinned boolean NOT NULL DEFAULT false,
+  source text NOT NULL DEFAULT 'auto' CHECK (source IN ('auto', 'manual')),
+  score integer NOT NULL DEFAULT 0,
+  error text NOT NULL DEFAULT '',
+  created_at bigint NOT NULL,
+  updated_at bigint NOT NULL,
+  removed_at bigint,
+  UNIQUE (node_id, infohash)
+);
+CREATE INDEX cache_assignments_hash ON cache_assignments (infohash);
+CREATE TABLE cache_interest (
+  infohash text PRIMARY KEY,
+  title text NOT NULL DEFAULT '',
+  searches integer NOT NULL DEFAULT 0,
+  plays integer NOT NULL DEFAULT 0,
+  seeders integer NOT NULL DEFAULT 0,
+  size_bytes bigint NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL
+);
+CREATE INDEX cache_interest_updated ON cache_interest (updated_at);
+`,
+  },
+  {
+    version: '008_playback_progress',
+    sql: `
+-- Continue on another device. One row per account, title and episode.
+-- title_key and episode_key are app labels, not a torrent hash, so a different release still matches.
+-- device_id is the writer. The API returns otherDevice, not the id.
+CREATE TABLE playback_progress (
+  account_id text NOT NULL,
+  title_key text NOT NULL,
+  episode_key text NOT NULL,
+  position_sec integer NOT NULL,
+  duration_sec integer NOT NULL,
+  title text NOT NULL DEFAULT '',
+  label text NOT NULL DEFAULT '',
+  device_id text NOT NULL DEFAULT '',
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (account_id, title_key, episode_key)
+);
+CREATE INDEX playback_progress_updated ON playback_progress (account_id, updated_at DESC);
+`,
+  },
+  {
+    version: '009_watch_quality',
+    sql: `
+-- Community quality of a release (src/watchRank.mjs).
+-- watch_votes stores sha256(account + device) so one account and device is one vote.
+-- Aggregates have no account id, no device id and no IP.
+CREATE TABLE watch_votes (
+  voter text NOT NULL,
+  infohash text NOT NULL,
+  file_index integer NOT NULL DEFAULT 0,
+  device_class text NOT NULL CHECK (device_class IN ('tv', 'phone')),
+  title_key text NOT NULL DEFAULT '',
+  season integer NOT NULL DEFAULT 0,
+  episode integer NOT NULL DEFAULT 0,
+  ttff_ms integer NOT NULL DEFAULT 0,
+  rebuffer_n integer NOT NULL DEFAULT 0,
+  rebuffer_ms integer NOT NULL DEFAULT 0,
+  watched_pct integer NOT NULL DEFAULT 0,
+  completed boolean NOT NULL DEFAULT false,
+  switched boolean NOT NULL DEFAULT false,
+  voice text NOT NULL DEFAULT '',
+  codec_ok boolean NOT NULL DEFAULT false,
+  codec_known boolean NOT NULL DEFAULT false,
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (voter, infohash, file_index)
+);
+CREATE TABLE watch_release_stats (
+  infohash text NOT NULL,
+  file_index integer NOT NULL DEFAULT 0,
+  device_class text NOT NULL CHECK (device_class IN ('tv', 'phone')),
+  title_key text NOT NULL DEFAULT '',
+  title text NOT NULL DEFAULT '',
+  season integer NOT NULL DEFAULT 0,
+  episode integer NOT NULL DEFAULT 0,
+  samples integer NOT NULL DEFAULT 0,
+  completed integer NOT NULL DEFAULT 0,
+  switched integer NOT NULL DEFAULT 0,
+  ttff_ms bigint NOT NULL DEFAULT 0,
+  rebuffer_n integer NOT NULL DEFAULT 0,
+  rebuffer_ms bigint NOT NULL DEFAULT 0,
+  watched_sum integer NOT NULL DEFAULT 0,
+  codec_ok integer NOT NULL DEFAULT 0,
+  codec_fail integer NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (infohash, file_index, device_class)
+);
+CREATE INDEX watch_release_title ON watch_release_stats (title_key, season, episode);
+CREATE TABLE watch_voice (
+  title_key text NOT NULL,
+  voice text NOT NULL,
+  picks integer NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (title_key, voice)
+);
+CREATE TABLE watch_codec (
+  device_class text NOT NULL CHECK (device_class IN ('tv', 'phone')),
+  codec text NOT NULL,
+  reports integer NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (device_class, codec)
+);
+CREATE TABLE watch_mod (
+  infohash text PRIMARY KEY,
+  pinned boolean NOT NULL DEFAULT false,
+  banned boolean NOT NULL DEFAULT false,
+  note text NOT NULL DEFAULT '',
+  updated_at bigint NOT NULL
+);
+CREATE TABLE watch_follow (
+  voter text NOT NULL,
+  title_key text NOT NULL,
+  title text NOT NULL DEFAULT '',
+  season integer NOT NULL DEFAULT 0,
+  episode integer NOT NULL DEFAULT 0,
+  device_class text NOT NULL CHECK (device_class IN ('tv', 'phone')),
+  infohash text NOT NULL DEFAULT '',
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (voter, title_key)
+);
+CREATE INDEX watch_follow_updated ON watch_follow (updated_at);
+CREATE TABLE watch_seen (
+  infohash text PRIMARY KEY,
+  title text NOT NULL DEFAULT '',
+  title_key text NOT NULL DEFAULT '',
+  season integer NOT NULL DEFAULT 0,
+  episode integer NOT NULL DEFAULT 0,
+  seeds integer NOT NULL DEFAULT 0,
+  dht_seeds integer NOT NULL DEFAULT 0,
+  size_bytes bigint NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL
+);
+CREATE INDEX watch_seen_title ON watch_seen (title_key);
+CREATE TABLE watch_best (
+  title_key text NOT NULL,
+  season integer NOT NULL DEFAULT 0,
+  episode integer NOT NULL DEFAULT 0,
+  device_class text NOT NULL CHECK (device_class IN ('tv', 'phone')),
+  infohash text NOT NULL DEFAULT '',
+  title text NOT NULL DEFAULT '',
+  score integer NOT NULL DEFAULT 0,
+  reason text NOT NULL DEFAULT '',
+  voice text NOT NULL DEFAULT '',
+  seeds integer NOT NULL DEFAULT 0,
+  size_bytes bigint NOT NULL DEFAULT 0,
+  updated_at bigint NOT NULL,
+  warmed_at bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (title_key, season, episode, device_class)
+);
+`,
+  },
+  {
+    version: '010_pay_methods',
+    sql: `
+-- Telegram Stars and Crypto Pay. Old payments have a null provider and stay YooMoney.
+-- Null columns stay off the state row. Empty strings are not written for missing fields.
+ALTER TABLE payments ADD COLUMN provider text;
+ALTER TABLE payments ADD COLUMN asset text;
+ALTER TABLE payments ADD COLUMN rub double precision;
+ALTER TABLE purchases ADD COLUMN method text;
+ALTER TABLE purchases ADD COLUMN asset text;
+ALTER TABLE purchases ADD COLUMN pay_amount text;
+ALTER TABLE purchases ADD COLUMN invoice_id text;
+ALTER TABLE purchases ADD COLUMN pay_url text;
+ALTER TABLE purchases ADD COLUMN web_url text;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

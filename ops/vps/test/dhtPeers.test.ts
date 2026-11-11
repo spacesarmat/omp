@@ -309,7 +309,7 @@ describe('createDhtLookup limits', () => {
     made.emit('peer', { host: '3.3.3.3', port: 1 }, Buffer.from(hash, 'hex'));
     made.emit('peer', { host: '9.9.9.9', port: 1 }, Buffer.from('b'.repeat(40), 'hex'));
     made.finish!();
-    expect(await pending).toEqual({ ok: true, peers: 2 });
+    expect(await pending).toEqual({ ok: true, peers: 2, seedsEstimate: 0, peerEstimate: 0, scraped: false });
     expect(lookup.busy()).toBe(false);
   });
 
@@ -335,7 +335,7 @@ describe('createDhtLookup limits', () => {
     expect(made.lookups).toEqual([hash]);
     clk.flush(2500);
     expect(made.aborts).toBe(1);
-    expect(await pending).toEqual({ ok: true, peers: 0 });
+    expect(await pending).toEqual({ ok: true, peers: 0, seedsEstimate: 0, peerEstimate: 0, scraped: false });
   });
 
   it('closes the node after idle, and keeps it while another lookup is running', async () => {
@@ -361,5 +361,45 @@ describe('createDhtLookup limits', () => {
     clk.flush(1000);
     expect(made.destroys).toBe(1);
     expect(lookup.state()).toBe('idle');
+  });
+});
+
+describe('BEP 33 scrape lookup', () => {
+  it('sends get_peers with scrape=1 and merges bloom filters', async () => {
+    const { estimateBloom, mergeBloom } = await import('../dht-peers/src/bloom.mjs');
+    const a = Buffer.alloc(256);
+    const b = Buffer.alloc(256);
+    a[0] = 0x0f;
+    b[0] = 0xf0;
+    const queries: { q?: string; scrape?: number }[] = [];
+    const node = {
+      ready: true,
+      destroyed: false,
+      on() {},
+      removeListener() {},
+      listen() {},
+      _rpc: { id: Buffer.alloc(20, 1) },
+      _closest(_target: Buffer, message: { q?: string; a?: { scrape?: number } }, onreply: (msg: unknown) => boolean, cb: () => void) {
+        queries.push({ q: message.q, scrape: message.a && message.a.scrape });
+        onreply({ r: { BFsd: a, BFpe: a, values: [Buffer.from([1, 2, 3, 4, 0x1a, 0xe1])] } });
+        onreply({ r: { BFsd: b, BFpe: b } });
+        cb();
+      },
+    };
+    const lookup = createDhtLookup({
+      lookupMs: 5000,
+      idleMs: 1000,
+      createNode: () => node,
+    });
+    const found = await lookup.lookup('ab'.repeat(20));
+    expect(queries).toEqual([{ q: 'get_peers', scrape: 1 }]);
+    const merged = mergeBloom(a, b);
+    expect(found).toEqual({
+      ok: true,
+      peers: 1,
+      seedsEstimate: estimateBloom(merged),
+      peerEstimate: estimateBloom(merged),
+      scraped: true,
+    });
   });
 });

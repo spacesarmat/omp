@@ -25,6 +25,8 @@ export interface AppSettings {
   updateCheck: boolean;
   /** «Получать бета-версии»: the beta feed (update-beta.json); off = a beta stays until the next release. */
   betaUpdates: boolean;
+  /** Send install/login steps and, later, crash reports. On by default. Heartbeat of an already linked device stays. */
+  diagnostics: boolean;
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
@@ -57,6 +59,12 @@ export interface AppSettings {
    */
   openOnStartup: boolean;
   /**
+   * Android TV: «Включать телевизор через HDMI-CEC». When the phone wakes the box or launches playback,
+   * OMP asks the HDMI port to turn the TV on and switch the input. Default on. Ignored when the system
+   * does not expose HdmiControlManager.
+   */
+  hdmiCec: boolean;
+  /**
    * Slide tour finished from Settings. The tour is not shown on its own.
    * Raise ONBOARDING_VERSION (src/onboarding/gate.ts) only if a future build should offer it again on its own.
    */
@@ -71,6 +79,11 @@ export interface AppSettings {
    */
   liveSeeds: boolean;
   /**
+   * «Помогать улучшать подбор». On: the app sends anonymous playback stats so billing can rank releases.
+   * Off: nothing is sent. Default on.
+   */
+  helpRank: boolean;
+  /**
    * TV beta builds: «Режим тестирования». On shows the stable screen codes.
    * A stable build ignores this flag (the switch is not rendered).
    */
@@ -79,6 +92,16 @@ export interface AppSettings {
   testLabelPx: number;
   /** Test-mode label size in px on the phone (4..24). Beta only. */
   testLabelPhonePx: number;
+  /**
+   * Prebuffer the likely file while a card or a search row is open, also on metered mobile data.
+   * Off: Wi-Fi and Ethernet still prebuffer, cellular does not.
+   */
+  prebufferOnMetered: boolean;
+  /**
+   * A play that is still not watchable after 18 s switches to another release of the same title.
+   * Off: the player only offers the switch.
+   */
+  fallbackAuto: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -96,6 +119,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   librarySort: 'new',
   updateCheck: true,
   betaUpdates: false,
+  diagnostics: true,
   historyFilter: 'all',
   playerEngine: 'auto',
   videoPlayer: 'builtin',
@@ -105,13 +129,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysFfmpeg: false,
   language: 'system',
   openOnStartup: true,
+  hdmiCec: true,
   onboardingVersion: 0,
   setupDone: false,
   seenHints: {},
   liveSeeds: true,
+  helpRank: true,
   testMode: false,
   testLabelPx: 20,
   testLabelPhonePx: 12,
+  prebufferOnMetered: false,
+  fallbackAuto: false,
 };
 
 const KEY = 'tsp.settings';

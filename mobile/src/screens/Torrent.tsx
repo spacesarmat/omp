@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { torrentHeaderEpisodes } from '../lib/releaseContents';
 import { externalNoteText } from '../../../src/lib/externalNote';
 import { rememberedSeasonTotal, rememberSeasonTotals, seasonEpisodeTotal } from '../../../src/lib/episodesOutOf';
@@ -52,6 +52,13 @@ import { reloadMonitor } from '../monitor/ui';
 import { deleteRelease, deleteTorrents, watchTarget } from '../lib/torrentActions';
 import { releaseName } from '../lib/duplicates';
 import { displayTitle } from '../../../src/lib/torrentName';
+import { settings } from '../../../src/store/settings';
+import { startFileWarm, shouldPrebuffer, connectionMetered } from '../../../src/viewer/prebuffer';
+import { asWarm } from '../../../src/viewer/warmClient';
+import { useContinue } from '../../../src/viewer/useContinue';
+import { useTrackChoice } from '../../../src/viewer/useTracks';
+import { takeAutoplay } from '../../../src/viewer/alternates';
+import { episodeProgressKey } from '../../../src/viewer/tracks';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
@@ -120,6 +127,7 @@ export function WatchSheet({ torrent, file, onClose, seasonTotal }: { torrent: T
       duration: getLocalProgress(torrent.hash, file.id)?.duration || undefined,
       label: [code, fileTitle(file)].filter(Boolean).join(' · '),
       seasonTotal: seasonTotal && seasonTotal > 0 ? seasonTotal : undefined,
+      season: parseEpisode(file.path).season !== null ? parseEpisode(file.path).season! : undefined,
       files: filesOf(torrent),
       onBusy: setBusy,
       onError: (m) => setStatus(m ? { kind: 'error', text: m } : null),
@@ -303,17 +311,17 @@ function MarksSheet({ title, prefs, onSave, onClose }: { title: string; prefs: S
       <div class="m-marks-pair">
         <div class="m-field">
           <label for="m-mark-from">{t('torrent.screen.marksFrom')}</label>
-          <TextField id="m-mark-from" class="m-input" type="text" inputMode="numeric" value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
+          <TextField id="m-mark-from" class="m-input" type="text" inputMode="numeric" placeholder={t('torrent.screen.timePlaceholder')} value={from} onInput={(e) => setFrom((e.target as HTMLInputElement).value)} />
         </div>
         <div class="m-field">
           <label for="m-mark-to">{t('torrent.screen.marksTo')}</label>
-          <TextField id="m-mark-to" class="m-input" type="text" inputMode="numeric" value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
+          <TextField id="m-mark-to" class="m-input" type="text" inputMode="numeric" placeholder={t('torrent.screen.timePlaceholder')} value={to} onInput={(e) => setTo((e.target as HTMLInputElement).value)} />
         </div>
       </div>
       <div class="m-section">{t('torrent.screen.marksCredits')}</div>
       <div class="m-field">
         <label for="m-mark-last">{t('torrent.screen.marksLast')}</label>
-        <TextField id="m-mark-last" class="m-input" type="text" inputMode="numeric" value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
+        <TextField id="m-mark-last" class="m-input" type="text" inputMode="numeric" placeholder={t('torrent.screen.timePlaceholder')} value={last} onInput={(e) => setLast((e.target as HTMLInputElement).value)} />
       </div>
       <div class="m-muted m-small">{t('torrent.screen.marksHint')}</div>
       {error && (
@@ -372,14 +380,37 @@ export function EpisodeRows({
 }) {
   const tmdb = { eps };
   const setSheet = onPick;
+  const ratios = files.map((f) => sharedRatio(hash, f.id));
+  let current = 0;
+  const mid = ratios.findIndex((r) => r > 0 && r < 0.9);
+  if (mid >= 0) current = mid;
+  else {
+    for (let i = ratios.length - 1; i >= 0; i--) if (ratios[i] >= 0.9) { current = i; break; }
+  }
+  const foldAt = 8;
+  const [openList, setOpenList] = useState(files.length <= foldAt);
+  const listRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const row = listRef.current ? (listRef.current.querySelector('[data-current="1"]') as HTMLElement | null) : null;
+    if (row && row.scrollIntoView) row.scrollIntoView({ block: 'nearest' });
+  }, [hash, current, openList]);
+  const folded = files.length > foldAt && !openList;
+  const from = folded ? Math.max(0, current - 1) : 0;
+  const to = folded ? Math.min(files.length, current + 3) : files.length;
   return (
-    <div class="m-list m-eps">
+    <div class="m-list m-eps" ref={listRef}>
+      {files.length > foldAt && (
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm m-ep-fold" aria-expanded={openList} onClick={() => setOpenList(!openList)}>
+          {openList ? t('torrent.screen.episodesFold') : t('torrent.screen.episodesAll', { n: files.length })}
+        </button>
+      )}
       {files.map((f, i) => {
+        if (i < from || i >= to) return null;
         const pct = Math.round(sharedRatio(hash, f.id) * 100);
         const pe = parseEpisode(f.path);
         if (pe.episode === null) {
           return (
-            <button type="button" class="m-ep" key={f.id} onClick={() => setSheet(f)}>
+            <button type="button" class="m-ep" key={f.id} data-current={i === current ? '1' : undefined} onClick={() => setSheet(f)}>
               <span class="m-ep-code">{fileCode(f) || i + 1}</span>
               <span class="m-ep-text">
                 <span class="m-ep-name">{fileTitle(f)}</span>
@@ -388,6 +419,7 @@ export function EpisodeRows({
                 </span>
               </span>
               <span class="m-muted m-small">{fmtSize(f.length)}</span>
+              {ratios[i] >= 0.9 && <span class="m-ep-watched">{t('library.watchedDone')}</span>}
             </button>
           );
         }
@@ -398,7 +430,7 @@ export function EpisodeRows({
         const seasonBit = pe.season !== null && (withSeason || spansSeasons(files.map((x) => x.path))) ? t('library.seasonNamed', { n: pe.season }) : '';
         const sub = [seasonBit, fmtSize(f.length)].filter(Boolean).join(' · ');
         return (
-          <button type="button" class="m-ep m-ep-named" key={f.id} onClick={() => setSheet(f)}>
+          <button type="button" class="m-ep m-ep-named" key={f.id} data-current={i === current ? '1' : undefined} onClick={() => setSheet(f)}>
             <span class="m-ep-text">
               <span class="m-ep-name">
                 {name}
@@ -409,6 +441,7 @@ export function EpisodeRows({
                 <span class="m-bar-fill" style={{ width: pct + '%' }} />
               </span>
             </span>
+            {ratios[i] >= 0.9 && <span class="m-ep-watched">{t('library.watchedDone')}</span>}
           </button>
         );
       })}
@@ -442,6 +475,7 @@ export function Torrent({ hash }: { hash: string }) {
   const [marksOpen, setMarksOpen] = useState(false);
   // the «Skip» block is folded by default; the choice is remembered across torrents
   const [skipOpen, setSkipOpen] = useState(() => loadJson<boolean>(SKIP_OPEN_KEY, false, (v) => typeof v === 'boolean'));
+  const [extAbout, setExtAbout] = useState(false);
   const toggleSkipOpen = () => {
     const next = !skipOpen;
     setSkipOpen(next);
@@ -561,6 +595,34 @@ export function Torrent({ hash }: { hash: string }) {
     if (cur.name === 'torrent' && cur.hash === hash) replaceTop({ name: 'audiobook', hash });
   }, [book, hash]);
 
+  const previewFiles = playableFiles(allFiles);
+  const previewTarget = watchTarget(hash, previewFiles);
+  const titleKeySrc = tor ? displayTitle(tor) : '';
+  const localPreview = previewTarget ? sharedResume(hash, previewTarget.id) : 0;
+  const remote = useContinue(titleKeySrc, previewTarget ? previewTarget.path : '', !(previewTarget && episodeLabel(previewTarget.path)), localPreview);
+  const tracks = useTrackChoice(c || null, hash, titleKeySrc, previewTarget ? previewTarget.id : null);
+  useEffect(() => {
+    if (!c) return undefined;
+    return startFileWarm(
+      asWarm(c),
+      hash,
+      previewTarget ? { id: previewTarget.id, path: previewTarget.path, length: previewTarget.length } : null,
+      shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered),
+    );
+  }, [c, hash, previewTarget ? previewTarget.id : -1, settings.value.prebufferOnMetered]);
+  useEffect(() => {
+    if (!previewTarget || !c || !tor) return;
+    const job = takeAutoplay(hash);
+    if (!job) return;
+    void watchOnPhone(c, tor, {
+      hash: hash,
+      file: previewTarget,
+      title: stripExt(baseName(previewTarget.path)),
+      at: job.positionSec,
+      duration: 0,
+    });
+  }, [hash, previewTarget ? previewTarget.id : -1]);
+
   if (!c || !tor) {
     return (
       <div class="m-screen m-torrent" data-route="torrent">
@@ -671,16 +733,28 @@ export function Torrent({ hash }: { hash: string }) {
   const meta = [
     selectedSeason === 'other' ? t('torrent.bonus') : headerSeason !== null ? t('library.season', { n: headerSeason }) : '',
     hasEpisodes ? torrentHeaderEpisodes(selectedSeason === 'other' ? shownFiles : allFiles, headerSeason, selectedSeason === 'other' ? 0 : seasonTotal) : '',
-    externalNoteText(allFiles),
     tor.torrent_size ? fmtSize(tor.torrent_size) : '',
     knownSwarmText(tor),
   ].filter(Boolean);
 
   // where to continue: the latest started file of this torrent, else the first one
-  const target = watchTarget(hash, files);
-  const at = target ? sharedResume(hash, target.id) : 0;
+  let target = watchTarget(hash, files);
+  const localAt = target ? sharedResume(hash, target.id) : 0;
+  let jumped = false;
+  if (localAt <= 0 && remote.episodeKey) {
+    for (let i = 0; i < files.length; i++) {
+      if (episodeProgressKey(files[i].path, !episodeLabel(files[i].path)) === remote.episodeKey) {
+        target = files[i];
+        jumped = true;
+      }
+    }
+  }
+  const at = jumped ? remote.remoteSec : Math.max(localAt, remote.sec);
+  const fromOther = remote.other && (jumped || remote.sec > localAt);
   const targetCode = target ? fileCode(target) : '';
-  const mainLabel = at > 0
+  const mainLabel = fromOther
+    ? t('viewer.continueOther', { time: formatDuration(at) })
+    : at > 0
     ? t('torrent.screen.continueOnTv', { ep: targetCode ? targetCode + ' ' : '', time: formatDuration(at) })
     : t('news.watchOnTv') + (hasEpisodes && targetCode ? ' · ' + targetCode : '');
 
@@ -705,6 +779,7 @@ export function Torrent({ hash }: { hash: string }) {
       duration: getLocalProgress(hash, target.id)?.duration || undefined,
       label: [targetCode, fileTitle(target)].filter(Boolean).join(' · '),
       seasonTotal: continuationTotal(target),
+      season: parseEpisode(target.path).season !== null ? parseEpisode(target.path).season! : undefined,
       files: filesOf(tor),
       onBusy: setBusy,
       onError: setStatus,
@@ -768,7 +843,15 @@ export function Torrent({ hash }: { hash: string }) {
         </div>
         <div class="m-thead-info">
           <div class="m-thead-title">{shortTitle(title)}</div>
-          <div class="m-thead-meta">{meta.join(' · ')}</div>
+          <div class="m-thead-meta">
+            {meta.join(' · ')}
+            {externalNoteText(allFiles) && (
+              <button type="button" class="m-icon-btn" aria-expanded={extAbout} aria-label={externalNoteText(allFiles)} onClick={() => setExtAbout(!extAbout)}>
+                i
+              </button>
+            )}
+          </div>
+          {extAbout && externalNoteText(allFiles) && <p class="m-small m-muted">{externalNoteText(allFiles)}</p>}
           {isDeadRelease(hash) && (
             <div class="m-dead">
               <div class="m-hint-warn">{t('torrent.deadRelease')}</div>
@@ -844,6 +927,18 @@ export function Torrent({ hash }: { hash: string }) {
           </>
         )}
         {status && <LaunchError message={status} />}
+        {(tracks.audio.length > 0 || tracks.subs.length > 0) && (
+          <div class="m-torrent-tracks" data-tracks>
+            {tracks.audio.length > 0 && (
+              <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={tracks.cycleAudio}>
+                {t('viewer.tracksAudio') + ': ' + tracks.audio[tracks.audioI].label}
+              </button>
+            )}
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={tracks.cycleSub}>
+              {t('viewer.tracksSub') + ': ' + (tracks.subI >= 0 && tracks.subs[tracks.subI] ? tracks.subs[tracks.subI].label : t('viewer.tracksOff'))}
+            </button>
+          </div>
+        )}
         {releases.length > 1 && (
           <ReleasesBlock
             releases={releases}
@@ -857,10 +952,10 @@ export function Torrent({ hash }: { hash: string }) {
         {moviePending && !movie && <div class="m-tc-section m-tc-cast-ph" aria-hidden="true" />}
         {movie && <CastStrip cast={movie.cast} />}
         {!book && files.length > 0 && (
-          <div class="m-skip" data-block="skip">
+          <div class="m-skip" data-block={film && !series ? 'monitoring' : 'skip'}>
             <button type="button" class="m-skip-row m-skip-open m-skip-toggle" aria-expanded={skipOpen} onClick={toggleSkipOpen}>
               <span class="m-skip-text">
-                <span class="m-skip-title">{t('torrent.skip')}</span>
+                <span class="m-skip-title">{film && !series ? t('torrent.viewSettings') : t('torrent.skip')}</span>
                 <span class="m-muted m-small">
                   {t('torrent.screen.skipSumIntro', { state: onOff(skip.prefs.i) })} · {t('torrent.screen.skipSumCredits', { state: onOff(skip.prefs.c) })}
                 </span>
@@ -886,12 +981,24 @@ export function Torrent({ hash }: { hash: string }) {
                 </button>
               </>
             )}
+            {film && !series && (
+              <div class="m-skip-row" data-block="watch-quality">
+                <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+                <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
+              </div>
+            )}
+            {film && !series && upgrade && (
+              <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
+                <span class="m-skip-text">{t('torrent.better.find')}</span>
+                <Icon d={CHEVRON} size={20} />
+              </button>
+            )}
           </div>
         )}
-        {((!book && series) || film || upgrade) && (
+        {(!(film && !series) || files.length === 0) && ((!book && series) || film || upgrade) && (
           <div class="m-skip" data-block="monitoring">
             <div class="m-skip-head">
-              <span class="m-skip-title">{t('monitor.title')}</span>
+              <span class="m-skip-title">{film && !series ? t('torrent.viewSettings') : t('monitor.title')}</span>
             </div>
             {!book && series && (
               <div class="m-skip-row" data-block="watch-new">

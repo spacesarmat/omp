@@ -1,4 +1,6 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
+import { CRYPTO_ASSETS } from './cryptoPay.mjs';
+import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, labelSettled, rubOfPayment, starDue } from './payMethods.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -646,16 +648,30 @@ export function openAppUrl(origin, code) {
   return base + '/go/' + encodeURIComponent(formatCode(code));
 }
 
-export function adminChatIds(settings) {
-  return String((settings && settings.adminTelegramIds) || '')
+function idList(raw) {
+  return String(raw || '')
     .split(/[,;\s]+/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
+export function adminChatIds(settings) {
+  return idList(settings && settings.adminTelegramIds);
+}
+
+/** Telegram ids that may open the panel but must not change billing. */
+export function readerChatIds(settings) {
+  return idList(settings && settings.adminReaders);
+}
+
+export function isPanelReader(settings, chatId) {
+  const id = String(chatId);
+  return readerChatIds(settings).some((s) => s === id);
+}
+
 export function isAdminChat(settings, chatId) {
   const id = String(chatId);
-  return adminChatIds(settings).some((s) => s === id);
+  return adminChatIds(settings).some((s) => s === id) || isPanelReader(settings, id);
 }
 
 const SUPPORT_CAP = 400;
@@ -964,7 +980,14 @@ export function codeAccess(state, row, now) {
  * Neither does a held payment the admin rejected: if YooMoney later accepts it, the money is there.
  */
 function seenPayment(state, operationId) {
-  return state.payments.some((p) => p.operationId === operationId && !p.pending && p.error !== 'rejected');
+  const alt = String(operationId || '').indexOf('stars:') === 0 || String(operationId || '').indexOf('crypto:') === 0;
+  return state.payments.some((p) => {
+    if (!p || p.operationId !== operationId || p.pending) return false;
+    // A rejected hold can still be accepted later. A short Stars or Crypto Pay notice can be followed by the full one.
+    if (p.error === 'rejected') return false;
+    if (alt && p.error === 'amount') return false;
+    return true;
+  });
 }
 
 function isTrue(v) {
@@ -1000,8 +1023,8 @@ function actorFromAuditDetail(row) {
 }
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
-export function logAudit(state, { action, detail, now, actor, accountId }) {
-  const row = { id: randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
+export function logAudit(state, { action, detail, now, actor, accountId, id }) {
+  const row = { id: id || randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
   if (accountId) row.accountId = String(accountId);
@@ -1220,7 +1243,7 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
   // The accepted notice replaces the held row for the same operation.
   const heldRow = hadPending ? input.payments.find((p) => p.operationId === operationId && p.pending) : null;
   const resolved = resolveNotice({ withdrawAmount, notificationType, requireWithdraw }, heldRow);
-  const state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
+  let state = hadPending ? { ...input, payments: input.payments.filter((p) => !(p.operationId === operationId && p.pending)) } : input;
   const mark = String(label || '');
   const days = state.settings.periodDays || 30;
   const row = { operationId, label: mark, amount, at: now || Date.now(), ...noticeMeta(resolved) };
@@ -1247,7 +1270,32 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
   }
+  const alt = quote && (quote.method === 'stars' || quote.method === 'crypto');
+  if (alt) {
+    // A short notice is replaced when the full amount arrives, so the operation id stays one row.
+    const priorShort = state.payments.find((p) => p.operationId === operationId && p.error === 'amount' && p.id);
+    if (priorShort) {
+      row.id = priorShort.id;
+      state = { ...state, payments: state.payments.filter((p) => p.id !== priorShort.id) };
+    }
+    row.provider = quote.method;
+    row.asset = String(quote.asset || '');
+    row.currency = String(quote.asset || '');
+    row.rub = Number(quote.rub) > 0 ? Number(quote.rub) : Number(quote.price) || 0;
+    // One order extends once. A short payment (error amount) does not count, so a later full payment can.
+    if (labelSettled(state, mark)) {
+      return {
+        state: logWebhook(state, { kind: 'duplicate', operationId, label: mark, amount: amount || '', at: now }),
+        result: { duplicate: true },
+      };
+    }
+    if (!cryptoInvoiceMatches(quote, operationId)) {
+      const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
+      return { state: { ...state, payments }, result: { error: 'bad_label' } };
+    }
+  }
   const coversNeed = (need) => {
+    if (alt) return altCovers(amount, currency, quote);
     if (quote && (quote.method === 'PC' || quote.method === 'AC')) {
       if (need > Number(quote.price) + 1e-9) return false;
       return settledCovers(amount, currency, quote, resolved);
@@ -1267,6 +1315,9 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     const usedCredit = quote ? Math.max(0, Math.floor(Number(quote.credit) || 0)) : 0;
     const haveCredit = creditOf(sub);
     const missing = Math.max(0, usedCredit - haveCredit);
+    // Stars and crypto cannot collect the missing rubles on top of an already sent invoice.
+    // A second quote that spent the same credit is refused instead of extending at the old discount.
+    if (alt && missing > 0) return rejectAmount(state, row);
     const need = (quoted !== null ? quoted : priceOf(state, act)) + missing;
     if (!coversNeed(need)) return rejectAmount(state, row);
     const next = extendPaid(state, sub, days, now, quotedExtras);
@@ -1308,7 +1359,10 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
     // after the end (an old message) becomes a credit toward the next renewal instead of a dead slot (P1-2).
     const access = subAccess(state, own, now);
     if (!access.paid) {
-      const credit = Math.round(quoted !== null ? quoted : priceOf(state, act));
+      const priced = quoted !== null ? quoted : priceOf(state, act);
+      // A crypto or Stars slot can have no ruble tariff. quote.rub is the value frozen at checkout.
+      const fromRub = quote && Number(quote.rub) > 0 ? Number(quote.rub) : 0;
+      const credit = Math.round(priced > 0 ? priced : fromRub);
       const total = creditOf(own) + credit;
       const subscriptions = state.subscriptions.map((s) => (s.id === id ? { ...s, creditRub: total } : s));
       return {
@@ -1397,8 +1451,14 @@ export function financeReport(state, now) {
   const monthFrom = now - 30 * DAY;
   const okPay = (p) => !p.error;
   const sumFrom = (from) =>
-    state.payments.filter((p) => okPay(p) && p.at >= from).reduce((acc, p) => acc + money(p.amount), 0);
+    state.payments.filter((p) => okPay(p) && p.at >= from).reduce((acc, p) => acc + rubOfPayment(p), 0);
   const countFrom = (from) => state.payments.filter((p) => okPay(p) && p.at >= from).length;
+  const splitFrom = (from) => {
+    const split = emptyMethodSplit();
+    const rows = state.payments.filter((p) => okPay(p) && (from == null || p.at >= from));
+    for (let i = 0; i < rows.length; i++) addMethodSplit(split, rows[i]);
+    return split;
+  };
 
   const payments = state.payments
     .slice()
@@ -1447,12 +1507,13 @@ export function financeReport(state, now) {
 
   return {
     summary: {
-      day: { sum: sumFrom(dayFrom), count: countFrom(dayFrom) },
-      week: { sum: sumFrom(weekFrom), count: countFrom(weekFrom) },
-      month: { sum: sumFrom(monthFrom), count: countFrom(monthFrom) },
+      day: { sum: sumFrom(dayFrom), count: countFrom(dayFrom), byMethod: splitFrom(dayFrom) },
+      week: { sum: sumFrom(weekFrom), count: countFrom(weekFrom), byMethod: splitFrom(weekFrom) },
+      month: { sum: sumFrom(monthFrom), count: countFrom(monthFrom), byMethod: splitFrom(monthFrom) },
       total: {
-        sum: state.payments.filter(okPay).reduce((acc, p) => acc + money(p.amount), 0),
+        sum: state.payments.filter(okPay).reduce((acc, p) => acc + rubOfPayment(p), 0),
         count: state.payments.filter(okPay).length,
+        byMethod: splitFrom(null),
       },
     },
     payments,
@@ -1462,7 +1523,7 @@ export function financeReport(state, now) {
 
 /** CSV of successful payments in [from, to] (ms). */
 export function paymentsCsv(state, from, to) {
-  const lines = ['at,amount,label,operationId,accountId,telegramId'];
+  const lines = ['at,amount,label,operationId,accountId,telegramId,provider,asset'];
   const rows = state.payments
     .filter((p) => !p.error && p.at >= from && p.at <= to)
     .slice()
@@ -1479,6 +1540,8 @@ export function paymentsCsv(state, from, to) {
         csvCell(p.operationId),
         csvCell(resolved.accountId || ''),
         csvCell(acc ? acc.telegramId || '' : ''),
+        csvCell(p.provider || 'yoomoney'),
+        csvCell(p.asset || ''),
       ].join(','),
     );
   }
@@ -1510,7 +1573,7 @@ export function dailySeries(state, now, days) {
     for (let p = 0; p < payments.length; p++) {
       const row = payments[p];
       if (row.error || row.at < from || row.at >= to) continue;
-      revenue += money(row.amount);
+      revenue += rubOfPayment(row);
     }
     let subs = 0;
     const subscriptions = state.subscriptions || [];
@@ -1532,6 +1595,9 @@ function paymentView(state, p) {
     label: p.label || '',
     operationId: p.operationId || '',
     error: p.error || '',
+    provider: p.provider || '',
+    asset: p.asset || '',
+    rub: Number(p.rub) || 0,
     accountId: resolved.accountId || '',
     who: acc ? telegramDisplay(acc) || acc.email || acc.id : '',
     problem: p.error || resolved.problem || '',
@@ -2397,12 +2463,12 @@ const PURCHASE_CAP = 2000;
  * A renewal (`sub`) includes every extra slot that still counts (base + extra × slots) unless
  * `withExtras` is false. The quote keeps how many slots it paid for.
  */
-export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras, addExtra, method }) {
+export function quotePurchase(state, { kind, accountId, subscriptionId, now, withExtras, addExtra, method, asset }) {
   const at = now || Date.now();
   const prices = priceText(state.settings);
   if (kind !== 'new' && kind !== 'sub' && kind !== 'dev') return { state, result: { error: 'bad_label' } };
   let price = kind === 'dev' ? prices.extra : prices.price;
-  if (!(price > 0)) return { state, result: { error: 'no_price' } };
+  let rubGross = price;
   let extras = 0;
   let credit = 0;
   let add = 0;
@@ -2411,6 +2477,7 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     add = addExtra > 0 ? Math.floor(addExtra) : 0;
     const quote = renewalPrice(state, sub, at, { withExtras: withExtras !== false, addExtra: add });
     price = quote.total;
+    rubGross = quote.gross;
     extras = quote.extras;
     credit = quote.credit;
   }
@@ -2418,13 +2485,38 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     // Slots left out of a base-only renewal are paid along with the new one, so they all run to paidUntil.
     extras = 1 + lapsingExtras(state, sub, at);
     price = prices.extra * extras;
+    rubGross = price;
   }
   // No method: a legacy quote. The payer is asked for `price` and the old net check applies.
   // PC or AC: freeze the documented gross-up. The caller cannot supply the fee.
+  // stars / crypto: payAmount is the tariff in that asset. No YooMoney fee is added.
   let payMethod = '';
   let fee = '';
   let gross = '';
-  if (method === 'PC' || method === 'AC') {
+  let payAmount = '';
+  let payAsset = '';
+  let rub = price > 0 ? price : 0;
+  if (method === 'stars') {
+    const stars = starDue(state.settings, kind, extras, rubGross, price);
+    if (!(stars >= 1)) return { state, result: { error: 'no_price' } };
+    payMethod = 'stars';
+    payAmount = String(stars);
+    payAsset = 'XTR';
+  } else if (method === 'crypto') {
+    if (CRYPTO_ASSETS.indexOf(asset) < 0) return { state, result: { error: 'bad_method' } };
+    const amount = cryptoDue(state.settings, asset, kind, extras, rubGross, price);
+    if (!amount) return { state, result: { error: 'no_price' } };
+    payMethod = 'crypto';
+    payAmount = amount;
+    payAsset = asset;
+    if (!(rub > 0)) {
+      const rateName = asset === 'USDT' ? 'cryptoRateUsdt' : asset === 'TON' ? 'cryptoRateTon' : 'cryptoRateBtc';
+      const rate = Number(state.settings[rateName]) || 0;
+      if (rate > 0) rub = Number(amount) * rate;
+    }
+  } else if (!(price > 0)) {
+    return { state, result: { error: 'no_price' } };
+  } else if (method === 'PC' || method === 'AC') {
     const up = grossUp(price, method);
     if (!up) return { state, result: { error: 'bad_method' } };
     payMethod = method;
@@ -2438,6 +2530,8 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     Number(p.price) === price &&
     (p.method || '') === payMethod &&
     (p.gross || '') === gross &&
+    (p.payAmount || '') === payAmount &&
+    (p.asset || '') === payAsset &&
     (Number(p.extras) || 0) === extras &&
     (Number(p.credit) || 0) === credit &&
     (Number(p.addExtra) || 0) === add &&
@@ -2446,9 +2540,23 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     at >= (Number(p.at) || 0);
   // A double tap or a second look at the same screen reuses the unpaid link instead of piling up quotes.
   const paidIds = paidQuoteIds(state.payments);
-  const quoted = { price, gross, fee, method: payMethod, extras, credit, addExtra: add };
+  const quoted = { price, gross, fee, method: payMethod, extras, credit, addExtra: add, payAmount, asset: payAsset, rub };
   const reuse = (state.purchases || []).find((p) => same(p) && !paidIds[p.id]);
-  if (reuse) return { state, result: { label: 'buy:' + reuse.id, id: reuse.id, ...quoted, gross: reuse.gross || '', fee: reuse.fee || '', method: reuse.method || '' } };
+  if (reuse) {
+    return {
+      state,
+      result: {
+        label: 'buy:' + reuse.id,
+        id: reuse.id,
+        ...quoted,
+        gross: reuse.gross || '',
+        fee: reuse.fee || '',
+        method: reuse.method || '',
+        payAmount: reuse.payAmount || payAmount,
+        asset: reuse.asset || payAsset,
+      },
+    };
+  }
   const row = {
     id: randomId(),
     kind,
@@ -2460,13 +2568,18 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
     addExtra: add,
     /** State check at payment time: the subscription end this link was quoted against. */
     paidUntil: sub ? Number(sub.paidUntil) || 0 : 0,
-    currency: '643',
+    currency: payAsset || '643',
     at,
   };
   if (payMethod) {
     row.method = payMethod;
-    row.fee = fee;
-    row.gross = gross;
+    if (fee) row.fee = fee;
+    if (gross) row.gross = gross;
+  }
+  if (payAmount) {
+    row.payAmount = payAmount;
+    row.asset = payAsset;
+    if (rub > 0) row.rub = rub;
   }
   const purchases = trimPurchases((state.purchases || []).concat([row]), state.payments);
   return { state: { ...state, purchases }, result: { label: 'buy:' + row.id, id: row.id, ...quoted } };
@@ -2516,16 +2629,18 @@ export function normalizePromo(code) {
  * A promo adds `days` to the subscription and/or `bonusSlots` free device slots: forever (`bonusDays` 0) or for
  * `bonusDays` days from the redemption. A promo with bonus slots may add no days (`days` 0).
  */
-export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const plain = normalizePromo(code) || normalizeCode(randomCode());
   if (plain.length < 4 || plain.length > 24) return { state, result: { error: 'bad_promo' } };
   if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
   const bonus = Math.max(0, Math.min(BASE_DEVICES_MAX, Math.floor(Number(bonusSlots) || 0)));
   const d = Math.floor(Number(days));
+  const discount = Math.floor(Number(discountPercent) || 0);
+  const discountOk = discount > 0 && discount <= 100;
   const row = {
     id: randomId(),
     code: plain,
-    days: d > 0 ? Math.min(3650, d) : bonus ? 0 : 1,
+    days: d > 0 ? Math.min(3650, d) : bonus || discountOk ? 0 : 1,
     maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
     createdAt: now,
     revoked: false,
@@ -2535,11 +2650,14 @@ export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonus
     row.bonusSlots = bonus;
     row.bonusDays = Math.max(0, Math.min(3650, Math.floor(Number(bonusDays) || 0)));
   }
+  const exp = Number(expiresAt) || 0;
+  if (exp > now) row.expiresAt = exp;
+  if (discountOk) row.discountPercent = discount;
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
 }
 
 /** Create `count` promo codes (max 100). A custom code is used only when count is 1. */
-export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays }) {
+export function createPromos(state, { count, code, days, maxUses, now, bonusSlots, bonusDays, expiresAt, discountPercent }) {
   const n = Math.max(1, Math.min(100, Math.floor(Number(count) || 1)));
   let cur = state;
   const promos = [];
@@ -2550,6 +2668,8 @@ export function createPromos(state, { count, code, days, maxUses, now, bonusSlot
       maxUses,
       bonusSlots,
       bonusDays,
+      expiresAt,
+      discountPercent,
       now: (now || Date.now()) + i,
     });
     if (out.result.error) return { state: cur, result: { error: out.result.error, promos } };
@@ -2578,6 +2698,7 @@ export function redeemPromo(state, { code, accountId, now }) {
   if (!promo) return { state, result: { error: 'bad_promo' } };
   if (promo.uses.some((u) => u.accountId === accountId)) return { state, result: { error: 'already' } };
   if (promo.uses.length >= promo.maxUses) return { state, result: { error: 'exhausted' } };
+  if (promo.expiresAt && now > promo.expiresAt) return { state, result: { error: 'expired' } };
 
   const existing = anySub(state, accountId);
   const days = Math.max(0, Math.floor(Number(promo.days) || 0));
@@ -2613,8 +2734,20 @@ export function redeemPromo(state, { code, accountId, now }) {
 
   const use = { id: randomId(), accountId, at: now, subscriptionId, code: activationCode };
   const promos = next.promos.map((p) => (p.id === promo.id ? { ...p, uses: p.uses.concat([use]) } : p));
+  let priced = { ...next, promos };
+  const discount = Math.floor(Number(promo.discountPercent) || 0);
+  const price = Math.floor(Number(priced.settings && priced.settings.priceRub) || 0);
+  if (discount > 0 && price > 0 && subscriptionId) {
+    const add = Math.floor((price * Math.min(100, discount)) / 100);
+    if (add > 0) {
+      priced = {
+        ...priced,
+        subscriptions: priced.subscriptions.map((s) => (s.id === subscriptionId ? { ...s, creditRub: creditOf(s) + add } : s)),
+      };
+    }
+  }
   return {
-    state: { ...next, promos },
+    state: priced,
     result: {
       kind: 'promo',
       code: activationCode,

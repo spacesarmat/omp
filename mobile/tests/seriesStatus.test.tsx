@@ -279,7 +279,7 @@ describe('series screen', () => {
     });
     mount(<Series seriesKey={darkKey()} />);
     await flush();
-    expect(chips().map((c) => c.textContent)).toEqual(['Сезон 1', 'Сезон 2', '+Сезон 3', 'Сезон 4 · с 3 дек.']);
+    expect(chips().map((c) => c.textContent)).toEqual(['Сезон 1', 'Сезон 2', 'Найти сезон 3', 'Сезон 4 · с 3 дек.']);
     act(() => chips()[2].click());
     expect(button('Найти раздачи')).toBeTruthy();
     expect(button('Напомнить')).toBeUndefined();

@@ -273,6 +273,10 @@ export function SettingsScreen() {
       <ChoiceRow focusKey="set-seekStep" label={t('tvSettings.seekStep')} value={s.seekStep} options={seekOptions()} onChange={(v) => updateSettings({ seekStep: v })} />
       <ChoiceRow focusKey="set-edgeStep" label={t('tvSettings.edgeStep')} value={s.edgeSeekStep} options={[5, 10, 15].map((v) => ({ value: v, label: v + ' ' + t('common.sec') }))} onChange={(v) => updateSettings({ edgeSeekStep: v })} />
       <ChoiceRow focusKey="set-autoNext" label={t('tvSettings.autoNext')} value={s.autoNext} options={onOff()} onChange={(v) => updateSettings({ autoNext: v })} />
+      <ChoiceRow focusKey="set-prebuffer" label={t('settings.prebufferMetered')} value={s.prebufferOnMetered} options={onOff()} onChange={(v) => updateSettings({ prebufferOnMetered: v })} />
+      {s.videoPlayer !== 'p2160' && (
+        <ChoiceRow focusKey="set-fallback" label={t('settings.fallbackAuto')} value={s.fallbackAuto} options={onOff()} onChange={(v) => updateSettings({ fallbackAuto: v })} />
+      )}
       <ChoiceRow focusKey="set-showStats" label={t('tvSettings.showStats')} value={s.showStats} options={onOff()} onChange={(v) => updateSettings({ showStats: v })} />
 
       <h2>{t('common.subtitles')}</h2>
@@ -294,9 +298,23 @@ export function SettingsScreen() {
       </div>
       <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} onArrow={nav('set-live-seeds')} />
       <div class="muted">{t('settings.liveSeedsHint')}</div>
+      <ChoiceRow focusKey="set-help-rank" label={t('settings.helpRank')} value={s.helpRank !== false} options={onOff()} onChange={(v) => updateSettings({ helpRank: v })} onArrow={nav('set-help-rank')} />
+      <div class="muted">{t('settings.helpRankHint')}</div>
 
       <h2>{t('settings.app')}</h2>
       {platformKind() === 'androidtv' && <OpenOnStartupSection />}
+      {platformKind() === 'androidtv' && (
+        <>
+          <ChoiceRow
+            focusKey="set-hdmi-cec"
+            label={t('tvSettings.hdmiCec')}
+            value={s.hdmiCec}
+            options={onOff()}
+            onChange={(v) => updateSettings({ hdmiCec: v })}
+          />
+          <div class="muted">{t('tvSettings.hdmiCecHint')}</div>
+        </>
+      )}
       <div class="row">
         <div class="grow">
           {t('tvSettings.aboutLine', { version: APP_VERSION })}
@@ -462,6 +480,8 @@ export function AdvancedSettingsScreen() {
       <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
       <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
       <div class="muted">{t('settings.betaHint')}</div>
+      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings({ diagnostics: v })} />
+      <div class="muted">{t('settings.diagnosticsHint')}</div>
 
       <h2>{t('tvSettings.log')}</h2>
       <LogBrief />

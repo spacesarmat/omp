@@ -61,6 +61,7 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
     val once = CallOnce(call)
     val mac = call.getString("mac")?.trim().orEmpty()
     val ip = call.getString("ip")?.trim().orEmpty()
+    val broadcast = call.getString("broadcast")?.trim()?.takeIf { OmpNativePlugin.IPV4.matches(it) }
     val packet = WakeOnLan.magicPacket(mac)
     if (packet == null || !OmpNativePlugin.IPV4.matches(ip)) {
         once.reject(I18n.s("plugin.wakeFailed"))
@@ -68,7 +69,7 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
     }
     io.execute {
         try {
-            WakeOnLan.send(packet, ip)
+            WakeOnLan.send(packet, ip, broadcast)
             once.resolve()
         } catch (_: Exception) {
             once.reject(I18n.s("plugin.wakeSendFailed"))
@@ -77,7 +78,14 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
 }
 
 internal fun OmpNativePlugin.player2160Op(call: PluginCall) {
-    call.resolve(JSObject().put("package", Player2160.installed(context.packageManager)).put("embedded", true))
+    val pm = context.packageManager
+    val pkg = Player2160.installed(pm)
+    val o = JSObject().put("package", pkg).put("embedded", true)
+    if (pkg != null) {
+        val ver = Player2160.versionLabel(Player2160.versionName(pm, pkg))
+        if (ver != null) o.put("version", ver)
+    }
+    call.resolve(o)
 }
 
 /** The queue of open2160's items/start/positionMs/fromStart/segments; null (call rejected) when the start item has no url. */

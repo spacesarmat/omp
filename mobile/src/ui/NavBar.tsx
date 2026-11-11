@@ -30,6 +30,15 @@ const TABS: { id: Tab; code: string; label: () => string; d: string }[] = [
 /** Ids of the bottom tabs, in order: every root screen, «Пульт» included. */
 export const TAB_IDS: Tab[] = TABS.map((t) => t.id);
 
+/** The same tabs as the phone bar, for the desktop sidebar. */
+export function desktopNavItems(): { id: Tab; label: string; d: string }[] {
+  return TABS.filter((item) => visibleTabIds().indexOf(item.id) >= 0).map((item) => ({
+    id: item.id,
+    label: item.label(),
+    d: item.d,
+  }));
+}
+
 /** The tabs shown now (the swipe between tabs follows them): «Пульт» only once a TV is paired. */
 export function visibleTabIds(): Tab[] {
   const tv = !!activeTv.value;

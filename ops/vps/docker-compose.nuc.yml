@@ -20,7 +20,7 @@ services:
       # pg_dump every backupEveryHours (admin settings) into /opt/omp-backups/pg, mode 600
       BILLING_PG_BACKUP_DIR: /backups/pg
       # base list + postgres (pg does not use the HTTP proxy; listed so nothing ever routes it via warp)
-      NO_PROXY: jackett,jacred,torrserver,caddy,postgres,docker-proxy,dht-peers,localhost,127.0.0.1
+      NO_PROXY: jackett,jacred,torrserver,caddy,postgres,docker-proxy,docker-restart,dht-peers,localhost,127.0.0.1
     volumes:
       - /opt/omp-backups/pg:/backups/pg
     networks:

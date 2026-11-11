@@ -94,6 +94,9 @@ import {
 import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
+import { createCryptoInvoice, cryptoPayAuthentic, paidInvoice } from './cryptoPay.mjs';
+import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
+import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
 import {
   confirmPendingPayment,
@@ -118,6 +121,7 @@ import {
   safeTorznabCat,
   searchJackett,
   searchJacRed,
+  searchBitmagnet,
   stripJackett,
 } from './jackett.mjs';
 import { sendMail } from './mail.mjs';
@@ -138,6 +142,19 @@ import {
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
 import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
+import { createPlaybackStore } from './db/pg/playbackSql.mjs';
+import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
+import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
+import { cacheEnabled } from './cacheNodes.mjs';
+import { isCachePath, routeCache } from './cacheHttp.mjs';
+import { browserReadCors, handleDesk, isBrowserRead } from './deskHttp.mjs';
+import { publishAdmin } from './adminLive.mjs';
+import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
+import { loginNote } from './crashIn.mjs';
+import { monitorEnv } from './monitorChecks.mjs';
+import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db/pg/watchSql.mjs';
+import { scoreOf, watchRankEnabled } from './watchRank.mjs';
+import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -324,16 +341,47 @@ async function accountDevices(store, state, accountId) {
   return out;
 }
 
-function audit(file, action, detail, admin) {
-  return toStore(file).update((state) => ({
-    state: logAudit(state, { action, detail, now: Date.now(), actor: adminActor(admin) }),
-  }));
+const loginPromptHits = new Map();
+
+/** At most 3 panel-login prompts per IP per 10 minutes, before any Telegram message is sent. */
+function loginPromptAllowed(ip, now) {
+  const key = String(ip || 'unknown');
+  const prev = loginPromptHits.get(key) || [];
+  const arr = prev.filter((t) => now - t < 10 * 60 * 1000);
+  if (arr.length >= 3) {
+    loginPromptHits.set(key, arr);
+    return false;
+  }
+  arr.push(now);
+  loginPromptHits.set(key, arr);
+  return true;
+}
+
+function audit(file, action, detail, admin, extra) {
+  const id = (extra && extra.id) || randomId();
+  return toStore(file)
+    .update((state) => {
+      let next = logAudit(state, {
+        id,
+        action,
+        detail,
+        now: Date.now(),
+        actor: adminActor(admin),
+        accountId: extra && extra.accountId,
+      });
+      if (extra && extra.before) next = pushRollback(next, { id, at: Date.now(), before: extra.before });
+      return { state: next, result: { id } };
+    })
+    .then((result) => {
+      publishAdmin({ type: 'audit', action, id });
+      return result;
+    });
 }
 
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 const JSON_BODY_LIMIT_BYTES = 256 * 1024;
 
-async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
+async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES, asText) {
   const chunks = [];
   let raw;
   if (typeof req.on === 'function' && typeof req.resume === 'function') {
@@ -387,6 +435,7 @@ async function readBody(req, maxBytes = JSON_BODY_LIMIT_BYTES) {
     }
     raw = Buffer.concat(chunks).toString('utf8');
   }
+  if (asText) return raw;
   const type = String(req.headers['content-type'] || '');
   if (type.indexOf('application/json') >= 0) {
     try {
@@ -488,7 +537,7 @@ export function formatSearchLog(row) {
   const r = row || {};
   const at =
     typeof r.at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ? r.at : new Date().toISOString();
-  const source = r.source === 'jacred' || r.source === 'jackett' ? r.source : '-';
+  const source = r.source === 'jacred' || r.source === 'jackett' || r.source === 'bitmagnet' ? r.source : '-';
   const device = typeof r.device === 'string' && /^[0-9a-f]{8}$/.test(r.device) ? r.device : '-';
   return (
     'search route=/v1/search' +
@@ -833,7 +882,91 @@ async function telegramMethod(token, method, body, fetchImpl, timeoutMs) {
     { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
     timeoutMs || TG_SEND_TIMEOUT_MS,
   );
-  return { ok: !!(res.ok && data.ok !== false) };
+  return { ok: !!(res.ok && data.ok !== false), description: data && data.description ? String(data.description).slice(0, 180) : '' };
+}
+
+function rememberCountry(state, accountId, country) {
+  if (!country || !accountId) return state;
+  let changed = false;
+  const accounts = (state.accounts || []).map((a) => {
+    if (!a || a.id !== accountId || a.country === country) return a;
+    changed = true;
+    return { ...a, country };
+  });
+  return changed ? { ...state, accounts } : state;
+}
+
+/** Create or reuse the Crypto Pay link for one quote. The token stays in the request header. */
+async function ensureCryptoLink(store, purchaseId, fetchImpl) {
+  const state = await store.read();
+  const quote = (state.purchases || []).find((p) => p.id === purchaseId);
+  if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
+  if (state.settings.cryptoEnabled !== true) return { error: 'disabled' };
+  if (quote.payUrl || quote.webUrl) {
+    return {
+      asset: quote.asset,
+      amount: quote.payAmount,
+      url: quote.payUrl || quote.webUrl,
+      webUrl: quote.webUrl || quote.payUrl,
+    };
+  }
+  if (!state.settings.cryptoPayToken) return { error: 'disabled' };
+  const invoice = await createCryptoInvoice(fetchImpl, {
+    testnet: state.settings.cryptoTestnet === true,
+    token: state.settings.cryptoPayToken,
+    asset: quote.asset,
+    amount: quote.payAmount,
+    payload: 'buy:' + quote.id,
+    description: 'Подписка OMP',
+  });
+  if (!invoice) return { error: 'down' };
+  return store.update((cur) => {
+    const row = (cur.purchases || []).find((p) => p.id === purchaseId);
+    if (!row) return { state: cur, result: { error: 'bad_order' } };
+    if (row.payUrl || row.webUrl) {
+      return {
+        state: cur,
+        result: { asset: row.asset, amount: row.payAmount, url: row.payUrl || row.webUrl, webUrl: row.webUrl || row.payUrl },
+      };
+    }
+    const purchases = cur.purchases.map((p) =>
+      p.id === purchaseId ? { ...p, invoiceId: invoice.invoiceId, payUrl: invoice.botUrl, webUrl: invoice.webUrl } : p,
+    );
+    return {
+      state: { ...cur, purchases },
+      result: {
+        asset: row.asset,
+        amount: row.payAmount,
+        url: invoice.botUrl || invoice.webUrl,
+        webUrl: invoice.webUrl || invoice.botUrl,
+      },
+    };
+  });
+}
+
+/** A bot row that is a Stars invoice or a Crypto Pay link. Other rows stay on telegramSend. */
+async function sendBotRow(token, row, net, timeoutMs, store) {
+  if (row && row.invoice) return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
+  if (row && row.cryptoIssue && store) {
+    const issued = await ensureCryptoLink(store, row.cryptoIssue.purchaseId, net);
+    const webUrl = issued && (issued.webUrl || issued.url);
+    const botUrl = issued && issued.url;
+    const buttons = [];
+    if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
+    if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
+    return telegramSend(token, row.chatId, webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.', net, {
+      keyboard: row.keyboard,
+      inline: buttons.length ? { inline_keyboard: buttons } : undefined,
+      parseMode: row.parseMode,
+      timeoutMs,
+    });
+  }
+  return telegramSend(token, row.chatId, row.text, net, {
+    keyboard: row.keyboard,
+    inline: row.inline,
+    parseMode: row.parseMode,
+    timeoutMs,
+  });
 }
 
 /** Account behind a payment label (buy:/sub:/dev:/new:), '' when unknown. */
@@ -1009,6 +1142,12 @@ export function createApp(file, fetchImpl, opts) {
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
+  const cacheRepo = typeof store.query === 'function' ? createCacheRepo((sql, params) => store.query(sql, params)) : null;
+  const watchRepo = typeof store.query === 'function' ? createWatchRepo(store) : null;
+  const watchRate = createRateLimit(30, 10 * 60 * 1000);
+  const cacheNodeRate = createRateLimit(60, 60 * 1000);
+  const cacheSourceRate = createRateLimit(30, 60 * 1000);
+  const cacheInterestRate = createRateLimit(30, 60 * 1000);
   // Minute counters survive a restart when the store has the DHT tables. Memory-only stores keep the process map.
   bindDhtStats(store.dht || null);
   // Per device, settings.dhtPerMinute (default 30) per minute. Rebuilt when the saved cap changes.
@@ -1033,6 +1172,10 @@ export function createApp(file, fetchImpl, opts) {
   const seedGate = (opts && opts.seedGate) || createTrackerGate();
   const seedTransport = (opts && opts.seedTransport) || defaultSeedTransport();
   const seedCache = (opts && opts.seedCache) || (typeof store.query === 'function' ? createPgSeedCache(store) : createMemorySeedCache());
+  const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
+  const progressRate = createRateLimit(40, 60 * 1000);
+  // Crypto Pay invoices. Ten creates per device per 10 minutes.
+  const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
@@ -1165,13 +1308,29 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('cache-control', 'no-store');
         res.setHeader(
           'content-security-policy',
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
         );
       }
       // Phone calls are native HTTP. The admin SPA is same-origin.
       // OPTIONS answers 204 with Allow only, so other sites cannot use a browser
       // to call bearer or cookie routes.
       if (req.method === 'OPTIONS') {
+        if (path === '/v1/watch-signals' || path === '/v1/watch-best') {
+          res.writeHead(204, {
+            allow: 'GET, POST, OPTIONS',
+            'access-control-allow-origin': '*',
+            'access-control-allow-headers': 'authorization, x-device-id, content-type',
+            'access-control-allow-methods': 'GET, POST, OPTIONS',
+          });
+          return res.end();
+        }
+        // webOS reads and crash reports. Every other preflight stays closed.
+        if (isBrowserRead(path)) {
+          const headers = browserReadCors(path);
+          headers.allow = headers['access-control-allow-methods'];
+          res.writeHead(204, headers);
+          return res.end();
+        }
         res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });
         return res.end();
       }
@@ -1188,12 +1347,66 @@ export function createApp(file, fetchImpl, opts) {
         const settings = backups ? (await store.read()).settings : null;
         return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly, monitor: monitor && monitor.health ? monitor.health() : null }));
       }
+      if (
+        await handleDesk({
+          req,
+          res,
+          path,
+          url,
+          store,
+          json,
+          send,
+          net,
+          env,
+          adminOf,
+          deviceCaller,
+          noteSeen,
+          readOnly,
+          readBody,
+          clientIp,
+          audit: (action, detail, who) => audit(file, action, detail, who),
+          notifyAdmins: async (state, messages) => {
+            const rows = typeof messages === 'string' ? adminBroadcast(state.settings, messages) : messages || [];
+            let ok = 0;
+            const token = state && state.settings && state.settings.botToken;
+            for (let i = 0; i < rows.length; i++) {
+              try {
+                const sent = await telegramSend(token, rows[i].chatId, rows[i].text, net, { keyboard: rows[i].keyboard, inline: rows[i].inline });
+                if (sent && sent.ok) ok += 1;
+              } catch (e) {
+                /* one chat can fail */
+              }
+            }
+            return ok;
+          },
+        })
+      ) {
+        return;
+      }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
         // Search and torrent only read, so the apps keep playing; a write that slips through is refused by the store.
         res.setHeader('retry-after', '600');
-        if (path === '/v1/yoomoney') return send(res, 503, 'read only');
+        if (path === '/v1/yoomoney' || path === '/v1/crypto-pay') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
+      }
+      if (isCachePath(path)) {
+        await routeCache(req, res, {
+          path,
+          url,
+          res,
+          store,
+          repo: cacheRepo,
+          json,
+          readBody,
+          adminOf,
+          deviceCaller,
+          audit: (action, detail) => audit(file, action, detail, adminOf(req)),
+          nodeRate: cacheNodeRate,
+          sourceRate: cacheSourceRate,
+          interestRate: cacheInterestRate,
+        });
+        return;
       }
       if (req.method === 'GET' && path === '/v1/ads-config') {
         // Public, no secrets: the switches and the live banners. Cached 5 minutes by the app and by Cloudflare.
@@ -1287,6 +1500,36 @@ export function createApp(file, fetchImpl, opts) {
           sidecar,
           limit: { perMinute: dhtPerMinute(settings, env), windowSec: DHT_WINDOW_MS / 1000 },
           stats: dhtStatsView(Date.now()),
+        });
+      }
+      if (req.method === 'GET' && path === '/admin/api/watch-rank') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        if (!watchRepo) return json(res, 200, { ok: false, error: 'unavailable' });
+        const settings = (await store.read()).settings;
+        const view = await watchRepo.adminRows(url.searchParams.get('q') || '');
+        const rows = view.rows.map((r) => {
+          const mod = { pinned: r.pinned, banned: r.banned };
+          const st = {
+            samples: r.samples,
+            completed: r.completed,
+            switched: r.switched,
+            ttffMs: r.ttffMs,
+            rebufferN: r.rebufferN,
+            rebufferMs: r.rebufferMs,
+            watchedSum: r.watchedSum,
+            codecOk: r.codecOk,
+            codecFail: r.codecFail,
+          };
+          const scored = scoreOf(st, 0, r.deviceClass, r.title, mod);
+          return Object.assign({}, r, { score: scored.score, reason: scored.reason });
+        });
+        return json(res, 200, {
+          ok: true,
+          enabled: watchRankEnabled(settings),
+          rows,
+          voices: view.voices,
+          codecs: view.codecs,
         });
       }
       if (req.method === 'GET' && path === '/admin/api/services') {
@@ -1427,9 +1670,31 @@ export function createApp(file, fetchImpl, opts) {
         if (!state.settings.botToken || !state.settings.botUsername) {
           return json(res, 400, { ok: false, error: 'Не задан бот Telegram (токен или username)' });
         }
+        if (!loginPromptAllowed(clientIp(req), Date.now())) {
+          return json(res, 429, { ok: false, error: 'Слишком много запросов входа. Подождите несколько минут.' });
+        }
         const started = adminAuth
           ? adminAuth.startPanel(Date.now())
           : await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        const ip = clientIp(req);
+        const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+        if (!adminAuth && !readOnly) {
+          await store.update((cur) => {
+            const adminLogins = (cur.adminLogins || []).map((l) => (l.token === started.token ? { ...l, ip, ua } : l));
+            return { state: loginNote({ ...cur, adminLogins }, { at: Date.now(), ip, ua, result: 'pending', telegramId: '' }) };
+          });
+        }
+        const ids = String(state.settings.adminTelegramIds || '').split(/[\s,;]+/).filter(Boolean);
+        const ask = 'Подтвердите вход в админку\nIP: ' + (ip || '-') + '\nУстройство: ' + (ua || '-');
+        for (let i = 0; i < ids.length; i++) {
+          try {
+            await telegramSend(state.settings.botToken, ids[i], ask, net, {
+              inline: { inline_keyboard: [[{ text: 'Подтвердить вход', callback_data: 'alin:' + started.token }]] },
+            });
+          } catch (e) {
+            /* one admin chat can fail */
+          }
+        }
         const deepLink = botDeepLink(state.settings, 'admin_' + started.token);
         if (!readOnly) {
           try {
@@ -1459,6 +1724,11 @@ export function createApp(file, fetchImpl, opts) {
           if (!readOnly) {
             try {
               await audit(file, 'login', 'telegram ' + (taken.telegramId || ''), { telegramId: taken.telegramId || '' });
+              const ip = clientIp(req);
+              const ua = String(req.headers['user-agent'] || '').slice(0, 180);
+              await store.update((cur) => ({
+                state: loginNote(cur, { at: Date.now(), ip, ua, result: 'ok', telegramId: taken.telegramId || '' }),
+              }));
             } catch (e) {
               /* ignore */
             }
@@ -1527,6 +1797,28 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, probed.http, probed.body);
         }
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        if (path !== '/admin/logout' && roleOf((await store.read()).settings, admin) !== 'full') {
+          return json(res, 403, { ok: false, error: 'Режим только просмотра' });
+        }
+        if (path === '/admin/watch-rank') {
+          if (!watchRepo) return json(res, 200, { ok: false, error: 'unavailable' });
+          if (body.infohash) {
+            const saved = await watchRepo.setMod(
+              { infohash: body.infohash, pinned: body.pinned === true || body.pinned === 'true', banned: body.banned === true || body.banned === 'true', note: body.note },
+              Date.now(),
+            );
+            if (!saved) return json(res, 200, { ok: false, error: 'bad_request' });
+            await audit(file, 'watch_rank_mod', String(body.infohash).slice(0, 40), admin);
+            return json(res, 200, { ok: true });
+          }
+          if (body.enabled !== undefined) {
+            const enabled = body.enabled === true || body.enabled === 'true';
+            await store.update((state) => ({ state: { ...state, settings: { ...state.settings, watchRankEnabled: enabled } } }));
+            await audit(file, 'watch_rank_flag', enabled ? 'on' : 'off', admin);
+            return json(res, 200, { ok: true, enabled });
+          }
+          return json(res, 200, { ok: false, error: 'bad_request' });
+        }
         if (path === '/admin/monitor/run' || path === '/admin/monitor/config') {
           if (!monitor) return json(res, 200, { ok: false, error: 'Мониторинг недоступен на этом экземпляре' });
           if (path === '/admin/monitor/run') {
@@ -1561,6 +1853,7 @@ export function createApp(file, fetchImpl, opts) {
             : null;
         const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
+          const beforeSnap = snapshotSettings((await store.read()).settings);
           const baseBefore = baseDevices((await store.read()).settings);
           await store.update((state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
@@ -1574,6 +1867,7 @@ export function createApp(file, fetchImpl, opts) {
                   (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
               : 'ok',
             admin,
+            { before: beforeSnap },
           );
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices((await store.read()).settings, net);
@@ -1722,6 +2016,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 })
               : createPromo(state, {
@@ -1730,6 +2026,8 @@ export function createApp(file, fetchImpl, opts) {
                   maxUses: Number(body.maxUses) || 1,
                   bonusSlots: Number(body.bonusSlots) || 0,
                   bonusDays: Number(body.bonusDays) || 0,
+                  expiresAt: Number(body.expiresDays) > 0 ? Date.now() + Number(body.expiresDays) * 24 * 60 * 60 * 1000 : 0,
+                  discountPercent: Number(body.discountPercent) || 0,
                   now: Date.now(),
                 }),
           );
@@ -1884,6 +2182,43 @@ export function createApp(file, fetchImpl, opts) {
                 await tellPayment((await store.read()), out, net);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
+              }
+            }
+            if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+            else redirectTo = '/admin/?tab=finance';
+          }
+        }
+        if (path === '/admin/payment-refund') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const operationId = String(body.operationId || '');
+            const cur = await store.read();
+            const payment = (cur.payments || []).find((p) => p.operationId === operationId);
+            const account = payment ? (cur.accounts || []).find((a) => a.id === payment.accountId) : null;
+            const charge = operationId.indexOf('stars:') === 0 ? operationId.slice(6) : '';
+            if (!payment || payment.provider !== 'stars' || !charge || !account || !account.telegramId) flashError = 'Это не оплата звёздами';
+            else if (payment.error === 'refunded') flashError = 'Звёзды уже возвращены';
+            else if (payment.error) flashError = 'Этот платёж не возвратить';
+            else {
+              const sent = await telegramMethod(
+                cur.settings.botToken,
+                'refundStarPayment',
+                { user_id: Number(account.telegramId), telegram_payment_charge_id: charge },
+                net,
+              );
+              const already = /already refunded|CHARGE_ALREADY_REFUNDED/i.test(sent.description || '');
+              if (!sent.ok && !already) flashError = 'Telegram не вернул звёзды';
+              else {
+                await store.update((state) => ({
+                  state: {
+                    ...state,
+                    payments: state.payments.map((p) =>
+                      p.operationId === operationId ? { ...p, error: 'refunded', refundedAt: Date.now() } : p,
+                    ),
+                  },
+                }));
+                await audit(file, 'stars_refund', operationId, admin);
+                flashText = 'Звёзды возвращены. Дни подписки этой кнопкой не снимаются.';
               }
             }
             if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
@@ -2165,6 +2500,60 @@ export function createApp(file, fetchImpl, opts) {
         if (result.error) return json(res, result.error === 'not_linked' ? 404 : 400, result);
         return json(res, 200, result);
       }
+      if (req.method === 'POST' && path === '/v1/pay/crypto') {
+        const body = await readBody(req);
+        const device = String(req.headers['x-device-id'] || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const rateKey = device || clientIp(req);
+        if (!cryptoPayRate.allow(rateKey)) {
+          res.setHeader('retry-after', String(cryptoPayRate.retryAfter(rateKey) || 60));
+          return json(res, 429, { error: 'rate' });
+        }
+        const state = await store.read();
+        const now = Date.now();
+        const caller = await deviceCaller(state, token, device, now);
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const own = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const account = own ? state.accounts.find((a) => a.id === own.accountId) : null;
+        if (!own || !account) return json(res, 403, { error: 'no_subscription' });
+        const country = countryCode(req.headers['cf-ipcountry']);
+        if (country && account.country !== country) {
+          await store.update((cur) => ({ state: rememberCountry(cur, account.id, country) }));
+        }
+        const live = state.settings.cryptoNonRu === true ? country : country || account.country || '';
+        if (!cryptoOffered(state.settings, live)) {
+          return json(res, 403, { error: state.settings.cryptoEnabled === true ? 'country' : 'disabled' });
+        }
+        const want = String((body && body.asset) || '').trim().toUpperCase();
+        const assets = want ? [want] : ['USDT', 'TON', 'BTC'];
+        const links = [];
+        for (let i = 0; i < assets.length; i++) {
+          const asset = assets[i];
+          const quoted = await store.update((cur) => {
+            const out = quotePurchase(cur, {
+              kind: 'sub',
+              accountId: account.id,
+              subscriptionId: own.id,
+              now,
+              method: 'crypto',
+              asset,
+            });
+            return { state: out.state, result: out.result };
+          });
+          if (!quoted || quoted.error || !quoted.id) continue;
+          const issued = await ensureCryptoLink(store, quoted.id, net);
+          if (issued && (issued.webUrl || issued.url)) {
+            links.push({
+              asset: issued.asset || asset,
+              amount: issued.amount || quoted.payAmount || '',
+              url: issued.url || issued.webUrl,
+              webUrl: issued.webUrl || issued.url,
+            });
+          }
+        }
+        if (!links.length) return json(res, 503, { error: 'down' });
+        return json(res, 200, { links });
+      }
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -2188,6 +2577,12 @@ export function createApp(file, fetchImpl, opts) {
         const viaToken = !!account;
         if (!account) account = accountByDevice(state, device);
         if (!account) return json(res, 404, { error: 'not_linked' });
+        const seenCountry = countryCode(req.headers['cf-ipcountry']);
+        // Optional. A read-only cutover must still answer /v1/me.
+        if (!readOnly && seenCountry && account.country !== seenCountry) {
+          const accountId = account.id;
+          await store.update((cur) => ({ state: rememberCountry(cur, accountId, seenCountry) }));
+        }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
         const mine = deviceAccess(state, device, now);
@@ -2211,11 +2606,54 @@ export function createApp(file, fetchImpl, opts) {
           sources: {
             jackett: isActive && sourceEnabled(state.settings, 'jackett') && !!state.settings.jackettUrl && !!state.settings.jackettApiKey,
             jacred: isActive && sourceEnabled(state.settings, 'jacred') && !!state.settings.jacredUrl && !!state.settings.jacredApiKey,
+            bitmagnet: isActive && sourceEnabled(state.settings, 'bitmagnet') && !!state.settings.bitmagnetUrl,
           },
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
+          // Popular-release cache. Omitted by old servers. False until an admin turns it on.
+          cache: { enabled: cacheEnabled(state.settings) },
         });
+      }
+      if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {
+        // Same device token as /v1/me. The row is the account's, so another signed-in device can continue.
+        // The device id is stored and compared here. It is not returned.
+        const device = String(req.headers['x-device-id'] || '');
+        const token = bearer(req);
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        if (!playback) return json(res, 503, { error: 'unavailable' });
+        const state = await store.read();
+        const caller = await deviceCaller(state, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
+        if (!accountId) return json(res, 404, { error: 'not_linked' });
+        const rateKey = (device || String(caller.rowId || '')).slice(0, 64);
+        if (!progressRate.allow(rateKey)) {
+          const wait = String(progressRate.retryAfter(rateKey) || 1);
+          res.setHeader('retry-after', wait);
+          return json(res, 429, { error: 'rate' });
+        }
+        if (req.method === 'GET') {
+          const q = parseProgressQuery(url.searchParams);
+          if (q.error) return json(res, 400, q);
+          const row = await playback.load(accountId, q.titleKey, q.episodeKey);
+          if (!row || !row.positionSec) return json(res, 404, { error: 'none' });
+          return json(res, 200, {
+            positionSec: row.positionSec,
+            durationSec: row.durationSec,
+            updatedAt: row.updatedAt,
+            label: row.label,
+            title: row.title,
+            episodeKey: row.episodeKey,
+            otherDevice: !!row.deviceId && row.deviceId !== device,
+          });
+        }
+        const body = await readBody(req);
+        const parsed = parseProgressBody(body);
+        if (parsed.error) return json(res, 400, parsed);
+        await playback.save(accountId, { ...parsed, deviceId: device }, Date.now());
+        return json(res, 200, { ok: true });
       }
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.
@@ -2302,12 +2740,33 @@ export function createApp(file, fetchImpl, opts) {
             dht: cfg.enabled
               ? async (hash) => {
                 const found = await queryDhtPeers(cfg, hash, net);
-                return found.status === 200 && found.body ? found.body.peers : 0;
+                if (found.status !== 200 || !found.body) return 0;
+                return {
+                  peers: found.body.peers,
+                  seedsEstimate: found.body.seedsEstimate,
+                  peerEstimate: found.body.peerEstimate,
+                  estimate: found.body.estimate === true,
+                };
               }
               : null,
           });
           counts = out.stats;
           status = 200;
+          // Interest feeds the cache job only after the feature is turned on. The answer itself stays the same.
+          if (cacheRepo && cacheEnabled(state.settings)) {
+            try {
+              for (let i = 0; i < out.items.length; i++) {
+                const it = out.items[i];
+                const seeds = it.estimate ? Math.max(it.seeders || 0, it.dhtSeeds || 0) : it.seeders || 0;
+                await cacheRepo.noteInterest(
+                  { infohash: it.infohash, title: '', event: 'search', seeders: seeds, sizeBytes: 0 },
+                  Date.now(),
+                );
+              }
+            } catch (e) {
+              /* a missed interest row must not fail the seed check */
+            }
+          }
           return json(res, 200, { items: out.items });
         } catch (e) {
           if (isReadOnlyError(e)) {
@@ -2319,6 +2778,43 @@ export function createApp(file, fetchImpl, opts) {
         } finally {
           process.stderr.write(formatSeedLog(status, Date.now() - started, device, counts));
         }
+      }
+      if ((req.method === 'GET' && path === '/v1/watch-best') || (req.method === 'POST' && path === '/v1/watch-signals')) {
+        res.setHeader('access-control-allow-origin', '*');
+        if (!watchRepo) return json(res, 503, { error: 'unavailable' });
+        const deviceId = String(req.headers['x-device-id'] || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        const state = await store.read();
+        const now = Date.now();
+        const caller = await deviceCaller(state, token, deviceId, now);
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const session = codeAccess(state, caller.code, now);
+        if (!session) return json(res, 403, { error: denyReason(state, caller.code, now, caller.legacy) });
+        const rateKey = deviceId.slice(0, 64) || String(caller.rowId || '').slice(0, 64);
+        if (!watchRate.allow(rateKey)) {
+          res.setHeader('retry-after', String(watchRate.retryAfter(rateKey) || 1));
+          return json(res, 429, { error: 'rate' });
+        }
+        if (req.method === 'GET') {
+          if (!watchRankEnabled(state.settings)) return json(res, 200, { infohash: '', score: 0, reason: '', voice: '' });
+          const best = await watchRepo.readBest({
+            titleKey: url.searchParams.get('titleKey') || '',
+            season: url.searchParams.get('season') || 0,
+            episode: url.searchParams.get('episode') || 0,
+            deviceClass: url.searchParams.get('deviceClass') || 'phone',
+          });
+          return json(res, 200, best || { infohash: '', score: 0, reason: '', voice: '' });
+        }
+        const body = await readBody(req);
+        const parsed = parseSignalBody(body);
+        if (!parsed.ok) return json(res, 400, { error: 'bad_request' });
+        if (!parsed.help || !parsed.items.length) return json(res, 200, { ok: true, accepted: 0 });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : String(caller.code.id || '');
+        const voter = voterHash(accountId, deviceId);
+        if (!voter) return json(res, 400, { error: 'bad_request' });
+        const accepted = await watchRepo.saveSignals(voter, parsed.items, now);
+        return json(res, 200, { ok: true, accepted });
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();
@@ -2339,7 +2835,7 @@ export function createApp(file, fetchImpl, opts) {
           const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
           row.device = deviceLogId(deviceId);
           row.qlen = String((body && body.q) || '').length;
-          row.source = body && body.source === 'jacred' ? 'jacred' : 'jackett';
+          row.source = body && body.source === 'jacred' ? 'jacred' : body && body.source === 'bitmagnet' ? 'bitmagnet' : 'jackett';
           const state = (await store.read());
           const now = Date.now();
           const caller = await deviceCaller(state, token, deviceId, now);
@@ -2352,17 +2848,47 @@ export function createApp(file, fetchImpl, opts) {
           const rateKey = String(deviceId || token || '').slice(0, 64);
           if (!searchRate.allow(rateKey)) return replyJson(429, { error: 'rate' });
           const indexer = indexerOf(state.settings, source);
-          if (!indexer.url || !indexer.key) return replyJson(403, { error: 'disabled' });
+          if (!indexer.url || (source !== 'bitmagnet' && !indexer.key)) return replyJson(403, { error: 'disabled' });
           const q = String((body && body.q) || '');
           const cat = safeTorznabCat(body && body.cat);
           const cacheKey = source + '\0' + q.toLowerCase() + '\0' + cat;
+          const deliver = async (xml) => {
+            let out = xml;
+            if (watchRepo && watchRankEnabled(state.settings)) {
+              try {
+                out = await rankSearchXml(watchRepo, xml, {
+                  deviceClass: body && body.deviceClass === 'tv' ? 'tv' : 'phone',
+                  now,
+                  readOnly,
+                });
+              } catch (e) {
+                out = xml;
+              }
+            }
+            return replyXml(out);
+          };
           const cached = searchCache.get(cacheKey);
-          if (cached !== null) return replyXml(cached);
+          if (cached !== null) return await deliver(cached);
           const headers = {};
           const auth = basicAuthHeader(state.settings);
           if (auth) headers.Authorization = auth;
           // One slow indexer on /indexers/all/results used to run past the phone's 25s limit.
           // Jackett is queried per configured indexer; JacRed stays on the aggregate route.
+          if (source === 'bitmagnet') {
+            const found = await searchBitmagnet({
+              origin: indexer.url,
+              apiKey: indexer.key,
+              query: q,
+              cat,
+              headers,
+              fetchImpl: net,
+              deadlineMs: jackettSearchDeadlineMs(),
+            });
+            if (!found.ok) return replyJson(502, { error: 'down' });
+            const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
+            searchCache.set(cacheKey, xml);
+            return await deliver(xml);
+          }
           if (source === 'jackett') {
             const found = await searchJackett({
               origin: indexer.url,
@@ -2378,7 +2904,7 @@ export function createApp(file, fetchImpl, opts) {
             if (!found.ok) return replyJson(502, { error: 'down' });
             const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
             searchCache.set(cacheKey, xml);
-            return replyXml(xml);
+            return await deliver(xml);
           }
           const found = await searchJacRed({
             origin: indexer.url,
@@ -2391,7 +2917,7 @@ export function createApp(file, fetchImpl, opts) {
           if (!found.ok) return replyJson(502, { error: 'down' });
           const xml = stripJackett(found.xml, indexer.url, indexer.key, indexer.mark);
           searchCache.set(cacheKey, xml);
-          return replyXml(xml);
+          return await deliver(xml);
         } catch (e) {
           if (!row.status) row.status = 500;
           throw e;
@@ -2454,6 +2980,59 @@ export function createApp(file, fetchImpl, opts) {
           clearTimeout(timer);
           controller.abort();
         }
+      }
+      if (req.method === 'POST' && path === '/v1/crypto-pay') {
+        const raw = await readBody(req, JSON_BODY_LIMIT_BYTES, true);
+        const state = await store.read();
+        const now = Date.now();
+        const header = req.headers['crypto-pay-api-signature'] || '';
+        if (!cryptoPayAuthentic(raw, header, state.settings.cryptoPayToken)) {
+          await store.update((cur) => ({
+            state: logWebhook(cur, { kind: 'bad_signature', operationId: '', label: '', amount: '', at: now }),
+          }));
+          process.stderr.write('crypto pay bad signature\n');
+          return send(res, 400, 'bad signature');
+        }
+        let body = null;
+        try {
+          body = JSON.parse(raw || '{}');
+        } catch (e) {
+          return send(res, 400, 'bad json');
+        }
+        const paid = paidInvoice(body);
+        if (!paid) return send(res, 200, 'ok');
+        const applied = await store.update((cur) =>
+          applyPayment(cur, {
+            operationId: 'crypto:' + paid.invoiceId,
+            label: paid.payload,
+            amount: paid.paidAmount,
+            currency: paid.asset,
+            now,
+          }),
+        );
+        const freshPay = await store.read();
+        if (!applied.duplicate && !applied.error) {
+          try {
+            await tellPayment(freshPay, applied, net);
+          } catch (e) {
+            /* the payment is stored either way */
+          }
+        }
+        if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
+          await notifyAdmins(
+            freshPay,
+            paymentAdminNotices(freshPay.settings, {
+              ok: !applied.error,
+              pending: false,
+              amount: paid.paidAmount,
+              label: paid.payload,
+              error: applied.error || '',
+              who: paymentWho(freshPay, applied),
+            }),
+            net,
+          );
+        }
+        return send(res, 200, 'ok');
       }
       if (req.method === 'POST' && path === '/v1/yoomoney') {
         const body = await readBody(req);
@@ -2523,6 +3102,7 @@ export function createApp(file, fetchImpl, opts) {
             }
           }
         }
+        if (!applied.duplicate) publishAdmin({ type: applied.error ? 'error' : 'payment' });
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
           await notifyAdmins(
             freshPay,
@@ -2603,6 +3183,9 @@ export async function pollBot(file, fetchImpl, opts) {
     return;
   }
   let offset = 0;
+  // Earliest Stars payment left unconfirmed during cutover, and updates already answered in this process.
+  let heldStar = 0;
+  const handledUpdates = new Set();
   let sweptAt = 0;
   let servicesAt = 0;
   let serviceSnap = {};
@@ -2640,14 +3223,28 @@ export async function pollBot(file, fetchImpl, opts) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
-      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn
-      if (!adminLoginOnly && legacyAlerts && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn.
+      // Disk under 10% and an error spike do not call the indexers.
+      if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000) {
         servicesAt = Date.now();
         try {
-          const probes = await probeAllServices(state.settings, net);
-          const notes = serviceDownNotices(state.settings, probes, serviceSnap);
-          serviceSnap = notes.snapshot;
-          await notifyAdmins(state, notes.messages, net);
+          if (legacyAlerts && adminNotifyEnabled(state.settings)) {
+            const probes = await probeAllServices(state.settings, net);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+            const notes = serviceDownNotices(state.settings, probes, serviceSnap);
+            serviceSnap = notes.snapshot;
+            await notifyAdmins(state, notes.messages, net);
+          }
+          if (adminNotifyEnabled(state.settings)) {
+            const disk = await diskRatio(monitorEnv(process.env).diskPaths);
+            const dAlert = diskAlert(serviceSnap.disk, disk && disk.ratio);
+            serviceSnap = { ...serviceSnap, disk: dAlert.snapshot };
+            if (dAlert.text) await notifyAdmins(state, adminBroadcast(state.settings, dAlert.text), net);
+            const spike = spikeAlert(serviceSnap.spikeAt || 0, recentFailCount(state, Date.now()), Date.now());
+            serviceSnap = { ...serviceSnap, spikeAt: spike.at };
+            if (spike.text) await notifyAdmins(state, adminBroadcast(state.settings, spike.text), net);
+          }
         } catch (e) {
           /* probe failure must not stop the bot loop */
         }
@@ -2684,9 +3281,56 @@ export async function pollBot(file, fetchImpl, opts) {
         await sleep(5000);
         continue;
       }
+      // Stars paid during cutover stay unconfirmed so the next normal poll can apply them.
+      // Later messages in the same queue, including /start admin_TOKEN, are still handled.
+      // The handled set exists only while a payment is held. Once Telegram has acked an update, it is dropped.
+      if (!heldStar && handledUpdates.size) handledUpdates.clear();
+      // pre_checkout must be answered within 10s. Do it before any sendMessage in this batch.
+      // A Stars payment in this batch is not saved yet. Another checkout for that buy: label
+      // would take a second charge and applyPayment would drop it as a duplicate.
+      const paidLabels = new Set();
+      for (let p = 0; p < updates.length; p++) {
+        const paid = updates[p] && updates[p].message && updates[p].message.successful_payment;
+        if (paid && paid.currency === 'XTR' && paid.invoice_payload) paidLabels.add(String(paid.invoice_payload));
+      }
+      const approvedLabels = new Set();
+      for (let p = 0; p < updates.length; p++) {
+        const early = updates[p] && updates[p].pre_checkout_query;
+        if (!early) continue;
+        let decision = { ok: false, error: 'Сейчас обслуживание' };
+        if (!adminLoginOnly) {
+          const payload = String(early.invoice_payload || '');
+          if (payload && (paidLabels.has(payload) || approvedLabels.has(payload))) {
+            decision = { ok: false, error: 'Этот счёт уже оплачен' };
+          } else {
+            try {
+              decision = starCheckoutDecision(await store.read(), early);
+            } catch (e) {
+              decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
+            }
+            if (decision.ok && payload) approvedLabels.add(payload);
+          }
+        }
+        const answer = { pre_checkout_query_id: early.id, ok: !!decision.ok };
+        if (!decision.ok) answer.error_message = decision.error || 'Счёт не найден';
+        await telegramMethod(token, 'answerPreCheckoutQuery', answer, net, sendTimeoutMs).catch(() => ({ ok: false }));
+      }
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
-        offset = u.update_id + 1;
+        if (handledUpdates.has(u.update_id)) {
+          offset = heldStar || u.update_id + 1;
+          continue;
+        }
+        const starMsg = u.message && u.message.successful_payment && u.message.successful_payment.currency === 'XTR' ? u.message.successful_payment : null;
+        const starCharge = starMsg ? String(starMsg.telegram_payment_charge_id || '') : '';
+        const starPayload = starMsg ? String(starMsg.invoice_payload || '') : '';
+        if (adminLoginOnly && starCharge && starPayload) {
+          if (!heldStar || u.update_id < heldStar) heldStar = u.update_id;
+          offset = heldStar;
+          continue;
+        }
+        if (heldStar) handledUpdates.add(u.update_id);
+        offset = heldStar || u.update_id + 1;
         if (u.channel_post) {
           // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
           const notice = pinNotice(u, channel);
@@ -2699,6 +3343,7 @@ export async function pollBot(file, fetchImpl, opts) {
           }
           continue;
         }
+        if (u.pre_checkout_query) continue;
         if (u.callback_query) {
           await handleCallback(file, token, u.callback_query, net, sendTimeoutMs, {
             adminLoginOnly,
@@ -2710,6 +3355,54 @@ export async function pollBot(file, fetchImpl, opts) {
         if (!msg || !msg.chat) continue;
         // Groups and channels: no answer and no account.
         if (!isPrivateChat(msg.chat)) continue;
+        if (msg.successful_payment && msg.successful_payment.currency === 'XTR') {
+          const sp = msg.successful_payment;
+          const charge = String(sp.telegram_payment_charge_id || '');
+          const payload = String(sp.invoice_payload || '');
+          if (charge && payload) {
+            const paidAt = Date.now();
+            let applied;
+            try {
+              applied = await store.update((cur) =>
+                applyPayment(cur, {
+                  operationId: 'stars:' + charge,
+                  label: payload,
+                  amount: String(sp.total_amount),
+                  currency: 'XTR',
+                  now: paidAt,
+                }),
+              );
+            } catch (e) {
+              // The write did not commit. Do not ack the update, so the next poll retries it.
+              handledUpdates.delete(u.update_id);
+              offset = u.update_id;
+              throw e;
+            }
+            const freshStar = await store.read();
+            if (!applied.duplicate && !applied.error) {
+              try {
+                await tellPayment(freshStar, applied, net);
+              } catch (e) {
+                /* the payment is stored either way */
+              }
+            }
+            if (!applied.duplicate && adminNotifyEnabled(freshStar.settings)) {
+              await notifyAdmins(
+                freshStar,
+                paymentAdminNotices(freshStar.settings, {
+                  ok: !applied.error,
+                  pending: false,
+                  amount: String(sp.total_amount),
+                  label: payload,
+                  error: applied.error || '',
+                  who: paymentWho(freshStar, applied),
+                }),
+                net,
+              );
+            }
+          }
+          continue;
+        }
         const chatId = String(msg.chat.id);
         const wait = awaiting.get(chatId) || null;
         const pad = pads.get(chatId) || null;
@@ -2784,12 +3477,7 @@ export async function pollBot(file, fetchImpl, opts) {
           const row = rows[m];
           if (row.await) awaiting.set(chatId, row.await);
           try {
-            const sent = await telegramSend(token, row.chatId, row.text, net, {
-              keyboard: row.keyboard,
-              inline: row.inline,
-              parseMode: row.parseMode,
-              timeoutMs: sendTimeoutMs,
-            });
+            const sent = await sendBotRow(token, row, net, sendTimeoutMs, store);
             if (row.supportNotify && sent.messageId && !adminLoginOnly) {
               await store.update((cur) => ({
                 state: rememberSupportReply(cur, {
@@ -2805,6 +3493,8 @@ export async function pollBot(file, fetchImpl, opts) {
           }
         }
       }
+      // The held payment is still the first result, so Telegram returns at once. Pause instead of spinning.
+      if (heldStar) await sleep(5000);
     } catch (e) {
       pollFailed('loop');
       await sleep(5000);
@@ -2866,7 +3556,15 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const answer = (text) =>
     telegramMethod(token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text || undefined }, net, timeoutMs).catch(() => ({ ok: false }));
   if (adminLoginOnly) {
-    // Admin login is /start admin_TOKEN only; never pretend an unbind or pay button worked.
+    const data = String((cq && cq.data) || '');
+    if (data.indexOf('alin:') === 0 && opts && opts.adminAuthMem) {
+      const state = await store.read();
+      const who = cq && cq.from ? String(cq.from.id) : '';
+      const confirmed = opts.adminAuthMem.confirmPanel(state.settings, { token: data.slice('alin:'.length), telegramId: who, now: Date.now() });
+      await answer(confirmed && confirmed.ok ? 'Вход подтверждён' : 'Ссылка устарела');
+      return;
+    }
+    // Other buttons stay off in read-only mode. Admin login is the exception above.
     await answer('Сейчас обслуживание. Админ-вход - через ссылку в панели.');
     return;
   }
@@ -2904,12 +3602,7 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   const rows = out.messages || [];
   for (let m = 0; m < rows.length; m++) {
     try {
-      await telegramSend(token, rows[m].chatId, rows[m].text, net, {
-        keyboard: rows[m].keyboard,
-        inline: rows[m].inline,
-        parseMode: rows[m].parseMode,
-        timeoutMs,
-      });
+      await sendBotRow(token, rows[m], net, timeoutMs, store);
     } catch (e) {
       /* Telegram unreachable or timed out — keep polling */
     }
@@ -3128,6 +3821,22 @@ if (started) {
       process.on('SIGINT', stopDht);
       if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
       else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
+      // Legacy alerts already probe the indexers. Otherwise record samples here so the dashboard
+      // success rate still moves while «Мониторинг» owns the Telegram alerts.
+      if (!readOnly && !legacyAlertsOn(process.env)) {
+        const sampleSources = async () => {
+          try {
+            const st = await store.read();
+            const probes = await probeAllServices(st.settings, fetch);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+          } catch (e) {
+            /* a failed probe must not stop billing */
+          }
+        };
+        const sampleTimer = setInterval(() => void sampleSources(), 5 * 60 * 1000);
+        if (sampleTimer.unref) sampleTimer.unref();
+      }
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );
@@ -3139,6 +3848,11 @@ if (started) {
       pollBot(store);
       startReminders(store);
       startRetention(store);
+      if (typeof store.query === 'function') {
+        const watchRepo = createWatchRepo(store);
+        const cacheRepo = createCacheRepo((sql, params) => store.query(sql, params));
+        startWatchFollow(watchRepo, cacheRepo, async () => (await store.read()).settings);
+      }
     })
     .catch((e) => {
       // Never the connection string: the error code and message only (pg puts no password in them).

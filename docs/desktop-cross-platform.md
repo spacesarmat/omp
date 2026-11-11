@@ -2,15 +2,17 @@
 
 ## Текущий статус
 
-Первый desktop-пакет предназначен для Windows 10/11 x64. Он включает каталог, поиск, библиотеку, источники, billing, встроенный или внешний TorrServer и внешний mpv. Установщик - NSIS, сертификат подписи пока не требуется.
+Desktop-пакет есть для Windows 10/11 x64, macOS (Intel и Apple Silicon) и Linux x64. Он включает каталог, поиск, библиотеку, источники, billing, встроенный или внешний TorrServer и внешний mpv. Windows: установщик NSIS и portable exe, сертификат подписи пока не требуется. macOS: два DMG без аккаунта Apple Developer, подпись ad-hoc. Linux: AppImage и deb.
 
-macOS и Linux проходят базовую CI-матрицу, но готовых пакетов для них пока нет. Microsoft Store и обязательный пульт не входят в первую версию. Для mpv используется сборка x86_64-v3, поэтому нужен процессор с соответствующими инструкциями. Старые процессоры x86_64 без x86_64-v3 не поддерживаются.
+Открыть неподписанный macOS: правый клик по приложению и «Открыть», либо «Системные настройки» - «Конфиденциальность и безопасность» - «Все равно открыть».
+
+Microsoft Store и обязательный пульт не входят в первую версию. Для mpv на Windows используется сборка x86_64-v3, поэтому нужен процессор с соответствующими инструкциями. Старые процессоры x86_64 без x86_64-v3 не поддерживаются.
 
 ## Версионирование и теги desktop
 
 Desktop живёт своим циклом версий, независимо от Android, webOS и ТВ. Источник версии desktop - `desktop/package.json`, та же версия дублируется в `desktop/src-tauri/tauri.conf.json` и в `Cargo.toml`/`Cargo.lock`. Их согласованность между собой проверяет `tests/version.test.ts`; совпадение с корневой версией `package.json` не требуется. Desktop UI получает версию из `desktop/package.json` на этапе сборки (`desktop/vite.config.ts`).
 
-Desktop-релиз публикуется тегом `desktop-<version>`, например `desktop-0.20.12-beta.2`. Такой тег не запускает Release workflow (он срабатывает только на `v*`), поэтому Android и webOS в релиз не попадают. Тег создаётся вручную вместе с GitHub Release, затем Desktop workflow (`workflow_dispatch`, `publish=true`, поле tag = существующий `desktop-<version>`) собирает NSIS, загружает его в этот release и обновляет feed `update-windows.json` на gh-pages. Версия установщика берётся из `tauri.conf.json`, заметки для feed - из раздела `## <version>` в `CHANGELOG.md`.
+Desktop-релиз публикуется тегом `desktop-<version>`, например `desktop-0.20.12-beta.2`. Такой тег не запускает Release workflow (он срабатывает только на `v*`), поэтому Android и webOS в релиз не попадают. Тег создаётся вручную вместе с GitHub Release, затем Desktop workflow (`workflow_dispatch`, `publish=true`, поле tag = существующий `desktop-<version>`) собирает NSIS, portable exe, два DMG, AppImage и deb, загружает их в этот release и обновляет фиды `update-windows.json`, `update-macos.json` и `update-linux.json` на gh-pages. Версия установщика берётся из `tauri.conf.json`, заметки для feed - из раздела `## <version>` в `CHANGELOG.md`. В каждом фиде есть `version`, HTTPS `url`, `sha256`, `size`, `notes` и `releaseUrl`. Дополнительные файлы лежат в `assets`.
 
 ## Установка и WebView2
 

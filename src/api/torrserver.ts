@@ -128,6 +128,15 @@ export class TorrServerClient {
     });
   }
 
+  /** Adds a torrent for prebuffer only. It is not written to TorrServer's database. */
+  addTemporary(link: string): Promise<Torrent> {
+    return this.call<Torrent>('/torrents', {
+      body: { action: 'add', link: link, title: '', poster: '', category: '', save_to_db: false },
+      timeoutMs: 30000,
+      quiet: true,
+    });
+  }
+
   add(p: { link: string; title?: string; poster?: string; category?: string }): Promise<Torrent> {
     // a .torrent that OMP downloaded itself (an indexer link with a secret): uploaded as a file, the link never leaves OMP
     if (isStashedFile(p.link)) return this.upload(p);
@@ -251,8 +260,44 @@ export class TorrServerClient {
    * the player opens beside the video (an external dub or subtitles) starts without waiting. Never rejects.
    */
   preload(hash: string, fileIndex: number, name = 'file'): Promise<void> {
+    return this.preloadAbortable(hash, fileIndex, name);
+  }
+
+  /** Same as preload, but `signal` aborts the request when the viewer leaves the screen. Never rejects. */
+  preloadAbortable(hash: string, fileIndex: number, name = 'file', signal?: AbortSignal): Promise<void> {
     const path = '/stream/' + encodeURIComponent(name) + '?link=' + hash + '&index=' + fileIndex + '&preload';
-    return this.call<string>(path, { method: 'GET', responseType: 'text', timeoutMs: 120000, quiet: true }).then(
+    // The native transport cannot abort. A speculative preload would keep running after the screen is left.
+    if (signal && this.via(this.baseUrl + path)) return Promise.resolve();
+    return this.call<string>(path, {
+      method: 'GET',
+      responseType: 'text',
+      timeoutMs: 120000,
+      quiet: true,
+      maxBytes: 1024 * 1024,
+      signal: signal,
+    }).then(
+      () => undefined,
+      () => undefined,
+    );
+  }
+
+  /**
+   * Pulls a byte range of the file into TorrServer's cache (the MKV index at the end).
+   * Never rejects. `signal` aborts it.
+   */
+  preloadTail(hash: string, fileIndex: number, name: string, start: number, end: number, signal?: AbortSignal): Promise<void> {
+    if (!(end >= start)) return Promise.resolve();
+    const path = '/stream/' + encodeURIComponent(name || 'file') + '?link=' + hash + '&index=' + fileIndex + '&play';
+    if (signal && this.via(this.baseUrl + path)) return Promise.resolve();
+    return this.call<ArrayBuffer>(path, {
+      method: 'GET',
+      responseType: 'arraybuffer',
+      timeoutMs: 30000,
+      quiet: true,
+      maxBytes: end - start + 1024,
+      headers: { Range: 'bytes=' + start + '-' + end },
+      signal: signal,
+    }).then(
       () => undefined,
       () => undefined,
     );

@@ -87,6 +87,7 @@ export function replaceTop(r: MRoute): void {
 }
 
 export function navigate(r: MRoute): void {
+  import('../../src/report/crash').then((m) => m.crumb('screen ' + r.name)).catch(() => undefined);
   const s = routeStack.value;
   coveredScroll.set(s[s.length - 1], currentScroll());
   cancelRestore();

@@ -40,11 +40,18 @@ import { applyFilters, activeFilterCount, filterChips, parseRelease, sinkUnknown
 import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
+import { releaseTitle } from '../ui/ReleaseRow';
 import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { orderSearch } from '../../../src/sources/seedRank';
+import { deviceCaps, pickDefaultSource } from '../../../src/viewer/sourcePick';
+import { lastLinkSpeed } from '../../../src/viewer/linkSpeed';
+import { noteAlternatePool } from '../../../src/viewer/alternates';
+import { connectionMetered, protectWarm, protectWarmLink, shouldPrebuffer, startWarm } from '../../../src/viewer/prebuffer';
+import { asWarm } from '../../../src/viewer/warmClient';
+import { settings } from '../../../src/store/settings';
 import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFilter, type KindFilter } from '../../../src/lib/releaseKind';
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
@@ -54,6 +61,26 @@ const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 const CHECK = 'M5 12l5 5l9-10';
 const BELL = 'M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0';
 
+function groupKey(title: string): { key: string; label: string } {
+  const s = releaseTitle(title);
+  return { key: (s.title + '|' + s.meta).toLowerCase(), label: s.meta ? s.title + ' · ' + s.meta : s.title };
+}
+
+/** Same short title (and year) becomes one heading with the releases under it. */
+export function groupSameTitles(rows: SourceResult[]): { key: string; label: string; rows: SourceResult[] }[] {
+  const out: { key: string; label: string; rows: SourceResult[] }[] = [];
+  const at: { [k: string]: number } = {};
+  rows.forEach((r) => {
+    const g = groupKey(r.Title || '');
+    const i = at[g.key];
+    if (i === undefined) {
+      at[g.key] = out.length;
+      out.push({ key: g.key, label: g.label, rows: [r] });
+    } else out[i].rows.push(r);
+  });
+  return out;
+}
+
 function sameQuery(a: string, b: string): boolean {
   const n = (q: string) => q.replace(/\s+/g, ' ').trim().toLowerCase();
   return n(a) === n(b);
@@ -62,19 +89,24 @@ function sameQuery(a: string, b: string): boolean {
 /** Above the results of a search: «Подписаться» (with the search's filters), or «Открыть» when already subscribed. */
 function SubscribePlate({ query, onSubscribe }: { query: string; onSubscribe: () => void }) {
   const existing = loadSubs().filter((s) => sameQuery(s.query, query))[0];
+  const [open, setOpen] = useState(false);
   return (
     <div class="m-sub-plate" data-plate="subscribe">
-      <Icon d={BELL} size={22} />
-      <span class="m-grow">{existing ? t('add.subscribed') : t('add.subscribeHint')}</span>
       {existing ? (
-        <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={() => navigate({ name: 'subFindings', id: existing.id })}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'subFindings', id: existing.id })}>
+          <Icon d={BELL} size={18} />
           {t('common.open')}
         </button>
       ) : (
-        <button type="button" class="m-btn m-btn-primary m-btn-sm" onClick={onSubscribe}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={onSubscribe}>
+          <Icon d={BELL} size={18} />
           {t('add.subscribe')}
         </button>
       )}
+      <button type="button" class="m-icon-btn" aria-expanded={open} aria-label={t('add.subscribeHint')} onClick={() => setOpen(!open)}>
+        i
+      </button>
+      {open && <span class="m-grow m-small">{existing ? t('add.subscribed') : t('add.subscribeHint')}</span>}
     </div>
   );
 }
@@ -485,6 +517,8 @@ export function Add({
 
   // 'tv': add and play on the TV; 'phone': add and play here (one file), else the torrent screen to choose
   const addResult = async (r: SourceResult, watch: false | 'tv' | 'phone') => {
+    protectWarm((r.hash || r.Hash || '').toLowerCase());
+    protectWarmLink(r.Magnet || r.Link || r.Hash || '');
     const key = resultKey(r);
     if (pendingRef.current.has(key)) return;
     if (watch === 'tv' && !tv) {
@@ -545,6 +579,8 @@ export function Add({
   const kindEmpty = kindF !== 'all' && matching.length > 0;
   // the search settled and not one source answered (no network, or every site down)
   const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
+  const rankKind = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'tv' : 'phone';
+  const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
@@ -558,6 +594,57 @@ export function Add({
   const others = prog ? prog.failed.filter((id) => !blocked.includes(id) && !ipBanNote(id) && fixKind(id) !== '') : [];
   const bannedIds = prog ? prog.failed.filter((id) => !!ipBanNote(id)) : [];
   const sortLabel = sortLabels().filter((s) => s.key === sort)[0].label;
+  const pick = visible.length ? pickDefaultSource(visible, memo.searched, rankCtx) : null;
+  const pickKey = pick ? resultKey(pick.row) : '';
+  useEffect(() => {
+    noteAlternatePool(visible.map((r) => ({ hash: (r.hash || r.Hash || '').toLowerCase(), title: r.Title || '' })));
+  }, [pickKey, visible.length, searching]);
+  useEffect(() => {
+    const r = pick ? pick.row : null;
+    const c = client.value;
+    if (!r || searching || !c) return undefined;
+    const hash = (r.hash || r.Hash || '').toLowerCase();
+    const link = r.Magnet || r.Link || hash;
+    if (!hash && !link) return undefined;
+    let stop = (): void => undefined;
+    const timer = setTimeout(() => {
+      stop = startWarm(asWarm(c), { hash: hash, link: link }, shouldPrebuffer(connectionMetered(), settings.value.prebufferOnMetered));
+    }, 700);
+    return () => {
+      clearTimeout(timer);
+      stop();
+    };
+  }, [searching, pickKey]);
+  const renderResults = (list: SourceResult[]) =>
+    groupSameTitles(list).map((g) => {
+      const many = g.rows.length > 1;
+      const cards = g.rows.map((r) => {
+        const k = resultKey(r);
+        return (
+          <ResultCard
+            key={k}
+            r={r}
+            nested={many}
+            category={categoryOfRow(r)}
+            busy={pending[k]}
+            flag={k === pickKey && pick ? pick.badge : undefined}
+            highlight={k === pickKey}
+            onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
+            onAdd={() => void addResult(r, false)}
+            onWatch={() => void addResult(r, 'tv')}
+            onPhone={() => void addResult(r, 'phone')}
+            seedCode="P07.6"
+            round
+          />
+        );
+      });
+      return (
+        <div class={many ? 'm-result-group' : ''} key={g.key}>
+          {many && <div class="m-result-group-title">{g.label}</div>}
+          {cards}
+        </div>
+      );
+    });
 
   return (
     <div class="m-screen" data-route="add">
@@ -691,7 +778,7 @@ export function Add({
       )}
       {searchError && <LaunchError message={searchError} />}
       {rows && (
-        <div class="m-seg m-search-kinds" role="group" aria-label={t('search.kind.filterLabel')} data-kind-filter="">
+        <div class="m-seg m-search-kinds m-scroll-x" role="group" aria-label={t('search.kind.filterLabel')} data-kind-filter="">
           {kindFilterOptions().map((o) => (
             <button
               key={o.id}
@@ -723,45 +810,13 @@ export function Add({
         </div>
       )}
       <div class="m-results">
-        {visible.map((r) => {
-          const k = resultKey(r);
-          return (
-            <ResultCard
-              key={k}
-              r={r}
-              category={categoryOfRow(r)}
-              busy={pending[k]}
-              onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
-              onAdd={() => void addResult(r, false)}
-              onWatch={() => void addResult(r, 'tv')}
-              onPhone={() => void addResult(r, 'phone')}
-              seedCode="P07.6"
-              round
-            />
-          );
-        })}
+        {renderResults(visible)}
       </div>
       {similarVisible.length > 0 && (
         <details class="m-similar" data-similar="">
           <summary class="m-similar-sum tm" data-code="P07.7">{t('search.similar', { n: similarVisible.length })}</summary>
           <div class="m-results">
-            {similarVisible.map((r) => {
-              const k = resultKey(r);
-              return (
-                <ResultCard
-                  key={k}
-                  r={r}
-                  category={categoryOfRow(r)}
-                  busy={pending[k]}
-                  onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
-                  onAdd={() => void addResult(r, false)}
-                  onWatch={() => void addResult(r, 'tv')}
-                  onPhone={() => void addResult(r, 'phone')}
-                  seedCode="P07.6"
-                  round
-                />
-              );
-            })}
+            {renderResults(similarVisible)}
           </div>
         </details>
       )}

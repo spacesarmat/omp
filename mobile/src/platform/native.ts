@@ -4,6 +4,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { createSecretStore, createSourceHttp, type NativeHttpRequest } from '../../../src/sources/http';
 import { t } from '../../../src/i18n';
+import { browserUdpSend, sendWake } from '../tv/power/wol';
 import { log } from '../../../src/lib/log';
 import { sanitizeP2160, type P2160Result } from '../../../src/player/player2160';
 import type { HttpResponse, NativeBilling, NativeBillingAnswer, SecretStore, SourceHttp } from '../../../src/sources/types';
@@ -33,6 +34,21 @@ export interface FoundCastTv {
   name: string;
   /** TXT `md`, e.g. «Chromecast HD». */
   model?: string;
+}
+
+/** A TV found for network power (SSDP / mDNS), not necessarily running OMP. */
+export interface FoundNetTv {
+  ip: string;
+  kind: 'lg' | 'samsung' | 'google';
+  name: string;
+  mac?: string;
+}
+
+/** ESP IR learner (`_omp-ir._tcp`). */
+export interface FoundLearner {
+  ip: string;
+  port: number;
+  name: string;
 }
 
 /** The embedded TorrServer binary on the phone: the pinned one, an older one (still runs) or none. */
@@ -164,6 +180,8 @@ export interface OmpNativeApi {
   scanLan(ports: number[], timeoutMs?: number): Promise<{ ip: string; port: number }[] | null>;
   /** Phone model for the TV's list of paired phones; «Телефон» when unknown. */
   phoneName(): Promise<string>;
+  /** Friendly name and the manufacturer+model code, for history rows stored before the friendly name. */
+  phoneIdentity(): Promise<{ name: string; model: string }>;
   /**
    * Opens the socket and sends `register`; resolves once open with the port that worked.
    * Both ports (ws:3000, wss:3001) are raced; `preferPort` is tried alone first (2 s).
@@ -183,11 +201,22 @@ export interface OmpNativeApi {
   /** 'type:button\nname:UP\n\n' etc. */
   pointerSend(frame: string): Promise<void>;
   tvDisconnect(): Promise<void>;
-  /** Wake-on-LAN magic packet (broadcast + the /24 broadcast of `ip`), repeated 3 times. */
-  wakeOnLan(mac: string, ip: string): Promise<void>;
+  /** Wake-on-LAN magic packet (global and subnet broadcast, UDP 9 and 7), repeated 3 times. */
+  wakeOnLan(mac: string, ip: string, broadcast?: string): Promise<void>;
+  /** IR blaster. receive is true only when the phone exposes a receive API. */
+  irHardware(): Promise<{ transmit: boolean; receive: boolean }>;
+  irTransmit(frequency: number, pulses: number[]): Promise<void>;
+  /** Native IR learn. Rejects when the phone cannot receive. */
+  irLearn(): Promise<{ frequency: number; pulses: number[] } | null>;
+  /** Samsung remote websocket: connect if needed, send the JSON body, return the hello message. */
+  samsungClick(ip: string, path: string, body: string): Promise<{ message: string }>;
+  discoverNetTvs(timeoutMs: number): Promise<FoundNetTv[]>;
+  discoverLearners(timeoutMs: number): Promise<FoundLearner[]>;
   openExternal(url: string, mime: string): Promise<void>;
   /** The installed 2160 Player package; null when it is missing, the app is older or off-device. */
   player2160(): Promise<string | null>;
+  /** versionName of that package. null when the player is missing or the name is not a version. */
+  player2160Version(): Promise<string | null>;
   /** Opens the queue in 2160 Player; resolves with what it handed back (null: an older app without it). */
   open2160(o: Open2160Options): Promise<P2160Result | null>;
   /** True when this app carries 2160 Player's screen (player-core) for playEmbedded2160; false off-device or in an older app. */
@@ -207,7 +236,7 @@ export interface OmpNativeApi {
   takePendingAudioOpen(): Promise<string | null>;
   onAudioOpen(cb: (hash: string) => void): () => void;
   /** apks: the feed's per-ABI APKs, the plugin installs the device's one (url/sha256 = universal fallback). */
-  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void>;
+  downloadAndInstallApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles, packageName?: string): Promise<void>;
   /** Feed key of this device's APK (Build.SUPPORTED_ABIS[0]: arm64 / armv7); null = universal. */
   deviceAbiKey(): Promise<ApkAbi | null>;
   /** Deferred desktop update result, read once after the app restarts. */
@@ -215,6 +244,8 @@ export interface OmpNativeApi {
   /** «Установка неизвестных приложений» is allowed for OMP (true when it cannot be told: nothing to explain). */
   canInstallApks(): Promise<boolean>;
   takePendingMagnet(): Promise<string | null>;
+  /** Native crash and hang text, or '' when this build has no watcher. */
+  takeNativeCrashes(): Promise<string>;
   onMagnet(cb: (link: string) => void): () => void;
   /** Starts the server (idempotent) on the interface that reaches tvIp; resolves the report URL. */
   startPlayerServer(tvIp: string): Promise<string>;
@@ -344,7 +375,7 @@ interface OmpNativePlugin {
   probePorts(o: { ip: string; ports: number[]; timeoutMs: number }): Promise<{ open?: unknown }>;
   scanLan(o: { ports: number[]; timeoutMs?: number }): Promise<{ hits?: unknown; lan?: unknown }>;
   stopDiscovery(o: { group?: string }): Promise<void>;
-  phoneName(): Promise<{ name?: string | null }>;
+  phoneName(): Promise<{ name?: string | null; model?: string | null }>;
   tvConnect(o: { ip: string; register: string; preferPort?: number }): Promise<{ port: 3000 | 3001 }>;
   setCleartextHosts?(o: { hosts: string[] }): Promise<void>;
   trustTvCert?(o: { host: string; fingerprint: string }): Promise<void>;
@@ -352,19 +383,26 @@ interface OmpNativePlugin {
   tvDisconnect(): Promise<void>;
   pointerConnect(o: { url: string }): Promise<void>;
   pointerSend(o: { frame: string }): Promise<void>;
-  wakeOnLan(o: { mac: string; ip: string }): Promise<void>;
+  wakeOnLan(o: { mac: string; ip: string; broadcast?: string }): Promise<void>;
+  irHardware?(): Promise<{ transmit?: boolean; receive?: boolean }>;
+  irTransmit?(o: { frequency: number; pulses: number[] }): Promise<void>;
+  irLearn?(): Promise<{ frequency?: number; pulses?: number[] }>;
+  samsungClick?(o: { ip: string; path: string; body: string }): Promise<{ message?: string }>;
+  discoverNetTvs?(o: { timeoutMs: number }): Promise<{ tvs?: unknown }>;
+  discoverLearners?(o: { timeoutMs: number }): Promise<{ devices?: unknown }>;
   openExternal(o: { url: string; mime: string }): Promise<void>;
-  player2160?(): Promise<{ package?: unknown; embedded?: unknown }>;
+  player2160?(): Promise<{ package?: unknown; version?: unknown; embedded?: unknown }>;
   open2160?(o: Open2160Options): Promise<unknown>;
   playEmbedded2160?(o: Open2160Options): Promise<unknown>;
   audioPrepare?(): Promise<void>;
   audioPlay?(o: AudioPlayRequest): Promise<unknown>;
   audioControl?(o: AudioControlRequest): Promise<unknown>;
   audioState?(): Promise<unknown>;
-  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<void>;
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles; packageName?: string }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
   canInstallApks?(): Promise<{ granted?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
+  takeNativeCrashes?: () => Promise<{ text?: string }>;
   takePendingAudioOpen?(): Promise<{ hash?: string | null }>;
   startPlayerServer(o: { tvIp: string }): Promise<{ url: string }>;
   stopPlayerServer(): Promise<void>;
@@ -633,14 +671,18 @@ export const native: OmpNativeApi = {
     return out;
   },
 
-  async phoneName() {
-    if (!plugin) return phoneFallback();
+  async phoneIdentity() {
+    if (!plugin) return { name: phoneFallback(), model: '' };
     try {
       const r = await plugin.phoneName();
-      return text(r?.name?.trim()) ?? phoneFallback();
+      return { name: text(r?.name?.trim()) ?? phoneFallback(), model: text(r?.model?.trim()) ?? '' };
     } catch {
-      return phoneFallback();
+      return { name: phoneFallback(), model: '' };
     }
+  },
+  async phoneName() {
+    const id = await this.phoneIdentity();
+    return id.name;
   },
 
   tvConnect(ip, register, preferPort) {
@@ -695,9 +737,75 @@ export const native: OmpNativeApi = {
     return plugin.tvDisconnect();
   },
 
-  wakeOnLan(mac, ip) {
-    if (!plugin) return unavailable();
-    return logged('wakeOnLan', plugin.wakeOnLan({ mac, ip }));
+  wakeOnLan(mac, ip, broadcast) {
+    if (plugin && typeof plugin.wakeOnLan === 'function') {
+      const o: { mac: string; ip: string; broadcast?: string } = { mac, ip };
+      if (broadcast) o.broadcast = broadcast;
+      return logged('wakeOnLan', plugin.wakeOnLan(o));
+    }
+    const udp = browserUdpSend();
+    if (!udp) return unavailable();
+    return sendWake(mac, ip, broadcast, udp);
+  },
+
+  async irHardware() {
+    if (!plugin || typeof plugin.irHardware !== 'function') return { transmit: false, receive: false };
+    try {
+      const r = await plugin.irHardware();
+      return { transmit: r.transmit === true, receive: r.receive === true };
+    } catch {
+      return { transmit: false, receive: false };
+    }
+  },
+
+  irTransmit(frequency, pulses) {
+    if (!plugin || typeof plugin.irTransmit !== 'function') return unavailable();
+    return plugin.irTransmit({ frequency: frequency > 0 ? frequency : 38000, pulses });
+  },
+
+  async irLearn() {
+    if (!plugin || typeof plugin.irLearn !== 'function') return null;
+    const r = await plugin.irLearn();
+    const pulses = Array.isArray(r.pulses) ? r.pulses.filter((n) => typeof n === 'number') : [];
+    const frequency = typeof r.frequency === 'number' ? r.frequency : 0;
+    if (pulses.length < 2) return null;
+    return { frequency, pulses };
+  },
+
+  async samsungClick(ip, path, body) {
+    if (!plugin || typeof plugin.samsungClick !== 'function') return unavailable();
+    const r = await plugin.samsungClick({ ip, path, body });
+    return { message: typeof r.message === 'string' ? r.message : '' };
+  },
+
+  async discoverNetTvs(timeoutMs) {
+    if (!plugin || typeof plugin.discoverNetTvs !== 'function') return [];
+    const r = await plugin.discoverNetTvs({ timeoutMs });
+    const list = Array.isArray(r.tvs) ? r.tvs : [];
+    const out: FoundNetTv[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as { ip?: unknown; kind?: unknown; name?: unknown; mac?: unknown };
+      if (typeof o.ip !== 'string' || (o.kind !== 'lg' && o.kind !== 'samsung' && o.kind !== 'google')) continue;
+      const row: FoundNetTv = { ip: o.ip, kind: o.kind, name: typeof o.name === 'string' && o.name ? o.name : o.ip };
+      if (typeof o.mac === 'string') row.mac = o.mac;
+      out.push(row);
+    }
+    return out;
+  },
+
+  async discoverLearners(timeoutMs) {
+    if (!plugin || typeof plugin.discoverLearners !== 'function') return [];
+    const r = await plugin.discoverLearners({ timeoutMs });
+    const list = Array.isArray(r.devices) ? r.devices : [];
+    const out: FoundLearner[] = [];
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const o = item as { ip?: unknown; port?: unknown; name?: unknown };
+      if (typeof o.ip !== 'string' || typeof o.port !== 'number') continue;
+      out.push({ ip: o.ip, port: o.port, name: typeof o.name === 'string' ? o.name : o.ip });
+    }
+    return out;
   },
 
   openExternal(url, mime) {
@@ -710,6 +818,17 @@ export const native: OmpNativeApi = {
     try {
       const r = await plugin.player2160();
       return r && typeof r.package === 'string' && r.package ? r.package : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async player2160Version() {
+    if (!plugin || typeof plugin.player2160 !== 'function') return null;
+    try {
+      const r = await plugin.player2160();
+      const v = r && typeof r.version === 'string' ? r.version.trim() : '';
+      return /^v?\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(v) ? v : null;
     } catch {
       return null;
     }
@@ -800,12 +919,15 @@ export const native: OmpNativeApi = {
     }));
   },
 
-  async downloadAndInstallApk(url, sha256, onProgress, apks) {
+  async downloadAndInstallApk(url, sha256, onProgress, apks, packageName) {
     if (!plugin) return unavailable();
     // awaited so that no early progress event is missed
     const handle = await plugin.addListener('apkProgress', (e) => onProgress(e.percent));
+    const body: { url: string; sha256: string; apks?: ApkFiles; packageName?: string } = { url, sha256 };
+    if (apks) body.apks = apks;
+    if (packageName) body.packageName = packageName;
     try {
-      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 }));
+      await logged('downloadAndInstallApk', plugin.downloadAndInstallApk(body));
     } finally {
       void handle.remove();
     }
@@ -831,6 +953,16 @@ export const native: OmpNativeApi = {
     if (!plugin) return unavailable();
     const r = await plugin.takePendingMagnet();
     return r.link ?? null;
+  },
+
+  async takeNativeCrashes() {
+    if (!plugin || typeof plugin.takeNativeCrashes !== 'function') return '';
+    try {
+      const r = await plugin.takeNativeCrashes();
+      return r && r.text ? String(r.text) : '';
+    } catch {
+      return '';
+    }
   },
 
   onMagnet(cb) {

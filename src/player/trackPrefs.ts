@@ -5,7 +5,7 @@ import { defaultSubChoice } from './trackOptions';
 import { pickTrack, findLang, guessLangFromName, normalizeLang } from '../lib/tracks';
 import { channelLayout, dubOf, findDub, sameDub, seenDubs, torrentChoicesCount, type SeriesSub, type SeriesTracks } from '../lib/seriesTracks';
 
-export function pickAudio(audio: TrackOption[], pref: TrackPref | null, fallbackLang: string): number {
+export function pickAudio(audio: TrackOption[], pref: TrackPref | null, fallbackLang: string, communityVoice?: string): number {
   if (pref) {
     if (pref.audioLabel) {
       for (let i = 0; i < audio.length; i++) if (audio[i].label === pref.audioLabel) return i;
@@ -14,6 +14,10 @@ export function pickAudio(audio: TrackOption[], pref: TrackPref | null, fallback
       const i = findLang(audio, pref.audioLang);
       if (i >= 0) return i;
     }
+  }
+  if (communityVoice) {
+    const i = findDub(audio, communityVoice);
+    if (i >= 0) return i;
   }
   return pickTrack(audio, fallbackLang);
 }
@@ -67,8 +71,8 @@ function langOk(a: string | undefined, b: string | undefined): boolean {
  * The audio track to start with: the series' dub by label, then this torrent's own choice (label, language), then the
  * series' language, then the settings. A reset of the series («по умолчанию») drops the torrents' older choices.
  */
-export function pickAudioFor(audio: TrackOption[], series: SeriesTracks | null, pref: TrackPref | null, fallbackLang: string): number {
-  if (!series) return pickAudio(audio, pref, fallbackLang);
+export function pickAudioFor(audio: TrackOption[], series: SeriesTracks | null, pref: TrackPref | null, fallbackLang: string, communityVoice?: string): number {
+  if (!series) return pickAudio(audio, pref, fallbackLang, communityVoice);
   const byDub = findDub(audio, series.l);
   if (byDub >= 0) return byDub;
   const own = torrentPrefCounts(series, pref);
@@ -83,6 +87,10 @@ export function pickAudioFor(audio: TrackOption[], series: SeriesTracks | null, 
   }
   if (series.g) {
     const i = findLang(audio, series.g);
+    if (i >= 0) return i;
+  }
+  if (communityVoice && !series.l) {
+    const i = findDub(audio, communityVoice);
     if (i >= 0) return i;
   }
   return pickTrack(audio, fallbackLang);
@@ -183,6 +191,7 @@ export function nativeTrackStart(
   series: SeriesTracks | null,
   pref: TrackPref | null,
   s: { audioLang: string; subLang: string; subtitlesOn: boolean },
+  communityVoice?: string,
 ): NativeTrackStart {
   const own = torrentPrefCounts(series, pref);
   const out: NativeTrackStart = { audioLang: s.audioLang, subLang: s.subLang, subtitlesOn: s.subtitlesOn };
@@ -193,6 +202,7 @@ export function nativeTrackStart(
   if (ownDub) audio.push({ l: ownDub });
   if (own && own.audioLang) audio.push({ g: own.audioLang });
   if (series && series.g) audio.push({ g: series.g });
+  if (communityVoice && !(series && series.l) && !ownDub) audio.push({ l: communityVoice });
   if (audio.length) {
     audio.push({ g: s.audioLang });
     out.audioPick = audio;

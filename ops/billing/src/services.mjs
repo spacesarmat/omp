@@ -3,6 +3,34 @@ import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
 import { secretText } from './envSecrets.mjs';
+import { bitmagnetCapsUrl } from './jackett.mjs';
+import { prefixMbOf, prefixPercentOf, validPrefixMb, validPrefixPercent } from './cacheNodes.mjs';
+
+/** Stars: a whole number 0-1000000. Empty or a bad value keeps the current one. */
+function starField(incoming, current) {
+  if (incoming === undefined || incoming === '') {
+    const n = Number(current);
+    return Number.isInteger(n) && n >= 0 && n <= 1000000 ? n : 0;
+  }
+  const n = Number(String(incoming).trim());
+  if (!Number.isInteger(n) || n < 0 || n > 1000000) {
+    const cur = Number(current);
+    return Number.isInteger(cur) && cur >= 0 && cur <= 1000000 ? cur : 0;
+  }
+  return n;
+}
+
+/** Crypto price or rate: 0 or a positive finite number. Empty or a bad value keeps the current one. */
+function rateField(incoming, current) {
+  const keep = () => {
+    const n = Number(current);
+    return Number.isFinite(n) && n >= 0 && n <= 1e12 ? n : 0;
+  };
+  if (incoming === undefined || incoming === '') return keep();
+  const n = Number(String(incoming).trim().replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0 || n > 1e12) return keep();
+  return n;
+}
 
 /** settings.baseDevices from the form: a whole number 1-20. */
 export function validBase(v) {
@@ -51,6 +79,8 @@ export function publicAdminSettings(settings, env) {
     botUsername: s.botUsername || '',
     publicOrigin: s.publicOrigin || '',
     adminTelegramIds: s.adminTelegramIds || '',
+    adminReaders: s.adminReaders || '',
+    betaPercent: s.betaPercent === undefined || s.betaPercent === '' ? 100 : Number(s.betaPercent),
     yoomoneyWallet: maskWallet(s.yoomoneyWallet),
     yoomoneySecret: secretText(s.yoomoneySecret),
     adminNotify: s.adminNotify !== false,
@@ -60,6 +90,13 @@ export function publicAdminSettings(settings, env) {
     jacredUrl: s.jacredUrl || '',
     jacredApiKey: secretText(s.jacredApiKey),
     jacredEnabled: s.jacredEnabled !== false,
+    bitmagnetUrl: s.bitmagnetUrl || '',
+    bitmagnetApiKey: secretText(s.bitmagnetApiKey),
+    bitmagnetEnabled: s.bitmagnetEnabled === true,
+    cacheNodesEnabled: s.cacheNodesEnabled === true,
+    watchRankEnabled: s.watchRankEnabled !== false,
+    cachePrefixMb: prefixMbOf(s),
+    cachePrefixPercent: prefixPercentOf(s),
     torrserverUrl: s.torrserverUrl || '',
     indexerUser: s.indexerUser || '',
     indexerPass: secretText(s.indexerPass),
@@ -70,6 +107,22 @@ export function publicAdminSettings(settings, env) {
     priceRub: s.priceRub || 0,
     periodDays: s.periodDays || 30,
     extraDeviceRub: s.extraDeviceRub || 0,
+    starsEnabled: s.starsEnabled === true,
+    starsPrice: Number(s.starsPrice) || 0,
+    starsExtra: Number(s.starsExtra) || 0,
+    cryptoEnabled: s.cryptoEnabled === true,
+    cryptoTestnet: s.cryptoTestnet === true,
+    cryptoNonRu: s.cryptoNonRu === true,
+    cryptoUsdt: Number(s.cryptoUsdt) || 0,
+    cryptoExtraUsdt: Number(s.cryptoExtraUsdt) || 0,
+    cryptoRateUsdt: Number(s.cryptoRateUsdt) || 0,
+    cryptoTon: Number(s.cryptoTon) || 0,
+    cryptoExtraTon: Number(s.cryptoExtraTon) || 0,
+    cryptoRateTon: Number(s.cryptoRateTon) || 0,
+    cryptoBtc: Number(s.cryptoBtc) || 0,
+    cryptoExtraBtc: Number(s.cryptoExtraBtc) || 0,
+    cryptoRateBtc: Number(s.cryptoRateBtc) || 0,
+    cryptoPayToken: secretText(s.cryptoPayToken),
     baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
@@ -105,6 +158,13 @@ export function mergeSettings(prev, body) {
     ),
     publicOrigin: String(b.publicOrigin !== undefined ? b.publicOrigin : cur.publicOrigin || '').replace(/\/+$/, ''),
     adminTelegramIds: b.adminTelegramIds !== undefined ? b.adminTelegramIds || '' : cur.adminTelegramIds || '',
+    adminReaders: b.adminReaders !== undefined ? b.adminReaders || '' : cur.adminReaders || '',
+    betaPercent:
+      b.betaPercent !== undefined && b.betaPercent !== '' && Number.isInteger(Number(b.betaPercent)) && Number(b.betaPercent) >= 0 && Number(b.betaPercent) <= 100
+        ? Number(b.betaPercent)
+        : cur.betaPercent === undefined
+          ? 100
+          : cur.betaPercent,
     yoomoneyWallet:
       b.yoomoneyWallet !== undefined && !walletUnchanged(b.yoomoneyWallet, cur.yoomoneyWallet)
         ? String(b.yoomoneyWallet).replace(/\s/g, '')
@@ -117,6 +177,19 @@ export function mergeSettings(prev, body) {
     jacredUrl: String(b.jacredUrl !== undefined ? b.jacredUrl : cur.jacredUrl || '').replace(/\/+$/, ''),
     jacredApiKey: String(cur.jacredApiKey || ''),
     jacredEnabled: bool(b.jacredEnabled, cur.jacredEnabled !== false),
+    bitmagnetUrl: String(b.bitmagnetUrl !== undefined ? b.bitmagnetUrl : cur.bitmagnetUrl || '').replace(/\/+$/, ''),
+    bitmagnetApiKey: String(cur.bitmagnetApiKey || ''),
+    bitmagnetEnabled: bool(b.bitmagnetEnabled, cur.bitmagnetEnabled === true),
+    cacheNodesEnabled: b.cacheNodesEnabled !== undefined ? bool(b.cacheNodesEnabled, false) : cur.cacheNodesEnabled === true,
+    watchRankEnabled: b.watchRankEnabled !== undefined ? bool(b.watchRankEnabled, true) : cur.watchRankEnabled !== false,
+    cachePrefixMb:
+      b.cachePrefixMb !== undefined && b.cachePrefixMb !== '' && validPrefixMb(b.cachePrefixMb)
+        ? Number(b.cachePrefixMb)
+        : prefixMbOf(cur),
+    cachePrefixPercent:
+      b.cachePrefixPercent !== undefined && b.cachePrefixPercent !== '' && validPrefixPercent(b.cachePrefixPercent)
+        ? Number(b.cachePrefixPercent)
+        : prefixPercentOf(cur),
     torrserverUrl: String(b.torrserverUrl !== undefined ? b.torrserverUrl : cur.torrserverUrl || '').replace(
       /\/+$/,
       '',
@@ -130,6 +203,22 @@ export function mergeSettings(prev, body) {
     priceRub: num(b.priceRub !== undefined ? b.priceRub : cur.priceRub, 0),
     periodDays: num(b.periodDays !== undefined ? b.periodDays : cur.periodDays, 30),
     extraDeviceRub: num(b.extraDeviceRub !== undefined ? b.extraDeviceRub : cur.extraDeviceRub, 0),
+    starsEnabled: b.starsEnabled !== undefined ? bool(b.starsEnabled, false) : cur.starsEnabled === true,
+    starsPrice: starField(b.starsPrice, cur.starsPrice),
+    starsExtra: starField(b.starsExtra, cur.starsExtra),
+    cryptoEnabled: b.cryptoEnabled !== undefined ? bool(b.cryptoEnabled, false) : cur.cryptoEnabled === true,
+    cryptoTestnet: b.cryptoTestnet !== undefined ? bool(b.cryptoTestnet, false) : cur.cryptoTestnet === true,
+    cryptoNonRu: b.cryptoNonRu !== undefined ? bool(b.cryptoNonRu, false) : cur.cryptoNonRu === true,
+    cryptoUsdt: rateField(b.cryptoUsdt, cur.cryptoUsdt),
+    cryptoExtraUsdt: rateField(b.cryptoExtraUsdt, cur.cryptoExtraUsdt),
+    cryptoRateUsdt: rateField(b.cryptoRateUsdt, cur.cryptoRateUsdt),
+    cryptoTon: rateField(b.cryptoTon, cur.cryptoTon),
+    cryptoExtraTon: rateField(b.cryptoExtraTon, cur.cryptoExtraTon),
+    cryptoRateTon: rateField(b.cryptoRateTon, cur.cryptoRateTon),
+    cryptoBtc: rateField(b.cryptoBtc, cur.cryptoBtc),
+    cryptoExtraBtc: rateField(b.cryptoExtraBtc, cur.cryptoExtraBtc),
+    cryptoRateBtc: rateField(b.cryptoRateBtc, cur.cryptoRateBtc),
+    cryptoPayToken: String(cur.cryptoPayToken || ''),
     // 1-20; an empty or bad value keeps the current one
     baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),
@@ -151,6 +240,7 @@ export function mergeSettings(prev, body) {
 }
 
 export function sourceEnabled(settings, source) {
+  if (source === 'bitmagnet') return !!(settings && settings.bitmagnetEnabled === true);
   if (source === 'jacred') return settings.jacredEnabled !== false;
   return settings.jackettEnabled !== false;
 }
@@ -181,6 +271,11 @@ export async function probeService(kind, settings, fetchImpl) {
       if (!s.torrserverUrl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'url_empty', checkedAt: started };
       }
+    } else if (kind === 'bitmagnet') {
+      if (!s.bitmagnetUrl) {
+        return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
+      }
+      url = bitmagnetCapsUrl(s.bitmagnetUrl, s.bitmagnetApiKey);
     } else {
       const indexer = kind === 'jacred'
         ? { url: s.jacredUrl, key: s.jacredApiKey }
@@ -189,6 +284,8 @@ export async function probeService(kind, settings, fetchImpl) {
         return { ok: false, status: 0, latencyMs: 0, error: 'not_configured', checkedAt: started };
       }
       url = capsUrl(indexer.url, indexer.key);
+    }
+    if (kind !== 'torrserver') {
       const user = String(s.indexerUser || '');
       if (user) {
         headers.Authorization =
@@ -224,10 +321,11 @@ export async function probeService(kind, settings, fetchImpl) {
 }
 
 export async function probeAllServices(settings, fetchImpl) {
-  const [jackett, jacred, torrserver] = await Promise.all([
+  const [jackett, jacred, torrserver, bitmagnet] = await Promise.all([
     probeService('jackett', settings, fetchImpl),
     probeService('jacred', settings, fetchImpl),
     probeService('torrserver', settings, fetchImpl),
+    probeService('bitmagnet', settings, fetchImpl),
   ]);
   return {
     jackett: {
@@ -241,6 +339,12 @@ export async function probeAllServices(settings, fetchImpl) {
       enabled: settings.jacredEnabled !== false,
       configured: secretConfigured(settings.jacredApiKey) && !!settings.jacredUrl,
       url: settings.jacredUrl || '',
+    },
+    bitmagnet: {
+      ...bitmagnet,
+      enabled: settings.bitmagnetEnabled === true,
+      configured: !!settings.bitmagnetUrl,
+      url: settings.bitmagnetUrl || '',
     },
     torrserver: {
       ...torrserver,

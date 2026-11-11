@@ -12,6 +12,9 @@ import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
+import { PowerBanner } from '../ui/PowerBanner';
+import { PowerTools } from '../ui/PowerTools';
+import { adoptProfile } from '../tv/power/irProfile';
 import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
@@ -37,6 +40,7 @@ import {
   sendEnter,
   turnOffTv,
   pressAtvKey,
+  armCecAfterWake,
 } from '../tv/tvClient';
 import type { RemoteButton } from '../tv/ssap';
 import { KeyPump, LONG_PRESS_MS, PadArrows, pressKey, TAP_SLOP as PAD_SLOP } from '../tv/atvPad';
@@ -78,7 +82,7 @@ export interface RemoteActions {
   pressAtvKey: (name: 'CATALOG' | 'NOWPLAYING') => Promise<void>;
   /** Android TV: pairs again by the code on the TV screen. */
   pairAtv: (found: FoundOmpTv, code: string) => Promise<void>;
-  wakeOnLan: (mac: string, ip: string) => Promise<void>;
+  wakeOnLan: (mac: string, ip: string, broadcast?: string) => Promise<void>;
   warmUp: () => Promise<void>;
   /** Makes a saved TV the active one and connects with its saved key or token. */
   switchTv: (tv: SavedTv) => Promise<void>;
@@ -97,7 +101,7 @@ const defaults: RemoteActions = {
   turnOffTv,
   pressAtvKey,
   pairAtv,
-  wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
+  wakeOnLan: (mac, ip, broadcast) => native.wakeOnLan(mac, ip, broadcast),
   warmUp,
   switchTv: (tv) => {
     // the saved key or token is reused: no pairing again
@@ -150,8 +154,11 @@ const COLOR_KEYS: ReadonlyArray<readonly ['RED' | 'GREEN' | 'YELLOW' | 'BLUE', (
 
 /** The TV's name without the maker prefixes LG puts first: «[LG] webOS TV OLED55C9PLA» → «OLED55C9PLA». */
 export function shortTvName(name: string): string {
-  const short = (name || '').replace(/^\s*\[LG\]\s*/i, '').replace(/^webOS TV\s*/i, '').trim();
-  return short || name;
+  const raw = name || '';
+  const short = raw.replace(/^\s*\[LG\]\s*/i, '').replace(/^webOS TV\s*/i, '').trim();
+  if (short) return short;
+  if (/^\[LG\]$/i.test(raw.trim())) return 'LG';
+  return raw;
 }
 
 /** A saved TV's name as the remote shows it: the user's own name as typed, else the TV's name without LG prefixes. */
@@ -800,6 +807,22 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         }
       : undefined;
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
+  const wake = async () => {
+    if (!tv.mac) {
+      showToast(t('remote.needOnToConnect'));
+      return;
+    }
+    try {
+      if (tv.broadcast) await act.wakeOnLan(tv.mac, tv.ip, tv.broadcast);
+      else await act.wakeOnLan(tv.mac, tv.ip);
+    } catch (e) {
+      fail(e);
+      return;
+    }
+    armCecAfterWake(tv.ip);
+    showToast(t('remote.turningOn', { name: tv.name }));
+    void act.warmUp();
+  };
   return (
     <div class={screenClass()} data-route="remote">
       <ScreenHeader
@@ -812,6 +835,12 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </span>
         }
       />
+      {mode !== 'touchpad' && (
+        <>
+          <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
+          <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />
+        </>
+      )}
       {!forgot && !box && <NoAnswer tv={tv} />}
       {forgot && !box && (
         <div class="m-remote-forgot">
@@ -944,6 +973,10 @@ export function Remote() {
   const [tuning, setTuning] = useState(false);
 
   const tvIp = tv?.ip;
+  const irMac = tv?.mac || '';
+  useEffect(() => {
+    if (irMac && tvIp) adoptProfile(tvIp, irMac);
+  }, [irMac, tvIp]);
   // shared discovery may still be empty when this screen opens; the saved TV connects on mount and again
   // when that TV shows up in the list (a scan that finished after the first attempt)
   const onNetwork = !!tvIp && foundTvRows.value.some((r) => r.ip === tvIp);
@@ -980,6 +1013,7 @@ export function Remote() {
         <ScreenHeader title={t('nav.remote')} />
         {/* one block, not «Ищу…» above «Подключите телевизор» (QA B18): found TVs still show above, the search is a line in the card */}
         <FoundTvs quiet />
+        <PowerTools deviceId="local" showInputs={false} />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>
@@ -1028,7 +1062,8 @@ export function Remote() {
       return;
     }
     try {
-      await act.wakeOnLan(tv.mac, tv.ip);
+      if (tv.broadcast) await act.wakeOnLan(tv.mac, tv.ip, tv.broadcast);
+      else await act.wakeOnLan(tv.mac, tv.ip);
     } catch (e) {
       fail(e);
       return;
@@ -1105,6 +1140,12 @@ export function Remote() {
           <Icon d={POWER} />
         </button>
       </ScreenHeader>
+      {mode !== 'touchpad' && (
+        <>
+          <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
+          <PowerTools deviceId={tv.mac || tv.ip} showInputs />
+        </>
+      )}
       <NoAnswer tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>

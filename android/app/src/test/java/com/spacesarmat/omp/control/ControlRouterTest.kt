@@ -68,7 +68,7 @@ class ControlRouterTest {
 
     @Test
     fun protectedRoutesNeedTheTokenBeforeMethodAndBody() {
-        for (path in listOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/sources")) {
+        for (path in listOf("/omp/launch", "/omp/attach", "/omp/key", "/omp/text", "/omp/volume", "/omp/cec", "/omp/sources")) {
             assertEquals(path, 401, req("POST", path, "{\"name\":\"UP\"}").status)
             // no method/body detail leaks before auth
             assertEquals(path, 401, req("GET", path).status)

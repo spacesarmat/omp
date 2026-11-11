@@ -3,6 +3,8 @@
 import { signal, effect } from '@preact/signals';
 import { native, type OmpNativeApi, type FoundOmpTv } from '../platform/native';
 import { activeTv, saveTv, setActiveTv, clearTvToken, normalizeMac, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from './tvStore';
+import { netFromReport } from './power/wol';
+import { lgSwitchInput } from './power/protocols';
 import { showToast } from '../ui/toast';
 import { phoneParam, markPhoneSent } from './phoneRpc';
 import { log } from '../../../src/lib/log';
@@ -203,9 +205,9 @@ function onRegisterMessage(s: Session, m: any): void {
     // Learn the MAC for Wake-on-LAN (soft: a failure never touches the session).
     const mySession = s;
     send(GETINFO_URI, undefined, false, true).then((info) => {
-      const mac = macFromInfo(info, mySession.tv.ip);
-      if (mac && session === mySession) {
-        mySession.tv = { ...mySession.tv, mac };
+      const net = netFromLg(info, mySession.tv.ip);
+      if ((net.mac || net.broadcast) && session === mySession) {
+        mySession.tv = { ...mySession.tv, ...net };
         saveTv(mySession.tv, { keepActive: mySession.keepActive });
       }
     }, noop);
@@ -257,6 +259,20 @@ function wsHost(url: string): string | null {
   const m = /^wss?:\/\/([^/?#]+)/i.exec(url);
   if (!m) return null;
   return m[1].replace(/:\d+$/, '').replace(/^\[|\]$/g, '') || null;
+}
+
+function netFromLg(info: any, ip: string): { mac?: string; broadcast?: string } {
+  const mac = macFromInfo(info, ip);
+  const wired = info?.wiredInfo;
+  const wifi = info?.wifiInfo;
+  const useWired = !!wired && (wired.state === 'connected' || wired.ipAddress === ip);
+  const iface = useWired ? wired : wifi;
+  return netFromReport({
+    mac,
+    broadcast: iface && iface.broadcast,
+    ip: (iface && iface.ipAddress) || ip,
+    netmask: iface && iface.netmask,
+  });
 }
 
 export function macFromInfo(info: any, ip: string): string | undefined {
@@ -540,7 +556,10 @@ export function warmUp(): Promise<void> {
   warmError = '';
   const watch = effect(() => {
     if (tvState.value === 'pairing') pairing = true;
-    if (activeTv.value?.ip !== tv.ip) stop();
+    if (activeTv.value?.ip !== tv.ip) {
+      if (cecTarget === tv.ip) cecTarget = null;
+      stop();
+    }
     // another session (a user connect to a different TV) took over: do not fight it
     const ip = sessionIp.value;
     if (ip && ip !== tv.ip) stop();
@@ -586,6 +605,7 @@ export function warmUp(): Promise<void> {
         if (stopped || pairing) return;
       }
     } finally {
+      if (cecTarget === tv.ip && sessionIp.value !== tv.ip) cecTarget = null;
       watch();
       tvWaking.value = false;
       if (cancelWarm === stop) warmActive = false;
@@ -796,6 +816,23 @@ export async function sendEnter(): Promise<void> {
 }
 
 /** The TV may drop the socket before answering: a close or timeout after sending counts as success. */
+export async function switchInput(inputId: string): Promise<void> {
+  const msg = lgSwitchInput('x', inputId) as { uri: string; payload: object };
+  await request(msg.uri, msg.payload);
+}
+
+/** IP of the box whose next successful connect should turn its TV on. Other boxes do not consume it. */
+let cecTarget: string | null = null;
+
+/** The next successful connect to this Android TV asks the box to turn its TV on over HDMI-CEC. */
+export function armCecAfterWake(ip: string): void {
+  cecTarget = ip;
+}
+
+export function clearCecWake(): void {
+  cecTarget = null;
+}
+
 export async function turnOffTv(): Promise<void> {
   if (tvKind() === 'atv') throw new Error(atvUnsupported());
   await ensureConnected();
@@ -820,6 +857,8 @@ interface AtvInfo {
   version: string;
   paired: boolean;
   foreground: boolean;
+  mac?: string;
+  broadcast?: string;
 }
 
 interface AtvSession {
@@ -925,11 +964,14 @@ function atvFetch(tv: SavedTv, method: 'GET' | 'POST', path: string, body?: obje
 
 function parseInfo(d: any): AtvInfo | null {
   if (!d || typeof d !== 'object') return null;
+  const net = netFromReport(d);
   return {
     name: typeof d.name === 'string' ? d.name : '',
     version: typeof d.version === 'string' ? d.version : '',
     paired: d.paired === true,
     foreground: d.foreground === true,
+    mac: net.mac,
+    broadcast: net.broadcast,
   };
 }
 
@@ -967,10 +1009,16 @@ function connectAtv(tv: SavedTv, opts: ConnectOptions = {}): Promise<void> {
       throw new Error(tvForgot());
     }
     s.info = info;
+    if (info.mac) s.tv = { ...s.tv, mac: info.mac };
+    if (info.broadcast) s.tv = { ...s.tv, broadcast: info.broadcast };
     atvConnecting = null;
     tvState.value = 'connected';
     tvError.value = '';
     saveTv(s.tv, opts);
+    if (cecTarget === s.tv.ip) {
+      cecTarget = null;
+      atvFetch(s.tv, 'POST', '/omp/cec', {}).catch(noop);
+    }
     if (!opts.keepActive) setActiveTv(s.tv.ip);
   })();
   atvConnecting = p;

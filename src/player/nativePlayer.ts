@@ -11,6 +11,7 @@ import { rememberSeriesTracks } from '../store/seriesTracks';
 import type { NativeTrackPick } from './trackPrefs';
 import { buildSnapshot } from './phoneBridge';
 import { saveItemProgress, LOCAL_SAVE_MS, REMOTE_SAVE_MS } from './progressSave';
+import { watchBuffer, watchClose, watchFrame, watchOpen } from '../viewer/watchReport';
 import { resumePosition } from '../store/progress';
 import type { PlayItem } from './types';
 import { itemHeading } from './heading';
@@ -26,6 +27,7 @@ import { DONATE_QR } from '../ui/donateQr';
 import { DONATE_QR_LABEL } from '../lib/donate';
 import { log } from '../lib/log';
 import { getTrackPref, saveTrackPref } from '../store/trackPrefs';
+import { rememberTracks } from '../viewer/tracks';
 import type { PlayerEngineSetting } from './nativeEngine';
 import { assSubsShown, sanitizeNativeEngine, engineLogText, rememberProbe, knownProbe } from './nativeEngine';
 
@@ -118,6 +120,8 @@ export interface NativeState {
   duration: number;
   paused: boolean;
   buffering: boolean;
+  /** The native player has shown a frame. A resume position is not enough. */
+  played: boolean;
   audio: { list: string[]; sel: number };
   subs: { list: { label: string; value: string }[]; sel: string };
 }
@@ -192,7 +196,7 @@ export function sanitizeNativeState(v: unknown): NativeState | null {
   }
   return {
     index: base.index, time: base.time, duration: base.duration,
-    paused: v.paused === true, buffering: v.buffering === true, audio, subs,
+    paused: v.paused === true, buffering: v.buffering === true, played: v.played === true, audio, subs,
   };
 }
 
@@ -255,6 +259,12 @@ export class NativeSession {
   private lastLocal = 0;
   private lastRemote = 0;
   private pos: NativeClosed | null = null;
+  private watchKey = '';
+  private watchHash = '';
+  private watchFile = 0;
+  private watchTitle = '';
+  private watchFileTitle = '';
+  private watchVoice = '';
   private done = false;
   private readonly sid = ++sessionSeq;
   private readonly journal: WatchJournal | null;
@@ -312,6 +322,8 @@ export class NativeSession {
         this.lastLocal = this.lastRemote = Date.now();
         this.pos = { index: o.index, time: o.startAt, duration: 0 };
         this.launched = true;
+        // The clock starts when play is requested, not when the resume position comes back.
+        this.armWatch(o.index, 0, 0);
         openRuns++;
         this.opts = o;
         const donate = nativeDonate(o.donate);
@@ -370,6 +382,12 @@ export class NativeSession {
     this.plugin.nativePlayerCommand({ cmd: { type: 'donate', on: false, session: this.sid } }).catch(() => undefined);
   }
 
+  /** Asks the built-in player to close. The close event still saves the position. */
+  close(): void {
+    if (this.done) return;
+    this.plugin.nativePlayerCommand({ cmd: { type: 'close', session: this.sid } }).catch(() => undefined);
+  }
+
   /**
    * The screen is gone (Back on the placeholder, route replaced): once playNative was called the run keeps
    * listening until the player reports its close (progress is still saved), without calling the hooks;
@@ -384,16 +402,57 @@ export class NativeSession {
   /** Leaves without a close event: final save, listeners released. */
   dispose(): void {
     if (this.done) return;
+    this.finishWatch(this.pos ? this.pos.time : 0, this.pos ? this.pos.duration : 0, false);
     this.save(true);
     this.journalEnd();
     this.stop();
+  }
+
+  /** Opens the watch clock for this item. A repeat of the same file does not restart it. */
+  private armWatch(index: number, prevTime: number, prevDuration: number): void {
+    const item = this.queue[index];
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    const k = item.hash + ':' + item.fileIndex;
+    if (this.watchKey === k) return;
+    this.finishWatch(prevTime, prevDuration, false);
+    this.watchKey = k;
+    this.watchHash = item.hash;
+    this.watchFile = item.fileIndex;
+    this.watchTitle = item.torrentTitle || item.title;
+    this.watchFileTitle = item.title;
+    this.watchVoice = '';
+    watchOpen({ infohash: item.hash, file: item.fileIndex, title: this.watchTitle, fileTitle: item.title });
+  }
+
+  private finishWatch(time: number, duration: number, error: boolean): void {
+    if (!this.watchKey) return;
+    watchClose({
+      infohash: this.watchHash,
+      file: this.watchFile,
+      title: this.watchTitle,
+      fileTitle: this.watchFileTitle,
+      time,
+      duration,
+      voice: this.watchVoice,
+      error,
+    });
+    this.watchKey = '';
   }
 
   private onState(d: unknown): void {
     if (this.done || foreign(d, this.sid)) return;
     const s = sanitizeNativeState(d);
     if (!s || !this.queue[s.index]) return;
+    const prevPos = this.pos;
     this.track(s);
+    const item = this.queue[s.index];
+    if (item && item.hash && item.fileIndex !== undefined) {
+      this.armWatch(s.index, prevPos ? prevPos.time : 0, prevPos ? prevPos.duration : 0);
+      const audioLabel = s.audio && s.audio.sel >= 0 && s.audio.list[s.audio.sel] ? s.audio.list[s.audio.sel] : '';
+      if (audioLabel) this.watchVoice = audioLabel;
+      if (s.played) watchFrame(item.hash, item.fileIndex);
+      watchBuffer(item.hash, item.fileIndex, s.buffering);
+    }
     const now = Date.now();
     if (now - this.lastRemote >= REMOTE_SAVE_MS) {
       this.lastRemote = this.lastLocal = now;
@@ -411,6 +470,7 @@ export class NativeSession {
     if (this.done || foreign(d, this.sid)) return;
     const c = sanitizeNativeClosed(d);
     if (c && this.queue[c.index]) this.track(c);
+    this.finishWatch(this.pos ? this.pos.time : 0, this.pos ? this.pos.duration : 0, false);
     this.save(true);
     this.journalEnd();
     this.stop();
@@ -565,13 +625,14 @@ export class NativeSession {
     const item = e && this.queue[e.index];
     if (!e || !item || !item.hash) return;
     if (e.kind === 'audio') {
-      saveTrackPref(item.hash, { audioLang: e.lang, audioLabel: e.label });
+      this.watchVoice = e.label || '';
+      rememberTracks(item.hash, item.torrentTitle || item.title, { audioLang: e.lang, audioLabel: e.label });
       void this.seriesSaver(item.hash, e.channels ? { l: e.label, g: e.lang, c: e.channels, k: e.seen } : { l: e.label, g: e.lang, k: e.seen });
     } else if (e.off) {
-      saveTrackPref(item.hash, { sub: 'off' });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: 'off' });
       void this.seriesSaver(item.hash, { s: 'off' });
     } else {
-      saveTrackPref(item.hash, { sub: { lang: e.lang, label: e.label } });
+      rememberTracks(item.hash, item.torrentTitle || item.title, { sub: { lang: e.lang, label: e.label } });
       void this.seriesSaver(item.hash, { s: { l: e.label, g: e.lang } });
     }
   }

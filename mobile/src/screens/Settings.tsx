@@ -11,7 +11,7 @@ import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
+import { allowedBeta, checkForUpdate, latestUpdate, updateCheckDue, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -52,9 +52,15 @@ export function runUpdateCheck(o: { manual: boolean; url?: string; minIntervalMs
   return (checker ?? checkForUpdate)(o);
 }
 
-/** The phone's APK feed: the beta one with «Получать бета-версии». */
-export function phoneFeedUrl(): string {
-  return updateFeedUrl(true, settings.value.betaUpdates);
+/** The phone's APK feed. Beta is asked from billing before the URL is chosen. */
+export function phoneFeedUrl(): Promise<string> {
+  return allowedBeta(settings.value.betaUpdates).then((beta) => updateFeedUrl(true, beta));
+}
+
+/** Automatic phone check. Billing is asked only when a check is actually due. */
+export function runBackgroundPhoneUpdate(gap: number): Promise<CheckResult> {
+  if (!updateCheckDue({ manual: false, minIntervalMs: gap })) return Promise.resolve('skipped');
+  return phoneFeedUrl().then((url) => runUpdateCheck({ manual: false, url, minIntervalMs: gap }));
 }
 
 /** Under «Get beta versions». */
@@ -360,7 +366,7 @@ export function Settings() {
   const showWizard = !tv || (connected && ompMissing);
 
   async function check() {
-    const r = await runUpdateCheck({ manual: true, url: phoneFeedUrl() }).catch((): CheckResult => 'error');
+    const r = await phoneFeedUrl().then((url) => runUpdateCheck({ manual: true, url })).catch((): CheckResult => 'error');
     if (r === 'error') showToast(t('updateScreen.checkFailed'));
     else if (r === 'latest') showToast(t('updateScreen.latest'));
   }
@@ -413,6 +419,22 @@ export function Settings() {
         <PhoneServerRow />
         <VideoPlayerRow />
         <LanguageRow />
+        <div class="m-set-row" data-row="prebuffer">
+          <div class="m-set-text">
+            <span>{t('settings.prebufferMetered')}</span>
+            <span class="m-muted m-small">{t('settings.prebufferMeteredHint')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.prebufferOnMetered}
+            aria-label={t('settings.prebufferMetered')}
+            class={'m-switch' + (settings.value.prebufferOnMetered ? ' on' : '')}
+            onClick={() => updateSettings({ prebufferOnMetered: !settings.value.prebufferOnMetered })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
       </section>
 
       <section class="m-set-group" data-section="search">
@@ -437,6 +459,22 @@ export function Settings() {
             aria-label={t('settings.liveSeeds')}
             class={'m-switch' + (settings.value.liveSeeds ? ' on' : '')}
             onClick={() => updateSettings({ liveSeeds: !settings.value.liveSeeds })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
+        <div class="m-set-row tm" data-row="help-rank">
+          <div class="m-set-text">
+            <span>{t('settings.helpRank')}</span>
+            <span class="m-muted m-small">{t('settings.helpRankHint')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.helpRank !== false}
+            aria-label={t('settings.helpRank')}
+            class={'m-switch' + (settings.value.helpRank !== false ? ' on' : '')}
+            onClick={() => updateSettings({ helpRank: settings.value.helpRank === false })}
           >
             <span class="m-switch-knob" />
           </button>

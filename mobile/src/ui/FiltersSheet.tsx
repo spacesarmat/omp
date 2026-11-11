@@ -90,7 +90,8 @@ export function FiltersSheet({
             </label>
             <label>
               {t('filters.to')}
-              <TextField inputMode="decimal" value={f.maxGb ? String(f.maxGb) : ''} placeholder={t('filters.unlimited')} onInput={(e) => set({ maxGb: gb((e.target as HTMLInputElement).value) })} />
+              <TextField inputMode="decimal" value={f.maxGb ? String(f.maxGb) : ''} placeholder={t('filters.maxPlaceholder')}
+              aria-label={t('filters.unlimited')} onInput={(e) => set({ maxGb: gb((e.target as HTMLInputElement).value) })} />
             </label>
           </div>
         </div>

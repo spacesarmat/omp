@@ -24,7 +24,7 @@
 - CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Desktop (`.github/workflows/desktop.yml`): smoke-матрица и `package-windows`.
   Cargo и `node_modules` кешируются по ОС и lockfiles, при cache hit используется `npm install --prefer-offline`, при промахе `npm ci`, затем lockfiles проверяются.
   Релиз по тегу `v*` (`release.yml`), образ биллинга `billing-image.yml`,
-  `torrserver-update.yml` (обновление TorrServer), `telegram-post.yml` (пост для уже выпущенного релиза), `vps-deploy.yml` (ручной деплой).
+  `torrserver-update.yml` (обновление TorrServer), `player2160-update.yml` (обновление сабмодуля 2160 Player), `telegram-post.yml` (пост для уже выпущенного релиза), `vps-deploy.yml` (ручной деплой).
 - `main` защищён: изменения только через PR.
 - NUC: только с ПК Andy по ssh (адрес в локальных заметках, не в репо), каталог `/opt/omp-vps`,
   compose `-f docker-compose.yml -f docker-compose.nuc.yml`. Выкатка: `deploy.sh [--dry-run] <ref>`, откат `deploy.sh --rollback <dir>`.

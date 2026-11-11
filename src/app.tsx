@@ -24,6 +24,7 @@ import { TitleCardScreen } from './screens/TitleCard';
 import { PersonScreen } from './screens/Person';
 import { PhoneSourcesScreen } from './screens/PhoneSources';
 import { UpdateDialog, shouldShowUpdateDialog } from './ui/UpdateDialog';
+import { ComponentUpdateDialog, shouldShowComponentDialog } from './ui/ComponentUpdateDialog';
 import { WhatsNewDialog, shouldShowWhatsNew } from './ui/WhatsNewDialog';
 import { checkWhatsNew, whatsNew } from './store/whatsNew';
 import { OnboardingScreen } from './ui/OnboardingScreen';
@@ -31,11 +32,13 @@ import { armOnboardingBoot, onboardingVisible, resumeOnboarding } from './onboar
 import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
 import { checkForUpdate, installUpdateChecks, updatePrompt } from './store/updates';
+import { checkComponentUpdates, componentPrompt, installComponentChecks } from './store/componentUpdates';
+import { readTvAbi, readTvPlayerVersion, readTvTorr } from './player/componentProbe';
 import { platformKind } from './platform/env';
 import { installAndroidKeyBridge } from './platform/androidKeys';
 import { installAndroidRemote } from './platform/androidRemote';
 import { installAndroidScale } from './platform/androidScale';
-import { syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
+import { syncHdmiCec, syncNativeLanguage, syncOpenOnStartup } from './platform/androidNative';
 import { flushTvTitleLink } from './titleLink';
 import { ScreenCodeBadge } from './testmode/badge';
 import { ElementLabelsHost } from './testmode/elements';
@@ -128,11 +131,23 @@ export function App() {
   useEffect(() => (platformKind() === 'androidtv' ? syncNativeLanguage() : undefined), []);
   // «Открывать при включении» for the boot receiver. webOS has no receiver; the phone bundle does not run this UI.
   useEffect(() => (platformKind() === 'androidtv' ? syncOpenOnStartup() : undefined), []);
+  useEffect(() => (platformKind() === 'androidtv' ? syncHdmiCec() : undefined), []);
   // a title link that arrived on the connect screen opens once a server is chosen
   useEffect(() => {
     if (platformKind() === 'androidtv') flushTvTitleLink();
   });
   useEffect(() => installUpdateChecks((gap) => { checkForUpdate({ manual: false, minIntervalMs: gap }); }), []);
+  useEffect(
+    () => installComponentChecks((gap) => {
+      void checkComponentUpdates({
+        playerVersion: readTvPlayerVersion,
+        torr: readTvTorr,
+        abi: readTvAbi,
+        minIntervalMs: gap,
+      }).catch(() => {});
+    }),
+    [],
+  );
   useEffect(() => { checkWhatsNew(getChangelog(), APP_VERSION); }, []);
   useEffect(() => armOnboardingBoot(), []);
   const r = currentRoute.value;
@@ -149,11 +164,12 @@ export function App() {
   const wn = whatsNew.value;
   const anyDialog = dialogOpen.value || textDialogOpen.value;
   const showTour = onboardingVisible('tv', r.name);
-  const showWhatsNew = !!wn && !showTour && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value));
+  const showWhatsNew = !!wn && !showTour && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value && !componentPrompt.value));
   return (
     <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
       {shouldShowUpdateDialog(r.name) && !anyDialog && !showTour && <UpdateDialog />}
+      {shouldShowComponentDialog(r.name) && !anyDialog && !showTour && !updatePrompt.value && <ComponentUpdateDialog />}
       {showWhatsNew && <WhatsNewDialog />}
       {showTour && <OnboardingScreen />}
       <DialogHost />

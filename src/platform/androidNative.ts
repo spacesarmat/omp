@@ -22,7 +22,7 @@ export interface ListenerHandle {
 export interface OmpNativeTvPlugin {
   localIpv4(): Promise<{ ip?: string | null }>;
   /** apks: the feed's per-ABI APKs; the plugin picks the device's one, url/sha256 (universal) otherwise. */
-  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles }): Promise<unknown>;
+  downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles; packageName?: string }): Promise<unknown>;
   /** «Установка неизвестных приложений» is allowed for OMP (APKs from 0.17.0). */
   canInstallApks?(): Promise<{ granted?: unknown }>;
   /** Starts the native Media3 player (PlayerActivity); resolves once it is launched. */
@@ -93,12 +93,14 @@ export interface OmpNativeTvPlugin {
   setLanguage?(o: { lang: string }): Promise<unknown>;
   /** Android TV: persist «Открывать при включении» for the boot receiver. Missing in an older APK. */
   setOpenOnStartup?(o: { enabled: boolean }): Promise<OpenOnStartupState>;
+  /** Android TV: persist «Включать телевизор через HDMI-CEC». Missing in an older APK. */
+  setHdmiCec?(o: { enabled: boolean }): Promise<unknown>;
   /** Last boot-launch result. needsOverlay is false on a read. */
   openOnStartupState?(): Promise<OpenOnStartupState>;
   /** System screen for display over other apps. { opened: false } when that screen cannot be opened. */
   requestOpenOnStartupOverlay?(): Promise<{ opened?: boolean }>;
   /** The installed 2160 Player package, null when it is not installed; missing in an older APK. */
-  player2160?(): Promise<{ package: string | null }>;
+  player2160?(): Promise<{ package: string | null; version?: string | null }>;
   /** Opens the playlist in 2160 Player; resolves with { returned, positionMs?, durationMs?, ended?, url? } when it closes. */
   open2160?(o: Open2160Request): Promise<unknown>;
   /** One diagnostic line in logcat. Release WebView logging is off. tag must be omp.tracks. */
@@ -338,7 +340,7 @@ export function describeApkError(e: unknown): string {
  * per-ABI APKs) the plugin installs the one for the device's ABI; url/sha256 is the universal fallback.
  * Rejects with an Error whose message is in Russian.
  */
-export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles): Promise<void> {
+export function installApk(url: string, sha256: string, onProgress: (percent: number) => void, apks?: ApkFiles, packageName?: string): Promise<void> {
   const p = nativePlugin();
   if (!p) return Promise.reject(new Error(t('update.installUnavailable')));
   let handle: ListenerHandle | null = null;
@@ -356,7 +358,10 @@ export function installApk(url: string, sha256: string, onProgress: (percent: nu
     })
     .then((h) => {
       handle = h;
-      return p.downloadAndInstallApk(apks ? { url, sha256, apks } : { url, sha256 });
+      const body: { url: string; sha256: string; apks?: ApkFiles; packageName?: string } = { url, sha256 };
+      if (apks) body.apks = apks;
+      if (packageName) body.packageName = packageName;
+      return p.downloadAndInstallApk(body);
     })
     .then(
       () => { release(); },
@@ -448,6 +453,27 @@ export function nativeRequestOpenOnStartupOverlay(): Promise<boolean | null> {
 }
 
 /** Keeps SharedPreferences `omp-boot` in step with the setting. Android TV only (the caller gates the platform). */
+export function nativeSetHdmiCec(enabled: boolean): Promise<unknown> {
+  const p = nativePlugin();
+  if (!p || typeof p.setHdmiCec !== 'function') return Promise.resolve(null);
+  try {
+    return p.setHdmiCec({ enabled });
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+/** Keeps SharedPreferences `omp-cec` in step with the setting. Android TV only. */
+export function syncHdmiCec(set: (enabled: boolean) => Promise<unknown> = nativeSetHdmiCec): () => void {
+  let last: boolean | undefined;
+  return effect(() => {
+    const enabled = settings.value.hdmiCec;
+    if (enabled === last) return;
+    last = enabled;
+    void set(enabled);
+  });
+}
+
 export function syncOpenOnStartup(set: (enabled: boolean) => Promise<unknown> = nativeSetOpenOnStartup): () => void {
   let last: boolean | undefined;
   return effect(() => {

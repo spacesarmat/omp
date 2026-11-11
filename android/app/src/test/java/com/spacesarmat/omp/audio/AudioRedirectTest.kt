@@ -3,6 +3,7 @@ package com.spacesarmat.omp.audio
 import android.content.Intent
 import androidx.media3.datasource.DataSpec
 import com.spacesarmat.omp.ApkInstallTracker
+import com.spacesarmat.omp.ApkInstaller
 import com.spacesarmat.omp.CertPins
 import com.spacesarmat.omp.tls.TorrServerTrust
 import java.io.File
@@ -21,6 +22,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -105,6 +107,27 @@ class AudioRedirectTest {
         tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED).setData(android.net.Uri.parse("package:" + context.packageName)))
         assertFalse(apk.exists())
         assertEquals(1, completed)
+    }
+
+    @Test
+    fun watchPackageAcceptsOnly2160Player() {
+        assertEquals(setOf("tv.p2160.player"), ApkInstaller.watchPackage("tv.p2160.player"))
+        assertEquals(setOf("tv.p2160.player.debug"), ApkInstaller.watchPackage(" tv.p2160.player.debug "))
+        assertTrue(ApkInstaller.watchPackage("com.example.other").isEmpty())
+        assertTrue(ApkInstaller.watchPackage(null).isEmpty())
+    }
+
+    @Test
+    fun playerPackageDeletesTheApkAndDoesNotRelaunchOmp() {
+        val context = RuntimeEnvironment.getApplication()
+        val apk = File.createTempFile("p2160", ".apk")
+        var completed = 0
+        val tracker = ApkInstallTracker(context, apk, setOf("tv.p2160.player")) { completed++ }
+        tracker.onReceive(context, Intent(Intent.ACTION_PACKAGE_ADDED).setData(android.net.Uri.parse("package:tv.p2160.player")))
+        assertFalse(apk.exists())
+        assertEquals(1, completed)
+        assertNull(shadowOf(context).nextStartedActivity)
+        apk.delete()
     }
 
     @Test

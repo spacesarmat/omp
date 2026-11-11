@@ -75,6 +75,14 @@ function seasonTarget(list: Torrent[]): Torrent {
   return list.slice().sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0];
 }
 
+function seriesCountText(group: SeriesGroup, card: CatalogCard | null): string {
+  const owned = group.seasons.filter((s) => s !== NO_SEASON).length;
+  const announced = card ? card.seasons.map((s) => s.number).filter((n) => n > 0).length : 0;
+  const total = Math.max(owned, announced);
+  if (total > owned && total > 0) return tp('series.seasonsOf', total, { have: String(owned) });
+  return groupLabel(group);
+}
+
 function seasonName(n: number): string {
   return n === NO_SEASON ? t('series.noSeason') : t('library.season', { n });
 }
@@ -173,7 +181,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
           <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.named).title}</h1>
           {meta && <span class="m-muted m-small m-sh-meta">{meta}</span>}
           <SeriesPill card={card} />
-          <span class="m-muted m-small">{groupLabel(group)}</span>
+          <span class="m-muted m-small">{seriesCountText(group, card)}</span>
         </div>
       </div>
       {card.overview && <HeroOverview text={card.overview} />}
@@ -258,6 +266,7 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
 function DubRow({ group }: { group: SeriesGroup }) {
   const dub = useSeriesDub(group.members, client.value);
   const [open, setOpen] = useState(false);
+  const [about, setAbout] = useState(false);
   const pick = (value: string) => {
     setOpen(false);
     dub.pick(value).catch((e) => showToast(errorMessage(e)));
@@ -272,10 +281,14 @@ function DubRow({ group }: { group: SeriesGroup }) {
           {t('series.dub') + ': '}
           <b data-dub-value>{dub.text}</b>
         </span>
+        <button type="button" class="m-icon-btn" aria-expanded={about} aria-label={t('series.dubNote')} onClick={() => setAbout(!about)}>
+          i
+        </button>
         <button type="button" class="m-btn-text tm" data-code="P26.3" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? t('common.hide') : t('series.dubChange')}
         </button>
       </div>
+      {about && <span class="m-small m-muted">{t('series.dubNote')}</span>}
       {open && (
         <>
           {!onlyReset && (
@@ -294,7 +307,6 @@ function DubRow({ group }: { group: SeriesGroup }) {
               ))}
             </div>
           )}
-          <span class="m-small m-muted">{t('series.dubNote')}</span>
         </>
       )}
     </div>
@@ -459,7 +471,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           <Poster torrent={group.lead} class="m-poster-mini" />
           <div class="m-series-info">
             <h1 class="m-bar-title m-series-title">{lead.title}</h1>
-            <span class="m-muted m-small">{groupLabel(group)}</span>
+            <span class="m-muted m-small">{seriesCountText(group, card)}</span>
           </div>
         </div>
       )}
@@ -492,12 +504,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
                 aria-label={gap ? t('series.missingSeason', { n }) : undefined}
                 onClick={() => pick(n)}
               >
-                {gap && (
-                  <span class="m-chip-plus" aria-hidden="true">
-                    +
-                  </span>
-                )}
-                {seasonName(n)}
+                {gap ? t('series.findSeason', { n }) : seasonName(n)}
               </button>
             );
           })}

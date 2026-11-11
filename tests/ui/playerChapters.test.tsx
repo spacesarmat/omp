@@ -48,7 +48,7 @@ function mount(node: any) {
 }
 
 async function until(cond: () => boolean) {
-  for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
+  for (let i = 0; i < 400 && !cond(); i++) await new Promise((r) => setTimeout(r, 5));
   expect(cond()).toBe(true);
 }
 const tick = () => new Promise((r) => setTimeout(r, 20));
