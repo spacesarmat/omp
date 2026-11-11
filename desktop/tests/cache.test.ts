@@ -52,22 +52,28 @@ describe('node_modules CI caching', () => {
         expect(cache).toContain(`\${{ runner.os }}-node24-${scope}-modules-`);
       }
 
+      const gate = "needs.changes.outputs.desktop == 'true' && ";
       const cachedInstalls = steps.filter(
         (step) => field(step, 'run') === `npm install ${directory}--prefer-offline --no-audit --no-fund`,
       );
-      const cleanInstalls = steps.filter(
-        (step) =>
+      const cleanInstalls = steps.filter((step) => {
+        const cond = field(step, 'if');
+        return (
           field(step, 'run') === `npm ci ${directory}`.trim() &&
-          field(step, 'if') === `steps.${id}.outputs.cache-hit != 'true'`,
-      );
+          (cond === `steps.${id}.outputs.cache-hit != 'true'` ||
+            cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`)
+        );
+      });
       expect(cachedInstalls).toHaveLength(copies);
       expect(cleanInstalls).toHaveLength(copies);
 
       for (const step of cachedInstalls) {
-        expect(field(step, 'if')).toBe(`steps.${id}.outputs.cache-hit == 'true'`);
+        const cond = field(step, 'if');
+        expect(cond === `steps.${id}.outputs.cache-hit == 'true'` || cond === `${gate}steps.${id}.outputs.cache-hit == 'true'`).toBe(true);
       }
       for (const step of cleanInstalls) {
-        expect(field(step, 'if')).toBe(`steps.${id}.outputs.cache-hit != 'true'`);
+        const cond = field(step, 'if');
+        expect(cond === `steps.${id}.outputs.cache-hit != 'true'` || cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`).toBe(true);
       }
     }
 

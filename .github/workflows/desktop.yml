@@ -6,6 +6,7 @@ permissions:
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -19,17 +20,68 @@ on:
         default: false
         type: boolean
 
+# Cancel a superseded pull request. Push to main, tags and workflow_dispatch keep running.
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Pull requests run the smoke matrix only when desktop, the shared UI it bundles
+  # (src, mobile, design), lockfiles, vitest config, or this workflow change.
+  # The matrix still reports success when nothing matches, so a required check is not left pending.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 1
+      - name: Detect desktop paths
+        id: filter
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "desktop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          files="$(git diff --name-only "$BASE_SHA" HEAD)"
+          desktop=false
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            case "$file" in
+              desktop/*|src/*|mobile/*|design/*|tests/setup/*|package.json|package-lock.json|torrserver.version|tsconfig.json|vite.config.ts|.github/workflows/desktop.yml)
+                desktop=true
+                ;;
+            esac
+          done <<< "$files"
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
+          echo "desktop=$desktop"
+          printf '%s\n' "$files"
+
   smoke:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.result == 'success' }}
     strategy:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Skip unchanged desktop paths
+        if: needs.changes.outputs.desktop != 'true'
+        run: echo "Pull request does not change desktop inputs."
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        if: needs.changes.outputs.desktop == 'true'
         with:
           submodules: recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true'
         with:
           node-version: 24
           cache: npm
@@ -38,9 +90,11 @@ jobs:
             desktop/package-lock.json
       - name: Check Rust
         id: rust-version
+        if: needs.changes.outputs.desktop == 'true'
         shell: bash
         run: echo "version=$(rustc --version | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
       - name: Cache Cargo
+        if: needs.changes.outputs.desktop == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -52,6 +106,7 @@ jobs:
             ${{ runner.os }}-cargo-smoke-${{ steps.rust-version.outputs.version }}-
       - name: Cache root node_modules
         id: root-node-modules
+        if: needs.changes.outputs.desktop == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
@@ -60,6 +115,7 @@ jobs:
             ${{ runner.os }}-node24-root-modules-
       - name: Cache desktop node_modules
         id: desktop-node-modules
+        if: needs.changes.outputs.desktop == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: desktop/node_modules
@@ -67,39 +123,47 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node24-desktop-modules-
       - name: Install root dependencies
-        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        if: needs.changes.outputs.desktop == 'true' && steps.root-node-modules.outputs.cache-hit == 'true'
         run: npm install --prefer-offline --no-audit --no-fund
       - name: Install root dependencies exactly
-        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.desktop == 'true' && steps.root-node-modules.outputs.cache-hit != 'true'
         run: npm ci
       - name: Install desktop dependencies
-        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        if: needs.changes.outputs.desktop == 'true' && steps.desktop-node-modules.outputs.cache-hit == 'true'
         run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
       - name: Install desktop dependencies exactly
-        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.desktop == 'true' && steps.desktop-node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefix desktop
       - name: Verify lockfiles
+        if: needs.changes.outputs.desktop == 'true'
         run: git diff --exit-code -- package-lock.json desktop/package-lock.json
-      - run: npx vitest run desktop/tests
-      - run: npm run build:desktop
+      - name: Desktop unit tests
+        if: needs.changes.outputs.desktop == 'true'
+        run: npx vitest run desktop/tests
+      - name: Build desktop
+        if: needs.changes.outputs.desktop == 'true'
+        run: npm run build:desktop
       - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: needs.changes.outputs.desktop == 'true' && matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: matrix.os == 'windows-latest'
+        if: needs.changes.outputs.desktop == 'true' && matrix.os == 'windows-latest'
         with:
           python-version: '3.12'
       - name: Install peer test dependency
-        if: matrix.os == 'windows-latest'
+        if: needs.changes.outputs.desktop == 'true' && matrix.os == 'windows-latest'
         run: python -m pip install -r desktop/tests/requirements.txt
       - name: Rust tests
+        if: needs.changes.outputs.desktop == 'true'
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
 
 
+  # NSIS on push to main, version tags, and workflow_dispatch. Pull requests stop after smoke.
   package-windows:
     needs: smoke
+    if: ${{ !cancelled() && needs.smoke.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: windows-latest
     permissions:
       contents: write
@@ -250,6 +314,7 @@ jobs:
 
   package-macos:
     needs: smoke
+    if: ${{ !cancelled() && needs.smoke.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -372,6 +437,7 @@ jobs:
 
   package-linux:
     needs: smoke
+    if: ${{ !cancelled() && needs.smoke.result == 'success' && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
