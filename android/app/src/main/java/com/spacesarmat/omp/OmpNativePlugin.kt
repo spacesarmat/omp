@@ -1058,24 +1058,39 @@ class OmpNativePlugin : Plugin() {
             instance?.emitMagnet(link)
         }
 
-        /** magnet link from VIEW magnet:… or SEND text/plain containing "magnet:?". */
+        /** Magnet, or an http(s) .torrent link, from VIEW or SEND text/plain. */
         fun magnetFrom(intent: Intent?): String? {
             if (intent == null) return null
             return when (intent.action) {
-                Intent.ACTION_VIEW -> {
-                    val data = intent.data
-                    if (data?.scheme.equals("magnet", ignoreCase = true)) intent.dataString else null
-                }
-                Intent.ACTION_SEND -> {
-                    if (intent.type?.startsWith("text/plain") != true) return null
-                    val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: return null
-                    val start = text.indexOf("magnet:?", ignoreCase = true)
-                    if (start < 0) return null
-                    val end = text.indexOfFirst(start) { it.isWhitespace() }
-                    text.substring(start, end)
-                }
+                Intent.ACTION_VIEW -> linkFromView(intent)
+                Intent.ACTION_SEND -> linkFromSend(intent)
                 else -> null
             }
+        }
+
+        private val TORRENT_URL = Regex("https?://\\S+\\.torrent(?:\\?\\S*)?", RegexOption.IGNORE_CASE)
+
+        private fun torrentUrl(raw: String?): String? {
+            if (raw.isNullOrBlank()) return null
+            return TORRENT_URL.find(raw.trim())?.value
+        }
+
+        private fun linkFromView(intent: Intent): String? {
+            val scheme = intent.data?.scheme?.lowercase()
+            if (scheme == "magnet") return intent.dataString
+            if (scheme == "http" || scheme == "https") return torrentUrl(intent.dataString)
+            return null
+        }
+
+        private fun linkFromSend(intent: Intent): String? {
+            if (intent.type?.startsWith("text/plain") != true) return null
+            val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() ?: return null
+            val start = text.indexOf("magnet:?", ignoreCase = true)
+            if (start >= 0) {
+                val end = text.indexOfFirst(start) { it.isWhitespace() }
+                return text.substring(start, end)
+            }
+            return torrentUrl(text)
         }
 
         internal inline fun String.indexOfFirst(from: Int, pred: (Char) -> Boolean): Int {

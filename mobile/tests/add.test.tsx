@@ -420,6 +420,53 @@ describe('Add category', () => {
     expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
   });
 
+  it('a shared torrent url is added as that url', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount('https://x.test/a.torrent?dl=1');
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('https://x.test/a.torrent?dl=1');
+    click(byText('Добавить'));
+    await flush();
+    expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: 'https://x.test/a.torrent?dl=1' }));
+  });
+
+  it('the plus menu announces whether it is open', () => {
+    mount();
+    const plus = el.querySelector('.m-add-plus > button') as HTMLButtonElement;
+    expect(plus.getAttribute('aria-expanded')).toBe('false');
+    click(plus);
+    expect(plus.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('.m-add-plus')!.getAttribute('data-open')).toBe('1');
+  });
+
+  it('a torrent file without a server shows the reason beside the closed magnet field', async () => {
+    for (const s of servers.value.slice()) removeServer(s.id);
+    setActiveServer(null);
+    mount();
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['x'], 'a.torrent', { type: 'application/x-bittorrent' });
+    await act(async () => {
+      Object.defineProperty(input, 'files', { configurable: true, value: { 0: file, length: 1, item: () => file } });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
+    expect(el.querySelector('[data-file-error]')!.textContent).toBe('Сервер не выбран');
+  });
+
+  it('a failed torrent file shows the error outside the magnet field', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockRejectedValue(new Error('upload failed'));
+    mount();
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['x'], 'a.torrent', { type: 'application/x-bittorrent' });
+    await act(async () => {
+      Object.defineProperty(input, 'files', { configurable: true, value: { 0: file, length: 1, item: () => file } });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(el.querySelector('[data-file-error]')!.textContent).toBe('upload failed');
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
+  });
+
   it('a link arriving while the screen is open opens the field', () => {
     mount();
     expect(el.querySelector(MAGNET)).toBeNull();
@@ -1174,6 +1221,13 @@ describe('one «Поиск»: «Мои / Каталог / Источники»',
     act(() => render(null, el));
     mount('magnet:?xt=urn:btih:' + HASH);
     expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+  });
+
+  it('a magnet pasted on «Мои» opens «Источники» and the field', () => {
+    mountScope('mine');
+    typeQuery('magnet:?xt=urn:btih:' + HASH);
+    expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
   });
 });
 

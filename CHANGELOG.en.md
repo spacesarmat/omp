@@ -7,7 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
-- [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet opens add. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
+- [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
 
 ## 0.30.1-beta.3
 

@@ -2286,11 +2286,11 @@ html.m-hint-hold .m-hint { display: none; }
 .m-add-plus-menu { display: none; position: absolute; z-index: 3; left: 0; top: 40px; min-width: 220px; padding: 6px; border-radius: 12px; background: #252A35; }
 .m-add-plus[data-open='1'] .m-add-plus-menu { display: flex; flex-direction: column; }
 .m-add-plus-menu button { min-height: 40px; padding: 0 12px; border: none; background: transparent; color: var(--text); text-align: left; }
-.m-seeds-low { color: #E07A3D; }
+.m-rc-prominent.m-seeds-low { color: #E07A3D; }
 .m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
 .m-rc-bottom > .m-rc-btn { display: none; }
 .m-rc-watch, .m-rc-more { position: relative; z-index: 1; pointer-events: auto; }
-.m-rc-watch { flex: 1 1 auto; min-width: 0; }
+.m-rc-watch { flex: 1 1 auto; min-width: 0; min-height: 40px; }
 .m-rc-prominent { font-size: 14px; font-weight: 700; color: var(--text); }
 .m-result-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; background: var(--panel); }
 .m-result-group-title { font-weight: 700; }

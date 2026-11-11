@@ -9,7 +9,9 @@ describe('search intake', () => {
     expect(intakeKind('dark matter')).toBeNull();
   });
 
-  it('turns a hash into a magnet', () => {
+  it('turns a hash into a magnet and keeps a torrent url', () => {
     expect(normalizeLink('0123456789abcdef0123456789abcdef01234567')).toBe('magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567');
+    expect(normalizeLink('https://x.test/a.torrent?dl=1')).toBe('https://x.test/a.torrent?dl=1');
+    expect(normalizeLink('https://x.test/page')).toBeNull();
   });
 });
