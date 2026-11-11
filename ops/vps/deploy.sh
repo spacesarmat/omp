@@ -844,6 +844,18 @@ recreate_restart_helper() {
   compose --profile restart up -d --no-deps --force-recreate docker-restart || return 1
 }
 
+stop_restart_container() {
+  if ! restart_container_running; then
+    return 0
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "would stop ${RESTART_CONTAINER}"
+    return 0
+  fi
+  log "stopping ${RESTART_CONTAINER}"
+  docker stop "$RESTART_CONTAINER" >/dev/null || return 1
+}
+
 dht_current_image_id() {
   local raw
   raw="$(docker image inspect --format '{{.Id}}' "$DHT_IMAGE" 2>/dev/null)" || {
@@ -1620,7 +1632,7 @@ restore_dht_service() {
 
 restore_backup() {
   local backup="$1"
-  local caddy_diff docker_diff compose_diff dht_diff restart_diff reload_failed image_failed dht_failed billing_restarted
+  local caddy_diff docker_diff compose_diff dht_diff restart_diff reload_failed image_failed dht_failed restart_failed billing_restarted
   [[ -d "$backup" ]] || die "backup not found: ${backup}"
   [[ -f "$backup/backup.manifest" ]] || die "not a deploy backup: ${backup}"
   read_manifest "$backup/backup.manifest"
@@ -1631,6 +1643,7 @@ restore_backup() {
   dht_diff=0
   restart_diff=0
   reload_failed=0
+  restart_failed=0
   image_failed=0
   dht_failed=0
   billing_restarted=0
@@ -1699,7 +1712,18 @@ restore_backup() {
     restore_one_dir "$backup" docker-restart "$MANIFEST_HAD_RESTART" restart || return 1
   fi
   if [[ "$restart_diff" -eq 1 ]]; then
-    recreate_restart_helper || return 1
+    # An older compose has no docker-restart service. Stop by name so billing restore still runs.
+    if [[ -f "$ROOT/docker-compose.yml" && ! -L "$ROOT/docker-compose.yml" ]] && grep -Eq '^[[:space:]]*docker-restart:[[:space:]]*(#.*)?$' "$ROOT/docker-compose.yml"; then
+      if ! recreate_restart_helper; then
+        log "docker-restart recreate failed"
+        restart_failed=1
+      fi
+    else
+      if ! stop_restart_container; then
+        log "docker-restart stop failed"
+        restart_failed=1
+      fi
+    fi
   fi
   # A failed Caddy reload must not skip the image restore. Each step finishes
   # before health checks, and any failure is still a failed rollback.
@@ -1743,7 +1767,7 @@ restore_backup() {
   if [[ "$DRY_RUN" -eq 1 ]]; then
     return 0
   fi
-  if [[ "$reload_failed" -eq 1 || "$image_failed" -eq 1 || "$dht_failed" -eq 1 ]]; then
+  if [[ "$reload_failed" -eq 1 || "$image_failed" -eq 1 || "$dht_failed" -eq 1 || "$restart_failed" -eq 1 ]]; then
     return 1
   fi
   health_checks || return 1
