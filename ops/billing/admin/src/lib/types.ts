@@ -22,6 +22,10 @@ export type PaymentRow = {
   label?: string;
   operationId?: string;
   error?: string;
+  /** Charged sum before the YooMoney fee, when the notice had it. */
+  charged?: number | null;
+  /** Fee kept by YooMoney: charged minus the amount that landed. */
+  fee?: number | null;
 };
 
 export type ProblemRow = {
@@ -145,6 +149,8 @@ export type HomeData = {
     maxUses: number;
     revoked: boolean;
     createdAt?: number;
+    expiresAt?: number;
+    discountPercent?: number;
   }[];
   fails?: { at?: number; atText: string; reason: string; deviceId: string }[];
   sessions?: { id: string; lastSeen?: number; createdAt?: number; actor?: FeedActor }[];
@@ -169,6 +175,7 @@ export type BackupStatus = {
   totalBytes: number;
   stale: boolean;
   lastError: string;
+  verify?: { ok: boolean; at?: number; error?: string; name?: string } | null;
 };
 
 export type UserCode = {
@@ -220,4 +227,5 @@ export type UserData = {
   devices?: DeviceRow[];
   pending?: PendingPayment[];
   payments?: PaymentRow[];
+  watch?: { name: string; at: number; version?: string; platform?: string }[];
 };

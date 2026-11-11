@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -86,6 +86,8 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
   const [count, setCount] = useState('1');
   const [bonusSlots, setBonusSlots] = useState('0');
   const [bonusDays, setBonusDays] = useState('');
+  const [expiresDays, setExpiresDays] = useState('');
+  const [discountPercent, setDiscountPercent] = useState('0');
   return (
     <Card>
       <CardHeader>
@@ -114,6 +116,14 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <Input type="number" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
           </label>
           <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Истекает, дней</span>
+            <Input type="number" min={0} placeholder="пусто = без срока" value={expiresDays} onChange={(e) => setExpiresDays(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Скидка, %</span>
+            <Input type="number" min={0} max={100} value={discountPercent} onChange={(e) => setDiscountPercent(e.target.value)} />
+          </label>
+          <label className="space-y-1 text-sm">
             <span className="text-muted-foreground">Количество</span>
             <Input type="number" min={1} max={100} value={count} onChange={(e) => setCount(e.target.value)} />
           </label>
@@ -121,7 +131,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
             <Button
               onClick={() => {
                 const n = Number(count) || 1;
-                void run('/admin/promo', { code, days, maxUses, count: n, bonusSlots, bonusDays }).then((res) => {
+                void run('/admin/promo', { code, days, maxUses, count: n, bonusSlots, bonusDays, expiresDays, discountPercent }).then((res) => {
                   const list = res?.extra?.promos || [];
                   if (list.length > 1) {
                     downloadCsv(
@@ -524,6 +534,8 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['botUsername', 'Имя бота'],
       ['publicOrigin', 'Публичный адрес'],
       ['adminTelegramIds', 'Telegram id администраторов'],
+      ['adminReaders', 'Telegram id только для просмотра'],
+      ['betaPercent', 'Процент беты (0-100)'],
     ],
   },
   {
@@ -594,6 +606,11 @@ export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
       {' · всего ' + backup.count + ' (' + bytesText(backup.totalBytes) + ')'}
       {backup.stale ? <span className="text-destructive"> · бэкап устарел</span> : null}
       {backup.lastError ? <span className="text-destructive"> · ошибка: {backup.lastError}</span> : null}
+      {backup.verify ? (
+        <span className={backup.verify.ok ? '' : 'text-destructive'}>
+          {' · проверка архива: ' + (backup.verify.ok ? 'список читается' : backup.verify.error || 'ошибка')}
+        </span>
+      ) : null}
     </CardDescription>
   );
 }
@@ -615,10 +632,16 @@ export function SettingsCard({
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
+  const dirty = useRef(false);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
   const [lower, setLower] = useState<BaseImpact | null>(null);
-  const save = (confirm: boolean) => run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) });
+  const save = (confirm: boolean) =>
+    run('/admin/settings', { ...form, adminNotify: notify ? 'true' : 'false', ...(confirm ? { confirm: 'yes' } : {}) }).then((res) => {
+      if (!res?.flash?.error) dirty.current = false;
+      return res;
+    });
   useEffect(() => {
+    if (dirty.current) return;
     const o: Record<string, string> = {};
     for (const group of SETTING_GROUPS) {
       for (const [k] of group.fields) if (!SECRET_KEYS.has(k)) o[k] = String(settings[k] ?? '');
@@ -667,13 +690,27 @@ export function SettingsCard({
               ) : (
                 <div key={name} className="space-y-1">
                   <Label htmlFor={name}>{label}</Label>
-                  <Input id={name} value={form[name] || ''} onChange={(e) => setForm({ ...form, [name]: e.target.value })} />
+                  <Input
+                    id={name}
+                    value={form[name] || ''}
+                    onChange={(e) => {
+                      dirty.current = true;
+                      setForm({ ...form, [name]: e.target.value });
+                    }}
+                  />
                 </div>
               ),
             )}
             {group.title === 'Бот' ? (
               <label className="flex items-center gap-2 text-sm md:col-span-2">
-                <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={notify}
+                  onChange={(e) => {
+                    dirty.current = true;
+                    setNotify(e.target.checked);
+                  }}
+                />
                 Уведомлять администраторов в Telegram (оплата, ошибка оплаты, падение сервиса, новое сообщение поддержки)
               </label>
             ) : null}

@@ -76,6 +76,7 @@ export function createDesktopNative(bridge: DesktopBridge = createBridge()): Des
     audioState: async () => null,
     takePendingAudioOpen: async () => null,
     takePendingMagnet: async () => null,
+    takeNativeCrashes: async () => '',
     takePendingUpdateResult: () => updateApi.takePendingUpdateResult(),
     deviceAbiKey: async () => null,
     canInstallApks: async () => bridge.invoke<boolean>('update_supported'),

@@ -87,13 +87,22 @@ www.omp-player.online {
 }
 
 billing.omp-player.online {
-	encode gzip
 	import tls_protocols
 	import security_headers
 	handle_errors {
 		import security_headers
 	}
-	reverse_proxy billing:8787
+	# SSE must not be gzipped or buffered (Cloudflare honors no-transform).
+	@sse path /admin/api/events
+	handle @sse {
+		reverse_proxy billing:8787 {
+			flush_interval -1
+		}
+	}
+	handle {
+		encode gzip
+		reverse_proxy billing:8787
+	}
 }
 
 # INDEXER_HASH = bcrypt from: caddy hash-password --plaintext '…'

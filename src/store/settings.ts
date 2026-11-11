@@ -25,6 +25,8 @@ export interface AppSettings {
   updateCheck: boolean;
   /** «Получать бета-версии»: the beta feed (update-beta.json); off = a beta stays until the next release. */
   betaUpdates: boolean;
+  /** Send install/login steps and, later, crash reports. On by default. Heartbeat of an already linked device stays. */
+  diagnostics: boolean;
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
@@ -117,6 +119,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   librarySort: 'new',
   updateCheck: true,
   betaUpdates: false,
+  diagnostics: true,
   historyFilter: 'all',
   playerEngine: 'auto',
   videoPlayer: 'builtin',

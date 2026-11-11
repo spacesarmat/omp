@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 fn main() {
+    omp_desktop::commands::install_native_crash_hook();
     let app = tauri::Builder::default()
         .manage(HttpClient::new())
         .setup(|app| {
@@ -39,7 +40,8 @@ fn main() {
             commands::update_check,
             commands::update_download,
             commands::update_apply,
-            commands::update_pending_result
+            commands::update_pending_result,
+            commands::take_native_crashes
         ])
         .build(tauri::generate_context!())
         .expect("error while building OMP desktop");
