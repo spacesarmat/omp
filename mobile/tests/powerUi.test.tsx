@@ -3,6 +3,7 @@ import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { IrPanel } from '../src/ui/IrPanel';
 import { MacForm } from '../src/ui/MacForm';
+import { NetMacField } from '../src/ui/NetMacField';
 import { PowerBanner } from '../src/ui/PowerBanner';
 
 let el: HTMLElement;
@@ -55,6 +56,23 @@ describe('manual MAC', () => {
     mac.dispatchEvent(new Event('input', { bubbles: true }));
     click('[data-code="P10.2"]');
     expect(onAdd).toHaveBeenCalledWith({ name: 'Зал', mac: 'aa:bb:cc:dd:ee:ff', ip: undefined });
+  });
+});
+
+describe('MAC on a discovered TV', () => {
+  it('rejects a bad MAC and saves a good one on that row', () => {
+    const onSave = vi.fn(() => true);
+    mount(<NetMacField id="net-mac-google" onSave={onSave} />);
+    const mac = el.querySelector('input[name="mac"]') as HTMLInputElement;
+    mac.value = 'nope';
+    mac.dispatchEvent(new Event('input', { bubbles: true }));
+    click('[data-code="P10.2"]');
+    expect(onSave).not.toHaveBeenCalled();
+    expect(el.textContent).toContain('MAC');
+    mac.value = 'AA:BB:CC:DD:EE:FF';
+    mac.dispatchEvent(new Event('input', { bubbles: true }));
+    click('[data-code="P10.2"]');
+    expect(onSave).toHaveBeenCalledWith('aa:bb:cc:dd:ee:ff');
   });
 });
 

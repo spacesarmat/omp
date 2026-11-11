@@ -2467,6 +2467,7 @@ export const ru = {
     badMac: 'Неверный MAC-адрес',
     macName: 'Название',
     macLabel: 'MAC-адрес',
+    macForWake: 'Чтобы включать этот телевизор, укажите MAC',
     macIp: 'IP, если известен',
     macAdd: 'Добавить',
     macSaved: 'Устройство добавлено',

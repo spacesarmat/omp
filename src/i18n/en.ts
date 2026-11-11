@@ -2418,6 +2418,7 @@ export const en: EnDict<typeof ru> = {
     badMac: 'Invalid MAC address',
     macName: 'Name',
     macLabel: 'MAC address',
+    macForWake: 'Enter the MAC to turn this TV on',
     macIp: 'IP, if known',
     macAdd: 'Add',
     macSaved: 'Device added',

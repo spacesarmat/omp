@@ -9,7 +9,8 @@ import { forgetButton, irProfiles, rememberButton } from '../tv/power/irProfile'
 import { manualDevices } from '../tv/power/manual';
 import { captureLearner, learnerOrigin, type LearnerHttp } from '../tv/power/learn';
 import { forgetNetToken, loadNetToken, saveNetToken } from '../tv/power/tokens';
-import { clearNetToken, markNetToken, netTvs, type NetDevice } from '../tv/power/netStore';
+import { attachNetMac, clearNetToken, markNetToken, netTvs, type NetDevice } from '../tv/power/netStore';
+import { NetMacField } from './NetMacField';
 import { samsungKey, samsungPlan, samsungSocketPath, samsungToken } from '../tv/power/protocols';
 import { switchInput, tvKind } from '../tv/tvClient';
 import { BoxCodeSheet } from './BoxCodeSheet';
@@ -206,9 +207,13 @@ export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInp
       {netTvs.value.map((d) => (
         <div key={d.id} class="m-tv-row">
           <span>{d.name}</span>
-          <button type="button" class="m-btn m-btn-primary m-btn-sm tm" data-code="P08.2" onClick={() => void power(d)}>
-            {t('remote.powerOn')}
-          </button>
+          {d.mac ? (
+            <button type="button" class="m-btn m-btn-primary m-btn-sm tm" data-code="P08.2" onClick={() => void power(d)}>
+              {t('remote.powerOn')}
+            </button>
+          ) : (
+            <NetMacField id={'net-mac-' + d.id.replace(/[^a-z0-9]+/gi, '-')} onSave={(mac) => attachNetMac(d.id, mac)} />
+          )}
           <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_VOLUP') : googleKey(d, 'VOLUMEUP')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
             {t('remote.volUp')}
           </button>

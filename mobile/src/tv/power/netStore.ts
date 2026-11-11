@@ -56,10 +56,31 @@ export function reloadNet(): void {
   netTvs.value = load();
 }
 
+/** A later scan must not wipe a MAC the user typed, or a broadcast and token flag already stored. */
+export function mergeNet(prev: NetDevice | undefined, next: NetDevice): NetDevice {
+  if (!prev) return next;
+  const merged: NetDevice = { ...next };
+  if (!merged.mac && prev.mac) merged.mac = prev.mac;
+  if (!merged.broadcast && prev.broadcast) merged.broadcast = prev.broadcast;
+  if (merged.tokenStored !== true && prev.tokenStored) merged.tokenStored = true;
+  return merged;
+}
+
 export function saveNet(d: NetDevice): void {
-  const next = sanitizeNet([d].concat(netTvs.value.filter((x) => x.id !== d.id)));
+  const prev = netTvs.value.find((x) => x.id === d.id);
+  const next = sanitizeNet([mergeNet(prev, d)].concat(netTvs.value.filter((x) => x.id !== d.id)));
   netTvs.value = next;
   persist();
+}
+
+/** Writes a MAC onto a TV found on the network. False when the address is not a MAC or the TV is unknown. */
+export function attachNetMac(id: string, mac: string): boolean {
+  const norm = normalizeMac(mac);
+  if (!norm) return false;
+  const current = netTvs.value.find((d) => d.id === id);
+  if (!current) return false;
+  saveNet({ ...current, mac: norm });
+  return true;
 }
 
 export function markNetToken(id: string): void {
