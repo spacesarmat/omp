@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] On a pull request, desktop CI installs apt packages, Python and cargo test only when desktop/src-tauri, Cargo files, this workflow or the Rust test inputs change. Push, tags and manual runs still always run them. Apt packages are cached and installed with --no-install-recommends, the man-db trigger is disabled, mirror retries are capped, and the apt step times out after 10 minutes. The CI apt install (shellcheck, rsync) does the same
 - [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
 
 ## 0.30.0

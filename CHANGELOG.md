@@ -4,6 +4,7 @@
 
 ## Не выпущено
 
+- [tech] Desktop CI на PR ставит apt, Python и cargo test только если менялись desktop/src-tauri, файлы Cargo, этот workflow или входные файлы Rust-тестов. Push, тег и ручной запуск по-прежнему гоняют их всегда. Пакеты apt кешируются и ставятся с --no-install-recommends, триггер man-db выключен, повтор запроса к зеркалу ограничен, у шага apt таймаут 10 минут. То же для apt в CI (shellcheck, rsync)
 - [tech] Сайт omp-player.online и страница загрузки отдают стабильные сборки Windows (установщик и portable), macOS (Apple Silicon и Intel) и Linux (AppImage и deb). Подписи «бета» у компьютера убраны. Кнопки читают фиды update-windows.json, update-macos.json и update-linux.json: их уже пишет desktop workflow. Бета в том же фиде стабильные кнопки не подменяет, поэтому следующая стабильная сборка не требует правки ссылок. Основные кнопки в одном ряду стоят на одной линии
 
 ## 0.30.0
