@@ -39,6 +39,7 @@ export function OmpJackettCard() {
   const [session, setSession] = useState(billingSession());
   const [account, setAccount] = useState<BillingAccount | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
   const [cryptoBusy, setCryptoBusy] = useState(false);
   const [cryptoError, setCryptoError] = useState('');
   const [cryptoLinks, setCryptoLinks] = useState<{ asset: string; amount: string; webUrl: string; url: string }[]>([]);
@@ -226,38 +227,51 @@ export function OmpJackettCard() {
                 ))}
               </div>
             ) : null}
-            <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+            <div class="m-src-row">
               <button
                 type="button"
                 class="m-btn m-btn-primary"
                 data-action="renew"
-                onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}
+                aria-expanded={payOpen}
+                onClick={() => setPayOpen(!payOpen)}
               >
                 {t('sources.billing.renew')}
               </button>
-              <button
-                type="button"
-                class="m-btn m-btn-secondary"
-                data-action="crypto"
-                disabled={cryptoBusy}
-                onClick={() => {
-                  setCryptoBusy(true);
-                  setCryptoError('');
-                  void fetchCryptoLinks(phoneSourceContext()).then(
-                    (links) => {
-                      setCryptoLinks(links);
-                      setCryptoBusy(false);
-                    },
-                    (e: unknown) => {
-                      setCryptoLinks([]);
-                      setCryptoError(e instanceof Error ? e.message : t('sources.billing.cryptoDown'));
-                      setCryptoBusy(false);
-                    },
-                  );
-                }}
-              >
-                {cryptoBusy ? t('sources.billing.cryptoBusy') : t('sources.billing.crypto')}
-              </button>
+            </div>
+            {payOpen && (
+              <div class="m-src-row" data-pay-methods>
+                <button type="button" class="m-btn m-btn-secondary" data-pay="card" onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}>
+                  {t('sources.billing.payCard')}
+                </button>
+                <button type="button" class="m-btn m-btn-secondary" data-pay="stars" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+                  {t('sources.billing.payStars')}
+                </button>
+                <button
+                  type="button"
+                  class="m-btn m-btn-secondary"
+                  data-pay="crypto"
+                  disabled={cryptoBusy}
+                  onClick={() => {
+                    setCryptoBusy(true);
+                    setCryptoError('');
+                    void fetchCryptoLinks(phoneSourceContext()).then(
+                      (links) => {
+                        setCryptoLinks(links);
+                        setCryptoBusy(false);
+                      },
+                      (e: unknown) => {
+                        setCryptoLinks([]);
+                        setCryptoError(e instanceof Error ? e.message : t('sources.billing.cryptoDown'));
+                        setCryptoBusy(false);
+                      },
+                    );
+                  }}
+                >
+                  {cryptoBusy ? t('sources.billing.cryptoBusy') : t('sources.billing.payCrypto')}
+                </button>
+              </div>
+            )}
+            <div class="m-src-row">
               <button
                 type="button"
                 class="m-btn m-btn-secondary"

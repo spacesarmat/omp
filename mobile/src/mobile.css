@@ -1975,7 +1975,8 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-cal-dot.mine { background: var(--accent); }
 .m-cal-more { display: block; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--accent); }
 .m-cal-dayhead { font-weight: 700; }
-.m-cal-today { align-self: flex-start; margin: 8px 0; }
+.m-promo-row { align-items: flex-end; }
+.m-promo-apply:disabled { background: #252A35; color: var(--muted); opacity: 1; }
 .m-sub-quality { display: flex; }
 .m-sub-quality .m-seg-btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; }
 .m-cal-picked { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

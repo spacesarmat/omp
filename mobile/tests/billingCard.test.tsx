@@ -9,7 +9,7 @@ let site: FakeSite;
 vi.mock('../src/searchContext', () => ({ phoneSourceContext: () => site.ctx }));
 
 import { OmpJackettCard } from '../src/screens/OmpJackettCard';
-import { billingNotice, billingSession, setBillingNotice } from '../../src/billing/session';
+import { billingNotice, billingSession, saveBillingSession, setBillingNotice } from '../../src/billing/session';
 import { REFRESH_SECRET } from '../../src/billing/tokens';
 import { clearBilling } from '../../src/sources/ompJackett';
 
@@ -74,5 +74,17 @@ describe('OMP subscription card', () => {
     await flush();
     const notice = el.querySelector('[data-notice="keystore"]');
     expect(notice && notice.textContent).toBe('Ключ подписки не сохранился на телефоне - введите код заново');
+  });
+
+  it('Продлить opens card, stars and crypto, with no standalone crypto button', async () => {
+    saveBillingSession({ token: 'legacy-token', paidUntil: 2e12 });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.querySelector('[data-action="crypto"]')).toBeNull();
+    expect(el.querySelector('[data-pay-methods]')).toBeNull();
+    const renew = el.querySelector('[data-action="renew"]') as HTMLButtonElement;
+    expect(renew.textContent).toBe('Продлить');
+    act(() => renew.click());
+    expect(Array.from(el.querySelectorAll('[data-pay-methods] button')).map((b) => b.textContent)).toEqual(['Карта', 'Звёзды', 'Крипта']);
   });
 });

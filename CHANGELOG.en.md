@@ -10,6 +10,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
 - [phone] Calendar lists days, Earlier stays folded, and the aired/today plates are gone. Month view marks today with a yellow circle, the selected day in gray, up to three dots plus a count, and a yellow dot for a subscription. A subscription that is any quality and best-only reads "best"
 - [phone] Remote: the settings button is a gear, not a sun. HDMI inputs stay hidden until the TV is connected
+- [phone] Account: Renew opens card, stars and crypto. There is no separate Crypto button. The promo field and Activate sit on one row, and an empty button stays dark
 
 ## 0.30.1-beta.3
 
