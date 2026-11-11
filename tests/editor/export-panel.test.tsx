@@ -5,6 +5,7 @@ import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { ExportPanel } from '../../editor/src/components/ExportPanel';
 import { EditorApiError, type EditorClient } from '../../editor/src/client';
+import type { LayoutIssue } from '../../design/layout-checks';
 
 const BASE = '0000000000000000000000000000000000000000';
 let host: HTMLDivElement;
@@ -101,5 +102,44 @@ describe('ExportPanel', () => {
     controller.setView({ target: 'desktop-macos', screenId: 'settings', format: 'landscape', language: 'ru' });
     act(() => render(h(ExportPanel, { controller }), host));
     expect(host.textContent).toContain('package unavailable');
+  });
+
+  it('blocks export until geometry warnings are explicitly confirmed', async () => {
+    const exportDraft = vi.fn(async (draft: typeof controller.draft) => ({
+      baseCommit: draft.baseCommit,
+      files: ['design/themes/default.json'],
+      releaseIntents: draft.theme.releaseIntents,
+    }));
+    const client: EditorClient = {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft,
+    };
+    const issues: LayoutIssue[] = [{ code: 'SAFE_AREA', nodeId: 'edge', severity: 'warning', message: 'outside the TV safe area' }];
+    const onGeometryConfirm = vi.fn();
+    act(() => render(h(ExportPanel, { controller, client, issues, geometryConfirmed: false, onGeometryConfirm }), host));
+    const exportButton = () => host.querySelector<HTMLButtonElement>('[data-action="export"]')!;
+    expect(exportButton().disabled).toBe(true);
+    const checkbox = host.querySelector<HTMLInputElement>('[data-testid="confirm-geometry-warnings"]')!;
+    act(() => {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onGeometryConfirm).toHaveBeenCalledWith(true);
+    act(() => render(h(ExportPanel, { controller, client, issues, geometryConfirmed: true, onGeometryConfirm }), host));
+    expect(exportButton().disabled).toBe(false);
+    await act(async () => {
+      exportButton().click();
+    });
+    await vi.waitFor(() => expect(exportDraft).toHaveBeenCalledOnce(), { timeout: 1000 });
+  });
+
+  it('keeps export enabled without geometry warnings and hides the confirmation', () => {
+    act(() => render(h(ExportPanel, { controller, issues: [], geometryConfirmed: false, onGeometryConfirm: vi.fn() }), host));
+    expect(host.querySelector<HTMLButtonElement>('[data-action="export"]')!.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="confirm-geometry-warnings"]')).toBeNull();
   });
 });

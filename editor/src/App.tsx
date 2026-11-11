@@ -3,6 +3,7 @@ import type { InteractionTrace } from '../../design/interaction.ts';
 import type { DesignTarget, DesignFormat, DesignState, LayoutPlacement } from '../../design/schema.ts';
 import { createDefaultTheme } from '../../design/defaults';
 import { getLayoutPlacement } from '../../design/layout';
+import { checkLayoutAccessibility, type GeometrySnapshot } from '../../design/layout-checks';
 import type { LayoutNodeDescriptor } from '../../design/layoutDom.ts';
 import { isDesignElementAvailable } from '../../design/catalog';
 import { DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from '../../desktop/src/shell/routes';
@@ -72,6 +73,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const [selection, setSelection] = useState<SelectionState>({ ids: [], anchorId: null });
   const [layoutNodes, setLayoutNodes] = useState<LayoutNodeDescriptor[]>([]);
   const [layoutRects, setLayoutRects] = useState<Record<string, LayoutRect>>({});
+  const [geometrySnapshot, setGeometrySnapshot] = useState<GeometrySnapshot | null>(null);
+  const [geometryConfirmed, setGeometryConfirmed] = useState(false);
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
   const [serverConnected, setServerConnected] = useState(false);
   const [previewMode, setPreviewMode] = useState<'before' | 'after'>('after');
@@ -95,6 +98,20 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     setSelection((prev) => reduceSelection(prev, { type: 'prune', liveIds: [...liveIds] }));
   }, [layoutNodes, draft.theme.layout]);
   const layoutContext = { target: draft.target, screenId: draft.screenId, format: draft.format };
+  const layoutIssues = useMemo(
+    () => (geometrySnapshot ? checkLayoutAccessibility(geometrySnapshot, draft.theme) : []),
+    [geometrySnapshot, draft.theme],
+  );
+  const geometryWarningKey = layoutIssues
+    .filter((issue) => issue.severity === 'warning')
+    .map((issue) => `${issue.code}:${issue.nodeId}`)
+    .sort()
+    .join('|');
+  useEffect(() => {
+    // A confirmation covers exactly the warnings it was given: any change in the warning set
+    // (including their disappearance) revokes it.
+    setGeometryConfirmed(false);
+  }, [geometryWarningKey]);
   const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>) => {
     setLayoutNodes(nodes);
     setLayoutRects(rects);
@@ -447,6 +464,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             onNavigate={(screenId) => setView({ screenId })}
             onTrace={setTrace}
             onNodesChange={handleNodesChange}
+            onGeometryChange={setGeometrySnapshot}
             onSelectNode={handleSelectNode}
             onMoveNode={handleMoveNode}
             onPlaceNode={handlePlaceNode}
@@ -496,7 +514,13 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" readOnly={!previewEditable} /><FlowMap flow={draft.flow} /></>}
             {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
-            <ExportPanel controller={controller} client={workspaceClient} />
+            <ExportPanel
+              controller={controller}
+              client={workspaceClient}
+              issues={layoutIssues}
+              geometryConfirmed={geometryConfirmed}
+              onGeometryConfirm={setGeometryConfirmed}
+            />
           </div>
           <div class="editor-inspector-status"><span class="editor-status-dot" />{trace.length ? `Действий: ${trace.length}` : 'Все изменения сохраняются локально'}</div>
         </aside>

@@ -1336,6 +1336,70 @@ h2 svg {
   font-size: 9px;
 }
 
+.editor-accessibility {
+  margin: 0 0 12px;
+  padding-top: 12px;
+  border-top: 1px solid #3b3b3b;
+}
+
+.editor-accessibility h3 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.editor-accessibility-summary {
+  margin: 0 0 8px;
+  color: var(--editor-muted);
+  font-size: 10px;
+}
+
+.editor-accessibility ul {
+  margin: 0 0 4px;
+  padding-left: 16px;
+}
+
+.editor-accessibility li {
+  margin-bottom: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.editor-accessibility li[data-severity="error"] {
+  color: #ff8585;
+}
+
+.editor-accessibility li[data-severity="warning"] {
+  color: #e5c07b;
+}
+
+.editor-accessibility code {
+  color: #a7d7ff;
+  font-size: 9px;
+}
+
+.editor-issue-badge {
+  margin-right: 4px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #333333;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.editor-accessibility-confirm {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 0;
+  color: var(--editor-muted);
+  font-size: 10px;
+}
+
+.editor-accessibility-confirm input {
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
 .editor-notice,
 .editor-chain,
 .editor-inspector-status {

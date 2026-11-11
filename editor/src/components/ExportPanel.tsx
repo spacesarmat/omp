@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ReleaseIntent } from '../../../design/schema.ts';
+import type { LayoutIssue } from '../../../design/layout-checks.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { createEditorClient, EditorApiError, formatEditorIssue, type EditorClient } from '../client';
+import { AccessibilityPanel } from './AccessibilityPanel';
 import type { ExportResult } from '../../export.mjs';
 
 export interface ExportPanelProps {
   controller: DraftController;
   client?: EditorClient;
+  issues?: LayoutIssue[];
+  geometryConfirmed?: boolean;
+  onGeometryConfirm?: (confirmed: boolean) => void;
 }
 
-export function ExportPanel({ controller, client }: ExportPanelProps) {
+export function ExportPanel({ controller, client, issues: accessibilityIssues, geometryConfirmed = false, onGeometryConfirm }: ExportPanelProps) {
   const draft = useDraftController(controller);
   const [version, setVersion] = useState('0.20.12-beta.3');
   const [channel, setChannel] = useState<'beta' | 'stable'>('beta');
@@ -51,6 +56,8 @@ export function ExportPanel({ controller, client }: ExportPanelProps) {
       setBusy(false);
     }
   };
+  const geometryWarnings = (accessibilityIssues ?? []).some((issue) => issue.severity === 'warning');
+  const geometryBlocked = geometryWarnings && !geometryConfirmed;
   return (
     <section class="editor-export">
       <h3>Релиз и экспорт</h3>
@@ -66,7 +73,17 @@ export function ExportPanel({ controller, client }: ExportPanelProps) {
         </select>
       </label>
       <button type="button" data-action="save-release" onClick={saveIntent}>Сохранить намерение</button>
-      <button type="button" data-action="export" disabled={busy} onClick={runExport}>{busy ? 'Экспорт...' : 'Экспортировать'}</button>
+      {accessibilityIssues && (
+        <AccessibilityPanel
+          issues={accessibilityIssues}
+          geometryConfirmed={geometryConfirmed}
+          onGeometryConfirm={(confirmed) => onGeometryConfirm?.(confirmed)}
+        />
+      )}
+      {geometryWarnings && !geometryConfirmed && (
+        <p class="editor-notice" data-testid="geometry-confirm-notice">Экспорт ожидает подтверждения предупреждений геометрии</p>
+      )}
+      <button type="button" data-action="export" disabled={busy || geometryBlocked} onClick={runExport}>{busy ? 'Экспорт...' : 'Экспортировать'}</button>
       {error && (
         <div class="editor-export-error" ref={errorRef} role="alert" tabIndex={-1}>
           <strong>{error}</strong>

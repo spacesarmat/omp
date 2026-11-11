@@ -3,6 +3,7 @@ import type { InteractionTrace } from '../../../design/interaction.ts';
 import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
 import { collectLayoutNodes, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
+import { collectGeometrySnapshot, type GeometrySnapshot } from '../../../design/layout-checks.ts';
 import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
@@ -25,6 +26,7 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   onNavigate(route: DesktopRouteId): void;
   onTrace(trace: InteractionTrace[]): void;
   onNodesChange(nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>): void;
+  onGeometryChange?(snapshot: GeometrySnapshot | null): void;
   onSelectNode(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
   onPlaceNode(placement: LayoutPlacement): void;
@@ -98,6 +100,12 @@ export function PreviewPane(props: PreviewPaneProps) {
     }
     setCollected({ nodes, rects });
     props.onNodesChange(nodes, rects);
+    props.onGeometryChange?.(collectGeometrySnapshot(body, {
+      target: props.target,
+      screenId: props.route,
+      format: props.format,
+      viewport,
+    }));
   };
 
   const send = (command: PreviewCommandInput) => {
