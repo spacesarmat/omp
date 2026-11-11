@@ -4,8 +4,9 @@ import type { LayoutIssue } from '../../../design/layout-checks.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { createEditorClient, EditorApiError, formatEditorIssue, type EditorClient } from '../client';
+import { EDITOR_TARGET_LABELS } from '../../shared/routes';
 import { AccessibilityPanel } from './AccessibilityPanel';
-import type { ExportResult } from '../../export.mjs';
+import type { ExportDiff, ExportResult, ExportScope } from '../../export.mjs';
 
 export interface ExportPanelProps {
   controller: DraftController;
@@ -19,10 +20,13 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
   const draft = useDraftController(controller);
   const [version, setVersion] = useState('0.20.12-beta.3');
   const [channel, setChannel] = useState<'beta' | 'stable'>('beta');
+  const [scopeKind, setScopeKind] = useState<'all' | 'page' | 'component'>('all');
+  const [componentId, setComponentId] = useState('');
   const [error, setError] = useState('');
   const [issues, setIssues] = useState<unknown[]>([]);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ExportResult | null>(null);
+  const [diff, setDiff] = useState<ExportDiff | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -41,6 +45,11 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       setError(reason instanceof Error ? reason.message : String(reason));
     }
   };
+  const scopeFor = (): ExportScope => {
+    if (scopeKind === 'page') return { kind: 'page', screenId: draft.screenId };
+    if (scopeKind === 'component') return { kind: 'component', nodeId: componentId.trim() };
+    return { kind: 'all' };
+  };
   const runExport = async () => {
     setBusy(true);
     setError('');
@@ -48,7 +57,7 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
     setResult(null);
     try {
       await controller.flush();
-      setResult(await (client || createEditorClient()).exportDraft(draft));
+      setResult(await (client || createEditorClient()).exportDraft(draft, { scope: scopeFor() }));
     } catch (reason) {
       setIssues(reason instanceof EditorApiError ? reason.issues : []);
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -56,8 +65,23 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       setBusy(false);
     }
   };
+  const runDiff = async () => {
+    setError('');
+    setIssues([]);
+    setDiff(null);
+    try {
+      const activeClient = client || createEditorClient();
+      if (!activeClient.exportDiff) return;
+      setDiff(await activeClient.exportDiff(draft, { scope: scopeFor() }));
+    } catch (reason) {
+      setIssues(reason instanceof EditorApiError ? reason.issues : []);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
   const geometryWarnings = (accessibilityIssues ?? []).some((issue) => issue.severity === 'warning');
   const geometryBlocked = geometryWarnings && !geometryConfirmed;
+  const componentBlocked = scopeKind === 'component' && !componentId.trim();
+  const diffAvailable = Boolean(client?.exportDiff);
   return (
     <section class="editor-export">
       <h3>Релиз и экспорт</h3>
@@ -73,6 +97,18 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
         </select>
       </label>
       <button type="button" data-action="save-release" onClick={saveIntent}>Сохранить намерение</button>
+      <label>Область экспорта
+        <select data-testid="export-scope" value={scopeKind} onChange={(event) => setScopeKind(event.currentTarget.value as 'all' | 'page' | 'component')}>
+          <option value="all">Всё</option>
+          <option value="page">Страница ({draft.screenId})</option>
+          <option value="component">Компонент</option>
+        </select>
+      </label>
+      {scopeKind === 'component' && (
+        <label>Node id
+          <input data-testid="export-component" value={componentId} onChange={(event) => setComponentId(event.currentTarget.value)} />
+        </label>
+      )}
       {accessibilityIssues && (
         <AccessibilityPanel
           issues={accessibilityIssues}
@@ -83,7 +119,30 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       {geometryWarnings && !geometryConfirmed && (
         <p class="editor-notice" data-testid="geometry-confirm-notice">Экспорт ожидает подтверждения предупреждений геометрии</p>
       )}
-      <button type="button" data-action="export" disabled={busy || geometryBlocked} onClick={runExport}>{busy ? 'Экспорт...' : 'Экспортировать'}</button>
+      {diffAvailable && (
+        <button type="button" data-action="show-diff" disabled={busy || componentBlocked} onClick={runDiff}>Показать diff</button>
+      )}
+      {diff && !error && (
+        <div class="editor-export-diff">
+          <strong>Изменения в скоупе</strong>
+          <ul>
+            {diff.files.map((file) => (
+              <li key={file.path}><code>{file.action}</code> {file.path}</li>
+            ))}
+          </ul>
+          {diff.foreignDirty.length > 0 && (
+            <p class="editor-notice">Вне скоупа, не изменятся: {diff.foreignDirty.join(', ')}</p>
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        data-action="export"
+        disabled={busy || geometryBlocked || componentBlocked}
+        onClick={runExport}
+      >
+        {busy ? 'Экспорт...' : 'Экспортировать'}
+      </button>
       {error && (
         <div class="editor-export-error" ref={errorRef} role="alert" tabIndex={-1}>
           <strong>{error}</strong>
@@ -93,6 +152,9 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       {result && (
         <div class="editor-export-result">
           <strong>Файлы экспортированы</strong>
+          {result.targets.length > 0 && (
+            <p>Затронутые платформы: {result.targets.map((target) => EDITOR_TARGET_LABELS[target] ?? target).join(', ')}</p>
+          )}
           <ul>{result.files.map((file) => <li key={file}>{file}</li>)}</ul>
           <code>git diff -- design</code>
         </div>

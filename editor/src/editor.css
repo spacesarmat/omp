@@ -1327,6 +1327,27 @@ h2 svg {
   font-size: 10px;
 }
 
+.editor-export-diff {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 5px;
+  background: #1d2733;
+  font-size: 10px;
+}
+
+.editor-export-diff ul {
+  padding-left: 16px;
+}
+
+.editor-export-diff code {
+  color: #a7d7ff;
+  font-size: 9px;
+}
+
+.editor-export-result p {
+  margin: 6px 0 0;
+}
+
 .editor-export-result ul {
   padding-left: 16px;
 }

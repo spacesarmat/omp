@@ -44,6 +44,7 @@ describe('design export', () => {
       'design/generated/desktop-linux.css',
       'design/generated/desktop-macos.css',
       'design/generated/desktop-windows.css',
+      'design/generated/layout.ts',
       'design/generated/lg-webos.css',
       'design/themes/default.json',
     ]);

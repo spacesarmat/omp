@@ -8,10 +8,12 @@ import { DESIGN_ELEMENTS } from '../design/catalog.ts';
 import { generateThemeCss } from '../design/theme.ts';
 import { checkTheme } from '../design/theme-checks.ts';
 import { validateFlow } from '../design/flow-validation.ts';
+import { generateLayoutModule } from '../design/generate.ts';
+import { parseThemeDocument } from '../design/validation.ts';
 import { parseEditorDraft } from './shared/draft.ts';
 import { DESIGN_TARGETS, DESIGN_FORMATS, DESIGN_STATES } from '../design/schema.ts';
 import { DESKTOP_ROUTES } from '../desktop/src/shell/routes.ts';
-import { getEditorPages } from './shared/routes.ts';
+import { getEditorPages, isEditorRoute } from './shared/routes.ts';
 import { isDesignElementAvailable } from '../design/catalog.ts';
 
 const execute = promisify(execFile);
@@ -97,28 +99,39 @@ export async function inheritExportManifest(root, sourceId, targetId) {
   };
 }
 
-async function verifyDirty(root, manifest) {
-  const dirty = [...new Set([
+async function dirtyDesignFiles(root) {
+  return [...new Set([
     ...await gitLines(root, ['diff', '--name-only', '--', 'design']),
     ...await gitLines(root, ['diff', '--cached', '--name-only', '--', 'design']),
     ...await gitLines(root, ['ls-files', '--others', '--exclude-standard', '--', 'design']),
   ])].sort();
-  for (const path of dirty) safePath(path);
-  if (!manifest) {
-    if (dirty.length) throw new ExportError('DIRTY_DESIGN', 409);
-    return;
-  }
-  const owned = new Map(manifest.files.map((file) => [file.path, file.sha256]));
+}
+
+// Scoped exports only guard the files they write; dirty foreign files stay untouched and
+// are reported back so the reviewer sees what remains outside the exported scope. The all
+// scope keeps the full ownership check because it also removes previously exported files.
+async function verifyPlanDirty(root, plan, manifest) {
+  const planPaths = new Set(plan.files.map((file) => file.path));
+  const dirty = await dirtyDesignFiles(root);
+  const foreignDirty = [];
   for (const path of dirty) {
-    if (!owned.has(path)) throw new ExportError('DIRTY_DESIGN', 409);
+    const guarded = plan.scope.kind === 'all' || planPaths.has(path);
+    if (!guarded) {
+      foreignDirty.push(path);
+      continue;
+    }
+    safePath(path);
+    const owned = manifest ? manifest.files.find((file) => file.path === path) : undefined;
+    if (!owned) throw new ExportError('DIRTY_DESIGN', 409);
     let current;
     try {
       current = await readFile(join(root, path), 'utf8');
     } catch {
       throw new ExportError('DIRTY_DESIGN', 409);
     }
-    if (sha256(current) !== owned.get(path)) throw new ExportError('DIRTY_DESIGN', 409);
+    if (sha256(current) !== owned.sha256) throw new ExportError('DIRTY_DESIGN', 409);
   }
+  return foreignDirty;
 }
 
 function contexts() {
@@ -149,8 +162,179 @@ function outputFiles(draft) {
       path: `design/generated/${target}.css`,
       content: generateThemeCss(draft.theme, target),
     })),
+    { path: 'design/generated/layout.ts', content: generateLayoutModule(draft.theme.layout) },
   ];
   return files.map((file) => ({ ...file, path: safePath(file.path) })).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+const SCOPE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+function normalizeScope(scope) {
+  if (typeof scope !== 'object' || scope === null || Array.isArray(scope)) {
+    throw new ExportError('INVALID_EXPORT_SCOPE', 400);
+  }
+  if (scope.kind === 'all') return { kind: 'all' };
+  if (scope.kind === 'page') {
+    const screenId = scope.screenId;
+    if (typeof screenId !== 'string' || !SCOPE_ID.test(screenId)) {
+      throw new ExportError('INVALID_EXPORT_SCOPE', 400);
+    }
+    if (!DESIGN_TARGETS.some((target) => isEditorRoute(target, screenId))) {
+      throw new ExportError('INVALID_EXPORT_SCOPE', 400);
+    }
+    return { kind: 'page', screenId };
+  }
+  if (scope.kind === 'component') {
+    const nodeId = scope.nodeId;
+    if (typeof nodeId !== 'string' || !SCOPE_ID.test(nodeId)) {
+      throw new ExportError('INVALID_EXPORT_SCOPE', 400);
+    }
+    return { kind: 'component', nodeId };
+  }
+  throw new ExportError('INVALID_EXPORT_SCOPE', 400);
+}
+
+function layoutEntryInScope(entry, scope) {
+  if (scope.kind === 'page') return entry.screenId === scope.screenId;
+  if (entry.nodeId === scope.nodeId) return true;
+  if (Array.isArray(entry.order) && entry.order.includes(scope.nodeId)) return true;
+  return entry.parentId === scope.nodeId;
+}
+
+function emptyLayout() {
+  return { containers: [], placements: [] };
+}
+
+function layoutForScope(layout, scope) {
+  if (scope.kind === 'all') return layout ?? emptyLayout();
+  const source = layout ?? emptyLayout();
+  const inScope = (entry) => layoutEntryInScope(entry, scope);
+  const containers = source.containers.filter(inScope);
+  const placements = source.placements.filter(inScope);
+  const clones = (source.clones ?? []).filter(inScope);
+  return clones.length ? { containers, placements, clones } : { containers, placements };
+}
+
+function targetsForScope(scope, theme) {
+  if (scope.kind === 'all') return [...DESIGN_TARGETS];
+  if (scope.kind === 'page') {
+    return DESIGN_TARGETS.filter((target) => getEditorPages(target).some((page) => page.id === scope.screenId));
+  }
+  const layout = theme.layout ?? emptyLayout();
+  const matched = new Set([
+    ...layout.containers,
+    ...layout.placements,
+    ...(layout.clones ?? []),
+  ].filter((entry) => layoutEntryInScope(entry, scope)).map((entry) => entry.target));
+  return DESIGN_TARGETS.filter((target) => matched.has(target));
+}
+
+// The plan is a pure, validated view of what the draft contributes for the scope. Merging
+// with the files already on disk happens in createExportDiff, where the foreign scopes are
+// preserved byte for byte.
+export function createExportPlan(input, scopeInput) {
+  let draft;
+  try {
+    draft = parseEditorDraft(input);
+  } catch {
+    throw new ExportError('INVALID_DRAFT', 400);
+  }
+  const scope = normalizeScope(scopeInput);
+  const theme = scope.kind === 'all'
+    ? draft.theme
+    : { ...draft.theme, layout: layoutForScope(draft.theme.layout, scope) };
+  if (scope.kind === 'all') {
+    const flowIssues = validateFlow(draft.flow, DESKTOP_ROUTES.map((route) => route.id));
+    if (flowIssues.length) throw new ExportError('INVALID_FLOW', 400, flowIssues);
+    const designIssues = checkTheme(draft.theme, contexts());
+    if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
+  }
+  const files = scope.kind === 'all'
+    ? outputFiles({ ...draft, theme })
+    : [
+        { path: safePath('design/generated/layout.ts'), content: generateLayoutModule(theme.layout) },
+        { path: safePath(`design/themes/${draft.theme.id}.json`), content: json(theme) },
+      ];
+  return { scope, targets: targetsForScope(scope, theme), draft, theme, files };
+}
+
+async function exportContents(root, plan) {
+  const contents = new Map();
+  if (plan.scope.kind === 'all') {
+    for (const file of plan.files) contents.set(file.path, file.content);
+    return contents;
+  }
+  const themeFile = plan.files.find((file) => file.path.startsWith('design/themes/'));
+  const layoutFile = plan.files.find((file) => file.path === 'design/generated/layout.ts');
+  let baseTheme = null;
+  try {
+    baseTheme = parseThemeDocument(JSON.parse(await readFile(join(root, themeFile.path), 'utf8')));
+  } catch (error) {
+    if (!(error && typeof error === 'object' && error.code === 'ENOENT')) {
+      throw new ExportError('INVALID_EXPORT_BASE', 409);
+    }
+  }
+  const scopedLayout = plan.theme.layout ?? emptyLayout();
+  let mergedLayout;
+  if (baseTheme) {
+    const inScope = (entry) => layoutEntryInScope(entry, plan.scope);
+    const containers = [
+      ...(baseTheme.layout?.containers ?? []).filter((entry) => !inScope(entry)),
+      ...scopedLayout.containers,
+    ];
+    const placements = [
+      ...(baseTheme.layout?.placements ?? []).filter((entry) => !inScope(entry)),
+      ...scopedLayout.placements,
+    ];
+    const clones = [
+      ...(baseTheme.layout?.clones ?? []).filter((entry) => !inScope(entry)),
+      ...(scopedLayout.clones ?? []),
+    ];
+    mergedLayout = clones.length ? { containers, placements, clones } : { containers, placements };
+  } else {
+    mergedLayout = scopedLayout.clones?.length
+      ? { containers: scopedLayout.containers, placements: scopedLayout.placements, clones: scopedLayout.clones }
+      : { containers: scopedLayout.containers, placements: scopedLayout.placements };
+  }
+  let mergedTheme;
+  try {
+    mergedTheme = parseThemeDocument(baseTheme
+      ? { ...baseTheme, baseCommit: plan.draft.baseCommit, layout: mergedLayout }
+      : { ...plan.theme, layout: mergedLayout });
+  } catch {
+    throw new ExportError('INVALID_EXPORT_BASE', 409);
+  }
+  const designIssues = checkTheme(mergedTheme, contexts());
+  if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
+  contents.set(themeFile.path, json(mergedTheme));
+  contents.set(layoutFile.path, generateLayoutModule(mergedTheme.layout));
+  return contents;
+}
+
+export async function createExportDiff(root, plan) {
+  const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
+  const baseCommit = stdout.trim();
+  if (plan.draft.baseCommit !== baseCommit) throw new ExportError('STALE_BASE', 409);
+  const manifest = await manifestFor(root, plan.draft.id);
+  const foreignDirty = await verifyPlanDirty(root, plan, manifest);
+  const contents = await exportContents(root, plan);
+  const files = [];
+  for (const planned of plan.files) {
+    const after = contents.get(planned.path);
+    let before = null;
+    try {
+      before = await readFile(join(root, planned.path), 'utf8');
+    } catch (error) {
+      if (!(error && typeof error === 'object' && error.code === 'ENOENT')) throw error;
+    }
+    files.push({
+      path: planned.path,
+      action: before === null ? 'create' : before === after ? 'unchanged' : 'update',
+      before,
+      after,
+    });
+  }
+  return { baseCommit, targets: plan.targets, files, foreignDirty };
 }
 
 async function backupFor(root, paths) {
@@ -250,39 +434,39 @@ export function exportDraft(options) {
   return result;
 }
 
-async function performExport({ root, draft: input }) {
-  let draft;
+async function performExport({ root, draft: input, scope: scopeInput }) {
+  const plan = createExportPlan(input, scopeInput ?? { kind: 'all' });
+  const diff = await createExportDiff(root, plan);
+  const writes = diff.files.filter((file) => file.action !== 'unchanged');
+  const backup = await backupFor(root, writes.map((file) => file.path));
+  const manifest = await manifestFor(root, plan.draft.id);
   try {
-    draft = parseEditorDraft(input);
-  } catch {
-    throw new ExportError('INVALID_DRAFT', 400);
-  }
-  const flowIssues = validateFlow(draft.flow, DESKTOP_ROUTES.map((route) => route.id));
-  if (flowIssues.length) throw new ExportError('INVALID_FLOW', 400, flowIssues);
-  const designIssues = checkTheme(draft.theme, contexts());
-  if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
-  const { stdout } = await execute('git', ['rev-parse', 'HEAD'], { cwd: root });
-  const baseCommit = stdout.trim();
-  if (draft.baseCommit !== baseCommit) throw new ExportError('STALE_BASE', 409);
-
-  const manifest = await manifestFor(root, draft.id);
-  await verifyDirty(root, manifest);
-  const files = outputFiles(draft);
-  const nextPaths = new Set(files.map((file) => file.path));
-  const removed = manifest ? manifest.files.map((file) => file.path).filter((path) => !nextPaths.has(path)) : [];
-  const backup = await backupFor(root, [...nextPaths, ...removed]);
-  try {
-    for (const file of files) {
+    for (const file of writes) {
       await mkdir(dirname(join(root, file.path)), { recursive: true });
-      await writeFile(join(root, file.path), file.content, 'utf8');
+      await writeFile(join(root, file.path), file.after, 'utf8');
     }
-    for (const path of removed) await rm(join(root, path), { force: true });
+    let entries;
+    if (plan.scope.kind === 'all') {
+      const nextPaths = new Set(diff.files.map((file) => file.path));
+      const removed = manifest ? manifest.files.map((file) => file.path).filter((path) => !nextPaths.has(path)) : [];
+      for (const path of removed) await rm(join(root, path), { force: true });
+      entries = diff.files.map((file) => ({ path: file.path, sha256: sha256(file.after) }));
+    } else {
+      // A scoped export never deletes: ownership of files outside the scope is retained so
+      // their dirty state keeps matching the recorded hashes on the next export.
+      const touched = new Map(writes.map((file) => [file.path, sha256(file.after)]));
+      const kept = manifest ? manifest.files.filter((file) => !touched.has(file.path)) : [];
+      entries = [
+        ...kept,
+        ...[...touched].map(([path, hash]) => ({ path, sha256: hash })),
+      ];
+    }
     const manifestContent = json({
       schemaVersion: 1,
-      draftId: draft.id,
-      files: files.map((file) => ({ path: file.path, sha256: sha256(file.content) })),
+      draftId: plan.draft.id,
+      files: entries.sort((a, b) => a.path.localeCompare(b.path)),
     });
-    const manifestPath = join(root, '.omp-editor', 'exports', `${draft.id}.json`);
+    const manifestPath = join(root, '.omp-editor', 'exports', `${plan.draft.id}.json`);
     await mkdir(dirname(manifestPath), { recursive: true });
     const temporary = `${manifestPath}.tmp`;
     await writeFile(temporary, manifestContent, { mode: 0o600 });
@@ -291,5 +475,11 @@ async function performExport({ root, draft: input }) {
     await restore(root, backup);
     throw error;
   }
-  return { baseCommit, files: [...nextPaths].sort(), releaseIntents: draft.theme.releaseIntents };
+  return {
+    baseCommit: diff.baseCommit,
+    files: diff.files.map((file) => file.path),
+    releaseIntents: plan.draft.theme.releaseIntents,
+    targets: plan.targets,
+    scope: plan.scope.kind,
+  };
 }
