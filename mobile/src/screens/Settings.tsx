@@ -457,6 +457,22 @@ export function Settings() {
             <span class="m-switch-knob" />
           </button>
         </div>
+        <div class="m-set-row tm" data-row="help-rank">
+          <div class="m-set-text">
+            <span>{t('settings.helpRank')}</span>
+            <span class="m-muted m-small">{t('settings.helpRankHint')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.helpRank !== false}
+            aria-label={t('settings.helpRank')}
+            class={'m-switch' + (settings.value.helpRank !== false ? ' on' : '')}
+            onClick={() => updateSettings({ helpRank: settings.value.helpRank === false })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.11" onClick={() => navigate({ name: 'monitor' })}>
           <span>{t('settings.followNew')}</span>
           <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>

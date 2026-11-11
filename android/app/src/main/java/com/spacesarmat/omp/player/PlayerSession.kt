@@ -35,6 +35,8 @@ data class PlayerSnapshot(
     val audioSel: Int,
     val subs: List<SubOption>,
     val subSel: String,
+    /** The current item has shown a frame. A resume position alone is not a frame. */
+    val played: Boolean = false,
 )
 
 /** Engine-independent track labels and menu lists. */
@@ -432,6 +434,7 @@ class PlayerSession(engine: PlayerEngine, private val ui: Ui) : PlayerEngine.Lis
             audioSel = TrackOptions.selectedAudio(audio),
             subs = subs,
             subSel = TrackOptions.selectedSub(subs).value,
+            played = firstFrame,
         )
     }
 

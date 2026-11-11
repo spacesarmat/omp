@@ -347,6 +347,7 @@ describe('sources http and secrets outside Android', () => {
 describe('native 2160 Player off-device', () => {
   it('is not installed and open2160 rejects', async () => {
     expect(await native.player2160()).toBeNull();
+    expect(await native.player2160Version()).toBeNull();
     await expect(native.open2160({ items: [], start: 0, positionMs: 0, fromStart: true, segments: '' })).rejects.toThrow(onlyAndroid());
   });
   it('has no embedded screen: playEmbedded2160 resolves null (the caller falls back to the chooser)', async () => {

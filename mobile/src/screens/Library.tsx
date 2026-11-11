@@ -21,12 +21,12 @@ import { FoundTvs } from '../ui/FoundTvs';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
-import { buildHistory, resumeFrom, sourceLine, historyFilters } from '../../../src/lib/history';
+import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, sortOptions } from '../../../src/lib/librarySearch';
-import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, remainingLabel, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
-import { baseName, episodeLabel, playableFiles, stripExt } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
@@ -156,7 +156,25 @@ export function Library() {
   serverViewed.value;
 
   useEffect(() => {
-    native.phoneName().then((n) => setPhoneName(n), () => undefined);
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      const on = y > 48;
+      const node = rootRef.current;
+      if (!node || node.getAttribute('data-collapsed') === (on ? '1' : '0')) return;
+      node.setAttribute('data-collapsed', on ? '1' : '0');
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    native.phoneIdentity().then(
+      (id) => {
+        setPhoneName(id.name);
+      },
+      () => undefined,
+    );
   }, []);
 
   useEffect(() => {
@@ -318,7 +336,9 @@ export function Library() {
   const sv = serverViewed.value;
   const history = useMemo(() => {
     if (!isHistory) return [];
-    return buildHistory(list, hfilter, continueWatching(list, 40), getLocalProgress, 40, { src: 'phone', name: phoneName });
+    const rows = buildHistory(list, hfilter, continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName });
+    const grouped = collapseHistoryShows(rows);
+    return unfinishedFirst(grouped, (it: HistoryItem) => phoneHistoryFinished(it.progress.time, it.progress.duration, it.progress.open));
   }, [list, isHistory, hfilter, pv, sv, phoneName]);
   // «Продолжить просмотр»: what was started and not finished, newest first (the top of «Мои»)
   const resume = useMemo(() => (isHistory ? [] : continueWatching(list, 12)), [list, isHistory, pv, sv]);
@@ -467,6 +487,8 @@ export function Library() {
       at: sharedResume(tor.hash, target.id),
       duration: getLocalProgress(tor.hash, target.id)?.duration || undefined,
       label: [episodeLabel(target.path), stripExt(baseName(target.path))].filter(Boolean).join(' · '),
+      files: filesOf(tor),
+      season: parseEpisode(target.path).season !== null ? parseEpisode(target.path).season! : undefined,
       onError: setTvError,
     });
   };
@@ -498,12 +520,17 @@ export function Library() {
           },
         );
     }
+    const tor = list.find((x) => x.hash === hash);
+    const file = tor ? filesOf(tor).find((f) => f.id === fileIndex) : undefined;
+    const season = file ? parseEpisode(file.path).season : null;
     return launch.start({
       hash,
       file: fileIndex,
       at: time,
       duration: duration > 0 ? duration : undefined,
       label,
+      files: tor ? filesOf(tor) : undefined,
+      season: season !== null ? season : undefined,
       onError: setTvError,
     });
   };
@@ -513,7 +540,8 @@ export function Library() {
     : { transition: 'transform .25s ease' };
   const armed = pull >= PULL_TRIGGER || refreshing;
   return (
-    <div class="m-screen m-library" data-route="library" ref={rootRef}>
+    <div class="m-screen m-library" data-route="library" data-collapsed="0" ref={rootRef}>
+      <div class="m-lib-sticky">
       {selecting && mine && !isHistory ? (
         <div class="m-lib-head m-select-bar">
           <button type="button" class="m-icon-btn tm" data-code="P02.6" aria-label={t('library.selectCancel')} disabled={deleting} onClick={() => setSelected(null)}>
@@ -590,9 +618,6 @@ export function Library() {
             onClick={() => setViewSheet(true)}
           >
             <Icon d={ICONS['view-' + view as keyof typeof ICONS]} size={20} />
-            <span class="m-icon-tag" aria-hidden="true" data-sort-tag={sort}>
-              {t(sort === 'title' ? 'library.sortTagTitle' : sort === 'size' ? 'library.sortTagSize' : 'library.sortTagNew')}
-            </span>
           </button>
         )}
         {mine && (
@@ -609,8 +634,7 @@ export function Library() {
         )}
       </div>
       )}
-      {mine ? (
-      <>
+      {mine && (
       <div class="m-tabs" role="tablist">
         {/* «История» is the clock in the header and «Вся история» of «Продолжить просмотр», not a chip */}
         {libraryTabs().filter((x) => x.id !== 'history').map((t) => (
@@ -629,6 +653,10 @@ export function Library() {
           </button>
         ))}
       </div>
+      )}
+      </div>
+      {mine ? (
+      <>
       {/* only the list follows the finger: the header and tabs stay put; history device filter sits in the list */}
       <div class="m-lib-pull">
         {(pull > 0 || refreshing) && (
@@ -756,7 +784,7 @@ export function Library() {
                       <span class="m-resume-text">
                         <span class="m-resume-name"><ShortTitle tor={tor} /></span>
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
-                        <span class="m-muted m-small">{remainingLabel(time, duration)}</span>
+                        <span class="m-muted m-small">{phoneRemainingLabel(time, duration, e.progress.open) || (time > 0 ? positionLabel(time, duration) : '')}</span>
                         <span class="m-bar-track thin">
                           <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
                         </span>
@@ -798,7 +826,7 @@ export function Library() {
                         <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
                         <span class="m-hrow-pos">
                           <span>{positionLabel(time, duration)}</span>
-                          <span class="m-muted">{remainingLabel(time, duration)}</span>
+                          <span class="m-muted">{phoneRemainingLabel(time, duration, e.progress.open)}</span>
                         </span>
                         <span class="m-bar-track">
                           <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />

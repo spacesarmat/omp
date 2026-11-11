@@ -12,6 +12,7 @@ import { setDhtPeersContext } from '../../src/sources/dhtPeers';
 import { setProgressContext } from '../../src/viewer/progressSync';
 import { setProbeContext } from '../../src/sources/liveSeedsRun';
 import { phoneSourceContext } from './searchContext';
+import { setWatchContext, setWatchDeviceClass } from '../../src/viewer/watchReport';
 import { setTorrServerTransport, TorrServerClient } from '../../src/api/torrserver';
 import { scanLan } from './screens/Connect';
 import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWifiPrefs, watchPlaybackEnd } from './servers/wifiRun';
@@ -36,6 +37,7 @@ installCleartextSync(
 );
 
 if (typeof __DESKTOP__ !== 'undefined' && __DESKTOP__) {
+  document.documentElement.classList.add('omp-desktop');
   setTorrServerTransport({
     send: async (url, req) => {
       const response = await native.http({
@@ -87,6 +89,8 @@ setDhtPeersContext(phoneSourceContext);
 setProgressContext(phoneSourceContext);
 // A feed row without a magnet (NNM-Club) loads the announce list from its topic page. No invented tracker URL.
 setProbeContext(() => phoneSourceContext());
+setWatchDeviceClass('phone');
+setWatchContext(() => phoneSourceContext());
 bindWifiRuntime({
   hint: () => native.wifiHint(),
   prefs: loadWifiPrefs,

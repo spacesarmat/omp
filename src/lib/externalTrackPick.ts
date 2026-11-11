@@ -2,7 +2,7 @@
 // record («Озвучка», src/lib/seriesTracks.ts: dub label + language, subtitles by title + language or off), shared by the
 // TV and the phone through the watch journal, so a dub picked in one episode is found again in the next one by its
 // studio and language. The order is that of the built-in players (nativeTrackStart in src/player/trackPrefs.ts): the
-// series' dub by name, then the series' language, then the settings («Язык озвучки», «Язык субтитров»).
+// series' dub by name, then the series' language, then a popular voice when no dub was chosen, then the settings.
 //
 // An embedded track that answers a step first leaves the choice to the player (null): the external one is picked only
 // when the video itself has nothing better. When the embedded tracks are not known (no probe yet), an external track
@@ -19,6 +19,8 @@ export interface ExternalStartSettings {
   subLang: string;
   /** «Субтитры» on by default (settings.subtitlesOn). */
   subtitlesOn: boolean;
+  /** Popular voice-over for this title, used when the viewer has not chosen a dub or a language. */
+  communityVoice?: string;
 }
 
 /** A track of the video itself (from ffprobe or the player), when known. */
@@ -68,7 +70,7 @@ function embeddedLang(embedded: EmbeddedTrack[] | undefined, g: string, skipForc
 export function pickExternalAudio(
   tracks: ExternalTrack[],
   series: SeriesTracks | null,
-  s: Pick<ExternalStartSettings, 'audioLang'>,
+  s: Pick<ExternalStartSettings, 'audioLang' | 'communityVoice'>,
   embedded?: EmbeddedTrack[],
 ): string | null {
   const rec = series && !isReset(series) ? series : null;
@@ -78,12 +80,19 @@ export function pickExternalAudio(
     if (embeddedDub(embedded, rec.l, rec.g)) return null;
     for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), rec.l) && langOk(tracks[i].lang, rec.g)) return tracks[i].id;
   }
-  const langs: string[] = [];
-  if (rec && rec.g) langs.push(rec.g);
-  langs.push(s.audioLang || DEFAULT_AUDIO_LANG);
-  for (let j = 0; j < langs.length; j++) {
-    if (embeddedLang(embedded, langs[j])) return null;
-    for (let i = 0; i < tracks.length; i++) if (sameLang(tracks[i].lang, langs[j])) return tracks[i].id;
+  // The saved language wins over a popular voice. A viewer who chose English keeps English.
+  if (rec && rec.g) {
+    if (embeddedLang(embedded, rec.g)) return null;
+    for (let i = 0; i < tracks.length; i++) if (sameLang(tracks[i].lang, rec.g)) return tracks[i].id;
+  }
+  if (s.communityVoice && !(rec && rec.l)) {
+    if (embeddedDub(embedded, s.communityVoice, undefined)) return null;
+    for (let i = 0; i < tracks.length; i++) if (sameDub(labelOf(tracks[i]), s.communityVoice)) return tracks[i].id;
+  }
+  const fallback = s.audioLang || DEFAULT_AUDIO_LANG;
+  if (!(rec && rec.g && sameLang(rec.g, fallback))) {
+    if (embeddedLang(embedded, fallback)) return null;
+    for (let i = 0; i < tracks.length; i++) if (sameLang(tracks[i].lang, fallback)) return tracks[i].id;
   }
   return null;
 }

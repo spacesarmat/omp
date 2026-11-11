@@ -1,12 +1,23 @@
-import '../../mobile/src/main';
 import { phoneSourceContext } from '../../mobile/src/searchContext';
 import { createBridge } from './platform/bridge';
 import { flushCrashes, queueCrash } from '../../src/report/crash';
+import { setDesktopUpdatePlatform } from '../../src/lib/updateInfo';
 
-void createBridge()
-  .invoke<string>('take_native_crashes')
-  .then((text) => {
+async function boot(): Promise<void> {
+  try {
+    const platform = await createBridge().invoke<string>('target_platform');
+    if (typeof platform === 'string' && platform) setDesktopUpdatePlatform(platform);
+  } catch {
+    // The browser preview has no Tauri command. The feed then uses the user agent.
+  }
+  await import('../../mobile/src/main');
+  try {
+    const text = await createBridge().invoke<string>('take_native_crashes');
     if (text) queueCrash({ kind: 'native', message: text.slice(0, 400), stack: text, platform: 'desktop' });
-    return flushCrashes(phoneSourceContext);
-  })
-  .catch(() => undefined);
+    await flushCrashes(phoneSourceContext);
+  } catch {
+    /* a missing command must not block the shell */
+  }
+}
+
+void boot();

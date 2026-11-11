@@ -8,6 +8,8 @@ import type { FfprobeResult } from '../api/types';
 import { errorMessage } from '../api/http';
 import { rememberTracks, prefForStart } from '../viewer/tracks';
 import { pickAudioFor, pickSubFor, subPrefFromChoice, seriesSubFromChoice } from '../player/trackPrefs';
+import { communityVoiceFor } from '../viewer/communityRank';
+import { watchBuffer, watchClose, watchFrame, watchOpen } from '../viewer/watchReport';
 import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
 import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
@@ -178,6 +180,32 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   const posRef = useRef({ time: 0, duration: 0 });
   posRef.current = { time: vs.time, duration: vs.duration };
   useProgressSync(c, item, posRef);
+  const watchVoice = useRef('');
+  useEffect(() => {
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    const hash = item.hash;
+    const file = item.fileIndex;
+    const title = item.torrentTitle || item.title;
+    watchOpen({ infohash: hash, file, title, fileTitle: item.title });
+    return () => {
+      watchClose({
+        infohash: hash,
+        file,
+        title,
+        fileTitle: item.title,
+        time: posRef.current.time,
+        duration: posRef.current.duration,
+        voice: watchVoice.current,
+      });
+    };
+  }, [item]);
+  useEffect(() => {
+    if (!item || !item.hash || item.fileIndex === undefined) return;
+    if (vs.played) watchFrame(item.hash, item.fileIndex);
+    watchBuffer(item.hash, item.fileIndex, !!vs.buffering);
+    const audio = listAudio(videoRef.current, probe)[audioIdx];
+    watchVoice.current = audio && audio.label ? audio.label : '';
+  }, [vs.played, vs.buffering, audioIdx, item]);
   const goAlt = (bias: 'any' | 'lower') => {
     const pos = posRef.current.time >= 1 ? posRef.current.time : startPos.current;
     const title = item.torrentTitle || item.title;
@@ -568,16 +596,17 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     const v = videoRef.current;
     if (!v || userTracks.current) return;
     const s = settings.value;
+    const voice = communityVoiceFor(item.hash, item.torrentTitle || item.title);
     const pref = prefForStart(item.hash, item.torrentTitle || item.title);
     const series = seriesTracksFor(item.hash);
     const builtin = audioOptions(probeRef.current, v);
     const list = listAudio(v, probeRef.current);
-    let ai = webosAudioIndex(builtin, extTracks, series, pref, s.audioLang);
+    let ai = webosAudioIndex(builtin, extTracks, series, pref, s.audioLang, voice);
     const picked = ai >= 0 ? list[ai] : undefined;
     // ffprobe (or the file list) may still be on the way: do not start a dub over a built-in track we have not seen yet
-    if (!probed && picked && picked.externalId) ai = builtin.length ? pickAudioFor(builtin, series, pref, s.audioLang) : -1;
+    if (!probed && picked && picked.externalId) ai = builtin.length ? pickAudioFor(builtin, series, pref, s.audioLang, voice) : -1;
     const pickedId = ai >= 0 && list[ai] ? list[ai].externalId : '';
-    if (pickedId && failedDub.current[pickedId]) ai = pickAudioFor(builtin, series, pref, s.audioLang);
+    if (pickedId && failedDub.current[pickedId]) ai = pickAudioFor(builtin, series, pref, s.audioLang, voice);
     const opt = ai >= 0 ? list[ai] : undefined;
     const useExternal = !!(opt && opt.externalId && opt.externalUrl && !failedDub.current[opt.externalId]);
     if (useExternal) {
@@ -586,7 +615,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     } else if (dubRef.current) {
       dubRef.current.stop();
       let bi = ai;
-      if (!(bi >= 0 && bi < builtin.length)) bi = pickAudioFor(builtin, series, pref, s.audioLang);
+      if (!(bi >= 0 && bi < builtin.length)) bi = pickAudioFor(builtin, series, pref, s.audioLang, voice);
       if (bi >= 0 && bi < builtin.length) {
         setAudioIdx(bi);
         if (bi !== defaultAudioIndex(builtin)) selectAudioTrack(v, bi);
@@ -608,7 +637,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     const builtin = audioOptions(probeRef.current, v);
     const series = seriesTracksFor(item && item.hash);
     const pref = item ? prefForStart(item.hash, item.torrentTitle || item.title) : null;
-    let ai = pickAudioFor(builtin, series, pref, settings.value.audioLang);
+    const voice = communityVoiceFor(item && item.hash, item && (item.torrentTitle || item.title));
+    let ai = pickAudioFor(builtin, series, pref, settings.value.audioLang, voice);
     if (ai < 0 && builtin.length) ai = 0;
     setAudioIdx(builtin.length && ai >= 0 ? ai : -1);
     if (v && ai >= 0 && builtin.length) selectAudioTrack(v, ai);

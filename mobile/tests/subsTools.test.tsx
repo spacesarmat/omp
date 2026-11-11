@@ -356,7 +356,8 @@ describe('in English', () => {
     addSubscription({ query: 'Avatar', quality: '', sources: null, notify: true }, 2);
     addFindings([finding(s.id, 'd1', 'Dune Part Two 2160p', { result: res('Dune Part Two 2160p', { Size: '4.2 GB' }) })]);
     await mountNews();
-    expect(search()!.getAttribute('placeholder')).toBe('Search subscriptions and found releases');
+    expect(search()!.getAttribute('placeholder')).toBe('Search');
+    expect(search()!.getAttribute('aria-label')).toBe('Search subscriptions and found releases');
     expect(el.textContent).toContain('Sort');
     expect(byText('by date added')!.getAttribute('aria-pressed')).toBe('true');
     expect(byText('new findings')).toBeDefined();
