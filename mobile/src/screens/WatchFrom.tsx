@@ -251,13 +251,13 @@ export function WatchFrom() {
           <button type="button" class={'m-set-row m-set-pick' + (auto ? ' m-track-on' : '')} role="radio" aria-checked={auto} data-code="P35.3" data-mode="auto" onClick={() => chooseMode('auto')}>
             <span class="m-set-text">
               <span>{t('settings.watchFromByNet')}</span>
-              <span class="m-muted m-small">{t('settings.watchFromByNetHint')}</span>
+              <span class="m-muted m-small">{auto ? t('settings.watchFromByNetHint') : ''}</span>
             </span>
           </button>
           <button type="button" class={'m-set-row m-set-pick' + (!auto ? ' m-track-on' : '')} role="radio" aria-checked={!auto} data-code="P35.4" data-mode="always" disabled={list.length === 0} onClick={() => chooseMode('always')}>
             <span class="m-set-text">
               <span>{t('settings.watchFromAlways')}</span>
-              <span class="m-muted m-small">{t('settings.watchFromAlwaysHint')}</span>
+              <span class="m-muted m-small">{auto ? '' : t('settings.watchFromAlwaysHint')}</span>
             </span>
           </button>
         </div>

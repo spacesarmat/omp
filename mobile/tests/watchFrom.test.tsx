@@ -404,6 +404,16 @@ describe('WatchFrom', () => {
     expect(loadWifiPrefs().overrideId).toBe(b.id);
   });
 
+  it('shows only the explanation of the selected server rule', async () => {
+    addServer({ name: 'yoda', url: 'http://192.168.1.191:8090' });
+    const el = mount();
+    expect(el.textContent).toContain('Сохраненная сеть ведет на свой сервер');
+    expect(el.textContent).not.toContain('Сеть не переключает сервер');
+    await click(el, '[data-mode="always"]');
+    expect(el.textContent).toContain('Сеть не переключает сервер');
+    expect(el.textContent).not.toContain('Сохраненная сеть ведет на свой сервер');
+  });
+
   it('does not write the TV link and does not scan for a network list', () => {
     const src = [
       'mobile/src/screens/WatchFrom.tsx',

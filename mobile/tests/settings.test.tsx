@@ -823,8 +823,10 @@ describe('Settings: «Плеер для видео»', () => {
     expect(settings.value.phonePlayer).toBe('embedded');
     // the TV's own setting is not touched
     expect(settings.value.videoPlayer).toBe('builtin');
-    expect(row.textContent).toContain('Встроенный - экран 2160 Player прямо в OMP');
-    expect(row.textContent).toContain('«Выбор Android» откроет видео в приложении, которое вы выберете');
+    expect(row.textContent).toContain('играет прямо в OMP');
+    expect(row.textContent).toContain('рекомендуем');
+    expect(row.textContent).toContain('каждый раз спрашивать');
+    expect(row.textContent).not.toContain('Встроенный - экран 2160 Player прямо в OMP');
   });
 
   it('not installed: only the app option is disabled and the link opens the release page', async () => {

@@ -3,6 +3,7 @@ import { sendManualReport } from '../../../src/report/crash';
 import { phoneSourceContext } from '../searchContext';
 import { navigate, goBack } from '../nav';
 import { Icon } from '../ui/Icon';
+import { Sheet } from '../ui/Sheet';
 import {
   localServer,
   localAutostart,
@@ -120,6 +121,11 @@ function LocalServerSection() {
           </div>
           <Switch on={st.running} label={t('localServer.title')} disabled={starting} onToggle={() => void toggle()} />
         </div>
+        {st.running && (
+          <button type="button" class="m-link m-local-stop" data-local-stop onClick={() => void toggle()}>
+            {t('settings.localStop')}
+          </button>
+        )}
         {st.error && (
           <div class="m-error" role="alert">
             {st.error}
@@ -250,7 +256,7 @@ export function Advanced() {
         <button type="button" class="m-btn m-btn-secondary tm" data-code="P13.10" onClick={() => window.open(PROJECT_URL, '_system')}>
           {t('settings.projectPage')}
         </button>
-        <button type="button" class="m-link" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
+        <button type="button" class="m-credits" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
           TorrServer © YouROK, GPL-3.0
         </button>
         <p class="m-muted m-small m-set-attr">{t('settings.tmdbData')}</p>
@@ -260,25 +266,32 @@ export function Advanced() {
 }
 
 function ReportRow() {
+  const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [note, setNote] = useState('');
   return (
-    <div class="m-set-row">
-      <div class="m-set-text">
+    <>
+      <button type="button" class="m-set-row m-set-pick" data-report-open onClick={() => setOpen(true)}>
         <span>{t('settings.reportTitle')}</span>
-        <input class="m-input" value={comment} onInput={(e) => setComment((e.target as HTMLInputElement).value)} />
-        {note ? <span class="m-small m-muted">{note}</span> : null}
-      </div>
-      <button
-        type="button"
-        class="m-btn"
-        onClick={() => {
-          const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
-          void sendManualReport(phoneSourceContext, platform, comment, '').then((ok) => setNote(ok ? t('settings.promoOk') : t('settings.promoBad')));
-        }}
-      >
-        {t('settings.reportSend')}
+        <Icon d="M9 6l6 6-6 6" size={20} />
       </button>
-    </div>
+      {open && (
+        <Sheet label={t('settings.reportTitle')} onClose={() => setOpen(false)}>
+          <div class="m-sheet-title">{t('settings.reportTitle')}</div>
+          <textarea class="m-input" rows={4} value={comment} onInput={(e) => setComment((e.target as HTMLTextAreaElement).value)} />
+          <button
+            type="button"
+            class="m-btn m-btn-primary"
+            onClick={() => {
+              const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
+              void sendManualReport(phoneSourceContext, platform, comment, '').then((ok) => setNote(ok ? t('settings.promoOk') : t('settings.promoBad')));
+            }}
+          >
+            {t('settings.reportSend')}
+          </button>
+          {note ? <p class="m-small m-muted">{note}</p> : null}
+        </Sheet>
+      )}
+    </>
   );
 }

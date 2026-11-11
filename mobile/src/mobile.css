@@ -173,7 +173,7 @@ button, .m-btn {
 @keyframes m-rot { to { transform: rotate(360deg); } }
 .m-tv { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--panel); }
 .m-tv.pairing { background: var(--panel-2); box-shadow: inset 0 0 0 2px var(--accent); }
-.m-tv.connected { box-shadow: inset 0 0 0 2px #3FB950; }
+.m-tv.connected { box-shadow: inset 0 0 0 1px var(--accent); }
 .m-tv-row { display: flex; align-items: center; gap: 4px; }
 .m-tv-main {
   flex-grow: 1;
@@ -685,6 +685,7 @@ button, .m-btn {
 .m-tc-season-name { font-weight: 700; }
 .m-tc-season-state { color: #8FE39A; font-weight: 700; }
 .m-set-attr { margin: 4px 0 0; text-align: center; }
+.m-credits { display: block; width: 100%; margin: 8px 0 0; padding: 0; border: none; background: none; color: var(--muted); font-size: 12px; text-align: center; }
 .m-bar-track { display: block; height: 6px; border-radius: 3px; background: #2A2F3A; overflow: hidden; }
 .m-bar-track.thin { height: 4px; border-radius: 2px; }
 .m-bar-fill { display: block; height: 100%; background: var(--accent); }
@@ -2230,6 +2231,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-icon-btn.m-glass.m-danger { color: #FF9EA2; }
 /* «Другая раздача» (QA N1): the picked row is outlined and its check is a full-size accent mark */
 .m-sub-pick .m-opt[aria-checked='true'] { box-shadow: inset 0 0 0 2px var(--accent); background: var(--panel-2); }
+.m-screen[data-route='video-player'] .m-sub-pick .m-opt[aria-checked='true'] { box-shadow: none; background: #252A35; }
 .m-sub-pick .m-opt > svg { flex-shrink: 0; color: var(--accent); }
 /* phone navigation: search scopes, continue row, release line */
 .m-search-scopes { margin: 4px 0 8px; }

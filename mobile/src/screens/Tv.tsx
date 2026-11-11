@@ -149,7 +149,9 @@ export function Tv() {
     const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === sv.ip) : undefined;
     // a TV renamed on the phone also shows its own name, so it can still be told apart on the network
     const own = isTvRenamed(sv) ? sv.defaultName + ' · ' : '';
-    const meta = own + (atv && atv.version ? ompMeta(sv.ip, atv.version) : t('tvScreen.savedMeta', { ip: sv.ip }));
+    const platform = kind === 'atv' ? 'Android TV' : 'webOS';
+    const version = atv && atv.version ? ' · OMP ' + atv.version : '';
+    const meta = own + platform + version + ' · ' + t('tvScreen.savedMark');
     return { ip: sv.ip, name: sv.name, meta, kind, saved: sv, atv };
   });
   for (const f of foundAtv) {
@@ -259,7 +261,7 @@ export function Tv() {
           const failed = mine && state === 'error';
           const cls = 'm-tv' + (pairing || connecting ? ' pairing' : '') + (connected ? ' connected' : '');
           return (
-            <div key={r.ip} class={cls}>
+            <div key={r.ip} class={cls} data-ip={r.ip}>
               <div class="m-tv-row">
                 <button type="button" class="m-tv-main" onClick={() => openRow(r)}>
                   <span class="m-tv-icon">
