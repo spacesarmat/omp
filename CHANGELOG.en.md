@@ -4,8 +4,6 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
-
 ## 0.30.1-beta.1
 
 - [phone] Catalog header: Mine is filled, icon buttons are 40 by 40. Scrolling hides the Mine / Discover row and keeps the chips on a solid dark bar. Continue shows the device and time, only items at 2-90%, a finished episode moves to the next one, and anything untouched for 30 days leaves the row. Long press: remove, mark watched, start over. Settings: Shared history across devices
