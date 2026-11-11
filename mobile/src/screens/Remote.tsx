@@ -14,6 +14,7 @@ import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
 import { PowerBanner } from '../ui/PowerBanner';
 import { PowerTools } from '../ui/PowerTools';
+import { adoptProfile } from '../tv/power/irProfile';
 import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
@@ -972,6 +973,10 @@ export function Remote() {
   const [tuning, setTuning] = useState(false);
 
   const tvIp = tv?.ip;
+  const irMac = tv?.mac || '';
+  useEffect(() => {
+    if (irMac && tvIp) adoptProfile(tvIp, irMac);
+  }, [irMac, tvIp]);
   // shared discovery may still be empty when this screen opens; the saved TV connects on mount and again
   // when that TV shows up in the list (a scan that finished after the first attempt)
   const onNetwork = !!tvIp && foundTvRows.value.some((r) => r.ip === tvIp);

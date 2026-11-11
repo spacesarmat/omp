@@ -13,6 +13,15 @@ export async function saveNetToken(id: string, token: string): Promise<void> {
   }
 }
 
+export async function forgetNetToken(id: string): Promise<void> {
+  mem.delete(id);
+  try {
+    await native.secretDelete('nettv:' + id);
+  } catch {
+    // the web build has no keystore
+  }
+}
+
 export async function loadNetToken(id: string): Promise<string | null> {
   const hit = mem.get(id);
   if (hit) return hit;

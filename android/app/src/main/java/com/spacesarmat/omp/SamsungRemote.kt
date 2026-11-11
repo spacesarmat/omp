@@ -40,6 +40,12 @@ object SamsungRemote {
                     host = ip
                     hello = opened.second
                 }
+                if (hello.contains("ms.channel.unauthorized")) {
+                    val text = hello
+                    dead.set(true)
+                    closeLocked()
+                    return text
+                }
                 val live = socket ?: throw IllegalStateException("closed")
                 if (!live.send(body)) {
                     dead.set(true)
@@ -69,7 +75,8 @@ object SamsungRemote {
     private fun connect(ip: String, path: String): Pair<WebSocket, String> {
         try {
             return open("wss", ip, 8002, path)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (!samsungMayFallback(e)) throw e
             return open("ws", ip, 8001, path)
         }
     }
@@ -119,3 +126,7 @@ object SamsungRemote {
         return ws to hello.get()
     }
 }
+
+/** A changed certificate must not fall through to plaintext: that port would carry the saved token. */
+internal fun samsungMayFallback(error: Throwable): Boolean =
+    !CertPins.isChanged(error) && tvMayTryOtherPorts(tvFailText(error))

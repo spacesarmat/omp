@@ -14,6 +14,7 @@ export interface IrProfile {
 }
 
 const MAX_NAME = 40;
+const MAX_BUTTONS = 40;
 
 function cleanName(name: string): string {
   return name.trim().slice(0, MAX_NAME);
@@ -25,8 +26,25 @@ export function addLearned(list: IrProfile[], deviceId: string, button: LearnedB
   const next: LearnedButton = { id: button.id, name, frequency: button.frequency, pulses: button.pulses.slice() };
   const idx = list.findIndex((p) => p.deviceId === deviceId);
   if (idx < 0) return list.concat({ deviceId, buttons: [next] });
-  const buttons = list[idx].buttons.filter((b) => b.id !== button.id).concat(next);
+  const existing = list[idx].buttons;
+  const replacing = existing.some((b) => b.id === button.id);
+  if (!replacing && existing.length >= MAX_BUTTONS) return list;
+  const buttons = existing.filter((b) => b.id !== button.id).concat(next);
   return list.map((p, i) => (i === idx ? { deviceId, buttons } : p));
+}
+
+/** Buttons learned before the MAC was known follow the device. The IP profile is removed. */
+export function moveLearned(list: IrProfile[], fromId: string, toId: string): IrProfile[] {
+  if (!fromId || !toId || fromId === toId) return list;
+  const fromIdx = list.findIndex((p) => p.deviceId === fromId);
+  if (fromIdx < 0) return list;
+  const toIdx = list.findIndex((p) => p.deviceId === toId);
+  let buttons = list[fromIdx].buttons;
+  if (toIdx >= 0) {
+    const kept = new Set(list[toIdx].buttons.map((b) => b.id));
+    buttons = list[toIdx].buttons.concat(buttons.filter((b) => !kept.has(b.id))).slice(0, MAX_BUTTONS);
+  }
+  return list.filter((_, i) => i !== fromIdx && i !== toIdx).concat({ deviceId: toId, buttons });
 }
 
 /** Renames a button. A blank name leaves the list unchanged. */
@@ -71,7 +89,7 @@ export function sanitizeProfiles(v: unknown): IrProfile[] {
         frequency,
         pulses: raw.pulses.slice(),
       });
-      if (buttons.length >= 40) break;
+      if (buttons.length >= MAX_BUTTONS) break;
     }
     if (buttons.length) out.push({ deviceId: item.deviceId, buttons });
     if (out.length >= 20) break;
@@ -93,8 +111,20 @@ export function reloadProfiles(): void {
   irProfiles.value = load();
 }
 
-export function rememberButton(deviceId: string, button: LearnedButton): void {
-  irProfiles.value = addLearned(irProfiles.value, deviceId, button);
+/** False when the device already has 40 buttons and this one is new. */
+export function rememberButton(deviceId: string, button: LearnedButton): boolean {
+  const next = addLearned(irProfiles.value, deviceId, button);
+  if (next === irProfiles.value) return false;
+  irProfiles.value = next;
+  persist();
+  return true;
+}
+
+/** Moves a profile from an IP to a MAC once the TV reports the MAC. */
+export function adoptProfile(fromId: string, toId: string): void {
+  const next = moveLearned(irProfiles.value, fromId, toId);
+  if (next === irProfiles.value) return;
+  irProfiles.value = next;
   persist();
 }
 

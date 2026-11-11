@@ -66,3 +66,8 @@ export function markNetToken(id: string): void {
   netTvs.value = netTvs.value.map((d) => (d.id === id ? { ...d, tokenStored: true } : d));
   persist();
 }
+
+export function clearNetToken(id: string): void {
+  netTvs.value = netTvs.value.map((d) => (d.id === id ? { ...d, tokenStored: false } : d));
+  persist();
+}

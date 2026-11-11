@@ -85,4 +85,74 @@ describe('Wake-on-LAN packet', () => {
   it('has no browser UDP transport unless the page exposes one', () => {
     expect(browserUdpSend()).toBeNull();
   });
+
+  it('binds the browser socket and enables broadcast before sending', async () => {
+    const calls: string[] = [];
+    const chrome = {
+      sockets: {
+        udp: {
+          create: (_props: object, cb: (info: { socketId: number }) => void) => {
+            calls.push('create');
+            cb({ socketId: 7 });
+          },
+          bind: (socketId: number, address: string, port: number, cb: (result: number) => void) => {
+            calls.push('bind:' + socketId + ':' + address + ':' + port);
+            cb(0);
+          },
+          setBroadcast: (socketId: number, enabled: boolean, cb: (result: number) => void) => {
+            calls.push('broadcast:' + socketId + ':' + enabled);
+            cb(0);
+          },
+          send: (socketId: number, _data: ArrayBuffer, address: string, port: number, cb: (r: { resultCode?: number }) => void) => {
+            calls.push('send:' + socketId + ':' + address + ':' + port);
+            cb({ resultCode: 0 });
+          },
+          close: (socketId: number, cb: () => void) => {
+            calls.push('close:' + socketId);
+            cb();
+          },
+        },
+      },
+    };
+    (globalThis as { chrome?: unknown }).chrome = chrome;
+    try {
+      const send = browserUdpSend();
+      expect(send).not.toBeNull();
+      await send!(new Uint8Array([1, 2]), '255.255.255.255', 9);
+      expect(calls).toEqual([
+        'create',
+        'bind:7:0.0.0.0:0',
+        'broadcast:7:true',
+        'send:7:255.255.255.255:9',
+        'close:7',
+      ]);
+    } finally {
+      delete (globalThis as { chrome?: unknown }).chrome;
+    }
+  });
+
+  it('does not send when the browser socket refuses to bind', async () => {
+    const calls: string[] = [];
+    (globalThis as { chrome?: unknown }).chrome = {
+      sockets: {
+        udp: {
+          create: (_props: object, cb: (info: { socketId: number }) => void) => cb({ socketId: 3 }),
+          bind: (_socketId: number, _address: string, _port: number, cb: (result: number) => void) => cb(-1),
+          setBroadcast: () => calls.push('broadcast'),
+          send: () => calls.push('send'),
+          close: (_socketId: number, cb: () => void) => {
+            calls.push('close');
+            cb();
+          },
+        },
+      },
+    };
+    try {
+      const send = browserUdpSend();
+      await expect(send!(new Uint8Array([1]), '255.255.255.255', 9)).rejects.toThrow(/udp/);
+      expect(calls).toEqual(['close']);
+    } finally {
+      delete (globalThis as { chrome?: unknown }).chrome;
+    }
+  });
 });

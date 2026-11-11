@@ -11,6 +11,7 @@ import {
   lgVolume,
   samsungKey,
   samsungSocketPath,
+  samsungPlan,
   samsungToken,
 } from '../src/tv/power/protocols';
 
@@ -56,6 +57,15 @@ describe('Samsung remote messages', () => {
     expect(samsungToken({ event: 'ms.channel.connect', data: { token: 'abc' } })).toBe('abc');
     expect(samsungToken({ event: 'ms.channel.unauthorized' })).toBeNull();
     expect(samsungToken({ event: 'ms.channel.connect', data: { token: 'bad token' } })).toBeNull();
+  });
+
+  it('drops a rejected token and pairs again, and stops when the TV still refuses', () => {
+    const denied = { event: 'ms.channel.unauthorized' };
+    const paired = { event: 'ms.channel.connect', data: { token: 'abc' } };
+    expect(samsungPlan(true, denied)).toBe('retry');
+    expect(samsungPlan(false, denied)).toBe('stop');
+    expect(samsungPlan(false, paired)).toBe('save');
+    expect(samsungPlan(true, { event: 'ms.remote.control' })).toBe('ok');
   });
 });
 

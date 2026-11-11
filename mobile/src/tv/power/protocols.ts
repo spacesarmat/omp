@@ -60,6 +60,23 @@ export function samsungToken(message: unknown): string | null {
   return typeof token === 'string' && TOKEN.test(token) ? token : null;
 }
 
+/** The TV closed the old pairing. The saved token must be dropped. */
+export function samsungRejected(message: unknown): boolean {
+  if (!message || typeof message !== 'object') return false;
+  return (message as { event?: unknown }).event === 'ms.channel.unauthorized';
+}
+
+/**
+ * What the phone does with a Samsung hello.
+ * `retry` drops the saved token and opens the socket again without it.
+ * `stop` means the TV still refuses, so the user has to allow the phone on the screen.
+ */
+export function samsungPlan(hadToken: boolean, message: unknown): 'retry' | 'stop' | 'save' | 'ok' {
+  if (samsungRejected(message)) return hadToken ? 'retry' : 'stop';
+  if (samsungToken(message)) return 'save';
+  return 'ok';
+}
+
 function varint(n: number): number[] {
   const out: number[] = [];
   let v = n >>> 0;

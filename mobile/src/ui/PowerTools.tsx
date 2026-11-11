@@ -8,9 +8,9 @@ import { parseIrText } from '../tv/power/irParse';
 import { forgetButton, irProfiles, rememberButton } from '../tv/power/irProfile';
 import { manualDevices } from '../tv/power/manual';
 import { captureLearner, learnerOrigin, type LearnerHttp } from '../tv/power/learn';
-import { loadNetToken, saveNetToken } from '../tv/power/tokens';
-import { markNetToken, netTvs, type NetDevice } from '../tv/power/netStore';
-import { samsungKey, samsungSocketPath, samsungToken } from '../tv/power/protocols';
+import { forgetNetToken, loadNetToken, saveNetToken } from '../tv/power/tokens';
+import { clearNetToken, markNetToken, netTvs, type NetDevice } from '../tv/power/netStore';
+import { samsungKey, samsungPlan, samsungSocketPath, samsungToken } from '../tv/power/protocols';
 import { switchInput, tvKind } from '../tv/tvClient';
 import { BoxCodeSheet } from './BoxCodeSheet';
 import { boxIp, boxState, cancelBoxCode, connectBox, sendBoxKey, submitBoxCode, type BoxKey } from '../tv/boxRemote';
@@ -38,21 +38,33 @@ async function googleKey(d: NetDevice, key: BoxKey): Promise<void> {
   await sendBoxKey(tv, key);
 }
 
-async function samsungPress(d: NetDevice, key: string): Promise<void> {
-  const token = await loadNetToken(d.id);
+async function samsungHello(d: NetDevice, key: string, token: string | null): Promise<unknown> {
   const path = samsungSocketPath('OMP', token || undefined);
   const sent = await native.samsungClick(d.ip, path, JSON.stringify(samsungKey(key)));
-  let message: unknown = null;
   try {
-    message = sent.message ? JSON.parse(sent.message) : null;
+    return sent.message ? JSON.parse(sent.message) : null;
   } catch {
-    message = null;
+    return null;
   }
+}
+
+async function keepSamsungToken(id: string, token: string): Promise<void> {
+  await saveNetToken(id, token);
+  markNetToken(id);
+}
+
+async function samsungPress(d: NetDevice, key: string): Promise<void> {
+  const token = await loadNetToken(d.id);
+  let message = await samsungHello(d, key, token);
+  const plan = samsungPlan(!!token, message);
+  if (plan === 'retry') {
+    await forgetNetToken(d.id);
+    clearNetToken(d.id);
+    message = await samsungHello(d, key, null);
+  }
+  if (samsungPlan(false, message) === 'stop') throw new Error(t('remote.samsungDenied'));
   const next = samsungToken(message);
-  if (next) {
-    await saveNetToken(d.id, next);
-    markNetToken(d.id);
-  }
+  if (next) await keepSamsungToken(d.id, next);
 }
 
 /** IR, manual Wake-on-LAN and network TV keys. The OMP remote stays above this block. */
@@ -97,15 +109,17 @@ export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInp
       showToast(t('remote.ir.badCode'));
       return;
     }
+    let dropped = false;
     parsed.forEach((s, i) => {
-      rememberButton(deviceId, {
+      const kept = rememberButton(deviceId, {
         id: 'i' + Date.now().toString(36) + i,
         name: s.name || t('remote.ir.name'),
         frequency: s.frequency,
         pulses: s.pulses,
       });
+      if (!kept) dropped = true;
     });
-    showToast(t('remote.ir.saved'));
+    showToast(dropped ? t('remote.ir.full') : t('remote.ir.saved'));
   }
 
   async function onLearnExt(): Promise<void> {
@@ -124,8 +138,8 @@ export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInp
       };
       const got = await captureLearner(origin, known, http, (token) => saveNetToken('learner:' + one.ip, token));
       const name = typeof prompt === 'function' ? prompt(t('remote.ir.name')) || t('remote.ir.name') : t('remote.ir.name');
-      rememberButton(deviceId, { id: 'l' + Date.now().toString(36), name, frequency: got.signal.frequency, pulses: got.signal.pulses });
-      showToast(t('remote.ir.saved'));
+      const kept = rememberButton(deviceId, { id: 'l' + Date.now().toString(36), name, frequency: got.signal.frequency, pulses: got.signal.pulses });
+      showToast(kept ? t('remote.ir.saved') : t('remote.ir.full'));
     } catch (e) {
       showToast(e instanceof Error ? e.message : t('remote.ir.badCode'));
     }
@@ -139,8 +153,8 @@ export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInp
         return;
       }
       const name = typeof prompt === 'function' ? prompt(t('remote.ir.name')) || t('remote.ir.name') : t('remote.ir.name');
-      rememberButton(deviceId, { id: 'n' + Date.now().toString(36), name, frequency: got.frequency, pulses: got.pulses });
-      showToast(t('remote.ir.saved'));
+      const kept = rememberButton(deviceId, { id: 'n' + Date.now().toString(36), name, frequency: got.frequency, pulses: got.pulses });
+      showToast(kept ? t('remote.ir.saved') : t('remote.ir.full'));
     } catch (e) {
       showToast(e instanceof Error ? e.message : t('remote.ir.badCode'));
     }

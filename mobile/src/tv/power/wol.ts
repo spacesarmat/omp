@@ -86,6 +86,8 @@ export async function sendWake(mac: string, ip: string, broadcast: string | unde
 
 interface ChromeUdp {
   create: (props: object, cb: (info: { socketId: number }) => void) => void;
+  bind: (socketId: number, address: string, port: number, cb: (result: number) => void) => void;
+  setBroadcast: (socketId: number, enabled: boolean, cb: (result: number) => void) => void;
   send: (socketId: number, data: ArrayBuffer, address: string, port: number, cb: (r: { resultCode?: number }) => void) => void;
   close?: (socketId: number, cb: () => void) => void;
 }
@@ -94,7 +96,7 @@ interface ChromeUdp {
 export function browserUdpSend(): UdpSend | null {
   const chrome = (globalThis as { chrome?: { sockets?: { udp?: ChromeUdp } } }).chrome;
   const udp = chrome && chrome.sockets && chrome.sockets.udp;
-  if (!udp || typeof udp.create !== 'function' || typeof udp.send !== 'function') return null;
+  if (!udp || typeof udp.create !== 'function' || typeof udp.bind !== 'function' || typeof udp.setBroadcast !== 'function' || typeof udp.send !== 'function') return null;
   return (packet, host, port) =>
     new Promise<void>((resolve, reject) => {
       udp.create({}, (info) => {
@@ -102,15 +104,28 @@ export function browserUdpSend(): UdpSend | null {
           reject(new Error('udp'));
           return;
         }
-        const copy = packet.slice().buffer;
+        const id = info.socketId;
         const finish = (err?: Error) => {
           const done = () => (err ? reject(err) : resolve());
-          if (typeof udp.close === 'function') udp.close(info.socketId, done);
+          if (typeof udp.close === 'function') udp.close(id, done);
           else done();
         };
-        udp.send(info.socketId, copy, host, port, (r) => {
-          if (r && typeof r.resultCode === 'number' && r.resultCode < 0) finish(new Error('udp'));
-          else finish();
+        udp.bind(id, '0.0.0.0', 0, (bound) => {
+          if (typeof bound === 'number' && bound < 0) {
+            finish(new Error('udp'));
+            return;
+          }
+          udp.setBroadcast(id, true, (flag) => {
+            if (typeof flag === 'number' && flag < 0) {
+              finish(new Error('udp'));
+              return;
+            }
+            const copy = packet.slice().buffer;
+            udp.send(id, copy, host, port, (r) => {
+              if (r && typeof r.resultCode === 'number' && r.resultCode < 0) finish(new Error('udp'));
+              else finish();
+            });
+          });
         });
       });
     });

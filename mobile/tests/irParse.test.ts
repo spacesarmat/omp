@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addLearned, deleteLearned, renameLearned } from '../src/tv/power/irProfile';
+import { addLearned, deleteLearned, moveLearned, renameLearned } from '../src/tv/power/irProfile';
 import { brandSignal, necFrame, sircFrame } from '../src/tv/power/irCodes';
 import { parseFlipper, parseIrText, parseLearnerBody, parsePronto, parseRaw } from '../src/tv/power/irParse';
 
@@ -113,5 +113,27 @@ describe('learned buttons', () => {
     const once = addLearned([], 'd', { id: 'b1', name: 'Power', ...signal });
     const twice = addLearned(once, 'd', { id: 'b1', name: 'Power', frequency: 36000, pulses: [9] });
     expect(twice[0].buttons).toEqual([{ id: 'b1', name: 'Power', frequency: 36000, pulses: [9] }]);
+  });
+
+  it('refuses a 41st button and still replaces one of the 40', () => {
+    let list = addLearned([], 'd', { id: 'b0', name: 'B0', ...signal });
+    for (let i = 1; i < 40; i++) list = addLearned(list, 'd', { id: 'b' + i, name: 'B' + i, ...signal });
+    const extra = addLearned(list, 'd', { id: 'b40', name: 'Extra', ...signal });
+    expect(extra).toBe(list);
+    expect(extra[0].buttons).toHaveLength(40);
+    const replaced = addLearned(list, 'd', { id: 'b0', name: 'Again', ...signal });
+    expect(replaced[0].buttons.some((b) => b.id === 'b0' && b.name === 'Again')).toBe(true);
+    expect(replaced[0].buttons).toHaveLength(40);
+  });
+
+  it('moves buttons learned under an IP onto the MAC', () => {
+    const list = [
+      { deviceId: '192.168.1.20', buttons: [{ id: 'b1', name: 'Power', ...signal }] },
+      { deviceId: '10.0.0.2', buttons: [{ id: 'b2', name: 'Ok', ...signal }] },
+    ];
+    const moved = moveLearned(list, '192.168.1.20', 'aa:bb:cc:dd:ee:ff');
+    expect(moved.map((p) => p.deviceId).sort()).toEqual(['10.0.0.2', 'aa:bb:cc:dd:ee:ff']);
+    expect(moved.find((p) => p.deviceId === 'aa:bb:cc:dd:ee:ff')?.buttons[0].id).toBe('b1');
+    expect(moveLearned(moved, '10.0.0.9', 'aa:bb:cc:dd:ee:ff')).toBe(moved);
   });
 });
