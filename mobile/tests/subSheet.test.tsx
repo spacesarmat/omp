@@ -112,7 +112,7 @@ describe('SubSheet', () => {
     const close = vi.fn();
     sheet({ onClose: close });
     type('m-sub-query', '  Дюна   2160p ');
-    click(byText('2160p'));
+    click(byText('2160p+'));
     type('m-sub-seeds', '20');
     type('m-sub-size', '45,5');
     click(el.querySelector('[role=switch][aria-label="Уведомлять"]'));
@@ -168,7 +168,8 @@ describe('SubSheet', () => {
     await flush();
     const [s] = loadSubs();
     expect(s.better).toBe(true);
-    expect(subRule(s)).toContain('только лучшее качество');
+    expect(subRule(s)).toBe('Все источники · лучшее');
+    expect(subRule(s)).not.toContain('любое качество');
     sheet({ sub: s });
     expect(better().getAttribute('aria-checked')).toBe('true');
     click(better());

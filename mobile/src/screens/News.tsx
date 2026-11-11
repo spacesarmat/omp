@@ -203,26 +203,22 @@ function Feed() {
       </div>
       {names.length === 0 && showHint ? (
         <div class="m-hint-warn m-feed-banner">
-          <span>{t('news.enableSites')}</span>
-          <div class="m-feed-banner-actions">
-            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => navigate({ name: 'sources' })}>
-              {t('news.feedSources')}
-            </button>
-            <button
-              type="button"
-              class="m-btn m-btn-primary m-btn-sm"
-              onClick={() => {
-                try {
-                  localStorage.setItem(FEED_HINT_KEY, '1');
-                } catch {
-                  // the hint stays dismissed for this visit even if storage is blocked
-                }
-                setShowHint(false);
-              }}
-            >
-              {t('news.feedGotIt')}
-            </button>
-          </div>
+          <span class="m-grow">{t('news.enableSites')}</span>
+          <button
+            type="button"
+            class="m-icon-btn"
+            aria-label={t('common.close')}
+            onClick={() => {
+              try {
+                localStorage.setItem(FEED_HINT_KEY, '1');
+              } catch {
+                // the hint stays dismissed for this visit even if storage is blocked
+              }
+              setShowHint(false);
+            }}
+          >
+            ×
+          </button>
         </div>
       ) : names.length === 0 ? null : (
         <div class="m-news-status m-muted m-small" role="status">
@@ -502,14 +498,11 @@ function Subs({ finding, watch, running }: { finding?: string; watch?: boolean; 
       <div class="m-muted m-small" role="status" data-monitor-status>
         {line}
       </div>
-      <div class="m-set-label">
-        {t('news.subs')}
-        {quota && (
-          <span class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
-            {' · ' + t('monitor.limit.quota', quota)}
-          </span>
-        )}
-      </div>
+      {quota && (
+        <div class={'m-subs-quota' + (quota.used >= quota.max ? ' full' : '')} data-subs-quota aria-label={t('monitor.limit.quotaAria', quota)}>
+          {' · ' + t('monitor.limit.quota', quota)}
+        </div>
+      )}
       {subs.length === 0 && <div class="m-muted m-small">{t('news.noSubs')}</div>}
       {subs.length > 0 && (
         <div class="m-subs-search">

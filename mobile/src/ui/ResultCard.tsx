@@ -155,7 +155,7 @@ export function ResultCard(p: {
           <div class="m-rc-meta m-small m-muted">
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
-            <span class="m-rc-meta-text m-rc-prominent">
+            <span class={'m-rc-meta-text m-rc-prominent' + ((device.seeders || 0) <= 1 ? ' m-seeds-low' : '')}>
               {[sizeText(r), seedText || (r.Seed > 0 ? knownSeeds(r) : '')].filter(Boolean).join(' · ')}
               {p.busy === 'link' ? (
                 <span class="m-rc-date" role="status">{(sizeText(r) || seedText ? ' · ' : '') + t('add.gettingLink')}</span>

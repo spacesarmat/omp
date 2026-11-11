@@ -650,7 +650,7 @@ describe('News in English', () => {
   it('feed: no sources switched on and sites that did not answer', async () => {
     await mount();
     expect(el.querySelector('.m-hint-warn')!.textContent).toContain('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
-    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Got it');
+    expect(el.querySelector('.m-feed-banner .m-icon-btn')!.getAttribute('aria-label')).toBe('Close');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
     registerSource({ id: 'feedy', name: 'Feedy', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('down')) });
     click(byText('Series'));

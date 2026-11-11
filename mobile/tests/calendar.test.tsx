@@ -128,6 +128,10 @@ async function flush() {
 }
 const button = (text: string, root: ParentNode = el) =>
   Array.from(root.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === text) as HTMLButtonElement | undefined;
+function openEarlier() {
+  const b = el.querySelector('[data-cal-earlier]') as HTMLButtonElement | null;
+  if (b && b.getAttribute('aria-expanded') === 'false') act(() => b.click());
+}
 
 beforeEach(() => {
   localStorage.clear();
@@ -403,7 +407,8 @@ describe('list and month', () => {
     expect(today.today).toBe(true);
     expect(today.inMonth).toBe(true);
     expect(eighth.count).toBe(2);
-    expect(dayCountLabel(eighth.count)).toBe('+2');
+    expect(dayCountLabel(eighth.count)).toBe('');
+    expect(dayCountLabel(5)).toBe('+2');
     expect(dayCountLabel(1)).toBe('');
     expect(eighth.poster).toBe(FROST.poster);
     expect(monthTitle(2026, 9)).toBe('Октябрь 2026');
@@ -443,23 +448,23 @@ describe('the «Календарь» tab', () => {
     mount(<Calendar />);
     await flush();
     const groups = Array.from(el.querySelectorAll('.m-cal-group'));
-    expect(groups.map((d) => d.querySelector('.m-set-label')!.textContent)).toEqual(['Вышли', 'Эта неделя', 'Следующая']);
-    const released = Array.from(groups[0].querySelectorAll('.m-cal-row'));
-    const today = released[0];
-    const first = released[1];
+    expect(groups[0].querySelector('[data-cal-earlier]')!.textContent).toBe('Ранее (1)');
+    expect(groups[0].querySelector('.m-cal-row')).toBeNull();
+    act(() => (groups[0].querySelector('[data-cal-earlier]') as HTMLElement).click());
+    const first = groups[0].querySelector('.m-cal-row')!;
+    const today = groups[1].querySelector('.m-cal-row')!;
+    expect(groups[1].querySelector('.m-cal-dayhead')!.textContent).toBe('Сегодня');
     expect(today.querySelector('.m-cal-title')!.textContent).toBe('Тихая гавань');
-    expect(today.querySelector('.m-cal-chip')!.textContent).toBe('сегодня');
-    expect(today.querySelector('.m-cal-when')!.textContent).toBe('Сегодня');
+    expect(today.querySelector('.m-cal-chip')).toBeNull();
+    expect(today.querySelector('.m-cal-when')).toBeNull();
     expect(first.querySelector('.m-cal-title')!.textContent).toBe('Ледяной перевал');
     expect(first.querySelector('.m-cal-ep')!.textContent).toBe('3 сезон · 4 серия · Глава 4');
-    expect(first.querySelector('.m-cal-when')!.textContent).toBe('Вс 4 окт.');
     expect(first.querySelector('img')!.getAttribute('src')).toBe(FROST.poster);
-    expect(first.querySelector('.m-cal-chip')!.textContent).toBe('вышла');
-    const future = groups[1].querySelector('.m-cal-row')!;
+    expect(first.querySelector('.m-cal-chip')).toBeNull();
+    const future = groups[2].querySelector('.m-cal-row')!;
     expect(future.querySelector('.m-cal-chip')).toBeNull();
-    expect(future.querySelector('.m-cal-side')).toBeNull();
-    expect(future.querySelector('button.m-btn')).toBeNull();
-    expect(future.querySelector('.m-cal-when')!.textContent).toBe('Чт 8 окт.');
+    expect(future.querySelector('button.m-btn')!.textContent).toBe('Найти');
+    expect(future.querySelector('.m-cal-when')).toBeNull();
 
     act(() => button('Смотреть', first)!.click());
     expect(currentRoute.value).toEqual({ name: 'news', seg: 'subs', finding: HASH + ':3:4' });
@@ -508,9 +513,10 @@ describe('the «Календарь» tab', () => {
     mount(<Calendar />);
     await flush();
     const labels = Array.from(el.querySelectorAll('.m-cal-group .m-set-label')).map((x) => x.textContent);
-    expect(labels).toEqual(['Out', 'This week', 'Next week']);
-    expect(el.querySelector('.m-cal-when')!.textContent).toBe('Sun, Oct 4');
-    expect(el.querySelector('.m-cal-chip')!.textContent).toBe('out');
+    expect(labels[0]).toBe('Earlier (1)');
+    expect(labels).toContain('Thu, Oct 8');
+    expect(el.querySelector('.m-cal-chip')).toBeNull();
+    expect(el.querySelector('.m-cal-when')).toBeNull();
     expect(button('Find')).toBeTruthy();
   });
 
@@ -565,6 +571,7 @@ describe('the «Календарь» tab', () => {
     torrents.value = [TOR];
     mount(<Calendar />);
     await flush();
+    openEarlier();
     const row = el.querySelector('[data-cal-row="21:3:4"] button.m-cal-open') as HTMLButtonElement;
     act(() => row.click());
     expect(currentRoute.value).toEqual({ name: 'news', seg: 'calendar' });
@@ -600,12 +607,26 @@ describe('the «Календарь» tab', () => {
     expect(currentRoute.value).toEqual({ name: 'add', query: episodeTorrentQuery(FROST, 3, 4), run: true });
   });
 
+  it('a same-day batch counts every episode in the month dots and the heading', async () => {
+    fake({ sameDay: true });
+    torrents.value = [TOR];
+    mount(<Calendar />);
+    await flush();
+    act(() => button('Месяц')!.click());
+    await flush();
+    const cell = el.querySelector('[data-cal-cell="2026-10-04"]')!;
+    expect(cell.querySelectorAll('.m-cal-dot').length).toBe(2);
+    act(() => (cell as HTMLButtonElement).click());
+    expect(el.querySelector('.m-cal-dayhead')!.textContent).toContain('2 релиза');
+  });
+
   it('a day with two episodes of one show lets List choose each one', async () => {
     fake({ sameDay: true });
     torrents.value = [TOR];
     addSubscription({ query: 'Ледяной перевал', quality: '', sources: null, notify: true });
     mount(<Calendar />);
     await flush();
+    openEarlier();
     const row = el.querySelector('[data-cal-row="21:3:7,8"]')!;
     expect(row.querySelector('.m-cal-ep')!.textContent).toBe('3 сезон · 7-8 серия');
     act(() => (row.querySelector('button.m-cal-open') as HTMLButtonElement).click());
