@@ -30,7 +30,8 @@ import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
 import { expectBetaGate } from '../../src/store/updates';
-import { observeProductionLayout } from '../../design/layoutDom.ts';
+import { installProductionDesign } from '../../design/production.ts';
+import { currentRoute, routeStack } from './nav';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -139,5 +140,13 @@ if (import.meta.env.DEV && typeof location !== 'undefined') {
   if (asked) resetTo({ name: asked[1] } as MRoute);
 }
 render(<App />, document.getElementById('app')!);
-const stopProductionLayout = observeProductionLayout(document.body);
-window.addEventListener('pagehide', stopProductionLayout, { once: true });
+// The desktop shell installs its own production design context with the target from the Tauri
+// bridge; the phone app installs the android-phone context only when it runs standalone.
+if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
+  const stopProductionLayout = installProductionDesign(document.body, {
+    target: 'android-phone',
+    screenOf: () => currentRoute.value.name,
+    subscribeScreen: (notify) => routeStack.subscribe(notify),
+  });
+  window.addEventListener('pagehide', stopProductionLayout, { once: true });
+}

@@ -13,9 +13,10 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
-import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, type LayoutRect } from './layout/transactions';
+import { moveNodeTransaction, placeNodeTransaction, nudgePlacement, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, type LayoutRect } from './layout/transactions';
 import { alignPlacements, distributePlacements, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
 import { copyNodes, duplicateNode, parseLayoutClipboard, pasteNodes, renameNode, setNodeHidden, setNodeLocked } from './layout/layerOperations';
+import { DEFAULT_GUIDE_SETTINGS, resolveGuideSettings, type GuideSettings } from './layout/guides';
 import type { LayerRowModel } from './components/LayersPanel';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
@@ -40,6 +41,13 @@ export interface AppProps {
 }
 
 export const LAYOUT_CLIPBOARD_KEY = 'omp.editor.layoutClipboard';
+
+const ARROW_NUDGE_STEPS: Record<string, { x: number; y: number }> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+};
 
 function offlineClient(initial: EditorDraft): EditorClient {
   let current = initial;
@@ -81,6 +89,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const [trace, setTrace] = useState<InteractionTrace[]>([]);
   const [zoom, setZoom] = useState(1);
   const [tool, setTool] = useState<'select' | 'hand'>('select');
+  const [guideSettings, setGuideSettings] = useState<GuideSettings>(DEFAULT_GUIDE_SETTINGS);
+  const updateGuideSettings = (patch: Partial<GuideSettings>) => {
+    setGuideSettings((current) => resolveGuideSettings({ ...current, ...patch }));
+  };
   const [designState, setDesignState] = useState<DesignState>('default');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [comparison, setComparison] = useState<DraftSnapshot | null>(null);
@@ -150,6 +162,34 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (existing?.locked || existing?.hidden) return;
     placeNodeTransaction(controller, placement);
   };
+  // One Arrow press is one undo step. Only a single selected absolute node nudges; flow nodes,
+  // locked and hidden nodes never move from the keyboard.
+  const handleNudge = (dx: number, dy: number) => {
+    if (!previewEditable || mode !== 'design' || selection.ids.length !== 1) return;
+    const nodeId = selection.ids[0];
+    const placement = getLayoutPlacement(draft.theme, layoutContext, nodeId);
+    if (!placement || placement.mode !== 'absolute' || placement.locked || placement.hidden) return;
+    const node = layoutNodes.find((entry) => entry.nodeId === nodeId);
+    const parentRect = node?.parentId ? layoutRects[node.parentId] ?? null : null;
+    const parentSize = parentRect ? { width: parentRect.width, height: parentRect.height } : viewport;
+    placeNodeTransaction(controller, nudgePlacement(placement, { x: dx, y: dy }, parentSize));
+  };
+  const nudgeRef = useRef<(dx: number, dy: number) => void>(() => undefined);
+  nudgeRef.current = handleNudge;
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLElement && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable)) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const step = ARROW_NUDGE_STEPS[event.key];
+      if (!step) return;
+      event.preventDefault();
+      const scale = event.shiftKey ? 10 : 1;
+      nudgeRef.current(step.x * scale, step.y * scale);
+    };
+    window.addEventListener('keydown', listener);
+    return () => window.removeEventListener('keydown', listener);
+  }, []);
   const handleContainerPatch = (patch: { padding?: string }) => {
     if (!selectedNode) return;
     const selectedPlacement = getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId);
@@ -220,15 +260,94 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const layerRows: LayerRowModel[] = [
     ...layoutNodes.map((node) => {
       const placement = layerPlacement(node.nodeId);
-      return { nodeId: node.nodeId, label: placement?.label ?? node.label, hidden: placement?.hidden ?? false, locked: placement?.locked ?? false };
+      return {
+        nodeId: node.nodeId,
+        label: placement?.label ?? node.label,
+        hidden: placement?.hidden ?? false,
+        locked: placement?.locked ?? false,
+        elementId: node.elementId,
+        kind: node.kind,
+        parentId: node.parentId,
+      };
     }),
     ...(draft.theme.layout?.placements ?? [])
       .filter((placement) => placement.target === layoutContext.target
         && placement.screenId === layoutContext.screenId
         && placement.format === layoutContext.format
         && !layoutNodes.some((node) => node.nodeId === placement.nodeId))
-      .map((placement) => ({ nodeId: placement.nodeId, label: placement.label, hidden: placement.hidden, locked: placement.locked })),
+      .map((placement) => ({
+        nodeId: placement.nodeId,
+        label: placement.label,
+        hidden: placement.hidden,
+        locked: placement.locked,
+        elementId: placement.nodeId,
+        kind: undefined,
+        parentId: null,
+      })),
   ];
+  const layerParents = (() => {
+    const seen = new Map<string, string>();
+    const rootNode = layoutNodes.find((node) => node.parentId === null);
+    if (rootNode) seen.set(rootNode.nodeId, rootNode.label);
+    for (const container of draft.theme.layout?.containers ?? []) {
+      if (container.target !== layoutContext.target
+        || container.screenId !== layoutContext.screenId
+        || container.format !== layoutContext.format
+        || seen.has(container.nodeId)) continue;
+      seen.set(container.nodeId, layerLabel(container.nodeId));
+    }
+    for (const node of layoutNodes) {
+      if (node.parentId && !seen.has(node.parentId)) seen.set(node.parentId, layerLabel(node.parentId));
+    }
+    return [...seen.entries()].map(([nodeId, label]) => ({ nodeId, label }));
+  })();
+  // Reorder and reparent reuse the move transaction: the flow order changes in exactly one draft
+  // update, so one undo restores the previous state. Locked layers never move from the panel.
+  const containerOrderFor = (parentId: string): string[] => {
+    const recorded = draft.theme.layout?.containers.find(
+      (container) => container.target === layoutContext.target
+        && container.screenId === layoutContext.screenId
+        && container.format === layoutContext.format
+        && container.nodeId === parentId,
+    );
+    return recorded?.order.length
+      ? [...recorded.order]
+      : layoutNodes.filter((node) => node.parentId === parentId).map((node) => node.nodeId);
+  };
+  const handleReorderNode = (nodeId: string, direction: 'up' | 'down') => {
+    if (layerPlacement(nodeId)?.locked) return;
+    const node = layoutNodes.find((entry) => entry.nodeId === nodeId);
+    const parentId = node?.parentId ?? rootNodeId();
+    if (!parentId) return;
+    const order = containerOrderFor(parentId);
+    const index = order.indexOf(nodeId);
+    if (index < 0) return;
+    const next = direction === 'up' ? index - 1 : index + 1;
+    if (next < 0 || next >= order.length) return;
+    moveNodeTransaction(controller, { context: layoutContext, nodeId, parentId, index: next, siblings: order });
+  };
+  const handleReparentNode = (nodeId: string, parentId: string) => {
+    if (layerPlacement(nodeId)?.locked) return;
+    const node = layoutNodes.find((entry) => entry.nodeId === nodeId);
+    if (!node || node.nodeId === parentId || node.parentId === parentId) return;
+    const children = new Map<string, string[]>();
+    for (const entry of layoutNodes) {
+      if (!entry.parentId) continue;
+      children.set(entry.parentId, [...(children.get(entry.parentId) ?? []), entry.nodeId]);
+    }
+    const descendants = new Set<string>();
+    const collectDescendants = (id: string): void => {
+      for (const child of children.get(id) ?? []) {
+        if (descendants.has(child)) continue;
+        descendants.add(child);
+        collectDescendants(child);
+      }
+    };
+    collectDescendants(node.nodeId);
+    if (descendants.has(parentId)) return;
+    const siblings = (children.get(parentId) ?? []).filter((id) => id !== nodeId);
+    moveNodeTransaction(controller, { context: layoutContext, nodeId, parentId, index: siblings.length, siblings });
+  };
   const handleRenameNode = (nodeId: string, name: string) => {
     renameNode(controller, { context: layoutContext, nodeId, label: layerLabel(nodeId), base: layerPlacement(nodeId), name });
   };
@@ -427,6 +546,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           route={draft.screenId}
           target={draft.target}
           layers={layerRows}
+          parents={layerParents}
           selectedNodeId={selectedNodeId}
           clipboardError={clipboardError}
           readOnly={!previewEditable}
@@ -439,6 +559,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
           onDuplicateNode={handleDuplicateNode}
           onCopySelection={handleCopySelection}
           onPaste={handlePaste}
+          onReorderNode={handleReorderNode}
+          onReparentNode={handleReparentNode}
         />
         <section class="editor-canvas-area" aria-label="Холст">
           <div class="editor-canvas-caption"><span>{routeLabel}</span><small>{viewport.width} × {viewport.height}</small>{!previewEditable && <small class="editor-canvas-readonly" data-testid="canvas-readonly">Базовая тема - редактирование выключено</small>}</div>
@@ -457,9 +579,11 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             tool={tool}
             selection={selection}
             editable={previewEditable}
+            guideSettings={guideSettings}
             nodeSource={nodeSourceRef}
             onZoomChange={setZoom}
             onTool={setTool}
+            onGuideSettingsChange={updateGuideSettings}
             onSelect={handleElementSelected}
             onNavigate={(screenId) => setView({ screenId })}
             onTrace={setTrace}

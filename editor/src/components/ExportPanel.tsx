@@ -80,6 +80,8 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
   };
   const geometryWarnings = (accessibilityIssues ?? []).some((issue) => issue.severity === 'warning');
   const geometryBlocked = geometryWarnings && !geometryConfirmed;
+  const errorIssues = (accessibilityIssues ?? []).filter((issue) => issue.severity === 'error');
+  const errorBlocked = errorIssues.length > 0;
   const componentBlocked = scopeKind === 'component' && !componentId.trim();
   const diffAvailable = Boolean(client?.exportDiff);
   return (
@@ -119,6 +121,11 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       {geometryWarnings && !geometryConfirmed && (
         <p class="editor-notice" data-testid="geometry-confirm-notice">Экспорт ожидает подтверждения предупреждений геометрии</p>
       )}
+      {errorBlocked && (
+        <p class="editor-notice" data-testid="accessibility-error-notice">
+          Экспорт заблокирован ошибками доступности: {errorIssues.map((issue) => issue.code).join(', ')}
+        </p>
+      )}
       {diffAvailable && (
         <button type="button" data-action="show-diff" disabled={busy || componentBlocked} onClick={runDiff}>Показать diff</button>
       )}
@@ -138,7 +145,7 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       <button
         type="button"
         data-action="export"
-        disabled={busy || geometryBlocked || componentBlocked}
+        disabled={busy || geometryBlocked || errorBlocked || componentBlocked}
         onClick={runExport}
       >
         {busy ? 'Экспорт...' : 'Экспортировать'}

@@ -587,6 +587,33 @@ h2 svg {
   height: 22px;
 }
 
+.editor-layer-row-actions .editor-icon-button svg {
+  pointer-events: none;
+}
+
+.editor-layer-move-up svg {
+  transform: rotate(-90deg);
+}
+
+.editor-layer-move-down svg {
+  transform: rotate(90deg);
+}
+
+.editor-layer-parent-select {
+  max-width: 88px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  background: #242424;
+  color: #c9c9c9;
+  font-size: 11px;
+}
+
+.editor-layer-parent-select:disabled {
+  opacity: 0.5;
+}
+
 .editor-layer-muted .editor-layer-row-name span,
 .editor-layer-muted .editor-layer-row-name svg {
   opacity: 0.55;

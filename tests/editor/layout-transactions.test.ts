@@ -9,6 +9,7 @@ import {
   collectLayoutElements,
   createPlacement,
   moveNodeTransaction,
+  nudgePlacement,
   placeNodeTransaction,
   screenToArtboard,
 } from '../../editor/src/layout/transactions';
@@ -208,5 +209,35 @@ describe('collectLayoutElements', () => {
     expect(elements.get('server-card')).toBe(first);
     expect(elements.get('server-card-2')).toBe(second);
     expect(elements.get('key-hash-1')).toBe(keyed);
+  });
+});
+
+describe('nudgePlacement', () => {
+  it('moves a top-left anchored placement by whole artboard pixels', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 500, y: 250, width: 2500, height: 2500 });
+    const parentSize = { width: 400, height: 400 };
+
+    const nudged = nudgePlacement(base, { x: 1, y: 0 }, parentSize);
+    expect(nudged.x).toBe(525);
+    expect(nudged.y).toBe(250);
+
+    const shifted = nudgePlacement(base, { x: 0, y: -10 }, parentSize);
+    expect(shifted.x).toBe(500);
+    expect(shifted.y).toBe(0);
+  });
+
+  it('moves right and bottom anchored placements toward the pressed arrow visually', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', anchor: 'bottom-right', x: 500, y: 250 });
+    const parentSize = { width: 400, height: 400 };
+
+    const nudged = nudgePlacement(base, { x: 1, y: 1 }, parentSize);
+    expect(nudged.x).toBe(475);
+    expect(nudged.y).toBe(225);
+  });
+
+  it('clamps nudged coordinates to the geometry limit', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 9990, y: 20 });
+    const nudged = nudgePlacement(base, { x: 10, y: 0 }, { width: 100, height: 100 });
+    expect(nudged.x).toBe(10000);
   });
 });

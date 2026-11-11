@@ -150,6 +150,113 @@ describe('LayersPanel layer operations', () => {
     expect(onPaste).toHaveBeenCalled();
     expect(host.querySelector('.editor-layers-footer')!.textContent).toContain('Неподдерживаемая версия clipboard');
   });
+
+  it('searches layers by node id, label and element type', () => {
+    const typedRows: LayerRowModel[] = [
+      { nodeId: 'server-card', label: 'Карточка сервера', elementId: 'server-card', kind: 'element', parentId: 'card-grid', hidden: false, locked: false },
+      { nodeId: 'key-hash-1', label: 'Раздача А', elementId: 'card', kind: 'dynamic', parentId: 'card-grid', hidden: false, locked: false },
+      { nodeId: 'btn-ok', label: 'Ок', elementId: 'button', kind: 'element', parentId: 'footer', hidden: false, locked: false },
+    ];
+    renderPanel({ layers: typedRows });
+    const search = host.querySelector<HTMLInputElement>('[data-testid="layout-search"]')!;
+
+    act(() => {
+      search.value = 'key-hash-1';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('[data-testid^="layout-row-"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="layout-row-key-hash-1"]')).not.toBeNull();
+
+    act(() => {
+      search.value = 'button';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('[data-testid^="layout-row-"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="layout-row-btn-ok"]')).not.toBeNull();
+
+    act(() => {
+      search.value = 'карточка сервера';
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('[data-testid^="layout-row-"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="layout-row-server-card"]')).not.toBeNull();
+  });
+
+  it('filters component layers apart from dynamic data-key nodes', () => {
+    const typedRows: LayerRowModel[] = [
+      { nodeId: 'server-card', label: 'Карточка сервера', elementId: 'server-card', kind: 'element', parentId: 'card-grid', hidden: false, locked: false },
+      { nodeId: 'key-hash-1', label: 'Раздача А', elementId: 'card', kind: 'dynamic', parentId: 'card-grid', hidden: false, locked: false },
+    ];
+    renderPanel({ layers: typedRows });
+    const filter = host.querySelector<HTMLSelectElement>('[data-testid="layout-filter"]')!;
+
+    act(() => {
+      filter.value = 'component';
+      filter.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('[data-testid^="layout-row-"]')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="layout-row-server-card"]')).not.toBeNull();
+  });
+
+  it('reorders and reparents layers from the row controls', () => {
+    const onReorderNode = vi.fn();
+    const onReparentNode = vi.fn();
+    const typedRows: LayerRowModel[] = [
+      { nodeId: 'server-card', label: 'Карточка сервера', elementId: 'server-card', kind: 'element', parentId: 'card-grid', hidden: false, locked: false },
+    ];
+    renderPanel({
+      layers: typedRows,
+      parents: [
+        { nodeId: 'card-grid', label: 'Сетка карточек' },
+        { nodeId: 'footer', label: 'Подвал' },
+      ],
+      onReorderNode,
+      onReparentNode,
+    });
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-up-server-card"]')!.click());
+    expect(onReorderNode).toHaveBeenCalledWith('server-card', 'up');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-down-server-card"]')!.click());
+    expect(onReorderNode).toHaveBeenCalledWith('server-card', 'down');
+
+    const parent = host.querySelector<HTMLSelectElement>('[data-testid="layout-parent-server-card"]')!;
+    expect([...parent.options].map((option) => option.value)).toEqual(['card-grid', 'footer']);
+    act(() => {
+      parent.value = 'footer';
+      parent.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(onReparentNode).toHaveBeenCalledWith('server-card', 'footer');
+  });
+
+  it('disables reorder and reparent controls for locked layers and in read-only mode', () => {
+    const onReorderNode = vi.fn();
+    const onReparentNode = vi.fn();
+    const typedRows: LayerRowModel[] = [
+      { nodeId: 'banner', label: 'Баннер', elementId: 'banner', kind: 'element', parentId: 'card-grid', hidden: false, locked: true },
+      { nodeId: 'server-card', label: 'Карточка сервера', elementId: 'server-card', kind: 'element', parentId: 'card-grid', hidden: false, locked: false },
+    ];
+    renderPanel({
+      layers: typedRows,
+      parents: [{ nodeId: 'card-grid', label: 'Сетка карточек' }],
+      onReorderNode,
+      onReparentNode,
+    });
+
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="layout-up-banner"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="layout-down-banner"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="layout-parent-banner"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="layout-up-server-card"]')!.disabled).toBe(false);
+
+    renderPanel({
+      layers: typedRows,
+      parents: [{ nodeId: 'card-grid', label: 'Сетка карточек' }],
+      onReorderNode,
+      onReparentNode,
+      readOnly: true,
+    });
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="layout-up-server-card"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLSelectElement>('[data-testid="layout-parent-server-card"]')!.disabled).toBe(true);
+  });
 });
 
 describe('App layer operations', () => {
@@ -383,5 +490,88 @@ describe('App layer operations', () => {
 
     expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
     expect(host.querySelector('.editor-layers-footer')!.textContent).toContain('Синхронизировано');
+  });
+
+  it('reorders a layer from the panel with exactly one undo step', () => {
+    buildPreview();
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-down-server-card"]')!.click());
+
+    const context = contextOf();
+    const container = controller.draft.theme.layout?.containers.find(
+      (entry) => entry.target === context.target
+        && entry.screenId === context.screenId
+        && entry.format === context.format
+        && entry.nodeId === 'card-grid',
+    );
+    expect(container?.order).toEqual(['server-card-2', 'server-card']);
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers ?? []).toHaveLength(0);
+  });
+
+  it('reparents a layer into another container from the panel with one undo step', () => {
+    const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
+    iframe.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
+    const doc = iframe.contentDocument!;
+    if (!doc.documentElement) doc.appendChild(doc.createElement('html'));
+    let body = doc.body;
+    if (!body) {
+      body = doc.createElement('body');
+      doc.documentElement.appendChild(body);
+    }
+    body.innerHTML = '';
+    const make = (designId: string, x: number, y: number, width: number, height: number): HTMLElement => {
+      const element = doc.createElement('div');
+      element.dataset.designId = designId;
+      element.getBoundingClientRect = () => clientRect(x, y, width, height);
+      return element;
+    };
+    const grid = make('card-grid', 0, 0, 400, 400);
+    const first = make('server-card', 0, 0, 400, 100);
+    grid.append(first);
+    const side = make('side-list', 400, 0, 200, 400);
+    side.append(make('side-item', 400, 0, 200, 50));
+    body.append(grid, side);
+    act(() => {
+      iframe.dispatchEvent(new Event('load'));
+    });
+
+    const parent = host.querySelector<HTMLSelectElement>('[data-testid="layout-parent-server-card"]')!;
+    expect([...parent.options].map((option) => option.value)).toContain('side-list');
+    expect(parent.value).toBe('card-grid');
+    act(() => {
+      parent.value = 'side-list';
+      parent.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const context = contextOf();
+    const container = controller.draft.theme.layout?.containers.find(
+      (entry) => entry.target === context.target
+        && entry.screenId === context.screenId
+        && entry.format === context.format
+        && entry.nodeId === 'side-list',
+    );
+    expect(container?.order).toEqual(['side-item', 'server-card']);
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers ?? []).toHaveLength(0);
+  });
+
+  it('keeps locked layers out of panel reordering until unlocked', () => {
+    buildPreview();
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-lock-server-card"]')!.click());
+    const button = host.querySelector<HTMLButtonElement>('[data-testid="layout-down-server-card"]')!;
+    expect(button.disabled).toBe(true);
+    const blockedUpdate = vi.spyOn(controller, 'update');
+    act(() => button.click());
+    expect(blockedUpdate).not.toHaveBeenCalled();
+    blockedUpdate.mockRestore();
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-lock-server-card"]')!.click());
+    const update = vi.spyOn(controller, 'update');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-down-server-card"]')!.click());
+    expect(update).toHaveBeenCalledTimes(1);
   });
 });

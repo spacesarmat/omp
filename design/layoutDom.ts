@@ -177,6 +177,39 @@ function resetManagedStyle(element: HTMLElement): void {
   delete element.dataset.layoutManaged;
 }
 
+// Absolute percent geometry is resolved against the nearest positioned ancestor. The layout
+// parent is not necessarily positioned in the app CSS, so the runtime promotes it to a
+// containing block itself: the property is set only when nothing else positions the element,
+// it is flagged as runtime-owned and removed once no absolute child needs it anymore.
+function ensureContainingBlock(element: HTMLElement, managed: Set<HTMLElement>): void {
+  if (element.dataset.layoutParent === '1') {
+    managed.add(element);
+    return;
+  }
+  const inline = element.style.position;
+  if (inline && inline !== 'static') return;
+  let computed = '';
+  try {
+    computed = typeof getComputedStyle === 'function' ? getComputedStyle(element).position : '';
+  } catch {
+    computed = '';
+  }
+  if (computed && computed !== 'static') return;
+  element.style.position = 'relative';
+  element.dataset.layoutParent = '1';
+  managed.add(element);
+}
+
+function releaseContainingBlocks(held: Set<HTMLElement>, managed: Set<HTMLElement>): void {
+  for (const element of held) {
+    if (managed.has(element)) continue;
+    if (element.style.position === 'relative') element.style.removeProperty('position');
+    delete element.dataset.layoutParent;
+  }
+  held.clear();
+  for (const element of managed) held.add(element);
+}
+
 function applyPlacement(element: HTMLElement, placement: LayoutPlacement): void {
   resetManagedStyle(element);
   element.dataset.layoutMode = placement.mode;
@@ -243,6 +276,7 @@ function createLayoutRuntime(
   options: LayoutRuntimeOptions,
 ): () => void {
   let applying = false;
+  const heldParents = new Set<HTMLElement>();
   const syncClones = (layout: LayoutDocument, context: LayoutContext): void => {
     const clones = (layout.clones ?? []).filter((clone) => sameContext(clone, context));
     const active = new Set(clones.map((clone) => clone.nodeId));
@@ -269,12 +303,17 @@ function createLayoutRuntime(
       const nodes = resolveNodes(root);
       const nodeById = new Map(nodes.map((node) => [node.nodeId, node]));
       const nodeIdByElement = new Map(nodes.map((node) => [node.element, node.nodeId]));
+      const activeParents = new Set<HTMLElement>();
       for (const node of nodes) {
         const placement = layout.placements.find((entry) => sameContext(entry, context) && entry.nodeId === node.nodeId);
         if (!placement) continue;
         if (placement.locked && !options.production) continue;
         applyPlacement(node.element, placement);
+        if (placement.mode === 'absolute' && node.element.parentElement) {
+          ensureContainingBlock(node.element.parentElement, activeParents);
+        }
       }
+      releaseContainingBlocks(heldParents, activeParents);
       for (const container of layout.containers) {
         if (!sameContext(container, context)) continue;
         const target = nodeById.get(container.nodeId);
@@ -291,9 +330,12 @@ function createLayoutRuntime(
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['data-key', 'data-design-id', 'data-design-screen', 'data-design-target', 'data-design-format'],
+    attributeFilter: ['data-key', 'data-design-id', 'data-design-component', 'data-design-screen', 'data-design-target', 'data-design-format'],
   });
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    releaseContainingBlocks(heldParents, new Set());
+  };
 }
 
 export function observeLayout(root: HTMLElement, theme: ThemeDocument, context: LayoutContext): () => void {

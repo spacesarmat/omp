@@ -456,3 +456,68 @@ describe('layout dom runtime', () => {
     expect(() => parseThemeDocument(theme)).not.toThrow();
   });
 });
+
+describe('layout containing blocks', () => {
+  it('sets position relative on an unpositioned layout parent and cleans it up', async () => {
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24 }));
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    cleanup = observeLayout(root, theme, context);
+
+    const grid = root.querySelector<HTMLElement>('[data-design-id="card-grid"]')!;
+    expect(grid.style.position).toBe('relative');
+    expect(grid.dataset.layoutParent).toBe('1');
+    expect(root.style.position).toBe('');
+
+    theme.layout = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'flow', x: 0, y: 0 })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(grid.style.position).toBe('');
+    expect(grid.dataset.layoutParent).toBeUndefined();
+  });
+
+  it('preserves an explicitly positioned parent and never touches it', async () => {
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24 }));
+    const root = mount(`
+      <div data-design-id="card-grid" style="position: fixed">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    cleanup = observeLayout(root, theme, context);
+
+    const grid = root.querySelector<HTMLElement>('[data-design-id="card-grid"]')!;
+    expect(grid.style.position).toBe('fixed');
+    expect(grid.dataset.layoutParent).toBeUndefined();
+  });
+
+  it('keeps a managed parent positioned while any absolute child remains', async () => {
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24 }));
+    theme = upsertLayoutPlacement(theme, placement('key-hash-2', { mode: 'absolute', x: 60, y: 40, nodeId: 'key-hash-2' }));
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    cleanup = observeLayout(root, theme, context);
+
+    const grid = root.querySelector<HTMLElement>('[data-design-id="card-grid"]')!;
+    expect(grid.style.position).toBe('relative');
+
+    theme.layout = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'flow', x: 0, y: 0 })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+    expect(grid.style.position).toBe('relative');
+
+    theme.layout = upsertLayoutPlacement(theme, placement('key-hash-2', { mode: 'flow', x: 0, y: 0, nodeId: 'key-hash-2' })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+    expect(grid.style.position).toBe('');
+  });
+});

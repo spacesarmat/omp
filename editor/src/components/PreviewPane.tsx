@@ -11,7 +11,7 @@ import { SelectionOverlay, type MoveNodeArgs } from './SelectionOverlay';
 import { Rulers } from './Rulers';
 import type { SelectionState } from '../layout/selection';
 import { getEditorViewport } from '../../shared/routes';
-import { DEFAULT_GUIDE_SETTINGS } from '../layout/guides';
+import { DEFAULT_GUIDE_SETTINGS, type GuideSettings } from '../layout/guides';
 
 export interface PreviewPaneProps extends PreviewConfiguration {
   sessionId: string;
@@ -19,9 +19,11 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   tool: CanvasTool;
   selection: SelectionState;
   editable?: boolean;
+  guideSettings?: GuideSettings;
   nodeSource?: { current: ((nodeId: string) => string | null) | null };
   onZoomChange(zoom: number): void;
   onTool(tool: CanvasTool): void;
+  onGuideSettingsChange?(patch: Partial<GuideSettings>): void;
   onSelect(elementId: string): void;
   onNavigate(route: DesktopRouteId): void;
   onTrace(trace: InteractionTrace[]): void;
@@ -74,6 +76,7 @@ export function PreviewPane(props: PreviewPaneProps) {
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
   const layoutContext: LayoutContext = { target: props.target, screenId: props.route, format: props.format };
+  const guideSettings = props.guideSettings ?? DEFAULT_GUIDE_SETTINGS;
   useEffect(() => {
     zoomRef.current = props.zoom;
   });
@@ -237,10 +240,16 @@ export function PreviewPane(props: PreviewPaneProps) {
       <CanvasControls
         zoom={props.zoom}
         tool={props.tool}
+        rulers={guideSettings.showRulers}
+        grid={guideSettings.showGrid}
+        snap={guideSettings.snapToGuides}
         onZoomIn={() => setZoom(props.zoom * 1.25)}
         onZoomOut={() => setZoom(props.zoom / 1.25)}
         onFit={fit}
         onTool={props.onTool}
+        onToggleRulers={() => props.onGuideSettingsChange?.({ showRulers: !guideSettings.showRulers })}
+        onToggleGrid={() => props.onGuideSettingsChange?.({ showGrid: !guideSettings.showGrid })}
+        onToggleSnap={() => props.onGuideSettingsChange?.({ snapToGuides: !guideSettings.snapToGuides })}
       />
       <div
         ref={viewportElement}
@@ -268,7 +277,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       >
         <div class="editor-canvas-stage">
           <div class="editor-artboard-size" data-testid="artboard-size" style={{ width: `${viewport.width * props.zoom}px`, height: `${viewport.height * props.zoom}px` }}>
-            {DEFAULT_GUIDE_SETTINGS.showRulers && <Rulers viewport={viewport} zoom={props.zoom} />}
+            {guideSettings.showRulers && <Rulers viewport={viewport} zoom={props.zoom} />}
             <div class="editor-artboard" style={{ width: `${viewport.width}px`, height: `${viewport.height}px`, transform: `scale(${props.zoom})` }}>
               <iframe
                 key={`${props.target}-${props.language}`}
@@ -302,6 +311,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                 context={layoutContext}
                 nodes={collected.nodes}
                 rects={collected.rects}
+                guideSettings={guideSettings}
                 containers={(props.theme.layout?.containers ?? []).filter(
                   (container) => container.target === layoutContext.target
                     && container.screenId === layoutContext.screenId

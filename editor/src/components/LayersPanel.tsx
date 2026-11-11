@@ -10,6 +10,14 @@ export interface LayerRowModel {
   label: string;
   hidden: boolean;
   locked: boolean;
+  elementId?: string;
+  kind?: 'element' | 'dynamic';
+  parentId?: string | null;
+}
+
+export interface LayerParentOption {
+  nodeId: string;
+  label: string;
 }
 
 export interface LayersPanelProps {
@@ -17,6 +25,7 @@ export interface LayersPanelProps {
   route: DesktopRouteId;
   target?: DesignTarget;
   layers?: LayerRowModel[];
+  parents?: LayerParentOption[];
   selectedNodeId?: string | null;
   clipboardError?: string | null;
   readOnly?: boolean;
@@ -29,6 +38,8 @@ export interface LayersPanelProps {
   onDuplicateNode?(nodeId: string): void;
   onCopySelection?(): void;
   onPaste?(): void;
+  onReorderNode?(nodeId: string, direction: 'up' | 'down'): void;
+  onReparentNode?(nodeId: string, parentId: string): void;
 }
 
 const icons: Record<string, EditorIconName> = {
@@ -38,13 +49,14 @@ const icons: Record<string, EditorIconName> = {
   'settings-continue': 'button',
 };
 
-type LayerFilter = 'all' | 'hidden' | 'locked';
+type LayerFilter = 'all' | 'hidden' | 'locked' | 'component';
 
 export function LayersPanel({
   selected,
   route,
   target = 'desktop-windows',
   layers = [],
+  parents = [],
   selectedNodeId = null,
   clipboardError = null,
   readOnly = false,
@@ -57,6 +69,8 @@ export function LayersPanel({
   onDuplicateNode,
   onCopySelection,
   onPaste,
+  onReorderNode,
+  onReparentNode,
 }: LayersPanelProps) {
   const selectedLayer = selected.startsWith('nav-') ? 'sidebar-item' : selected;
   const pages = getEditorPages(target);
@@ -68,9 +82,15 @@ export function LayersPanel({
   const [draftName, setDraftName] = useState('');
   const normalizedQuery = query.trim().toLowerCase();
   const visibleLayers = layers.filter((layer) => {
-    if (normalizedQuery && !layer.label.toLowerCase().includes(normalizedQuery)) return false;
+    if (normalizedQuery) {
+      const haystack = [layer.label, layer.nodeId, layer.elementId ?? '']
+        .join(' ')
+        .toLowerCase();
+      if (!haystack.includes(normalizedQuery)) return false;
+    }
     if (filter === 'hidden') return layer.hidden;
     if (filter === 'locked') return layer.locked;
+    if (filter === 'component') return layer.kind === 'element';
     return true;
   });
   const commitRename = (layer: LayerRowModel, name: string) => {
@@ -134,6 +154,7 @@ export function LayersPanel({
                 <option value="all">Все</option>
                 <option value="hidden">Скрытые</option>
                 <option value="locked">Заблокированные</option>
+                <option value="component">Компоненты</option>
               </select>
               <button type="button" data-testid="layout-copy" class="editor-icon-button" aria-label="Копировать выделенные слои" title="Копировать выделенные слои" onClick={() => onCopySelection?.()}><EditorIcon name="copy" /></button>
               <button type="button" data-testid="layout-paste" class="editor-icon-button" aria-label="Вставить слои" title="Вставить слои" disabled={readOnly} onClick={() => { if (!readOnly) onPaste?.(); }}><EditorIcon name="plus" /></button>
@@ -179,6 +200,63 @@ export function LayersPanel({
                       </button>
                     )}
                     <span class="editor-layer-row-actions">
+                      {onReorderNode && (
+                        <>
+                          <button
+                            type="button"
+                            data-testid={`layout-up-${layer.nodeId}`}
+                            class="editor-icon-button editor-layer-move-up"
+                            aria-label="Поднять слой выше"
+                            title="Поднять слой выше"
+                            disabled={readOnly || layer.locked}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (readOnly || layer.locked) return;
+                              onReorderNode(layer.nodeId, 'up');
+                            }}
+                          >
+                            <EditorIcon name="chevron" size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`layout-down-${layer.nodeId}`}
+                            class="editor-icon-button editor-layer-move-down"
+                            aria-label="Опустить слой ниже"
+                            title="Опустить слой ниже"
+                            disabled={readOnly || layer.locked}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (readOnly || layer.locked) return;
+                              onReorderNode(layer.nodeId, 'down');
+                            }}
+                          >
+                            <EditorIcon name="chevron" size={12} />
+                          </button>
+                        </>
+                      )}
+                      {onReparentNode && parents.length > 0 && (
+                        <select
+                          data-testid={`layout-parent-${layer.nodeId}`}
+                          class="editor-layer-parent-select"
+                          aria-label="Родительский контейнер"
+                          title="Родительский контейнер"
+                          value={layer.parentId ?? ''}
+                          disabled={readOnly || layer.locked}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            if (readOnly || layer.locked) return;
+                            const value = (event.target as HTMLSelectElement).value;
+                            if (value && value !== layer.parentId) onReparentNode(layer.nodeId, value);
+                          }}
+                        >
+                          {(layer.parentId && !parents.some((parent) => parent.nodeId === layer.parentId)
+                            ? [...parents, { nodeId: layer.parentId, label: layer.parentId }]
+                            : parents
+                          ).map((parent) => (
+                            <option key={parent.nodeId} value={parent.nodeId}>{parent.label}</option>
+                          ))}
+                        </select>
+                      )}
                       {onRenameNode && renamingId !== layer.nodeId && (
                         <button
                           type="button"

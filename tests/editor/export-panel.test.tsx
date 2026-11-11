@@ -271,4 +271,67 @@ describe('ExportPanel', () => {
     act(() => render(h(ExportPanel, { controller }), host));
     expect(host.querySelector('[data-action="show-diff"]')).toBeNull();
   });
+
+  it.each([
+    { code: 'CONTRAST', message: 'color #777777 on #ffffff has contrast 2.10:1' },
+    { code: 'TV_FONT_SIZE', message: 'font size 18px is below the TV minimum 24px' },
+    { code: 'OVERFLOW', message: 'rect extends beyond the 1920x1080 viewport' },
+  ] as const)('blocks export while a $code error is present, even with confirmed warnings', async ({ code, message }) => {
+    const exportDraft = vi.fn(async (draft: typeof controller.draft) => ({
+      baseCommit: draft.baseCommit,
+      files: ['design/themes/default.json'],
+      releaseIntents: draft.theme.releaseIntents,
+      targets: ['desktop-windows' as const],
+      scope: 'all' as const,
+    }));
+    const client: EditorClient = {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft,
+    };
+    const issues: LayoutIssue[] = [
+      { code, nodeId: 'edge', severity: 'error', message },
+      { code: 'SAFE_AREA', nodeId: 'edge', severity: 'warning', message: 'outside the TV safe area' },
+    ];
+    act(() => render(h(ExportPanel, { controller, client, issues, geometryConfirmed: true, onGeometryConfirm: vi.fn() }), host));
+
+    const exportButton = host.querySelector<HTMLButtonElement>('[data-action="export"]')!;
+    expect(exportButton.disabled).toBe(true);
+    const notice = host.querySelector('[data-testid="accessibility-error-notice"]')!;
+    expect(notice.textContent).toContain(code);
+    await act(async () => {
+      exportButton.click();
+    });
+    expect(exportDraft).not.toHaveBeenCalled();
+  });
+
+  it('keeps warnings confirmable without any error present', async () => {
+    const exportDraft = vi.fn(async (draft: typeof controller.draft) => ({
+      baseCommit: draft.baseCommit,
+      files: ['design/themes/default.json'],
+      releaseIntents: draft.theme.releaseIntents,
+      targets: ['desktop-windows' as const],
+      scope: 'all' as const,
+    }));
+    const client: EditorClient = {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft,
+    };
+    const issues: LayoutIssue[] = [{ code: 'SAFE_AREA', nodeId: 'edge', severity: 'warning', message: 'outside the TV safe area' }];
+    act(() => render(h(ExportPanel, { controller, client, issues, geometryConfirmed: false, onGeometryConfirm: vi.fn() }), host));
+
+    expect(host.querySelector('[data-testid="accessibility-error-notice"]')).toBeNull();
+    const exportButton = host.querySelector<HTMLButtonElement>('[data-action="export"]')!;
+    expect(exportButton.disabled).toBe(true);
+    act(() => render(h(ExportPanel, { controller, client, issues, geometryConfirmed: true, onGeometryConfirm: vi.fn() }), host));
+    expect(host.querySelector<HTMLButtonElement>('[data-action="export"]')!.disabled).toBe(false);
+    expect(host.querySelector('[data-testid="confirm-geometry-warnings"]')).not.toBeNull();
+  });
 });

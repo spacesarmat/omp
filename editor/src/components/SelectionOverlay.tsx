@@ -28,6 +28,7 @@ import {
   snapToGrid,
   DEFAULT_GUIDE_SETTINGS,
   type GuideLine,
+  type GuideSettings,
   type Rect,
 } from '../layout/guides.ts';
 import { isTvTarget } from '../../shared/routes.ts';
@@ -48,6 +49,7 @@ export interface SelectionOverlayProps {
   rects: Record<string, LayoutRect>;
   containers: LayoutContainer[];
   placements: LayoutPlacement[];
+  guideSettings?: GuideSettings;
   selectedIds: string[];
   anchorId: string | null;
   getIframeRect(): ClientRectLike;
@@ -197,9 +199,10 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
 
   // Snapping runs in native artboard coordinates: the CSS scale of the canvas handles rendering,
   // so the same threshold works at any zoom. Alt held anywhere during the drag disables snapping,
-  // and the 8px grid only fills axes where no element, safe-area or artboard line matched.
+  // and the grid only fills axes where no element, safe-area or artboard line matched.
+  const guideSettings = props.guideSettings ?? DEFAULT_GUIDE_SETTINGS;
   const snapDragRect = (moved: LayoutRect, nodeId: string, altKey: boolean): { rect: LayoutRect; lines: GuideLine[] } => {
-    if (altKey || !DEFAULT_GUIDE_SETTINGS.snapToGuides) return { rect: moved, lines: [] };
+    if (altKey || !guideSettings.snapToGuides) return { rect: moved, lines: [] };
     const rects = Object.entries(props.rects)
       .filter(([id, rect]) => id !== nodeId && Boolean(rect))
       .map(([, rect]) => rect as Rect);
@@ -207,13 +210,13 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       { x: moved.x, y: moved.y },
       [moved],
       collectGuides(rects, { safeArea: safeAreaRect(), artboard: artboardRect() }),
-      DEFAULT_GUIDE_SETTINGS.snapThreshold,
+      guideSettings.snapThreshold,
     );
     let { x, y } = moved;
     if (snap.x !== null) x = snap.x;
-    else if (DEFAULT_GUIDE_SETTINGS.snapToGrid) x = snapToGrid(x, DEFAULT_GUIDE_SETTINGS.gridSize);
+    else if (guideSettings.snapToGrid) x = snapToGrid(x, guideSettings.gridSize);
     if (snap.y !== null) y = snap.y;
-    else if (DEFAULT_GUIDE_SETTINGS.snapToGrid) y = snapToGrid(y, DEFAULT_GUIDE_SETTINGS.gridSize);
+    else if (guideSettings.snapToGrid) y = snapToGrid(y, guideSettings.gridSize);
     return { rect: { ...moved, x, y }, lines: snap.lines };
   };
 
@@ -517,11 +520,11 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           />
         );
       })()}
-      {DEFAULT_GUIDE_SETTINGS.showGrid && (
+      {guideSettings.showGrid && (
         <div
           class="editor-grid-layer"
           data-testid="grid-layer"
-          style={{ backgroundSize: `${DEFAULT_GUIDE_SETTINGS.gridSize}px ${DEFAULT_GUIDE_SETTINGS.gridSize}px` }}
+          style={{ backgroundSize: `${guideSettings.gridSize}px ${guideSettings.gridSize}px` }}
         />
       )}
       {preview?.lines.map((guide, index) => (guide.axis === 'x' ? (

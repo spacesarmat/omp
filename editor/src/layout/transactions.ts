@@ -152,6 +152,23 @@ export function absolutePlacementFromRect(
   return createPlacement(context, nodeId, label, patch);
 }
 
+// Arrow-key nudge: one press moves the element by whole artboard pixels, Shift multiplies the
+// step by 10. Right and bottom anchors measure the offset from the opposite edge, so the sign
+// flips there to keep the visual direction of the pressed arrow.
+export function nudgePlacement(
+  placement: LayoutPlacement,
+  delta: { x: number; y: number },
+  parentSize: { width: number; height: number },
+): LayoutPlacement {
+  const signX = placement.anchor === 'top-right' || placement.anchor === 'bottom-right' ? -1 : 1;
+  const signY = placement.anchor === 'bottom-left' || placement.anchor === 'bottom-right' ? -1 : 1;
+  return {
+    ...placement,
+    x: toUnits((placement.x / LAYOUT_GEOMETRY_LIMIT) * parentSize.width + delta.x * signX, parentSize.width),
+    y: toUnits((placement.y / LAYOUT_GEOMETRY_LIMIT) * parentSize.height + delta.y * signY, parentSize.height),
+  };
+}
+
 export interface MoveNodeTransactionArgs {
   context: LayoutContext;
   nodeId: string;
