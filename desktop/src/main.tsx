@@ -2,6 +2,7 @@ import { phoneSourceContext } from '../../mobile/src/searchContext';
 import { createBridge } from './platform/bridge';
 import { flushCrashes, queueCrash } from '../../src/report/crash';
 import { setDesktopUpdatePlatform } from '../../src/lib/updateInfo';
+import { observeProductionLayout } from '../../design/layoutDom.ts';
 
 async function boot(): Promise<void> {
   try {
@@ -11,6 +12,8 @@ async function boot(): Promise<void> {
     // The browser preview has no Tauri command. The feed then uses the user agent.
   }
   await import('../../mobile/src/main');
+  const stopProductionLayout = observeProductionLayout(document.body);
+  window.addEventListener('pagehide', stopProductionLayout, { once: true });
   try {
     const text = await createBridge().invoke<string>('take_native_crashes');
     if (text) queueCrash({ kind: 'native', message: text.slice(0, 400), stack: text, platform: 'desktop' });

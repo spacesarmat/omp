@@ -30,6 +30,7 @@ import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
 import { expectBetaGate } from '../../src/store/updates';
+import { observeProductionLayout } from '../../design/layoutDom.ts';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -138,3 +139,5 @@ if (import.meta.env.DEV && typeof location !== 'undefined') {
   if (asked) resetTo({ name: asked[1] } as MRoute);
 }
 render(<App />, document.getElementById('app')!);
+const stopProductionLayout = observeProductionLayout(document.body);
+window.addEventListener('pagehide', stopProductionLayout, { once: true });

@@ -1,4 +1,5 @@
 import { activeOverrideIds, type ThemeContext } from '../../../design/theme.ts';
+import { observeLayout } from '../../../design/layoutDom.ts';
 import type { ThemeDocument } from '../../../design/schema.ts';
 
 const REGISTERED = new Set(['legacy-page', 'button', 'input', 'card', 'choice-row']);
@@ -41,9 +42,13 @@ export function decorateDesignElements(root: HTMLElement, theme: ThemeDocument, 
 }
 
 export function observeDesignElements(root: HTMLElement, theme: ThemeDocument, context: ThemeContext): () => void {
+  const stopLayout = observeLayout(root, theme, context);
   const refresh = () => decorateDesignElements(root, theme, context);
   refresh();
   const observer = new MutationObserver(refresh);
   observer.observe(root, { childList: true, subtree: true });
-  return () => observer.disconnect();
+  return () => {
+    observer.disconnect();
+    stopLayout();
+  };
 }

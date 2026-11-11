@@ -22,6 +22,7 @@ import { installTvAds } from './ads/tvAds';
 import { tvSourceContext } from './sources/tvContext';
 import { expectBetaGate } from './store/updates';
 import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
+import { observeProductionLayout } from '../design/layoutDom.ts';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -80,6 +81,8 @@ function start(): void {
   if (activeServer.value) resetTo({ name: 'library' });
 
   render(<App />, document.getElementById('app')!);
+  const stopProductionLayout = observeProductionLayout(document.body);
+  window.addEventListener('pagehide', stopProductionLayout, { once: true });
 
   runLaunchParams(readLaunchParams());
   onRelaunch(runLaunchParams);
