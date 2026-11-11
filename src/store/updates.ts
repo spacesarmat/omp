@@ -79,11 +79,21 @@ function gateReady(): Promise<(() => Promise<boolean>) | null> {
   });
 }
 
+/** False when an automatic check should not touch the network yet. */
+export function updateCheckDue(opts: { manual?: boolean; now?: number; minIntervalMs?: number } = {}): boolean {
+  if (opts.manual) return true;
+  const now = opts.now === undefined ? Date.now() : opts.now;
+  const gap = opts.minIntervalMs === undefined ? CHECK_INTERVAL_MS : opts.minIntervalMs;
+  if (!settings.value.updateCheck) return false;
+  if (state.lastCheck <= now && now - state.lastCheck < gap) return false;
+  return true;
+}
+
 export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
   const now = opts.now === undefined ? Date.now() : opts.now;
   const current = opts.current === undefined ? APP_VERSION : opts.current;
   const gap = opts.minIntervalMs === undefined ? CHECK_INTERVAL_MS : opts.minIntervalMs;
-  if (!opts.manual && (!settings.value.updateCheck || (state.lastCheck <= now && now - state.lastCheck < gap))) {
+  if (!updateCheckDue({ manual: opts.manual, now, minIntervalMs: gap })) {
     return Promise.resolve<CheckResult>('skipped');
   }
   // cache-buster: GitHub raw and the WebView keep the feed for up to 5 minutes after a release

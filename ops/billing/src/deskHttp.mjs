@@ -38,21 +38,25 @@ import { probeAllServices } from './services.mjs';
 const hits = new Map();
 let probeCache = { at: 0, value: null };
 
-/** Public browser reads. webOS calls these with XHR from file:// and a custom header, so the preflight must name it. */
-const BROWSER_READS = { '/v1/rollout': 'X-Device-Id' };
+/** Public browser calls from webOS (file:// XHR). Each path names the methods and headers it needs. */
+const BROWSER_ROUTES = {
+  '/v1/rollout': { methods: 'GET, OPTIONS', headers: 'X-Device-Id' },
+  '/v1/crash': { methods: 'POST, OPTIONS', headers: 'X-Device-Id, Content-Type, Authorization' },
+};
 
 export function isBrowserRead(path) {
-  return Object.prototype.hasOwnProperty.call(BROWSER_READS, path);
+  return Object.prototype.hasOwnProperty.call(BROWSER_ROUTES, path);
 }
 
 /** Any origin, no credentials. Other routes stay closed. */
 export function browserReadCors(path, extra) {
-  if (!isBrowserRead(path)) return extra || {};
+  const row = BROWSER_ROUTES[path];
+  if (!row) return extra || {};
   return Object.assign(
     {
       'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'GET, OPTIONS',
-      'access-control-allow-headers': BROWSER_READS[path],
+      'access-control-allow-methods': row.methods,
+      'access-control-allow-headers': row.headers,
     },
     extra || {},
   );
@@ -431,12 +435,19 @@ async function toggleSource(ctx, admin, body) {
   return true;
 }
 
+function creditActor(admin) {
+  if (admin && admin.via === 'cli') return { kind: 'admin', id: 'cli', label: 'cli' };
+  const id = admin && admin.telegramId ? String(admin.telegramId) : '';
+  if (id) return { kind: 'admin', id, label: id };
+  return { kind: 'admin', id: '', label: 'панель' };
+}
+
 async function credit(ctx, admin, body) {
   if (!confirmed(body)) {
     ctx.json(ctx.res, 409, { ok: false, error: 'Нужно подтверждение', needConfirm: true });
     return true;
   }
-  const out = await ctx.store.update((cur) => addCredit(cur, { accountId: body.accountId, rub: body.rub, now: Date.now(), actor: null }));
+  const out = await ctx.store.update((cur) => addCredit(cur, { accountId: body.accountId, rub: body.rub, now: Date.now(), actor: creditActor(admin) }));
   if (!out || out.error) {
     ctx.json(ctx.res, 200, { ok: false, error: (out && out.error) || 'fail' });
     return true;
@@ -590,11 +601,20 @@ async function crashStatus(ctx, admin, body) {
   return true;
 }
 
+function crashSend(ctx, status, value) {
+  ctx.send(
+    ctx.res,
+    status,
+    JSON.stringify(value),
+    browserReadCors('/v1/crash', { 'content-type': 'application/json; charset=utf-8' }),
+  );
+}
+
 async function crashPost(ctx) {
   const body = await ctx.readBody(ctx.req);
   const parsed = body && body.payload ? safePayload(body.payload) : body || {};
   if (parsed.diagnostics === '0' || parsed.diagnostics === false) {
-    ctx.json(ctx.res, 200, { ok: true, stored: false });
+    crashSend(ctx, 200, { ok: true, stored: false });
     return true;
   }
   const rawDevice = String(ctx.req.headers['x-device-id'] || '').slice(0, 128);
@@ -603,20 +623,20 @@ async function crashPost(ctx) {
   const ip = ctx.clientIp ? ctx.clientIp(ctx.req) : '';
   // IP first: changing X-Device-Id cannot buy another slot. A linked device is checked, an install without an account is stored.
   if (!allowRate('cip:' + (ip || 'unknown'), now, 6, 60 * 60 * 1000)) {
-    ctx.json(ctx.res, 429, { error: 'rate' });
+    crashSend(ctx, 429, { error: 'rate' });
     return true;
   }
   if (token) {
     const stateNow = await ctx.store.read();
     const caller = await ctx.deviceCaller(stateNow, token, rawDevice, now);
     if (!caller || caller.error) {
-      ctx.json(ctx.res, 401, { error: (caller && caller.error) || 'bad_token' });
+      crashSend(ctx, 401, { error: (caller && caller.error) || 'bad_token' });
       return true;
     }
   }
   const device = rawDevice ? deviceKey(rawDevice) : '';
   if (device && !allowRate('cdev:' + device, now, 6, 60 * 60 * 1000)) {
-    ctx.json(ctx.res, 429, { error: 'rate' });
+    crashSend(ctx, 429, { error: 'rate' });
     return true;
   }
   const saved = await ctx.store.update((cur) => {
@@ -634,7 +654,7 @@ async function crashPost(ctx) {
     await ctx.notifyAdmins(state, text);
   }
   publishAdmin({ type: 'crash' });
-  ctx.json(ctx.res, 200, { ok: true, stored: true });
+  crashSend(ctx, 200, { ok: true, stored: true });
   return true;
 }
 

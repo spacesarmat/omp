@@ -144,7 +144,17 @@ describe('desk http', () => {
     expect(closed.status).toBe(204);
     expect(closed.headers['access-control-allow-origin']).toBeUndefined();
     const crashOpt = await call(app, 'OPTIONS', '/v1/crash');
-    expect(crashOpt.headers['access-control-allow-origin']).toBeUndefined();
+    expect(crashOpt.status).toBe(204);
+    expect(crashOpt.headers['access-control-allow-origin']).toBe('*');
+    expect(String(crashOpt.headers['access-control-allow-headers'])).toContain('X-Device-Id');
+    expect(String(crashOpt.headers['access-control-allow-headers'])).toContain('Content-Type');
+    expect(crashOpt.headers['access-control-allow-credentials']).toBeUndefined();
+    const posted = await call(app, 'POST', '/v1/crash', {
+      headers: { 'x-device-id': 'tv-1' },
+      body: { diagnostics: '1', payload: JSON.stringify({ message: 'boom', stack: 'at a', version: '1', platform: 'webos' }) },
+    });
+    expect(posted.status).toBe(200);
+    expect(posted.headers['access-control-allow-origin']).toBe('*');
   });
 
   it('stores a crash with no account and still caps one IP when the device id changes', async () => {
@@ -166,5 +176,29 @@ describe('desk http', () => {
     expect(saved.crashGroups).toHaveLength(1);
     const blocked = await call(app, 'POST', '/v1/crash', { headers: { 'x-device-id': 'dev-99' }, body });
     expect(blocked.status).toBe(429);
+  });
+
+  it('records the signed-in admin on a credit', async () => {
+    const store = memoryStore();
+    const now = Date.now();
+    await store.update((s) => {
+      s.accounts = [{ id: 'a1' }];
+      s.subscriptions = [{ id: 's1', accountId: 'a1', product: 'jackett', paidUntil: now + 86400000, creditRub: 0 }];
+      return { state: s };
+    });
+    const issued = await store.update((s) => issueCliAdminLogin(s, { now }));
+    const app = createApp(store, async () => ({ ok: false, status: 0, text: async () => '', json: async () => ({}) }));
+    const once = await call(app, 'GET', '/admin/login/once?token=' + encodeURIComponent(String((issued as { token: string }).token)));
+    const cookie = String(once.headers['set-cookie'] || '');
+    const desk = await call(app, 'GET', '/admin/api/desk', { cookie });
+    const saved = await call(app, 'POST', '/admin/api/credit', {
+      cookie,
+      body: { csrf: desk.data?.csrf, accountId: 'a1', rub: 15, confirm: 'yes' },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.data?.creditRub).toBe(15);
+    const state = await store.read();
+    const row = (state.audit || []).find((a: { action?: string }) => a.action === 'credit');
+    expect(row && row.actor).toEqual({ kind: 'admin', id: 'cli', label: 'cli' });
   });
 });

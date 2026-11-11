@@ -21,7 +21,7 @@ import { CertChangedSheet } from './ui/CertChangedSheet';
 import { catalogMode, setCatalogMode } from './catalog/phoneCatalog';
 import { Connect } from './screens/Connect';
 import { Library } from './screens/Library';
-import { Settings, runUpdateCheck, phoneFeedUrl } from './screens/Settings';
+import { Settings, runBackgroundPhoneUpdate } from './screens/Settings';
 import { installPhoneCloudflare } from './cloudflare';
 import {
   autostartLocal,
@@ -403,7 +403,7 @@ export function App() {
 
   // background update check 3 s after start and on each return to OMP (at most hourly); honours the setting
   useEffect(
-    () => installUpdateChecks((gap) => void phoneFeedUrl().then((url) => runUpdateCheck({ manual: false, url, minIntervalMs: gap })).catch(() => {})),
+    () => installUpdateChecks((gap) => void runBackgroundPhoneUpdate(gap).catch(() => {})),
     [],
   );
 

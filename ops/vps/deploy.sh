@@ -44,6 +44,8 @@ COMPOSE_CHANGED=0
 DHT_CHANGED=0
 RELEASE_HAS_DHT=0
 RELEASE_HAS_DHT_SERVICE=0
+RESTART_CHANGED=0
+RELEASE_HAS_RESTART=0
 IMAGE_ID=""
 BACKUP_TAG=""
 DHT_IMAGE="${OMP_DHT_IMAGE:-omp-dht-peers:local}"
@@ -101,6 +103,7 @@ directory (not a checkout):
   ops/billing/              -> $OMP_VPS_ROOT/billing-src/
   ops/vps/docker-compose.yml -> $OMP_VPS_ROOT/docker-compose.yml
   ops/vps/dht-peers/        -> $OMP_VPS_ROOT/dht-peers/
+  ops/vps/docker-restart/   -> $OMP_VPS_ROOT/docker-restart/
 
 docker-compose.nuc.yml, .env, and data/ are not published. The current
 billing image (and the dht image, when it exists) is tagged and those
@@ -400,7 +403,7 @@ read_billing_image() {
 
 assert_managed_not_symlinks() {
   local path
-  for path in "$ROOT/Caddyfile" "$ROOT/Caddyfile.nuc" "$ROOT/Dockerfile.billing" "$ROOT/docker-compose.yml" "$ROOT/site" "$ROOT/billing-src" "$ROOT/dht-peers"; do
+  for path in "$ROOT/Caddyfile" "$ROOT/Caddyfile.nuc" "$ROOT/Dockerfile.billing" "$ROOT/docker-compose.yml" "$ROOT/site" "$ROOT/billing-src" "$ROOT/dht-peers" "$ROOT/docker-restart"; do
     if [[ -L "$path" ]]; then
       die "refusing to follow symlink: ${path}"
     fi
@@ -576,6 +579,10 @@ validate_tree() {
     require_regular_file "$tree/ops/vps/dht-peers/Dockerfile" "$tree"
     require_regular_file "$tree/ops/vps/dht-peers/package.json" "$tree"
   fi
+  if [[ -e "$tree/ops/vps/docker-restart" || -L "$tree/ops/vps/docker-restart" ]]; then
+    require_real_dir "$tree/ops/vps/docker-restart" "$tree"
+    require_regular_file "$tree/ops/vps/docker-restart/server.mjs" "$tree"
+  fi
   require_regular_file "$tree/ops/vps/Dockerfile" "$tree"
   require_regular_file "$tree/ops/billing/package.json" "$tree"
   require_regular_file "$tree/ops/billing/src/server.mjs" "$tree"
@@ -627,6 +634,8 @@ detect_changes() {
   DHT_CHANGED=0
   RELEASE_HAS_DHT=0
   RELEASE_HAS_DHT_SERVICE=0
+  RESTART_CHANGED=0
+  RELEASE_HAS_RESTART=0
   if files_differ "$tree/ops/vps/Caddyfile" "$ROOT/Caddyfile"; then
     CADDY_CHANGED=1
   fi
@@ -653,12 +662,20 @@ detect_changes() {
   else
     log "release has no dht-peers; leaving the sidecar unchanged"
   fi
+  if [[ -e "$tree/ops/vps/docker-restart" || -L "$tree/ops/vps/docker-restart" ]]; then
+    RELEASE_HAS_RESTART=1
+    if dirs_differ "$tree/ops/vps/docker-restart" "$ROOT/docker-restart" restart; then
+      RESTART_CHANGED=1
+    fi
+  else
+    log "release has no docker-restart; leaving the restart helper unchanged"
+  fi
   # A ref from before the sidecar has no service key. A compose diff must not
   # ask Compose to start a service that file does not define.
   if [[ -f "$tree/ops/vps/docker-compose.yml" && ! -L "$tree/ops/vps/docker-compose.yml" ]] && grep -Eq '^[[:space:]]*dht-peers:[[:space:]]*(#.*)?$' "$tree/ops/vps/docker-compose.yml"; then
     RELEASE_HAS_DHT_SERVICE=1
   fi
-  log "changes caddyfile=${CADDY_CHANGED} caddyfile_nuc=${CADDY_NUC_CHANGED} site=${SITE_CHANGED} billing=${BILLING_CHANGED} dockerfile=${DOCKERFILE_CHANGED} compose=${COMPOSE_CHANGED} dht=${DHT_CHANGED}"
+  log "changes caddyfile=${CADDY_CHANGED} caddyfile_nuc=${CADDY_NUC_CHANGED} site=${SITE_CHANGED} billing=${BILLING_CHANGED} dockerfile=${DOCKERFILE_CHANGED} compose=${COMPOSE_CHANGED} dht=${DHT_CHANGED} restart=${RESTART_CHANGED}"
 }
 
 rsync_dir() {
@@ -706,6 +723,9 @@ sync_release() {
   rsync_dir "$tree/ops/billing" "$ROOT/billing-src" billing delete || return 1
   if [[ "$RELEASE_HAS_DHT" -eq 1 ]]; then
     rsync_dir "$tree/ops/vps/dht-peers" "$ROOT/dht-peers" dht delete || return 1
+  fi
+  if [[ "$RELEASE_HAS_RESTART" -eq 1 ]]; then
+    rsync_dir "$tree/ops/vps/docker-restart" "$ROOT/docker-restart" restart delete || return 1
   fi
   # cp, not mv or rsync: a single-file bind mount keeps the inode.
   install_file "$tree/ops/vps/Caddyfile" "$ROOT/Caddyfile" || return 1
@@ -846,7 +866,7 @@ caddy_mount_changed() {
 
 write_manifest() {
   local dest="$1"
-  local had_caddyfile had_caddy_nuc had_site had_billing had_dockerfile had_compose had_dht dht_running
+  local had_caddyfile had_caddy_nuc had_site had_billing had_dockerfile had_compose had_dht had_restart dht_running
   had_caddyfile=0
   had_caddy_nuc=0
   had_site=0
@@ -854,6 +874,7 @@ write_manifest() {
   had_dockerfile=0
   had_compose=0
   had_dht=0
+  had_restart=0
   dht_running=0
   [[ -f "$ROOT/Caddyfile" ]] && had_caddyfile=1
   [[ -f "$ROOT/Caddyfile.nuc" ]] && had_caddy_nuc=1
@@ -862,6 +883,7 @@ write_manifest() {
   [[ -f "$ROOT/Dockerfile.billing" ]] && had_dockerfile=1
   [[ -f "$ROOT/docker-compose.yml" ]] && had_compose=1
   [[ -d "$ROOT/dht-peers" ]] && had_dht=1
+  [[ -d "$ROOT/docker-restart" ]] && had_restart=1
   if dht_container_running; then
     dht_running=1
   fi
@@ -879,6 +901,7 @@ write_manifest() {
     printf 'had_dockerfile=%s\n' "$had_dockerfile"
     printf 'had_compose=%s\n' "$had_compose"
     printf 'had_dht=%s\n' "$had_dht"
+    printf 'had_restart=%s\n' "$had_restart"
     printf 'dht_image=%s\n' "$DHT_IMAGE"
     printf 'dht_image_tag=%s\n' "$DHT_BACKUP_TAG"
     printf 'dht_image_id=%s\n' "$DHT_IMAGE_ID"
@@ -943,6 +966,12 @@ backup_live() {
   fi
   if [[ -d "$ROOT/dht-peers" ]]; then
     rsync_dir "$ROOT/dht-peers" "$BACKUP_DIR/dht-peers" dht keep || {
+      remove_partial_backup
+      return 1
+    }
+  fi
+  if [[ -d "$ROOT/docker-restart" ]]; then
+    rsync_dir "$ROOT/docker-restart" "$BACKUP_DIR/docker-restart" restart keep || {
       remove_partial_backup
       return 1
     }
@@ -1029,6 +1058,7 @@ print_restart_plan() {
   note_change "Dockerfile.billing" "$DOCKERFILE_CHANGED"
   note_change "docker-compose.yml" "$COMPOSE_CHANGED"
   note_change "dht-peers" "$DHT_CHANGED"
+  note_change "docker-restart" "$RESTART_CHANGED"
   if [[ "$BILLING_CHANGED" -eq 1 || "$DOCKERFILE_CHANGED" -eq 1 ]]; then
     log "would build ${IMAGE} and docker compose up -d --no-deps billing"
   elif [[ "$COMPOSE_CHANGED" -eq 1 ]]; then
@@ -1242,6 +1272,7 @@ read_manifest() {
   MANIFEST_HAD_DOCKERFILE=""
   MANIFEST_HAD_COMPOSE=""
   MANIFEST_HAD_DHT=""
+  MANIFEST_HAD_RESTART=""
   MANIFEST_DHT_IMAGE_TAG=""
   MANIFEST_DHT_IMAGE_ID=""
   MANIFEST_DHT_RUNNING=""
@@ -1259,6 +1290,7 @@ read_manifest() {
       had_dockerfile) MANIFEST_HAD_DOCKERFILE="$value" ;;
       had_compose) MANIFEST_HAD_COMPOSE="$value" ;;
       had_dht) MANIFEST_HAD_DHT="$value" ;;
+      had_restart) MANIFEST_HAD_RESTART="$value" ;;
       dht_image_tag) MANIFEST_DHT_IMAGE_TAG="$value" ;;
       dht_image_id) MANIFEST_DHT_IMAGE_ID="$value" ;;
       dht_running) MANIFEST_DHT_RUNNING="$value" ;;
@@ -1274,6 +1306,7 @@ read_manifest() {
   [[ -z "$MANIFEST_HAD_CADDY_NUC" ]] || valid_flag "$MANIFEST_HAD_CADDY_NUC" || die "bad manifest had_caddyfile_nuc"
   [[ -z "$MANIFEST_HAD_COMPOSE" ]] || valid_flag "$MANIFEST_HAD_COMPOSE" || die "bad manifest had_compose"
   [[ -z "$MANIFEST_HAD_DHT" ]] || valid_flag "$MANIFEST_HAD_DHT" || die "bad manifest had_dht"
+  [[ -z "$MANIFEST_HAD_RESTART" ]] || valid_flag "$MANIFEST_HAD_RESTART" || die "bad manifest had_restart"
   [[ -z "$MANIFEST_DHT_RUNNING" ]] || valid_flag "$MANIFEST_DHT_RUNNING" || die "bad manifest dht_running"
   if [[ -n "$MANIFEST_IMAGE_TAG" && ! "$MANIFEST_IMAGE_TAG" =~ ^[A-Za-z0-9._:/-]+$ ]]; then
     die "bad manifest image tag"
@@ -1306,7 +1339,7 @@ remove_managed_file() {
 remove_managed_dir() {
   local dest="$1"
   case "$dest" in
-    "$ROOT/site" | "$ROOT/billing-src" | "$ROOT/dht-peers") ;;
+    "$ROOT/site" | "$ROOT/billing-src" | "$ROOT/dht-peers" | "$ROOT/docker-restart") ;;
     *) die "refusing to remove ${dest}" ;;
   esac
   [[ ! -L "$dest" ]] || die "refusing to follow symlink: ${dest}"
@@ -1617,6 +1650,9 @@ restore_backup() {
   restore_one_dir "$backup" billing-src "$MANIFEST_HAD_BILLING" billing || return 1
   if [[ -n "$MANIFEST_HAD_DHT" ]]; then
     restore_one_dir "$backup" dht-peers "$MANIFEST_HAD_DHT" dht || return 1
+  fi
+  if [[ -n "$MANIFEST_HAD_RESTART" ]]; then
+    restore_one_dir "$backup" docker-restart "$MANIFEST_HAD_RESTART" restart || return 1
   fi
   # A failed Caddy reload must not skip the image restore. Each step finishes
   # before health checks, and any failure is still a failed rollback.

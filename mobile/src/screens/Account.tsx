@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { billingPost } from '../../../src/billing/client';
+import { emitBillingChange } from '../../../src/billing/session';
 import { withDeviceToken } from '../../../src/billing/tokens';
 import { goBack } from '../nav';
 import { phoneSourceContext } from '../searchContext';
@@ -43,7 +44,11 @@ function PromoEntry() {
           void withDeviceToken(phoneSourceContext(), (headers) =>
             billingPost(phoneSourceContext(), '/v1/promo', { code: value }, { headers, timeoutMs: 12000 }),
           )
-            .then((res) => setNote(res.status === 200 && res.text.indexOf('"ok":true') >= 0 ? t('settings.promoOk') : t('settings.promoBad')))
+            .then((res) => {
+              const ok = res.status === 200 && res.text.indexOf('"ok":true') >= 0;
+              if (ok) emitBillingChange();
+              setNote(ok ? t('settings.promoOk') : t('settings.promoBad'));
+            })
             .catch(() => setNote(t('settings.promoBad')));
         }}
       >

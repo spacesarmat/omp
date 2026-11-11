@@ -1160,6 +1160,24 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
     expect(imageId(box.env, DHT_IMAGE)).not.toBe(DHT_ID);
   });
 
+  it('publishes docker-restart and restores the previous file from the backup', () => {
+    const files = release({
+      'ops/vps/docker-restart/server.mjs': 'export const restart = 2;\n',
+    });
+    const box = world(files);
+    mkdirSync(path.join(box.root, 'docker-restart'), { recursive: true });
+    writeFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'export const restart = 1;\n');
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 2;\n');
+    const backup = backupFrom(result.stdout);
+    expect(readFileSync(path.join(backup, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 1;\n');
+    expect(readFileSync(path.join(backup, 'backup.manifest'), 'utf8')).toContain('had_restart=1');
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 1;\n');
+  });
+
   it('a compose-only change recreates billing and does not start a stopped dht-peers', () => {
     const box = world(release({ 'ops/vps/docker-compose.yml': 'name: omp-vps\n# claim\n' }));
     const result = runDeploy(box.env, ['main']);

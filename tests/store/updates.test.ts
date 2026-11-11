@@ -3,7 +3,7 @@ import { mockFetch } from '../helpers/fetchMock';
 import {
   checkForUpdate, skipVersion, dismissPrompt, reloadUpdateState, sanitizeUpdateState,
   latestUpdate, updatePrompt, CHECK_INTERVAL_MS, installUpdateChecks,
-  setBetaGate, expectBetaGate, resetBetaGate, allowedBeta,
+  setBetaGate, expectBetaGate, resetBetaGate, allowedBeta, updateCheckDue,
 } from '../../src/store/updates';
 import { updateSettings, resetSettings } from '../../src/store/settings';
 
@@ -133,6 +133,15 @@ describe('beta channel', () => {
     expect(await checkForUpdate({ manual: true, now: NOW, current: '0.15.3' })).toBe('update');
     expect(f.mock.calls[0][0]).toBe(BASE + 'update-beta.json?t=' + NOW);
     expect(latestUpdate.value!.version).toBe('0.16.0-beta.1');
+  });
+
+  it('an automatic check is not due while updates are off or the hour has not elapsed', async () => {
+    updateSettings({ updateCheck: false });
+    expect(updateCheckDue({ manual: false, now: NOW, minIntervalMs: 0 })).toBe(false);
+    updateSettings({ updateCheck: true });
+    await checkForUpdate({ manual: true, now: NOW, current: '0.6.0' });
+    expect(updateCheckDue({ manual: false, now: NOW + 1000, minIntervalMs: CHECK_INTERVAL_MS })).toBe(false);
+    expect(updateCheckDue({ manual: false, now: NOW + CHECK_INTERVAL_MS, minIntervalMs: CHECK_INTERVAL_MS })).toBe(true);
   });
 
   it('a local beta flag stays on the stable feed until the gate is ready', async () => {

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Settings, setAccountFetcher, setUpdateChecker } from '../src/screens/Settings';
+import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate } from '../src/screens/Settings';
 import { saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
 import { dropDeviceTokens } from '../../src/billing/tokens';
 import { Advanced } from '../src/screens/Advanced';
@@ -127,6 +127,17 @@ describe('Settings', () => {
     resetTo({ name: 'settings' });
     await act(async () => btn(el, 'Выбрать').click());
     expect(currentRoute.value.name).toBe('tv');
+  });
+
+  it('does not ask billing when automatic checks are off', async () => {
+    updateSettings({ updateCheck: false, betaUpdates: true });
+    let asked = 0;
+    setBetaGate(() => {
+      asked += 1;
+      return Promise.resolve(true);
+    });
+    expect(await runBackgroundPhoneUpdate(0)).toBe('skipped');
+    expect(asked).toBe(0);
   });
 
   it('«Пробовать новые функции раньше всех» switches the check to the beta APK feed', async () => {

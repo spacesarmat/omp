@@ -1234,9 +1234,11 @@ export function createApp(file, fetchImpl, opts) {
           });
           return res.end();
         }
-        // /v1/rollout is the public webOS read. Every other preflight stays closed.
+        // webOS reads and crash reports. Every other preflight stays closed.
         if (isBrowserRead(path)) {
-          res.writeHead(204, browserReadCors(path, { allow: 'GET, OPTIONS' }));
+          const headers = browserReadCors(path);
+          headers.allow = headers['access-control-allow-methods'];
+          res.writeHead(204, headers);
           return res.end();
         }
         res.writeHead(204, { allow: 'GET, HEAD, POST, OPTIONS' });

@@ -11,7 +11,7 @@ import { tvSearchOn, setTvSearch } from '../tv/phoneRpc';
 import { tvOmpVersions, tvNeedsUpdate, tvOpensUpdate, openUpdateOnTv, type TvOmp } from '../tv/tvUpdate';
 import { errorMessage } from '../../../src/api/http';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { allowedBeta, checkForUpdate, latestUpdate, updatePrompt, type CheckResult } from '../../../src/store/updates';
+import { allowedBeta, checkForUpdate, latestUpdate, updateCheckDue, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
 import { isBetaVersion } from '../../../src/lib/version';
@@ -55,6 +55,12 @@ export function runUpdateCheck(o: { manual: boolean; url?: string; minIntervalMs
 /** The phone's APK feed. Beta is asked from billing before the URL is chosen. */
 export function phoneFeedUrl(): Promise<string> {
   return allowedBeta(settings.value.betaUpdates).then((beta) => updateFeedUrl(true, beta));
+}
+
+/** Automatic phone check. Billing is asked only when a check is actually due. */
+export function runBackgroundPhoneUpdate(gap: number): Promise<CheckResult> {
+  if (!updateCheckDue({ manual: false, minIntervalMs: gap })) return Promise.resolve('skipped');
+  return phoneFeedUrl().then((url) => runUpdateCheck({ manual: false, url, minIntervalMs: gap }));
 }
 
 /** Under «Get beta versions». */
