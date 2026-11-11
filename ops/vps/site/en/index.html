@@ -17,7 +17,7 @@
     <link rel="alternate" hreflang="ru" href="https://omp-player.online/" />
     <link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
     <link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
-    <link rel="stylesheet" href="/style.css?v=20261111c" />
+    <link rel="stylesheet" href="/style.css?v=20261111d" />
     <link rel="preload" href="/assets/manrope-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/manrope-cyrillic.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
@@ -121,8 +121,8 @@
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">Download the latest version</a>
-            <a class="button secondary" href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe" target="_blank" rel="noopener noreferrer">Download for Windows (beta)</a>
-            <a class="button secondary" href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">macOS and Linux (beta)</a>
+            <a class="button secondary" data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe" target="_blank" rel="noopener noreferrer">Download for Windows</a>
+            <a class="button secondary" href="#platforms">macOS and Linux</a>
           </div>
           <div class="chips">
             <span class="chip">LG webOS 4.0+</span>
@@ -185,7 +185,7 @@
           <li>
             <p class="index">01</p>
             <h3>Install OMP</h3>
-            <p>Download the build for LG webOS, Android TV or Android from the latest stable release. Windows, macOS and Linux are in the <a href="https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2" target="_blank" rel="noopener noreferrer">beta release</a> and on the <a href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">download page</a>.</p>
+            <p>Download the build for LG webOS, Android TV, Android, Windows, macOS or Linux from the <a href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">latest stable release</a>. Desktop files are in the cards below.</p>
           </li>
           <li>
             <p class="index">02</p>
@@ -247,19 +247,25 @@
               <li>Catalog, search and library</li>
               <li>Built-in or external TorrServer</li>
               <li>External mpv: 4K, HDR, Dolby Vision</li>
-              <li><a href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe" target="_blank" rel="noopener noreferrer">Download the installer (beta)</a></li>
             </ul>
+            <div class="platform-downloads">
+              <a class="button secondary" data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe" target="_blank" rel="noopener noreferrer">Download installer</a>
+              <a class="button secondary" data-download="desktop-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe" target="_blank" rel="noopener noreferrer">Portable</a>
+            </div>
           </article>
           <article class="card platform">
             <div class="accent-bar" aria-hidden="true"></div>
             <h3>macOS</h3>
             <ul>
-              <li>Intel and Apple Silicon, beta channel</li>
+              <li>Intel and Apple Silicon</li>
               <li>Catalog, search, TorrServer and mpv</li>
-              <li>No Apple Developer account, so the build is unsigned</li>
-              <li>Right-click the app and choose Open, or System Settings - Privacy and Security - Open Anyway</li>
-              <li><a href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">Download the DMG (beta)</a></li>
+              <li>The build is not signed with an Apple Developer account</li>
+              <li>Right-click the app and choose Open, or in Terminal: <code>xattr -d com.apple.quarantine</code></li>
             </ul>
+            <div class="platform-downloads">
+              <a class="button secondary" data-download="desktop-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg" target="_blank" rel="noopener noreferrer">Apple Silicon</a>
+              <a class="button secondary" data-download="desktop-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg" target="_blank" rel="noopener noreferrer">Intel</a>
+            </div>
           </article>
           <article class="card platform">
             <div class="accent-bar" aria-hidden="true"></div>
@@ -268,8 +274,11 @@
               <li>AppImage with no install, and a deb package</li>
               <li>Catalog, search, TorrServer and mpv</li>
               <li>Auto-update replaces the AppImage</li>
-              <li><a href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">Download the AppImage or deb (beta)</a></li>
             </ul>
+            <div class="platform-downloads">
+              <a class="button secondary" data-download="desktop-linux" data-asset="appimage" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage" target="_blank" rel="noopener noreferrer">AppImage</a>
+              <a class="button secondary" data-download="desktop-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb" target="_blank" rel="noopener noreferrer">deb</a>
+            </div>
           </article>
         </div>
       </section>
@@ -321,7 +330,7 @@
             </details>
             <details class="faq-item">
               <summary><h3>How do I install OMP?</h3><span class="faq-mark" aria-hidden="true"><span class="plus">+</span><span class="minus">-</span></span></summary>
-              <p class="faq-answer">The easiest way is from the phone: Settings, “Install OMP on the TV”. The phone finds LG and Android TV devices on the network and installs OMP itself. Files for a manual install are in the latest GitHub release: for Android there are three APKs - arm64 (almost all phones), armv7 (many TV boxes) and the universal one if you are not sure. For Windows, download the OMP-0.20.12-beta.2-setup.exe installer from the <a href="https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2" target="_blank" rel="noopener noreferrer">beta release</a> and run it. macOS and Linux are in beta too: DMG, AppImage and deb on the <a href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">download page</a>. macOS is not signed with an Apple Developer account: right-click the app and choose Open, or use System Settings - Privacy and Security - Open Anyway. From a computer, install the APK with ADB - <a href="#adb">steps below</a>; for LG <a href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install" target="_blank" rel="noopener noreferrer">see the install guide</a>.</p>
+              <p class="faq-answer">The easiest way is from the phone: Settings, “Install OMP on the TV”. The phone finds LG and Android TV devices on the network and installs OMP itself. Files for a manual install are in the latest GitHub release: for Android there are three APKs - arm64 (almost all phones), armv7 (many TV boxes) and the universal one if you are not sure. For Windows, download the <a data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe" target="_blank" rel="noopener noreferrer">installer</a> or the <a data-download="desktop-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe" target="_blank" rel="noopener noreferrer">portable exe</a>. For macOS, use the <a data-download="desktop-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg" target="_blank" rel="noopener noreferrer">Apple Silicon DMG</a> or the <a data-download="desktop-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg" target="_blank" rel="noopener noreferrer">Intel DMG</a>. For Linux, use the <a data-download="desktop-linux" data-asset="appimage" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage" target="_blank" rel="noopener noreferrer">AppImage</a> or the <a data-download="desktop-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb" target="_blank" rel="noopener noreferrer">deb package</a>. macOS is not signed with an Apple Developer account: right-click the app and choose Open, or in Terminal: <code>xattr -d com.apple.quarantine</code>. From a computer, install the APK with ADB - <a href="#adb">steps below</a>; for LG <a href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install" target="_blank" rel="noopener noreferrer">see the install guide</a>.</p>
             </details>
             <details class="faq-item" id="adb">
               <summary><h3>How do I install OMP on Android with ADB?</h3><span class="faq-mark" aria-hidden="true"><span class="plus">+</span><span class="minus">-</span></span></summary>
@@ -362,8 +371,8 @@
           <p>OMP is free, ad-free with a subscription. Download it and set up your cinema in an evening.</p>
           <div class="actions">
             <a class="button primary" href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">Download the latest version</a>
-            <a class="button secondary" href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe" target="_blank" rel="noopener noreferrer">Download for Windows (beta)</a>
-            <a class="button secondary" href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">macOS and Linux (beta)</a>
+            <a class="button secondary" data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe" target="_blank" rel="noopener noreferrer">Download for Windows</a>
+            <a class="button secondary" href="#platforms">macOS and Linux</a>
           </div>
           <div class="cta-links">
             <a href="https://t.me/ompgplayerroup" target="_blank" rel="noopener noreferrer">Telegram group</a>
@@ -389,8 +398,12 @@
           <nav class="footer-col" aria-label="Download">
             <p class="footer-label">DOWNLOAD</p>
             <a href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">Latest release</a>
-            <a href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe" target="_blank" rel="noopener noreferrer">Windows (beta)</a>
-            <a href="https://spacesarmat.github.io/omp/en/" target="_blank" rel="noopener noreferrer">macOS and Linux (beta)</a>
+            <a data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe" target="_blank" rel="noopener noreferrer">Windows installer</a>
+            <a data-download="desktop-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe" target="_blank" rel="noopener noreferrer">Windows portable</a>
+            <a data-download="desktop-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg" target="_blank" rel="noopener noreferrer">macOS Apple Silicon</a>
+            <a data-download="desktop-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg" target="_blank" rel="noopener noreferrer">macOS Intel</a>
+            <a data-download="desktop-linux" data-asset="appimage" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage" target="_blank" rel="noopener noreferrer">Linux AppImage</a>
+            <a data-download="desktop-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb" target="_blank" rel="noopener noreferrer">Linux deb</a>
             <a href="https://github.com/spacesarmat/omp/blob/main/README.en.md#install" target="_blank" rel="noopener noreferrer">Install guide</a>
           </nav>
           <nav class="footer-col" aria-label="Community">
@@ -417,6 +430,7 @@
         </div>
       </div>
     </footer>
+        <script type="module" src="/desktop-downloads.js?v=20261111d"></script>
         <script src="/app.js?v=20261111c"></script>
   </body>
 </html>

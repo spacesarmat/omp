@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { detectPlatform, formatReleaseDate, formatSize, highlightPlatform, updateDownloads } from '../../ops/pages/download';
 
-const KINDS = ['stable-android', 'stable-webos', 'beta-android', 'beta-webos', 'beta-windows'] as const;
+const KINDS = ['stable-android', 'stable-webos', 'beta-android', 'beta-webos', 'stable-windows'] as const;
 
 function fixture(): void {
   document.body.innerHTML = KINDS.map((kind) => `
     <a data-download="${kind}" href="https://github.com/spacesarmat/omp/releases">fallback ${kind}</a>
     <a data-download="${kind}" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">arm64</a>
     <a data-download="${kind}" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">armv7</a>
-  `).join('') + '<span data-version="stable">Stable fallback</span><span data-version="beta">Beta fallback</span><span data-version="beta-windows">Windows fallback</span>';
+  `).join('') + '<span data-version="stable">Stable fallback</span><span data-version="beta">Beta fallback</span><span data-version="stable-windows">Windows fallback</span>';
 }
 
 function response(body: unknown): Response {
@@ -45,7 +45,7 @@ describe('download page feeds', () => {
         },
       },
       '/omp/update-beta.json': { version: '1.1.0-beta.2', ipkUrl: 'https://example.test/beta.ipk' },
-      '/omp/update-windows.json': { version: '0.20.12-beta.2', url: 'https://example.test/beta-setup.exe' },
+      '/omp/update-windows.json': { version: '0.30.0', url: 'https://example.test/setup.exe' },
     };
     const fetchImpl = vi.fn((url: string) => Promise.resolve(response(feeds[url])));
     await updateDownloads(document, fetchImpl as unknown as typeof fetch);
@@ -58,10 +58,10 @@ describe('download page feeds', () => {
     expect(link('beta-android', 'arm64').href).toBe('https://example.test/beta-arm64.apk');
     expect(link('beta-android', 'armv7').href).toBe('https://example.test/beta-armv7.apk');
     expect(link('beta-webos').href).toBe('https://example.test/beta.ipk');
-    expect(link('beta-windows').href).toBe('https://example.test/beta-setup.exe');
+    expect(link('stable-windows').href).toBe('https://example.test/setup.exe');
     expect(document.querySelector('[data-version="stable"]')!.textContent).toBe('1.0.0');
     expect(document.querySelector('[data-version="beta"]')!.textContent).toBe('1.1.0-beta.2');
-    expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('0.20.12-beta.2');
+    expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
     expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
       '/omp/update-android.json',
       '/omp/update.json',
@@ -84,17 +84,17 @@ describe('download page feeds', () => {
     }
     expect(document.querySelector('[data-version="stable"]')!.textContent).toBe('Stable fallback');
     expect(document.querySelector('[data-version="beta"]')!.textContent).toBe('Beta fallback');
-    expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('Windows fallback');
+    expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('Windows fallback');
   });
 
   it('shows a desktop tile only when the feed has a file', async () => {
     document.body.innerHTML = `
-      <article data-platform="macos" data-optional="beta-macos" hidden>
-        <a data-download="beta-macos" href="https://github.com/spacesarmat/omp/releases">dmg</a>
-        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">intel</a>
+      <article data-platform="macos" data-optional="stable-macos" hidden>
+        <a data-download="stable-macos" href="https://github.com/spacesarmat/omp/releases">dmg</a>
+        <a data-download="stable-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">intel</a>
       </article>
-      <article data-platform="linux" data-optional="beta-linux" hidden>
-        <a data-download="beta-linux" href="https://github.com/spacesarmat/omp/releases">app</a>
+      <article data-platform="linux" data-optional="stable-linux" hidden>
+        <a data-download="stable-linux" href="https://github.com/spacesarmat/omp/releases">app</a>
       </article>
     `;
     const empty = vi.fn((url: string) => Promise.resolve(response(url.endsWith('update-linux.json') ? { version: '0.1.0' } : {})));
@@ -110,8 +110,8 @@ describe('download page feeds', () => {
     } : {})));
     await updateDownloads(document, ready as unknown as typeof fetch);
     expect((document.querySelector('[data-platform="macos"]') as HTMLElement).hidden).toBe(false);
-    expect((document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement).href).toBe('https://example.test/intel.dmg');
-    expect((document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLElement).hidden).toBe(false);
+    expect((document.querySelector('[data-download="stable-macos"][data-asset="x64"]') as HTMLAnchorElement).href).toBe('https://example.test/intel.dmg');
+    expect((document.querySelector('[data-download="stable-macos"][data-asset="x64"]') as HTMLElement).hidden).toBe(false);
   });
 
   it('keeps ABI fallbacks when a feed has no per-ABI links', async () => {
@@ -224,13 +224,28 @@ describe('download page languages and fallbacks', () => {
       }
       expect(doc.querySelector('[data-download="stable-android"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases/latest');
       expect(doc.querySelector('[data-download="beta-android"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
-      expect(doc.querySelector('[data-download="beta-windows"]:not([data-abi])')!.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe');
+      const desktop = 'https://github.com/spacesarmat/omp/releases/download/v0.30.0/';
+      expect(doc.querySelector('[data-download="stable-windows"]:not([data-abi]):not([data-asset])')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-setup.exe');
+      expect(doc.querySelector('[data-download="stable-windows"][data-asset="portable"]')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-portable.exe');
+      expect(doc.querySelector('[data-download="stable-windows"][data-asset="portable"]')!.hasAttribute('hidden')).toBe(false);
+      expect(doc.querySelector('[data-download="stable-macos"][data-asset="arm64"]')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-macos-arm64.dmg');
+      expect(doc.querySelector('[data-download="stable-macos"][data-asset="x64"]')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-macos-x64.dmg');
+      expect(doc.querySelector('[data-download="stable-macos"][data-asset="x64"]')!.hasAttribute('hidden')).toBe(false);
+      expect(doc.querySelector('[data-download="stable-linux"]:not([data-asset])')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-linux-x64.AppImage');
+      expect(doc.querySelector('[data-download="stable-linux"][data-asset="deb"]')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-linux-x64.deb');
+      expect(doc.querySelector('[data-download="stable-linux"][data-asset="deb"]')!.hasAttribute('hidden')).toBe(false);
+      expect(doc.querySelector('[data-platform="macos"]')!.textContent).toContain('xattr -d com.apple.quarantine');
+      for (const platform of ['windows', 'macos', 'linux']) {
+        expect(doc.querySelector(`[data-platform="${platform}"]`)!.textContent!.toLowerCase()).not.toMatch(/beta|бета/);
+      }
       expect(doc.querySelectorAll(`a[href="${page.mainSite}"]`)).toHaveLength(2);
       expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp"]')).not.toBeNull();
       expect(doc.querySelector(`a[href="${page.guide}"]`)).not.toBeNull();
       expect(doc.querySelector('[data-version="stable"]')).not.toBeNull();
       expect(doc.querySelector('[data-version="beta"]')).not.toBeNull();
-      expect(doc.querySelector('[data-version="beta-windows"]')).not.toBeNull();
+      expect(doc.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
+      expect(doc.querySelector('[data-version="stable-macos"]')!.textContent).toBe('0.30.0');
+      expect(doc.querySelector('[data-version="stable-linux"]')!.textContent).toBe('0.30.0');
 
       const html = doc.documentElement.outerHTML;
       expect(html).not.toContain('fonts.googleapis.com');
@@ -262,8 +277,8 @@ describe('download page languages and fallbacks', () => {
         expect(mono.style.whiteSpace).toBe('normal');
         expect(mono.style.overflowWrap).toBe('anywhere');
         expect(doc.querySelectorAll('[data-platform]')).toHaveLength(6);
-        expect(doc.querySelector('[data-platform="macos"]')!.hasAttribute('hidden')).toBe(true);
-        expect(doc.querySelector('[data-platform="linux"]')!.hasAttribute('hidden')).toBe(true);
+        expect(doc.querySelector('[data-platform="macos"]')!.hasAttribute('hidden')).toBe(false);
+        expect(doc.querySelector('[data-platform="linux"]')!.hasAttribute('hidden')).toBe(false);
         const hiddenTile = document.createElement('article');
         hiddenTile.className = 'tile';
         hiddenTile.hidden = true;

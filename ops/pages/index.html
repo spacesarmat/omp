@@ -55,6 +55,7 @@
     .abis { display: flex; flex-wrap: wrap; gap: 8px; }
     .chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
     .chip:hover { border-color: var(--yellow); color: var(--text); }
+    .abis .button { flex: 1 1 12rem; text-align: center; }
     .beta { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
     .beta summary { cursor: pointer; color: var(--yellow); font-size: 13px; font-weight: 600; }
     .fallback { margin: 0 0 40px; color: var(--subtle); font-size: 13px; line-height: 20px; }
@@ -197,44 +198,43 @@
           <div>
             <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
             <h2>Windows</h2>
-            <p class="lead">Установщик NSIS для Windows 10 и 11 (x64). Пока только бета-канал.</p>
+            <p class="lead">Установщик NSIS и portable для Windows 10 и 11 (x64).</p>
           </div>
         </div>
         <p class="meta">
-          <span class="mono" data-version="beta-windows">Windows-бета</span>
-          <span class="mono" data-date="beta-windows" hidden></span>
-          <span class="mono" data-size="beta-windows" hidden></span>
+          <span class="mono" data-version="stable-windows">0.30.0</span>
+          <span class="mono" data-date="stable-windows" hidden></span>
+          <span class="mono" data-size="stable-windows" hidden></span>
         </p>
-        <a class="button primary" data-download="beta-windows" href="https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe">Скачать установщик</a>
+        <a class="button primary" data-download="stable-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">Скачать установщик</a>
         <div class="abis" aria-label="Другие сборки Windows">
-          <a class="chip" data-download="beta-windows" data-asset="portable" hidden href="https://github.com/spacesarmat/omp/releases">Portable</a>
+          <a class="button secondary" data-download="stable-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe">Portable</a>
         </div>
-        <button type="button" class="hash" data-sha-for="beta-windows" data-label-copied="Скопировано" hidden>sha256</button>
+        <button type="button" class="hash" data-sha-for="stable-windows" data-label-copied="Скопировано" hidden>sha256</button>
       </article>
 
-      <article class="tile" data-platform="macos" data-optional="beta-macos" hidden>
+      <article class="tile" data-platform="macos" data-optional="stable-macos">
         <div class="tile-top">
           <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M24 6c-1.4 1.1-2.3 2.6-2.1 4.3 1.7.1 3.3-.9 4.3-2.2-1.5-1.6-3.6-2.6-2.2-2.1zM24.4 11.2c-2.3-.1-4.3 1.3-5.4 1.3s-2.8-1.3-4.7-1.2c-2.4.1-4.6 1.4-5.8 3.5-2.5 4.3-.6 10.7 1.8 14.2 1.2 1.7 2.6 3.6 4.5 3.5 1.8-.1 2.5-1.1 4.6-1.1s2.8 1.1 4.7 1c1.9 0 3.2-1.7 4.4-3.4 1.4-2 1.9-3.9 2-4-.1 0-3.8-1.5-3.8-5.8 0-3.6 3-5.4 3.1-5.5-1.7-2.5-4.3-2.8-5.4-2.5z"/></svg></span>
           <div>
             <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
             <h2>macOS</h2>
-            <p class="lead">DMG для Intel и Apple Silicon. Сборки без подписи Apple: правый клик по приложению, «Открыть», или «Системные настройки» - «Конфиденциальность и безопасность» - «Все равно открыть».</p>
+            <p class="lead">DMG для Apple Silicon и Intel. Сборка без подписи Apple: правый клик по приложению и «Открыть», или в Терминале: xattr -d com.apple.quarantine.</p>
           </div>
         </div>
         <p class="meta">
-          <span class="mono" data-version="beta-macos">macOS-бета</span>
-          <span class="mono" data-date="beta-macos" hidden></span>
-          <span class="mono" data-size="beta-macos" hidden></span>
+          <span class="mono" data-version="stable-macos">0.30.0</span>
+          <span class="mono" data-date="stable-macos" hidden></span>
+          <span class="mono" data-size="stable-macos" hidden></span>
         </p>
-        <a class="button primary" data-download="beta-macos" href="https://github.com/spacesarmat/omp/releases">Скачать DMG</a>
+        <a class="button primary" data-download="stable-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg">Apple Silicon</a>
         <div class="abis" aria-label="Сборки macOS">
-          <a class="chip" data-download="beta-macos" data-asset="arm64" hidden href="https://github.com/spacesarmat/omp/releases">Apple Silicon</a>
-          <a class="chip" data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">Intel</a>
+          <a class="button secondary" data-download="stable-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg">Intel</a>
         </div>
-        <button type="button" class="hash" data-sha-for="beta-macos" data-label-copied="Скопировано" hidden>sha256</button>
+        <button type="button" class="hash" data-sha-for="stable-macos" data-label-copied="Скопировано" hidden>sha256</button>
       </article>
 
-      <article class="tile" data-platform="linux" data-optional="beta-linux" hidden>
+      <article class="tile" data-platform="linux" data-optional="stable-linux">
         <div class="tile-top">
           <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="18" r="4" fill="currentColor"/><path d="M18 6v4M18 26v4M6 18h4M26 18h4" stroke="currentColor" stroke-width="1.6"/></svg></span>
           <div>
@@ -244,15 +244,15 @@
           </div>
         </div>
         <p class="meta">
-          <span class="mono" data-version="beta-linux">Linux-бета</span>
-          <span class="mono" data-date="beta-linux" hidden></span>
-          <span class="mono" data-size="beta-linux" hidden></span>
+          <span class="mono" data-version="stable-linux">0.30.0</span>
+          <span class="mono" data-date="stable-linux" hidden></span>
+          <span class="mono" data-size="stable-linux" hidden></span>
         </p>
-        <a class="button primary" data-download="beta-linux" href="https://github.com/spacesarmat/omp/releases">Скачать AppImage</a>
+        <a class="button primary" data-download="stable-linux" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage">Скачать AppImage</a>
         <div class="abis" aria-label="Сборки Linux">
-          <a class="chip" data-download="beta-linux" data-asset="deb" hidden href="https://github.com/spacesarmat/omp/releases">deb</a>
+          <a class="button secondary" data-download="stable-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb">deb</a>
         </div>
-        <button type="button" class="hash" data-sha-for="beta-linux" data-label-copied="Скопировано" hidden>sha256</button>
+        <button type="button" class="hash" data-sha-for="stable-linux" data-label-copied="Скопировано" hidden>sha256</button>
       </article>
     </div>
 

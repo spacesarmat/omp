@@ -3,9 +3,9 @@ const FEEDS = [
   { url: '/omp/update.json', kind: 'stable-webos', channel: 'stable' },
   { url: '/omp/update-android-beta.json', kind: 'beta-android', channel: 'beta' },
   { url: '/omp/update-beta.json', kind: 'beta-webos', channel: 'beta' },
-  { url: '/omp/update-windows.json', kind: 'beta-windows', channel: 'beta', versionKey: 'beta-windows' },
-  { url: '/omp/update-macos.json', kind: 'beta-macos', channel: 'beta', versionKey: 'beta-macos' },
-  { url: '/omp/update-linux.json', kind: 'beta-linux', channel: 'beta', versionKey: 'beta-linux' },
+  { url: '/omp/update-windows.json', kind: 'stable-windows', channel: 'stable', versionKey: 'stable-windows' },
+  { url: '/omp/update-macos.json', kind: 'stable-macos', channel: 'stable', versionKey: 'stable-macos' },
+  { url: '/omp/update-linux.json', kind: 'stable-linux', channel: 'stable', versionKey: 'stable-linux' },
 ];
 
 const RELEASE_API = 'https://api.github.com/repos/spacesarmat/omp/releases/tags/';

@@ -449,6 +449,20 @@ h2 {
 
 .platform a { color: var(--accent); font-size: 13px; font-weight: 500; line-height: 20px; }
 
+.platform-downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.platform-downloads .button {
+  width: 100%;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.platform code { overflow-wrap: anywhere; }
+
 .plan { gap: 16px; padding: 32px; }
 
 .plan h3 { font-size: 28px; line-height: 34px; letter-spacing: -0.6px; }
