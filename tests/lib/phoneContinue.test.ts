@@ -62,6 +62,21 @@ describe('continueCards', () => {
     expect(cards[0].code).toBe('S01E01-E02');
   });
 
+  it('does not treat another torrent file with the same id as the current episode', () => {
+    const both = {
+      show: [
+        { id: 1, path: 'Show/S01E01.mkv', hash: 'a' },
+        { id: 1, path: 'Show/S02E01.mkv', hash: 'b' },
+        { id: 2, path: 'Show/S02E02.mkv', hash: 'b' },
+        { id: 3, path: 'Show/S02E02.srt', hash: 'b', playable: false },
+      ],
+    };
+    const cards = continueCards([watch({ hash: 'b', fileIndex: 1, showKey: 'show', time: 2300, duration: 2400 })], both, NOW);
+    expect(cards[0].code).toBe('S02E02');
+    expect(cards[0].hash).toBe('b');
+    expect(cards[0].fileIndex).toBe(2);
+  });
+
   it('hides an item untouched for more than 30 days', () => {
     const cards = continueCards(
       [watch({ hash: 'h', fileIndex: 1, updated: NOW - 31 * DAY })],

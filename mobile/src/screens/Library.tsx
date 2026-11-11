@@ -19,7 +19,7 @@ import { activeTv } from '../tv/tvStore';
 import { FoundTvs } from '../ui/FoundTvs';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, markWatched, clearProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, localFileIds, markWatched, saveProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
 import { continueCards, continueSourceLine, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
 import { movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
@@ -28,7 +28,7 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, phoneSortOptions } from '../../../src/lib/librarySearch';
 import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
-import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
+import { baseName, episodeLabel, fileKind, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
@@ -105,35 +105,53 @@ function filesByShow(list: Torrent[]): { [k: string]: ContinueFile[] } {
   const out: { [k: string]: ContinueFile[] } = {};
   list.forEach((tor) => {
     const key = showKeyOf(tor);
-    const files = filesOf(tor).map((f) => ({ id: f.id, path: f.path, hash: tor.hash }));
+    const files = filesOf(tor).map((f) => ({ id: f.id, path: f.path, hash: tor.hash, playable: fileKind(f.path) === 'video' }));
     out[key] = (out[key] || []).concat(files);
   });
   return out;
 }
 
-function watchesOf(list: Torrent[], shared: boolean, phoneName: string): ContinueWatch[] {
-  const rows = buildHistory(
-    list,
-    shared ? 'all' : 'phone',
-    shared ? continueWatching(list, 80) : [],
-    getLocalProgress,
-    80,
-    { src: 'phone', name: phoneName },
-  );
-  return collapseHistoryShows(rows).map((it) => {
-    const row: ContinueWatch = {
-      hash: it.torrent.hash,
-      fileIndex: it.fileIndex,
-      time: it.progress.time,
-      duration: it.progress.duration,
-      updated: it.progress.updated || it.source.at,
-      src: it.source.src,
-      showKey: showKeyOf(it.torrent),
-    };
-    if (it.progress.open) row.open = true;
-    if (it.source.name) row.name = it.source.name;
-    return row;
+function restarted(hash: string, at: number): boolean {
+  let best = 0;
+  let time = 1;
+  localFileIds(hash).forEach((id) => {
+    const p = getLocalProgress(hash, id);
+    if (!p || p.updated < best) return;
+    best = p.updated;
+    time = p.time;
   });
+  return time < 1 && best >= at;
+}
+
+function watchFrom(it: HistoryItem): ContinueWatch {
+  const row: ContinueWatch = {
+    hash: it.torrent.hash,
+    fileIndex: it.fileIndex,
+    time: it.progress.time,
+    duration: it.progress.duration,
+    updated: it.progress.updated || it.source.at,
+    src: it.source.src,
+    showKey: showKeyOf(it.torrent),
+  };
+  if (it.progress.open) row.open = true;
+  if (it.source.name) row.name = it.source.name;
+  return row;
+}
+
+function watchesOf(list: Torrent[], shared: boolean, phoneName: string): ContinueWatch[] {
+  if (!shared) {
+    return continueWatching(list, 80)
+      .filter((e) => !!getLocalProgress(e.torrent.hash, e.fileIndex))
+      .filter((e) => !restarted(e.torrent.hash, e.progress.updated || 0))
+      .map((e) => watchFrom({
+        torrent: e.torrent,
+        fileIndex: e.fileIndex,
+        progress: e.progress,
+        source: { src: 'phone', name: phoneName, at: e.progress.updated },
+      }));
+  }
+  const rows = buildHistory(list, 'all', continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName });
+  return collapseHistoryShows(rows).filter((it) => !restarted(it.torrent.hash, it.source.at || it.progress.updated || 0)).map(watchFrom);
 }
 
 function rowBottom(it: PhoneItem): string {
@@ -413,8 +431,17 @@ export function Library() {
   const sharedHistory = settings.value.sharedHistory !== false;
   const history = useMemo(() => {
     if (!isHistory) return [];
-    const rows = buildHistory(list, sharedHistory ? hfilter : 'phone', sharedHistory ? continueWatching(list, 80) : [], getLocalProgress, 80, { src: 'phone', name: phoneName });
-    const grouped = collapseHistoryShows(rows).filter((it) => !isHistoryHidden(showKeyOf(it.torrent)) && !isHistoryHidden(it.torrent.hash + ':' + it.fileIndex));
+    const rows = sharedHistory
+      ? buildHistory(list, hfilter, continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName })
+      : continueWatching(list, 80)
+        .filter((e) => !!getLocalProgress(e.torrent.hash, e.fileIndex))
+        .map((e): HistoryItem => ({
+          torrent: e.torrent,
+          fileIndex: e.fileIndex,
+          progress: e.progress,
+          source: { src: 'phone', name: phoneName, at: e.progress.updated },
+        }));
+    const grouped = collapseHistoryShows(rows).filter((it) => !restarted(it.torrent.hash, it.source.at || it.progress.updated || 0) && !isHistoryHidden(showKeyOf(it.torrent)) && !isHistoryHidden(it.torrent.hash + ':' + it.fileIndex));
     return unfinishedFirst(grouped, (it: HistoryItem) => phoneHistoryFinished(it.progress.time, it.progress.duration, it.progress.open));
   }, [list, isHistory, hfilter, pv, sv, phoneName, sharedHistory, hideTick]);
   const resume = useMemo(() => {
@@ -1080,7 +1107,7 @@ export function Library() {
           <button type="button" class="m-opt" onClick={() => { markWatched(resumeMenu.hash, resumeMenu.fileIndex); setResumeMenu(null); }}>
             {t('history.markWatched')}
           </button>
-          <button type="button" class="m-opt" onClick={() => { clearProgress(resumeMenu.hash, resumeMenu.fileIndex); setResumeMenu(null); }}>
+          <button type="button" class="m-opt" onClick={() => { saveProgress(resumeMenu.hash, resumeMenu.fileIndex, 0, resumeMenu.duration > 0 ? resumeMenu.duration : 1); setResumeMenu(null); }}>
             {t('history.restart')}
           </button>
         </Sheet>

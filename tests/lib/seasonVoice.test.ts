@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickSeasonVoice, readVoice, withSeasonVoice, voiceDiffers } from '../../src/lib/seasonVoice';
+import { pickSeasonVoice, playbackStudio, readVoice, withSeasonVoice, voiceDiffers } from '../../src/lib/seasonVoice';
 import { withSeriesTracks } from '../../src/lib/seriesTracks';
 
 function dataWith(studio: string, at = 10): string {
@@ -52,6 +52,15 @@ describe('season voice', () => {
     expect(picked.studio).toBe('NewStudio');
     expect(picked.source).toBe('priority');
     expect(readVoice([JSON.stringify(saved)]).priority).toEqual(['NewStudio', 'LostFilm']);
+  });
+
+  it('plays the season choice, not a newer choice of another season', () => {
+    const s1 = JSON.parse(dataWith('LostFilm', 5)) as { [k: string]: unknown };
+    const withS1 = withSeasonVoice(s1, 1, { at: 5, l: 'LostFilm', m: true });
+    const withBoth = withSeasonVoice(withS1, 2, { at: 30, l: 'NewStudio', m: true });
+    const raw = JSON.stringify(withBoth);
+    expect(playbackStudio([raw], 1)).toBe('LostFilm');
+    expect(playbackStudio([raw], 2)).toBe('NewStudio');
   });
 
   it('marks a season whose studio differs', () => {

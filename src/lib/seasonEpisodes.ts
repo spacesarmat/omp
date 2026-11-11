@@ -1,6 +1,7 @@
 // Episode rows of one season: a combined file is one row, a TMDB episode with no file is shown as missing.
 import { t } from '../i18n';
 import { fileEpisodes } from './categoryCheck';
+import { baseName, stripExt } from './episodes';
 
 export interface SeasonEpFile {
   id: number;
@@ -44,10 +45,20 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   const rows: SeasonEpModel[] = [];
   files.forEach((f) => {
     const parsed = fileEpisodes(f.path);
-    if (!parsed || !parsed.episodes.length) return;
+    if (!parsed || !parsed.episodes.length) {
+      rows.push({
+        key: 'u' + f.id,
+        fileId: f.id,
+        numbers: [],
+        season: null,
+        title: stripExt(baseName(f.path)),
+        missing: false,
+        runtimeMin: 0,
+      });
+      return;
+    }
     const fileSeason = parsed.season;
-    if (season > 0 && parsed.season !== null && parsed.season !== season) return;
-    if (season > 0 && parsed.season === null) return;
+    if (season > 0 && fileSeason !== null && fileSeason !== season) return;
     parsed.episodes.forEach((n) => {
       if (covered.indexOf(n) < 0) covered.push(n);
     });
@@ -77,7 +88,7 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
       runtimeMin: ep.runtime > 0 ? ep.runtime : 0,
     });
   });
-  rows.sort((a, b) => a.numbers[0] - b.numbers[0]);
+  rows.sort((a, b) => (a.numbers.length ? a.numbers[0] : 1e9) - (b.numbers.length ? b.numbers[0] : 1e9));
   return rows;
 }
 

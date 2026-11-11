@@ -9,6 +9,8 @@ export interface ContinueFile {
   path: string;
   /** Set when the next episode lives in another torrent of the same show. */
   hash?: string;
+  /** False for a subtitle or an external audio file. Absent means playable. */
+  playable?: boolean;
 }
 
 export interface ContinueWatch {
@@ -105,10 +107,10 @@ export function continueCards(
       return;
     }
     if (w.open || ratio < DONE_RATIO) return;
-    const cur = files.filter((f) => f.id === w.fileIndex)[0];
+    const cur = files.filter((f) => f.id === w.fileIndex && (!f.hash || f.hash === w.hash))[0];
     const curOrder = cur ? orderOf(cur.path) : -1;
     const next = files
-      .filter((f) => orderOf(f.path) > curOrder)
+      .filter((f) => f.playable !== false && orderOf(f.path) > curOrder)
       .sort((a, b) => orderOf(a.path) - orderOf(b.path))[0];
     if (!next) return;
     const later = watches.filter((x) => x.hash === w.hash && x.fileIndex === next.id)[0];

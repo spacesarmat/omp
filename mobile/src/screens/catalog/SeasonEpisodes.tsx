@@ -1,7 +1,7 @@
 // The season's episode list on the phone: a number on the left, no fold button, missing episodes stay visible.
 import { useState } from 'preact/hooks';
 import { fmtDuration, fmtSize, t } from '../../../../src/i18n';
-import { markWatched, clearProgress } from '../../../../src/store/progress';
+import { markWatched, saveProgress } from '../../../../src/store/progress';
 import { sharedProgress } from '../../lib/sharedProgress';
 import { seasonEpisodeModels, watchedCount, type SeasonEpTitle } from '../../../../src/lib/seasonEpisodes';
 import type { TorrentFile } from '../../../../src/lib/episodes';
@@ -119,7 +119,7 @@ export function SeasonEpisodes({
             type="button"
             class="m-opt"
             onClick={() => {
-              clearProgress(hash, menu);
+              saveProgress(hash, menu, 0, 1);
               setMenu(null);
             }}
           >

@@ -4,6 +4,8 @@
 import type { Torrent } from '../api/types';
 import { findGroup, isSeries, seriesKey } from '../lib/seriesGroups';
 import { newestSeriesTracks, seriesTracksOf, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { playbackStudio } from '../lib/seasonVoice';
+import { seasonsOf } from '../lib/seriesGroups';
 import { saveSeriesTracks, type JournalClient } from './journal';
 import { logTrackDiag } from '../platform/androidNative';
 import { libraryGeneration, torrents } from './library';
@@ -42,7 +44,7 @@ export function seriesMembersOf(hash: string | undefined, list: Torrent[] = torr
 /** The series' record for the torrent `hash`; null for a film or when nothing was ever chosen. */
 export function seriesTracksFor(hash: string | undefined, list: Torrent[] = torrents.peek()): SeriesTracks | null {
   const members = seriesMembersOf(hash, list);
-  const rec = newestSeriesTracks(members);
+  const rec = seasonChoice(newestSeriesTracks(members), hash, list, members);
   if (!rec || typeof rec.e !== 'number' || !hash) return rec;
   // embedded:N belongs to the release it was saved on. Another release's track 0 may be a different language.
   let owner: Torrent | undefined;
@@ -54,6 +56,18 @@ export function seriesTracksFor(hash: string | undefined, list: Torrent[] = torr
   const copy: SeriesTracks = { ...rec };
   delete copy.e;
   return copy;
+}
+
+/** Prefer the season's own studio (`omp.as`) over the latest series-wide record. */
+function seasonChoice(rec: SeriesTracks | null, hash: string | undefined, list: Torrent[], members: Torrent[]): SeriesTracks | null {
+  if (!hash) return rec;
+  const tor = list.filter((x) => sameHash(x.hash, hash))[0];
+  const seasons = tor ? seasonsOf(tor) : [];
+  if (seasons.length !== 1) return rec;
+  const studio = playbackStudio(members.map((m) => m.data), seasons[0]);
+  if (!studio) return rec;
+  if (!rec) return { at: 1, l: studio };
+  return { ...rec, l: studio };
 }
 
 function warnTracks(msg: string): void {

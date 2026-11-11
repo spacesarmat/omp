@@ -30,6 +30,16 @@ describe('seasonEpisodeModels', () => {
     expect(rows[2].fileId).toBeNull();
   });
 
+  it('keeps a seasonless episode and a file the parser cannot number', () => {
+    const rows = seasonEpisodeModels([
+      { id: 1, path: 'Show.E01.mkv', length: 1 },
+      { id: 2, path: 'extras/interview.mkv', length: 1 },
+    ], 2, []);
+    expect(rows.map((r) => r.fileId)).toEqual([1, 2]);
+    expect(rows[0].numbers).toEqual([1]);
+    expect(rows[1].title).toBe('interview');
+  });
+
   it('counts a watched combined file as every episode it holds', () => {
     const rows = seasonEpisodeModels(files, 1, tmdb);
     const ratio = (id: number) => (id === 1 ? 1 : 0);

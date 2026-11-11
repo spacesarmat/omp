@@ -134,6 +134,17 @@ export function pickSeasonVoice(opts: {
   return { studio: '', source: 'none', toast: '' };
 }
 
+/**
+ * The studio playback should use for one season of a torrent. A manual season choice wins over the
+ * newer series-wide record, so season 1 does not inherit season 2's later pick.
+ */
+export function playbackStudio(data: (string | undefined | null)[], season: number): string {
+  if (!(season > 0)) return '';
+  const bag = readVoice(data);
+  const own = bag.seasons[season];
+  return own && own.l ? own.l : '';
+}
+
 /** True when this season's studio is not the one the others share. */
 export function voiceDiffers(studio: string, others: string[]): boolean {
   const rest = others.filter((s) => !!s);
