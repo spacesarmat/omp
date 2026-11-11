@@ -144,6 +144,10 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
+import { handleDesk } from './deskHttp.mjs';
+import { publishAdmin } from './adminLive.mjs';
+import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
+import { monitorEnv } from './monitorChecks.mjs';
 import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db/pg/watchSql.mjs';
 import { scoreOf, watchRankEnabled } from './watchRank.mjs';
 import { startWatchFollow } from './watchFollow.mjs';
@@ -333,10 +337,25 @@ async function accountDevices(store, state, accountId) {
   return out;
 }
 
-function audit(file, action, detail, admin) {
-  return toStore(file).update((state) => ({
-    state: logAudit(state, { action, detail, now: Date.now(), actor: adminActor(admin) }),
-  }));
+function audit(file, action, detail, admin, extra) {
+  const id = (extra && extra.id) || randomId();
+  return toStore(file)
+    .update((state) => {
+      let next = logAudit(state, {
+        id,
+        action,
+        detail,
+        now: Date.now(),
+        actor: adminActor(admin),
+        accountId: extra && extra.accountId,
+      });
+      if (extra && extra.before) next = pushRollback(next, { id, at: Date.now(), before: extra.before });
+      return { state: next, result: { id } };
+    })
+    .then((result) => {
+      publishAdmin({ type: 'audit', action, id });
+      return result;
+    });
 }
 
 const BODY_LIMIT_BYTES = 8 * 1024 * 1024;
@@ -1182,7 +1201,7 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('cache-control', 'no-store');
         res.setHeader(
           'content-security-policy',
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
         );
       }
       // Phone calls are native HTTP. The admin SPA is same-origin.
@@ -1213,6 +1232,28 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/health') {
         const settings = backups ? (await store.read()).settings : null;
         return json(res, 200, healthPayload(Date.now(), { backup: backups ? backups.status(settings) : null, readOnly, monitor: monitor && monitor.health ? monitor.health() : null }));
+      }
+      if (
+        await handleDesk({
+          req,
+          res,
+          path,
+          url,
+          store,
+          json,
+          send,
+          net,
+          env,
+          adminOf,
+          deviceCaller,
+          noteSeen,
+          readOnly,
+          readBody,
+          clientIp,
+          audit: (action, detail, who) => audit(file, action, detail, who),
+        })
+      ) {
+        return;
       }
       if (readOnly && req.method === 'POST' && !READ_ONLY_POSTS.has(path)) {
         // Cutover: nothing may be written. YooMoney retries a notification that did not get 200.
@@ -1601,6 +1642,9 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, probed.http, probed.body);
         }
         if (!admin || body.csrf !== admin.csrf) return send(res, 403, 'forbidden');
+        if (path !== '/admin/logout' && roleOf((await store.read()).settings, admin) !== 'full') {
+          return json(res, 403, { ok: false, error: 'Режим только просмотра' });
+        }
         if (path === '/admin/watch-rank') {
           if (!watchRepo) return json(res, 200, { ok: false, error: 'unavailable' });
           if (body.infohash) {
@@ -1654,6 +1698,7 @@ export function createApp(file, fetchImpl, opts) {
             : null;
         const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
+          const beforeSnap = snapshotSettings((await store.read()).settings);
           const baseBefore = baseDevices((await store.read()).settings);
           await store.update((state) => ({
             state: { ...state, settings: mergeSettings(state.settings, body) },
@@ -1667,6 +1712,7 @@ export function createApp(file, fetchImpl, opts) {
                   (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
               : 'ok',
             admin,
+            { before: beforeSnap },
           );
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices((await store.read()).settings, net);
@@ -2747,6 +2793,7 @@ export function createApp(file, fetchImpl, opts) {
             }
           }
         }
+        if (!applied.duplicate) publishAdmin({ type: applied.error ? 'error' : 'payment' });
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
           await notifyAdmins(
             freshPay,
@@ -2864,14 +2911,28 @@ export async function pollBot(file, fetchImpl, opts) {
         sweptAt = Date.now();
         await refreshMissingProfiles(file, token, net, { timeoutMs: sendTimeoutMs });
       }
-      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn
-      if (!adminLoginOnly && legacyAlerts && Date.now() - servicesAt > 5 * 60 * 1000 && adminNotifyEnabled(state.settings)) {
+      // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn.
+      // Disk under 10% and an error spike do not call the indexers.
+      if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000) {
         servicesAt = Date.now();
         try {
-          const probes = await probeAllServices(state.settings, net);
-          const notes = serviceDownNotices(state.settings, probes, serviceSnap);
-          serviceSnap = notes.snapshot;
-          await notifyAdmins(state, notes.messages, net);
+          if (legacyAlerts && adminNotifyEnabled(state.settings)) {
+            const probes = await probeAllServices(state.settings, net);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+            const notes = serviceDownNotices(state.settings, probes, serviceSnap);
+            serviceSnap = notes.snapshot;
+            await notifyAdmins(state, notes.messages, net);
+          }
+          if (adminNotifyEnabled(state.settings)) {
+            const disk = await diskRatio(monitorEnv(process.env).diskPaths);
+            const dAlert = diskAlert(serviceSnap.disk, disk && disk.ratio);
+            serviceSnap = { ...serviceSnap, disk: dAlert.snapshot };
+            if (dAlert.text) await notifyAdmins(state, adminBroadcast(state.settings, dAlert.text), net);
+            const spike = spikeAlert(serviceSnap.spikeAt || 0, recentFailCount(state, Date.now()), Date.now());
+            serviceSnap = { ...serviceSnap, spikeAt: spike.at };
+            if (spike.text) await notifyAdmins(state, adminBroadcast(state.settings, spike.text), net);
+          }
         } catch (e) {
           /* probe failure must not stop the bot loop */
         }
@@ -3352,6 +3413,22 @@ if (started) {
       process.on('SIGINT', stopDht);
       if (monitor && monitorEnabled(process.env) && botPollEnabled(process.env)) monitor.start();
       else if (monitor) process.stderr.write('monitor schedule off on this instance (BILLING_MONITOR=0 or BILLING_BOT_POLL=0); manual checks still work\n');
+      // Legacy alerts already probe the indexers. Otherwise record samples here so the dashboard
+      // success rate still moves while «Мониторинг» owns the Telegram alerts.
+      if (!readOnly && !legacyAlertsOn(process.env)) {
+        const sampleSources = async () => {
+          try {
+            const st = await store.read();
+            const probes = await probeAllServices(st.settings, fetch);
+            await store.update((cur) => ({ state: recordProbes(cur, probes, Date.now()) }));
+            publishAdmin({ type: 'source' });
+          } catch (e) {
+            /* a failed probe must not stop billing */
+          }
+        };
+        const sampleTimer = setInterval(() => void sampleSources(), 5 * 60 * 1000);
+        if (sampleTimer.unref) sampleTimer.unref();
+      }
       process.stdout.write(
         'billing listening on ' + port + ' (store: ' + store.engine + ')' + (readOnly ? ' READ-ONLY' : '') + (pgBackups ? ' pg backups on' : '') + '\n',
       );

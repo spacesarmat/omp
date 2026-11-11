@@ -60,6 +60,9 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
+import('../../src/report/presence').then((m) =>
+  m.startPresence(phoneSourceContext, typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone'),
+).catch(() => undefined);
 startKeyboardWatch();
 ensureFirstRun(); // starts the 30-day clock of the «Поддержать» card
 logStart(t('history.phone'));

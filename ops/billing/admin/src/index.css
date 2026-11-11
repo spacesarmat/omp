@@ -1,23 +1,24 @@
 @import 'tailwindcss';
 
 @theme inline {
-  --color-background: hsl(222 20% 7%);
-  --color-foreground: hsl(220 20% 92%);
-  --color-card: hsl(222 18% 11%);
-  --color-card-foreground: hsl(220 20% 92%);
-  --color-primary: hsl(44 100% 48%);
-  --color-primary-foreground: hsl(222 20% 7%);
-  --color-secondary: hsl(220 14% 18%);
-  --color-secondary-foreground: hsl(220 20% 92%);
-  --color-muted: hsl(220 14% 18%);
-  --color-muted-foreground: hsl(220 12% 78%);
-  --color-accent: hsl(220 14% 18%);
-  --color-accent-foreground: hsl(220 20% 92%);
-  --color-destructive: hsl(0 72% 51%);
-  --color-destructive-foreground: hsl(0 0% 100%);
-  --color-border: hsl(220 14% 20%);
-  --color-input: hsl(220 14% 20%);
-  --color-ring: hsl(44 100% 48%);
+  --color-background: #111310;
+  --color-foreground: #f2f2e9;
+  --color-card: #181a15;
+  --color-card-foreground: #f2f2e9;
+  --color-primary: #f9c400;
+  --color-primary-foreground: #111310;
+  --color-secondary: #31342c;
+  --color-secondary-foreground: #f2f2e9;
+  --color-muted: #181a15;
+  --color-muted-foreground: #b3b8a8;
+  --color-accent: #31342c;
+  --color-accent-foreground: #f2f2e9;
+  --color-destructive: #c4483a;
+  --color-destructive-foreground: #f2f2e9;
+  --color-border: #31342c;
+  --color-input: #31342c;
+  --color-ring: #f9c400;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -42,6 +43,8 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: Manrope, 'Segoe UI', system-ui, sans-serif;
+    background: #111310;
+    color: #f2f2e9;
     margin: 0;
     min-height: 100%;
     overflow-y: auto;
@@ -73,4 +76,28 @@
 }
 .omp-scroll::-webkit-scrollbar-thumb:hover {
   background: hsl(220 14% 38%);
+}
+
+[cmdk-input] {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 12px 14px;
+  color: inherit;
+  outline: none;
+}
+[cmdk-item] {
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+[cmdk-item][data-selected='true'] {
+  background: #31342c;
+}
+[cmdk-group-heading] {
+  padding: 6px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b3b8a8;
 }

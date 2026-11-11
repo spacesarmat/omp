@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Billing admin: sidebar, service and payment overview, tables, sources, ranking from watch data, settings rollback, NUC, funnel and revenue. Live updates use SSE /admin/api/events, otherwise a poll every 12 seconds. Apps send POST /v1/presence (install, sign-in, payment). Read-only role is a Telegram id list in settings. Container restart is allowlisted and needs a separate proxy. Nothing was deployed to the NUC
 - Desktop: macOS (Intel and Apple Silicon) and Linux (AppImage and deb) join Windows. Auto-update uses the same feed: NSIS, DMG or AppImage. macOS is not signed by Apple: right-click and Open, or System Settings - Privacy and Security - Open Anyway
 - On a computer the menu is on the left: labels, an icon rail, or hidden. A button and Ctrl+B (Cmd+B on Mac). The choice is remembered. On a narrow window the menu covers the content. Sheets and confirmations open above the menu
 - On a computer posters highlight, and a right click opens the same menu as a long press. Space pauses, arrows seek and change volume, F is fullscreen, Ctrl+K or Cmd+K opens search, Esc goes back. Rows scroll with the wheel

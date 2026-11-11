@@ -9,6 +9,7 @@ import {
   adminChatIds,
   appendSupportMessage,
   confirmAdminPanelLogin,
+  isPanelReader,
   confirmDeviceLink,
   createPromo,
   baseDevices,
@@ -187,6 +188,7 @@ export function serviceDownNotices(settings, probes, prev) {
   const names = [
     ['jackett', 'Jackett'],
     ['jacred', 'JacRed'],
+    ['bitmagnet', 'bitmagnet'],
     ['torrserver', 'TorrServer'],
   ];
   const snapshot = { ...(prev || {}) };
@@ -1024,6 +1026,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       say('Нет доступа. Добавьте свой Telegram id в настройках панели.');
       return { state: cur, messages, pad: 'user' };
     }
+  }
+  if ((action === 'admin_grant' || action === 'admin_promo') && isPanelReader(cur.settings, chatId)) {
+    say('Режим только просмотра. Выдача дней и промокоды недоступны.', { adminPad: true });
+    return { state: cur, messages, pad: 'admin' };
   }
 
   if (action === 'user_mode') {

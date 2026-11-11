@@ -97,6 +97,8 @@ export const en: EnDict<typeof ru> = {
     },
     betaTitle: 'Try new features first',
     betaHint: 'There may be bugs. When the main version is out, it replaces the beta',
+    diagnosticsTitle: 'Send usage steps',
+    diagnosticsHint: 'Install, sign-in and payment for the admin funnel. No release names or addresses. You can turn it off.',
     testModeTitle: 'Test mode',
     testModeHint: 'Screen and item numbers. Tap the number in the corner of the screen to copy it.',
     testModeCopied: 'Code {code}',

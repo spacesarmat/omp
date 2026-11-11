@@ -468,6 +468,8 @@ export function AdvancedSettingsScreen() {
       <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
       <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
       <div class="muted">{t('settings.betaHint')}</div>
+      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings({ diagnostics: v })} />
+      <div class="muted">{t('settings.diagnosticsHint')}</div>
 
       <h2>{t('tvSettings.log')}</h2>
       <LogBrief />

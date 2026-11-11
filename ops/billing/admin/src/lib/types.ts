@@ -22,6 +22,10 @@ export type PaymentRow = {
   label?: string;
   operationId?: string;
   error?: string;
+  /** Charged sum before the YooMoney fee, when the notice had it. */
+  charged?: number | null;
+  /** Fee kept by YooMoney: charged minus the amount that landed. */
+  fee?: number | null;
 };
 
 export type ProblemRow = {
@@ -220,4 +224,5 @@ export type UserData = {
   devices?: DeviceRow[];
   pending?: PendingPayment[];
   payments?: PaymentRow[];
+  watch?: { name: string; at: number; version?: string; platform?: string }[];
 };
