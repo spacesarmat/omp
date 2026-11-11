@@ -628,6 +628,104 @@ h2 svg {
   pointer-events: none;
 }
 
+.editor-rulers {
+  position: absolute;
+  top: -28px;
+  left: -28px;
+  pointer-events: none;
+  z-index: 6;
+}
+
+.editor-ruler {
+  position: absolute;
+  box-sizing: border-box;
+  background-color: #23262d;
+  background-repeat: repeat;
+}
+
+.editor-ruler-x {
+  border-bottom: 1px solid #3a3f4a;
+  background-image: linear-gradient(to right, rgb(255 255 255 / 16%) 1px, transparent 1px);
+}
+
+.editor-ruler-y {
+  border-right: 1px solid #3a3f4a;
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 16%) 1px, transparent 1px);
+}
+
+.editor-ruler-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  border-right: 1px solid #3a3f4a;
+  border-bottom: 1px solid #3a3f4a;
+  background: #23262d;
+}
+
+.editor-ruler-tick {
+  position: absolute;
+  background: rgb(255 255 255 / 40%);
+}
+
+.editor-ruler-x .editor-ruler-tick {
+  bottom: 0;
+  width: 1px;
+  height: 8px;
+}
+
+.editor-ruler-y .editor-ruler-tick {
+  right: 0;
+  width: 8px;
+  height: 1px;
+}
+
+.editor-ruler-tick span {
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  color: #9aa3b2;
+}
+
+.editor-ruler-x .editor-ruler-tick span {
+  bottom: 9px;
+  left: 2px;
+}
+
+.editor-ruler-y .editor-ruler-tick span {
+  top: -4px;
+  left: 9px;
+}
+
+.editor-safe-area {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px dashed rgb(255 180 84 / 70%);
+  pointer-events: none;
+}
+
+.editor-guide-line {
+  position: absolute;
+  background: #ff4fa3;
+  pointer-events: none;
+}
+
+.editor-grid-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image: linear-gradient(to right, rgb(255 255 255 / 6%) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 6%) 1px, transparent 1px);
+}
+
+.editor-selection-box[data-safe-overflow="true"] {
+  border-color: #ffb454;
+  background: rgb(255 180 84 / 10%);
+}
+
 .editor-multi-inspector {
   padding: 10px 12px;
   border-top: 1px solid #3a3a3a;

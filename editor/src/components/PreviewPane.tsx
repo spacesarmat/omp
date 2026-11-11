@@ -7,8 +7,10 @@ import { collectLayoutElements, type LayoutRect } from '../layout/transactions.t
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
 import { SelectionOverlay, type MoveNodeArgs } from './SelectionOverlay';
+import { Rulers } from './Rulers';
 import type { SelectionState } from '../layout/selection';
 import { getEditorViewport } from '../../shared/routes';
+import { DEFAULT_GUIDE_SETTINGS } from '../layout/guides';
 
 export interface PreviewPaneProps extends PreviewConfiguration {
   sessionId: string;
@@ -234,6 +236,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       >
         <div class="editor-canvas-stage">
           <div class="editor-artboard-size" data-testid="artboard-size" style={{ width: `${viewport.width * props.zoom}px`, height: `${viewport.height * props.zoom}px` }}>
+            {DEFAULT_GUIDE_SETTINGS.showRulers && <Rulers viewport={viewport} zoom={props.zoom} />}
             <div class="editor-artboard" style={{ width: `${viewport.width}px`, height: `${viewport.height}px`, transform: `scale(${props.zoom})` }}>
               <iframe
                 key={`${props.target}-${props.language}`}

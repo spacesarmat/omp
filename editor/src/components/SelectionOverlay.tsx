@@ -21,6 +21,16 @@ import {
   type LayoutRect,
 } from '../layout/transactions.ts';
 import { reduceSelection, type SelectionState } from '../layout/selection.ts';
+import {
+  collectGuides,
+  findSnap,
+  getSafeArea,
+  snapToGrid,
+  DEFAULT_GUIDE_SETTINGS,
+  type GuideLine,
+  type Rect,
+} from '../layout/guides.ts';
+import { isTvTarget } from '../../shared/routes.ts';
 
 export interface MoveNodeArgs {
   nodeId: string;
@@ -61,6 +71,7 @@ interface DragState {
   marquee: boolean;
   point: ClientPoint;
   insertion: InsertionTarget | null;
+  altKey: boolean;
 }
 
 interface DragPreview {
@@ -68,6 +79,8 @@ interface DragPreview {
   insertion: InsertionTarget | null;
   point: ClientPoint;
   start: ClientPoint;
+  rect: LayoutRect | null;
+  lines: GuideLine[];
 }
 
 interface ResizeState {
@@ -172,6 +185,38 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     ? props.rects[node.parentId]
     : { x: 0, y: 0, width: props.viewport.width, height: props.viewport.height });
 
+  const zoomScale = props.zoom > 0 ? props.zoom : 1;
+  const safeAreaRect = (): Rect => getSafeArea(props.context.target, props.viewport);
+  const artboardRect = (): Rect => ({ x: 0, y: 0, width: props.viewport.width, height: props.viewport.height });
+  const overflowsSafeArea = (rect: LayoutRect): boolean => {
+    const safe = safeAreaRect();
+    return rect.x < safe.x || rect.y < safe.y
+      || rect.x + rect.width > safe.x + safe.width
+      || rect.y + rect.height > safe.y + safe.height;
+  };
+
+  // Snapping runs in native artboard coordinates: the CSS scale of the canvas handles rendering,
+  // so the same threshold works at any zoom. Alt held anywhere during the drag disables snapping,
+  // and the 8px grid only fills axes where no element, safe-area or artboard line matched.
+  const snapDragRect = (moved: LayoutRect, nodeId: string, altKey: boolean): { rect: LayoutRect; lines: GuideLine[] } => {
+    if (altKey || !DEFAULT_GUIDE_SETTINGS.snapToGuides) return { rect: moved, lines: [] };
+    const rects = Object.entries(props.rects)
+      .filter(([id, rect]) => id !== nodeId && Boolean(rect))
+      .map(([, rect]) => rect as Rect);
+    const snap = findSnap(
+      { x: moved.x, y: moved.y },
+      [moved],
+      collectGuides(rects, { safeArea: safeAreaRect(), artboard: artboardRect() }),
+      DEFAULT_GUIDE_SETTINGS.snapThreshold,
+    );
+    let { x, y } = moved;
+    if (snap.x !== null) x = snap.x;
+    else if (DEFAULT_GUIDE_SETTINGS.snapToGrid) x = snapToGrid(x, DEFAULT_GUIDE_SETTINGS.gridSize);
+    if (snap.y !== null) y = snap.y;
+    else if (DEFAULT_GUIDE_SETTINGS.snapToGrid) y = snapToGrid(y, DEFAULT_GUIDE_SETTINGS.gridSize);
+    return { rect: { ...moved, x, y }, lines: snap.lines };
+  };
+
   // The selection box follows the committed placement geometry for absolute nodes so the
   // handles and the numeric inspector agree with the draft even before the preview repaints.
   const resolvedRect = (nodeId: string): LayoutRect | undefined => {
@@ -226,7 +271,8 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       width: rect.width,
       height: rect.height,
     };
-    props.onPlaceNode(absolutePlacementFromRect(moved, nodeParentRect(node), props.context, node.nodeId, node.label, existingPlacement(node.nodeId)));
+    const snapped = snapDragRect(moved, node.nodeId, state.altKey);
+    props.onPlaceNode(absolutePlacementFromRect(snapped.rect, nodeParentRect(node), props.context, node.nodeId, node.label, existingPlacement(node.nodeId)));
   };
 
   const release = (state: DragState, event: PointerEvent): void => {
@@ -272,12 +318,12 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
 
   const selectedRect = anchorId ? resolvedRect(anchorId) : undefined;
   const movedRect = selectedRect && preview && preview.nodeId === anchorId && !preview.insertion
-    ? {
+    ? (preview.rect ?? {
       x: selectedRect.x + preview.point.x - preview.start.x,
       y: selectedRect.y + preview.point.y - preview.start.y,
       width: selectedRect.width,
       height: selectedRect.height,
-    }
+    })
     : selectedRect;
   const displayRect = resizeRect ?? movedRect;
   const selectedNode = anchorId ? props.nodes.find((entry) => entry.nodeId === anchorId) : undefined;
@@ -344,6 +390,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           marquee: false,
           point,
           insertion: null,
+          altKey: event.altKey,
         };
         if (hit) {
           props.onSelect({ ids: [hit.nodeId], anchorId: hit.nodeId });
@@ -375,6 +422,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         if (!state || state.pointerId !== event.pointerId) return;
         const point = artboardPoint(event);
         state.point = point;
+        state.altKey = event.altKey;
         if (!state.started) {
           const distance = Math.hypot(point.x - state.start.x, point.y - state.start.y);
           if (distance < DRAG_THRESHOLD_PX) return;
@@ -391,7 +439,23 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           return;
         }
         state.insertion = resolveInsertion(point, state.nodeId);
-        setPreview({ nodeId: state.nodeId, insertion: state.insertion, point, start: state.start });
+        if (state.insertion) {
+          setPreview({ nodeId: state.nodeId, insertion: state.insertion, point, start: state.start, rect: null, lines: [] });
+          return;
+        }
+        const base = resolvedRect(state.nodeId);
+        if (!base) return;
+        const snapped = snapDragRect(
+          {
+            x: base.x + point.x - state.start.x,
+            y: base.y + point.y - state.start.y,
+            width: base.width,
+            height: base.height,
+          },
+          state.nodeId,
+          event.altKey,
+        );
+        setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped.rect, lines: snapped.lines });
       }}
       onPointerUp={(event) => {
         const resizing = resize.current;
@@ -443,6 +507,40 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         release(state, event);
       }}
     >
+      {isTvTarget(props.context.target) && (() => {
+        const safe = safeAreaRect();
+        return (
+          <div
+            class="editor-safe-area"
+            data-testid="safe-area"
+            style={{ left: `${safe.x}px`, top: `${safe.y}px`, width: `${safe.width}px`, height: `${safe.height}px` }}
+          />
+        );
+      })()}
+      {DEFAULT_GUIDE_SETTINGS.showGrid && (
+        <div
+          class="editor-grid-layer"
+          data-testid="grid-layer"
+          style={{ backgroundSize: `${DEFAULT_GUIDE_SETTINGS.gridSize}px ${DEFAULT_GUIDE_SETTINGS.gridSize}px` }}
+        />
+      )}
+      {preview?.lines.map((guide, index) => (guide.axis === 'x' ? (
+        <div
+          key={index}
+          class="editor-guide-line"
+          data-testid="guide-line"
+          data-axis="x"
+          style={{ left: `${guide.position}px`, top: '0px', width: `${1 / zoomScale}px`, height: '100%' }}
+        />
+      ) : (
+        <div
+          key={index}
+          class="editor-guide-line"
+          data-testid="guide-line"
+          data-axis="y"
+          style={{ top: `${guide.position}px`, left: '0px', height: `${1 / zoomScale}px`, width: '100%' }}
+        />
+      )))}
       {props.selectedIds.map((nodeId) => {
         const rect = nodeId === anchorId ? displayRect : resolvedRect(nodeId);
         if (!rect) return null;
@@ -452,6 +550,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
             data-testid="selection-box"
             data-anchor={nodeId === anchorId ? 'true' : 'false'}
             data-layout-node={nodeId}
+            data-safe-overflow={overflowsSafeArea(rect) ? 'true' : 'false'}
             style={{ left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` }}
           >
             {nodeId === anchorId && showResizeHandles && RESIZE_HANDLES.map((handle) => (
