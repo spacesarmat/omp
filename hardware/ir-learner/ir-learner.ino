@@ -32,6 +32,7 @@ static volatile unsigned long pulses[MAX_PULSES];
 static volatile bool capturing = false;
 static int readyCount = 0;
 static unsigned long readyPulses[MAX_PULSES];
+static bool wsSent = false;
 
 static void IRAM_ATTR onEdge() {
   unsigned long now = micros();
@@ -89,8 +90,6 @@ static void takeCapture() {
   }
   interrupts();
 }
-
-static bool wsSent = false;
 
 static void sendWsText(const String &text) {
   if (!wsClient || !wsClient.connected()) return;

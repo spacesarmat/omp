@@ -4,6 +4,7 @@ import java.security.SecureRandom
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLContext
 import okhttp3.OkHttpClient
@@ -25,6 +26,7 @@ object SamsungRemote {
     private var host: String? = null
     private var hello: String = ""
     private val dead = AtomicBoolean(false)
+    private val generation = AtomicInteger(0)
 
     fun click(ip: String, path: String, body: String): String {
         if (!OmpNativePlugin.IPV4.matches(ip) || !path.startsWith(PATH)) throw IllegalArgumentException("bad")
@@ -34,10 +36,6 @@ object SamsungRemote {
                     closeLocked()
                     dead.set(false)
                     val opened = connect(ip, path)
-                    if (dead.get()) {
-                        opened.first.cancel()
-                        throw IllegalStateException("closed")
-                    }
                     socket = opened.first
                     host = ip
                     hello = opened.second
@@ -77,6 +75,7 @@ object SamsungRemote {
     }
 
     private fun open(scheme: String, ip: String, port: Int, path: String): Pair<WebSocket, String> {
+        val mine = generation.incrementAndGet()
         val builder = OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
         if (scheme == "wss") {
             val tm = CertPins.trustManager(ip)
@@ -97,13 +96,16 @@ object SamsungRemote {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                dead.set(true)
+                if (generation.get() != mine) return
                 fail.set(t)
                 latch.countDown()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                dead.set(true)
+                if (generation.get() != mine) return
+                synchronized(lock) {
+                    if (socket === webSocket) dead.set(true)
+                }
             }
         })
         if (!latch.await(8, TimeUnit.SECONDS)) {
