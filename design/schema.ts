@@ -51,6 +51,7 @@ export interface LayoutPlacement extends LayoutContext {
   maxWidth?: number | 'auto';
   minHeight?: number | 'auto';
   maxHeight?: number | 'auto';
+  margin?: string;
   zIndex: number;
   hidden: boolean;
   locked: boolean;

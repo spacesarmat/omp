@@ -1,7 +1,32 @@
-import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
+import type { LayoutContainer, LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
-import { absolutePlacementFromRect, createPlacement, type LayoutRect } from '../layout/transactions.ts';
+import {
+  absolutePlacementFromRect,
+  createPlacement,
+  placementToRect,
+  rectSizeToUnits,
+  type LayoutRect,
+} from '../layout/transactions.ts';
 import type { MoveNodeArgs } from './SelectionOverlay.tsx';
+
+export type EditorFieldValue = number | 'mixed';
+
+export function formatSizeField(value: EditorFieldValue | undefined): string {
+  if (value === undefined) return '';
+  if (value === 'mixed') return 'разные';
+  return String(value);
+}
+
+// Spacing fields store CSS px sizes: plain numbers become "Npx", an empty input clears
+// the value and the mixed sentinel keeps multi-select edits representable for Task 5.
+export function parseSpacingField(text: string): string | 'mixed' | null {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+  if (trimmed === 'mixed' || trimmed === 'разные') return 'mixed';
+  const parsed = trimmed.replace(/px$/, '');
+  if (!/^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/.test(parsed)) return null;
+  return `${parsed}px`;
+}
 
 export interface LayoutInspectorProps {
   context: LayoutContext;
@@ -10,8 +35,60 @@ export interface LayoutInspectorProps {
   rect: LayoutRect | null;
   parentRect: LayoutRect | null;
   order: string[];
+  container?: LayoutContainer;
   onPlace(placement: LayoutPlacement): void;
   onMove(args: MoveNodeArgs): void;
+  onContainerPatch(patch: { padding?: string }): void;
+  onMargin(margin: string | undefined): void;
+}
+
+interface NumberFieldProps {
+  testId: string;
+  label: string;
+  value: number;
+  onCommit(value: number): void;
+}
+
+function NumberField(props: NumberFieldProps) {
+  return (
+    <label>{props.label}
+      <input
+        type="number"
+        data-testid={props.testId}
+        value={String(props.value)}
+        onChange={(event) => {
+          const next = Number(event.currentTarget.value);
+          if (Number.isFinite(next) && next !== props.value) props.onCommit(Math.round(next));
+        }}
+      />
+    </label>
+  );
+}
+
+interface SpacingFieldProps {
+  testId: string;
+  label: string;
+  value: string | undefined;
+  placeholder?: string;
+  onCommit(value: string | undefined): void;
+}
+
+function SpacingField(props: SpacingFieldProps) {
+  return (
+    <label>{props.label}
+      <input
+        type="text"
+        data-testid={props.testId}
+        value={props.value ?? ''}
+        placeholder={props.placeholder}
+        onChange={(event) => {
+          const parsed = parseSpacingField(event.currentTarget.value);
+          if (parsed === null || parsed === 'mixed') return;
+          props.onCommit(parsed === '' ? undefined : parsed);
+        }}
+      />
+    </label>
+  );
 }
 
 export function LayoutInspector(props: LayoutInspectorProps) {
@@ -20,6 +97,9 @@ export function LayoutInspector(props: LayoutInspectorProps) {
   const currentIndex = props.order.indexOf(node.nodeId);
   const position = currentIndex >= 0 ? currentIndex : props.order.length;
   const label = placement?.label || node.label;
+  const geometryRect = mode === 'absolute' && placement && parentRect
+    ? placementToRect(placement, parentRect, rect)
+    : null;
 
   const switchMode = (next: 'flow' | 'absolute') => {
     if (next === mode) return;
@@ -38,6 +118,17 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     if (!node.parentId) return;
     const base = placement?.mode === 'absolute' ? createPlacement(props.context, node.nodeId, label, { ...placement, mode: 'flow', x: 0, y: 0 }) : placement;
     props.onMove({ nodeId: node.nodeId, parentId: node.parentId, index, placement: base });
+  };
+
+  const commitGeometry = (patch: Partial<LayoutRect>) => {
+    if (!geometryRect || !parentRect) return;
+    const next = { ...geometryRect, ...patch };
+    const base = placement ?? createPlacement(props.context, node.nodeId, label);
+    const placed = absolutePlacementFromRect(next, parentRect, props.context, node.nodeId, label, base);
+    const override: Partial<LayoutPlacement> = {};
+    if (patch.width !== undefined) override.width = rectSizeToUnits(next.width, parentRect.width);
+    if (patch.height !== undefined) override.height = rectSizeToUnits(next.height, parentRect.height);
+    props.onPlace({ ...placed, ...override });
   };
 
   return (
@@ -63,7 +154,15 @@ export function LayoutInspector(props: LayoutInspectorProps) {
           </select>
         </label>
       )}
-      {mode === 'absolute' && rect && (
+      {geometryRect && (
+        <div class="editor-layout-geometry">
+          <NumberField testId="layout-x" label="X" value={Math.round(geometryRect.x)} onCommit={(x) => commitGeometry({ x })} />
+          <NumberField testId="layout-y" label="Y" value={Math.round(geometryRect.y)} onCommit={(y) => commitGeometry({ y })} />
+          <NumberField testId="layout-width" label="Ширина" value={Math.round(geometryRect.width)} onCommit={(width) => commitGeometry({ width })} />
+          <NumberField testId="layout-height" label="Высота" value={Math.round(geometryRect.height)} onCommit={(height) => commitGeometry({ height })} />
+        </div>
+      )}
+      {mode === 'absolute' && !geometryRect && rect && (
         <dl class="editor-layout-geometry">
           <div><dt>X</dt><dd>{Math.round(rect.x)}</dd></div>
           <div><dt>Y</dt><dd>{Math.round(rect.y)}</dd></div>
@@ -71,6 +170,21 @@ export function LayoutInspector(props: LayoutInspectorProps) {
           <div><dt>Высота</dt><dd>{Math.round(rect.height)}</dd></div>
         </dl>
       )}
+      <div class="editor-layout-spacing">
+        <SpacingField
+          testId="layout-padding"
+          label="Внутренние поля"
+          value={props.container?.padding}
+          onCommit={(padding) => props.onContainerPatch({ padding })}
+        />
+        <SpacingField
+          testId="layout-margin"
+          label="Внешние поля"
+          value={placement?.margin}
+          placeholder="0px"
+          onCommit={(margin) => props.onMargin(margin)}
+        />
+      </div>
       {!rect && <p class="editor-notice">Геометрия элемента недоступна в превью</p>}
     </div>
   );

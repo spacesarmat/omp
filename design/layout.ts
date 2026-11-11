@@ -39,6 +39,30 @@ export function upsertLayoutPlacement(theme: ThemeDocument, placement: LayoutPla
   return { ...theme, layout: { ...layout, placements } };
 }
 
+export function createContainer(
+  context: LayoutContext,
+  nodeId: string,
+  seed: string[],
+  patch: Partial<Pick<LayoutContainer, 'padding' | 'direction' | 'alignment' | 'distribution'>> = {},
+): LayoutContainer {
+  return {
+    id: `flow-${nodeId}`,
+    ...context,
+    nodeId,
+    order: [...seed],
+    ...patch,
+  };
+}
+
+export function upsertLayoutContainer(theme: ThemeDocument, container: LayoutContainer): ThemeDocument {
+  const layout = theme.layout ?? emptyLayout();
+  const index = layout.containers.findIndex((entry) => sameContext(entry, container) && entry.nodeId === container.nodeId);
+  const containers = index >= 0
+    ? layout.containers.map((entry, entryIndex) => (entryIndex === index ? container : entry))
+    : [...layout.containers, { ...container, id: containerId(theme, container.nodeId) }];
+  return { ...theme, layout: { ...layout, containers } };
+}
+
 function containerId(theme: ThemeDocument, parentId: string): string {
   const taken = new Set(theme.layout?.containers.map((container) => container.id) ?? []);
   let candidate = `flow-${parentId}`;

@@ -199,7 +199,7 @@ function layoutContainer(value: unknown, path: string): LayoutContainer {
 }
 
 function layoutPlacement(value: unknown, path: string): LayoutPlacement {
-  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'mode', 'x', 'y', 'anchor', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'zIndex', 'hidden', 'locked', 'label'];
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'mode', 'x', 'y', 'anchor', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'margin', 'zIndex', 'hidden', 'locked', 'label'];
   const source = plain(value, path, keys);
   const result = {} as LayoutPlacement;
   layoutContextFields(source, path, result);
@@ -215,6 +215,12 @@ function layoutPlacement(value: unknown, path: string): LayoutPlacement {
   if (source.maxWidth !== undefined) result.maxWidth = layoutSize(source.maxWidth, `${path}.maxWidth`);
   if (source.minHeight !== undefined) result.minHeight = layoutSize(source.minHeight, `${path}.minHeight`);
   if (source.maxHeight !== undefined) result.maxHeight = layoutSize(source.maxHeight, `${path}.maxHeight`);
+  if (source.margin !== undefined) {
+    if (typeof source.margin !== 'string' || !SIZE.test(source.margin) || Number.parseFloat(source.margin) > 512) {
+      fail(`${path}.margin`, 'size from 0px to 512px with at most two decimals required');
+    }
+    result.margin = source.margin;
+  }
   result.zIndex = layoutZIndex(source.zIndex, `${path}.zIndex`);
   if (typeof source.hidden !== 'boolean') fail(`${path}.hidden`, 'boolean required');
   if (typeof source.locked !== 'boolean') fail(`${path}.locked`, 'boolean required');

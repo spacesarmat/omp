@@ -3,9 +3,18 @@ import type { JSX } from 'preact';
 import type { LayoutContainer, LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import {
+  RESIZE_HANDLES,
+  resizePlacement,
+  type LayoutConstraints,
+  type ResizeHandle,
+} from '../../../design/geometry.ts';
+import {
   absolutePlacementFromRect,
   createPlacement,
   DRAG_THRESHOLD_PX,
+  LAYOUT_GEOMETRY_LIMIT,
+  placementToRect,
+  rectSizeToUnits,
   screenToArtboard,
   type ClientPoint,
   type ClientRectLike,
@@ -58,6 +67,15 @@ interface DragPreview {
   start: ClientPoint;
 }
 
+interface ResizeState {
+  pointerId: number;
+  nodeId: string;
+  handle: ResizeHandle;
+  start: ClientPoint;
+  point: ClientPoint;
+  started: boolean;
+}
+
 function contains(rect: LayoutRect, point: ClientPoint): boolean {
   return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
 }
@@ -67,8 +85,11 @@ function area(rect: LayoutRect): number {
 }
 
 export function SelectionOverlay(props: SelectionOverlayProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<DragState | null>(null);
+  const resize = useRef<ResizeState | null>(null);
   const [preview, setPreview] = useState<DragPreview | null>(null);
+  const [resizeRect, setResizeRect] = useState<LayoutRect | null>(null);
 
   const artboardPoint = (event: PointerEvent): ClientPoint => screenToArtboard(
     { x: event.clientX, y: event.clientY },
@@ -128,9 +149,49 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
 
   const existingPlacement = (nodeId: string): LayoutPlacement | undefined => props.placements.find((entry) => entry.nodeId === nodeId);
 
+  const nodeParentRect = (node: LayoutNodeDescriptor): LayoutRect => (node.parentId && props.rects[node.parentId]
+    ? props.rects[node.parentId]
+    : { x: 0, y: 0, width: props.viewport.width, height: props.viewport.height });
+
+  // The selection box follows the committed placement geometry for absolute nodes so the
+  // handles and the numeric inspector agree with the draft even before the preview repaints.
+  const resolvedRect = (nodeId: string): LayoutRect | undefined => {
+    const rect = props.rects[nodeId];
+    if (!rect) return undefined;
+    const node = props.nodes.find((entry) => entry.nodeId === nodeId);
+    const placement = existingPlacement(nodeId);
+    if (node?.parentId && placement?.mode === 'absolute' && props.rects[node.parentId]) {
+      return placementToRect(placement, props.rects[node.parentId], rect);
+    }
+    return rect;
+  };
+
+  const resizeConstraints = (placement: LayoutPlacement | undefined, parentRect: LayoutRect): LayoutConstraints => {
+    const toPx = (value: number | 'auto' | undefined, size: number): number | undefined =>
+      typeof value === 'number' ? (value / LAYOUT_GEOMETRY_LIMIT) * size : undefined;
+    return {
+      minWidth: toPx(placement?.minWidth, parentRect.width),
+      maxWidth: toPx(placement?.maxWidth, parentRect.width),
+      minHeight: toPx(placement?.minHeight, parentRect.height),
+      maxHeight: toPx(placement?.maxHeight, parentRect.height),
+    };
+  };
+
+  const commitResize = (state: ResizeState, rect: LayoutRect): void => {
+    const node = props.nodes.find((entry) => entry.nodeId === state.nodeId);
+    if (!node) return;
+    const parentRect = nodeParentRect(node);
+    const placement = absolutePlacementFromRect(rect, parentRect, props.context, node.nodeId, node.label, existingPlacement(node.nodeId));
+    props.onPlaceNode({
+      ...placement,
+      width: rectSizeToUnits(rect.width, parentRect.width),
+      height: rectSizeToUnits(rect.height, parentRect.height),
+    });
+  };
+
   const commit = (state: DragState): void => {
     const node = props.nodes.find((entry) => entry.nodeId === state.nodeId);
-    const rect = props.rects[state.nodeId];
+    const rect = resolvedRect(state.nodeId);
     if (!node || !rect) return;
     if (state.insertion) {
       const current = existingPlacement(node.nodeId);
@@ -146,10 +207,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       width: rect.width,
       height: rect.height,
     };
-    const parentRect = node.parentId && props.rects[node.parentId]
-      ? props.rects[node.parentId]
-      : { x: 0, y: 0, width: props.viewport.width, height: props.viewport.height };
-    props.onPlaceNode(absolutePlacementFromRect(moved, parentRect, props.context, node.nodeId, node.label, existingPlacement(node.nodeId)));
+    props.onPlaceNode(absolutePlacementFromRect(moved, nodeParentRect(node), props.context, node.nodeId, node.label, existingPlacement(node.nodeId)));
   };
 
   const release = (state: DragState, event: PointerEvent): void => {
@@ -157,6 +215,13 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     if (target.hasPointerCapture?.(state.pointerId)) target.releasePointerCapture(state.pointerId);
     drag.current = null;
     setPreview(null);
+  };
+
+  const releaseResize = (state: ResizeState, event: PointerEvent): void => {
+    const target = event.currentTarget as HTMLElement;
+    if (target.hasPointerCapture?.(state.pointerId)) target.releasePointerCapture(state.pointerId);
+    resize.current = null;
+    setResizeRect(null);
   };
 
   const renderInsertionLine = (target: InsertionTarget): JSX.Element | null => {
@@ -185,7 +250,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     return <div class="editor-insertion-line" data-testid="insertion-line" style={style} />;
   };
 
-  const selectedRect = props.selectedNodeId ? props.rects[props.selectedNodeId] : undefined;
+  const selectedRect = props.selectedNodeId ? resolvedRect(props.selectedNodeId) : undefined;
   const movedRect = selectedRect && preview && preview.nodeId === props.selectedNodeId && !preview.insertion
     ? {
       x: selectedRect.x + preview.point.x - preview.start.x,
@@ -194,9 +259,48 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       height: selectedRect.height,
     }
     : selectedRect;
+  const displayRect = resizeRect ?? movedRect;
+  const selectedNode = props.nodes.find((entry) => entry.nodeId === props.selectedNodeId);
+  const selectedPlacement = props.selectedNodeId ? existingPlacement(props.selectedNodeId) : undefined;
+  const showResizeHandles = Boolean(
+    props.active
+    && displayRect
+    && selectedNode
+    && selectedPlacement?.mode === 'absolute'
+    && !preview
+    && !resizeRect,
+  );
+
+  const startResize = (event: PointerEvent, handle: ResizeHandle): void => {
+    if (!props.active || event.button !== 0 || !props.selectedNodeId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const state: ResizeState = {
+      pointerId: event.pointerId,
+      nodeId: props.selectedNodeId,
+      handle,
+      start: artboardPoint(event),
+      point: artboardPoint(event),
+      started: false,
+    };
+    resize.current = state;
+    rootRef.current?.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePositions: Record<ResizeHandle, { left: string; top: string; cursor: string }> = {
+    nw: { left: '0px', top: '0px', cursor: 'nwse-resize' },
+    n: { left: '50%', top: '0px', cursor: 'ns-resize' },
+    ne: { left: '100%', top: '0px', cursor: 'nesw-resize' },
+    e: { left: '100%', top: '50%', cursor: 'ew-resize' },
+    se: { left: '100%', top: '100%', cursor: 'nwse-resize' },
+    s: { left: '50%', top: '100%', cursor: 'ns-resize' },
+    sw: { left: '0px', top: '100%', cursor: 'nesw-resize' },
+    w: { left: '0px', top: '50%', cursor: 'ew-resize' },
+  };
 
   return (
     <div
+      ref={rootRef}
       class="editor-selection-overlay"
       data-testid="selection-overlay"
       data-active={props.active ? 'true' : 'false'}
@@ -221,6 +325,26 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         }
       }}
       onPointerMove={(event) => {
+        const resizing = resize.current;
+        if (resizing && resizing.pointerId === event.pointerId) {
+          const point = artboardPoint(event);
+          resizing.point = point;
+          if (!resizing.started) {
+            const distance = Math.hypot(point.x - resizing.start.x, point.y - resizing.start.y);
+            if (distance < DRAG_THRESHOLD_PX) return;
+            resizing.started = true;
+          }
+          const node = props.nodes.find((entry) => entry.nodeId === resizing.nodeId);
+          const base = resolvedRect(resizing.nodeId);
+          if (!node || !base) return;
+          setResizeRect(resizePlacement(
+            base,
+            resizing.handle,
+            { x: point.x - resizing.start.x, y: point.y - resizing.start.y },
+            resizeConstraints(existingPlacement(resizing.nodeId), nodeParentRect(node)),
+          ));
+          return;
+        }
         const state = drag.current;
         if (!state || state.pointerId !== event.pointerId) return;
         const point = artboardPoint(event);
@@ -234,6 +358,23 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         if (state.nodeId) setPreview({ nodeId: state.nodeId, insertion: state.insertion, point, start: state.start });
       }}
       onPointerUp={(event) => {
+        const resizing = resize.current;
+        if (resizing && resizing.pointerId === event.pointerId) {
+          if (resizing.started) {
+            const node = props.nodes.find((entry) => entry.nodeId === resizing.nodeId);
+            const base = resolvedRect(resizing.nodeId);
+            if (node && base) {
+              commitResize(resizing, resizePlacement(
+                base,
+                resizing.handle,
+                { x: resizing.point.x - resizing.start.x, y: resizing.point.y - resizing.start.y },
+                resizeConstraints(existingPlacement(resizing.nodeId), nodeParentRect(node)),
+              ));
+            }
+          }
+          releaseResize(resizing, event);
+          return;
+        }
         const state = drag.current;
         if (!state || state.pointerId !== event.pointerId) return;
         if (!state.started) {
@@ -245,18 +386,34 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         release(state, event);
       }}
       onPointerCancel={(event) => {
+        const resizing = resize.current;
+        if (resizing && resizing.pointerId === event.pointerId) {
+          releaseResize(resizing, event);
+          return;
+        }
         const state = drag.current;
         if (!state || state.pointerId !== event.pointerId) return;
         release(state, event);
       }}
     >
-      {movedRect && props.selectedNodeId && (
+      {displayRect && props.selectedNodeId && (
         <div
           class="editor-selection-box"
           data-testid="selection-box"
           data-layout-node={props.selectedNodeId}
-          style={{ left: `${movedRect.x}px`, top: `${movedRect.y}px`, width: `${movedRect.width}px`, height: `${movedRect.height}px` }}
-        />
+          style={{ left: `${displayRect.x}px`, top: `${displayRect.y}px`, width: `${displayRect.width}px`, height: `${displayRect.height}px` }}
+        >
+          {showResizeHandles && RESIZE_HANDLES.map((handle) => (
+            <span
+              key={handle}
+              class="editor-resize-handle"
+              data-testid="resize-handle"
+              data-handle={handle}
+              style={{ left: handlePositions[handle].left, top: handlePositions[handle].top, cursor: handlePositions[handle].cursor }}
+              onPointerDown={(event) => startResize(event, handle)}
+            />
+          ))}
+        </div>
       )}
       {preview && preview.nodeId === props.selectedNodeId && !preview.insertion && (
         <div class="editor-free-mode" data-testid="free-mode">Свободное размещение</div>

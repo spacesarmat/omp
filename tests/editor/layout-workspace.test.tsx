@@ -12,6 +12,7 @@ import {
   placeNodeTransaction,
 } from '../../editor/src/layout/transactions';
 import { getLayoutPlacement } from '../../design/layout';
+import { formatSizeField, parseSpacingField } from '../../editor/src/components/LayoutInspector';
 import type { LayoutContext } from '../../design/schema';
 
 const BASE = '0000000000000000000000000000000000000000';
@@ -326,5 +327,136 @@ describe('layout workspace', () => {
     pointer(overlay(), 'pointerup', 50, 150);
 
     expect(orderOf('card-grid')).toEqual(['server-card-2', 'server-card']);
+  });
+
+  it('resizes an absolute node from a corner handle with one undo step', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect(
+      { x: 0, y: 100, width: 400, height: 100 },
+      { x: 0, y: 0, width: 400, height: 400 },
+      context,
+      'server-card-2',
+      'server-card',
+    ));
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+    expect(host.querySelectorAll('[data-testid="resize-handle"]')).toHaveLength(8);
+
+    const update = vi.spyOn(controller, 'update');
+    const handle = host.querySelector<HTMLElement>('[data-testid="resize-handle"][data-handle="se"]')!;
+    pointer(handle, 'pointerdown', 400, 200);
+    pointer(overlay(), 'pointermove', 370, 190);
+    expect(host.querySelector<HTMLElement>('[data-testid="selection-box"]')!.style.width).toBe('370px');
+    pointer(overlay(), 'pointerup', 370, 190);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(placementOf('server-card-2')).toMatchObject({ x: 0, y: 2500, width: 9250, height: 2250 });
+    expect(host.querySelector<HTMLElement>('[data-testid="selection-box"]')!.style.width).toBe('370px');
+    controller.undo();
+    expect(placementOf('server-card-2')).toMatchObject({ width: 10000, height: 2500 });
+    controller.redo();
+    expect(placementOf('server-card-2')).toMatchObject({ width: 9250, height: 2250 });
+  });
+
+  it('honors the placement min size constraints while resizing', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, {
+      ...absolutePlacementFromRect(
+        { x: 0, y: 100, width: 400, height: 100 },
+        { x: 0, y: 0, width: 400, height: 400 },
+        context,
+        'server-card-2',
+        'server-card',
+      ),
+      minWidth: 7500,
+      minHeight: 2000,
+    });
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+    const handle = host.querySelector<HTMLElement>('[data-testid="resize-handle"][data-handle="se"]')!;
+    pointer(handle, 'pointerdown', 400, 200);
+    pointer(overlay(), 'pointermove', 100, 150);
+    pointer(overlay(), 'pointerup', 100, 150);
+
+    expect(placementOf('server-card-2')).toMatchObject({ width: 7500, height: 2000 });
+  });
+
+  it('syncs the numeric inspector with handle resizes and commits typed geometry', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect(
+      { x: 0, y: 100, width: 400, height: 100 },
+      { x: 0, y: 0, width: 400, height: 400 },
+      context,
+      'server-card-2',
+      'server-card',
+    ));
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+    const width = host.querySelector<HTMLInputElement>('[data-testid="layout-width"]')!;
+    expect(width.value).toBe('400');
+
+    const handle = host.querySelector<HTMLElement>('[data-testid="resize-handle"][data-handle="se"]')!;
+    pointer(handle, 'pointerdown', 400, 200);
+    pointer(overlay(), 'pointermove', 370, 190);
+    pointer(overlay(), 'pointerup', 370, 190);
+    expect(width.value).toBe('370');
+
+    const x = host.querySelector<HTMLInputElement>('[data-testid="layout-x"]')!;
+    act(() => {
+      x.value = '20';
+      x.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(placementOf('server-card-2')).toMatchObject({ x: 500, width: 9250 });
+  });
+
+  it('edits container padding and node margin from the inspector with one undo each', () => {
+    buildPreview();
+    pointer(overlay(), 'pointerdown', 350, 350);
+    pointer(overlay(), 'pointerup', 350, 350);
+    const padding = host.querySelector<HTMLInputElement>('[data-testid="layout-padding"]')!;
+    act(() => {
+      padding.value = '16';
+      padding.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    const context = contextOf();
+    const container = controller.draft.theme.layout?.containers.find(
+      (entry) => entry.target === context.target
+        && entry.screenId === context.screenId
+        && entry.format === context.format
+        && entry.nodeId === 'card-grid',
+    );
+    expect(container).toMatchObject({ padding: '16px', order: ['server-card', 'server-card-2', 'settings-continue'] });
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers ?? []).toHaveLength(0);
+    controller.redo();
+
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+    const margin = host.querySelector<HTMLInputElement>('[data-testid="layout-margin"]')!;
+    act(() => {
+      margin.value = '12';
+      margin.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(placementOf('server-card')).toMatchObject({ mode: 'flow', margin: '12px' });
+    controller.undo();
+    expect(placementOf('server-card')).toBeUndefined();
+  });
+
+  it('parses mixed padding and margin field values', () => {
+    expect(parseSpacingField('16')).toBe('16px');
+    expect(parseSpacingField('16.5')).toBe('16.5px');
+    expect(parseSpacingField('')).toBe('');
+    expect(parseSpacingField('mixed')).toBe('mixed');
+    expect(parseSpacingField('разные')).toBe('mixed');
+    expect(parseSpacingField('abc')).toBeNull();
+    expect(formatSizeField('mixed')).toBe('разные');
+    expect(formatSizeField(24)).toBe('24');
   });
 });

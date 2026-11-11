@@ -12,7 +12,7 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
-import { moveNodeTransaction, placeNodeTransaction, type LayoutRect } from './layout/transactions';
+import { moveNodeTransaction, placeNodeTransaction, updateContainerTransaction, updateNodeMarginTransaction, type LayoutRect } from './layout/transactions';
 import { TargetBar } from './components/TargetBar';
 import { PreviewPane } from './components/PreviewPane';
 import { ThemeInspector } from './components/ThemeInspector';
@@ -106,6 +106,23 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   };
   const handlePlaceNode = (placement: LayoutPlacement) => {
     placeNodeTransaction(controller, placement);
+  };
+  const handleContainerPatch = (patch: { padding?: string }) => {
+    if (!selectedNode) return;
+    const seed = layoutNodes
+      .filter((node) => node.parentId === selectedNode.nodeId)
+      .map((node) => node.nodeId);
+    updateContainerTransaction(controller, { context: layoutContext, nodeId: selectedNode.nodeId, seed, patch });
+  };
+  const handleNodeMargin = (margin: string | undefined) => {
+    if (!selectedNode) return;
+    updateNodeMarginTransaction(controller, {
+      context: layoutContext,
+      nodeId: selectedNode.nodeId,
+      label: selectedNode.label,
+      base: getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId),
+      margin,
+    });
   };
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
@@ -249,8 +266,16 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                 rect={layoutRects[selectedNode.nodeId] ?? null}
                 parentRect={selectedNode.parentId ? layoutRects[selectedNode.parentId] ?? null : null}
                 order={selectedOrder}
+                container={draft.theme.layout?.containers.find(
+                  (container) => container.target === layoutContext.target
+                    && container.screenId === layoutContext.screenId
+                    && container.format === layoutContext.format
+                    && container.nodeId === selectedNode.nodeId,
+                )}
                 onPlace={handlePlaceNode}
                 onMove={handleMoveNode}
+                onContainerPatch={handleContainerPatch}
+                onMargin={handleNodeMargin}
               />
             )}
             {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" /><FlowMap flow={draft.flow} /></>}

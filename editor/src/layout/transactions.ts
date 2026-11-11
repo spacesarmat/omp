@@ -1,5 +1,5 @@
-import type { LayoutContext, LayoutPlacement, ThemeDocument } from '../../../design/schema.ts';
-import { moveLayoutNode, upsertLayoutPlacement } from '../../../design/layout.ts';
+import type { LayoutContainer, LayoutContext, LayoutPlacement, ThemeDocument } from '../../../design/schema.ts';
+import { moveLayoutNode, upsertLayoutContainer, upsertLayoutPlacement, createContainer } from '../../../design/layout.ts';
 import { collectLayoutNodes } from '../../../design/layoutDom.ts';
 import type { DraftController } from '../drafts.ts';
 
@@ -46,6 +46,31 @@ function clampGeometry(value: number): number {
 function toUnits(px: number, size: number): number {
   if (!(size > 0)) return 0;
   return clampGeometry((px * LAYOUT_GEOMETRY_LIMIT) / size);
+}
+
+// Explicit size conversions for resize commits: absolutePlacementFromRect keeps the base
+// sizes on purpose (mode switches preserve geometry), so resizing overrides them with
+// the freshly computed units.
+export function rectSizeToUnits(px: number, size: number): number {
+  return toUnits(px, size);
+}
+
+export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRect, fallback?: LayoutRect | null): LayoutRect {
+  const width = typeof placement.width === 'number'
+    ? (placement.width / LAYOUT_GEOMETRY_LIMIT) * parentRect.width
+    : fallback?.width ?? parentRect.width;
+  const height = typeof placement.height === 'number'
+    ? (placement.height / LAYOUT_GEOMETRY_LIMIT) * parentRect.height
+    : fallback?.height ?? parentRect.height;
+  const xUnits = (placement.x / LAYOUT_GEOMETRY_LIMIT) * parentRect.width;
+  const yUnits = (placement.y / LAYOUT_GEOMETRY_LIMIT) * parentRect.height;
+  const x = placement.anchor === 'top-right' || placement.anchor === 'bottom-right'
+    ? parentRect.x + parentRect.width - xUnits - width
+    : parentRect.x + xUnits;
+  const y = placement.anchor === 'bottom-left' || placement.anchor === 'bottom-right'
+    ? parentRect.y + parentRect.height - yUnits - height
+    : parentRect.y + yUnits;
+  return { x, y, width, height };
 }
 
 export function createPlacement(
@@ -155,6 +180,49 @@ export function moveNodeTransaction(controller: DraftController, args: MoveNodeT
 
 export function placeNodeTransaction(controller: DraftController, placement: LayoutPlacement): void {
   controller.update((draft) => {
+    draft.theme = upsertLayoutPlacement(draft.theme, { ...placement, id: uniquePlacementId(draft.theme, placement) });
+    return draft;
+  });
+}
+
+export interface ContainerPatchTransactionArgs {
+  context: LayoutContext;
+  nodeId: string;
+  seed?: string[];
+  patch: Partial<Pick<LayoutContainer, 'padding' | 'direction' | 'alignment' | 'distribution'>>;
+}
+
+// Container spacing edits stay one undo step: the record is created from the document
+// order seed when missing, otherwise patched in place with its order preserved.
+export function updateContainerTransaction(controller: DraftController, args: ContainerPatchTransactionArgs): void {
+  controller.update((draft) => {
+    const layout = draft.theme.layout ?? { containers: [], placements: [] };
+    const existing = layout.containers.find(
+      (entry) => entry.target === args.context.target
+        && entry.screenId === args.context.screenId
+        && entry.format === args.context.format
+        && entry.nodeId === args.nodeId,
+    );
+    const container = existing
+      ? { ...existing, ...args.patch }
+      : createContainer(args.context, args.nodeId, args.seed ?? [], args.patch);
+    draft.theme = upsertLayoutContainer(draft.theme, container);
+    return draft;
+  });
+}
+
+export interface NodeMarginTransactionArgs {
+  context: LayoutContext;
+  nodeId: string;
+  label: string;
+  base?: LayoutPlacement;
+  margin?: string;
+}
+
+export function updateNodeMarginTransaction(controller: DraftController, args: NodeMarginTransactionArgs): void {
+  controller.update((draft) => {
+    const placement = createPlacement(args.context, args.nodeId, args.label, { ...(args.base ?? {}), margin: args.margin });
+    if (args.base?.id) placement.id = args.base.id;
     draft.theme = upsertLayoutPlacement(draft.theme, { ...placement, id: uniquePlacementId(draft.theme, placement) });
     return draft;
   });

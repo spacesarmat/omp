@@ -588,6 +588,19 @@ h2 svg {
   pointer-events: none;
 }
 
+.editor-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  box-sizing: border-box;
+  border: 1px solid var(--editor-accent);
+  border-radius: 2px;
+  background: #fff;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .editor-insertion-line {
   position: absolute;
   background: var(--editor-accent);
