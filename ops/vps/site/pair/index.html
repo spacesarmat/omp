@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111310" />
+    <meta name="robots" content="noindex, follow" />
+    <title>Подключить телевизор</title>
+    <link rel="stylesheet" href="/style.css?v=20261031a" />
+    <link rel="icon" href="/assets/logo.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="header wrap">
+      <a class="brand" href="/" aria-label="OMP - на главную">
+        <img src="/assets/logo.svg" width="40" height="40" alt="" />
+        <b>OMP</b>
+        <span>OPEN MOVIE PLAYER</span>
+      </a>
+      <div class="header-tools">
+        <button type="button" class="lang-btn" id="pair-lang">EN</button>
+      </div>
+    </header>
+
+    <main class="notfound wrap" id="pair-card">
+      <p class="eyebrow" id="pair-kicker">OMP</p>
+      <h1 id="pair-heading">Подключить телевизор</h1>
+      <p id="pair-line">Ссылка с телевизора откроет OMP и подключит сервер. Если приложения ещё нет, скачайте его: адрес уже подставлен.</p>
+      <form class="actions" id="pair-form" onsubmit="return false">
+        <label id="pair-url-label"><span id="pair-url-caption">Адрес сервера</span>
+          <input id="pair-url" type="text" readonly />
+        </label>
+        <label id="pair-user-label" hidden><span id="pair-user-caption">Логин</span>
+          <input id="pair-user" type="text" readonly />
+        </label>
+        <label id="pair-pass-label" hidden><span id="pair-pass-caption">Пароль</span>
+          <input id="pair-pass" type="password" readonly />
+        </label>
+        <a class="button primary" id="pair-open" href="/">Открыть в OMP</a>
+        <a class="button secondary" id="pair-download" href="https://github.com/spacesarmat/omp/releases/latest" target="_blank" rel="noopener noreferrer">Скачать для Android</a>
+        <a class="text-link" id="pair-home" href="/">На главную</a>
+      </form>
+    </main>
+
+    <footer class="wrap">
+      <a class="footer-brand" href="/">OMP <span>Open Movie Player</span></a>
+      <p class="copyright">© 2026 OMP · Open Movie Player</p>
+    </footer>
+    <script src="/pair-link.js?v=20261110b"></script>
+  </body>
+</html>

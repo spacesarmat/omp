@@ -222,7 +222,7 @@ export function Tv() {
         </button>
         <h1 class="m-bar-title">{t('history.tv')}</h1>
       </div>
-      <p class="m-muted m-note">
+      <p class="m-muted m-note m-tv-steps">
         {t('tvScreen.note')}
       </p>
       <button type="button" class="m-link m-tv-install" onClick={() => navigate({ name: 'install' })}>
@@ -331,7 +331,7 @@ export function Tv() {
           {t('tvScreen.manualIp')}
         </button>
       )}
-      <p class="m-muted m-note m-tv-tip">
+      <p class="m-muted m-note m-tv-tip m-tv-steps">
         {t('tvScreen.tip')}
       </p>
       {coding && (

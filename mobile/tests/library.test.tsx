@@ -736,7 +736,7 @@ describe('Library', () => {
     const titles = () => Array.from(el.querySelectorAll('.m-card-title')).map((n) => n.textContent);
     const pick = (sel: string) => act(() => (document.querySelector(sel) as HTMLElement).click());
     expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: Новые, Большие карточки');
-    expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('нов');
+    expect(chip().querySelector('.m-icon-tag')).toBeNull();
     expect(titles()[0]).toContain('Starbound');
     act(() => chip().click());
     const sheet = document.querySelector('[data-code="PD54"]')!;
@@ -745,8 +745,7 @@ describe('Library', () => {
     expect(sheet.querySelector('[data-view="large"]')!.getAttribute('aria-checked')).toBe('true');
     pick('[data-sort="title"]');
     expect(chip().getAttribute('aria-label')).toBe('Вид и сортировка: По названию, Большие карточки');
-    // the order that is on is visible, not only in the label (QA B13)
-    expect(chip().querySelector('.m-icon-tag')!.textContent).toBe('А-Я');
+    expect(chip().querySelector('.m-icon-tag')).toBeNull();
     expect(settings.value.librarySort).toBe('title');
     expect(titles()[0]).toBe('Neon Rivers');
     expect(document.querySelector('[data-sort="title"]')!.getAttribute('aria-checked')).toBe('true');

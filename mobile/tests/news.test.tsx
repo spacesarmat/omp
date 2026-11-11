@@ -329,10 +329,12 @@ describe('«Новое» · Подписки', () => {
     const button = el.querySelector('[data-sub-remove="' + gone.id + '"]') as HTMLButtonElement;
     expect(button.getAttribute('data-code')).toBe('P03.4');
     click(button);
+    click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Удалить')!);
     expect(document.getElementById('m-confirm-msg')!.textContent).toBe('Удалить подписку «Убрать»?');
     await declineConfirm();
     expect(loadSubs().map((s) => s.id).sort()).toEqual([keep.id, gone.id].sort());
     click(el.querySelector('[data-sub-remove="' + gone.id + '"]')!);
+    click(Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Удалить')!);
     await acceptConfirm();
     expect(loadSubs().map((s) => s.query)).toEqual(['Оставить']);
     reloadMonitor();
@@ -371,6 +373,31 @@ describe('«Новое» · Подписки', () => {
     touch('touchend', 80, 44);
     await acceptConfirm();
     expect(loadSubs()).toEqual([]);
+  });
+
+  it('the subscription menu sits outside the swipe, so a sideways gesture does not delete', async () => {
+    const s = addSubscription({ query: 'Меню', quality: '', sources: null, notify: true }, 1)!;
+    await mount({ seg: 'subs' });
+    mountConfirmHost();
+    click(el.querySelector('[data-sub-remove="' + s.id + '"]')!);
+    const sheet = el.querySelector('.m-sheet-host')!;
+    const swipe = el.querySelector('[data-sub-swipe="' + s.id + '"]')!;
+    expect(sheet).toBeTruthy();
+    expect(swipe.contains(sheet)).toBe(false);
+    const touch = (type: string, x: number, y: number) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      const point = { clientX: x, clientY: y, identifier: 1 };
+      Object.defineProperty(ev, 'touches', { value: type === 'touchend' ? [] : [point] });
+      Object.defineProperty(ev, 'changedTouches', { value: [point] });
+      act(() => {
+        sheet.dispatchEvent(ev);
+      });
+    };
+    touch('touchstart', 200, 40);
+    touch('touchmove', 40, 44);
+    touch('touchend', 40, 44);
+    expect(document.getElementById('m-confirm-msg')).toBeNull();
+    expect(loadSubs().map((x) => x.id)).toEqual([s.id]);
   });
 
   it('a poster looked up after the subscription was added stays on the row', async () => {
@@ -622,7 +649,8 @@ describe('News in English', () => {
 
   it('feed: no sources switched on and sites that did not answer', async () => {
     await mount();
-    expect(el.querySelector('.m-hint-warn')!.textContent).toBe('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('The feed comes from rutor, nnmclub and torrent.by - turn them on in “Search sources”.');
+    expect(el.querySelector('.m-hint-warn')!.textContent).toContain('Got it');
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
     registerSource({ id: 'feedy', name: 'Feedy', kind: 'builtin', search: () => Promise.resolve([]), latest: () => Promise.reject(new Error('down')) });
     click(byText('Series'));

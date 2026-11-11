@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeUpdateInfo, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateNotes, updateTitle } from '../../src/lib/updateInfo';
+import { sanitizeUpdateInfo, setDesktopUpdatePlatform, UPDATE_URL, ANDROID_UPDATE_URL, HB_REPO_URL, RELEASES_URL, HB_SITE_URL, updateFeedUrl, updateNotes, updateTitle } from '../../src/lib/updateInfo';
 
 const HASH = 'a'.repeat(64);
 const good = {
@@ -123,14 +123,34 @@ describe('beta feeds and titles', () => {
       else target.__TAURI_INTERNALS__ = previous;
     }
   });
-  it('does not offer Windows updates to a non-Windows desktop', () => {
+  it('picks the desktop feed and the package for this CPU', () => {
     const target = window as unknown as { __TAURI_INTERNALS__?: object };
     const previous = target.__TAURI_INTERNALS__;
     target.__TAURI_INTERNALS__ = {};
     const userAgent = navigator.userAgent;
-    Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Mac OS X 14_0', configurable: true });
+    const B = 'https://raw.githubusercontent.com/spacesarmat/omp/gh-pages/';
+    const sha = 'b'.repeat(64);
+    const feed = {
+      version: '0.20.12',
+      url: 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12/OMP-0.20.12-macos-arm64.dmg',
+      sha256: sha,
+      size: 10,
+      assets: {
+        arm64: { url: 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12/OMP-0.20.12-macos-arm64.dmg', sha256: sha, size: 10 },
+        x64: { url: 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12/OMP-0.20.12-macos-x64.dmg', sha256: 'c'.repeat(64), size: 11 },
+      },
+    };
     try {
-      expect(updateFeedUrl(false, false)).toBe('');
+      Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Intel Mac OS X 14_0', configurable: true });
+      expect(updateFeedUrl(false, false)).toBe(B + 'update-macos.json');
+      expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-x64.dmg');
+      setDesktopUpdatePlatform('macos-arm64');
+      expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-arm64.dmg');
+      setDesktopUpdatePlatform('');
+      Object.defineProperty(navigator, 'userAgent', { value: 'Macintosh; Mac OS X 14_0; arm64', configurable: true });
+      expect(sanitizeUpdateInfo(feed)?.ipkUrl).toContain('macos-arm64.dmg');
+      Object.defineProperty(navigator, 'userAgent', { value: 'X11; Linux x86_64', configurable: true });
+      expect(updateFeedUrl(false, false)).toBe(B + 'update-linux.json');
     } finally {
       Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true });
       if (previous === undefined) delete target.__TAURI_INTERNALS__;

@@ -128,8 +128,8 @@ fn path_traversal_in_version_is_rejected() {
 #[test]
 fn missing_target_asset_is_an_explicit_error() {
     assert!(matches!(
-        asset_for(TargetPlatform::LinuxX64),
-        Err(DownloadError::UnsupportedTarget(TargetPlatform::LinuxX64))
+        asset_for(TargetPlatform::LinuxArm64),
+        Err(DownloadError::UnsupportedTarget(TargetPlatform::LinuxArm64))
     ));
 }
 

@@ -181,6 +181,18 @@ pub async fn player_pause(
 }
 
 #[tauri::command]
+pub async fn player_control(
+    action: String,
+    state: State<'_, Arc<Mutex<PlayerManager>>>,
+) -> Result<PlayerStatus, String> {
+    run_player(Arc::clone(state.inner()), move |manager| match manager.control(&action) {
+        Ok(status) => status,
+        Err(_) => manager.status(),
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn player_stop(
     state: State<'_, Arc<Mutex<PlayerManager>>>,
     cancellation: State<'_, PlayerCancellation>,
@@ -212,6 +224,11 @@ where
     })
     .await
     .map_err(|error| format!("update worker failed: {error}"))?
+}
+
+#[tauri::command]
+pub fn update_supported() -> bool {
+    crate::update::updates_are_automatic()
 }
 
 #[tauri::command]

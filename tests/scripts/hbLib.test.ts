@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { changelogNotes, isTech, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, buildWindowsUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
+import { changelogNotes, isTech, feedNotes, FIXES_NOTE, buildHomebrew, buildAndroidUpdate, buildWindowsUpdate, buildMacosUpdate, buildLinuxUpdate, apkAbi, splitApks, APP_ID, FEED_BASE } from '../../scripts/hb-lib.mjs';
 import { sanitizeUpdateInfo } from '../../src/lib/updateInfo';
 
 const MD = '# Изменения\n\n## 0.6.0\n\n- Окно обновления\n* Параметры запуска\n\n## 0.5.0\n\n- Новый каталог\n';
@@ -105,6 +105,26 @@ describe('hb-lib', () => {
       notes: ['Windows'],
       releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/desktop-v0.20.11',
     });
+  });
+  it('builds macOS and Linux feeds with size and extra files', () => {
+    const sha = 'd'.repeat(64);
+    const other = 'e'.repeat(64);
+    const mac = buildMacosUpdate({
+      tag: 'desktop-0.20.12', version: '0.20.12', notes: ['Mac'],
+      arm64: { name: 'OMP-0.20.12-macos-arm64.dmg', sha256: sha, size: 20 },
+      x64: { name: 'OMP-0.20.12-macos-x64.dmg', sha256: other, size: 21 },
+    });
+    expect(mac.size).toBe(20);
+    expect(mac.sha256).toBe(sha);
+    expect(mac.assets.arm64.size).toBe(20);
+    expect(mac.assets.x64.url).toContain('macos-x64.dmg');
+    const linux = buildLinuxUpdate({
+      tag: 'desktop-0.20.12', version: '0.20.12', notes: ['Linux'],
+      appimage: { name: 'OMP-0.20.12-linux-x64.AppImage', sha256: sha, size: 30 },
+      deb: { name: 'OMP-0.20.12-linux-x64.deb', sha256: other, size: 31 },
+    });
+    expect(linux.url).toContain('.AppImage');
+    expect(linux.assets.deb.size).toBe(31);
   });
   it('builds per-ABI entries and keeps the universal APK in the legacy fields', () => {
     const [a, b, c] = ['a', 'b', 'c'].map((x) => x.repeat(64));

@@ -1,13 +1,11 @@
 package com.spacesarmat.omp
 
-import android.os.Build
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import com.spacesarmat.omp.install.DevModeReminder
 import com.spacesarmat.omp.rpc.PhoneRpcService
 import com.spacesarmat.omp.rpc.RpcConfig
 import com.spacesarmat.omp.rpc.SharedRpcPrefs
-import com.spacesarmat.omp.sources.BillingTokens
 
 /** Developer-mode reminder and the phone RPC server. Bodies for [OmpNativePlugin]. */
 
@@ -47,10 +45,11 @@ internal fun OmpNativePlugin.devModeReminderStateOp(call: PluginCall) {
 }
 
 internal fun OmpNativePlugin.phoneNameOp(call: PluginCall) {
-    call.resolve(JSObject().put("name", deviceName()))
+    val (name, model) = PhoneName.read(context)
+    call.resolve(JSObject().put("name", name).put("model", model))
 }
 
-internal fun OmpNativePlugin.deviceName(): String = BillingTokens.modelName(Build.MANUFACTURER, Build.MODEL)
+internal fun OmpNativePlugin.deviceName(): String = PhoneName.read(context).first
 
 internal fun OmpNativePlugin.rpcSetEnabledOp(call: PluginCall) {
     val once = CallOnce(call)

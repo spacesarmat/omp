@@ -36,6 +36,7 @@ installCleartextSync(
 );
 
 if (typeof __DESKTOP__ !== 'undefined' && __DESKTOP__) {
+  document.documentElement.classList.add('omp-desktop');
   setTorrServerTransport({
     send: async (url, req) => {
       const response = await native.http({

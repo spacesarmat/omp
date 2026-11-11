@@ -315,6 +315,8 @@ export function NowDeck({
       return;
     }
     const code = episodeLabel(file.path);
+    const tor = libraryTorrent(hash);
+    const season = parseEpisode(file.path).season;
     setLaunchError('');
     void launch
       .start({
@@ -323,6 +325,8 @@ export function NowDeck({
         at: sharedResume(hash, file.id),
         duration: getLocalProgress(hash, file.id)?.duration || undefined,
         label: code ? episodeLine(code, stripExt(baseName(file.path))) : stripExt(baseName(file.path)),
+        files: tor ? filesOf(tor) : undefined,
+        season: season !== null ? season : undefined,
         onError: setLaunchError,
       })
       .then((ok) => {

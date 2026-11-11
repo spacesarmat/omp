@@ -136,7 +136,7 @@ describe('phone torrent card · one «Мониторинг» card', () => {
     applyLanguageSetting('en');
     try {
       await mount(film);
-      expect(card()!.querySelector('.m-skip-title')!.textContent).toBe('Monitoring');
+      expect(card()!.querySelector('.m-skip-title')!.textContent).toBe('Playback settings');
       expect(card()!.textContent).toContain('Watch the quality');
       expect(card()!.textContent).not.toMatch(/[А-Яа-яЁё]/);
     } finally {
