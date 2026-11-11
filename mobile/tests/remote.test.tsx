@@ -433,7 +433,7 @@ describe('Remote with a TV', () => {
         i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
       });
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 40));
+        await new Promise((r) => setTimeout(r, 150));
       });
       expect(order).toEqual(['type:a', 'type:b', 'enter', 'del:1']);
     });

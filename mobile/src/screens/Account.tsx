@@ -31,14 +31,16 @@ function PromoEntry() {
   const [note, setNote] = useState('');
   return (
     <section class="m-set-group">
-      <label class="m-set-row">
-        <span>{t('settings.promoTitle')}</span>
-        <input class="m-input" value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
-      </label>
-      <button
-        type="button"
-        class="m-btn"
-        onClick={() => {
+      <div class="m-add-row m-promo-row">
+        <label class="m-grow">
+          <span class="m-small m-muted">{t('settings.promoTitle')}</span>
+          <input class="m-input" value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
+        </label>
+        <button
+          type="button"
+          class="m-btn m-btn-primary m-promo-apply"
+          disabled={!code.trim()}
+          onClick={() => {
           const value = code.trim();
           if (!value) return;
           void withDeviceToken(phoneSourceContext(), (headers) =>
@@ -54,6 +56,7 @@ function PromoEntry() {
       >
         {t('settings.promoApply')}
       </button>
+      </div>
       {note ? <p class="m-small m-muted">{note}</p> : null}
     </section>
   );
