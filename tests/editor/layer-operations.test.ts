@@ -294,6 +294,11 @@ describe('clipboard', () => {
     expect(parsedScript.clipboard).toBeNull();
     expect(parsedScript.errors[0]).toContain('html');
 
+    const slash = { ...valid.nodes[0], html: '<script/>alert(1)' };
+    const parsedSlash = parseLayoutClipboard({ schemaVersion: 1, nodes: [slash] });
+    expect(parsedSlash.clipboard).toBeNull();
+    expect(parsedSlash.errors[0]).toContain('html');
+
     const long = { ...valid.nodes[0], html: `<div>${'a'.repeat(LAYOUT_CLONE_HTML_LIMIT + 1)}</div>` };
     const parsedLong = parseLayoutClipboard({ schemaVersion: 1, nodes: [long] });
     expect(parsedLong.clipboard).toBeNull();

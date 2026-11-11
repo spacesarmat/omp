@@ -242,7 +242,7 @@ function layoutClone(value: unknown, path: string): LayoutClone {
   result.parentId = id(source.parentId, `${path}.parentId`);
   if (source.sourceNodeId !== undefined) result.sourceNodeId = id(source.sourceNodeId, `${path}.sourceNodeId`);
   result.label = layoutLabel(source.label, `${path}.label`);
-  if (typeof source.html !== 'string' || source.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>]/i.test(source.html)) {
+  if (typeof source.html !== 'string' || source.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>/]/i.test(source.html)) {
     fail(`${path}.html`, `string without scripts of at most ${LAYOUT_CLONE_HTML_LIMIT} characters required`);
   }
   result.html = source.html;

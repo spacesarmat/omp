@@ -125,7 +125,9 @@ const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-layout-id', 'data-layout-clone
 
 // Clone snapshots copy real component markup only: scripts, embedded content, inline handlers,
 // javascript: URLs, per-node layout identity and baked placement styles never travel with a clone.
-function sanitizeCloneElement(element: HTMLElement): void {
+// The root itself must be a renderable tag as well, never a live script or embedded document.
+function sanitizeCloneElement(element: HTMLElement): HTMLElement | null {
+  if (CLONE_BLOCKED_TAGS.has(element.tagName)) return null;
   const walk = (current: HTMLElement): void => {
     for (const child of [...current.children]) {
       const childElement = child as HTMLElement;
@@ -147,13 +149,13 @@ function sanitizeCloneElement(element: HTMLElement): void {
     }
   };
   walk(element);
+  return element;
 }
 
 // Editor-side snapshot of a live preview element used for duplicate and clipboard html.
 export function snapshotCloneHtml(source: HTMLElement): string {
   const copy = source.cloneNode(true) as HTMLElement;
-  sanitizeCloneElement(copy);
-  return copy.outerHTML;
+  return sanitizeCloneElement(copy)?.outerHTML ?? '';
 }
 
 function materializeCloneElement(clone: LayoutClone, doc: Document): HTMLElement | null {
@@ -162,10 +164,11 @@ function materializeCloneElement(clone: LayoutClone, doc: Document): HTMLElement
   template.innerHTML = clone.html.trim();
   const element = template.content.firstElementChild;
   if (!(element instanceof HTMLElement)) return null;
-  sanitizeCloneElement(element);
-  element.dataset.layoutId = clone.nodeId;
-  element.dataset.layoutClone = clone.nodeId;
-  return element;
+  const sanitized = sanitizeCloneElement(element);
+  if (!sanitized) return null;
+  sanitized.dataset.layoutId = clone.nodeId;
+  sanitized.dataset.layoutClone = clone.nodeId;
+  return sanitized;
 }
 
 function resetManagedStyle(element: HTMLElement): void {

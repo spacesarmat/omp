@@ -188,7 +188,7 @@ function validateClipboardNode(raw: unknown, index: number, errors: string[]): v
   }
   if (node.margin !== undefined && typeof node.margin !== 'string') errors.push(`${prefix}: отступ должен быть строкой`);
   if (node.html !== undefined
-    && (typeof node.html !== 'string' || node.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>]/i.test(node.html))) {
+    && (typeof node.html !== 'string' || node.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>/]/i.test(node.html))) {
     errors.push(`${prefix}: html недопустим`);
   }
 }

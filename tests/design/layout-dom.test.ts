@@ -388,7 +388,6 @@ describe('layout dom runtime', () => {
   });
 
   it('round-trips clone records through theme validation and rejects unsafe ones', () => {
-    const root = mount('<div data-design-id="card-grid"></div>');
     let theme = createDefaultTheme(BASE);
     const validClone = {
       id: 'clone-a',
@@ -413,6 +412,47 @@ describe('layout dom runtime', () => {
 
     theme.layout.clones = [{ ...validClone }, { ...validClone, id: 'clone-b' }];
     expect(() => parseThemeDocument(theme)).toThrow(/duplicate/);
-    void root;
+  });
+
+  it('refuses to materialize clones whose root is a blocked tag', () => {
+    const root = mount('<div data-design-id="card-grid"></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [],
+      clones: [
+        { id: 'clone-script', target: context.target, screenId: context.screenId, format: context.format, nodeId: 'copy-script', parentId: 'card-grid', label: 'Script', html: '<script>alert(1)</script>' },
+        { id: 'clone-iframe', target: context.target, screenId: context.screenId, format: context.format, nodeId: 'copy-iframe', parentId: 'card-grid', label: 'Iframe', html: '<iframe src="https://evil.example"></iframe>' },
+        { id: 'clone-slash', target: context.target, screenId: context.screenId, format: context.format, nodeId: 'copy-slash', parentId: 'card-grid', label: 'Slash', html: '<script/>alert(1)' },
+      ],
+    };
+
+    cleanup = observeLayout(root, theme, context);
+
+    expect(root.querySelector('[data-layout-clone="copy-script"]')).toBeNull();
+    expect(root.querySelector('[data-layout-clone="copy-iframe"]')).toBeNull();
+    expect(root.querySelector('[data-layout-clone="copy-slash"]')).toBeNull();
+    expect(root.querySelector('script')).toBeNull();
+    expect(root.querySelector('iframe')).toBeNull();
+  });
+
+  it('rejects crafted clone html with blocked root tags or slash script variants in validation', () => {
+    let theme = createDefaultTheme(BASE);
+    const baseClone = {
+      id: 'clone-a',
+      target: context.target,
+      screenId: context.screenId,
+      format: context.format,
+      nodeId: 'copy-a',
+      parentId: 'card-grid',
+      label: 'Copy A',
+      html: '<div data-design-id="card">Copy</div>',
+    };
+    theme.layout = { containers: [], placements: [], clones: [{ ...baseClone, html: '<script>alert(1)</script>' }] };
+    expect(() => parseThemeDocument(theme)).toThrow(/html/);
+    theme.layout.clones = [{ ...baseClone, html: '<script/>alert(1)' }];
+    expect(() => parseThemeDocument(theme)).toThrow(/html/);
+    theme.layout.clones = [{ ...baseClone, html: '<iframe src="https://evil.example"></iframe>' }];
+    expect(() => parseThemeDocument(theme)).not.toThrow();
   });
 });
