@@ -2344,8 +2344,8 @@ html.m-hint-hold .m-hint { display: none; }
 .m-library .m-lib-head .m-icon-btn.on { background: rgba(255, 255, 255, 0.06); }
 .m-library .m-lib-head .m-tvchip.on { width: 40px; height: 40px; border-radius: 12px; background: rgba(143, 227, 154, 0.18); color: #8FE39A; }
 .m-library .m-lib-head .m-seg-btn.on::before { box-shadow: none; background: #252A35; }
-.m-library .m-tabs { margin-top: 12px; background: var(--bg); box-shadow: 0 8px 14px rgba(0, 0, 0, 0.35); }
-.m-resume { margin-top: 20px; }
+.m-library .m-tabs { margin-top: 12px; background: var(--bg); position: sticky; top: 0; z-index: 2; }
+.m-resume { margin-top: 18px; }
 .m-resume-card { flex: 0 0 64%; flex-direction: column; align-items: stretch; width: auto; max-width: none; padding: 0; background: transparent; }
 .m-resume-poster-wrap { position: relative; }
 .m-resume-poster { position: relative; display: block; width: 100%; padding: 0; border: none; background: none; color: inherit; }
@@ -2369,25 +2369,29 @@ html.m-hint-hold .m-hint { display: none; }
 .m-ep-row.is-watched .m-ep-check { color: var(--muted); }
 .m-ep-check { flex-shrink: 0; }
 .m-vrow .m-poster-row .m-badge { display: block; left: auto; right: 0; top: 8px; padding: 1px 6px; font-size: 10px; line-height: 14px; border-radius: 6px 0 0 6px; }
-.m-vrow-size { color: var(--muted); font-size: 12px; }
+.m-vrow-size, .m-crow-size { display: none; }
 .m-crow-titleline { display: flex; align-items: flex-start; }
 .m-crow-titleline .m-crow-title { flex: 1 1 auto; }
 .m-crow-titleline .m-new-badge { flex-shrink: 0; margin-left: 8px; }
 .m-new-badge.filled { background: var(--accent); color: #1A1400; }
 .m-new-badge.outline { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
 .m-row-wrap { position: relative; }
-.m-swipe-actions { display: none; }
+.m-row-wrap { overflow: visible; }
+.m-swipe-actions { display: none; position: absolute; right: 28px; top: 8px; bottom: 8px; z-index: 2; }
 .m-row-wrap[data-open='1'] .m-swipe-actions { display: flex; }
+.m-swipe-actions button { border: none; background: #252A35; color: #fff; padding: 0 12px; font-weight: 700; }
+.m-swipe-actions button.danger { background: #8E2F2F; }
+.m-swipe-actions button.ok { background: #1E6B3A; }
 .m-info-btn { width: 28px; height: 28px; border-radius: 8px; }
-.m-library .m-tabs { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 36px), transparent); }
+.m-library .m-tabs { padding-bottom: 2px; }
 .m-library .m-tabs.nudge { animation: m-chips-nudge .8s ease; }
 @keyframes m-chips-nudge { 0% { transform: none; } 45% { transform: translateX(-22px); } 100% { transform: none; } }
-.m-resume-head { flex-wrap: wrap; }
-.m-resume-toggle { display: flex; align-items: center; padding: 0; border: none; background: none; color: inherit; margin-right: 8px; }
+.m-resume-head { flex-wrap: nowrap; align-items: center; }
+.m-resume-toggle { display: flex; align-items: center; padding: 0; border: none; background: none; color: inherit; margin-right: 10px; }
 .m-resume-toggle .m-resume-title { margin-right: 6px; }
 .m-resume-toggle svg { flex-shrink: 0; display: block; }
 .m-resume-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }
-.m-resume-layouts { display: flex; }
+.m-resume-layouts { display: flex; margin-left: auto; }
 .m-resume-layout { min-height: 28px; padding: 0 8px; border: none; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; }
 .m-resume-layout.on { background: #252A35; color: var(--text); }
 .m-resume-mini .m-resume-card { flex-basis: 34%; }

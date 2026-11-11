@@ -13,7 +13,7 @@ export function movieRowLine(year: string, runtimeMin: number): string {
 export function seriesRowLine(seasons: number, episodes: number, ended: boolean): string {
   const parts: string[] = [];
   if (seasons > 0) parts.push(tp('series.seasons', seasons));
-  if (seasons <= 1 && episodes > 1) parts.push(tp('library.episodes', episodes));
-  else if (ended && seasons > 1) parts.push(t('series.rowEnded'));
+  if (episodes > 1) parts.push(tp('library.episodes', episodes));
+  if (ended && seasons > 1) parts.push(t('series.rowEnded'));
   return parts.join(' · ');
 }

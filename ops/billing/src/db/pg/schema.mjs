@@ -628,6 +628,48 @@ ALTER TABLE purchases ADD COLUMN pay_url text;
 ALTER TABLE purchases ADD COLUMN web_url text;
 `,
   },
+  {
+    version: '011_referral',
+    sql: `
+-- Referral program. The master flag lives in referral_settings and starts off.
+CREATE TABLE referral_settings (
+  id text PRIMARY KEY,
+  enabled boolean NOT NULL DEFAULT false,
+  referrer_days integer NOT NULL DEFAULT 0,
+  friend_days integer NOT NULL DEFAULT 0,
+  balance_percent integer NOT NULL DEFAULT 0,
+  tiers boolean NOT NULL DEFAULT false,
+  friend_discount boolean NOT NULL DEFAULT false,
+  retention boolean NOT NULL DEFAULT false,
+  stack boolean NOT NULL DEFAULT false,
+  delay_days integer NOT NULL DEFAULT 7,
+  monthly_cap integer NOT NULL DEFAULT 0,
+  yearly_cap integer NOT NULL DEFAULT 0
+);
+INSERT INTO referral_settings (id) VALUES ('default');
+CREATE TABLE referral_codes (
+  code text PRIMARY KEY,
+  account_id text NOT NULL,
+  status text NOT NULL DEFAULT 'user',
+  created_at bigint NOT NULL
+);
+CREATE TABLE referral_binds (
+  friend_id text PRIMARY KEY,
+  referrer_id text NOT NULL,
+  code text NOT NULL,
+  bound_at bigint NOT NULL
+);
+CREATE TABLE referral_accruals (
+  id text PRIMARY KEY,
+  referrer_id text NOT NULL,
+  friend_id text NOT NULL,
+  status text NOT NULL,
+  days integer NOT NULL DEFAULT 0,
+  reason text NOT NULL,
+  created_at bigint NOT NULL
+);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

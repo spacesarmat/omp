@@ -506,20 +506,22 @@ describe('Library', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('«Продолжить просмотр» on top of «Мои»: a card per started item, «Вся история» opens the history', async () => {
+  it('«Продолжить просмотр» on top of «Мои»: a card per started item, the clock opens the history', async () => {
     saveProgress('h1', 2, 1394, 3651);
     mount();
     await flush();
     const row = el.querySelector('[data-code="P02.19"]')!;
     expect(row).toBeTruthy();
     expect(row.querySelector('.m-resume-title')!.textContent).toBe('Продолжить просмотр');
+    expect(row.querySelector('.m-resume-layouts')).toBeTruthy();
+    expect(row.querySelector('[data-code="P02.21"]')).toBeNull();
     const cards = row.querySelectorAll('[data-resume-hash]');
     expect(cards.length).toBe(1);
     expect(cards[0].getAttribute('data-resume-hash')).toBe('h1');
     expect(cards[0].textContent).toContain('осталось 38 мин');
     // the chips have no «История» any more
     expect(tab('История')).toBeUndefined();
-    act(() => (row.querySelector('[data-code="P02.21"]') as HTMLElement).click());
+    act(() => (el.querySelector('[data-code="P02.20"]') as HTMLElement).click());
     expect(libraryTab.value).toBe('history');
     expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
     expect(el.querySelectorAll('.m-history .m-hrow').length).toBe(1);

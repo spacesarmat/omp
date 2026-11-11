@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.30.1-beta.3
+
+- [phone] Catalog header hides with 24px hysteresis and the chips stay. Continue layout sits on the title row. History link is gone. List swipe uses dark, red and green actions and only one open row
+- [phone] The phone stays in portrait, including after the player. TV orientation is unchanged
+- [tech] Referral accrual rules and migration 011, off by default. Billing was not deployed
+
 ## 0.30.1-beta.2
 
 - [phone] Catalog chips show that the row scrolls: the right edge fades, the next chip is cut, and the row nudges once on the first open
