@@ -227,7 +227,9 @@ describe('Library', () => {
       await flush();
       const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
-      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1-6 из 10', '2026']);
+      const meta = Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent);
+      if (view === 'list' || view === 'compact') expect(meta, view).toEqual(['2 сезон · 6 серий', 'Фильм · 2026', 'Фильм']);
+      else expect(meta, view).toEqual(['2 сезон · серии 1-6 из 10', '2026']);
       expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
@@ -248,16 +250,15 @@ describe('Library', () => {
     await flush();
     const row = el.querySelector('.m-clist .m-crow')!;
     const main = row.querySelector('.m-crow-main')!;
-    expect(main.children[0].classList.contains('m-crow-title')).toBe(true);
+    expect(main.children[0].classList.contains('m-crow-titleline')).toBe(true);
     expect(main.querySelector('.m-crow-title')!.textContent).toBe('Американская история преступлений');
+    const line = main.querySelector('.m-crow-titleline')!;
+    expect(line.querySelector('.m-crow-title')).toBeTruthy();
+    expect(line.querySelector('.m-new-badge')).toBeTruthy();
     const sub = main.querySelector('.m-crow-sub')!;
-    expect(Array.from(sub.children).map((c) => c.className.split(' ').filter((x) => /^m-(crow-meta|new-badge|crow-size)$/.test(x))[0])).toEqual([
-      'm-crow-meta',
-      'm-new-badge',
-      'm-crow-size',
-    ]);
-    // nothing of the second line sits next to the name
-    expect(row.querySelector(':scope > .m-crow-size, :scope > .m-new-badge, :scope > .m-crow-meta')).toBeNull();
+    expect(sub.querySelector('.m-crow-meta')).toBeTruthy();
+    expect(sub.querySelector('.m-crow-size')).toBeTruthy();
+    expect(sub.querySelector('.m-new-badge')).toBeNull();
     const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
     const rule = (sel: string) => {
       const i = css.indexOf('\n' + sel + ' {');
@@ -760,7 +761,7 @@ describe('Library', () => {
     expect(el.querySelector('.m-vlist')).toBeTruthy();
     const rows = el.querySelectorAll('.m-vrow');
     expect(rows.length).toBe(3);
-    expect(rows[0].querySelector('.m-badge-inline')!.textContent).toBe('1080p');
+    expect(rows[0].querySelector('.m-badge')!.textContent).toBe('1080p');
     expect(rows[0].textContent).toContain('2 серии');
     pick('[data-view="compact"]');
     expect(el.querySelectorAll('.m-crow').length).toBe(3);

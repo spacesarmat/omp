@@ -350,13 +350,14 @@ describe('Series screen', () => {
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 1');
     const main = el.querySelector('[data-code="P26.5"]')!;
     expect(main.getAttribute('data-main')).toBe('phone');
-    expect(main.textContent).toContain('Продолжить на телефоне');
+    expect(main.textContent).toContain('Продолжить S01E02');
+    expect(main.textContent).toContain('на телефоне');
     expect(el.querySelector('[data-code="P26.6"]')!.textContent).toBe('На ТВ');
     expect(el.querySelector('.m-ep .m-bar-fill')).toBeTruthy();
     act(() => render(null, el));
     saveTv({ ip: '192.168.1.5', name: 'LG' });
     mount(<Series seriesKey={key()} />);
-    expect(btn('Продолжить на ТВ')).toBeTruthy();
+    expect(el.querySelector('[data-main="tv"]')!.textContent).toContain('на ТВ');
     expect(el.querySelector('[data-code="P26.6"]')).toBeNull();
   });
 
@@ -386,7 +387,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('HDRezka · 5.1');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
     });
 
@@ -394,7 +395,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('по умолчанию');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
       expect(choices()).toEqual([]);
       const about = el.querySelector('button[aria-label*="общая для ТВ и телефона"]') as HTMLElement;
@@ -413,7 +414,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('LostFilm');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       expect(choices()).toEqual(['LostFilm · Русский', 'HDrezka Studio · Русский', 'По умолчанию (сбросить)']);
       expect(el.querySelector('[data-dub-choice].on')!.textContent).toBe('LostFilm · Русский');
       act(() => (el.querySelector('[data-dub-choice="k1"]') as HTMLElement).click());
@@ -423,7 +424,7 @@ describe('Series screen', () => {
       // the rest of the torrent's data stays
       expect(JSON.parse(sets[0].data).TorrServer.Files).toHaveLength(2);
       expect(value()).toBe('HDrezka Studio');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       act(() => (el.querySelector('[data-dub-choice="reset"]') as HTMLElement).click());
       await flush();
       expect(JSON.parse(sets[1].data).omp.a.l).toBeUndefined();

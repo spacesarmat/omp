@@ -4,8 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.1
 
+- [phone] Catalog header: Mine is filled, icon buttons are 40 by 40. Scrolling hides the Mine / Discover row and keeps the chips on a solid dark bar. Continue shows the device and time, only items at 2-90%, a finished episode moves to the next one, and anything untouched for 30 days leaves the row. Long press: remove, mark watched, start over. Settings: Shared history across devices
+- [phone] A series opens at the top. The main button is two lines, and the release line has one Change action. Season chips stay when there is one season, and voice-over is stored per season. The episode list is shorter: number on the left, a check for watched, missing episodes stay visible, and a watched counter
+- [phone] List and compact rows keep the title on the first line, then "1 season, 6 episodes" or "Movie, year". New season is a filled badge, new episode is an outline. Sort: new episodes first
 - [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
 
 ## 0.30.0

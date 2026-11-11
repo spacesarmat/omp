@@ -135,6 +135,7 @@ describe('series screen with TMDB', () => {
     expect(chips()[1].classList.contains('on')).toBe(true);
     expect(el.querySelector('.m-sh-caption')!.textContent).toBe('10 серий · 2025');
     expect(el.querySelector('.m-sh-season-name')!.textContent).toBe('Возвращение');
+    act(() => (el.querySelector('.m-sh-season-about .m-btn-text') as HTMLElement).click());
     expect(el.querySelector('.m-sh-season-overview')!.textContent).toBe('О сезоне 2');
     expect(el.querySelector('[data-release-switch]')!.getAttribute('data-hash')).toBe('s2');
 

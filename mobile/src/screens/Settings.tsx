@@ -419,6 +419,22 @@ export function Settings() {
         <PhoneServerRow />
         <VideoPlayerRow />
         <LanguageRow />
+        <div class="m-set-row" data-row="shared-history">
+          <div class="m-set-text">
+            <span>{t('settings.sharedHistory')}</span>
+            <span class="m-muted m-small">{settings.value.sharedHistory ? t('settings.sharedHistoryOn') : t('settings.sharedHistoryOff')}</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.value.sharedHistory}
+            aria-label={t('settings.sharedHistory')}
+            class={'m-switch' + (settings.value.sharedHistory ? ' on' : '')}
+            onClick={() => updateSettings({ sharedHistory: !settings.value.sharedHistory })}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
         <div class="m-set-row" data-row="prebuffer">
           <div class="m-set-text">
             <span>{t('settings.prebufferMetered')}</span>
