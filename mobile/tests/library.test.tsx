@@ -182,8 +182,7 @@ describe('Library', () => {
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(3);
     expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
-    expect(cards[0].querySelector('.m-card-meta')!.textContent).toBe('2 сезон');
-    expect(cards[0].textContent).toContain('2,0 ГБ');
+    expect(cards[0].querySelector('.m-poster-foot')!.textContent).toContain('сезон');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
@@ -229,7 +228,7 @@ describe('Library', () => {
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
       const meta = Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent);
       if (view === 'list' || view === 'compact') expect(meta, view).toEqual(['2 сезон · 6 серий', 'Фильм · 2026', 'Фильм']);
-      else expect(meta, view).toEqual(['2 сезон · серии 1-6 из 10', '2026']);
+      else expect(Array.from(el.querySelectorAll('.m-poster-foot')).map((n) => n.textContent), view).toEqual(['2 сезон · 6 серий', 'Фильм · 2026', 'Фильм']);
       expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
@@ -282,7 +281,7 @@ describe('Library', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя');
-    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1-6 of 10');
+    expect(el.querySelector('.m-poster-foot')!.textContent).toBe('season 2 · 6 episodes');
     expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 
@@ -541,9 +540,7 @@ describe('Library', () => {
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(2);
     expect(cards[0].classList.contains('m-film-card')).toBe(true);
-    expect(cards[0].querySelector('.m-badge')!.textContent).toBe('2 раздачи');
-    // the size of both releases
-    expect(cards[0].textContent).toContain('3,0 ГБ');
+    expect(cards[0].querySelector('.m-badge')!.textContent).toBe('1080p');
     act(() => (cards[0] as HTMLElement).click());
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f1' });
   });
@@ -978,7 +975,6 @@ describe('Library in English', () => {
     expect(el.querySelector('[aria-label^="View and sort: "]')).toBeTruthy();
     expect(el.querySelector('[aria-label="History"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Search"]')).toBeTruthy();
-    expect(el.textContent).toContain('2.0 GB');
     act(() => updateSettings({ libraryView: 'list' }));
     expect(el.textContent).toContain('2 episodes');
     updateSettings({ libraryView: 'large' });

@@ -201,7 +201,7 @@ export function sanitizeSettings(v: unknown): AppSettings {
   out.testLabelPhonePx = clampLabelPx(out.testLabelPhonePx, PHONE_LABEL_PX);
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
-  if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
+  if (['one', 'large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
   if (['cards', 'mini', 'line'].indexOf(out.continueLayout) < 0) out.continueLayout = DEFAULT_SETTINGS.continueLayout;
   if (['new', 'title', 'size', 'fresh'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;

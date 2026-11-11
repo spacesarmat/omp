@@ -2400,6 +2400,17 @@ html.m-hint-hold .m-hint { display: none; }
 .m-resume-line .m-resume-card, .m-resume-row.m-resume-line { flex-direction: column; }
 .m-resume-row.m-resume-line { overflow: visible; }
 .m-resume-line { width: 100%; padding: 8px 0; border: none; border-bottom: 1px solid #252A35; background: none; color: inherit; text-align: left; }
+.m-poster-box { position: relative; display: block; }
+.m-poster-box .m-poster::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(180deg, transparent, rgba(15, 17, 21, 0.88)); }
+.m-poster-foot { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; color: #fff; font-size: 12px; font-weight: 700; }
+.m-poster-box .m-watch-tag { position: absolute; left: 8px; bottom: 28px; z-index: 1; }
+.m-poster-box .m-new-badge { position: absolute; right: 8px; bottom: 28px; z-index: 1; }
+.m-poster-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; height: 3px; background: rgba(255, 255, 255, 0.28); }
+.m-poster-bar > span { display: block; height: 100%; background: var(--accent); }
+.m-vrow-status { color: var(--muted); font-size: 12px; }
+.m-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: #8FE39A; margin-left: 6px; }
+.m-card { height: 100%; }
+.m-card-title { min-height: 38px; }
 .m-watch-tag { align-self: flex-start; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-series-tail { margin-top: 8px; }
 

@@ -434,6 +434,7 @@ export const ru = {
     viewList: 'Список',
     viewCompact: 'Компактный',
     // phone catalog only (TV keeps the four names above)
+    viewCardsOne: 'Одна карточка',
     viewCardsLarge: 'Большие карточки',
     viewCardsMedium: 'Средние карточки',
     viewListPictures: 'Список с картинками',

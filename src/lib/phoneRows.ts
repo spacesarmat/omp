@@ -9,6 +9,11 @@ export function movieRowLine(year: string, runtimeMin: number): string {
   return parts.join(' · ');
 }
 
+/** «S01E04, осталось 22 мин». A missing code or remaining time is left out. */
+export function continueStatus(code: string, left: string): string {
+  return [code, left].filter(Boolean).join(', ');
+}
+
 /** «1 сезон · 6 серий», «2 сезона», «5 сезонов · завершён». */
 export function seriesRowLine(seasons: number, episodes: number, ended: boolean): string {
   const parts: string[] = [];

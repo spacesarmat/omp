@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import {
-  viewOptions, nextView, viewLabel, libraryTabs, POSTER_COLORS, posterColor, shortTitle,
+  viewOptions, nextView, nextPhoneView, viewLabel, libraryTabs, POSTER_COLORS, posterColor, shortTitle,
   episodeLine, positionLabel, remainingLabel, libraryTitle,
 } from '../../src/lib/libraryView';
 
@@ -11,6 +11,9 @@ describe('views and tabs', () => {
     expect(nextView('large')).toBe('small');
     expect(nextView('compact')).toBe('large');
     expect(viewLabel('list')).toBe('Список');
+    expect(nextPhoneView('one')).toBe('large');
+    expect(nextPhoneView('compact')).toBe('one');
+    expect(nextPhoneView('large')).toBe('small');
   });
   it('puts history first', () => {
     expect(libraryTabs().map((t) => t.id)).toEqual(['history', 'all', 'movie', 'tv', 'music', 'audiobook', 'other']);

@@ -429,6 +429,7 @@ export const en: EnDict<typeof ru> = {
     viewList: 'List',
     viewCompact: 'Compact',
     // phone catalog only (TV keeps the four names above)
+    viewCardsOne: 'One card',
     viewCardsLarge: 'Large cards',
     viewCardsMedium: 'Medium cards',
     viewListPictures: 'List with pictures',
