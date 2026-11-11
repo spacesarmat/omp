@@ -38,9 +38,10 @@ describe('node_modules CI caching', () => {
       ['root', '', 'package-lock.json'],
       ['desktop', '--prefix desktop ', 'desktop/package-lock.json'],
     ] as const) {
+      const copies = file === 'desktop.yml' ? 4 : 2;
       const id = `${scope}-node-modules`;
       const caches = steps.filter((step) => field(step, 'id') === id);
-      expect(caches).toHaveLength(2);
+      expect(caches).toHaveLength(copies);
 
       for (const cache of caches) {
         expect(cache).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
@@ -63,8 +64,8 @@ describe('node_modules CI caching', () => {
             cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`)
         );
       });
-      expect(cachedInstalls).toHaveLength(2);
-      expect(cleanInstalls).toHaveLength(2);
+      expect(cachedInstalls).toHaveLength(copies);
+      expect(cleanInstalls).toHaveLength(copies);
 
       for (const step of cachedInstalls) {
         const cond = field(step, 'if');
@@ -79,7 +80,7 @@ describe('node_modules CI caching', () => {
     const lockfileChecks = steps.filter(
       (step) => field(step, 'run') === 'git diff --exit-code -- package-lock.json desktop/package-lock.json',
     );
-    expect(lockfileChecks).toHaveLength(2);
+    expect(lockfileChecks).toHaveLength(file === 'desktop.yml' ? 4 : 2);
   });
 });
 
@@ -87,18 +88,19 @@ describe('cargo CI caching', () => {
   it('desktop.yml keeps smoke and package-windows cargo caches separate', () => {
     const steps = workflowSteps('desktop.yml');
     const cargoCaches = steps.filter((step) => stepName(step) === 'Cache Cargo');
-    expect(cargoCaches).toHaveLength(2);
+    expect(cargoCaches).toHaveLength(4);
 
     const cargoKey = (profile: string) =>
       `\${{ runner.os }}-cargo-${profile}-\${{ steps.rust-version.outputs.version }}-\${{ hashFiles('desktop/src-tauri/Cargo.lock') }}`;
     const cargoRestoreKey = (profile: string) =>
       `\${{ runner.os }}-cargo-${profile}-\${{ steps.rust-version.outputs.version }}-`;
 
-    for (const [index, profile] of ['smoke', 'release'].entries()) {
-      const cache = cargoCaches[index];
-      expect(field(cache, 'key')).toBe(cargoKey(profile));
-      expect(restoreKeys(cache)).toEqual([cargoRestoreKey(profile)]);
-      expect(cache).not.toContain(`-cargo-${profile === 'smoke' ? 'release' : 'smoke'}-`);
+    expect(field(cargoCaches[0], 'key')).toBe(cargoKey('smoke'));
+    expect(restoreKeys(cargoCaches[0])).toEqual([cargoRestoreKey('smoke')]);
+    for (const cache of cargoCaches.slice(1)) {
+      expect(field(cache, 'key')).toBe(cargoKey('release'));
+      expect(restoreKeys(cache)).toEqual([cargoRestoreKey('release')]);
+      expect(cache).not.toContain('-cargo-smoke-');
     }
   });
 });

@@ -8,4 +8,5 @@ pub mod platform;
 pub mod player;
 pub mod process;
 pub mod server;
+pub mod tray;
 pub mod update;

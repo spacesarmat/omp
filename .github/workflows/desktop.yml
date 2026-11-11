@@ -235,6 +235,10 @@ jobs:
           $output = "desktop/dist-desktop"
           New-Item -ItemType Directory -Path $output -Force | Out-Null
           Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $output "OMP-$version-setup.exe") -Force
+          $portable = Get-Item -LiteralPath desktop/src-tauri/target/release/omp-desktop.exe -ErrorAction SilentlyContinue
+          if ($portable) {
+            Copy-Item -LiteralPath $portable.FullName -Destination (Join-Path $output "OMP-$version-portable.exe") -Force
+          }
       - name: Validate publication input
         if: github.event.inputs.publish == 'true'
         shell: pwsh
@@ -251,13 +255,18 @@ jobs:
           RELEASE_TAG: ${{ github.event.inputs.tag }}
         run: |
           $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-setup.exe" | Select-Object -First 1
+          $portable = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-portable.exe" | Select-Object -First 1
           $version = (Get-Content -LiteralPath desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          node scripts/desktop-update-feed.mjs --tag $env:RELEASE_TAG --version $version --nsis $package.FullName --output desktop/dist-desktop/update-windows.json
+          $feedArgs = @('scripts/desktop-update-feed.mjs', '--kind', 'windows', '--tag', $env:RELEASE_TAG, '--version', $version, '--nsis', $package.FullName, '--output', 'desktop/dist-desktop/update-windows.json')
+          if ($portable) { $feedArgs += @('--portable', $portable.FullName) }
+          node @feedArgs
       - name: Upload NSIS installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: omp-nsis-${{ github.event.inputs.tag || 'preview' }}
-          path: desktop/dist-desktop/OMP-*-setup.exe
+          path: |
+            desktop/dist-desktop/OMP-*-setup.exe
+            desktop/dist-desktop/OMP-*-portable.exe
           if-no-files-found: error
       - name: Upload update feed
         if: github.event.inputs.publish == 'true'
@@ -275,7 +284,12 @@ jobs:
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           $package = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-setup.exe" | Select-Object -First 1
-          gh release upload $env:RELEASE_TAG $package.FullName --clobber
+          $portable = Get-ChildItem -LiteralPath desktop/dist-desktop -Filter "OMP-*-portable.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($portable) {
+            gh release upload $env:RELEASE_TAG $package.FullName $portable.FullName --clobber
+          } else {
+            gh release upload $env:RELEASE_TAG $package.FullName --clobber
+          }
           $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes("desktop/dist-desktop/update-windows.json"))
           $sha = $null
           $nativePreference = $PSNativeCommandUseErrorActionPreference
@@ -297,3 +311,251 @@ jobs:
           } else {
             gh api --method PUT "repos/${{ github.repository }}/contents/update-windows.json" -f message="Add Windows desktop feed" -f content="$content" -f branch="gh-pages"
           }
+
+  package-macos:
+    needs: smoke
+    if: ${{ !cancelled() && needs.smoke.result == 'success' && github.event_name != 'pull_request' }}
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Check Rust
+        id: rust-version
+        shell: bash
+        run: echo "version=$(rustc --version | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+      - name: Cache Cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-
+      - name: Cache root node_modules
+        id: root-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node24-root-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-root-modules-
+      - name: Cache desktop node_modules
+        id: desktop-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node24-desktop-modules-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-desktop-modules-
+      - name: Install root dependencies
+        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: Install root dependencies exactly
+        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Install desktop dependencies
+        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
+      - name: Install desktop dependencies exactly
+        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefix desktop
+      - name: Verify lockfiles
+        run: git diff --exit-code -- package-lock.json desktop/package-lock.json
+      - name: Add Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: npm run build:desktop
+      - name: Build Apple Silicon DMG
+        run: npm --prefix desktop run tauri -- build --target aarch64-apple-darwin --bundles dmg
+      - name: Build Intel DMG
+        run: npm --prefix desktop run tauri -- build --target x86_64-apple-darwin --bundles dmg
+      - name: Prepare DMG artifacts
+        run: |
+          version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
+          mkdir -p desktop/dist-desktop
+          cp desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg "desktop/dist-desktop/OMP-${version}-macos-arm64.dmg"
+          cp desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg "desktop/dist-desktop/OMP-${version}-macos-x64.dmg"
+      - name: Build update feed
+        if: github.event.inputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
+          node scripts/desktop-update-feed.mjs --kind macos --tag "$RELEASE_TAG" --version "$version" \
+            --arm64 desktop/dist-desktop/OMP-${version}-macos-arm64.dmg \
+            --x64 desktop/dist-desktop/OMP-${version}-macos-x64.dmg \
+            --output desktop/dist-desktop/update-macos.json
+      - name: Upload macOS disk images
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: omp-dmg-${{ github.event.inputs.tag || 'preview' }}
+          path: desktop/dist-desktop/OMP-*-macos-*.dmg
+          if-no-files-found: error
+      - name: Upload update feed
+        if: github.event.inputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: update-macos-${{ github.event.inputs.tag }}
+          path: desktop/dist-desktop/update-macos.json
+          if-no-files-found: error
+      - name: Publish release asset and feed
+        if: github.event.inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(desktop/dist-desktop/OMP-*-macos-*.dmg)
+          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          feed=desktop/dist-desktop/update-macos.json
+          content=$(base64 < "$feed" | tr -d '\n')
+          set +e
+          lookup=$(gh api "repos/${{ github.repository }}/contents/update-macos.json?ref=gh-pages" --jq .sha 2>&1)
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            if ! printf '%s' "$lookup" | grep -Eq '404|Not Found'; then
+              printf '%s\n' "$lookup" >&2
+              exit 1
+            fi
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-macos.json" -f message="Add macOS desktop feed" -f content="$content" -f branch="gh-pages"
+          else
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-macos.json" -f message="Update macOS desktop feed" -f content="$content" -f sha="$lookup" -f branch="gh-pages"
+          fi
+
+  package-linux:
+    needs: smoke
+    if: ${{ !cancelled() && needs.smoke.result == 'success' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - name: Check Rust
+        id: rust-version
+        shell: bash
+        run: echo "version=$(rustc --version | cut -d ' ' -f 2)" >> "$GITHUB_OUTPUT"
+      - name: Cache Cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-${{ hashFiles('desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-${{ steps.rust-version.outputs.version }}-
+      - name: Cache root node_modules
+        id: root-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node24-root-modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-root-modules-
+      - name: Cache desktop node_modules
+        id: desktop-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: desktop/node_modules
+          key: ${{ runner.os }}-node24-desktop-modules-${{ hashFiles('desktop/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node24-desktop-modules-
+      - name: Install root dependencies
+        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefer-offline --no-audit --no-fund
+      - name: Install root dependencies exactly
+        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+      - name: Install desktop dependencies
+        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
+      - name: Install desktop dependencies exactly
+        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        run: npm ci --prefix desktop
+      - name: Verify lockfiles
+        run: git diff --exit-code -- package-lock.json desktop/package-lock.json
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
+      - run: npm run build:desktop
+      - run: npm --prefix desktop run tauri -- build --bundles appimage,deb
+      - name: Prepare Linux artifacts
+        run: |
+          version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
+          mkdir -p desktop/dist-desktop
+          cp desktop/src-tauri/target/release/bundle/appimage/*.AppImage "desktop/dist-desktop/OMP-${version}-linux-x64.AppImage"
+          cp desktop/src-tauri/target/release/bundle/deb/*.deb "desktop/dist-desktop/OMP-${version}-linux-x64.deb"
+      - name: Build update feed
+        if: github.event.inputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
+          node scripts/desktop-update-feed.mjs --kind linux --tag "$RELEASE_TAG" --version "$version" \
+            --appimage "desktop/dist-desktop/OMP-${version}-linux-x64.AppImage" \
+            --deb "desktop/dist-desktop/OMP-${version}-linux-x64.deb" \
+            --output desktop/dist-desktop/update-linux.json
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: omp-linux-${{ github.event.inputs.tag || 'preview' }}
+          path: |
+            desktop/dist-desktop/OMP-*-linux-x64.AppImage
+            desktop/dist-desktop/OMP-*-linux-x64.deb
+          if-no-files-found: error
+      - name: Upload update feed
+        if: github.event.inputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: update-linux-${{ github.event.inputs.tag }}
+          path: desktop/dist-desktop/update-linux.json
+          if-no-files-found: error
+      - name: Publish release asset and feed
+        if: github.event.inputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(desktop/dist-desktop/OMP-*-linux-x64.AppImage desktop/dist-desktop/OMP-*-linux-x64.deb)
+          gh release upload "$RELEASE_TAG" "${files[@]}" --clobber
+          feed=desktop/dist-desktop/update-linux.json
+          content=$(base64 -w0 < "$feed")
+          set +e
+          lookup=$(gh api "repos/${{ github.repository }}/contents/update-linux.json?ref=gh-pages" --jq .sha 2>&1)
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            if ! printf '%s' "$lookup" | grep -Eq '404|Not Found'; then
+              printf '%s\n' "$lookup" >&2
+              exit 1
+            fi
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-linux.json" -f message="Add Linux desktop feed" -f content="$content" -f branch="gh-pages"
+          else
+            gh api --method PUT "repos/${{ github.repository }}/contents/update-linux.json" -f message="Update Linux desktop feed" -f content="$content" -f sha="$lookup" -f branch="gh-pages"
+          fi
+

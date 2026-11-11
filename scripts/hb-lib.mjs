@@ -161,12 +161,63 @@ export function buildAndroidUpdate({ tag, version, apkName, sha256, size, notes,
 }
 
 
-export function buildWindowsUpdate({ tag, version, nsisName, sha256, notes }) {
+function releaseFile(tag, name, sha256, size) {
   return {
+    url: `https://github.com/${REPO}/releases/download/${tag}/${name}`,
+    sha256,
+    size,
+  };
+}
+
+export function buildWindowsUpdate({ tag, version, nsisName, sha256, notes, size, portable }) {
+  const update = {
     version,
     url: `https://github.com/${REPO}/releases/download/${tag}/${nsisName}`,
     sha256,
     notes,
     releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
   };
+  if (typeof size === 'number') update.size = size;
+  if (portable) {
+    update.assets = {
+      nsis: releaseFile(tag, nsisName, sha256, typeof size === 'number' ? size : 0),
+      portable: releaseFile(tag, portable.name, portable.sha256, portable.size),
+    };
+  }
+  return update;
+}
+
+/** macOS feed. `url` is the Apple Silicon disk image when both exist, else the Intel one. */
+export function buildMacosUpdate({ tag, version, notes, arm64, x64 }) {
+  const primary = arm64 || x64;
+  const update = {
+    version,
+    url: `https://github.com/${REPO}/releases/download/${tag}/${primary.name}`,
+    sha256: primary.sha256,
+    size: primary.size,
+    notes,
+    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
+  };
+  const assets = {};
+  if (arm64) assets.arm64 = releaseFile(tag, arm64.name, arm64.sha256, arm64.size);
+  if (x64) assets.x64 = releaseFile(tag, x64.name, x64.sha256, x64.size);
+  if (Object.keys(assets).length) update.assets = assets;
+  return update;
+}
+
+/** Linux feed. `url` is the AppImage used by auto-update. The deb is an extra download. */
+export function buildLinuxUpdate({ tag, version, notes, appimage, deb }) {
+  const update = {
+    version,
+    url: `https://github.com/${REPO}/releases/download/${tag}/${appimage.name}`,
+    sha256: appimage.sha256,
+    size: appimage.size,
+    notes,
+    releaseUrl: `https://github.com/${REPO}/releases/tag/${tag}`,
+  };
+  update.assets = {
+    appimage: releaseFile(tag, appimage.name, appimage.sha256, appimage.size),
+  };
+  if (deb) update.assets.deb = releaseFile(tag, deb.name, deb.sha256, deb.size);
+  return update;
 }

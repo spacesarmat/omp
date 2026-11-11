@@ -4,6 +4,8 @@ const FEEDS = [
   { url: '/omp/update-android-beta.json', kind: 'beta-android', channel: 'beta' },
   { url: '/omp/update-beta.json', kind: 'beta-webos', channel: 'beta' },
   { url: '/omp/update-windows.json', kind: 'beta-windows', channel: 'beta', versionKey: 'beta-windows' },
+  { url: '/omp/update-macos.json', kind: 'beta-macos', channel: 'beta', versionKey: 'beta-macos' },
+  { url: '/omp/update-linux.json', kind: 'beta-linux', channel: 'beta', versionKey: 'beta-linux' },
 ];
 
 const RELEASE_API = 'https://api.github.com/repos/spacesarmat/omp/releases/tags/';
@@ -72,9 +74,24 @@ function applyFeed(root, kind, versionKey, feed) {
   }
   const fileUrl = typeof feed.url === 'string' && feed.url ? feed.url : (typeof feed.ipkUrl === 'string' ? feed.ipkUrl : '');
   if (fileUrl) {
-    root.querySelectorAll(`[data-download="${kind}"]:not([data-abi])`).forEach((link) => {
+    root.querySelectorAll(`[data-download="${kind}"]:not([data-abi]):not([data-asset])`).forEach((link) => {
       link.href = fileUrl;
     });
+  }
+  const assets = feed.assets && typeof feed.assets === 'object' ? feed.assets : null;
+  if (assets) {
+    root.querySelectorAll(`[data-download="${kind}"][data-asset]`).forEach((link) => {
+      const key = link.getAttribute('data-asset');
+      const entry = key ? assets[key] : null;
+      if (!entry || typeof entry.url !== 'string' || !entry.url) return;
+      link.href = entry.url;
+      link.hidden = false;
+    });
+  }
+  const tile = root.querySelector(`[data-optional="${kind}"]`);
+  if (tile) {
+    const extra = assets ? Object.keys(assets).some((key) => assets[key] && typeof assets[key].url === 'string' && assets[key].url) : false;
+    tile.hidden = !fileUrl && !extra;
   }
   for (const abi of ['arm64', 'armv7']) {
     const url = feed.apks && feed.apks[abi] && feed.apks[abi].url;
@@ -127,6 +144,8 @@ export function detectPlatform(ua) {
   if (/android/i.test(agent) && /android tv|\btv\b|aft[a-z]|bravia|googletv|mitv|mibox/i.test(agent)) return 'android-tv';
   if (/android/i.test(agent)) return 'android';
   if (/windows nt/i.test(agent)) return 'windows';
+  if (/mac os x|macintosh/i.test(agent)) return 'macos';
+  if (/linux|cros|x11/i.test(agent)) return 'linux';
   return '';
 }
 

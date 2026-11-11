@@ -4,7 +4,7 @@ English: [README.en.md](README.en.md)
 
 <h1 align="center">OMP - Open Movie Player</h1>
 
-<p align="center">Медиаплеер для телевизоров LG (webOS 4.0+), Android TV и телефонов Android. Смотрит фильмы и сериалы из <a href="https://github.com/YouROK/TorrServer">TorrServer</a> в домашней сети.</p>
+<p align="center">Медиаплеер для телевизоров LG (webOS 4.0+), Android TV, телефонов Android, Windows, macOS и Linux. Смотрит фильмы и сериалы из <a href="https://github.com/YouROK/TorrServer">TorrServer</a> в домашней сети.</p>
 
 <p align="center"><a href="https://omp-player.online">Сайт</a> · <a href="https://github.com/spacesarmat/omp/releases/latest">Скачать</a> · <a href="#установка">Установка</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Задачи</a> · <a href="https://boosty.to/djmaker/donate">Поддержать</a></p>
 
@@ -13,6 +13,9 @@ English: [README.en.md](README.en.md)
 - **LG webOS 4.0+** - примерно телевизоры 2018 года и новее. Для работы OMP root не требуется.
 - **Android TV и Google TV** - Android 8 и новее. Тот же APK, что и на телефоне.
 - **Телефон Android** - Android 8 и новее.
+- **Windows** - Windows 10 и 11, x64. Установщик NSIS и portable exe. Пока бета.
+- **macOS** - Intel и Apple Silicon. DMG без подписи Apple Developer: правый клик по приложению и «Открыть», либо «Системные настройки» - «Конфиденциальность и безопасность» - «Все равно открыть».
+- **Linux** - AppImage и пакет deb (x64). Автообновление заменяет AppImage.
 
 Samsung (Tizen) пока не поддерживается. Приставки Xiaomi, Сбер и Яндекс ставятся тем же APK: шаги показывает помощник установки на телефоне.
 
@@ -33,7 +36,7 @@ Samsung (Tizen) пока не поддерживается. Приставки X
 
 ## Установка
 
-Сборки лежат на странице [последнего выпуска](https://github.com/spacesarmat/omp/releases/latest): `OMP-<версия>-webOS.ipk` для LG и три APK для Android.
+Сборки лежат на странице [последнего выпуска](https://github.com/spacesarmat/omp/releases/latest): `OMP-<версия>-webOS.ipk` для LG и три APK для Android. Компьютерные беты (Windows, macOS, Linux) собраны на [странице загрузки](https://spacesarmat.github.io/omp/).
 
 Проще всего с телефона: «Настройки» → «Установить OMP на телевизор». Телефон находит LG и Android TV в сети и ставит OMP сам. На LG это режим разработчика (код Passphrase из приложения Developer Mode), на Android TV - отладка по сети (порт 5555). Сопряжение «Беспроводной отладки» Android 11+ помощник пока не делает.
 

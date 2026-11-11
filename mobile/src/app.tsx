@@ -11,6 +11,10 @@ import { refreshTorrents } from '../../src/store/library';
 import { native } from './platform/native';
 import { audioLaunch, rememberAudio } from './audiobooks/launch';
 import { NavBar, TAB_IDS, visibleTabIds, type Tab } from './ui/NavBar';
+import { isDesktopBuild } from './desktop/runtime';
+import { DesktopSidebar } from './desktop/DesktopSidebar';
+import { installDesktopExtras } from './desktop/installDesktop';
+import './desktop/desktop.css';
 import { Toast, showToast } from './ui/toast';
 import { ConfirmHost } from './ui/confirm';
 import { CertChangedSheet } from './ui/CertChangedSheet';
@@ -163,6 +167,14 @@ export function syncNativeLanguage(set: (l: Lang) => Promise<void> = (l) => nati
 export function App() {
   // the native copy (notifications, install assistant…) follows the page's language
   useEffect(() => syncNativeLanguage(), []);
+  useEffect(() => {
+    if (!isDesktopBuild()) return;
+    return installDesktopExtras({
+      onSearch: () => switchTab({ name: 'add' }),
+      onBack: () => handleBack(),
+      onOpenLink: (link) => intakeMagnet(link),
+    });
+  }, []);
   useEffect(() => {
     if (typeof native.takePendingUpdateResult !== 'function') return;
     let active = true;
@@ -450,8 +462,11 @@ export function App() {
   }, [tabRoot, !!activeTv.value]);
   const showMini = (route.name === 'library' || route.name === 'remote') && linkStatus.value !== 'none';
   // a language change remounts the whole UI (t() does not subscribe components to the language)
+  const desktop = isDesktopBuild();
+  const navActive: Tab = route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab);
   return (
     <Fragment key={lang.value}>
+      {desktop && <DesktopSidebar active={navActive} />}
       {route.name === 'connect' ? (
         <Connect />
       ) : route.name === 'tv' ? (
@@ -539,7 +554,7 @@ export function App() {
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
       {showMini && <MiniPlayer />}
-      {showNav && <NavBar active={route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab)} />}
+      {showNav && !desktop && <NavBar active={navActive} />}
     </Fragment>
   );
 }

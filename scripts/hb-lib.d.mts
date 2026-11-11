@@ -1,57 +1,13 @@
 export const APP_ID: string;
-export const REPO: string;
 export const FEED_BASE: string;
 export const FIXES_NOTE: string;
-export const TECH_MARK: RegExp;
-export function isTech(item: string): boolean;
-export function changelogNotes(
-  md: string,
-  version: string,
-  platform?: 'lg' | 'atv' | 'phone',
-  opts?: { includeTech?: boolean },
-): string[];
-export function feedNotes(md: string, version: string, tv: 'lg' | 'atv'): { notes: string[]; notesTv: string[]; notesPhone: string[] };
-export function buildHomebrew(p: {
-  tag: string;
-  version: string;
-  ipkName: string;
-  sha256: string;
-  size: number;
-  title: string;
-  description: string;
-  notes: string[];
-  notesTv?: string[];
-  notesPhone?: string[];
-}): { manifest: object; apps: object; update: object };
-export const APK_ABIS: string[];
-export function apkAbi(name: string): 'arm64' | 'armv7' | null;
-export function splitApks(paths: string[]): { universal: string; abis: Partial<Record<'arm64' | 'armv7', string>> } | null;
-export interface AbiApk {
-  name: string;
-  sha256: string;
-  size: number;
-}
-export function buildAndroidUpdate(p: {
-  tag: string;
-  version: string;
-  apkName: string;
-  sha256: string;
-  size: number;
-  notes: string[];
-  notesTv?: string[];
-  notesPhone?: string[];
-  abis?: Partial<Record<'arm64' | 'armv7', AbiApk>>;
-}): object;
-export function buildWindowsUpdate(p: {
-  tag: string;
-  version: string;
-  nsisName: string;
-  sha256: string;
-  notes: string[];
-}): {
-  version: string;
-  url: string;
-  sha256: string;
-  notes: string[];
-  releaseUrl: string;
-};
+export function changelogNotes(...args: any[]): any;
+export function isTech(...args: any[]): any;
+export function feedNotes(...args: any[]): any;
+export function buildHomebrew(...args: any[]): any;
+export function buildAndroidUpdate(...args: any[]): any;
+export function buildWindowsUpdate(...args: any[]): any;
+export function buildMacosUpdate(...args: any[]): any;
+export function buildLinuxUpdate(...args: any[]): any;
+export function apkAbi(...args: any[]): any;
+export function splitApks(...args: any[]): any;
