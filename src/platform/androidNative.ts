@@ -93,6 +93,8 @@ export interface OmpNativeTvPlugin {
   setLanguage?(o: { lang: string }): Promise<unknown>;
   /** Android TV: persist «Открывать при включении» for the boot receiver. Missing in an older APK. */
   setOpenOnStartup?(o: { enabled: boolean }): Promise<OpenOnStartupState>;
+  /** Android TV: persist «Включать телевизор через HDMI-CEC». Missing in an older APK. */
+  setHdmiCec?(o: { enabled: boolean }): Promise<unknown>;
   /** Last boot-launch result. needsOverlay is false on a read. */
   openOnStartupState?(): Promise<OpenOnStartupState>;
   /** System screen for display over other apps. { opened: false } when that screen cannot be opened. */
@@ -451,6 +453,27 @@ export function nativeRequestOpenOnStartupOverlay(): Promise<boolean | null> {
 }
 
 /** Keeps SharedPreferences `omp-boot` in step with the setting. Android TV only (the caller gates the platform). */
+export function nativeSetHdmiCec(enabled: boolean): Promise<unknown> {
+  const p = nativePlugin();
+  if (!p || typeof p.setHdmiCec !== 'function') return Promise.resolve(null);
+  try {
+    return p.setHdmiCec({ enabled });
+  } catch (e) {
+    return Promise.resolve(null);
+  }
+}
+
+/** Keeps SharedPreferences `omp-cec` in step with the setting. Android TV only. */
+export function syncHdmiCec(set: (enabled: boolean) => Promise<unknown> = nativeSetHdmiCec): () => void {
+  let last: boolean | undefined;
+  return effect(() => {
+    const enabled = settings.value.hdmiCec;
+    if (enabled === last) return;
+    last = enabled;
+    void set(enabled);
+  });
+}
+
 export function syncOpenOnStartup(set: (enabled: boolean) => Promise<unknown> = nativeSetOpenOnStartup): () => void {
   let last: boolean | undefined;
   return effect(() => {

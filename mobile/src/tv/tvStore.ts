@@ -12,6 +12,8 @@ export interface SavedTv {
   port?: 3000 | 3001;
   /** Wi-Fi/Ethernet MAC for Wake-on-LAN, lower-case colon form. */
   mac?: string;
+  /** Subnet broadcast the device reported, or one computed from its netmask. */
+  broadcast?: string;
   /** Absent = LG webOS (SSAP); 'atv' = Android TV with OMP (HTTP control server). */
   kind?: TvKind;
   /** Android TV: bearer token from pairing (32 hex). */
@@ -53,6 +55,19 @@ function validPort(v: unknown): v is number {
 
 const MAC = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
 
+function copyNet(next: SavedTv, tv: SavedTv, existing: SavedTv | undefined): void {
+  const mac = tv.mac ?? existing?.mac;
+  if (mac && MAC.test(mac)) next.mac = mac;
+  const broadcast = tv.broadcast ?? existing?.broadcast;
+  if (broadcast && IPV4.test(broadcast)) next.broadcast = broadcast;
+}
+
+function applyNet(tv: SavedTv, t: { mac?: unknown; broadcast?: unknown }): void {
+  const mac = normalizeMac(t.mac);
+  if (mac) tv.mac = mac;
+  if (typeof t.broadcast === 'string' && IPV4.test(t.broadcast)) tv.broadcast = t.broadcast;
+}
+
 /** "AA-BB-CC-DD-EE-FF" / "aabbccddeeff" / "aa:bb:..." -> "aa:bb:cc:dd:ee:ff"; undefined when it is not a MAC. */
 export function normalizeMac(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined;
@@ -77,6 +92,7 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     const tv: SavedTv = { ip: t.ip, name: t.name };
     if (typeof t.defaultName === 'string' && t.defaultName) tv.defaultName = t.defaultName;
     if (typeof t.usedAt === 'number' && t.usedAt > 0 && isFinite(t.usedAt)) tv.usedAt = t.usedAt;
+    applyNet(tv, t);
     if (t.kind === 'atv') {
       tv.kind = 'atv';
       if (typeof t.token === 'string' && TOKEN.test(t.token)) tv.token = t.token;
@@ -86,7 +102,6 @@ export function sanitizeTvs(v: unknown): SavedTv[] {
     } else {
       if (typeof t.clientKey === 'string' && t.clientKey) tv.clientKey = t.clientKey;
       if (t.port === 3000 || t.port === 3001) tv.port = t.port;
-      if (typeof t.mac === 'string' && MAC.test(t.mac)) tv.mac = t.mac;
     }
     out.push(tv);
   }
@@ -156,13 +171,13 @@ export function saveTv(tv: SavedTv, opts: { keepActive?: boolean } = {}): void {
     if (ctlPort) next.ctlPort = ctlPort;
     const box = tv.box ?? existing?.box;
     if (box) next.box = box;
+    copyNet(next, tv, existing);
   } else {
     const clientKey = tv.clientKey || existing?.clientKey;
     if (clientKey) next.clientKey = clientKey;
     const port = tv.port ?? existing?.port;
     if (port) next.port = port;
-    const mac = tv.mac ?? existing?.mac;
-    if (mac) next.mac = mac;
+    copyNet(next, tv, existing);
   }
   tvs.value = existing ? tvs.value.map((t) => (t.ip === tv.ip ? next : t)) : tvs.value.concat(next);
   if (!hasActive() && !opts.keepActive) activeTvIp.value = tv.ip;

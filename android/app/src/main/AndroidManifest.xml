@@ -29,6 +29,8 @@
     <!-- API 33+: the media notification is visible only after the user allows notifications. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.TRANSMIT_IR" />
+    <uses-feature android:name="android.hardware.consumerir" android:required="false" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Not granted at install. Asked from TV settings only after Android 10+ blocks the boot activity start. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

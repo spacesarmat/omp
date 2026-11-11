@@ -407,6 +407,7 @@ addScreen('S05', ['settings'], 'Настройки', 'Settings', [
   item('S05.28', ['set-onboarding'], 'Показать знакомство', 'Show the tour'),
   item('S05.29', ['set-test-mode'], 'Режим тестирования', 'Test mode', opt('S05.29', ON_OFF)),
   item('S05.30', ['set-test-size'], 'Размер меток (ползунок, px)', 'Label size (slider, px)'),
+  item('S05.31', ['set-hdmi-cec'], 'Включать телевизор через HDMI-CEC', 'Turn the TV on over HDMI-CEC', opt('S05.31', ON_OFF)),
 ]);
 
 addScreen('S06', ['player'], 'Плеер', 'Player', [

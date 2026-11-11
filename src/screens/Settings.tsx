@@ -303,6 +303,18 @@ export function SettingsScreen() {
 
       <h2>{t('settings.app')}</h2>
       {platformKind() === 'androidtv' && <OpenOnStartupSection />}
+      {platformKind() === 'androidtv' && (
+        <>
+          <ChoiceRow
+            focusKey="set-hdmi-cec"
+            label={t('tvSettings.hdmiCec')}
+            value={s.hdmiCec}
+            options={onOff()}
+            onChange={(v) => updateSettings({ hdmiCec: v })}
+          />
+          <div class="muted">{t('tvSettings.hdmiCecHint')}</div>
+        </>
+      )}
       <div class="row">
         <div class="grow">
           {t('tvSettings.aboutLine', { version: APP_VERSION })}

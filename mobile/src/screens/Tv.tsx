@@ -21,6 +21,10 @@ import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { tvs, activeTv, forgetTv, isTvRenamed, updateAtvPorts, ATV_PORT, type SavedTv, type TvKind } from '../tv/tvStore';
 import { TextField } from '../ui/TextField';
+import { MacForm } from '../ui/MacForm';
+import { addManual } from '../tv/power/manual';
+import { saveNet, netId, type NetKind } from '../tv/power/netStore';
+import { showToast } from '../ui/toast';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
@@ -331,6 +335,32 @@ export function Tv() {
           {t('tvScreen.manualIp')}
         </button>
       )}
+      <MacForm
+        onAdd={(d) => {
+          addManual(d);
+          showToast(t('remote.macSaved'));
+        }}
+      />
+      <button
+        type="button"
+        class="m-btn m-btn-secondary tm"
+        data-code="P10.3"
+        onClick={() => {
+          native.discoverNetTvs(4000).then(
+            (list) => {
+              list.forEach((row) => {
+                if (row.kind === 'lg') return;
+                const kind = row.kind as NetKind;
+                saveNet({ id: netId(kind, row.ip), kind, ip: row.ip, name: row.name, mac: row.mac });
+              });
+              showToast(t('remote.netFind'));
+            },
+            () => showToast(t('tvScreen.notFound')),
+          );
+        }}
+      >
+        {t('remote.netFind')}
+      </button>
       <p class="m-muted m-note m-tv-tip m-tv-steps">
         {t('tvScreen.tip')}
       </p>

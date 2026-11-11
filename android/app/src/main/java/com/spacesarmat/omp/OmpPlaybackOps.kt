@@ -61,6 +61,7 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
     val once = CallOnce(call)
     val mac = call.getString("mac")?.trim().orEmpty()
     val ip = call.getString("ip")?.trim().orEmpty()
+    val broadcast = call.getString("broadcast")?.trim()?.takeIf { OmpNativePlugin.IPV4.matches(it) }
     val packet = WakeOnLan.magicPacket(mac)
     if (packet == null || !OmpNativePlugin.IPV4.matches(ip)) {
         once.reject(I18n.s("plugin.wakeFailed"))
@@ -68,7 +69,7 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
     }
     io.execute {
         try {
-            WakeOnLan.send(packet, ip)
+            WakeOnLan.send(packet, ip, broadcast)
             once.resolve()
         } catch (_: Exception) {
             once.reject(I18n.s("plugin.wakeSendFailed"))

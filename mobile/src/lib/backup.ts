@@ -19,6 +19,9 @@ import { cleanDiscoverView } from '../screens/catalog/discoverCols';
 import { sanitizeSubs } from '../../../src/monitor/subs';
 import { sanitizeMonitorSettings } from '../../../src/monitor/settings';
 import { sanitizeTvs } from '../tv/tvStore';
+import { sanitizeManual } from '../tv/power/manual';
+import { sanitizeProfiles } from '../tv/power/irProfile';
+import { sanitizeNet } from '../tv/power/netStore';
 import { sanitizeTouchpad } from '../tv/touchpad';
 import { sanitizeSupportState } from '../donate';
 import { APP_VERSION } from '../../../src/version';
@@ -107,6 +110,9 @@ export const BACKUP_KEYS: BackupKey[] = [
   { key: 'tsp.servers', clean: cleanServers },
   { key: 'tsp.activeServer', clean: cleanActive },
   { key: 'tsp.tvs', clean: (v) => cleanList(v, sanitizeTvs(v)) },
+  { key: 'tsp.wolManual', clean: (v) => cleanList(v, sanitizeManual(v)) },
+  { key: 'tsp.irProfiles', clean: (v) => cleanList(v, sanitizeProfiles(v)) },
+  { key: 'tsp.netTvs', clean: (v) => cleanList(v, sanitizeNet(v)) },
   { key: 'tsp.activeTv', clean: cleanActive },
   { key: 'tsp.subs', clean: (v) => cleanList(v, sanitizeSubs(v)) },
   { key: 'tsp.monitor', clean: cleanObject(sanitizeMonitorSettings) },

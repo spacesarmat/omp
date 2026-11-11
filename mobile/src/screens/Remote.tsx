@@ -12,6 +12,8 @@ import { useLongPress } from '../ui/longPress';
 import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
+import { PowerBanner } from '../ui/PowerBanner';
+import { PowerTools } from '../ui/PowerTools';
 import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
@@ -37,6 +39,7 @@ import {
   sendEnter,
   turnOffTv,
   pressAtvKey,
+  armCecAfterWake,
 } from '../tv/tvClient';
 import type { RemoteButton } from '../tv/ssap';
 import { KeyPump, LONG_PRESS_MS, PadArrows, pressKey, TAP_SLOP as PAD_SLOP } from '../tv/atvPad';
@@ -78,7 +81,7 @@ export interface RemoteActions {
   pressAtvKey: (name: 'CATALOG' | 'NOWPLAYING') => Promise<void>;
   /** Android TV: pairs again by the code on the TV screen. */
   pairAtv: (found: FoundOmpTv, code: string) => Promise<void>;
-  wakeOnLan: (mac: string, ip: string) => Promise<void>;
+  wakeOnLan: (mac: string, ip: string, broadcast?: string) => Promise<void>;
   warmUp: () => Promise<void>;
   /** Makes a saved TV the active one and connects with its saved key or token. */
   switchTv: (tv: SavedTv) => Promise<void>;
@@ -97,7 +100,7 @@ const defaults: RemoteActions = {
   turnOffTv,
   pressAtvKey,
   pairAtv,
-  wakeOnLan: (mac, ip) => native.wakeOnLan(mac, ip),
+  wakeOnLan: (mac, ip, broadcast) => native.wakeOnLan(mac, ip, broadcast),
   warmUp,
   switchTv: (tv) => {
     // the saved key or token is reused: no pairing again
@@ -803,6 +806,22 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         }
       : undefined;
   const shown = tvWaking.value && state !== 'connected' ? 'connecting' : state;
+  const wake = async () => {
+    if (!tv.mac) {
+      showToast(t('remote.needOnToConnect'));
+      return;
+    }
+    try {
+      if (tv.broadcast) await act.wakeOnLan(tv.mac, tv.ip, tv.broadcast);
+      else await act.wakeOnLan(tv.mac, tv.ip);
+    } catch (e) {
+      fail(e);
+      return;
+    }
+    armCecAfterWake();
+    showToast(t('remote.turningOn', { name: tv.name }));
+    void act.warmUp();
+  };
   return (
     <div class={screenClass()} data-route="remote">
       <ScreenHeader
@@ -815,6 +834,8 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           </span>
         }
       />
+      <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
+      <PowerTools deviceId={tv.mac || tv.ip} />
       {!forgot && !box && <NoAnswer tv={tv} />}
       {forgot && !box && (
         <div class="m-remote-forgot">
@@ -1031,7 +1052,8 @@ export function Remote() {
       return;
     }
     try {
-      await act.wakeOnLan(tv.mac, tv.ip);
+      if (tv.broadcast) await act.wakeOnLan(tv.mac, tv.ip, tv.broadcast);
+      else await act.wakeOnLan(tv.mac, tv.ip);
     } catch (e) {
       fail(e);
       return;
@@ -1108,6 +1130,8 @@ export function Remote() {
           <Icon d={POWER} />
         </button>
       </ScreenHeader>
+      <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
+      <PowerTools deviceId={tv.mac || tv.ip} />
       <NoAnswer tv={tv} />
       <div class="m-seg" role="tablist">
         <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
