@@ -1,23 +1,24 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { DesktopDesignTarget, DesignFormat, ThemeDocument } from '../../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState, ThemeDocument } from '../../../design/schema.ts';
 import { designOverrideAttrs } from './designScope';
 import { DESKTOP_ROUTES, DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from './routes';
 import './shell.css';
 
 export interface DesktopShellProps {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   route: DesktopRouteId;
   format: DesignFormat;
+  state: DesignState;
   language: 'ru' | 'en';
   theme: ThemeDocument;
   children: ComponentChildren;
 }
 
-export function DesktopShell({ target, route, format, language, theme, children }: DesktopShellProps) {
+export function DesktopShell({ target, route, format, state, language, theme, children }: DesktopShellProps) {
   const [collapsed, setCollapsed] = useState(format === 'portrait');
   useEffect(() => setCollapsed(format === 'portrait'), [format]);
-  const rootContext = { target, screenId: route, format, state: 'default' as const };
+  const rootContext = { target, screenId: route, format, state };
   return (
     <div
       class={'desktop-shell' + (collapsed ? ' is-collapsed' : '')}
@@ -25,7 +26,7 @@ export function DesktopShell({ target, route, format, language, theme, children 
       data-design-target={target}
       data-design-screen={route}
       data-design-format={format}
-      data-design-state="default"
+      data-design-state={state}
       {...designOverrideAttrs(theme, rootContext)}
     >
       <aside class="desktop-sidebar" data-design-id="sidebar" data-design-component="sidebar" {...designOverrideAttrs(theme, { ...rootContext, componentId: 'sidebar', elementId: 'sidebar' })}>
@@ -49,7 +50,7 @@ export function DesktopShell({ target, route, format, language, theme, children 
               >
                 <span class="desktop-nav-icon" aria-hidden="true">{(language === 'ru' ? item.label : item.labelEn).slice(0, 1)}</span>
                 <span class="desktop-nav-label">{language === 'ru' ? item.label : item.labelEn}</span>
-                <span class="desktop-support">{DESKTOP_SCREEN_SUPPORT[item.id] === 'logic' ? '' : 'preview'}</span>
+                <span class="desktop-support">{DESKTOP_SCREEN_SUPPORT[item.id] === 'preview' ? 'preview' : ''}</span>
               </button>
             );
           })}

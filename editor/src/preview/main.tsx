@@ -1,16 +1,20 @@
 import { h, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import { lazy, Suspense } from 'preact/compat';
 import { DesktopPreview } from '../../../desktop/src/preview/DesktopPreview';
 import { createDefaultFlow, createDefaultTheme } from '../../../design/defaults';
 import { parseFlowDocument, parseThemeDocument } from '../../../design/validation';
 import type { InteractionTrace } from '../../../design/interaction.ts';
-import { isDesktopRouteId, type DesktopRouteId } from '../../../desktop/src/shell/routes';
+import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
+import { isEditorRoute, isTvTarget } from '../../shared/routes';
 import { newMessageId, type PreviewCommand, type PreviewConfiguration, type PreviewMessageInput } from './protocol';
 
+const PhonePreview = lazy(() => import('../../../desktop/src/preview/PhonePreview').then((module) => ({ default: module.PhonePreview })));
+const TvPreview = lazy(() => import('../../../desktop/src/preview/TvPreview').then((module) => ({ default: module.TvPreview })));
 const BASE = '0000000000000000000000000000000000000000';
 
 function PreviewRoot() {
-  const [sessionId, setSessionId] = useState('pending');
+  const [sessionId, setSessionId] = useState(() => window.name || 'pending');
   const [config, setConfig] = useState<PreviewConfiguration>({
     target: 'desktop-windows',
     route: 'settings',
@@ -18,6 +22,7 @@ function PreviewRoot() {
     language: 'ru',
     mode: 'design',
     serverConnected: false,
+    state: 'default',
     theme: createDefaultTheme(BASE),
     flow: createDefaultFlow(BASE),
   });
@@ -43,7 +48,7 @@ function PreviewRoot() {
           flow: parseFlowDocument(command.props.flow),
         });
         window.parent.postMessage({ type: 'ready', messageId: newMessageId(), sessionId: command.sessionId }, window.location.origin);
-      } else if (command.type === 'navigate' && isDesktopRouteId(command.route)) {
+      } else if (command.type === 'navigate' && isEditorRoute(config.target, command.route)) {
         navigate(command.route);
       } else if (command.type === 'simulate') {
         document.querySelector(`[data-design-id="${command.elementId}"]`)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -51,11 +56,19 @@ function PreviewRoot() {
     };
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
-  }, [sessionId]);
+  }, [sessionId, config.target]);
+  useEffect(() => {
+    post({ type: 'ready' });
+  }, []);
 
   const selected = (elementId: string) => post({ type: 'element-selected', elementId });
   const traced = (trace: InteractionTrace[]) => post({ type: 'trace', trace });
-  return <DesktopPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
+  const preview = config.target === 'android-phone'
+    ? <PhonePreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />
+    : isTvTarget(config.target)
+      ? <TvPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />
+      : <DesktopPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
+  return <Suspense fallback={null}>{preview}</Suspense>;
 }
 
 render(h(PreviewRoot, {}), document.getElementById('app')!);

@@ -33,6 +33,11 @@ afterEach(() => {
 describe('SnapshotPanel', () => {
   it('creates, lists and restores a snapshot', () => {
     act(() => render(h(SnapshotPanel, { controller }), host));
+    act(() => {
+      const input = host.querySelector<HTMLInputElement>('[data-testid="snapshot-name"]')!;
+      input.value = 'Snapshot 1';
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     act(() => host.querySelector<HTMLButtonElement>('[data-action="create-snapshot"]')!.click());
     expect(host.textContent).toContain('1/10');
     expect(host.textContent).toContain(controller.draft.snapshots[0].name);

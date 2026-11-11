@@ -107,9 +107,12 @@ describe('theme resolver and generator', () => {
 
     const files = await writeGeneratedThemes(root);
     expect(files.map((file) => file.path)).toEqual([
+      'design/generated/android-phone.css',
+      'design/generated/android-tv.css',
       'design/generated/desktop-linux.css',
       'design/generated/desktop-macos.css',
       'design/generated/desktop-windows.css',
+      'design/generated/lg-webos.css',
     ]);
     const windowsPath = join(root, 'design', 'generated', 'desktop-windows.css');
     const initial = await readFile(windowsPath, 'utf8');

@@ -1,7 +1,7 @@
-import type { DesktopDesignTarget, FlowDocument, InteractionCondition, InteractionRule } from './schema.ts';
+import type { DesignTarget, FlowDocument, InteractionCondition, InteractionRule } from './schema.ts';
 
 export interface InteractionContext {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: string;
   serverConnected: boolean;
 }

@@ -16,6 +16,7 @@ export interface DraftController {
   rebase(draft: EditorDraft): void;
   snapshot(name: string): DraftSnapshot;
   restore(snapshotId: string): boolean;
+  deleteSnapshot(snapshotId: string): boolean;
   undo(): boolean;
   redo(): boolean;
   flush(options?: { keepalive?: boolean }): Promise<void>;
@@ -202,6 +203,14 @@ export function createDraftController(options: DraftControllerOptions): DraftCon
       update((draft) => {
         draft.theme = snapshot.theme;
         draft.flow = snapshot.flow;
+        return draft;
+      });
+      return true;
+    },
+    deleteSnapshot(snapshotId) {
+      if (!current.snapshots.some((entry) => entry.id === snapshotId)) return false;
+      update((draft) => {
+        draft.snapshots = draft.snapshots.filter((entry) => entry.id !== snapshotId);
         return draft;
       });
       return true;

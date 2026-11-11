@@ -1,0 +1,12 @@
+:root {
+  --omp-color-accent: #F5B700;
+  --omp-color-background: #0F1115;
+  --omp-color-danger: #E5484D;
+  --omp-color-muted: #9AA1B2;
+  --omp-color-panel: #181B22;
+  --omp-color-text: #E8EAF0;
+  --omp-size-font: 16px;
+  --omp-size-radius: 12px;
+  --omp-size-sidebar: 240px;
+  --omp-size-space: 16px;
+}

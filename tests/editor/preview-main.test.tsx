@@ -3,16 +3,23 @@ import { act } from 'preact/test-utils';
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
 
 vi.mock('../../desktop/src/preview/DesktopPreview', () => ({ DesktopPreview: () => null }));
+vi.mock('../../desktop/src/preview/PhonePreview', async () => {
+  const { h } = await import('preact');
+  return { PhonePreview: () => h('div', { class: 'phone-preview' }) };
+});
+vi.mock('../../desktop/src/preview/TvPreview', () => {
+  throw new Error('TV preview import must be deferred');
+});
 
 const BASE = '0000000000000000000000000000000000000000';
 
-function initCommand(sessionId: string) {
+function initCommand(sessionId: string, target = 'desktop-windows') {
   return {
     type: 'init',
     messageId: `message-${sessionId}`,
     sessionId,
     props: {
-      target: 'desktop-windows',
+      target,
       route: 'settings',
       format: 'landscape',
       language: 'ru',
@@ -26,6 +33,7 @@ function initCommand(sessionId: string) {
 
 describe('preview entry lifecycle', () => {
   beforeEach(() => {
+    vi.resetModules();
     document.body.innerHTML = '<div id="app"></div>';
   });
 
@@ -58,5 +66,22 @@ describe('preview entry lifecycle', () => {
     });
     const ready = post.mock.calls.filter(([message]) => (message as { type?: string }).type === 'ready');
     expect(ready).toHaveLength(1);
+  });
+
+  it('selects the phone adapter from the init target', async () => {
+    vi.spyOn(window, 'postMessage').mockImplementation(() => undefined);
+    await act(async () => {
+      await import('../../editor/src/preview/main');
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: window,
+        data: initCommand('phone-session', 'android-phone'),
+      }));
+    });
+    await vi.waitFor(() => {
+      expect(document.querySelector('.phone-preview')).not.toBeNull();
+    });
   });
 });

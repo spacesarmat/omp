@@ -1,7 +1,7 @@
-import type { DesktopDesignTarget, DesignFormat, DesignState, OverrideScope, ThemeDocument, ThemeOverride, TokenMap } from './schema';
+import type { DesignTarget, DesignFormat, DesignState, OverrideScope, ThemeDocument, ThemeOverride, TokenMap } from './schema';
 
 export interface ThemeContext {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: string;
   componentId?: string;
   elementId?: string;
@@ -61,14 +61,20 @@ const STATE_SELECTORS: Record<DesignState, string> = {
   error: ':where([data-design-error="true"])',
 };
 
-export function generateThemeCss(theme: ThemeDocument, target: DesktopDesignTarget): string {
+export function generateThemeCss(theme: ThemeDocument, target: DesignTarget, previewState?: DesignState): string {
   const blocks = [`:root {\n${declarations(theme.tokens)}\n}`];
   const overrides = theme.overrides
     .map((override, index) => ({ override, index }))
     .filter(({ override }) => override.target === undefined || override.target === target)
     .sort((a, b) => RANK[a.override.scope] - RANK[b.override.scope] || a.index - b.index);
   for (const { override } of overrides) {
-    blocks.push(`[data-design-overrides~="${override.id}"]${STATE_SELECTORS[override.state || 'default']} {\n${declarations(override.tokens)}\n}`);
+    const state = override.state || 'default';
+    const element = `[data-design-overrides~="${override.id}"]`;
+    const previewRoot = `[data-design-state="${previewState}"]`;
+    const selector = previewState === state && state !== 'default'
+      ? `${previewRoot} ${element}, ${previewRoot}${element}`
+      : `${element}${STATE_SELECTORS[state]}`;
+    blocks.push(`${selector} {\n${declarations(override.tokens)}\n}`);
   }
   return `${blocks.join('\n\n')}\n`;
 }

@@ -127,6 +127,33 @@
 
 .desktop-legacy {
   min-width: 0;
+  background: var(--omp-color-background, #0f1115);
+  color: var(--omp-color-text, #e8eaf0);
+  font-size: var(--omp-size-font, 16px);
+  --bg: var(--omp-color-background, #0f1115);
+  --panel: var(--omp-color-panel, #181b22);
+  --panel-2: color-mix(in srgb, var(--omp-color-panel, #181b22) 92%, var(--omp-color-text, #e8eaf0));
+  --accent: var(--omp-color-accent, #f5b700);
+  --text: var(--omp-color-text, #e8eaf0);
+  --muted: var(--omp-color-muted, #9aa1b2);
+  --m-btn-h: calc(var(--omp-size-space, 16px) * 3.25);
+}
+
+.desktop-legacy .m-screen {
+  min-height: 100vh;
+  padding: var(--omp-size-space, 16px);
+}
+
+.desktop-legacy .m-btn,
+.desktop-legacy .m-input {
+  font-size: var(--omp-size-font, 16px);
+}
+
+.desktop-legacy .m-btn,
+.desktop-legacy .m-input,
+.desktop-legacy .m-server,
+.desktop-legacy .m-tv {
+  border-radius: var(--omp-size-radius, 12px);
 }
 
 @media (max-width: 800px) {

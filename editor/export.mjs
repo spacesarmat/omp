@@ -9,8 +9,10 @@ import { generateThemeCss } from '../design/theme.ts';
 import { checkTheme } from '../design/theme-checks.ts';
 import { validateFlow } from '../design/flow-validation.ts';
 import { parseEditorDraft } from './shared/draft.ts';
-import { DESKTOP_DESIGN_TARGETS, DESIGN_FORMATS, DESIGN_STATES } from '../design/schema.ts';
+import { DESIGN_TARGETS, DESIGN_FORMATS, DESIGN_STATES } from '../design/schema.ts';
 import { DESKTOP_ROUTES } from '../desktop/src/shell/routes.ts';
+import { getEditorPages } from './shared/routes.ts';
+import { isDesignElementAvailable } from '../design/catalog.ts';
 
 const execute = promisify(execFile);
 
@@ -124,16 +126,18 @@ function contexts() {
     componentId: 'sidebar-item',
     id: `nav-${route.id}`,
   }));
-  const elements = [...DESIGN_ELEMENTS, ...navigationElements];
-  return DESKTOP_DESIGN_TARGETS.flatMap((target) => elements.flatMap((element) => (
-    DESIGN_FORMATS.flatMap((format) => DESIGN_STATES.map((state) => ({
-      target,
-      screenId: 'settings',
-      componentId: element.componentId,
-      elementId: element.id,
-      format,
-      state,
-    })))
+  const allElements = [...DESIGN_ELEMENTS, ...navigationElements];
+  return DESIGN_TARGETS.flatMap((target) => getEditorPages(target).flatMap((page) => (
+    allElements.filter((element) => isDesignElementAvailable(element.id, page.id, target)).flatMap((element) => (
+      DESIGN_FORMATS.flatMap((format) => DESIGN_STATES.map((state) => ({
+        target,
+        screenId: page.id,
+        componentId: element.componentId,
+        elementId: element.id,
+        format,
+        state,
+      })))
+    ))
   )));
 }
 
@@ -141,7 +145,7 @@ function outputFiles(draft) {
   const files = [
     { path: `design/themes/${draft.theme.id}.json`, content: json(draft.theme) },
     { path: `design/flows/${draft.flow.id}.json`, content: json(draft.flow) },
-    ...DESKTOP_DESIGN_TARGETS.map((target) => ({
+    ...DESIGN_TARGETS.map((target) => ({
       path: `design/generated/${target}.css`,
       content: generateThemeCss(draft.theme, target),
     })),

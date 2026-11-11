@@ -37,7 +37,15 @@ it('creates a fresh draft from the committed design', async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  act(() => { host.querySelector('iframe')!.dispatchEvent(new Event('load')); });
+  act(() => {
+    const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
+    iframe.dispatchEvent(new Event('load'));
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      source: iframe.contentWindow,
+      data: { type: 'ready', messageId: 'ready', sessionId: iframe.name },
+    }));
+  });
   expect(send).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({ type: 'init', props: expect.objectContaining({ theme: expect.objectContaining({ name: 'From Git' }) }) }),
@@ -68,7 +76,15 @@ it('loads the recovered draft selected in this tab', async () => {
 
   expect(getDraft).toHaveBeenCalledWith('draft-copy');
   expect(getDraft).not.toHaveBeenCalledWith('default');
-  act(() => { host.querySelector('iframe')!.dispatchEvent(new Event('load')); });
+  act(() => {
+    const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
+    iframe.dispatchEvent(new Event('load'));
+    window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      source: iframe.contentWindow,
+      data: { type: 'ready', messageId: 'ready', sessionId: iframe.name },
+    }));
+  });
   expect(send).toHaveBeenCalledWith(
     expect.anything(),
     expect.objectContaining({ type: 'init', props: expect.objectContaining({ theme: expect.objectContaining({ name: 'Recovered copy' }) }) }),

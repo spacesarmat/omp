@@ -1,29 +1,32 @@
 import { useState } from 'preact/hooks';
-import type { DesktopDesignTarget, DesignFormat, DesignState } from '../../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState } from '../../../design/schema.ts';
 import { buildOverride, findDesignElement, overrideId, type EditorOverrideScope } from '../../../design/catalog';
 import { resolveThemeTokens } from '../../../design/theme';
 import { checkTheme } from '../../../design/theme-checks';
 import { DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from '../../../desktop/src/shell/routes';
+import { isDesktopTarget } from '../../shared/routes';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { PropertyField } from './PropertyField';
 
 export interface ThemeInspectorProps {
   controller: DraftController;
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: DesktopRouteId;
   elementId: string;
   format: DesignFormat;
+  state?: DesignState;
+  onStateChange?(state: DesignState): void;
 }
 
-export function ThemeInspector({ controller, target, screenId, elementId, format }: ThemeInspectorProps) {
+export function ThemeInspector({ controller, target, screenId, elementId, format, state = 'default', onStateChange = () => undefined }: ThemeInspectorProps) {
   const draft = useDraftController(controller);
   const [scope, setScope] = useState<EditorOverrideScope>('platform');
-  const [state, setState] = useState<DesignState>('default');
-  if (DESKTOP_SCREEN_SUPPORT[screenId] === 'preview') return <p class="editor-notice">preview only</p>;
+  if (isDesktopTarget(target) && DESKTOP_SCREEN_SUPPORT[screenId] === 'preview') return <p class="editor-notice">preview only</p>;
   const definition = findDesignElement(elementId);
   if (!definition) return <p class="editor-notice">Unknown element: {elementId}</p>;
   const availableStates = definition.states || ['default', 'hover', 'focus', 'active'];
+  const stateUnsupported = scope === 'state' && !availableStates.includes(state);
   const selectedState = availableStates.includes(state) ? state : 'default';
   const identity = { scope, target, screenId, elementId, format, state: selectedState };
   const currentId = overrideId(identity);
@@ -56,13 +59,14 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
       </label>
       {scope === 'state' && (
         <label>Состояние
-          <select data-testid="state" value={selectedState} onChange={(event) => setState(event.currentTarget.value as DesignState)}>
+          <select data-testid="state" value={selectedState} onChange={(event) => onStateChange(event.currentTarget.value as DesignState)}>
             {availableStates.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
       )}
-      {definition.fields.map((field) => <PropertyField key={`${scope}-${field.token}`} {...field} value={tokens[field.token]} onChange={change} />)}
-      <button type="button" data-action="reset" disabled={!currentOverride} onClick={() => controller.removeOverride(currentId)}>Сбросить override</button>
+      {stateUnsupported && <p class="editor-notice" role="alert">Состояние {state} недоступно для этого элемента</p>}
+      {!stateUnsupported && definition.fields.map((field) => <PropertyField key={`${scope}-${field.token}`} {...field} value={tokens[field.token]} onChange={change} />)}
+      <button type="button" data-action="reset" disabled={stateUnsupported || !currentOverride} onClick={() => controller.removeOverride(currentId)}>Сбросить override</button>
       {issues.length > 0 && (
         <div class="editor-issues" role="alert">
           {issues.map((issue) => <div key={`${issue.code}-${issue.token}`}>{issue.code}: {issue.token}</div>)}

@@ -71,14 +71,64 @@ describe('ThemeInspector', () => {
     expect(host.textContent).toContain('theme > platform > element');
   });
 
-  it('rejects unknown elements and preview-only screens', () => {
+  it('rejects unknown elements and exposes theme editing on legacy screens', () => {
     controller = createController();
     mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'unknown', format: 'landscape' }));
     expect(host.textContent).toContain('Unknown element');
     expect(controller.draft.theme.overrides).toEqual([]);
     act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'library', elementId: 'sidebar', format: 'landscape' }), host));
-    expect(host.textContent).toContain('preview only');
-    expect(host.querySelector('[data-testid="scope"]')).toBeNull();
+    expect(host.querySelector('[data-testid="scope"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('preview only');
+  });
+
+  it('edits legacy pages and the settings server card', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'library', elementId: 'legacy-page', format: 'landscape' }));
+    expect(host.textContent).toContain('Шаблон страницы');
+    change('[data-testid="scope"]', 'element');
+    change('[data-token="--omp-color-background"]', '#112233');
+
+    act(() => render(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'server-card', format: 'landscape' }), host));
+    expect(host.textContent).toContain('Карточка сервера');
+    change('[data-testid="scope"]', 'element');
+    change('[data-token="--omp-color-panel"]', '#223344');
+
+    expect(controller.draft.theme.overrides).toEqual([
+      expect.objectContaining({ scope: 'element', elementId: 'legacy-page', screenId: 'library', tokens: { '--omp-color-background': '#112233' } }),
+      expect.objectContaining({ scope: 'element', elementId: 'server-card', screenId: 'settings', tokens: { '--omp-color-panel': '#223344' } }),
+    ]);
+  });
+
+  it('creates an override for the shared interactive state', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'settings-continue', format: 'landscape', state: 'focus', onStateChange: () => undefined }));
+    change('[data-testid="scope"]', 'state');
+    change('[data-token="--omp-color-background"]', '#112233');
+
+    expect(controller.draft.theme.overrides).toEqual([
+      expect.objectContaining({ scope: 'state', state: 'focus', elementId: 'settings-continue', tokens: { '--omp-color-background': '#112233' } }),
+    ]);
+  });
+
+  it('saves disabled and error overrides for generic controls', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'android-phone', screenId: 'settings', elementId: 'button', format: 'landscape', state: 'disabled', onStateChange: () => undefined }));
+    change('[data-testid="scope"]', 'state');
+    change('[data-token="--omp-color-accent"]', '#112233');
+
+    expect(controller.draft.theme.overrides).toEqual([
+      expect.objectContaining({ scope: 'state', state: 'disabled', elementId: 'button', tokens: { '--omp-color-accent': '#112233' } }),
+    ]);
+  });
+
+  it('rejects editing a state that the selected container does not support', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape', state: 'disabled', onStateChange: () => undefined }));
+    change('[data-testid="scope"]', 'state');
+
+    expect(host.querySelector('[data-token="--omp-color-panel"]')).toBeNull();
+    expect(host.textContent).toContain('Состояние disabled недоступно');
+    expect(controller.draft.theme.overrides).toEqual([]);
   });
 
   it('rejects invalid values without saving them', () => {

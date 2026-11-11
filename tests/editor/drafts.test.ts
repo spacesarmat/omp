@@ -85,6 +85,18 @@ describe('DraftController', () => {
     expect(controller.draft.snapshots[0].id).toBe(first.id);
   });
 
+  it('deletes only the selected snapshot and restores it through undo', () => {
+    const controller = create();
+    const first = controller.snapshot('first');
+    const second = controller.snapshot('second');
+
+    expect(controller.deleteSnapshot(first.id)).toBe(true);
+    expect(controller.deleteSnapshot('missing')).toBe(false);
+    expect(controller.draft.snapshots.map((entry) => entry.id)).toEqual([second.id]);
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.snapshots.map((entry) => entry.id)).toEqual([first.id, second.id]);
+  });
+
   it('keeps baseCommit immutable through generic updates', () => {
     const controller = create();
     expect(() => controller.update((draft) => ({ ...draft, baseCommit: '1111111111111111111111111111111111111111' }))).toThrow('BASE_COMMIT_IMMUTABLE');

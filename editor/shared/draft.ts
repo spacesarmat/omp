@@ -1,7 +1,8 @@
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults.ts';
-import { DESKTOP_DESIGN_TARGETS, DESIGN_FORMATS, type DesktopDesignTarget, type DesignFormat, type FlowDocument, type ThemeDocument } from '../../design/schema.ts';
+import { DESIGN_TARGETS, DESIGN_FORMATS, type DesignTarget, type DesignFormat, type FlowDocument, type ThemeDocument } from '../../design/schema.ts';
 import { parseFlowDocument, parseThemeDocument } from '../../design/validation.ts';
-import { isDesktopRouteId, type DesktopRouteId } from '../../desktop/src/shell/routes.ts';
+import { isEditorRoute } from './routes.ts';
+import type { DesktopRouteId } from '../../desktop/src/shell/routes.ts';
 
 export interface DraftSnapshot {
   id: string;
@@ -15,7 +16,7 @@ export interface EditorDraft {
   schemaVersion: 1;
   id: string;
   baseCommit: string;
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: DesktopRouteId;
   format: DesignFormat;
   language: 'ru' | 'en';
@@ -76,8 +77,8 @@ export function parseEditorDraft(value: unknown): EditorDraft {
   const source = object(value, 'draft', ['schemaVersion', 'id', 'baseCommit', 'target', 'screenId', 'format', 'language', 'theme', 'flow', 'snapshots', 'revision', 'lastError']);
   if (source.schemaVersion !== 1) fail('draft.schemaVersion');
   if (typeof source.baseCommit !== 'string' || !COMMIT.test(source.baseCommit)) fail('draft.baseCommit');
-  if (typeof source.target !== 'string' || !DESKTOP_DESIGN_TARGETS.includes(source.target as DesktopDesignTarget)) fail('draft.target');
-  if (typeof source.screenId !== 'string' || !isDesktopRouteId(source.screenId)) fail('draft.screenId');
+  if (typeof source.target !== 'string' || !DESIGN_TARGETS.includes(source.target as DesignTarget)) fail('draft.target');
+  if (typeof source.screenId !== 'string' || !isEditorRoute(source.target as DesignTarget, source.screenId)) fail('draft.screenId');
   if (!DESIGN_FORMATS.includes(source.format as DesignFormat)) fail('draft.format');
   if (source.language !== 'ru' && source.language !== 'en') fail('draft.language');
   if (!Array.isArray(source.snapshots) || source.snapshots.length > 10) fail('draft.snapshots');
@@ -91,7 +92,7 @@ export function parseEditorDraft(value: unknown): EditorDraft {
     schemaVersion: 1,
     id: id(source.id, 'draft.id'),
     baseCommit,
-    target: source.target as DesktopDesignTarget,
+    target: source.target as DesignTarget,
     screenId: source.screenId,
     format: source.format as DesignFormat,
     language: source.language,

@@ -29,6 +29,7 @@ function previewProps(overrides: Partial<DesktopPreviewProps> = {}): DesktopPrev
     language: 'ru',
     mode: 'design',
     serverConnected: false,
+    state: 'default',
     theme: createDefaultTheme(BASE),
     flow: createDefaultFlow(BASE),
     onSelect: () => undefined,
@@ -89,7 +90,32 @@ describe('desktop preview shell', () => {
     for (const label of ['Каталог', 'Новое', 'Поиск', 'Пульт', 'Настройки']) expect(text).toContain(label);
     expect(DESKTOP_ROUTES.find((route) => route.id === 'connect')?.menu).toBe(false);
     expect(DESKTOP_SCREEN_SUPPORT.settings).toBe('logic');
-    expect(DESKTOP_SCREEN_SUPPORT.library).toBe('preview');
+    for (const route of ['library', 'news', 'search', 'remote', 'connect'] as const) {
+      expect(DESKTOP_SCREEN_SUPPORT[route]).toBe('theme');
+    }
+    mount(previewProps({ route: 'library' }));
+    for (const badge of host.querySelectorAll('.desktop-support')) expect(badge.textContent).toBe('');
+  });
+
+  it('applies a legacy page override on every legacy route', () => {
+    for (const route of ['library', 'news', 'search', 'remote', 'connect'] as const) {
+      const theme = createDefaultTheme(BASE);
+      theme.overrides.push({ id: `legacy-${route}`, scope: 'screen', screenId: route, tokens: { '--omp-color-background': '#112233' } });
+      mount(previewProps({ route, theme }));
+      const page = host.querySelector('[data-design-id="legacy-page"]')!;
+      expect(page.getAttribute('data-design-component')).toBe('legacy-page');
+      expect(page.getAttribute('data-design-overrides')).toContain(`legacy-${route}`);
+    }
+  });
+
+  it('applies overrides to the settings server card', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.overrides.push({ id: 'server-card-theme', scope: 'screen', screenId: 'settings', tokens: { '--omp-color-panel': '#112233' } });
+    mount(previewProps({ theme }));
+
+    const card = host.querySelector('[data-design-id="server-card"]')!;
+    expect(card.getAttribute('data-design-component')).toBe('card');
+    expect(card.getAttribute('data-design-overrides')).toContain('server-card-theme');
   });
 
   it('switches format and language with a remounted preview', () => {
@@ -97,6 +123,18 @@ describe('desktop preview shell', () => {
     expect(host.querySelector('[data-design-format="portrait"]')).not.toBeNull();
     expect(host.querySelector('[data-action="toggle-sidebar"]')).not.toBeNull();
     expect(host.textContent).toContain('Settings');
+  });
+
+  it('applies the selected interactive state to shell overrides', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.overrides.push({ id: 'focus-panel', scope: 'state', state: 'focus', target: 'desktop-windows', tokens: { '--omp-color-panel': '#112233' } });
+    mount(previewProps({ state: 'focus', theme }));
+
+    const root = host.querySelector('[data-design-state="focus"]')!;
+    expect(root.getAttribute('data-design-state')).toBe('focus');
+    const sidebar = root.querySelector<HTMLElement>('[data-design-id="sidebar"]')!;
+    expect(sidebar.getAttribute('data-design-overrides')).toContain('focus-panel');
+    expect(getComputedStyle(sidebar).getPropertyValue('--omp-color-panel').trim()).toBe('#112233');
   });
 
   it('returns active override ids in resolver order', () => {
