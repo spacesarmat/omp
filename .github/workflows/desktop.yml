@@ -228,10 +228,8 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content -LiteralPath desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          $installer = Get-ChildItem -LiteralPath desktop/src-tauri/target/release/bundle/nsis -Filter "*-setup.exe" | Select-Object -First 1
-          if (-not $installer) {
-            throw "NSIS installer was not produced"
-          }
+          # Exact name: a restored Cargo target cache can still hold an older *-setup.exe.
+          $installer = Get-Item -LiteralPath "desktop/src-tauri/target/release/bundle/nsis/OMP_${version}_x64-setup.exe"
           $output = "desktop/dist-desktop"
           New-Item -ItemType Directory -Path $output -Force | Out-Null
           Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $output "OMP-$version-setup.exe") -Force
@@ -384,8 +382,9 @@ jobs:
         run: |
           version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
           mkdir -p desktop/dist-desktop
-          cp desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg "desktop/dist-desktop/OMP-${version}-macos-arm64.dmg"
-          cp desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg "desktop/dist-desktop/OMP-${version}-macos-x64.dmg"
+          # Exact names: a restored Cargo target cache can still hold an older .dmg.
+          cp "desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/OMP_${version}_aarch64.dmg" "desktop/dist-desktop/OMP-${version}-macos-arm64.dmg"
+          cp "desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/OMP_${version}_x64.dmg" "desktop/dist-desktop/OMP-${version}-macos-x64.dmg"
       - name: Build update feed
         if: github.event.inputs.publish == 'true'
         env:
@@ -506,8 +505,9 @@ jobs:
         run: |
           version=$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('desktop/src-tauri/tauri.conf.json','utf8')).version)")
           mkdir -p desktop/dist-desktop
-          cp desktop/src-tauri/target/release/bundle/appimage/*.AppImage "desktop/dist-desktop/OMP-${version}-linux-x64.AppImage"
-          cp desktop/src-tauri/target/release/bundle/deb/*.deb "desktop/dist-desktop/OMP-${version}-linux-x64.deb"
+          # Exact names: a restored Cargo target cache can still hold an older .deb, and cp then refuses a file target.
+          cp "desktop/src-tauri/target/release/bundle/appimage/OMP_${version}_amd64.AppImage" "desktop/dist-desktop/OMP-${version}-linux-x64.AppImage"
+          cp "desktop/src-tauri/target/release/bundle/deb/OMP_${version}_amd64.deb" "desktop/dist-desktop/OMP-${version}-linux-x64.deb"
       - name: Build update feed
         if: github.event.inputs.publish == 'true'
         env:
