@@ -2365,7 +2365,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-ep-row.is-watched { color: var(--muted); }
 .m-ep-row.is-watched .m-ep-check { color: var(--muted); }
 .m-ep-check { flex-shrink: 0; }
-.m-vrow .m-poster-row .m-badge { display: block; }
+.m-vrow .m-poster-row .m-badge { display: block; left: auto; right: 0; top: 8px; padding: 1px 6px; font-size: 10px; line-height: 14px; border-radius: 6px 0 0 6px; }
 .m-vrow-size { color: var(--muted); font-size: 12px; }
 .m-crow-titleline { display: flex; align-items: flex-start; }
 .m-crow-titleline .m-crow-title { flex: 1 1 auto; }
@@ -2376,6 +2376,25 @@ html.m-hint-hold .m-hint { display: none; }
 .m-swipe-actions { display: none; }
 .m-row-wrap[data-open='1'] .m-swipe-actions { display: flex; }
 .m-info-btn { width: 28px; height: 28px; border-radius: 8px; }
+.m-library .m-tabs { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 36px), transparent); }
+.m-library .m-tabs.nudge { animation: m-chips-nudge .8s ease; }
+@keyframes m-chips-nudge { 0% { transform: none; } 45% { transform: translateX(-22px); } 100% { transform: none; } }
+.m-resume-head { flex-wrap: wrap; }
+.m-resume-toggle { display: flex; align-items: center; padding: 0; border: none; background: none; color: inherit; margin-right: 8px; }
+.m-resume-toggle .m-resume-title { margin-right: 6px; }
+.m-resume-toggle svg { flex-shrink: 0; display: block; }
+.m-resume-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }
+.m-resume-layouts { display: flex; }
+.m-resume-layout { min-height: 28px; padding: 0 8px; border: none; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 700; }
+.m-resume-layout.on { background: #252A35; color: var(--text); }
+.m-resume-mini .m-resume-card { flex-basis: 34%; }
+.m-resume-mini .m-resume-text { display: none; }
+.m-resume-line { display: flex; }
+.m-resume-line .m-resume-card, .m-resume-row.m-resume-line { flex-direction: column; }
+.m-resume-row.m-resume-line { overflow: visible; }
+.m-resume-line { width: 100%; padding: 8px 0; border: none; border-bottom: 1px solid #252A35; background: none; color: inherit; text-align: left; }
+.m-watch-tag { align-self: flex-start; color: #8FE39A; font-size: 12px; font-weight: 700; }
+.m-series-tail { margin-top: 8px; }
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.

@@ -416,6 +416,9 @@ export const ru = {
     restart: 'Начать заново',
     watching: 'смотрите',
     nextEp: 'Далее: {code}',
+    continueCards: 'Крупно',
+    continueMini: 'Плитки',
+    continueLine: 'Строки',
   },
   library: {
     sortNew: 'Новые',

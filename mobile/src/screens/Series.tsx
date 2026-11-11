@@ -52,6 +52,8 @@ import { SeasonEpisodes } from './catalog/SeasonEpisodes';
 import { seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { playOnPhone } from '../watchHere';
+import { playWhere } from '../../../src/lib/playWhere';
+import { SeriesExtras } from './catalog/SeriesExtras';
 
 const BACK = 'M15 5l-7 7l7 7';
 const KEEP = 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z';
@@ -485,7 +487,31 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const [episode, setEpisode] = useState<TorrentFile | null>(null);
   const mainFile = main ? watchTarget(main.hash, files) : undefined;
   const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
-  const tvMain = !!activeTv.value;
+  const tvMain = playWhere(!!activeTv.value) === 'tv';
+  const code = mainFile ? episodeLabel(mainFile.path) : '';
+  const lines = mainButtonLines({ onTv: tvMain, code, at: mainAt });
+  // A paired TV is the default. With nothing started, the button reads «Смотреть на ТВ» on two lines.
+  const freshTv = tvMain && !(mainAt > 0);
+  const playFile = (file: TorrentFile) => {
+    if (!main) return;
+    const at = sharedResume(main.hash, file.id);
+    if (tvMain) {
+      setError('');
+      void launch.start({
+        hash: main.hash,
+        file: file.id,
+        at,
+        duration: getLocalProgress(main.hash, file.id)?.duration || undefined,
+        label: [episodeLabel(file.path), stripExt(baseName(file.path))].filter(Boolean).join(' · '),
+        season: season !== NO_SEASON ? season : undefined,
+        files: filesOf(main),
+        onError: setError,
+      });
+      return;
+    }
+    setError('');
+    playOnPhone(main, file, at).catch((e) => setError(errorMessage(e)));
+  };
   const watchHere = () => {
     if (!main || !mainFile) return;
     setError('');
@@ -544,10 +570,14 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             data-main={tvMain ? 'tv' : 'phone'}
             onClick={() => (tvMain ? watch(main, files) : watchHere())}
           >
-            <span class="m-btn-title">{mainButtonLines({ onTv: tvMain, code: episodeLabel(mainFile.path), at: mainAt }).title}</span>
-            <span class="m-btn-sub">{mainButtonLines({ onTv: tvMain, code: episodeLabel(mainFile.path), at: mainAt }).sub}</span>
+            <span class="m-btn-title">{freshTv ? t('news.watchOnTv') : lines.title}</span>
+            <span class="m-btn-sub">{freshTv ? (code || lines.sub) : lines.sub}</span>
           </button>
-          {!tvMain && (
+          {tvMain ? (
+            <button type="button" class="m-btn-text tm" data-where="phone" onClick={watchHere}>
+              {t('nav.watchSubPhone')}
+            </button>
+          ) : (
             <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P26.6" onClick={() => watch(main, files)}>
               {t('nav.onTv')}
             </button>
@@ -631,7 +661,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
               titles={seasonTitles(tmdb.eps, season)}
               nextAir={nextAirLine(card)}
               showSeason={spansSeasons(allFiles.map((f) => f.path))}
-              onPick={setEpisode}
+              onPick={playFile}
               listRef={episodesRef}
             />
             </>
@@ -645,6 +675,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         </>
       )}
       {card && <CastStrip cast={card.cast} />}
+      {main && <SeriesExtras tor={main} files={files} />}
       {menuFor && (
         <TorrentMenu
           tor={menuFor}

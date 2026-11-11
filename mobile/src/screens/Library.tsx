@@ -237,7 +237,9 @@ export function Library() {
   const [dragging, setDragging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const nudged = useRef(false);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
   const [menuFor, setMenuFor] = useState<PhoneItem | null>(null);
@@ -262,6 +264,19 @@ export function Library() {
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const row = tabsRef.current;
+    if (!row || nudged.current || settings.value.seenHints.catalogChips) return;
+    nudged.current = true;
+    row.classList.add('nudge');
+    const done = () => {
+      row.classList.remove('nudge');
+      updateSettings({ seenHints: { ...settings.peek().seenHints, catalogChips: true } });
+    };
+    row.addEventListener('animationend', done);
+    return () => row.removeEventListener('animationend', done);
   }, []);
 
   useEffect(() => {
@@ -591,6 +606,12 @@ export function Library() {
       </span>
     ) : null;
   const sel = (it: PhoneItem) => (selecting && isChosen(it) ? ' selected' : '');
+  const swipeBtns = (tor: Torrent, key: string) => (
+    <span class="m-swipe-actions">
+      <button type="button" onClick={() => { hideHistory(key); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
+      <button type="button" onClick={() => { const f = filesOf(tor)[0]; if (f) markWatched(tor.hash, f.id); }}>{t('history.markWatched')}</button>
+    </span>
+  );
 
   const watchOnTv = (tor: Torrent) => {
     const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
@@ -749,7 +770,7 @@ export function Library() {
       </div>
       )}
       {mine && (
-      <div class="m-tabs" role="tablist">
+      <div class="m-tabs" role="tablist" ref={tabsRef}>
         {/* «История» is the clock in the header and «Вся история» of «Продолжить просмотр», not a chip */}
         {libraryTabs().filter((x) => x.id !== 'history').map((t) => (
           <button
@@ -865,7 +886,28 @@ export function Library() {
           {!unavailable && !isHistory && !selecting && resume.length > 0 && (
             <div class="m-resume tm" data-code="P02.19" data-resume role="region" aria-label={t('nav.continueRow')}>
               <div class="m-resume-head">
-                <span class="m-resume-title">{t('nav.continueRow')}</span>
+                <button
+                  type="button"
+                  class="m-resume-toggle"
+                  aria-expanded={settings.value.continueOpen}
+                  onClick={() => updateSettings({ continueOpen: !settings.value.continueOpen })}
+                >
+                  <span class="m-resume-title">{t('nav.continueRow')}</span>
+                  <Icon d={ICONS.collapse} size={18} />
+                </button>
+                <div class="m-resume-layouts" role="group" aria-label={t('nav.viewHead')}>
+                  {(['cards', 'mini', 'line'] as const).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      class={'m-resume-layout' + (settings.value.continueLayout === id ? ' on' : '')}
+                      aria-pressed={settings.value.continueLayout === id}
+                      onClick={() => updateSettings({ continueLayout: id })}
+                    >
+                      {t(id === 'cards' ? 'history.continueCards' : id === 'mini' ? 'history.continueMini' : 'history.continueLine')}
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   class="m-btn-text tm"
@@ -878,7 +920,8 @@ export function Library() {
                   {t('nav.historyAll')}
                 </button>
               </div>
-              <div class="m-resume-row m-scroll-x">
+              {settings.value.continueOpen && (
+              <div class={'m-resume-row m-scroll-x m-resume-' + settings.value.continueLayout}>
                 {resume.map((e) => {
                   const tor = list.filter((x) => x.hash === e.hash)[0];
                   if (!tor) return null;
@@ -892,6 +935,20 @@ export function Library() {
                     if (key) navigate({ name: 'series', key });
                     else navigate(routeForTorrent(tor));
                   };
+                  const line = [e.code, line3].filter(Boolean).join(', ');
+                  if (settings.value.continueLayout === 'line') {
+                    return (
+                      <button
+                        key={e.showKey + ':' + e.fileIndex}
+                        type="button"
+                        class="m-resume-line"
+                        data-resume-hash={e.hash}
+                        onClick={() => void continueOnTv(e.hash, e.fileIndex, e.time, e.duration, label)}
+                      >
+                        {line || displayTitle(tor)}
+                      </button>
+                    );
+                  }
                   return (
                     <div key={e.showKey + ':' + e.fileIndex} class="m-resume-card" data-resume-hash={e.hash}>
                       <button type="button" class="m-resume-poster" aria-label={displayTitle(tor)} onClick={openCard}>
@@ -924,6 +981,7 @@ export function Library() {
                   );
                 })}
               </div>
+              )}
             </div>
           )}
           {unavailable ? null : isHistory ? (
@@ -983,7 +1041,15 @@ export function Library() {
                   const k = itemKey(it);
                   if (it.kind === 'series') {
                     return (
-                      <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                      <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
+                        onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
+                        onTouchEnd={(ev) => {
+                          const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
+                          const dx = ev.changedTouches[0].clientX - start;
+                          if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                          else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
+                        }}
+                      >
                         <button type="button" class="m-vrow m-series-card" {...pressProps(it)}>
                           <Poster torrent={it.lead} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(it.lead)) || undefined} />
                           {mark(it)}
@@ -995,6 +1061,7 @@ export function Library() {
                             </span>
                           </span>
                         </button>
+                        {swipeBtns(it.lead, it.key)}
                         {moreBtn(it)}
                       </div>
                     );
@@ -1002,7 +1069,15 @@ export function Library() {
                   const film = it.kind === 'film' ? it : null;
                   const t = it.kind === 'film' ? it.lead : it.tor;
                   return (
-                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
+                      onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
+                      onTouchEnd={(ev) => {
+                        const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
+                        const dx = ev.changedTouches[0].clientX - start;
+                        if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                        else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
+                      }}
+                    >
                       <button type="button" class={'m-vrow' + (film ? ' m-film-card' : '')} {...pressProps(it)}>
                         <Poster torrent={t} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(t)) || undefined} />
                         {mark(it)}
@@ -1014,6 +1089,7 @@ export function Library() {
                           </span>
                         </span>
                       </button>
+                      {swipeBtns(t, showKeyOf(t))}
                       {moreBtn(it)}
                     </div>
                   );
@@ -1082,6 +1158,7 @@ export function Library() {
                       {/* a series card has its count on the poster badge; an empty line keeps the cards of a row one height (QA B15) */}
                       {meta ? <span class="m-muted m-card-meta m-tile-meta">{meta}</span> : <span class="m-card-meta-pad" aria-hidden="true" />}
                       {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
+                      {resume.some((c) => c.showKey === (g ? g.key : showKeyOf(tor))) && <span class="m-watch-tag">{t('history.watching')}</span>}
                       {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : film ? filmSize(film) : tor.torrent_size || 0)}</span>}
                     </button>
                   );

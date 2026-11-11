@@ -412,6 +412,9 @@ export const en: EnDict<typeof ru> = {
     restart: 'Start over',
     watching: 'watching',
     nextEp: 'Next: {code}',
+    continueCards: 'Large',
+    continueMini: 'Tiles',
+    continueLine: 'Rows',
   },
   library: {
     sortNew: 'Newest',
