@@ -3,7 +3,7 @@ use crate::platform::current;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub use crate::platform::{mpv_asset_for, TargetPlatform};
 
@@ -134,6 +134,9 @@ pub trait PlayerProcess: Send {
         _generation: u64,
     ) -> Result<Option<i32>, String> {
         self.try_wait()
+    }
+    fn input(&mut self, _args: &[&str]) -> Result<(), String> {
+        Err("player input is unavailable".to_string())
     }
 }
 
@@ -274,6 +277,24 @@ impl PlayerManager {
             Err(_) => self.status.error = Some("player pause failed".to_string()),
         }
         self.status.clone()
+    }
+
+    pub fn control(&mut self, action: &str) -> Result<PlayerStatus, String> {
+        if action == "pause" {
+            return Ok(self.pause());
+        }
+        let Some(process) = self.process.as_mut() else {
+            return Err("player is idle".to_string());
+        };
+        let result = match action {
+            "seek-back" => process.input(&["seek", "-10", "relative"]),
+            "seek-forward" => process.input(&["seek", "10", "relative"]),
+            "volume-down" => process.input(&["add", "volume", "-5"]),
+            "volume-up" => process.input(&["add", "volume", "5"]),
+            "fullscreen" => process.input(&["cycle", "fullscreen"]),
+            _ => Err("unknown player action".to_string()),
+        };
+        result.map(|_| self.status.clone())
     }
 
     pub fn stop(&mut self) -> PlayerStatus {
@@ -437,23 +458,59 @@ fn ipc_path(config: &PlayerConfig) -> String {
     }
 }
 
+fn is_mpv_file(name: &str) -> bool {
+    let base = name.rsplit(['/', '\\']).next().unwrap_or(name);
+    base == "mpv" || base == "mpv.exe"
+}
+
+fn safe_archive_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['/', '\\'])
+        && !name.contains(':')
+        && !name.split(['/', '\\']).any(|part| part == "..")
+}
+
+fn mark_executable(path: &Path) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+            .map_err(|_| "mpv permission update failed".to_string())?;
+    }
+    let _ = path;
+    Ok(())
+}
+
 fn extract_mpv(archive: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String> {
-    let executable = data_dir.join("mpv.exe");
+    std::fs::create_dir_all(data_dir).map_err(|_| "mpv directory failed".to_string())?;
+    let name = archive
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    if name.ends_with(".AppImage") {
+        let dest = data_dir.join("mpv");
+        std::fs::copy(archive, &dest).map_err(|_| "mpv copy failed".to_string())?;
+        mark_executable(&dest)?;
+        return Ok(dest);
+    }
+    if name.ends_with(".zip") {
+        return extract_mpv_zip(archive, data_dir);
+    }
+    extract_mpv_7z(archive, data_dir)
+}
+
+fn extract_mpv_7z(archive: &Path, data_dir: &Path) -> Result<PathBuf, String> {
     let file = std::fs::File::open(archive).map_err(|_| "mpv archive open failed".to_string())?;
     let mut found = false;
     sevenz_rust::decompress_with_extract_fn(file, data_dir, |entry, reader, path| {
         let name = entry.name();
-        if name.is_empty()
-            || name.starts_with(['/', '\\'])
-            || name.contains(':')
-            || name.split(['/', '\\']).any(|part| part == "..")
-        {
+        if !safe_archive_name(name) {
             return Err(sevenz_rust::Error::io(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "unsafe archive path",
             )));
         }
-        if name.replace('\\', "/").ends_with("mpv.exe") {
+        if is_mpv_file(name) {
             found = true;
         }
         sevenz_rust::default_entry_extract_fn(entry, reader, path)
@@ -462,12 +519,61 @@ fn extract_mpv(archive: &PathBuf, data_dir: &PathBuf) -> Result<PathBuf, String>
     if !found {
         return Err("mpv executable not found".to_string());
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
-            .map_err(|_| "mpv permission update failed".to_string())?;
+    let executable = data_dir.join("mpv.exe");
+    mark_executable(&executable)?;
+    Ok(executable)
+}
+
+fn extract_mpv_zip(archive: &Path, data_dir: &Path) -> Result<PathBuf, String> {
+    let file = std::fs::File::open(archive).map_err(|_| "mpv archive open failed".to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|_| "mpv archive open failed".to_string())?;
+    let mut tar_bytes = Vec::new();
+    for index in 0..zip.len() {
+        let mut entry = zip
+            .by_index(index)
+            .map_err(|_| "mpv archive open failed".to_string())?;
+        let name = entry.name().to_string();
+        if !safe_archive_name(&name) {
+            return Err("mpv archive path rejected".to_string());
+        }
+        if name.rsplit(['/', '\\']).next() == Some("mpv.tar.gz") {
+            std::io::copy(&mut entry, &mut tar_bytes)
+                .map_err(|_| "mpv archive read failed".to_string())?;
+            break;
+        }
     }
+    if tar_bytes.is_empty() {
+        return Err("mpv executable not found".to_string());
+    }
+    let decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(tar_bytes));
+    let mut tar = tar::Archive::new(decoder);
+    let entries = tar.entries().map_err(|_| "mpv extraction failed".to_string())?;
+    for entry in entries {
+        let mut entry = entry.map_err(|_| "mpv extraction failed".to_string())?;
+        let path = entry
+            .path()
+            .map_err(|_| "mpv extraction failed".to_string())?
+            .into_owned();
+        if !safe_archive_name(&path.to_string_lossy()) {
+            return Err("mpv archive path rejected".to_string());
+        }
+        let dest = data_dir.join(&path);
+        if entry.header().entry_type().is_dir() {
+            std::fs::create_dir_all(&dest).map_err(|_| "mpv extraction failed".to_string())?;
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|_| "mpv extraction failed".to_string())?;
+        }
+        entry
+            .unpack(&dest)
+            .map_err(|_| "mpv extraction failed".to_string())?;
+    }
+    let executable = data_dir.join("mpv.app/Contents/MacOS/mpv");
+    if !executable.is_file() {
+        return Err("mpv executable not found".to_string());
+    }
+    mark_executable(&executable)?;
     Ok(executable)
 }
 
@@ -492,6 +598,16 @@ impl MpvProcess {
         self.ipc
             .call(serde_json::json!(["loadfile", url]))
             .map(|_| ())
+    }
+
+    fn input_args(&self, args: &[&str]) -> Result<(), String> {
+        let command = serde_json::Value::Array(
+            args.iter()
+                .copied()
+                .map(|arg| serde_json::Value::String(arg.to_string()))
+                .collect(),
+        );
+        self.ipc.call(command).map(|_| ())
     }
 }
 
@@ -542,6 +658,10 @@ impl PlayerProcess for MpvProcess {
 
     fn pause(&mut self, paused: bool) -> Result<(), String> {
         self.ipc.set_pause(paused)
+    }
+
+    fn input(&mut self, args: &[&str]) -> Result<(), String> {
+        self.input_args(args)
     }
 
     fn pause_cancelled(

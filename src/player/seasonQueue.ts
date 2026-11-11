@@ -27,7 +27,10 @@ function placed(path: string): { season: number | null; episodes: number[] } | n
   if (isFractionalEpisode(path)) return null;
   const info = fileEpisodes(path);
   const parsed = parseEpisode(path);
-  const episodes = info && info.episodes.length ? info.episodes : parsed.episode !== null ? [parsed.episode] : [];
+  const episodes = info && info.episodes.length ? info.episodes.slice() : [];
+  // The label on screen («13 серия») comes from parseEpisode. A range parser must not hide that number,
+  // or the queue says the episode being played is not in the release.
+  if (parsed.episode !== null && episodes.indexOf(parsed.episode) < 0) episodes.push(parsed.episode);
   if (!episodes.length) return null;
   // S01E02 in the name wins over a Season 2 folder. The folder is used only when the name has no season.
   const season = info && info.season !== null ? info.season : parsed.season;
@@ -55,9 +58,12 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
   const covers: { id: number; file: TorrentFile; episodes: number[] }[] = [];
   playable.forEach((f) => {
     const info = placed(f.path);
-    if (!info || info.season !== season) return;
+    if (!info) return;
     const eps = info.episodes.filter((e) => e >= from);
     if (!eps.length) return;
+    // A file that names the episode but not the season («13 серия», «E13») still belongs to this season.
+    // A file that names a different season does not fill the hole.
+    if (info.season !== null && info.season !== season) return;
     covers.push({ id: f.id, file: f, episodes: eps });
   });
   const files: TorrentFile[] = [];
@@ -90,6 +96,8 @@ export function seasonSpan(all: TorrentFile[], startId: number, total?: number):
     const later = covers.some((c) => c.episodes.some((e) => e > n));
     if (later || (knownEnd && n <= knownEnd)) missing = n;
   }
+  // The file that is playing covers this number. It is in the release.
+  if (missing !== null && startPlace.episodes.indexOf(missing) >= 0) missing = null;
   return { files: files.length ? files : [start], start: 0, season: season, episodic: true, missing: missing };
 }
 

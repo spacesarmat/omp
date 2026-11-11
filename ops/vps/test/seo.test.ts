@@ -116,7 +116,7 @@ describe('landing SEO', () => {
       const betaRelease = 'https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2';
       const betaInstaller = 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe';
       expect(d.querySelectorAll(`a[href="${betaRelease}"]`)).toHaveLength(2);
-      expect(d.querySelectorAll(`a[href="${betaInstaller}"]`)).toHaveLength(2);
+      expect(d.querySelectorAll(`a[href="${betaInstaller}"]`)).toHaveLength(4);
 
       const card = [...d.querySelectorAll('article h3')].find((h) => h.textContent?.startsWith('Windows'));
       expect(card?.parentElement?.textContent).toContain('x86_64-v3');

@@ -20,16 +20,16 @@ export interface UpdateApi {
   takePendingUpdateResult(): Promise<UpdateResult | null>;
 }
 
+const PACKAGE_SUFFIXES = ['-setup.exe', '-portable.exe', '-macos-arm64.dmg', '-macos-x64.dmg', '-linux-x64.AppImage', '-linux-x64.deb'];
+
 export function updateInfoFromPackage(url: string, sha256: string): UpdateInfo {
-  const name = new URL(url).pathname.split('/').pop() || '';
-  const match = /^OMP-(.+)-setup\.exe$/i.exec(name);
-  if (!match) throw new Error('invalid update package version');
-  return {
-    version: decodeURIComponent(match[1]),
-    url,
-    sha256,
-    notes: [],
-  };
+  const name = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
+  const lower = name.toLowerCase();
+  const suffix = PACKAGE_SUFFIXES.find((item) => lower.endsWith(item.toLowerCase()));
+  if (!suffix || !lower.startsWith('omp-')) throw new Error('invalid update package version');
+  const version = name.slice(4, name.length - suffix.length);
+  if (!/^[0-9]+(\.[0-9]+){1,3}(-beta\.[0-9]+)?$/.test(version)) throw new Error('invalid update package version');
+  return { version, url, sha256, notes: [] };
 }
 
 export function createUpdateApi(bridge: DesktopBridge = createBridge()): UpdateApi {

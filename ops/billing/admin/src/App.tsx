@@ -15,8 +15,9 @@ import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
 import { DhtPanel } from '@/panels/DhtPanel';
 import { CachePanel } from '@/panels/CachePanel';
+import { WatchPanel } from '@/panels/WatchPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
-import { DeskHome, DevicesDesk, FunnelDesk, RankDesk, RevenueDesk, RollbackCard, SourcesDesk, UsersDesk, NucDesk } from '@/panels/DeskViews';
+import { DeskHome, DevicesDesk, FunnelDesk, RevenueDesk, RollbackCard, SourcesDesk, UsersDesk, NucDesk } from '@/panels/DeskViews';
 import { NAV, Palette } from '@/components/palette';
 import { useDesk } from '@/lib/desk';
 import { LiveBar, useLive } from '@/lib/live';
@@ -329,9 +330,7 @@ export function App() {
           <SourcesDesk data={deskData} csrf={d.csrf || ''} />
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>
-        <TabsContent value="rank">
-          <RankDesk data={deskData} csrf={d.csrf || ''} />
-        </TabsContent>
+        <TabsContent value="rank">{tab === 'rank' ? <WatchPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="funnel">
           <FunnelDesk data={deskData} />
         </TabsContent>

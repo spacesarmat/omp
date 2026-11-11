@@ -37,10 +37,10 @@ describe('textDialogOpen', () => {
     await act(async () => { dispatchKey('back', new KeyboardEvent('keydown')); });
     expect(textDialogOpen.value).toBe(false);
   });
-  it('the app gates the update and what-is-new dialogs on it', () => {
+  it('the app gates the update, component update and what-is-new dialogs on it', () => {
     const src = readFileSync('src/app.tsx', 'utf8');
     expect(src).toContain('textDialogOpen.value');
-    expect(src.split('!anyDialog').length - 1).toBe(2);
+    expect(src.split('!anyDialog').length - 1).toBe(3);
   });
 });
 

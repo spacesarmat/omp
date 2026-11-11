@@ -73,6 +73,11 @@ export interface AppSettings {
    */
   liveSeeds: boolean;
   /**
+   * «Помогать улучшать подбор». On: the app sends anonymous playback stats so billing can rank releases.
+   * Off: nothing is sent. Default on.
+   */
+  helpRank: boolean;
+  /**
    * TV beta builds: «Режим тестирования». On shows the stable screen codes.
    * A stable build ignores this flag (the switch is not rendered).
    */
@@ -122,6 +127,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   setupDone: false,
   seenHints: {},
   liveSeeds: true,
+  helpRank: true,
   testMode: false,
   testLabelPx: 20,
   testLabelPhonePx: 12,

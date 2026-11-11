@@ -6,6 +6,7 @@ import { seedCheckLine } from './dhtPeers';
 import { parseRelease } from './filters';
 import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
 import { matchCount, queryWords } from './relevance';
+import { communityBoost } from '../viewer/communityRank';
 import { sortResults, type SortKey } from './view';
 import type { SourceResult } from './types';
 
@@ -61,6 +62,9 @@ export function rankScore(r: SourceResult, query: string, now: number): number {
   } else {
     score += Math.min(r.Seed > 0 ? r.Seed : 0, 20000);
   }
+  // Learned community rank (billing). 0 until samples or an admin pin exist, so cold search stays put.
+  // #335 smartScore calls rankScore, so the same bonus applies there after that PR merges.
+  score += communityBoost(r);
   return score;
 }
 
@@ -76,9 +80,14 @@ function roundStarted(list: { seedCheck?: string }[]): boolean {
   return false;
 }
 
-/** Seed sort uses the checked ranking once a round has finished. Date and size stay as they were. */
+function hasCommunity(list: { communityReason?: string }[]): boolean {
+  for (let i = 0; i < list.length; i++) if (communityBoost(list[i]) > 0) return true;
+  return false;
+}
+
+/** Seed sort uses the checked ranking once a round has finished. A community mark reorders before that. Date and size stay as they were. */
 export function orderSearch<T extends SourceResult>(list: T[], sort: SortKey, query: string, now: number): T[] {
-  if (sort === 'seeds' && roundStarted(list)) return rankSearchResults(list, query, now);
+  if (sort === 'seeds' && (roundStarted(list) || hasCommunity(list))) return rankSearchResults(list, query, now);
   return sortResults(list, sort) as T[];
 }
 

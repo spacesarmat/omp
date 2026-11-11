@@ -4,7 +4,7 @@
 
 <h1 align="center">OMP - Open Movie Player</h1>
 
-<p align="center">A media player for LG TVs (webOS 4.0+), Android TV and Android phones. It plays movies and series from <a href="https://github.com/YouROK/TorrServer">TorrServer</a> on the home network.</p>
+<p align="center">A media player for LG TVs (webOS 4.0+), Android TV, Android phones, Windows, macOS and Linux. It plays movies and series from <a href="https://github.com/YouROK/TorrServer">TorrServer</a> on the home network.</p>
 
 <p align="center"><a href="https://omp-player.online">Site</a> · <a href="https://github.com/spacesarmat/omp/releases/latest">Download</a> · <a href="README.md#установка">Install</a> · <a href="https://t.me/ompplyaer">Telegram</a> · <a href="https://github.com/spacesarmat/omp/issues">Issues</a> · <a href="https://boosty.to/djmaker/donate">Support</a></p>
 
@@ -13,6 +13,9 @@
 - **LG webOS 4.0+** - roughly TVs from 2018 onward. OMP does not need root.
 - **Android TV and Google TV** - Android 8 or newer. The same APK as the phone.
 - **Android phone** - Android 8 or newer.
+- **Windows** - Windows 10 and 11, x64. An NSIS installer and a portable exe. Beta for now.
+- **macOS** - Intel and Apple Silicon. The DMG is not signed with an Apple Developer account: right-click the app and choose Open, or use System Settings - Privacy and Security - Open Anyway.
+- **Linux** - an AppImage and a deb package (x64). Auto-update replaces the AppImage.
 
 Samsung (Tizen) is not supported yet. Xiaomi, Sber and Yandex boxes use the same APK; the install assistant on the phone shows the steps.
 
@@ -33,7 +36,7 @@ You need [TorrServer](https://github.com/YouROK/TorrServer) on the home network.
 
 ## Install
 
-Builds are on the [latest release](https://github.com/spacesarmat/omp/releases/latest): `OMP-<version>-webOS.ipk` for LG and three APKs for Android. The full Russian steps are in [Установка](README.md#установка).
+Builds are on the [latest release](https://github.com/spacesarmat/omp/releases/latest): `OMP-<version>-webOS.ipk` for LG and three APKs for Android. Desktop betas (Windows, macOS, Linux) are on the [download page](https://spacesarmat.github.io/omp/en/). The full Russian steps are in [Установка](README.md#установка).
 
 The short path: install OMP on the phone and open Settings → “Install OMP on TV”. The phone finds LG and Android TV on the network and installs OMP. On LG that is developer mode (the Passphrase from the Developer Mode app); on Android TV it is network debugging (port 5555). The assistant does not pair Android 11+ wireless debugging yet.
 

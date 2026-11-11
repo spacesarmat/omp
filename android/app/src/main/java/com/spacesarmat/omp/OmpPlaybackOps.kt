@@ -77,7 +77,14 @@ internal fun OmpNativePlugin.wakeOnLanOp(call: PluginCall) {
 }
 
 internal fun OmpNativePlugin.player2160Op(call: PluginCall) {
-    call.resolve(JSObject().put("package", Player2160.installed(context.packageManager)).put("embedded", true))
+    val pm = context.packageManager
+    val pkg = Player2160.installed(pm)
+    val o = JSObject().put("package", pkg).put("embedded", true)
+    if (pkg != null) {
+        val ver = Player2160.versionLabel(Player2160.versionName(pm, pkg))
+        if (ver != null) o.put("version", ver)
+    }
+    call.resolve(o)
 }
 
 /** The queue of open2160's items/start/positionMs/fromStart/segments; null (call rejected) when the start item has no url. */

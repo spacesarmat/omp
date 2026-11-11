@@ -38,7 +38,7 @@ describe('title link page', () => {
     expect(html).toContain('noindex, follow');
     expect(html).toContain('id="share-download"');
     expect(html).toContain('https://github.com/spacesarmat/omp/releases/latest');
-    expect(html).toContain('src="/title-link.js?v=20261031a"');
+    expect(html).toContain('src="/title-link.js?v=20261111a"');
     expect(html).not.toContain('app.js');
     expect(html).not.toMatch(/magnet:|utm_/);
   });

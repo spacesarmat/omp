@@ -36,7 +36,7 @@ describe('desktop update API', () => {
     Object.defineProperty(navigator, 'userAgent', { value: 'Windows NT 10.0', configurable: true });
     const desktop = createDesktopNative(createBridge(async (command, args) => {
       calls.push({ command, args });
-      return command === 'update_download' ? candidate : undefined;
+      return command === 'update_download' ? candidate : command === 'update_supported' ? true : undefined;
     }));
 
     await expect(desktop.native.canInstallApks()).resolves.toBe(true);
@@ -44,6 +44,7 @@ describe('desktop update API', () => {
 
     const installInfo = { ...candidate, notes: [] };
     expect(calls).toEqual([
+      { command: 'update_supported', args: undefined },
       { command: 'update_download', args: { info: installInfo } },
       { command: 'update_apply', args: { info: installInfo } },
     ]);
@@ -74,5 +75,7 @@ describe('desktop update API', () => {
     });
     expect(() => updateInfoFromPackage('https://example.com/OMP-0.20.11.msix', candidate.sha256))
       .toThrow('invalid update package version');
+    expect(updateInfoFromPackage('https://example.com/OMP-0.20.12-beta.2-macos-arm64.dmg', candidate.sha256).version).toBe('0.20.12-beta.2');
+    expect(updateInfoFromPackage('https://example.com/OMP-0.20.12-linux-x64.AppImage', candidate.sha256).version).toBe('0.20.12');
   });
 });

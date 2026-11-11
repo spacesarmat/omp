@@ -190,6 +190,23 @@ describe('season queue', () => {
     expect(seasonSpan(otherFolder, 1).missing).toBe(2);
   });
 
+  it('a bare episode name fills the season being watched, so episode 13 is not reported missing while it is in the release', () => {
+    const files = [
+      file(12, 'Star Trek TNG S07E12.mkv'),
+      file(13, '13 серия.mkv'),
+      file(14, 'Show.S07E14.mkv'),
+      file(15, 'E15.mkv'),
+    ];
+    const span = seasonSpan(files, 12);
+    expect(span.season).toBe(7);
+    expect(span.files.map((f) => f.id)).toEqual([12, 13, 14, 15]);
+    expect(span.missing).toBeNull();
+    expect(seasonSpan(files, 12, 26).missing).toBe(16);
+    const playing = seasonSpan([file(13, 'Star Trek TNG S07E13.mkv'), file(15, 'Show.S07E15.mkv')], 13, 26);
+    expect(playing.files[0].id).toBe(13);
+    expect(playing.missing).toBe(14);
+  });
+
   it('a film is one file and does not send a season list', () => {
     const span = seasonSpan([file(1, 'Movie.2020.mkv'), file(2, 'Movie.2020.extra.mkv')], 1);
     expect(span.season).toBeNull();

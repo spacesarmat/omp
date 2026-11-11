@@ -61,11 +61,51 @@ describe('Telegram post workflows attach no files', () => {
 });
 
 describe('CI workflow', () => {
+  const ci = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/g, '\n');
+
   it('prints the size of every debug APK (one per ABI)', () => {
-    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
     const at = ci.indexOf('assembleDebug');
     expect(at).toBeGreaterThan(0);
     expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
+  });
+
+  it('keeps the overflow check beside build, not inside it', () => {
+    const build = ci.slice(ci.indexOf('\n  build:'), ci.indexOf('\n  overflow:'));
+    expect(build).not.toContain('check:overflow');
+    const overflow = ci.slice(ci.indexOf('\n  overflow:'), ci.indexOf('\n  android:'));
+    expect(overflow).toContain('run: npm run check:overflow');
+  });
+
+  it('builds only the arm64 debug APK on pull requests and uploads debug APKs otherwise', () => {
+    expect(ci).toContain("if [ \"$EVENT_NAME\" = \"pull_request\" ]; then");
+    expect(ci).toContain('-PompAbi=arm64-v8a');
+    expect(ci).toContain('assembleDebug testDebugUnitTest');
+    expect(ci).not.toContain('assembleArm64-v8aDebug');
+    expect(ci).toContain("if: github.event_name != 'pull_request'");
+    expect(readFileSync('android/gradle.properties', 'utf8')).toContain('org.gradle.configuration-cache=true');
+    const gradle = readFileSync('android/app/build.gradle', 'utf8');
+    expect(gradle).toContain("findProperty('ompAbi')");
+    expect(gradle).toContain('universalApk = false');
+    expect(gradle).not.toContain('taskGraph.whenReady');
+  });
+});
+
+describe('desktop workflow scope', () => {
+  const yml = readFileSync('.github/workflows/desktop.yml', 'utf8').replace(/\r\n/g, '\n');
+
+  it('cancels superseded pull requests and packages NSIS only outside them', () => {
+    expect(yml).toContain('group: desktop-${{ github.ref }}');
+    expect(yml).toContain("cancel-in-progress: ${{ github.event_name == 'pull_request' }}");
+    expect(yml).toContain("tags: ['v*']");
+    const job = yml.slice(yml.indexOf('\n  package-windows:'));
+    expect(job).toContain("github.event_name != 'pull_request'");
+    expect(job).toContain('needs.smoke.result == \'success\'');
+  });
+
+  it('still runs smoke when shared frontend, lockfiles, or the workflow change', () => {
+    for (const path of ['desktop/*', 'src/*', 'mobile/*', 'design/*', 'package.json', 'package-lock.json', 'torrserver.version', '.github/workflows/desktop.yml']) {
+      expect(yml).toContain(path);
+    }
   });
 });
 

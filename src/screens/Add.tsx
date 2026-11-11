@@ -31,6 +31,7 @@ import { ipBanNote, cloudflareTvNote, isCloudflare, progressText, resultDate, re
 import { isHotChip, kindFilterOptions, releaseChips, releaseTitle, resultKindLabel } from '../sources/releaseRow';
 import { filterByKind, getKindFilter, setKindFilter, type KindFilter } from '../lib/releaseKind';
 import { orderSearch, seedStatusLine } from '../sources/seedRank';
+import { communityLabel } from '../viewer/communityRank';
 import { deviceCaps, pickDefaultSource } from '../viewer/sourcePick';
 import { lastLinkSpeed } from '../viewer/linkSpeed';
 import { noteAlternatePool } from '../viewer/alternates';
@@ -631,6 +632,7 @@ export function AddScreen() {
                     <span class="title">{tvGlyphs(s.title)}</span>
                     {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
                     {kind && <span class="search-chip search-kind">{tvGlyphs(kind)}</span>}
+                    {communityLabel(r) && <span class="search-chip">{tvGlyphs(communityLabel(r))}</span>}
                     {key === pickKey && pick && <span class="search-chip pick-badge">{pick.badge}</span>}
                     {chips.map((ch) => (
                       <span key={ch} class={'search-chip' + (isHotChip(ch) ? ' hot' : '')}>

@@ -7,6 +7,7 @@ import { playerPosterStyle } from './playerPoster';
 import { t } from '../../../src/i18n';
 import { humanEpisodeCode, subtitleCode, usePlayingNames } from '../lib/playingNames';
 import { realEpisodeName } from '../../../src/lib/episodeNames';
+import { isDesktopBuild } from '../desktop/runtime';
 
 export { subtitleCode };
 
@@ -45,6 +46,22 @@ export function MiniPlayer() {
       <button type="button" class="m-mini-btn" aria-label={t('remote.mini.back10')} disabled={!live} onClick={() => sendCmd({ type: 'skip', d: -10 })}>
         <Icon d={ICONS.back10} />
       </button>
+      {isDesktopBuild() && (
+        <button
+          type="button"
+          class="m-mini-btn"
+          aria-label={t('nav.pip')}
+          onClick={(event) => {
+            const host = (event.currentTarget as HTMLElement).closest('.m-mini');
+            if (!host) return;
+            const on = !host.classList.contains('m-mini-float');
+            host.classList.toggle('m-mini-float', on);
+            try { localStorage.setItem('omp.desktop.pip', on ? '1' : '0'); } catch { /* storage off */ }
+          }}
+        >
+          PiP
+        </button>
+      )}
       <button
         type="button"
         class="m-mini-btn play"

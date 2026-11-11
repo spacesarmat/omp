@@ -15,6 +15,8 @@ import { parseEpisodeRange, SEASON_WORDS } from './episodes';
 import { addFindings, rememberSeen, seenKeys } from './subs';
 import { EPISODES_ID, type Finding } from './types';
 import { displayTitle } from '../lib/torrentName';
+import { communityBoost } from '../viewer/communityRank';
+import { fetchWatchBest } from '../viewer/watchBest';
 
 /** The fields of a library torrent the check needs. */
 export type LibraryTorrent = Pick<Torrent, 'hash' | 'title' | 'category' | 'data' | 'file_stats'>;
@@ -37,6 +39,8 @@ export interface NewEpisodes {
 export interface NewEpisodesOptions extends CheckOptions {
   /** Source id the library torrent came from, when known: preferred like the release group. */
   source?: string;
+  /** Precomputed infohash from billing. It wins when that release is in the results. */
+  bestHash?: string;
 }
 
 // a year, not a resolution like 1920x1080
@@ -222,7 +226,7 @@ interface Scored {
 }
 
 /** The best newer release among `results` for the library torrent, or null. */
-export function pickNewer(t: LibraryTorrent, results: SourceResult[], prefer?: { source?: string }): NewEpisodes | null {
+export function pickNewer(t: LibraryTorrent, results: SourceResult[], prefer?: { source?: string; bestHash?: string }): NewEpisodes | null {
   const have = libraryRange(t);
   if (!have) return null;
   const names = seriesNames(t.title);
@@ -241,7 +245,9 @@ export function pickNewer(t: LibraryTorrent, results: SourceResult[], prefer?: {
     if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return;
     const sameGroup = releaseGroups(r.Title).some((g) => groups.indexOf(g) >= 0);
     const sameSource = !!prefer && !!prefer.source && prefer.source === r.source;
-    const score = (qualityOf(r.Title) === quality ? 2 : 0) + (sameGroup || sameSource ? 1 : 0);
+    const marked = communityBoost(r) > 0 ? 1000 + (typeof r.communityRank === 'number' ? r.communityRank : 0) : 0;
+    const wanted = prefer && prefer.bestHash && (r.hash === prefer.bestHash || (r.Hash || '').toLowerCase() === prefer.bestHash) ? 100000 : 0;
+    const score = wanted + marked + (qualityOf(r.Title) === quality ? 2 : 0) + (sameGroup || sameSource ? 1 : 0);
     list.push({ r, to: range.to, from: range.from, score, i });
   });
   if (!list.length) return null;
@@ -271,9 +277,12 @@ export function findNewEpisodes(ctx: SourceContext, t: LibraryTorrent, opts?: Ne
   } catch (e) {
     return Promise.resolve(null);
   }
-  return h.done.then(
-    () => pickNewer(t, h.results(), { source: o.source }),
-    () => null,
+  const have = libraryRange(t);
+  const bestP = have
+    ? fetchWatchBest(ctx, t.title, have.season, have.to + 1).catch(() => null)
+    : Promise.resolve(null);
+  return Promise.all([h.done.then(() => h.results(), () => [] as SourceResult[]), bestP]).then(([results, best]) =>
+    pickNewer(t, results, { source: o.source, bestHash: best && best.infohash ? best.infohash : undefined }),
   );
 }
 

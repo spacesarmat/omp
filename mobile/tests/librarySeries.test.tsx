@@ -397,10 +397,13 @@ describe('Series screen', () => {
       act(() => btn('Сменить')!.click());
       // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
       expect(choices()).toEqual([]);
+      const about = el.querySelector('button[aria-label*="общая для ТВ и телефона"]') as HTMLElement;
+      act(() => about.click());
       expect(el.textContent).toContain('общая для ТВ и телефона');
+      act(() => about.click());
+      expect(el.textContent).not.toContain('общая для ТВ и телефона');
       act(() => btn('Скрыть')!.click());
       expect(btn('Сменить')).toBeTruthy();
-      expect(el.textContent).not.toContain('общая для ТВ и телефона');
     });
 
     it('shows the dub picked on the TV for any season, switches to another seen one and resets', async () => {

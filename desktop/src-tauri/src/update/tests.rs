@@ -160,3 +160,34 @@ fn nsis_helper_records_successful_exit_code() {
     let result = super::take_pending_update_result_in(&result_path).expect("helper result");
     assert_eq!(result.status, UpdateResultStatus::Success);
 }
+
+#[test]
+fn dmg_helper_mounts_and_copies_the_app() {
+    assert!(super::DMG_HELPER_SCRIPT.contains("hdiutil attach"));
+    assert!(super::DMG_HELPER_SCRIPT.contains("cp -R"));
+    assert!(super::DMG_HELPER_SCRIPT.contains("/Applications/OMP.app"));
+}
+
+#[cfg(unix)]
+#[test]
+fn appimage_helper_replaces_the_current_file() {
+    let temp = tempfile::tempdir().expect("temp AppImage");
+    let package = temp.path().join("next.AppImage");
+    let dest = temp.path().join("OMP.AppImage");
+    let result_path = temp.path().join("update-result.json");
+    std::fs::write(&package, b"new-appimage").expect("package");
+    std::fs::write(&dest, b"old").expect("dest");
+
+    let status = std::process::Command::new("sh")
+        .args(["-c", super::APPIMAGE_HELPER_SCRIPT])
+        .env("OMP_PACKAGE_PATH", &package)
+        .env("OMP_APPIMAGE_PATH", &dest)
+        .env("OMP_UPDATE_PID", "99999999")
+        .env("OMP_UPDATE_RESULT", &result_path)
+        .status()
+        .expect("run AppImage helper");
+    assert!(status.success());
+    assert_eq!(std::fs::read(&dest).expect("replaced"), b"new-appimage");
+    let result = super::take_pending_update_result_in(&result_path).expect("helper result");
+    assert_eq!(result.status, UpdateResultStatus::Success);
+}

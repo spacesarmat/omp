@@ -146,7 +146,7 @@ describe('found release rows', () => {
     );
     const card = el.querySelector('.m-rc')!;
     expect(card.querySelector('.m-rel-thumb')).toBeTruthy();
-    expect(card.querySelector('.m-btn')).toBeNull();
+    expect(card.querySelector('.m-rc-watch')!.textContent).toBe('Смотреть');
     expect(card.querySelector('.m-rc-meta')!.textContent).toContain('10,0 ГБ');
     expect(card.querySelector('.m-rc-date')!.textContent).not.toBe('');
     const [plus, tv] = Array.from(card.querySelectorAll('.m-rc-btn')) as HTMLButtonElement[];

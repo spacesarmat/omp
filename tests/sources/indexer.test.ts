@@ -40,6 +40,20 @@ const ITEMS =
 describe('parseTorznab', () => {
   const list = parseTorznab(RSS(ITEMS), 'indexer-x', 'jackett');
 
+  it('keeps billing reasons seeds and dht', () => {
+    const xml = RSS(
+      '<item><title>Cold</title><link>magnet:?xt=urn:btih:' + H1 + '</link>' +
+      '<torznab:attr name="omp_rank" value="70"/><torznab:attr name="omp_reason" value="seeds"/></item>' +
+      '<item><title>Dht</title><link>magnet:?xt=urn:btih:' + H2 + '</link>' +
+      '<torznab:attr name="omp_rank" value="40"/><torznab:attr name="omp_reason" value="dht"/></item>',
+    );
+    const rows = parseTorznab(xml, 'x');
+    expect(rows[0].communityReason).toBe('seeds');
+    expect(rows[0].communityRank).toBe(70);
+    expect(rows[1].communityReason).toBe('dht');
+    expect(rows[1].communityRank).toBe(40);
+  });
+
   it('drops items without a title or without a magnet/infohash/link', () => {
     expect(list.map((r) => r.Title)).toEqual(['Тестовый фильм (2020) WEB-DL 1080p', 'Вымышленный сериал S01', 'Magnet in link', 'Torrent file only']);
   });

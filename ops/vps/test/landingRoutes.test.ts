@@ -32,7 +32,10 @@ describe.each(FILES)('$file landing routes', ({ file, apex, www }) => {
   it('rewrites only title links to the card page, before file_server', () => {
     expect(site).toContain('@title path_regexp share ^/t/(?:movie|tv)/[0-9]+(?:/s/[0-9]+)?/?$');
     expect(site).toContain('rewrite @title /t/index.html');
+    expect(site).toContain('@pair path /pair /pair/');
+    expect(site).toContain('rewrite @pair /pair/index.html');
     expect(site.indexOf('rewrite @title')).toBeLessThan(site.indexOf('file_server'));
+    expect(site.indexOf('rewrite @pair')).toBeLessThan(site.indexOf('file_server'));
   });
 
   it('has no SPA fallback, so unknown paths are a real 404 with site/404.html', () => {
