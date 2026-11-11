@@ -103,8 +103,10 @@ describe('desktop workflow scope', () => {
   });
 
   it('still runs smoke when shared frontend, lockfiles, or the workflow change', () => {
+    const paths = readFileSync('scripts/desktop-ci-paths.sh', 'utf8');
+    expect(yml).toContain('bash scripts/desktop-ci-paths.sh');
     for (const path of ['desktop/*', 'src/*', 'mobile/*', 'design/*', 'package.json', 'package-lock.json', 'torrserver.version', '.github/workflows/desktop.yml']) {
-      expect(yml).toContain(path);
+      expect(paths).toContain(path);
     }
   });
 });

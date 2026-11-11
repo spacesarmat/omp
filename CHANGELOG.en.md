@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] On a pull request, desktop CI installs apt packages, Python and cargo test only when desktop/src-tauri, Cargo files, this workflow or the Rust test inputs change. Push, tags and manual runs still always run them. Apt packages are cached and installed with --no-install-recommends, the man-db trigger is disabled, mirror retries are capped, and the apt step times out after 10 minutes. The CI apt install (shellcheck, rsync) does the same
+
 ## 0.30.1-beta.1
 
 - [phone] Catalog header: Mine is filled, icon buttons are 40 by 40. Scrolling hides the Mine / Discover row and keeps the chips on a solid dark bar. Continue shows the device and time, only items at 2-90%, a finished episode moves to the next one, and anything untouched for 30 days leaves the row. Long press: remove, mark watched, start over. Settings: Shared history across devices
