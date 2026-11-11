@@ -2,7 +2,7 @@
 // then «Эта неделя», «Следующая», «Позже»). «Месяц» is a grid; a day opens that day's rows under it.
 // The view is remembered. «Только мои подписки» hides series that are only in the library.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { lang, t } from '../../../src/i18n';
+import { lang, t, tp } from '../../../src/i18n';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { isoDay } from '../../../src/lib/seriesStatus';
 import { torrents } from '../../../src/store/library';
@@ -14,7 +14,7 @@ import { Icon } from '../ui/Icon';
 import { CatalogError } from './catalog/CatalogError';
 import { dayHeader } from '../lib/releaseDates';
 import {
-  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, humanEpisodes, listGroups, loadCalendar,
+  calendarState, dayCountLabel, dayRows, defaultMonthDay, ensureCalendarSpan, entriesForMonth, episodeActions, humanEpisodes, listDaySections, loadCalendar,
   loadCalView, monthBounds, monthCells, monthRev, monthSwipe, monthTitle, realEpisodeName, rowFinding, rowLine, saveCalView, shiftMonth, subscribedOnly,
   weekdayHeads, STALE_MS, type CalGo, type CalRow, type CalView,
 } from '../lib/calendar';
@@ -23,13 +23,6 @@ import { Sheet } from '../ui/Sheet';
 
 const CHEV_L = 'M15 6l-6 6 6 6';
 const CHEV_R = 'M9 6l6 6-6 6';
-
-/** The chip of an episode out already: «вышла», «сегодня»; none for one to come. */
-function chipText(r: CalRow): string {
-  if (r.status === 'aired') return t('news.calAired');
-  if (r.status === 'today') return t('news.calToday');
-  return '';
-}
 
 function openFinding(f: Finding): void {
   if (f.subId === EPISODES_ID) navigate({ name: 'news', seg: 'subs', finding: f.key });
@@ -43,11 +36,9 @@ function goEpisode(action: CalGo): void {
 
 function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: (e: CalRow) => void }) {
   const card = e.show.card;
-  const out = e.status !== 'future';
-  const found = out ? rowFinding(e, findings) : null;
+  const found = rowFinding(e, findings);
   const multi = card.seasons.length > 1;
   const code = humanEpisodes(e.season, e.episodes, multi);
-  const chip = chipText(e);
   return (
     <div class="m-cal-row" data-cal-row={card.id + ':' + e.season + ':' + e.episodes.join(',')}>
       <button type="button" class="m-cal-open" onClick={() => onOpen(e)}>
@@ -59,33 +50,29 @@ function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: 
         <span class="m-cal-text">
           <span class="m-cal-title">{card.title}</span>
           <span class="m-small m-muted m-cal-ep">{rowLine(e, { withSeason: multi })}</span>
-          <span class="m-cal-when m-small m-muted">{dayHeader(e.airDate)}</span>
         </span>
       </button>
-      {out && (
-        <span class="m-cal-side">
-          {chip && <span class={'m-cal-chip m-cal-' + e.status}>{chip}</span>}
-          {found ? (
-            <button
-              type="button"
-              class="m-btn m-btn-primary m-btn-sm"
-              aria-label={t('news.calWatchAria', { title: card.title + ' ' + code })}
-              onClick={() => openFinding(found)}
-            >
-              {t('news.calWatch')}
-            </button>
-          ) : (
-            <button
-              type="button"
-              class="m-btn m-btn-secondary m-btn-sm"
-              aria-label={t('news.calFindAria', { title: card.title + ' ' + code })}
-              onClick={() => navigate({ name: 'add', query: torrentQuery(card, e.season), run: true })}
-            >
-              {t('news.calFind')}
-            </button>
-          )}
-        </span>
-      )}
+      <span class="m-cal-side">
+        {found ? (
+          <button
+            type="button"
+            class="m-btn m-btn-primary m-btn-sm"
+            aria-label={t('news.calWatchAria', { title: card.title + ' ' + code })}
+            onClick={() => openFinding(found)}
+          >
+            {t('news.calWatch')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            class="m-btn m-btn-secondary m-btn-sm"
+            aria-label={t('news.calFindAria', { title: card.title + ' ' + code })}
+            onClick={() => navigate({ name: 'add', query: torrentQuery(card, e.season), run: true })}
+          >
+            {t('news.calFind')}
+          </button>
+        )}
+      </span>
     </div>
   );
 }
@@ -174,7 +161,7 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpe
             <button
               key={c.iso}
               type="button"
-              class={'m-cal-cell tm' + (c.inMonth ? '' : ' out') + (c.today ? ' is-today' : '') + (c.iso === picked ? ' is-on' : '')}
+              class={'m-cal-cell tm' + (c.inMonth ? '' : ' out') + (c.past && c.inMonth ? ' is-past' : '') + (c.today ? ' is-today' : '') + (c.iso === picked ? ' is-on' : '')}
               data-code={c.inMonth ? 'P03.14' : undefined}
               data-cal-cell={c.iso}
               aria-pressed={c.iso === picked}
@@ -183,13 +170,25 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpe
               onClick={() => setPicked(c.iso)}
             >
               <span class="m-cal-num">{day}</span>
-              {c.count > 0 && c.inMonth && (c.poster ? <img class="m-cal-dotimg" src={c.poster} alt="" /> : <span class="m-cal-dot" />)}
-              {c.count > 1 && c.inMonth && <span class="m-cal-more">{dayCountLabel(c.count)}</span>}
+              {c.count > 0 && c.inMonth && (
+                <span class="m-cal-dots">
+                  {Array.from({ length: Math.min(3, c.count) }, (_, i) => (
+                    <span key={i} class={'m-cal-dot' + (c.mine ? ' mine' : '')} />
+                  ))}
+                </span>
+              )}
+              {c.inMonth && dayCountLabel(c.count) && <span class="m-cal-more">{dayCountLabel(c.count)}</span>}
             </button>
           );
         })}
       </div>
+      <button type="button" class="m-btn m-btn-secondary m-btn-sm m-cal-today" onClick={() => {
+        const n = new Date();
+        setCursor({ y: n.getFullYear(), m: n.getMonth() });
+        setPicked(isoDay(Date.now()));
+      }}>{t('date.today')}</button>
       <div class="m-cal-picked" data-cal-picked={picked}>
+        {picked && <div class="m-cal-dayhead">{dayHeader(picked) + (rows.length ? ' · ' + tp('news.calReleases', rows.length) : '')}</div>}
         {rows.length ? rows.map((r) => (
           <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} onOpen={p.onOpen} />
         )) : picked ? <div class="m-muted m-small">{t('news.calDayEmpty')}</div> : null}
@@ -267,6 +266,7 @@ export function Calendar() {
   const [view, setView] = useState<CalView>(loadCalView);
   const [subsOnly, setSubsOnly] = useState(false);
   const [ask, setAsk] = useState<CalRow | null>(null);
+  const [earlierOpen, setEarlierOpen] = useState(false);
   const reload = (fresh?: boolean) => loadCalendar(torrents.peek(), loadSubs(), fresh);
   useEffect(() => {
     const s = calendarState.peek();
@@ -276,7 +276,7 @@ export function Calendar() {
   const findings = loadFound();
   const shown = subsOnly ? subscribedOnly(state.entries) : state.entries;
   const filteredOut = subsOnly && !shown.length && state.entries.length > 0;
-  const groups = listGroups(shown);
+  const groups = listDaySections(shown);
   const pickView = (v: CalView) => {
     saveCalView(v);
     setView(v);
@@ -303,14 +303,23 @@ export function Calendar() {
   else {
     body = (
       <>
-        {groups.map((g) => (
-          <section key={g.id} class="m-cal-group" data-cal-group={g.id}>
-            <div class="m-set-label">{g.label}</div>
-            {g.rows.map((r) => (
-              <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} onOpen={setAsk} />
-            ))}
-          </section>
-        ))}
+        {groups.map((g) => {
+          const closed = g.collapsed && !earlierOpen;
+          return (
+            <section key={g.id} class="m-cal-group" data-cal-group={g.id}>
+              {g.collapsed ? (
+                <button type="button" class="m-set-label m-cal-earlier" data-cal-earlier aria-expanded={!closed} onClick={() => setEarlierOpen(!earlierOpen)}>
+                  {g.label}
+                </button>
+              ) : (
+                <div class="m-set-label m-cal-dayhead">{g.label}</div>
+              )}
+              {closed ? null : g.rows.map((r) => (
+                <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} onOpen={setAsk} />
+              ))}
+            </section>
+          );
+        })}
         {state.loading && <div class="m-muted m-small">{t('news.calLoading')}</div>}
       </>
     );
