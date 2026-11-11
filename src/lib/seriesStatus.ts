@@ -89,20 +89,36 @@ export function seriesPill(card: CatalogCard, now: number = Date.now(), compact:
   return null;
 }
 
+export interface TileBadgeInfo {
+  kind: '' | 'episode' | 'season';
+  /** Full label, including the date for a new episode. */
+  text: string;
+  /** The date alone, so a compact row can keep it off the badge. */
+  date: string;
+}
+
 /**
  * The badge of a «Мои» tile: «новая серия 12 окт.» when the next episode is within 30 days, else «новый сезон» when TMDB
- * has a released season newer than the newest one of the library; '' otherwise.
+ * has a released season newer than the newest one of the library; empty otherwise.
  */
-export function tileBadge(card: CatalogCard, librarySeasons: number[], now: number = Date.now()): string {
-  if (card.kind !== 'tv') return '';
+export function tileBadgeInfo(card: CatalogCard, librarySeasons: number[], now: number = Date.now()): TileBadgeInfo {
+  const none: TileBadgeInfo = { kind: '', text: '', date: '' };
+  if (card.kind !== 'tv') return none;
   const ne = upcomingEpisode(card, now);
   if (ne) {
     const days = daysUntil(ne.airDate, now);
-    if (days >= 0 && days <= BADGE_DAYS) return t('series.badgeNext', { date: airDateText(ne.airDate, now) });
+    if (days >= 0 && days <= BADGE_DAYS) {
+      const date = airDateText(ne.airDate, now);
+      return { kind: 'episode', text: t('series.badgeNext', { date }), date };
+    }
   }
   const newest = librarySeasons.reduce((m, s) => Math.max(m, s), 0);
-  if (!newest) return '';
+  if (!newest) return none;
   const today = isoDay(now);
   const released = card.seasons.some((s) => s.number > newest && (s.aired > 0 || (!!s.airDate && s.airDate <= today)));
-  return released ? t('series.badgeSeason') : '';
+  return released ? { kind: 'season', text: t('series.badgeSeason'), date: '' } : none;
+}
+
+export function tileBadge(card: CatalogCard, librarySeasons: number[], now: number = Date.now()): string {
+  return tileBadgeInfo(card, librarySeasons, now).text;
 }

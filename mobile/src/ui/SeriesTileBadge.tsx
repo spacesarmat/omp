@@ -2,13 +2,13 @@
 // Only a match found before is read on render; a tile not looked up yet asks for a lookup once it comes into view
 // (IntersectionObserver; the queue runs 2 at a time, one per series). Nothing without TMDB or a match.
 import { useEffect, useMemo, useRef } from 'preact/hooks';
-import { lang } from '../../../src/i18n';
+import { lang, t } from '../../../src/i18n';
 import { cachedSeriesMatch, requestSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
-import { tileBadge } from '../../../src/lib/seriesStatus';
+import { tileBadgeInfo } from '../../../src/lib/seriesStatus';
 import { singleGroup, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import type { Torrent } from '../../../src/api/types';
 
-export function SeriesTileBadge({ group, tor }: { group?: SeriesGroup; tor?: Torrent }) {
+export function SeriesTileBadge({ group, tor, split }: { group?: SeriesGroup; tor?: Torrent; split?: boolean }) {
   const g = useMemo(() => group || (tor ? singleGroup(tor) : null), [group, tor]);
   void seriesMatchVersion.value;
   const l = lang.value;
@@ -29,9 +29,11 @@ export function SeriesTileBadge({ group, tor }: { group?: SeriesGroup; tor?: Tor
     return () => io.disconnect();
   }, [g ? g.key : '', unknown, l]);
   if (!g) return null;
-  const text = card ? tileBadge(card, g.seasons) : '';
+  const info = card ? tileBadgeInfo(card, g.seasons) : { kind: '' as const, text: '', date: '' };
+  const text = split && info.kind === 'episode' ? t('series.badgeEpisode') : info.text;
+  const kind = info.kind === 'season' ? ' filled' : info.kind === 'episode' ? ' outline' : '';
   return (
-    <span ref={ref} class="m-new-badge">
+    <span ref={ref} class={'m-new-badge' + kind} data-kind={info.kind || undefined} data-date={info.date || undefined}>
       {text}
     </span>
   );

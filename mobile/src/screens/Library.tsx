@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { contentsText } from '../lib/releaseContents';
 import { fmtSize, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
@@ -20,10 +19,13 @@ import { activeTv } from '../tv/tvStore';
 import { FoundTvs } from '../ui/FoundTvs';
 import { catalogReason, cachedBanner } from '../../../src/lib/catalogState';
 import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } from '../../../src/store/library';
-import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
+import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, markWatched, clearProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
+import { continueCards, continueSourceLine, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
+import { movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
+import { hiddenHistory, hideHistory, isHistoryHidden } from '../../../src/store/historyHide';
 import { settings, updateSettings } from '../../../src/store/settings';
-import { sortTorrents, sortLabel, sortOptions } from '../../../src/lib/librarySearch';
+import { sortTorrents, sortLabel, phoneSortOptions } from '../../../src/lib/librarySearch';
 import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
@@ -32,7 +34,10 @@ import { errorMessage } from '../../../src/api/http';
 import { native } from '../platform/native';
 import { donateCardDue, dismissDonateCard, openDonate, supporterActive } from '../donate';
 import { localServer, startLocal, refreshLocalServer, LOCAL_URL, canRun, downloadSize } from '../server/localServer';
-import { displayTitle } from '../../../src/lib/torrentName';
+import { displayTitle, yearOf } from '../../../src/lib/torrentName';
+import { parseEpisodeRange } from '../../../src/monitor/episodes';
+import { episodeCountOf } from '../lib/releaseContents';
+import { tileBadgeInfo } from '../../../src/lib/seriesStatus';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
 import { Discover } from './catalog/Discover';
 import { setDiscoverHeadSlot, useCompactCatalogBar } from './catalog/compactBar';
@@ -41,7 +46,7 @@ import { cardWidth, gridCols, gridTemplate, useContentWidth, type GridMode } fro
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
-import { groupLabel, groupSize, singleGroup, type SeriesGroup } from '../../../src/lib/seriesGroups';
+import { groupLabel, groupSize, singleGroup, seriesKey, NO_SEASON, type SeriesGroup } from '../../../src/lib/seriesGroups';
 import { groupPhoneLibrary, phoneItemHashes, type FilmGroup, type PhoneItem } from '../lib/filmGroups';
 import { Sheet } from '../ui/Sheet';
 import { tvFirst, playOnPhone } from '../watchHere';
@@ -86,15 +91,74 @@ function tileMeta(tor: Torrent, g?: SeriesGroup | null): string {
 }
 
 const itemKey = (it: PhoneItem) => (it.kind === 'torrent' ? it.tor.hash : it.kind === 'film' ? 'f:' + it.key : 'g:' + it.key);
+
+function showKeyOf(tor: Torrent): string {
+  try {
+    const key = seriesKey(tor);
+    return key || tor.hash;
+  } catch (e) {
+    return tor.hash;
+  }
+}
+
+function filesByShow(list: Torrent[]): { [k: string]: ContinueFile[] } {
+  const out: { [k: string]: ContinueFile[] } = {};
+  list.forEach((tor) => {
+    const key = showKeyOf(tor);
+    const files = filesOf(tor).map((f) => ({ id: f.id, path: f.path, hash: tor.hash }));
+    out[key] = (out[key] || []).concat(files);
+  });
+  return out;
+}
+
+function watchesOf(list: Torrent[], shared: boolean, phoneName: string): ContinueWatch[] {
+  const rows = buildHistory(
+    list,
+    shared ? 'all' : 'phone',
+    shared ? continueWatching(list, 80) : [],
+    getLocalProgress,
+    80,
+    { src: 'phone', name: phoneName },
+  );
+  return collapseHistoryShows(rows).map((it) => {
+    const row: ContinueWatch = {
+      hash: it.torrent.hash,
+      fileIndex: it.fileIndex,
+      time: it.progress.time,
+      duration: it.progress.duration,
+      updated: it.progress.updated || it.source.at,
+      src: it.source.src,
+      showKey: showKeyOf(it.torrent),
+    };
+    if (it.progress.open) row.open = true;
+    if (it.source.name) row.name = it.source.name;
+    return row;
+  });
+}
+
+function rowBottom(it: PhoneItem): string {
+  const tor = it.kind === 'series' ? it.named : it.kind === 'film' ? it.lead : it.tor;
+  const movie = it.kind === 'film' || (it.kind !== 'series' && tor.category !== 'tv' && playableFiles(filesOf(tor)).length <= 1);
+  if (movie) return movieRowLine(yearOf(displayTitle(tor)) || '', 0);
+  const range = parseEpisodeRange(displayTitle(tor));
+  const seasons = it.kind === 'series' ? it.seasons.filter((s) => s !== NO_SEASON) : [];
+  const files = it.kind === 'series' ? it.members.reduce<ReturnType<typeof filesOf>>((all, m) => all.concat(filesOf(m)), []) : filesOf(tor);
+  const counted = episodeCountOf(files) || 0;
+  const episodes = counted || (range.from && range.to ? range.to - range.from + 1 : 0);
+  const card = it.kind === 'series' ? cachedSeriesMatch(it.key) : null;
+  const ended = !!(card && card.status === 'ended');
+  const seasonCount = seasons.length || (range.seasonTo && range.season ? range.seasonTo - range.season + 1 : range.season ? 1 : 0);
+  if (seasonCount > 1) return seriesRowLine(seasonCount, 0, ended);
+  const one = seasons.length === 1 ? seasons[0] : range.season || 0;
+  const head = one ? t('filters.season', { n: one }) : '';
+  const eps = episodes > 1 ? tp('library.episodes', episodes) : '';
+  return [head, eps].filter(Boolean).join(' · ');
+}
 const hashesOf = (it: PhoneItem) => (it.kind === 'torrent' ? [it.tor.hash] : it.members.map((m) => m.hash));
 /** The size of every release of a film card. */
 const filmSize = (g: FilmGroup) => g.members.reduce((n, m) => n + (m.torrent_size || 0), 0);
 
 /** «18 серий» (from the file names, «1-2 серия» counted as two), else «16 файлов»; '' for a film. */
-function episodesText(tor: Torrent): string {
-  return contentsText(tor);
-}
-
 const SEARCH = 'M5 11a6 6 0 1 0 12 0 6 6 0 0 0-12 0zM21 21l-5-5';
 const CLOSE = 'M6 6l12 12M18 6L6 18';
 const MORE = 'M5 12h.01M12 12h.01M19 12h.01';
@@ -148,6 +212,8 @@ export function Library() {
   const [selected, setSelected] = useState<string[] | null>(null);
   const [menuFor, setMenuFor] = useState<PhoneItem | null>(null);
   const [viewSheet, setViewSheet] = useState(false);
+  const [hideTick, setHideTick] = useState(0);
+  const [resumeMenu, setResumeMenu] = useState<ContinueCard | null>(null);
   const [deleting, setDeleting] = useState(false);
   const press = useRef<{ timer: ReturnType<typeof setTimeout> | undefined; x: number; y: number; fired: boolean }>({ timer: undefined, x: 0, y: 0, fired: false });
   const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
@@ -328,20 +394,36 @@ export function Library() {
   const shown = useMemo<PhoneItem[]>(() => {
     if (isHistory) return [];
     const inTab = sortTorrents(list.filter((t) => tab === 'all' || categoryOf(t.category) === tab), sort);
-    if (tab === 'all' || tab === 'tv' || tab === 'movie') return groupPhoneLibrary(inTab);
-    return inTab.map((tor) => ({ kind: 'torrent' as const, tor }));
-  }, [list, tab, isHistory, sort]);
+    let items: PhoneItem[] = tab === 'all' || tab === 'tv' || tab === 'movie' ? groupPhoneLibrary(inTab) : inTab.map((tor) => ({ kind: 'torrent' as const, tor }));
+    if (sort === 'fresh') {
+      const fresh: PhoneItem[] = [];
+      const rest: PhoneItem[] = [];
+      items.forEach((it) => {
+        const card = it.kind === 'series' ? cachedSeriesMatch(it.key) : null;
+        if (card && it.kind === 'series' && tileBadgeInfo(card, it.seasons).kind) fresh.push(it);
+        else rest.push(it);
+      });
+      items = fresh.concat(rest);
+    }
+    return items;
+  }, [list, tab, isHistory, sort, seriesMatchVersion.value]);
   const shownHashes = useMemo(() => phoneItemHashes(shown), [shown]);
   const pv = progressVersion.value;
   const sv = serverViewed.value;
+  const sharedHistory = settings.value.sharedHistory !== false;
   const history = useMemo(() => {
     if (!isHistory) return [];
-    const rows = buildHistory(list, hfilter, continueWatching(list, 80), getLocalProgress, 80, { src: 'phone', name: phoneName });
-    const grouped = collapseHistoryShows(rows);
+    const rows = buildHistory(list, sharedHistory ? hfilter : 'phone', sharedHistory ? continueWatching(list, 80) : [], getLocalProgress, 80, { src: 'phone', name: phoneName });
+    const grouped = collapseHistoryShows(rows).filter((it) => !isHistoryHidden(showKeyOf(it.torrent)) && !isHistoryHidden(it.torrent.hash + ':' + it.fileIndex));
     return unfinishedFirst(grouped, (it: HistoryItem) => phoneHistoryFinished(it.progress.time, it.progress.duration, it.progress.open));
-  }, [list, isHistory, hfilter, pv, sv, phoneName]);
-  // «Продолжить просмотр»: what was started and not finished, newest first (the top of «Мои»)
-  const resume = useMemo(() => (isHistory ? [] : continueWatching(list, 12)), [list, isHistory, pv, sv]);
+  }, [list, isHistory, hfilter, pv, sv, phoneName, sharedHistory, hideTick]);
+  const resume = useMemo(() => {
+    if (isHistory) return [];
+    const hidden = hiddenHistory();
+    return continueCards(watchesOf(list, sharedHistory, phoneName), filesByShow(list), Date.now())
+      .filter((c) => !isHistoryHidden(c.showKey, hidden) && !isHistoryHidden(c.hash + ':' + c.fileIndex, hidden))
+      .slice(0, 12);
+  }, [list, isHistory, pv, sv, phoneName, sharedHistory, hideTick]);
 
   // nothing to show: no server, or the server failed and there is no cached list
   const unavailable = !c || (!!error && !list.length);
@@ -766,30 +848,47 @@ export function Library() {
               </div>
               <div class="m-resume-row m-scroll-x">
                 {resume.map((e) => {
-                  const tor = e.torrent;
-                  const file = filesOf(tor).find((f) => f.id === e.fileIndex);
-                  const isMovie = tor.category === 'movie' || playableFiles(filesOf(tor)).length <= 1;
-                  const { time, duration } = e.progress;
-                  const label = [file ? episodeLabel(file.path) : '', displayTitle(tor)].filter(Boolean).join(' · ');
+                  const tor = list.filter((x) => x.hash === e.hash)[0];
+                  if (!tor) return null;
+                  const label = [e.code, displayTitle(tor)].filter(Boolean).join(' · ');
+                  const line2 = e.kind === 'next' ? t('history.nextEp', { code: e.code }) : e.code;
+                  const line3 = e.kind === 'resume'
+                    ? (phoneRemainingLabel(e.time, e.duration, e.open) || (e.time > 0 ? positionLabel(e.time, e.duration) : ''))
+                    : '';
+                  const openCard = () => {
+                    const key = seriesKey(tor);
+                    if (key) navigate({ name: 'series', key });
+                    else navigate(routeForTorrent(tor));
+                  };
                   return (
-                    <button
-                      key={tor.hash}
-                      type="button"
-                      class="m-resume-card"
-                      data-resume-hash={tor.hash}
-                      aria-label={(tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')) + ': ' + label}
-                      onClick={() => void continueOnTv(tor.hash, e.fileIndex, time, duration, label)}
-                    >
-                      <Poster torrent={tor} class="m-poster-mini" />
-                      <span class="m-resume-text">
-                        <span class="m-resume-name"><ShortTitle tor={tor} /></span>
-                        <span class="m-muted m-small">{episodeLine(file ? file.path : '', isMovie)}</span>
-                        <span class="m-muted m-small">{phoneRemainingLabel(time, duration, e.progress.open) || (time > 0 ? positionLabel(time, duration) : '')}</span>
-                        <span class="m-bar-track thin">
-                          <span class="m-bar-fill" style={{ width: (duration > 0 ? Math.min(100, (time / duration) * 100) : 0) + '%' }} />
+                    <div key={e.showKey + ':' + e.fileIndex} class="m-resume-card" data-resume-hash={e.hash}>
+                      <button type="button" class="m-resume-poster" aria-label={displayTitle(tor)} onClick={openCard}>
+                        <Poster torrent={tor} class="m-poster-mini" />
+                        <span class="m-resume-play" aria-hidden="true">
+                          <Icon d={ICONS.play} size={18} />
                         </span>
-                      </span>
-                    </button>
+                        {e.kind === 'resume' && e.duration > 0 && (
+                          <span class="m-resume-edge">
+                            <span style={{ width: Math.min(100, (e.time / e.duration) * 100) + '%' }} />
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        class="m-resume-text"
+                        aria-label={(tvFirst() ? t('library.continueOnTv') : t('nav.continueRow')) + ': ' + label}
+                        onClick={() => void continueOnTv(e.hash, e.fileIndex, e.time, e.duration, label)}
+                        onContextMenu={(ev) => {
+                          ev.preventDefault();
+                          setResumeMenu(e);
+                        }}
+                      >
+                        <span class="m-resume-name"><TileName tor={tor} /></span>
+                        {line2 && <span class="m-muted m-small">{line2}</span>}
+                        {line3 && <span class="m-muted m-small">{line3}</span>}
+                        <span class="m-resume-src">{continueSourceLine(e.src, e.name, e.updated, Date.now())}</span>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -854,14 +953,13 @@ export function Library() {
                     return (
                       <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
                         <button type="button" class="m-vrow m-series-card" {...pressProps(it)}>
-                          <Poster torrent={it.lead} class="m-poster-row" morphKey={k} />
+                          <Poster torrent={it.lead} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(it.lead)) || undefined} />
                           {mark(it)}
                           <span class="m-vrow-text">
                             <span class="m-card-title"><TileName tor={it.named} g={it} /></span>
                             <span class="m-muted m-small m-vrow-meta">
-                              <span class="m-tile-meta">{tileMeta(it.named, it)}</span>
-                              <span>{fmtSize(groupSize(it))}</span>
-                              <SeriesTileBadge group={it} />
+                              <span class="m-tile-meta">{rowBottom(it)}</span>
+                              <span class="m-vrow-size">{fmtSize(groupSize(it))}</span>
                             </span>
                           </span>
                         </button>
@@ -871,22 +969,16 @@ export function Library() {
                   }
                   const film = it.kind === 'film' ? it : null;
                   const t = it.kind === 'film' ? it.lead : it.tor;
-                  const eps = film ? tp('series.releases', film.members.length) : episodesText(t);
-                  const q = film ? '' : qualityBadge(titleOf(t));
-                  const meta = tileMeta(t);
                   return (
                     <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
                       <button type="button" class={'m-vrow' + (film ? ' m-film-card' : '')} {...pressProps(it)}>
-                        <Poster torrent={t} class="m-poster-row" morphKey={k} />
+                        <Poster torrent={t} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(t)) || undefined} />
                         {mark(it)}
                         <span class="m-vrow-text">
                           <span class="m-card-title"><TileName tor={t} /></span>
                           <span class="m-muted m-small m-vrow-meta">
-                            {meta && <span class="m-tile-meta">{meta}</span>}
-                            <span>{fmtSize(film ? filmSize(film) : t.torrent_size || 0)}</span>
-                            {q && <span class="m-badge-inline">{q}</span>}
-                            {eps && <span>{eps}</span>}
-                            <SeriesTileBadge tor={t} />
+                            <span class="m-tile-meta">{rowBottom(it)}</span>
+                            <span class="m-vrow-size">{fmtSize(film ? filmSize(film) : t.torrent_size || 0)}</span>
                           </span>
                         </span>
                       </button>
@@ -904,21 +996,36 @@ export function Library() {
                   const g = it.kind === 'series' ? it : null;
                   const film = it.kind === 'film' ? it : null;
                   const tor = it.kind === 'series' ? it.named : it.kind === 'film' ? it.lead : it.tor;
-                  const meta = film ? [tileMeta(tor), tp('series.releases', film.members.length)].filter(Boolean).join(' · ') : tileMeta(tor, g);
+                  const meta = rowBottom(it);
+                  const q = qualityBadge(titleOf(tor));
                   return (
-                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}>
+                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
+                      onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
+                      onTouchEnd={(ev) => {
+                        const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
+                        const dx = ev.changedTouches[0].clientX - start;
+                        if (dx < -48) (ev.currentTarget as HTMLElement).dataset.open = '1';
+                        else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
+                      }}
+                    >
                       <button type="button" class={'m-crow' + (g ? ' m-series-card' : film ? ' m-film-card' : '')} {...pressProps(it)}>
                         {mark(it)}
-                        {/* two lines: the whole first for the name (up to two lines), the meta, the badge and the size under it */}
                         <span class="m-crow-main">
-                          <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
+                          <span class="m-crow-titleline">
+                            <span class="m-crow-title"><TileName tor={tor} g={g} /></span>
+                            {g ? <SeriesTileBadge group={g} split /> : <SeriesTileBadge tor={tor} split />}
+                          </span>
                           <span class="m-crow-sub">
                             {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
-                            {it.kind === 'series' ? <SeriesTileBadge group={it} /> : <SeriesTileBadge tor={tor} />}
+                            {q && <span class="m-badge-inline">{q}</span>}
                             <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : film ? filmSize(film) : tor.torrent_size || 0)}</span>
                           </span>
                         </span>
                       </button>
+                      <span class="m-swipe-actions">
+                        <button type="button" onClick={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
+                        <button type="button" onClick={() => { const f = filesOf(tor)[0]; if (f) markWatched(tor.hash, f.id); }}>{t('history.markWatched')}</button>
+                      </span>
                       {moreBtn(it)}
                     </div>
                   );
@@ -965,12 +1072,25 @@ export function Library() {
           onWatchTv={watchOnTv}
         />
       )}
+      {resumeMenu && (
+        <Sheet label={t('library.actions')} onClose={() => setResumeMenu(null)}>
+          <button type="button" class="m-opt" onClick={() => { hideHistory(resumeMenu.showKey); setHideTick((n) => n + 1); setResumeMenu(null); }}>
+            {t('history.removeItem')}
+          </button>
+          <button type="button" class="m-opt" onClick={() => { markWatched(resumeMenu.hash, resumeMenu.fileIndex); setResumeMenu(null); }}>
+            {t('history.markWatched')}
+          </button>
+          <button type="button" class="m-opt" onClick={() => { clearProgress(resumeMenu.hash, resumeMenu.fileIndex); setResumeMenu(null); }}>
+            {t('history.restart')}
+          </button>
+        </Sheet>
+      )}
       {viewSheet && (
         <Sheet label={t('nav.viewSort')} testId="PD54" onClose={() => setViewSheet(false)}>
           <div class="m-sheet-title">{t('nav.viewSort')}</div>
           <div class="m-section">{t('nav.sortHead')}</div>
           <div class="m-sub-pick" role="radiogroup" aria-label={t('nav.sortHead')} data-sheet-sort>
-            {sortOptions().map((o) => (
+            {phoneSortOptions().map((o) => (
               <button
                 key={o.value}
                 type="button"

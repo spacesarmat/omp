@@ -250,7 +250,8 @@ button, .m-btn {
 .m-empty { padding: 24px 0; text-align: center; }
 /* the button under a centred heading and text sits in the middle too («Подключить ТВ» on «Пульт») */
 .m-empty .m-btn { margin: 0 auto; }
-.m-library { overflow-x: clip; }
+.m-library { overflow-x: visible; }
+.m-lib-body { overflow-x: clip; }
 /* columns follow the width: a card stays at least 156px (large) or 104px (medium), a short row grows to fill */
 .m-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(156px, 100%), 1fr)); gap: 16px 12px; min-width: 0; width: 100%; }
 .m-grid.m-view-small { grid-template-columns: repeat(auto-fit, minmax(min(104px, 100%), 1fr)); gap: 12px 8px; }
@@ -1891,6 +1892,7 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-sh-meta { color: var(--text); opacity: 0.85; }
 .m-sh-overview { -webkit-line-clamp: 3; }
 .m-chip.m-chip-missing { opacity: 0.5; }
+.m-chip.m-chip-missing::before { content: '+ '; font-weight: 700; }
 .m-chip.m-chip-missing.on { opacity: 0.85; }
 .m-chip-plus { margin-right: 4px; font-weight: 700; }
 .m-sh-caption { margin-top: -4px; }
@@ -2230,7 +2232,7 @@ html.m-hint-hold .m-hint { display: none; }
   display: flex; gap: 10px; align-items: center; flex: 0 0 auto; width: 260px; max-width: 80vw;
   padding: 8px; border: none; border-radius: 14px; background: var(--panel); color: inherit; text-align: left;
 }
-.m-resume-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.m-resume-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; width: 100%; padding: 8px 2px 0; border: none; background: transparent; color: inherit; text-align: left; }
 .m-resume-name { font-weight: 700; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal; }
 .m-resume-card .m-bar-track { margin-top: 4px; }
 .m-release-switch { display: flex; align-items: center; gap: 4px; min-height: 40px; padding: 2px 0 2px 12px; border-radius: 12px; background: var(--panel); }
@@ -2328,6 +2330,52 @@ html.m-hint-hold .m-hint { display: none; }
   .m-now-bleed .m-now-head::before { display: none; }
   .m-now-title { text-shadow: 0 1px 2px #000; background: rgba(15, 17, 21, 0.72); padding: 2px 8px; border-radius: 8px; }
 }
+
+/* Phone catalog header: the switch row collapses, chips stay on an opaque bar. */
+.m-library { padding-top: calc(env(safe-area-inset-top) + 10px); }
+.m-library .m-lib-head { gap: 8px; max-height: 48px; overflow: hidden; transition: max-height .2s ease, opacity .2s ease; }
+.m-library[data-collapsed='1'] .m-lib-head { max-height: 0; opacity: 0; pointer-events: none; }
+.m-library .m-lib-head .m-icon-btn,
+.m-library .m-lib-head .m-tvchip {
+  width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 12px; background: transparent;
+}
+.m-library .m-lib-head .m-icon-btn.on { background: rgba(255, 255, 255, 0.06); }
+.m-library .m-lib-head .m-tvchip.on { width: 40px; height: 40px; border-radius: 12px; background: rgba(143, 227, 154, 0.18); color: #8FE39A; }
+.m-library .m-lib-head .m-seg-btn.on::before { box-shadow: none; background: #252A35; }
+.m-library .m-tabs { margin-top: 12px; background: var(--bg); box-shadow: 0 8px 14px rgba(0, 0, 0, 0.35); }
+.m-resume { margin-top: 20px; }
+.m-resume-card { flex: 0 0 64%; flex-direction: column; align-items: stretch; width: auto; max-width: none; padding: 0; background: transparent; }
+.m-resume-poster { position: relative; display: block; width: 100%; padding: 0; border: none; background: none; color: inherit; }
+.m-resume-poster .m-poster-mini { width: 100%; height: 148px; }
+.m-resume-play { position: absolute; left: 8px; bottom: 10px; width: 28px; height: 28px; border-radius: 14px; background: rgba(15, 17, 21, 0.72); color: #fff; display: flex; align-items: center; justify-content: center; }
+.m-resume-edge { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.25); }
+.m-resume-edge > span { display: block; height: 100%; background: var(--accent); }
+.m-resume-src { font-size: 12px; color: var(--muted); }
+.m-btn-two { display: flex; flex-direction: column; align-items: flex-start; height: auto; min-height: 52px; padding-top: 8px; padding-bottom: 8px; line-height: 1.2; }
+.m-btn-two .m-btn-sub { font-size: 12px; font-weight: 600; opacity: 0.8; }
+.m-dead-card { display: flex; flex-direction: column; }
+.m-series .m-tc-chips { -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent); }
+.m-sh-backdrop::after { background: linear-gradient(180deg, rgba(15, 17, 21, 0.2) 0%, rgba(15, 17, 21, 0.72) 46%, var(--bg, #0F1115) 100%); }
+.m-icon-btn.m-glass, .m-tc-back, .m-season-back { width: 40px; height: 40px; border-radius: 12px; background: rgba(15, 17, 21, 0.72); color: #fff; }
+.m-series .m-tc-cast, .m-series .m-tc-section { margin-top: 24px; }
+.m-eps-short .m-ep-row { min-height: 0; padding-top: 6px; padding-bottom: 6px; }
+.m-ep-row { display: flex; align-items: center; }
+.m-ep-num { width: 36px; flex-shrink: 0; font-size: 18px; font-weight: 700; }
+.m-ep-dur, .m-ep-size { flex-shrink: 0; white-space: nowrap; }
+.m-ep-row.is-watched { color: var(--muted); }
+.m-ep-row.is-watched .m-ep-check { color: var(--muted); }
+.m-ep-check { flex-shrink: 0; }
+.m-vrow .m-poster-row .m-badge { display: block; }
+.m-vrow-size { color: var(--muted); font-size: 12px; }
+.m-crow-titleline { display: flex; align-items: flex-start; }
+.m-crow-titleline .m-crow-title { flex: 1 1 auto; }
+.m-crow-titleline .m-new-badge { flex-shrink: 0; margin-left: 8px; }
+.m-new-badge.filled { background: var(--accent); color: #1A1400; }
+.m-new-badge.outline { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
+.m-row-wrap { position: relative; }
+.m-swipe-actions { display: none; }
+.m-row-wrap[data-open='1'] .m-swipe-actions { display: flex; }
+.m-info-btn { width: 28px; height: 28px; border-radius: 8px; }
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.

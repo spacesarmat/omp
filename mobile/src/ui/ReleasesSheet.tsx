@@ -50,6 +50,7 @@ export function ReleasesSheet({
   onClose,
   onDelete,
   canDelete,
+  onActions,
 }: {
   releases: Torrent[];
   /** The hash shown now. */
@@ -60,6 +61,8 @@ export function ReleasesSheet({
   canDelete?: (tor: Torrent) => boolean;
   /** «Найти другую раздачу»; omitted when there is nothing to search with. */
   onFind?: () => void;
+  /** The old «⋯» of the release line, now inside this sheet. */
+  onActions?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -108,13 +111,18 @@ export function ReleasesSheet({
           {t('nav.releasesFind')}
         </button>
       )}
+      {onActions && (
+        <button type="button" class="m-btn m-btn-secondary" data-release-actions onClick={() => { onClose(); onActions(); }}>
+          {t('library.actions')}
+        </button>
+      )}
     </Sheet>
   );
 }
 
 /** «Раздача: 1080p WEB-DL · 18 ГБ · Сменить»: the release shown, and the way to «Другая раздача». */
-export function ReleaseSwitch({ tor, code, onChange, onMore }: { tor: Torrent; code: string; onChange: () => void; onMore?: () => void }) {
-  const line = releaseLine(tor, false);
+export function ReleaseSwitch({ tor, code, onChange, onMore, note }: { tor: Torrent; code: string; onChange: () => void; onMore?: () => void; note?: string }) {
+  const line = [releaseLine(tor, false), note].filter(Boolean).join(' · ');
   return (
     <div class="m-release-switch tm" data-release-switch data-hash={tor.hash} data-code={code}>
       <span class="m-small m-release-switch-text">
