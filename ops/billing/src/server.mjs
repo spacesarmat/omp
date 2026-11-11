@@ -3153,6 +3153,8 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       // Stars paid during cutover stay unconfirmed so the next normal poll can apply them.
       // Later messages in the same queue, including /start admin_TOKEN, are still handled.
+      // The handled set exists only while a payment is held. Once Telegram has acked an update, it is dropped.
+      if (!heldStar && handledUpdates.size) handledUpdates.clear();
       for (let i = 0; i < updates.length; i++) {
         const u = updates[i];
         if (handledUpdates.has(u.update_id)) {
@@ -3167,7 +3169,7 @@ export async function pollBot(file, fetchImpl, opts) {
           offset = heldStar;
           continue;
         }
-        handledUpdates.add(u.update_id);
+        if (heldStar) handledUpdates.add(u.update_id);
         offset = heldStar || u.update_id + 1;
         if (u.channel_post) {
           // the release workflow pins its post: delete Telegram's «… pinned a message» line in the OMP channel
@@ -3345,6 +3347,8 @@ export async function pollBot(file, fetchImpl, opts) {
           }
         }
       }
+      // The held payment is still the first result, so Telegram returns at once. Pause instead of spinning.
+      if (heldStar) await sleep(5000);
     } catch (e) {
       pollFailed('loop');
       await sleep(5000);
