@@ -357,7 +357,7 @@ button, .m-btn {
 /* ---- «Каталог»: «Мои / Обзор» switch and «Обзор» → «Новинки» ---- */
 .m-seg { display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: var(--panel); }
 .m-seg-btn { flex: 1 1 0; min-height: 40px; border: none; border-radius: 10px; background: none; color: var(--muted); font-size: 15px; font-weight: 700; }
-.m-seg-btn.on { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 2px var(--accent); }
+.m-seg-btn.on { background: #252A35; color: var(--text); box-shadow: none; }
 /* kind chips stay one scrolling row */
 .m-search-kinds { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .m-search-kinds::-webkit-scrollbar { display: none; }
@@ -1621,9 +1621,9 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-sub-remove span { margin-top: 4px; }
 .m-sub-row { display: flex; align-items: center; gap: 10px; padding: 12px; border: none; border-radius: 14px; background: var(--panel); color: var(--text); font: inherit; text-align: left; }
 .clear-field { position: relative; display: block; flex: 1 1 auto; min-width: 0; max-width: 100%; }
-.clear-field > input { width: 100%; box-sizing: border-box; padding-right: 40px; }
+.clear-field > input { width: 100%; box-sizing: border-box; padding-right: 52px; }
 .field-clear {
-  position: absolute; top: 50%; right: 4px; width: 32px; height: 32px; margin-top: -16px; padding: 0;
+  position: absolute; top: 50%; right: 12px; width: 40px; height: 40px; margin-top: -20px; padding: 0;
   border: none; border-radius: 8px; background: transparent; color: var(--muted);
   display: flex; align-items: center; justify-content: center; z-index: 2;
 }
@@ -2400,6 +2400,17 @@ html.m-hint-hold .m-hint { display: none; }
 .m-resume-line .m-resume-card, .m-resume-row.m-resume-line { flex-direction: column; }
 .m-resume-row.m-resume-line { overflow: visible; }
 .m-resume-line { width: 100%; padding: 8px 0; border: none; border-bottom: 1px solid #252A35; background: none; color: inherit; text-align: left; }
+.m-poster-box { position: relative; display: block; }
+.m-poster-box .m-poster::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(180deg, transparent, rgba(15, 17, 21, 0.88)); }
+.m-poster-foot { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; color: #fff; font-size: 12px; font-weight: 700; }
+.m-poster-box .m-watch-tag { position: absolute; left: 8px; top: 36px; z-index: 1; max-width: 70%; }
+.m-poster-box .m-new-badge { position: absolute; right: 8px; bottom: 28px; z-index: 1; }
+.m-poster-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; height: 3px; background: rgba(255, 255, 255, 0.28); }
+.m-poster-bar > span { display: block; height: 100%; background: var(--accent); }
+.m-vrow-status { color: var(--muted); font-size: 12px; }
+.m-status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: #8FE39A; margin-left: 6px; }
+.m-card { height: 100%; }
+.m-card-title { min-height: 38px; }
 .m-watch-tag { align-self: flex-start; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-series-tail { margin-top: 8px; }
 

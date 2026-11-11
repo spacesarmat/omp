@@ -261,4 +261,4 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
 }
 
 /** About how many cards one phone screen holds per view (the spacing of «at most one ad per screen»). */
-export const PER_SCREEN = { large: 6, small: 12, list: 8, compact: 12, cols2: 6, cols3: 12, cols4: 20 };
+export const PER_SCREEN = { one: 3, large: 6, small: 12, list: 8, compact: 12, cols2: 6, cols3: 12, cols4: 20 };

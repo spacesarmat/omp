@@ -11,7 +11,7 @@ import { DialogBadge } from '../../testmode/badge';
 import { Qr } from '../../ui/Qr';
 import { useKeys } from '../../ui/keys';
 
-export type TvAdKind = 'large' | 'small' | 'list' | 'compact' | 'disc';
+export type TvAdKind = 'one' | 'large' | 'small' | 'list' | 'compact' | 'disc';
 
 const SHOWN_MS = 1000;
 

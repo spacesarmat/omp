@@ -5,7 +5,7 @@ import { t, fmtDuration } from '../i18n';
 import { deriveName, displayTitle, fileSeasons, isPlaceholderTitle, torrentFiles, yearOf } from './torrentName';
 import { parseEpisodeRange, SEASON_WORDS } from '../monitor/episodes';
 
-export type LibraryView = 'large' | 'small' | 'list' | 'compact';
+export type LibraryView = 'one' | 'large' | 'small' | 'list' | 'compact';
 
 export const viewOptions = (): { value: LibraryView; label: string }[] => [
   { value: 'large', label: t('library.viewLarge') },
@@ -26,7 +26,7 @@ export function nextView(v: LibraryView): LibraryView {
 }
 
 // smallest to biggest: what a two-finger pinch steps through (spread = bigger)
-export const BY_SIZE: LibraryView[] = ['compact', 'list', 'small', 'large'];
+export const BY_SIZE: LibraryView[] = ['compact', 'list', 'small', 'large', 'one'];
 
 /** One step bigger (dir 1) or smaller (dir -1); the ends of the range stay put. */
 export function zoomView(v: LibraryView, dir: 1 | -1): LibraryView {
@@ -40,7 +40,15 @@ export function viewLabel(v: LibraryView): string {
 }
 
 /** Phone catalog («Мои» and «Обзор»): the same four modes in portrait and landscape. TV keeps viewOptions(). */
+export const PHONE_VIEWS: LibraryView[] = ['one', 'large', 'small', 'list', 'compact'];
+
+export function nextPhoneView(v: LibraryView): LibraryView {
+  const i = PHONE_VIEWS.indexOf(v);
+  return PHONE_VIEWS[(i < 0 ? 0 : i + 1) % PHONE_VIEWS.length];
+}
+
 export const phoneViewOptions = (): { value: LibraryView; label: string }[] => [
+  { value: 'one', label: t('library.viewCardsOne') },
   { value: 'large', label: t('library.viewCardsLarge') },
   { value: 'small', label: t('library.viewCardsMedium') },
   { value: 'list', label: t('library.viewListPictures') },

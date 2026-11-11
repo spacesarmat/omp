@@ -21,9 +21,9 @@ import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
 import { TvAdCell } from './TvAdCell';
 
 /** Tiles per row. The safe width is 1728px (96-1824); the CSS column count matches. */
-export const VIEW_COLS: { [v in LibraryView]: number } = { large: 6, small: 9, list: 1, compact: 1 };
+export const VIEW_COLS: { [v in LibraryView]: number } = { one: 4, large: 6, small: 9, list: 1, compact: 1 };
 /** The height of a row of each view, px (poster, title, meta and the gap under it). */
-const ROW_PX: { [v in LibraryView]: number } = { large: 560, small: 420, list: 140, compact: 70 };
+const ROW_PX: { [v in LibraryView]: number } = { one: 720, large: 560, small: 420, list: 140, compact: 70 };
 
 interface ItemProps {
   t: Torrent;

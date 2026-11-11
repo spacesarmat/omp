@@ -219,7 +219,8 @@ describe('Library series card', () => {
     expect(cards().length).toBe(4);
     const card = seriesCard()!;
     expect(card.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
-    expect(card.querySelector('.m-badge')!.textContent).toBe('2 сезона');
+    expect(card.querySelector('.m-poster-foot')!.textContent).toBe('2 сезона · 4 серии');
+    expect(card.querySelector('.m-badge')!.textContent).not.toBe('2 сезона');
     act(() => updateSettings({ libraryView: 'small' }));
     expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
     for (const v of ['list', 'compact'] as const) {
@@ -239,7 +240,6 @@ describe('Library series card', () => {
     mount();
     await flush();
     const card = seriesCard()!;
-    expect(card.querySelector('.m-badge')!.textContent).toBe('2 раздачи');
     expect(card.querySelector('.m-card-title')!.textContent).toBe('Повелитель духов');
     expect(card.textContent).not.toContain('· 2 раздачи');
   });
@@ -316,7 +316,7 @@ describe('Library series card', () => {
     mount();
     await flush();
     expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
-    expect(seriesCard()!.querySelector('.m-badge')!.textContent).toBe('2 seasons');
+    expect(seriesCard()!.querySelector('.m-poster-foot')!.textContent).toBe('2 seasons · 4 episodes');
     longPress(seriesCard()!);
     expect(btn('Delete series (2 torrents)')).toBeTruthy();
   });

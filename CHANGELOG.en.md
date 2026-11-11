@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
+
 ## 0.30.1-beta.3
 
 - [phone] Catalog header hides with 24px hysteresis and the chips stay. Continue layout sits on the title row. History link is gone. List swipe uses dark, red and green actions and only one open row

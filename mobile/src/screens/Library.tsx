@@ -22,12 +22,12 @@ import { torrents, libraryTab, refreshTorrents, torrentsAt, autoFillPosters } fr
 import { continueWatching, refreshViewed, progressVersion, serverViewed, getLocalProgress, localFileIds, markWatched, saveProgress, MIN_RESUME, WATCHED_RATIO } from '../../../src/store/progress';
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
 import { continueCards, continueSourceLine, isLocalWatch, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
-import { movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
+import { continueStatus, movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
 import { nextHeaderCollapsed } from '../../../src/lib/headerCollapse';
 import { hiddenHistory, hideHistory, isHistoryHidden } from '../../../src/store/historyHide';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, phoneSortOptions } from '../../../src/lib/librarySearch';
-import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
+import { libraryTabs, BY_SIZE, phoneViewLabel, phoneViewOptions, nextPhoneView, isRowCatalogView, episodeLine, positionLabel, phoneRemainingLabel, phoneHistoryFinished, libraryTitle, type LibraryTab } from '../../../src/lib/libraryView';
 import { categoryOf } from '../../../src/lib/category';
 import { baseName, episodeLabel, fileKind, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
@@ -478,6 +478,12 @@ export function Library() {
       .filter((c) => !isHistoryHidden(c.showKey, hidden) && !isHistoryHidden(c.hash + ':' + c.fileIndex, hidden))
       .slice(0, 12);
   }, [list, isHistory, pv, sv, phoneName, sharedHistory, hideTick]);
+  const statusFor = (key: string) => {
+    const hit = resume.filter((c) => c.showKey === key)[0];
+    if (!hit) return '';
+    const left = hit.kind === 'resume' ? (phoneRemainingLabel(hit.time, hit.duration, hit.open) || '') : '';
+    return continueStatus(hit.code, left) || t('history.watching');
+  };
 
   // nothing to show: no server, or the server failed and there is no cached list
   const unavailable = !c || (!!error && !list.length);
@@ -495,11 +501,12 @@ export function Library() {
   }
 
   // poster grids: columns from the content width, the same rule in portrait and landscape
-  const gridView = mine && !isHistory && (view === 'large' || view === 'small');
+  const gridView = mine && !isHistory && (view === 'one' || view === 'large' || view === 'small');
   const gridMode: GridMode = view === 'small' ? 'small' : 'large';
+  const fixedCols = view === 'one' ? 1 : 0;
   const gridWidth = useContentWidth(gridRef, gridView);
   const gridColsNow = gridView && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
-  const gridStyle = gridView ? { gridTemplateColumns: gridTemplate(gridMode) } : undefined;
+  const gridStyle = gridView ? { gridTemplateColumns: fixedCols ? 'repeat(' + fixedCols + ', minmax(0, 1fr))' : gridTemplate(gridMode) } : undefined;
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
   const pinch = usePinchStep(bodyRef, {
@@ -1073,10 +1080,8 @@ export function Library() {
                           {mark(it)}
                           <span class="m-vrow-text">
                             <span class="m-card-title"><TileName tor={it.named} g={it} /></span>
-                            <span class="m-muted m-small m-vrow-meta">
-                              <span class="m-tile-meta">{rowBottom(it)}</span>
-                              <span class="m-vrow-size">{fmtSize(groupSize(it))}</span>
-                            </span>
+                            {statusFor(it.key) && <span class="m-vrow-status">{statusFor(it.key)}</span>}
+                            <span class="m-muted m-small m-tile-meta">{rowBottom(it)}</span>
                           </span>
                         </button>
                         {swipeBtns(it.lead, it.key)}
@@ -1099,12 +1104,10 @@ export function Library() {
                       <button type="button" class={'m-vrow' + (film ? ' m-film-card' : '')} {...pressProps(it)}>
                         <Poster torrent={t} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(t)) || undefined} />
                         {mark(it)}
-                        <span class="m-vrow-text">
+                          <span class="m-vrow-text">
                           <span class="m-card-title"><TileName tor={t} /></span>
-                          <span class="m-muted m-small m-vrow-meta">
-                            <span class="m-tile-meta">{rowBottom(it)}</span>
-                            <span class="m-vrow-size">{fmtSize(film ? filmSize(film) : t.torrent_size || 0)}</span>
-                          </span>
+                          {statusFor(showKeyOf(t)) && <span class="m-vrow-status">{statusFor(showKeyOf(t))}</span>}
+                          <span class="m-muted m-small m-tile-meta">{rowBottom(it)}</span>
                         </span>
                       </button>
                       {swipeBtns(t, showKeyOf(t))}
@@ -1145,6 +1148,7 @@ export function Library() {
                             {meta && <span class="m-muted m-small m-crow-meta m-tile-meta">{meta}</span>}
                             {q && <span class="m-badge-inline">{q}</span>}
                             <span class="m-muted m-small m-crow-size">{fmtSize(it.kind === 'series' ? groupSize(it) : film ? filmSize(film) : tor.torrent_size || 0)}</span>
+                            {statusFor(g ? g.key : showKeyOf(tor)) && <span class="m-status-dot" aria-hidden="true" />}
                           </span>
                         </span>
                       </button>
@@ -1166,18 +1170,22 @@ export function Library() {
                   const g = it.kind === 'series' ? it : null;
                   const film = it.kind === 'film' ? it : null;
                   const tor = it.kind === 'torrent' ? it.tor : it.lead;
-                  const meta = g ? '' : tileMeta(tor);
+                  const show = g ? g.key : showKeyOf(tor);
+                  const hit = resume.filter((c) => c.showKey === show)[0];
+                  const foot = rowBottom(it);
                   return (
                     <button type="button" class={'m-card' + (g ? ' m-series-card' : film ? ' m-film-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
-                      {/* a film with several releases: «2 раздачи» on the poster, as a series card has its count */}
-                      <Poster torrent={tor} morphKey={k} badge={g ? groupLabel(g) : film ? tp('series.releases', film.members.length) : undefined} initial />
+                      <span class="m-poster-box">
+                        <Poster torrent={tor} morphKey={k} initial />
+                        {foot && <span class="m-poster-foot">{foot}</span>}
+                        {hit && <span class="m-watch-tag">{statusFor(show)}</span>}
+                        {hit && hit.duration > 0 && (
+                          <span class="m-poster-bar"><span style={{ width: Math.min(100, (hit.time / hit.duration) * 100) + '%' }} /></span>
+                        )}
+                        {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
+                      </span>
                       {mark(it)}
                       <span class="m-card-title"><TileName tor={g ? g.named : tor} g={g} /></span>
-                      {/* a series card has its count on the poster badge; an empty line keeps the cards of a row one height (QA B15) */}
-                      {meta ? <span class="m-muted m-card-meta m-tile-meta">{meta}</span> : <span class="m-card-meta-pad" aria-hidden="true" />}
-                      {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
-                      {resume.some((c) => c.showKey === (g ? g.key : showKeyOf(tor))) && <span class="m-watch-tag">{t('history.watching')}</span>}
-                      {view === 'large' && <span class="m-muted m-small">{fmtSize(g ? groupSize(g) : film ? filmSize(film) : tor.torrent_size || 0)}</span>}
                     </button>
                   );
                 })}
