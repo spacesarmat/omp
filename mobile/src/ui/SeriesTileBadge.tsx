@@ -19,7 +19,7 @@ export function SeriesTileBadge({ group, tor, split }: { group?: SeriesGroup; to
     const node = ref.current;
     if (!g || !unknown || !node || typeof IntersectionObserver === 'undefined') return;
     // the badge is empty until known: the tile it sits in is what comes into view
-    const target = node.parentElement || node;
+    const target = node.closest('[data-anchor]') || node.parentElement || node;
     const io = new IntersectionObserver((entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
       io.disconnect();
