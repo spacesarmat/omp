@@ -771,7 +771,7 @@ export function Add({
             <button type="button" class="tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
             <button type="button" onClick={() => fileRef.current && fileRef.current.click()}>{t('add.openTorrent')}</button>
           </div>
-          <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden onChange={(e) => {
+          <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden aria-label={t('add.openTorrent')} onChange={(e) => {
             const f = (e.target as HTMLInputElement).files && (e.target as HTMLInputElement).files![0];
             if (f) void onTorrentFile(f);
           }} />

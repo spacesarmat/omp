@@ -391,7 +391,7 @@ describe('Add category', () => {
     expect(open.getAttribute('aria-expanded')).toBe('false');
     expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам']);
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам', 'Открыть .torrent файл']);
   });
 
   it('a tap on the link opens the magnet field in place; the category chips come once a valid link is entered', () => {
