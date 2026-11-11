@@ -393,24 +393,24 @@ export function seedDisplay(r: { Seed: number; Peer: number }, enabled: boolean,
   return { mode: 'live', seeders: entry.seeders, leechers: entry.leechers };
 }
 
-/** Indexer count, not a live scrape: «44 сида · по данным трекера». Empty when the feed had no seeds. */
-function trackerSeedLine(prefix: string, n: number): string {
+/** Indexer count. The phone line is just the count. The TV line still says it came from the tracker. */
+function trackerSeedLine(prefix: string, n: number, fromTracker: boolean): string {
   if (n <= 0) return '';
-  return prefix + seedsText(n) + ' · ' + t('sources.trackerData');
+  return prefix + seedsText(n) + (fromTracker ? ' · ' + t('sources.trackerData') : '');
 }
 
-/** Phone line: live "N seeds · M leechers"; indexer counts say they are tracker data. Empty when search had no count. */
+/** Phone line: live "N seeds · M leechers". Indexer counts stay a plain number. Empty when search had no count. */
 export function phoneSeedBits(view: SeedDisplay): { text: string; mode: SeedMode } {
   if (view.mode === 'live') return { text: seedsText(view.seeders) + ' · ' + tp('sources.leechers', view.leechers), mode: 'live' };
-  if (view.mode === 'approx') return { text: trackerSeedLine('~', view.seeders), mode: 'approx' };
-  return { text: trackerSeedLine('', view.seeders), mode: view.mode };
+  if (view.mode === 'approx') return { text: trackerSeedLine('~', view.seeders, false), mode: 'approx' };
+  return { text: trackerSeedLine('', view.seeders, false), mode: view.mode };
 }
 
-/** TV line: live «↑152 ↓3»; indexer counts use the same tracker phrase as the phone. The date is shown separately. */
+/** TV line: live «↑152 ↓3»; indexer counts still say they came from the tracker. */
 export function tvSeedLabel(view: SeedDisplay): string {
   const n = view.seeders || 0;
   if (view.mode === 'live') return '↑' + n + ' ↓' + (view.leechers || 0);
-  return trackerSeedLine(view.mode === 'approx' ? '~' : '', n);
+  return trackerSeedLine(view.mode === 'approx' ? '~' : '', n, true);
 }
 
 export interface ScrapeJob {

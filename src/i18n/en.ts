@@ -2179,6 +2179,8 @@ export const en: EnDict<typeof ru> = {
     badLink: 'Paste a magnet link or a 40-character hash',
     magnetLabel: 'Magnet link or hash',
     byMagnet: 'Add by magnet link',
+    pasteMagnet: 'Paste magnet',
+    openTorrent: 'Open a .torrent file',
     openSourceSettings: 'Open {name} settings',
     fixHint: 'Sign in on the site or turn on the check bypass - both are on its page.',
     sourcesAll: 'All sources · {n}',

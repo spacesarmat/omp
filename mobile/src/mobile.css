@@ -2281,7 +2281,12 @@ html.m-hint-hold .m-hint { display: none; }
 .m-tv-steps { white-space: pre-line; }
 .m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-ep-fold { align-self: flex-start; }
-.m-feed-banner { display: flex; flex-direction: column; gap: 8px; }
+.m-feed-banner { display: flex; align-items: center; }
+.m-add-plus { position: relative; display: inline-block; }
+.m-add-plus-menu { display: none; position: absolute; z-index: 3; left: 0; top: 40px; min-width: 220px; padding: 6px; border-radius: 12px; background: #252A35; }
+.m-add-plus[data-open='1'] .m-add-plus-menu { display: flex; flex-direction: column; }
+.m-add-plus-menu button { min-height: 40px; padding: 0 12px; border: none; background: transparent; color: var(--text); text-align: left; }
+.m-seeds-low { color: #E07A3D; }
 .m-feed-banner-actions { display: flex; gap: 8px; align-items: center; }
 .m-rc-bottom > .m-rc-btn { display: none; }
 .m-rc-watch, .m-rc-more { position: relative; z-index: 1; pointer-events: auto; }
