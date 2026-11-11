@@ -1,9 +1,9 @@
-import type { DesktopDesignTarget, DesignFormat, DesignState, ThemeDocument } from './schema.ts';
+import type { DesignTarget, DesignFormat, DesignState, ThemeDocument } from './schema.ts';
 import { resolveThemeTokens, type ThemeContext } from './theme.ts';
 
 export interface DesignIssue {
   code: 'CONTRAST' | 'FONT_SIZE';
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: string;
   elementId?: string;
   format: DesignFormat;
@@ -59,7 +59,7 @@ export function checkTheme(theme: ThemeDocument, contexts: ThemeContext[]): Desi
         ...base,
         code: 'FONT_SIZE',
         token: '--omp-size-font',
-        message: 'Desktop font size must be at least 14px',
+        message: 'Editor font size must be at least 14px',
       });
     }
   }

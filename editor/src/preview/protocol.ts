@@ -1,5 +1,5 @@
 import type { InteractionTrace } from '../../../design/interaction.ts';
-import type { DesktopDesignTarget, DesignFormat, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
 import { isDesktopRouteId, type DesktopRouteId } from '../../../desktop/src/shell/routes';
 
 interface Envelope {
@@ -8,12 +8,13 @@ interface Envelope {
 }
 
 export interface PreviewConfiguration {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   route: DesktopRouteId;
   format: DesignFormat;
   language: 'ru' | 'en';
   mode: 'design' | 'logic' | 'simulate';
   serverConnected: boolean;
+  state: DesignState;
   theme: ThemeDocument;
   flow: FlowDocument;
 }

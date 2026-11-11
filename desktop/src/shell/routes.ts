@@ -11,12 +11,12 @@ export const DESKTOP_ROUTES: ReadonlyArray<{ id: DesktopRouteId; label: string; 
 ];
 
 export const DESKTOP_SCREEN_SUPPORT: Record<DesktopRouteId, DesktopSupportLevel> = {
-  library: 'preview',
-  news: 'preview',
-  search: 'preview',
-  remote: 'preview',
+  library: 'theme',
+  news: 'theme',
+  search: 'theme',
+  remote: 'theme',
   settings: 'logic',
-  connect: 'preview',
+  connect: 'theme',
 };
 
 export function isDesktopRouteId(value: string): value is DesktopRouteId {

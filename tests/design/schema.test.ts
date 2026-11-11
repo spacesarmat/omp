@@ -74,4 +74,11 @@ describe('design document schema', () => {
     });
     expect(() => parseFlowDocument(badFlow)).toThrow(DesignValidationError);
   });
+
+  it('requires complete base tokens but permits partial override maps', () => {
+    expect(() => parseThemeDocument({ ...createDefaultTheme(BASE), tokens: {} })).toThrow(DesignValidationError);
+    const partial = createDefaultTheme(BASE);
+    partial.overrides.push({ id: 'partial', scope: 'element', elementId: 'sidebar', tokens: { '--omp-color-panel': '#112233' } });
+    expect(parseThemeDocument(partial).overrides[0].tokens).toEqual({ '--omp-color-panel': '#112233' });
+  });
 });

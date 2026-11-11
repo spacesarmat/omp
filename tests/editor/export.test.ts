@@ -37,9 +37,12 @@ describe('design export', () => {
     const result = await exportDraft({ root, draft });
     expect(result.files).toEqual([
       'design/flows/desktop-default.json',
+      'design/generated/android-phone.css',
+      'design/generated/android-tv.css',
       'design/generated/desktop-linux.css',
       'design/generated/desktop-macos.css',
       'design/generated/desktop-windows.css',
+      'design/generated/lg-webos.css',
       'design/themes/default.json',
     ]);
     expect(result.releaseIntents).toEqual([{ target: 'desktop-windows', version: '0.20.12-beta.3', channel: 'beta' }]);
@@ -99,6 +102,40 @@ describe('design export', () => {
       screenId: 'settings',
       elementId: 'nav-library',
       tokens: { '--omp-color-accent': '#000000' },
+    });
+    await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DESIGN_ISSUES' });
+    expect(await readdir(join(root, 'design'))).toEqual([]);
+  });
+
+  it('checks phone legacy page contrast before export', async () => {
+    const { root, head } = await makeRepo();
+    const draft = createDefaultDraft('draft-1', head);
+    draft.target = 'android-phone';
+    draft.screenId = 'library';
+    draft.theme.overrides.push({
+      id: 'bad-phone-contrast',
+      scope: 'element',
+      target: 'android-phone',
+      screenId: 'library',
+      elementId: 'legacy-page',
+      tokens: { '--omp-color-background': '#0F1115', '--omp-color-text': '#0F1115' },
+    });
+    await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DESIGN_ISSUES' });
+    expect(await readdir(join(root, 'design'))).toEqual([]);
+  });
+
+  it('checks phone button contrast before export', async () => {
+    const { root, head } = await makeRepo();
+    const draft = createDefaultDraft('draft-1', head);
+    draft.target = 'android-phone';
+    draft.screenId = 'settings';
+    draft.theme.overrides.push({
+      id: 'bad-phone-button',
+      scope: 'element',
+      target: 'android-phone',
+      screenId: 'settings',
+      elementId: 'button',
+      tokens: { '--omp-color-background': '#0F1115', '--omp-color-accent': '#0F1115' },
     });
     await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'DESIGN_ISSUES' });
     expect(await readdir(join(root, 'design'))).toEqual([]);

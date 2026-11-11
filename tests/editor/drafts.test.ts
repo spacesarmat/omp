@@ -83,6 +83,18 @@ describe('DraftController', () => {
     expect(controller.draft.snapshots[0].id).toBe(first.id);
   });
 
+  it('deletes only the selected snapshot and restores it through undo', () => {
+    const controller = create();
+    const first = controller.snapshot('first');
+    const second = controller.snapshot('second');
+
+    expect(controller.deleteSnapshot(first.id)).toBe(true);
+    expect(controller.deleteSnapshot('missing')).toBe(false);
+    expect(controller.draft.snapshots.map((entry) => entry.id)).toEqual([second.id]);
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.snapshots.map((entry) => entry.id)).toEqual([first.id, second.id]);
+  });
+
   it('keeps baseCommit immutable through generic updates', () => {
     const controller = create();
     expect(() => controller.update((draft) => ({ ...draft, baseCommit: '1111111111111111111111111111111111111111' }))).toThrow('BASE_COMMIT_IMMUTABLE');
@@ -125,7 +137,7 @@ describe('DraftController', () => {
       throw new Error('offline');
     } });
     controller.upsertOverride({ id: 'local', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } });
-    await controller.flush();
+    await expect(controller.flush()).rejects.toThrow('offline');
     expect(controller.lastError).toBe('offline');
     expect(controller.draft.theme.overrides[0].id).toBe('local');
   });
@@ -169,5 +181,17 @@ describe('useDraftController', () => {
     act(() => render(null, host));
     expect(unsubscribe).toHaveBeenCalledTimes(1);
     expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('rerenders when the controller notifies a change', () => {
+    const controller = create();
+    function View() {
+      const draft = useDraftController(controller);
+      return h('span', null, draft.theme.overrides.length);
+    }
+    const host = document.createElement('div');
+    act(() => render(h(View, {}), host));
+    act(() => controller.upsertOverride({ id: 'win', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-accent': '#111111' } }));
+    expect(host.textContent).toBe('1');
   });
 });

@@ -1,26 +1,28 @@
 import { useState } from 'preact/hooks';
-import type { DesktopDesignTarget, DesignFormat, DesignState } from '../../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState } from '../../../design/schema.ts';
 import { buildOverride, findDesignElement, overrideId, type EditorOverrideScope } from '../../../design/catalog';
 import { resolveThemeTokens } from '../../../design/theme';
 import { checkTheme } from '../../../design/theme-checks';
 import { DESKTOP_SCREEN_SUPPORT, type DesktopRouteId } from '../../../desktop/src/shell/routes';
+import { isDesktopTarget } from '../../shared/routes';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { PropertyField } from './PropertyField';
 
 export interface ThemeInspectorProps {
   controller: DraftController;
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: DesktopRouteId;
   elementId: string;
   format: DesignFormat;
+  state?: DesignState;
+  onStateChange?(state: DesignState): void;
 }
 
-export function ThemeInspector({ controller, target, screenId, elementId, format }: ThemeInspectorProps) {
+export function ThemeInspector({ controller, target, screenId, elementId, format, state = 'default', onStateChange = () => undefined }: ThemeInspectorProps) {
   const draft = useDraftController(controller);
   const [scope, setScope] = useState<EditorOverrideScope>('platform');
-  const [state, setState] = useState<DesignState>('default');
-  if (DESKTOP_SCREEN_SUPPORT[screenId] === 'preview') return <p class="editor-notice">preview only</p>;
+  if (isDesktopTarget(target) && DESKTOP_SCREEN_SUPPORT[screenId] === 'preview') return <p class="editor-notice">preview only</p>;
   const definition = findDesignElement(elementId);
   if (!definition) return <p class="editor-notice">Unknown element: {elementId}</p>;
   const identity = { scope, target, screenId, elementId, format, state };
@@ -54,7 +56,7 @@ export function ThemeInspector({ controller, target, screenId, elementId, format
       </label>
       {scope === 'state' && (
         <label>Состояние
-          <select data-testid="state" value={state} onChange={(event) => setState(event.currentTarget.value as DesignState)}>
+          <select data-testid="state" value={state} onChange={(event) => onStateChange(event.currentTarget.value as DesignState)}>
             {(['default', 'hover', 'focus', 'active', 'disabled', 'error'] as DesignState[]).map((item) => <option value={item}>{item}</option>)}
           </select>
         </label>

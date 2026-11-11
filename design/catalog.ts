@@ -1,4 +1,4 @@
-import type { DesignFormat, DesignState, DesktopDesignTarget, ThemeOverride, TokenMap } from './schema.ts';
+import type { DesignFormat, DesignState, DesignTarget, ThemeOverride, TokenMap } from './schema.ts';
 
 export type DesignPropertyKind = 'color' | 'px';
 
@@ -56,6 +56,77 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
     ],
   },
+  {
+    id: 'server-card',
+    componentId: 'card',
+    label: 'Карточка сервера',
+    fields: [
+      { token: '--omp-color-panel', label: 'Фон карточки', kind: 'color' },
+      { token: '--omp-color-muted', label: 'Дополнительный текст', kind: 'color' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+      { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
+    ],
+  },
+  {
+    id: 'legacy-page',
+    componentId: 'legacy-page',
+    label: 'Шаблон страницы',
+    fields: [
+      { token: '--omp-color-background', label: 'Фон страницы', kind: 'color' },
+      { token: '--omp-color-panel', label: 'Фон панелей', kind: 'color' },
+      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-color-accent', label: 'Акцент', kind: 'color' },
+      { token: '--omp-color-muted', label: 'Дополнительный текст', kind: 'color' },
+      { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
+      { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+    ],
+  },
+  {
+    id: 'button',
+    componentId: 'button',
+    label: 'Кнопка',
+    fields: [
+      { token: '--omp-color-accent', label: 'Акцент', kind: 'color' },
+      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+      { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
+    ],
+  },
+  {
+    id: 'input',
+    componentId: 'input',
+    label: 'Поле ввода',
+    fields: [
+      { token: '--omp-color-panel', label: 'Фон поля', kind: 'color' },
+      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+    ],
+  },
+  {
+    id: 'card',
+    componentId: 'card',
+    label: 'Карточка',
+    fields: [
+      { token: '--omp-color-panel', label: 'Фон карточки', kind: 'color' },
+      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+      { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
+    ],
+  },
+  {
+    id: 'choice-row',
+    componentId: 'choice-row',
+    label: 'Строка настройки',
+    fields: [
+      { token: '--omp-color-panel', label: 'Фон строки', kind: 'color' },
+      { token: '--omp-color-text', label: 'Текст', kind: 'color' },
+      { token: '--omp-color-accent', label: 'Акцент', kind: 'color' },
+      { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
+      { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
+    ],
+  },
 ];
 
 export function findDesignElement(id: string): DesignElementDef | undefined {
@@ -63,11 +134,19 @@ export function findDesignElement(id: string): DesignElementDef | undefined {
   return DESIGN_ELEMENTS.find((entry) => entry.id === id);
 }
 
+export function isDesignElementAvailable(id: string, screenId: string, target: DesignTarget = 'desktop-windows'): boolean {
+  if (['button', 'input', 'card', 'choice-row'].includes(id)) return !target.startsWith('desktop-');
+  if (!target.startsWith('desktop-')) return ['legacy-page', 'button', 'input', 'card', 'choice-row'].includes(id);
+  if (id === 'legacy-page') return screenId !== 'settings';
+  if (id === 'server-card' || id === 'settings-continue') return screenId === 'settings';
+  return true;
+}
+
 export type EditorOverrideScope = 'platform' | 'screen' | 'element' | 'format' | 'state';
 
 export interface OverrideIdentity {
   scope: EditorOverrideScope;
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: string;
   elementId: string;
   format: DesignFormat;

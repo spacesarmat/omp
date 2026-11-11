@@ -1,6 +1,6 @@
 import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
-import type { DesktopDesignTarget, DesignFormat, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
+import type { DesignTarget, DesignFormat, DesignState, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
 import { dispatchInteraction, type InteractionTrace } from '../../../design/interaction.ts';
 import { generateThemeCss } from '../../../design/theme.ts';
 import { DesktopShell } from '../shell/DesktopShell';
@@ -9,12 +9,13 @@ import { installPreviewFixture } from './fixtures';
 import { PreviewRoute } from './previewRoutes';
 
 export interface DesktopPreviewProps {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   route: DesktopRouteId;
   format: DesignFormat;
   language: 'ru' | 'en';
   mode: 'design' | 'logic' | 'simulate';
   serverConnected: boolean;
+  state: DesignState;
   theme: ThemeDocument;
   flow: FlowDocument;
   onSelect(elementId: string): void;

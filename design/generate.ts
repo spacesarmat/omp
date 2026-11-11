@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DESKTOP_DESIGN_TARGETS, type DesktopDesignTarget, type ThemeDocument } from './schema.ts';
+import { DESIGN_TARGETS, type DesignTarget, type ThemeDocument } from './schema.ts';
 import { generateThemeCss } from './theme.ts';
 import { parseThemeDocument } from './validation.ts';
 
@@ -14,7 +14,7 @@ interface GeneratedContent extends GeneratedFile {
   content: string;
 }
 
-function outputName(target: DesktopDesignTarget): string {
+function outputName(target: DesignTarget): string {
   return `design/generated/${target}.css`;
 }
 
@@ -39,7 +39,7 @@ async function expectedFiles(root: string): Promise<GeneratedContent[]> {
   const themes = await sourceThemes(root);
   const files: GeneratedContent[] = [];
   for (const theme of themes) {
-    for (const target of DESKTOP_DESIGN_TARGETS) {
+    for (const target of DESIGN_TARGETS) {
       const content = generateThemeCss(theme, target);
       files.push({
         path: outputName(target),

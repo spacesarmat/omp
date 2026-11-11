@@ -1,7 +1,7 @@
-import type { DesktopDesignTarget, DesignFormat, DesignState, OverrideScope, ThemeDocument, ThemeOverride, TokenMap } from './schema';
+import type { DesignTarget, DesignFormat, DesignState, OverrideScope, ThemeDocument, ThemeOverride, TokenMap } from './schema';
 
 export interface ThemeContext {
-  target: DesktopDesignTarget;
+  target: DesignTarget;
   screenId: string;
   componentId?: string;
   elementId?: string;
@@ -52,7 +52,7 @@ function declarations(tokens: TokenMap): string {
     .join('\n');
 }
 
-export function generateThemeCss(theme: ThemeDocument, target: DesktopDesignTarget): string {
+export function generateThemeCss(theme: ThemeDocument, target: DesignTarget): string {
   const blocks = [`:root {\n${declarations(theme.tokens)}\n}`];
   const overrides = theme.overrides
     .map((override, index) => ({ override, index }))

@@ -72,7 +72,7 @@ function oneOf<T extends string>(value: unknown, values: readonly T[], path: str
   return value as T;
 }
 
-function tokens(value: unknown, path: string): TokenMap {
+function tokens(value: unknown, path: string, complete = false): TokenMap {
   const source = plain(value, path, [...COLORS, ...SIZES]);
   const result: TokenMap = {};
   for (const [key, raw] of Object.entries(source)) {
@@ -86,6 +86,11 @@ function tokens(value: unknown, path: string): TokenMap {
       result[key] = raw;
     } else {
       fail(`${path}.${key}`, 'unknown design token');
+    }
+  }
+  if (complete) {
+    for (const key of [...COLORS, ...SIZES]) {
+      if (!(key in result)) fail(`${path}.${key}`, 'base token is required');
     }
   }
   return result;
@@ -140,7 +145,7 @@ export function parseThemeDocument(value: unknown): ThemeDocument {
     id: id(source.id, 'theme.id'),
     name: text(source.name, 'theme.name'),
     baseCommit: commit(source.baseCommit, 'theme.baseCommit'),
-    tokens: tokens(source.tokens, 'theme.tokens'),
+    tokens: tokens(source.tokens, 'theme.tokens', true),
     overrides,
     releaseIntents,
   };
