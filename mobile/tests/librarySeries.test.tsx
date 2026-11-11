@@ -227,7 +227,7 @@ describe('Library series card', () => {
       expect(cards().length).toBe(4);
       // no poster badge in a row: the count is on the line beside the name
       expect(seriesCard()!.querySelector(v === 'list' ? '.m-card-title' : '.m-crow-title')!.textContent).toBe('Тёмная материя');
-      expect(seriesCard()!.querySelector('.m-tile-meta')!.textContent).toBe('2 сезона');
+      expect(seriesCard()!.querySelector('.m-tile-meta')!.textContent).toBe('2 сезона · 4 серии');
     }
   });
 

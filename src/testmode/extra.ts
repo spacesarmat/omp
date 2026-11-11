@@ -93,7 +93,6 @@ export const PHONE_SCREENS: ExtraScreen[] = [
       it('P02.18', 'Не напоминать', 'Do not remind'),
       it('P02.19', 'Продолжить просмотр', 'Continue watching'),
       it('P02.20', 'История', 'History'),
-      it('P02.21', 'Вся история', 'All history'),
     ],
   },
   {

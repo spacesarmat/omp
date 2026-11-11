@@ -175,7 +175,8 @@ function rowBottom(it: PhoneItem): string {
   const seasons = it.kind === 'series' ? it.seasons.filter((s) => s !== NO_SEASON) : [];
   const files = it.kind === 'series' ? it.members.reduce<ReturnType<typeof filesOf>>((all, m) => all.concat(filesOf(m)), []) : filesOf(tor);
   const counted = episodeCountOf(files) || 0;
-  const episodes = counted || (range.from && range.to ? range.to - range.from + 1 : 0);
+  const seasonsNow = it.kind === 'series' ? it.seasons.filter((s) => s !== NO_SEASON).length : 0;
+  const episodes = counted || (seasonsNow > 1 ? 0 : range.from && range.to ? range.to - range.from + 1 : 0);
   const card = it.kind === 'series' ? cachedSeriesMatch(it.key) : null;
   const ended = !!(card && card.status === 'ended');
   const seasonCount = seasons.length || (range.seasonTo && range.season ? range.seasonTo - range.season + 1 : range.season ? 1 : 0);
