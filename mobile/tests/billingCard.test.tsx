@@ -10,6 +10,7 @@ vi.mock('../src/searchContext', () => ({ phoneSourceContext: () => site.ctx }));
 
 import { OmpJackettCard } from '../src/screens/OmpJackettCard';
 import { billingNotice, billingSession, saveBillingSession, setBillingNotice } from '../../src/billing/session';
+import { BILLING_BOT_URL } from '../../src/billing/config';
 import { REFRESH_SECRET } from '../../src/billing/tokens';
 import { clearBilling } from '../../src/sources/ompJackett';
 
@@ -86,5 +87,13 @@ describe('OMP subscription card', () => {
     expect(renew.textContent).toBe('Продлить');
     act(() => renew.click());
     expect(Array.from(el.querySelectorAll('[data-pay-methods] button')).map((b) => b.textContent)).toEqual(['Карта', 'Звёзды', 'Крипта']);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    act(() => (el.querySelector('[data-pay="card"]') as HTMLButtonElement).click());
+    act(() => (el.querySelector('[data-pay="stars"]') as HTMLButtonElement).click());
+    expect(open.mock.calls).toEqual([
+      [BILLING_BOT_URL + '?start=renew', '_system'],
+      [BILLING_BOT_URL + '?start=renew', '_system'],
+    ]);
+    open.mockRestore();
   });
 });

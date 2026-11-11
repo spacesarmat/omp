@@ -243,7 +243,7 @@ export function OmpJackettCard() {
                 <button type="button" class="m-btn m-btn-secondary" data-pay="card" onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}>
                   {t('sources.billing.payCard')}
                 </button>
-                <button type="button" class="m-btn m-btn-secondary" data-pay="stars" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+                <button type="button" class="m-btn m-btn-secondary" data-pay="stars" onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}>
                   {t('sources.billing.payStars')}
                 </button>
                 <button
