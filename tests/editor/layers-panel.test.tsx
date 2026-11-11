@@ -6,6 +6,7 @@ import * as protocol from '../../editor/src/preview/protocol';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { getLayoutPlacement } from '../../design/layout';
+import { parseThemeDocument } from '../../design/validation';
 import type { LayoutContext } from '../../design/schema';
 import { LayersPanel, type LayerRowModel } from '../../editor/src/components/LayersPanel';
 
@@ -234,7 +235,7 @@ describe('App layer operations', () => {
     vi.restoreAllMocks();
   });
 
-  it('hides a node from the panel so the canvas no longer selects it, while the panel still does', () => {
+  it('hides a node from the panel so the canvas no longer selects or edits it, while the panel still does', () => {
     buildPreview();
 
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-hide-server-card"]')!.click());
@@ -249,8 +250,41 @@ describe('App layer operations', () => {
     expect(box).not.toBeNull();
     expect(box!.dataset.layoutNode).toBe('server-card');
 
+    const update = vi.spyOn(controller, 'update');
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointermove', 600, 300);
+    pointer(overlay(), 'pointerup', 600, 300);
+    expect(update).not.toHaveBeenCalled();
+    expect(getLayoutPlacement(controller.draft.theme, contextOf(), 'server-card')).toMatchObject({ mode: 'flow', hidden: true });
+
     controller.undo();
     expect(getLayoutPlacement(controller.draft.theme, contextOf(), 'server-card')).toBeUndefined();
+  });
+
+  it('keeps a hidden node out of group align and group margin edits', () => {
+    buildPreview();
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+    const toggle = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 200, clientY: 150, button: 0, shiftKey: true });
+    Object.defineProperty(toggle, 'pointerId', { value: 7 });
+    act(() => {
+      overlay().dispatchEvent(toggle);
+    });
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-hide-server-card"]')!.click());
+    expect(host.querySelector('[data-testid="multi-select-inspector"]')).not.toBeNull();
+
+    const update = vi.spyOn(controller, 'update');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!.click());
+    expect(update).not.toHaveBeenCalled();
+
+    act(() => {
+      const margin = host.querySelector<HTMLInputElement>('[data-testid="multi-margin"]')!;
+      margin.value = '12';
+      margin.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const hiddenPlacement = getLayoutPlacement(controller.draft.theme, contextOf(), 'server-card');
+    expect(hiddenPlacement).toMatchObject({ hidden: true });
+    expect(hiddenPlacement?.margin).toBeUndefined();
   });
 
   it('blocks canvas edits for a locked node until it is unlocked', () => {
@@ -278,21 +312,29 @@ describe('App layer operations', () => {
     expect(getLayoutPlacement(controller.draft.theme, contextOf(), 'server-card')?.mode).toBe('absolute');
   });
 
-  it('duplicates a node with a new id, selects the copy in the panel and cleans the selection on undo', () => {
+  it('duplicates a node with a new id, a sanitized html snapshot and a panel-selected copy', () => {
     buildPreview();
 
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="layout-duplicate-server-card"]')!.click());
 
-    const placement = controller.draft.theme.layout?.placements.find((entry) => entry.nodeId !== 'server-card');
+    const layout = controller.draft.theme.layout!;
+    const placement = layout.placements.find((entry) => entry.nodeId !== 'server-card');
     expect(placement).toBeDefined();
     expect(placement!.nodeId).toMatch(/^copy-/);
     expect(host.querySelector(`[data-testid="layout-row-${placement!.nodeId}"]`)!.getAttribute('aria-pressed')).toBe('true');
 
+    const clone = layout.clones!.find((entry) => entry.nodeId === placement!.nodeId)!;
+    expect(clone).toMatchObject({ parentId: 'card-grid', sourceNodeId: 'server-card' });
+    expect(clone.html).toContain('data-design-id="server-card"');
+    expect(clone.html).not.toContain('<script');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+
     act(() => host.querySelector<HTMLButtonElement>('[data-action="undo"]')!.click());
     expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
   });
 
-  it('copies a node and pastes it into another page with a fresh id', () => {
+  it('copies a node and pastes it with a visible clone into another page that has no original', () => {
     buildPreview();
     pointer(overlay(), 'pointerdown', 200, 50);
     pointer(overlay(), 'pointerup', 200, 50);
@@ -303,14 +345,21 @@ describe('App layer operations', () => {
 
     const context = contextOf();
     expect(context.screenId).toBe('news');
-    const placements = controller.draft.theme.layout?.placements ?? [];
-    expect(placements).toHaveLength(1);
-    expect(placements[0].nodeId).not.toBe('server-card');
-    expect(placements[0].nodeId).toMatch(/^copy-/);
-    expect(placements[0]).toMatchObject({ label: 'server-card', screenId: 'news' });
+    const layout = controller.draft.theme.layout!;
+    expect(layout.placements).toHaveLength(1);
+    expect(layout.placements[0].nodeId).not.toBe('server-card');
+    expect(layout.placements[0].nodeId).toMatch(/^copy-/);
+    expect(layout.placements[0]).toMatchObject({ label: 'server-card', screenId: 'news' });
+
+    const clone = layout.clones!.find((entry) => entry.nodeId === layout.placements[0].nodeId)!;
+    expect(clone).toMatchObject({ parentId: 'path-root', screenId: 'news' });
+    expect(clone.html).toContain('data-design-id="server-card"');
+    expect(clone.html).not.toContain('data-key');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
 
     controller.undo();
     expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
   });
 
   it('shows a clipboard incompatibility instead of saving when the stored clipboard is invalid', () => {

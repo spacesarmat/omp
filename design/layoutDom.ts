@@ -3,6 +3,7 @@ import {
   DESIGN_TARGETS,
   type DesignFormat,
   type DesignTarget,
+  type LayoutClone,
   type LayoutContext,
   type LayoutDocument,
   type LayoutPlacement,
@@ -28,7 +29,7 @@ interface ResolvedNode {
   kind: LayoutNodeKind;
 }
 
-type IdentitySource = 'key' | 'adapter' | 'path';
+type IdentitySource = 'key' | 'adapter' | 'path' | 'clone';
 
 interface IdentityCandidate {
   nodeId: string;
@@ -40,6 +41,7 @@ interface IdentityCandidate {
 // that references them round-trips through parseThemeDocument. Safe data keys stay literal;
 // unsafe or long ones get a deterministic hash fallback (prefixes key- and keyh- are disjoint).
 const SAFE_DATA_KEY = /^[a-z0-9][a-z0-9-]*$/;
+const SCHEMA_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 function fnv1a64(text: string): string {
   let hash = 0xcbf29ce484222325n;
@@ -62,6 +64,10 @@ function pathNodeId(indices: number[]): string {
 }
 
 function identityOf(element: HTMLElement, indices: number[], seenKeys: Set<string>, adapterCounts: Map<string, number>): IdentityCandidate {
+  // Clone roots stamped by the layout runtime carry an explicit schema-safe node id; they win
+  // over every other identity source so a clone is addressable by its own record.
+  const cloneId = element.dataset.layoutId;
+  if (cloneId && SCHEMA_ID.test(cloneId)) return { nodeId: cloneId, kind: 'element', source: 'clone' };
   const key = element.dataset.key;
   if (key) {
     if (seenKeys.has(key)) throw new Error(`duplicate data key "${key}"`);
@@ -113,6 +119,54 @@ export function collectLayoutNodes(root: HTMLElement): LayoutNodeDescriptor[] {
 }
 
 const MANAGED_STYLE_PROPS = ['position', 'left', 'right', 'top', 'bottom', 'width', 'height', 'z-index'] as const;
+
+const CLONE_BLOCKED_TAGS = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']);
+const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-layout-id', 'data-layout-clone'];
+
+// Clone snapshots copy real component markup only: scripts, embedded content, inline handlers,
+// javascript: URLs, per-node layout identity and baked placement styles never travel with a clone.
+function sanitizeCloneElement(element: HTMLElement): void {
+  const walk = (current: HTMLElement): void => {
+    for (const child of [...current.children]) {
+      const childElement = child as HTMLElement;
+      if (CLONE_BLOCKED_TAGS.has(childElement.tagName)) {
+        childElement.remove();
+        continue;
+      }
+      walk(childElement);
+    }
+    for (const name of current.getAttributeNames()) {
+      const lower = name.toLowerCase();
+      const value = current.getAttribute(name) ?? '';
+      if (lower.startsWith('on')
+        || ((lower === 'href' || lower === 'src' || lower === 'xlink:href') && /^\s*javascript:/i.test(value))
+        || CLONE_STRIP_ATTRIBUTES.includes(lower)
+        || lower === 'style') {
+        current.removeAttribute(name);
+      }
+    }
+  };
+  walk(element);
+}
+
+// Editor-side snapshot of a live preview element used for duplicate and clipboard html.
+export function snapshotCloneHtml(source: HTMLElement): string {
+  const copy = source.cloneNode(true) as HTMLElement;
+  sanitizeCloneElement(copy);
+  return copy.outerHTML;
+}
+
+function materializeCloneElement(clone: LayoutClone, doc: Document): HTMLElement | null {
+  // Template parsing is inert: markup never executes while being materialized.
+  const template = doc.createElement('template');
+  template.innerHTML = clone.html.trim();
+  const element = template.content.firstElementChild;
+  if (!(element instanceof HTMLElement)) return null;
+  sanitizeCloneElement(element);
+  element.dataset.layoutId = clone.nodeId;
+  element.dataset.layoutClone = clone.nodeId;
+  return element;
+}
 
 function resetManagedStyle(element: HTMLElement): void {
   if (element.dataset.layoutManaged !== '1') return;
@@ -186,6 +240,21 @@ function createLayoutRuntime(
   options: LayoutRuntimeOptions,
 ): () => void {
   let applying = false;
+  const syncClones = (layout: LayoutDocument, context: LayoutContext): void => {
+    const clones = (layout.clones ?? []).filter((clone) => sameContext(clone, context));
+    const active = new Set(clones.map((clone) => clone.nodeId));
+    for (const stale of [...root.querySelectorAll('[data-layout-clone]')]) {
+      if (!active.has(stale.getAttribute('data-layout-clone')!)) stale.remove();
+    }
+    if (!clones.length) return;
+    const elementById = new Map(resolveNodes(root).map((node) => [node.nodeId, node.element]));
+    for (const clone of clones) {
+      if (elementById.has(clone.nodeId)) continue;
+      const parent = elementById.get(clone.parentId) ?? root;
+      const element = materializeCloneElement(clone, root.ownerDocument);
+      if (element) parent.appendChild(element);
+    }
+  };
   const refresh = (): void => {
     if (applying) return;
     applying = true;
@@ -193,6 +262,7 @@ function createLayoutRuntime(
       const layout = layoutOf();
       const context = contextOf();
       if (!layout || !context) return;
+      syncClones(layout, context);
       const nodes = resolveNodes(root);
       const nodeById = new Map(nodes.map((node) => [node.nodeId, node]));
       const nodeIdByElement = new Map(nodes.map((node) => [node.element, node.nodeId]));

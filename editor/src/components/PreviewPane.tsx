@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../../design/interaction.ts';
 import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
-import { collectLayoutNodes, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
+import { collectLayoutNodes, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
@@ -17,6 +17,7 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   zoom: number;
   tool: CanvasTool;
   selection: SelectionState;
+  nodeSource?: { current: ((nodeId: string) => string | null) | null };
   onZoomChange(zoom: number): void;
   onTool(tool: CanvasTool): void;
   onSelect(elementId: string): void;
@@ -97,6 +98,18 @@ export function PreviewPane(props: PreviewPaneProps) {
     if (!iframe.current) return;
     sendPreviewCommand(iframe.current, { ...command, messageId: newMessageId(), sessionId: props.sessionId }, origin);
   };
+  useEffect(() => {
+    if (!props.nodeSource) return;
+    props.nodeSource.current = (nodeId) => {
+      const body = iframe.current?.contentDocument?.body;
+      if (!body) return null;
+      const element = collectLayoutElements(body).get(nodeId);
+      return element ? snapshotCloneHtml(element) : null;
+    };
+    return () => {
+      if (props.nodeSource) props.nodeSource.current = null;
+    };
+  }, [props.theme, props.route, props.nodeSource]);
   const sendInit = () => {
     initSent.current = true;
     send({

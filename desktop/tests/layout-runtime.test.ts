@@ -4,6 +4,7 @@ const generated = vi.hoisted(() => ({
   layout: {
     containers: [] as import('../../design/layout').LayoutContainer[],
     placements: [] as import('../../design/layout').LayoutPlacement[],
+    clones: [] as import('../../design/layout').LayoutClone[],
   },
 }));
 
@@ -77,6 +78,7 @@ afterEach(() => {
   cleanup = undefined;
   generated.layout.containers = [];
   generated.layout.placements = [];
+  generated.layout.clones = [];
   document.body.innerHTML = '';
 });
 
@@ -204,5 +206,70 @@ describe('production layout runtime', () => {
 
     expect(keys(root)).toEqual(['hash-1', 'hash-2']);
     expect(root.querySelector<HTMLElement>('[data-key="hash-1"]')!.getAttribute('style')).toBeNull();
+  });
+
+  it('hides hidden nodes in both preview and production runtimes', async () => {
+    generated.layout.containers = [];
+    generated.layout.placements = [placement({ hidden: true })];
+
+    const previewRoot = mount(GRID);
+    const theme = createDefaultTheme(BASE);
+    theme.layout = structuredClone(generated.layout as LayoutDocument);
+    const stopPreview = observeLayout(previewRoot, theme, { ...productionContext });
+    cleanup = () => stopPreview();
+
+    const productionRoot = mount(GRID);
+    const stopProduction = observeProductionLayout(productionRoot);
+    const previous = cleanup;
+    cleanup = () => {
+      previous?.();
+      stopProduction();
+    };
+
+    await Promise.resolve();
+
+    expect(previewRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.display).toBe('none');
+    expect(productionRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.display).toBe('none');
+  });
+
+  it('materializes clones in both preview and production runtimes', async () => {
+    generated.layout.containers = [];
+    generated.layout.placements = [];
+    generated.layout.clones = [{
+      id: 'clone-demo',
+      target: productionContext.target,
+      screenId: productionContext.screenId,
+      format: productionContext.format,
+      nodeId: 'copy-demo',
+      parentId: 'card-grid',
+      label: 'Copy',
+      sourceNodeId: 'key-hash-1',
+      html: '<div class="m-card" data-design-id="card">Cloned</div>',
+    }];
+
+    const previewRoot = mount(GRID);
+    const theme = createDefaultTheme(BASE);
+    theme.layout = structuredClone(generated.layout as LayoutDocument);
+    const stopPreview = observeLayout(previewRoot, theme, { ...productionContext });
+    cleanup = () => stopPreview();
+
+    const productionRoot = mount(GRID);
+    const stopProduction = observeProductionLayout(productionRoot);
+    const previous = cleanup;
+    cleanup = () => {
+      previous?.();
+      stopProduction();
+    };
+
+    await Promise.resolve();
+
+    for (const root of [previewRoot, productionRoot]) {
+      const clone = root.querySelector<HTMLElement>('[data-layout-clone="copy-demo"]')!;
+      expect(clone).not.toBeNull();
+      expect(clone.textContent).toBe('Cloned');
+      expect(clone.parentElement!.getAttribute('data-design-id')).toBe('card-grid');
+      const original = root.querySelector<HTMLElement>('[data-key="hash-1"]')!;
+      expect(original.textContent).toBe('A');
+    }
   });
 });

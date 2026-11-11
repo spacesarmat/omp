@@ -297,4 +297,122 @@ describe('layout dom runtime', () => {
 
     expect(root.querySelector<HTMLElement>('[data-design-id="badge"]')!.style.position).toBe('');
   });
+
+  it('materializes a clone from sanitized html even when the source node is absent', () => {
+    const root = mount('<div data-design-id="card-grid"><div data-key="hash-1" data-design-id="card">A</div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [placement('copy-demo', { label: 'Copy' })],
+      clones: [{
+        id: 'clone-demo',
+        target: context.target,
+        screenId: context.screenId,
+        format: context.format,
+        nodeId: 'copy-demo',
+        parentId: 'card-grid',
+        label: 'Copy',
+        sourceNodeId: 'key-hash-1',
+        html: '<div class="m-card" data-design-id="card" data-key="hash-1" style="position:absolute"><script>alert(1)</script><span onclick="x()">Cloned</span></div>',
+      }],
+    };
+
+    cleanup = observeLayout(root, theme, context);
+
+    const clone = root.querySelector<HTMLElement>('[data-layout-clone="copy-demo"]')!;
+    expect(clone).not.toBeNull();
+    expect(clone.textContent).toBe('Cloned');
+    expect(clone.querySelector('script')).toBeNull();
+    expect(clone.getAttribute('data-key')).toBeNull();
+    expect(clone.getAttribute('style')).toBeNull();
+    expect(clone.getAttribute('onclick')).toBeNull();
+    expect(clone.getAttribute('data-design-id')).toBe('card');
+    const cloneNode = collectLayoutNodes(root).find((node) => node.nodeId === 'copy-demo')!;
+    expect(cloneNode.elementId).toBe('card');
+    expect(cloneNode.parentId).toBe('card-grid');
+  });
+
+  it('removes clone elements when their records leave the layout document', () => {
+    const root = mount('<div data-design-id="card-grid"></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [],
+      clones: [{
+        id: 'clone-a',
+        target: context.target,
+        screenId: context.screenId,
+        format: context.format,
+        nodeId: 'copy-a',
+        parentId: 'card-grid',
+        label: 'Copy A',
+        html: '<div data-design-id="card">A copy</div>',
+      }],
+    };
+    cleanup = observeLayout(root, parseThemeDocument(theme), context);
+    expect(root.querySelector('[data-layout-clone="copy-a"]')).not.toBeNull();
+
+    cleanup();
+    const empty = createDefaultTheme(BASE);
+    empty.layout = { containers: [], placements: [] };
+    cleanup = observeLayout(root, parseThemeDocument(empty), context);
+
+    expect(root.querySelector('[data-layout-clone="copy-a"]')).toBeNull();
+  });
+
+  it('keeps duplicated clones independent with unique identities and geometry', () => {
+    const root = mount('<div data-design-id="card-grid"></div>');
+    let theme = createDefaultTheme(BASE);
+    const html = '<div class="m-card" data-design-id="card">Card</div>';
+    theme.layout = {
+      containers: [],
+      placements: [
+        placement('copy-a', { label: 'Copy A', mode: 'absolute', x: 1000, y: 1000 }),
+        placement('copy-b', { label: 'Copy B', mode: 'absolute', x: 5000, y: 5000 }),
+      ],
+      clones: [
+        { id: 'clone-a', target: context.target, screenId: context.screenId, format: context.format, nodeId: 'copy-a', parentId: 'card-grid', label: 'Copy A', html },
+        { id: 'clone-b', target: context.target, screenId: context.screenId, format: context.format, nodeId: 'copy-b', parentId: 'card-grid', label: 'Copy B', html },
+      ],
+    };
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const first = root.querySelector<HTMLElement>('[data-layout-clone="copy-a"]')!;
+    const second = root.querySelector<HTMLElement>('[data-layout-clone="copy-b"]')!;
+    expect(first.style.left).toBe('10%');
+    expect(second.style.left).toBe('50%');
+    const nodeIds = collectLayoutNodes(root).map((node) => node.nodeId);
+    expect(new Set(nodeIds).size).toBe(nodeIds.length);
+  });
+
+  it('round-trips clone records through theme validation and rejects unsafe ones', () => {
+    const root = mount('<div data-design-id="card-grid"></div>');
+    let theme = createDefaultTheme(BASE);
+    const validClone = {
+      id: 'clone-a',
+      target: context.target,
+      screenId: context.screenId,
+      format: context.format,
+      nodeId: 'copy-a',
+      parentId: 'card-grid',
+      label: 'Copy A',
+      sourceNodeId: 'card',
+      html: '<div data-design-id="card">Copy</div>',
+    };
+    theme.layout = { containers: [], placements: [], clones: [validClone] };
+
+    expect(parseThemeDocument(structuredClone(theme))).toEqual(theme);
+
+    theme.layout.clones = [{ ...validClone, html: '<div><script>alert(1)</script></div>' }];
+    expect(() => parseThemeDocument(theme)).toThrow(/html/);
+
+    theme.layout.clones = [{ ...validClone, nodeId: 'Bad Id' }];
+    expect(() => parseThemeDocument(theme)).toThrow();
+
+    theme.layout.clones = [{ ...validClone }, { ...validClone, id: 'clone-b' }];
+    expect(() => parseThemeDocument(theme)).toThrow(/duplicate/);
+    void root;
+  });
 });

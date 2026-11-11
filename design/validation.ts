@@ -16,6 +16,7 @@ import {
   type InteractionCondition,
   type InteractionRule,
   type LayoutContainer,
+  type LayoutClone,
   type LayoutDocument,
   type LayoutPlacement,
   type ReleaseIntent,
@@ -36,6 +37,7 @@ const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current']
 const SCOPES = new Set(['target', 'component', 'screen', 'element', 'format', 'state']);
 const LAYOUT_GEOMETRY_LIMIT = 10000;
 const LAYOUT_ZINDEX_LIMIT = 999;
+const LAYOUT_CLONE_HTML_LIMIT = 50000;
 
 export class DesignValidationError extends Error {
   readonly path: string;
@@ -230,8 +232,25 @@ function layoutPlacement(value: unknown, path: string): LayoutPlacement {
   return result;
 }
 
+function layoutClone(value: unknown, path: string): LayoutClone {
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'parentId', 'label', 'sourceNodeId', 'html'];
+  const source = plain(value, path, keys);
+  const result = {} as LayoutClone;
+  layoutContextFields(source, path, result);
+  result.id = id(source.id, `${path}.id`);
+  result.nodeId = id(source.nodeId, `${path}.nodeId`);
+  result.parentId = id(source.parentId, `${path}.parentId`);
+  if (source.sourceNodeId !== undefined) result.sourceNodeId = id(source.sourceNodeId, `${path}.sourceNodeId`);
+  result.label = layoutLabel(source.label, `${path}.label`);
+  if (typeof source.html !== 'string' || source.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>]/i.test(source.html)) {
+    fail(`${path}.html`, `string without scripts of at most ${LAYOUT_CLONE_HTML_LIMIT} characters required`);
+  }
+  result.html = source.html;
+  return result;
+}
+
 function layoutDocument(value: unknown, path: string): LayoutDocument {
-  const source = plain(value, path, ['containers', 'placements']);
+  const source = plain(value, path, ['containers', 'placements', 'clones']);
   if (!Array.isArray(source.containers)) fail(`${path}.containers`, 'array required');
   if (!Array.isArray(source.placements)) fail(`${path}.placements`, 'array required');
   const containers = source.containers.map((entry, index) => layoutContainer(entry, `${path}.containers[${index}]`));
@@ -240,7 +259,15 @@ function layoutDocument(value: unknown, path: string): LayoutDocument {
   if (new Set(placements.map((entry) => entry.id)).size !== placements.length) fail(`${path}.placements`, 'duplicate placement id');
   if (new Set(containers.map(layoutIdentity)).size !== containers.length) fail(`${path}.containers`, 'duplicate container identity');
   if (new Set(placements.map(layoutIdentity)).size !== placements.length) fail(`${path}.placements`, 'duplicate placement identity');
-  return { containers, placements };
+  const result: LayoutDocument = { containers, placements };
+  if (source.clones !== undefined) {
+    if (!Array.isArray(source.clones)) fail(`${path}.clones`, 'array required');
+    const clones = source.clones.map((entry, index) => layoutClone(entry, `${path}.clones[${index}]`));
+    if (new Set(clones.map((entry) => entry.id)).size !== clones.length) fail(`${path}.clones`, 'duplicate clone id');
+    if (new Set(clones.map(layoutIdentity)).size !== clones.length) fail(`${path}.clones`, 'duplicate clone identity');
+    result.clones = clones;
+  }
+  return result;
 }
 
 function stylePreset(value: unknown, path: string): StylePreset {

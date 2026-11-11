@@ -61,6 +61,21 @@ export interface LayoutPlacement extends LayoutContext {
 export interface LayoutDocument {
   containers: LayoutContainer[];
   placements: LayoutPlacement[];
+  clones?: LayoutClone[];
+}
+
+export const LAYOUT_CLONE_HTML_LIMIT = 50000;
+
+// A clone is a duplicated or pasted layout node: the runtime materializes its sanitized html
+// snapshot into the parent container, so the copy renders even after reload or on a page where
+// the source node does not exist. Only the clone root is layout-addressable.
+export interface LayoutClone extends LayoutContext {
+  id: string;
+  nodeId: string;
+  parentId: string;
+  label: string;
+  sourceNodeId?: string;
+  html: string;
 }
 
 export interface StylePreset {

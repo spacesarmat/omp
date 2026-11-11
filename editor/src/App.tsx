@@ -119,19 +119,22 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     handleSelectNode(node ? { ids: [node.nodeId], anchorId: node.nodeId } : { ids: [], anchorId: null });
   };
   const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement; siblings?: string[] }) => {
-    if (getLayoutPlacement(draft.theme, layoutContext, args.nodeId)?.locked) return;
+    const placement = getLayoutPlacement(draft.theme, layoutContext, args.nodeId);
+    if (placement?.locked || placement?.hidden) return;
     const siblings = args.siblings ?? layoutNodes
       .filter((node) => node.parentId === args.parentId)
       .map((node) => node.nodeId);
     moveNodeTransaction(controller, { context: layoutContext, ...args, siblings });
   };
   const handlePlaceNode = (placement: LayoutPlacement) => {
-    if (getLayoutPlacement(draft.theme, layoutContext, placement.nodeId)?.locked) return;
+    const existing = getLayoutPlacement(draft.theme, layoutContext, placement.nodeId);
+    if (existing?.locked || existing?.hidden) return;
     placeNodeTransaction(controller, placement);
   };
   const handleContainerPatch = (patch: { padding?: string }) => {
     if (!selectedNode) return;
-    if (getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId)?.locked) return;
+    const selectedPlacement = getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId);
+    if (selectedPlacement?.locked || selectedPlacement?.hidden) return;
     const seed = layoutNodes
       .filter((node) => node.parentId === selectedNode.nodeId)
       .map((node) => node.nodeId);
@@ -139,7 +142,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   };
   const handleNodeMargin = (margin: string | undefined) => {
     if (!selectedNode) return;
-    if (getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId)?.locked) return;
+    const selectedPlacement = getLayoutPlacement(draft.theme, layoutContext, selectedNode.nodeId);
+    if (selectedPlacement?.locked || selectedPlacement?.hidden) return;
     updateNodeMarginTransaction(controller, {
       context: layoutContext,
       nodeId: selectedNode.nodeId,
@@ -148,13 +152,14 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       margin,
     });
   };
-  // Locked nodes and nodes without a live preview element stay out of every group action.
+  // Locked nodes and nodes without a live preview element stay out of every group action; hidden
+  // nodes join them so a hidden participant never moves through a group edit.
   const selectedItems = () => selection.ids
     .map((nodeId) => ({
       node: layoutNodes.find((entry) => entry.nodeId === nodeId),
       placement: getLayoutPlacement(draft.theme, layoutContext, nodeId),
     }))
-    .filter((item) => item.node && item.node.parentId !== null && !item.placement?.locked);
+    .filter((item) => item.node && item.node.parentId !== null && !item.placement?.locked && !item.placement?.hidden);
   // Flow children of one container are aligned through the container record, absolute nodes
   // through their coordinates; either way the whole group lands in a single draft transaction.
   const alignSelection = (alignment: SelectionAlignment, axis: 'x' | 'y' | null) => {
@@ -190,6 +195,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   };
   const layerPlacement = (nodeId: string) => getLayoutPlacement(draft.theme, layoutContext, nodeId);
   const layerLabel = (nodeId: string) => layerPlacement(nodeId)?.label ?? layoutNodes.find((node) => node.nodeId === nodeId)?.label ?? nodeId;
+  const rootNodeId = () => layoutNodes.find((node) => node.parentId === null)?.nodeId ?? null;
+  const layerParentId = (nodeId: string) => layoutNodes.find((node) => node.nodeId === nodeId)?.parentId ?? rootNodeId();
+  const nodeSourceRef = useRef<(nodeId: string) => string | null>(() => null);
   const layerRows: LayerRowModel[] = [
     ...layoutNodes.map((node) => {
       const placement = layerPlacement(node.nodeId);
@@ -217,7 +225,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       nodeId,
       label: layerLabel(nodeId),
       base: layerPlacement(nodeId),
-      parentId: layoutNodes.find((node) => node.nodeId === nodeId)?.parentId ?? null,
+      parentId: layerParentId(nodeId),
+      html: nodeSourceRef.current(nodeId),
     });
     handlePanelSelectNode(copyId);
   };
@@ -228,7 +237,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       .filter((placement): placement is LayoutPlacement => Boolean(placement));
     if (!placements.length) return;
     try {
-      window.localStorage.setItem(LAYOUT_CLIPBOARD_KEY, JSON.stringify(copyNodes(placements)));
+      window.localStorage.setItem(LAYOUT_CLIPBOARD_KEY, JSON.stringify(copyNodes(placements, (nodeId) => nodeSourceRef.current(nodeId))));
     } catch {
       return;
     }
@@ -252,7 +261,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       setClipboardError(parsed.errors[0] ?? 'Clipboard недоступен');
       return;
     }
-    pasteNodes(controller, { context: layoutContext, clipboard: parsed.clipboard });
+    pasteNodes(controller, { context: layoutContext, clipboard: parsed.clipboard, parentId: rootNodeId() });
     setClipboardError(null);
   };
   const clipboardHandlersRef = useRef({ handleCopySelection, handlePaste });
@@ -408,6 +417,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             zoom={zoom}
             tool={tool}
             selection={selection}
+            nodeSource={nodeSourceRef}
             onZoomChange={setZoom}
             onTool={setTool}
             onSelect={handleElementSelected}

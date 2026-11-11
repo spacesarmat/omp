@@ -1,5 +1,6 @@
 import {
   LAYOUT_ANCHORS,
+  LAYOUT_CLONE_HTML_LIMIT,
   LAYOUT_MODES,
   type LayoutAnchor,
   type LayoutContext,
@@ -7,12 +8,13 @@ import {
   type LayoutPlacement,
   type ThemeDocument,
 } from '../../../design/schema.ts';
-import { upsertLayoutPlacement } from '../../../design/layout.ts';
+import { upsertLayoutClone, upsertLayoutPlacement } from '../../../design/layout.ts';
 import type { DraftController } from '../drafts.ts';
 import { createPlacement } from './transactions.ts';
 
 export const LAYER_NAME_LIMIT = 60;
 export const LAYER_CLIPBOARD_LIMIT = 100;
+export { LAYOUT_CLONE_HTML_LIMIT };
 
 export interface LayerNodeArgs {
   context: LayoutContext;
@@ -26,6 +28,10 @@ export interface LayerNodeArgs {
 // pasted or duplicated node is recognizable in the layer list.
 export function createLayerNodeId(): string {
   return `copy-${crypto.randomUUID()}`;
+}
+
+export function createCloneRecordId(): string {
+  return `clone-${crypto.randomUUID()}`;
 }
 
 function commitPlacement(controller: DraftController, args: LayerNodeArgs, patch: Partial<LayoutPlacement>): void {
@@ -72,8 +78,9 @@ function insertAfterOriginal(theme: ThemeDocument, context: LayoutContext, paren
 }
 
 // The copy lands next to the original inside a recorded container; an unrecorded parent stays
-// unrecorded so the first real reorder still seeds the full document order.
-export function duplicateNode(controller: DraftController, args: LayerNodeArgs & { parentId?: string | null }): string {
+// unrecorded so the first real reorder still seeds the full document order. With an html snapshot
+// the copy also becomes a layout clone that the shared runtime renders anywhere.
+export function duplicateNode(controller: DraftController, args: LayerNodeArgs & { parentId?: string | null; html?: string | null }): string {
   const nodeId = createLayerNodeId();
   const label = `${args.label} копия`.slice(0, LAYER_NAME_LIMIT);
   controller.update((draft) => {
@@ -85,6 +92,19 @@ export function duplicateNode(controller: DraftController, args: LayerNodeArgs &
       locked: false,
     });
     let theme = upsertLayoutPlacement(draft.theme, placement);
+    if (args.html && args.parentId) {
+      theme = upsertLayoutClone(theme, {
+        id: createCloneRecordId(),
+        target: args.context.target,
+        screenId: args.context.screenId,
+        format: args.context.format,
+        nodeId,
+        parentId: args.parentId,
+        label,
+        sourceNodeId: args.nodeId,
+        html: args.html,
+      });
+    }
     if (args.parentId) theme = insertAfterOriginal(theme, args.context, args.parentId, nodeId, args.nodeId);
     draft.theme = theme;
     return draft;
@@ -93,7 +113,8 @@ export function duplicateNode(controller: DraftController, args: LayerNodeArgs &
 }
 
 // Clipboard nodes intentionally carry no nodeId and no interaction action: identity is local to
-// one page, so paste mints fresh ids and actions never travel between screens.
+// one page, so paste mints fresh ids and actions never travel between screens. The sanitized html
+// snapshot is optional and only used to render visible clones on the target page.
 export interface LayoutClipboardNode {
   label: string;
   mode: LayoutMode;
@@ -106,6 +127,7 @@ export interface LayoutClipboardNode {
   zIndex: number;
   hidden: boolean;
   locked: boolean;
+  html?: string;
 }
 
 export interface LayoutClipboard {
@@ -113,22 +135,26 @@ export interface LayoutClipboard {
   nodes: LayoutClipboardNode[];
 }
 
-export function copyNodes(placements: LayoutPlacement[]): LayoutClipboard {
+export function copyNodes(placements: LayoutPlacement[], resolveHtml?: (nodeId: string) => string | null): LayoutClipboard {
   return {
     schemaVersion: 1,
-    nodes: placements.slice(0, LAYER_CLIPBOARD_LIMIT).map((placement) => ({
-      label: placement.label,
-      mode: placement.mode,
-      x: placement.x,
-      y: placement.y,
-      anchor: placement.anchor,
-      width: placement.width,
-      height: placement.height,
-      ...(placement.margin !== undefined ? { margin: placement.margin } : {}),
-      zIndex: placement.zIndex,
-      hidden: placement.hidden,
-      locked: placement.locked,
-    })),
+    nodes: placements.slice(0, LAYER_CLIPBOARD_LIMIT).map((placement) => {
+      const html = resolveHtml?.(placement.nodeId) ?? undefined;
+      return {
+        label: placement.label,
+        mode: placement.mode,
+        x: placement.x,
+        y: placement.y,
+        anchor: placement.anchor,
+        width: placement.width,
+        height: placement.height,
+        ...(placement.margin !== undefined ? { margin: placement.margin } : {}),
+        zIndex: placement.zIndex,
+        hidden: placement.hidden,
+        locked: placement.locked,
+        ...(html ? { html } : {}),
+      };
+    }),
   };
 }
 
@@ -161,6 +187,10 @@ function validateClipboardNode(raw: unknown, index: number, errors: string[]): v
     if (typeof node[key] !== 'boolean') errors.push(`${prefix}: флаг ${key} должен быть булевым`);
   }
   if (node.margin !== undefined && typeof node.margin !== 'string') errors.push(`${prefix}: отступ должен быть строкой`);
+  if (node.html !== undefined
+    && (typeof node.html !== 'string' || node.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>]/i.test(node.html))) {
+    errors.push(`${prefix}: html недопустим`);
+  }
 }
 
 // Validation errors are collected, not thrown, so the panel can list every incompatibility
@@ -206,7 +236,21 @@ export function pasteNodes(controller: DraftController, args: PasteNodesArgs): s
   controller.update((draft) => {
     let theme = draft.theme;
     args.clipboard.nodes.forEach((node, index) => {
-      theme = upsertLayoutPlacement(theme, createPlacement(args.context, nodeIds[index], node.label, { ...node }));
+      const nodeId = nodeIds[index];
+      const { html, ...placementFields } = node;
+      theme = upsertLayoutPlacement(theme, createPlacement(args.context, nodeId, node.label, { ...placementFields }));
+      if (html && args.parentId) {
+        theme = upsertLayoutClone(theme, {
+          id: createCloneRecordId(),
+          target: args.context.target,
+          screenId: args.context.screenId,
+          format: args.context.format,
+          nodeId,
+          parentId: args.parentId,
+          label: node.label,
+          html,
+        });
+      }
     });
     if (args.parentId) theme = appendToContainer(theme, args.context, args.parentId, nodeIds);
     draft.theme = theme;

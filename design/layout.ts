@@ -1,4 +1,5 @@
 import type {
+  LayoutClone,
   LayoutContainer,
   LayoutContext,
   LayoutDocument,
@@ -11,6 +12,7 @@ export type {
   LayoutContainer,
   LayoutPlacement,
   LayoutDocument,
+  LayoutClone,
   StylePreset,
 } from './schema.ts';
 
@@ -61,6 +63,16 @@ export function upsertLayoutContainer(theme: ThemeDocument, container: LayoutCon
     ? layout.containers.map((entry, entryIndex) => (entryIndex === index ? container : entry))
     : [...layout.containers, { ...container, id: containerId(theme, container.nodeId) }];
   return { ...theme, layout: { ...layout, containers } };
+}
+
+export function upsertLayoutClone(theme: ThemeDocument, clone: LayoutClone): ThemeDocument {
+  const layout = theme.layout ?? emptyLayout();
+  const clones = layout.clones ?? [];
+  const index = clones.findIndex((entry) => sameContext(entry, clone) && entry.nodeId === clone.nodeId);
+  const next = index >= 0
+    ? clones.map((entry, entryIndex) => (entryIndex === index ? clone : entry))
+    : [...clones, clone];
+  return { ...theme, layout: { ...layout, clones: next } };
 }
 
 function containerId(theme: ThemeDocument, parentId: string): string {

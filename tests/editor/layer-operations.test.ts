@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutContext, LayoutPlacement } from '../../design/schema';
 import { getLayoutPlacement } from '../../design/layout';
+import { parseThemeDocument } from '../../design/validation';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { createPlacement, moveNodeTransaction } from '../../editor/src/layout/transactions';
@@ -8,6 +9,7 @@ import {
   copyNodes,
   duplicateNode,
   LAYER_CLIPBOARD_LIMIT,
+  LAYOUT_CLONE_HTML_LIMIT,
   LAYER_NAME_LIMIT,
   parseLayoutClipboard,
   pasteNodes,
@@ -186,6 +188,43 @@ describe('duplicateNode', () => {
     expect(controller.draft.theme.layout?.placements).toHaveLength(1);
     controller.dispose();
   });
+
+  it('stores a schema-validated clone record with the sanitized html snapshot next to the copy', () => {
+    const controller = createController();
+    const html = '<div class="m-card" data-design-id="card" data-key="hash-9">Snapshot</div>';
+
+    const copyId = duplicateNode(controller, { ...args('card-a', 'Card A'), parentId: 'card-grid', html });
+
+    const layout = controller.draft.theme.layout!;
+    const clone = layout.clones!.find((entry) => entry.nodeId === copyId)!;
+    expect(clone).toMatchObject({
+      parentId: 'card-grid',
+      label: 'Card A копия',
+      sourceNodeId: 'card-a',
+      target: 'desktop-windows',
+      screenId: 'library',
+      format: 'landscape',
+    });
+    expect(clone.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    expect(clone.id).not.toBe(copyId);
+    expect(clone.html).toContain('Snapshot');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
+    expect(getLayoutPlacement(controller.draft.theme, context, copyId)).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('keeps the layout-only fallback when no html snapshot is available', () => {
+    const controller = createController();
+
+    duplicateNode(controller, { ...args('card-a', 'Card A'), parentId: 'card-grid', html: null });
+
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.placements).toHaveLength(1);
+    controller.dispose();
+  });
 });
 
 describe('clipboard', () => {
@@ -213,6 +252,18 @@ describe('clipboard', () => {
     expect(copyNodes(placements).nodes).toHaveLength(LAYER_CLIPBOARD_LIMIT);
   });
 
+  it('copyNodes attaches sanitized html snapshots while keeping node ids and actions out', () => {
+    const placement = createPlacement(context, 'card-a', 'Card A');
+
+    const withHtml = copyNodes([placement], () => '<div data-design-id="card">Snap</div>');
+    expect(withHtml.nodes[0].html).toContain('Snap');
+    expect('action' in withHtml.nodes[0]).toBe(false);
+    expect('nodeId' in withHtml.nodes[0]).toBe(false);
+
+    expect(copyNodes([placement]).nodes[0].html).toBeUndefined();
+    expect(copyNodes([placement], () => null).nodes[0].html).toBeUndefined();
+  });
+
   it('parseLayoutClipboard accepts a clipboard produced by copyNodes', () => {
     const placement = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 2500, y: 1200 });
     const parsed = parseLayoutClipboard(JSON.parse(JSON.stringify(copyNodes([placement]))));
@@ -234,6 +285,19 @@ describe('clipboard', () => {
     expect(parsed.clipboard).toBeNull();
     expect(parsed.errors.length).toBeGreaterThanOrEqual(4);
     expect(parsed.errors[0]).toContain('Узел 1');
+  });
+
+  it('parseLayoutClipboard rejects html with scripts or over the clone html limit', () => {
+    const valid = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+    const scripted = { ...valid.nodes[0], html: '<div><script>alert(1)</script></div>' };
+    const parsedScript = parseLayoutClipboard({ schemaVersion: 1, nodes: [scripted] });
+    expect(parsedScript.clipboard).toBeNull();
+    expect(parsedScript.errors[0]).toContain('html');
+
+    const long = { ...valid.nodes[0], html: `<div>${'a'.repeat(LAYOUT_CLONE_HTML_LIMIT + 1)}</div>` };
+    const parsedLong = parseLayoutClipboard({ schemaVersion: 1, nodes: [long] });
+    expect(parsedLong.clipboard).toBeNull();
+    expect(parsedLong.errors[0]).toContain('html');
   });
 
   it('pasteNodes pastes into another page with fresh ids and one undo step', () => {
@@ -268,6 +332,27 @@ describe('clipboard', () => {
     controller.undo();
     controller.undo();
     expect(orderOf(controller, context, 'card-grid')).toEqual(['card-a']);
+    controller.dispose();
+  });
+
+  it('pasteNodes materializes clone records with fresh ids and removes everything in one undo step', () => {
+    const controller = createController();
+    const clipboard = copyNodes(
+      [createPlacement(context, 'card-a', 'Card A')],
+      () => '<div data-design-id="card">Snap</div>',
+    );
+
+    const [pastedId] = pasteNodes(controller, { context, clipboard, parentId: 'card-grid' });
+
+    const layout = controller.draft.theme.layout!;
+    const clone = layout.clones!.find((entry) => entry.nodeId === pastedId)!;
+    expect(clone).toMatchObject({ parentId: 'card-grid', label: 'Card A', html: '<div data-design-id="card">Snap</div>' });
+    expect(clone.nodeId).not.toBe('card-a');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
     controller.dispose();
   });
 });
