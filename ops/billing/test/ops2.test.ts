@@ -22,6 +22,20 @@ describe('promo, crashes, beta, backup list', () => {
     expect(sub.creditRub).toBe(10);
   });
 
+  it('a discount without bonus days does not grant a free day', () => {
+    let state = emptyState();
+    state.accounts = [{ id: 'a1' }];
+    const until = 1_000_000;
+    state.subscriptions = [{ id: 's1', accountId: 'a1', product: 'jackett', paidUntil: until, creditRub: 0 }];
+    state.settings.priceRub = 100;
+    const made = createPromo(state, { code: 'OFF10', days: 0, maxUses: 1, now: 10, discountPercent: 10 });
+    expect(made.result.promo.days).toBe(0);
+    const used = redeemPromo(made.state, { code: 'OFF10', accountId: 'a1', now: 11 });
+    const sub = used.state.subscriptions.find((s) => s.id === 's1');
+    expect(sub.paidUntil).toBe(until);
+    expect(sub.creditRub).toBe(10);
+  });
+
   it('groups crashes, flags a regression and writes an issue draft', () => {
     const first = ingestCrash(emptyState(), { message: 'boom', stack: 'at main\n', version: '1.0.0', platform: 'phone' }, 10);
     expect(first.alert).toBe('new');

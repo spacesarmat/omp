@@ -2536,10 +2536,12 @@ export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonus
   if (state.promos.some((p) => !p.revoked && p.code === plain)) return { state, result: { error: 'exists' } };
   const bonus = Math.max(0, Math.min(BASE_DEVICES_MAX, Math.floor(Number(bonusSlots) || 0)));
   const d = Math.floor(Number(days));
+  const discount = Math.floor(Number(discountPercent) || 0);
+  const discountOk = discount > 0 && discount <= 100;
   const row = {
     id: randomId(),
     code: plain,
-    days: d > 0 ? Math.min(3650, d) : bonus ? 0 : 1,
+    days: d > 0 ? Math.min(3650, d) : bonus || discountOk ? 0 : 1,
     maxUses: maxUses > 0 ? Math.floor(maxUses) : 1,
     createdAt: now,
     revoked: false,
@@ -2551,8 +2553,7 @@ export function createPromo(state, { code, days, maxUses, now, bonusSlots, bonus
   }
   const exp = Number(expiresAt) || 0;
   if (exp > now) row.expiresAt = exp;
-  const discount = Math.floor(Number(discountPercent) || 0);
-  if (discount > 0 && discount <= 100) row.discountPercent = discount;
+  if (discountOk) row.discountPercent = discount;
   return { state: { ...state, promos: state.promos.concat([row]) }, result: { promo: row } };
 }
 

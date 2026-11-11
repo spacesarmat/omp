@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { issueCliAdminLogin } from '../src/logic.mjs';
-import { resetDeskHttp } from '../src/deskHttp.mjs';
+import { rememberPreview, resetDeskHttp } from '../src/deskHttp.mjs';
 
 function memoryStore() {
   let state = emptyState();
@@ -98,6 +98,22 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, method: 
   }
   return { status: res.status, headers: res.headers, data, body: res.body };
 }
+
+describe('broadcast previews', () => {
+  it('drops expired drafts and keeps only the newest ones', () => {
+    const map = new Map();
+    rememberPreview(map, { id: 'old', text: 'one', ids: ['1'], at: 0 }, 0);
+    rememberPreview(map, { id: 'fresh', text: 'two', ids: ['1'], at: 11 * 60 * 1000 }, 11 * 60 * 1000);
+    expect(map.has('old')).toBe(false);
+    expect(map.has('fresh')).toBe(true);
+    for (let i = 0; i < 25; i++) {
+      rememberPreview(map, { id: 'n' + i, text: 'x', ids: ['1'], at: 11 * 60 * 1000 + i }, 11 * 60 * 1000 + i);
+    }
+    expect(map.size).toBeLessThanOrEqual(20);
+    expect(map.has('fresh')).toBe(false);
+    expect(map.has('n24')).toBe(true);
+  });
+});
 
 describe('desk http', () => {
   it('requires a session, then returns the desk and a live stream', async () => {

@@ -542,6 +542,25 @@ async function presence(ctx) {
 }
 
 const previews = new Map();
+const PREVIEW_TTL_MS = 10 * 60 * 1000;
+const PREVIEW_CAP = 20;
+
+function prunePreviews(map, now) {
+  for (const [key, item] of map) {
+    if (!item || now - item.at > PREVIEW_TTL_MS) map.delete(key);
+  }
+}
+
+/** Drops drafts older than 10 minutes and keeps at most PREVIEW_CAP, newest last. */
+export function rememberPreview(map, row, now) {
+  prunePreviews(map, now);
+  if (!row || !row.id) return;
+  map.set(row.id, { ...row, at: row.at || now });
+  while (map.size > PREVIEW_CAP) {
+    const oldest = map.keys().next().value;
+    map.delete(oldest);
+  }
+}
 
 async function sendCrashes(ctx) {
   const state = await ctx.store.read();
@@ -716,8 +735,9 @@ async function broadcastPreview(ctx, body) {
   const segment = ['all', 'active', 'lapsed'].indexOf(body.segment) >= 0 ? body.segment : 'all';
   const state = await ctx.store.read();
   const ids = broadcastAudience(state, segment, Date.now());
-  const id = deviceKey(text + ':' + segment + ':' + Date.now());
-  previews.set(id, { text, ids, at: Date.now() });
+  const now = Date.now();
+  const id = deviceKey(text + ':' + segment + ':' + now);
+  rememberPreview(previews, { id, text, ids, at: now }, now);
   ctx.json(ctx.res, 200, { ok: true, id, count: ids.length, sample: ids.slice(0, 5) });
   return true;
 }
@@ -727,8 +747,10 @@ async function broadcastSend(ctx, admin, body) {
     ctx.json(ctx.res, 409, { ok: false, error: 'Нужно подтверждение', needConfirm: true });
     return true;
   }
+  const now = Date.now();
+  prunePreviews(previews, now);
   const row = previews.get(String(body.id || ''));
-  if (!row || Date.now() - row.at > 10 * 60 * 1000) {
+  if (!row || now - row.at > PREVIEW_TTL_MS) {
     ctx.json(ctx.res, 200, { ok: false, error: 'Черновик устарел. Откройте предпросмотр снова.' });
     return true;
   }
