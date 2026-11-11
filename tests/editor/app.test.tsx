@@ -376,6 +376,53 @@ describe('editor app', () => {
     expect(controller.draft.theme.overrides).toHaveLength(0);
   });
 
+  it('does not handle editor shortcuts from editable fields inside the preview', () => {
+    vi.spyOn(protocol, 'sendPreviewCommand').mockImplementation(() => undefined);
+    const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
+    act(() => { iframe.dispatchEvent(new Event('load')); });
+    const previewDocument = iframe.contentDocument!;
+    const input = previewDocument.createElement('input');
+    const root = previewDocument.createElement('html');
+    previewDocument.appendChild(root);
+    root.appendChild(input);
+    expect(input instanceof HTMLElement).toBe(false);
+    act(() => controller.upsertOverride({ id: 'preview-input', scope: 'target', target: 'desktop-windows', tokens: { '--omp-color-panel': '#112233' } }));
+
+    act(() => {
+      input.dispatchEvent(new previewDocument.defaultView!.KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      input.dispatchEvent(new previewDocument.defaultView!.KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    });
+
+    expect(host.querySelector('[data-testid="tool-select"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(controller.draft.theme.overrides).toHaveLength(1);
+  });
+
+  it('refits the canvas and keyboard fit shortcut when the platform changes', () => {
+    act(() => render(null, host));
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const size = this.dataset.testid === 'canvas-viewport' ? { width: 1032, height: 636 } : { width: 0, height: 0 };
+      return { ...size, x: 0, y: 0, top: 0, right: size.width, bottom: size.height, left: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.callback([{ target } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+    act(() => render(h(App, { controller }), host));
+    expect(host.querySelector('[data-testid="zoom-value"]')!.textContent).toBe('73%');
+
+    select('target', 'android-tv');
+    expect(host.querySelector('[data-testid="zoom-value"]')!.textContent).toBe('49%');
+    act(() => host.querySelector<HTMLButtonElement>('[data-action="zoom-in"]')!.click());
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true }));
+    });
+    expect(host.querySelector('[data-testid="zoom-value"]')!.textContent).toBe('49%');
+  });
+
   it('pans the canvas with the hand tool', () => {
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="tool-hand"]')!.click());
     const viewport = host.querySelector<HTMLElement>('[data-testid="canvas-viewport"]')!;

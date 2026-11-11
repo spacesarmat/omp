@@ -25,7 +25,9 @@ function clampZoom(value: number): number {
 }
 
 function isEditable(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable);
+  if (!target || typeof target !== 'object') return false;
+  const element = target as Partial<HTMLElement>;
+  return typeof element.tagName === 'string' && (['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName) || element.isContentEditable === true);
 }
 
 function forwardPreviewKey(event: KeyboardEvent): void {
@@ -128,7 +130,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [props.format]);
+  }, [props.target, props.format]);
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (isEditable(event.target)) return;
@@ -144,7 +146,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [props.zoom, props.onTool]);
+  }, [props.target, props.format, props.zoom, props.onTool]);
 
   return (
     <div class="editor-preview-shell">
