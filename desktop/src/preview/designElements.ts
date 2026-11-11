@@ -1,4 +1,4 @@
-import { activeOverrideIds, resolveThemeTokens, type ThemeContext } from '../../../design/theme.ts';
+import { activeOverrideIds, type ThemeContext } from '../../../design/theme.ts';
 import type { ThemeDocument } from '../../../design/schema.ts';
 
 const REGISTERED = new Set(['legacy-page', 'button', 'input', 'card', 'choice-row']);
@@ -11,17 +11,16 @@ function componentId(element: Element): string | null {
   return null;
 }
 
-function applyAliases(element: HTMLElement, theme: ThemeDocument, context: ThemeContext): void {
-  const tokens = resolveThemeTokens(theme, context);
+function applyAliases(element: HTMLElement): void {
   const aliases: Record<string, string> = {
-    '--bg': tokens['--omp-color-background'],
-    '--panel': tokens['--omp-color-panel'],
-    '--panel-2': `color-mix(in srgb, ${tokens['--omp-color-panel']} 92%, ${tokens['--omp-color-text']})`,
-    '--panel2': `color-mix(in srgb, ${tokens['--omp-color-panel']} 92%, ${tokens['--omp-color-text']})`,
-    '--accent': tokens['--omp-color-accent'],
-    '--text': tokens['--omp-color-text'],
-    '--muted': tokens['--omp-color-muted'],
-    '--danger': tokens['--omp-color-danger'],
+    '--bg': 'var(--omp-color-background)',
+    '--panel': 'var(--omp-color-panel)',
+    '--panel-2': 'color-mix(in srgb, var(--omp-color-panel) 92%, var(--omp-color-text))',
+    '--panel2': 'color-mix(in srgb, var(--omp-color-panel) 92%, var(--omp-color-text))',
+    '--accent': 'var(--omp-color-accent)',
+    '--text': 'var(--omp-color-text)',
+    '--muted': 'var(--omp-color-muted)',
+    '--danger': 'var(--omp-color-danger)',
   };
   for (const [name, value] of Object.entries(aliases)) element.style.setProperty(name, value);
 }
@@ -37,7 +36,7 @@ export function decorateDesignElements(root: HTMLElement, theme: ThemeDocument, 
     element.dataset.designId = id;
     element.dataset.designComponent = id;
     element.dataset.designOverrides = activeOverrideIds(theme, elementContext).join(' ');
-    applyAliases(element, theme, elementContext);
+    applyAliases(element);
   }
 }
 

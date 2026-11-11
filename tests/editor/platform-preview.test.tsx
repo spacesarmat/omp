@@ -116,9 +116,29 @@ describe('platform previews', () => {
       else mount(h(TvPreview, config));
 
       const button = host.querySelector<HTMLElement>('[data-design-id="button"]')!;
-      expect(getComputedStyle(button).getPropertyValue('--accent').trim()).toBe('#112233');
-      expect(getComputedStyle(button).getPropertyValue('--text').trim()).toBe('#ddeeff');
+      expect(getComputedStyle(button).getPropertyValue('--omp-color-accent').trim()).toBe('#112233');
+      expect(getComputedStyle(button).getPropertyValue('--omp-color-text').trim()).toBe('#ddeeff');
+      expect(button.style.getPropertyValue('--accent')).toBe('var(--omp-color-accent)');
+      expect(button.style.getPropertyValue('--text')).toBe('var(--omp-color-text)');
     }
+  });
+
+  it('keeps page element colors inherited by phone control aliases', () => {
+    const config = props('settings', 'android-phone');
+    config.theme.overrides.push({
+      id: 'page-text-color',
+      scope: 'element',
+      target: 'android-phone',
+      screenId: 'settings',
+      elementId: 'legacy-page',
+      format: 'landscape',
+      tokens: { '--omp-color-text': '#ddeeff' },
+    });
+    mount(h(PhonePreview, config));
+
+    const button = host.querySelector<HTMLElement>('[data-design-id="button"]')!;
+    expect(getComputedStyle(button).getPropertyValue('--omp-color-text').trim()).toBe('#ddeeff');
+    expect(button.style.getPropertyValue('--text')).toBe('var(--omp-color-text)');
   });
 
   it('renders every TV route with the matching platform kind and restores it on unmount', () => {
