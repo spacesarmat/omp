@@ -279,6 +279,19 @@ describe('editor app', () => {
     expect(host.querySelector('[data-testid="mode-logic"]')!.getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('returns to design when undo restores a platform without logic support', () => {
+    select('target', 'android-phone');
+    select('target', 'desktop-windows');
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="mode-logic"]')!.click());
+    expect(host.querySelector('[data-testid="mode-logic"]')!.getAttribute('aria-pressed')).toBe('true');
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-action="undo"]')!.click());
+
+    expect(controller.draft.target).toBe('android-phone');
+    expect(host.querySelector('[data-testid="mode-design"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(host.querySelector('[data-testid="mode-logic"]')!.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('keeps the selected template valid when undo changes the page', () => {
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="page-library"]')!.click());
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="page-settings"]')!.click());

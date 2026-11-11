@@ -69,7 +69,7 @@ export function DesktopPreview(props: DesktopPreviewProps) {
 
   return (
     <div onClick={onClick}>
-      <style>{generateThemeCss(props.theme, props.target)}</style>
+      <style>{generateThemeCss(props.theme, props.target, props.state)}</style>
       <DesktopShell key={props.language} {...props}>
         <PreviewRoute {...props} />
       </DesktopShell>

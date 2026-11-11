@@ -8,6 +8,7 @@ import { PhonePreview } from '../../desktop/src/preview/PhonePreview';
 import { TvPreview } from '../../desktop/src/preview/TvPreview';
 import { platformKind } from '../../src/platform/env';
 import { lang } from '../../src/i18n';
+import { settings } from '../../src/store/settings';
 
 const BASE = '0000000000000000000000000000000000000000';
 let host: HTMLDivElement;
@@ -58,7 +59,9 @@ describe('platform previews', () => {
 
       const page = host.querySelector('[data-design-state="hover"]')!;
       expect(page.getAttribute('data-design-state')).toBe('hover');
-      expect(host.querySelector('[data-design-id="button"]')!.getAttribute('data-design-overrides')).toContain(`hover-${target}`);
+      const button = host.querySelector<HTMLElement>('[data-design-id="button"]')!;
+      expect(button.getAttribute('data-design-overrides')).toContain(`hover-${target}`);
+      expect(getComputedStyle(button).getPropertyValue('--omp-color-panel').trim()).toBe('#112233');
     }
   });
 
@@ -97,6 +100,27 @@ describe('platform previews', () => {
     expect(host.querySelector('.choice-row')!.getAttribute('data-design-overrides')).toContain('page-android-tv');
   });
 
+  it('rebinds phone and TV control aliases to element color overrides', () => {
+    for (const target of ['android-phone', 'android-tv'] as const) {
+      const config = props('settings', target);
+      config.theme.overrides.push({
+        id: `colors-${target}`,
+        scope: 'element',
+        target,
+        screenId: 'settings',
+        elementId: 'button',
+        format: 'landscape',
+        tokens: { '--omp-color-accent': '#112233', '--omp-color-text': '#ddeeff' },
+      });
+      if (target === 'android-phone') mount(h(PhonePreview, config));
+      else mount(h(TvPreview, config));
+
+      const button = host.querySelector<HTMLElement>('[data-design-id="button"]')!;
+      expect(getComputedStyle(button).getPropertyValue('--accent').trim()).toBe('#112233');
+      expect(getComputedStyle(button).getPropertyValue('--text').trim()).toBe('#ddeeff');
+    }
+  });
+
   it('renders every TV route with the matching platform kind and restores it on unmount', () => {
     for (const target of ['android-tv', 'lg-webos'] as const) {
       for (const route of ['library', 'search', 'settings', 'connect'] as const) {
@@ -109,6 +133,35 @@ describe('platform previews', () => {
         expect(platformKind()).toBe('webos');
       }
     }
+  });
+
+  it('selects phone and TV controls without running their real actions', () => {
+    const previous = settings.value;
+    try {
+      const onSelect = vi.fn();
+      mount(h(PhonePreview, { ...props('settings', 'android-phone'), onSelect }));
+      const before = settings.value.prebufferOnMetered;
+      host.querySelector<HTMLElement>('[data-row="prebuffer"] .m-switch')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(settings.value.prebufferOnMetered).toBe(before);
+      expect(onSelect).toHaveBeenCalledWith('button');
+
+      mount(h(TvPreview, { ...props('settings', 'android-tv'), onSelect }));
+      const tvBefore = settings.value;
+      host.querySelector<HTMLElement>('.choice-row')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+      expect(settings.value).toBe(tvBefore);
+    } finally {
+      settings.value = previous;
+    }
+  });
+
+  it('preserves the default click action for preview text fields', () => {
+    mount(h(PhonePreview, props('search', 'android-phone')));
+    const input = host.querySelector<HTMLInputElement>('input')!;
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+
+    input.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('replaces a fixture without restoring stale state', () => {

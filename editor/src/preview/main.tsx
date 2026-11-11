@@ -1,8 +1,7 @@
 import { h, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import { lazy, Suspense } from 'preact/compat';
 import { DesktopPreview } from '../../../desktop/src/preview/DesktopPreview';
-import { PhonePreview } from '../../../desktop/src/preview/PhonePreview';
-import { TvPreview } from '../../../desktop/src/preview/TvPreview';
 import { createDefaultFlow, createDefaultTheme } from '../../../design/defaults';
 import { parseFlowDocument, parseThemeDocument } from '../../../design/validation';
 import type { InteractionTrace } from '../../../design/interaction.ts';
@@ -10,6 +9,8 @@ import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
 import { isEditorRoute, isTvTarget } from '../../shared/routes';
 import { newMessageId, type PreviewCommand, type PreviewConfiguration, type PreviewMessageInput } from './protocol';
 
+const PhonePreview = lazy(() => import('../../../desktop/src/preview/PhonePreview').then((module) => ({ default: module.PhonePreview })));
+const TvPreview = lazy(() => import('../../../desktop/src/preview/TvPreview').then((module) => ({ default: module.TvPreview })));
 const BASE = '0000000000000000000000000000000000000000';
 
 function PreviewRoot() {
@@ -62,9 +63,12 @@ function PreviewRoot() {
 
   const selected = (elementId: string) => post({ type: 'element-selected', elementId });
   const traced = (trace: InteractionTrace[]) => post({ type: 'trace', trace });
-  if (config.target === 'android-phone') return <PhonePreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
-  if (isTvTarget(config.target)) return <TvPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
-  return <DesktopPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
+  const preview = config.target === 'android-phone'
+    ? <PhonePreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />
+    : isTvTarget(config.target)
+      ? <TvPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />
+      : <DesktopPreview {...config} onSelect={selected} onNavigate={navigate} onTrace={traced} />;
+  return <Suspense fallback={null}>{preview}</Suspense>;
 }
 
 render(h(PreviewRoot, {}), document.getElementById('app')!);

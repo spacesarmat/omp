@@ -86,6 +86,9 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   useEffect(() => {
     if (!isDesignElementAvailable(selected, draft.screenId, draft.target)) setSelected(getDefaultElementId(draft.target));
   }, [draft.target, draft.screenId, selected]);
+  useEffect(() => {
+    if (!isDesktopTarget(draft.target) || DESKTOP_SCREEN_SUPPORT[draft.screenId] !== 'logic') setMode('design');
+  }, [draft.target, draft.screenId]);
   const setView = (view: Partial<Pick<EditorDraft, 'target' | 'screenId' | 'format' | 'language'>>) => {
     const target = view.target || draft.target;
     const screenId = view.screenId && isEditorRoute(target, view.screenId)

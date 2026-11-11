@@ -3,6 +3,13 @@ import { act } from 'preact/test-utils';
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
 
 vi.mock('../../desktop/src/preview/DesktopPreview', () => ({ DesktopPreview: () => null }));
+vi.mock('../../desktop/src/preview/PhonePreview', async () => {
+  const { h } = await import('preact');
+  return { PhonePreview: () => h('div', { class: 'phone-preview' }) };
+});
+vi.mock('../../desktop/src/preview/TvPreview', () => {
+  throw new Error('TV preview import must be deferred');
+});
 
 const BASE = '0000000000000000000000000000000000000000';
 
@@ -73,10 +80,8 @@ describe('preview entry lifecycle', () => {
         data: initCommand('phone-session', 'android-phone'),
       }));
     });
-    await act(async () => {
-      await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.phone-preview')).not.toBeNull();
     });
-
-    expect(document.querySelector('.phone-preview')).not.toBeNull();
   });
 });

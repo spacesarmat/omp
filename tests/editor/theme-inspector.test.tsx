@@ -110,6 +110,27 @@ describe('ThemeInspector', () => {
     ]);
   });
 
+  it('saves disabled and error overrides for generic controls', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'android-phone', screenId: 'settings', elementId: 'button', format: 'landscape', state: 'disabled', onStateChange: () => undefined }));
+    change('[data-testid="scope"]', 'state');
+    change('[data-token="--omp-color-accent"]', '#112233');
+
+    expect(controller.draft.theme.overrides).toEqual([
+      expect.objectContaining({ scope: 'state', state: 'disabled', elementId: 'button', tokens: { '--omp-color-accent': '#112233' } }),
+    ]);
+  });
+
+  it('rejects editing a state that the selected container does not support', () => {
+    controller = createController();
+    mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape', state: 'disabled', onStateChange: () => undefined }));
+    change('[data-testid="scope"]', 'state');
+
+    expect(host.querySelector('[data-token="--omp-color-panel"]')).toBeNull();
+    expect(host.textContent).toContain('Состояние disabled недоступно');
+    expect(controller.draft.theme.overrides).toEqual([]);
+  });
+
   it('rejects invalid values without saving them', () => {
     controller = createController();
     mount(h(ThemeInspector, { controller, target: 'desktop-windows', screenId: 'settings', elementId: 'sidebar', format: 'landscape' }));

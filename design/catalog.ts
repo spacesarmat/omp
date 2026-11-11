@@ -97,6 +97,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
       { token: '--omp-size-space', label: 'Отступ', kind: 'px' },
     ],
+    states: ['default', 'hover', 'focus', 'active', 'disabled', 'error'],
   },
   {
     id: 'input',
@@ -108,6 +109,7 @@ export const DESIGN_ELEMENTS: DesignElementDef[] = [
       { token: '--omp-size-font', label: 'Размер текста', kind: 'px' },
       { token: '--omp-size-radius', label: 'Радиус', kind: 'px' },
     ],
+    states: ['default', 'hover', 'focus', 'active', 'disabled', 'error'],
   },
   {
     id: 'card',

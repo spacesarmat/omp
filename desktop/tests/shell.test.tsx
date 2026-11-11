@@ -132,7 +132,9 @@ describe('desktop preview shell', () => {
 
     const root = host.querySelector('[data-design-state="focus"]')!;
     expect(root.getAttribute('data-design-state')).toBe('focus');
-    expect(root.querySelector('[data-design-id="sidebar"]')!.getAttribute('data-design-overrides')).toContain('focus-panel');
+    const sidebar = root.querySelector<HTMLElement>('[data-design-id="sidebar"]')!;
+    expect(sidebar.getAttribute('data-design-overrides')).toContain('focus-panel');
+    expect(getComputedStyle(sidebar).getPropertyValue('--omp-color-panel').trim()).toBe('#112233');
   });
 
   it('returns active override ids in resolver order', () => {
