@@ -89,6 +89,18 @@ case "$cmd" in
       cp "\$(idfile "$img")" "$state/running-billing"
       exit 0
     fi
+    if [[ "$*" == *"up -d"* && "$*" == *"docker-restart"* ]]; then
+      if [[ "$*" != *"--profile restart"* || "$*" != *"--no-deps"* || "$*" != *"--force-recreate"* ]]; then
+        printf 'docker-restart up must set --profile restart, --no-deps and --force-recreate\\n' >&2
+        exit 1
+      fi
+      if ! grep -q 'docker-restart:' "\${OMP_VPS_ROOT:?}/docker-compose.yml"; then
+        printf 'no such service docker-restart\\n' >&2
+        exit 1
+      fi
+      printf 'on' > "$state/running-restart"
+      exit 0
+    fi
     if [[ "$*" == *"up -d"* && "$*" == *"dht-peers"* ]]; then
       if [[ "$*" != *"--profile dht"* || "$*" != *"--no-deps"* ]]; then
         printf 'dht up must set --profile dht and --no-deps\\n' >&2
@@ -130,6 +142,15 @@ case "$cmd" in
         *) name="$1"; shift ;;
       esac
     done
+    if [[ "$name" == "omp-docker-restart" ]]; then
+      [[ -f "$state/running-restart" ]] || { printf 'no such container\\n' >&2; exit 1; }
+      if [[ "$format" == "{{.State.Running}}" ]]; then
+        printf 'true\\n'
+        exit 0
+      fi
+      printf 'unexpected restart inspect format\\n' >&2
+      exit 1
+    fi
     if [[ "$name" == "omp-dht-peers" ]]; then
       [[ -f "$state/running-dht" ]] || { printf 'no such container\\n' >&2; exit 1; }
       if [[ "$format" == "{{.State.Running}}" ]]; then
@@ -183,6 +204,10 @@ case "$cmd" in
     exit 0
     ;;
   stop)
+    if [[ "\${1:-}" == "omp-docker-restart" ]]; then
+      rm -f "$state/running-restart"
+      exit 0
+    fi
     [[ "\${1:-}" == "omp-dht-peers" ]] || { printf 'unexpected stop %s\\n' "\${1:-}" >&2; exit 1; }
     if [[ "\${DEPLOY_TEST_DOCKER_STOP_FAIL:-}" == 1 ]]; then
       printf 'stop failed\\n' >&2
@@ -1176,6 +1201,64 @@ describe('ops/vps deploy syncs compose, dht-peers, and Caddyfile.nuc', () => {
     const rolled = runDeploy(box.env, ['--rollback', backup]);
     expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
     expect(readFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 1;\n');
+    expect(log(box.dockerLog)).not.toContain('--profile restart');
+  });
+
+  it('recreates a running docker-restart helper when its file changes and does not start a stopped one', () => {
+    const stopped = world(release({ 'ops/vps/docker-restart/server.mjs': 'export const restart = 2;\n' }));
+    mkdirSync(path.join(stopped.root, 'docker-restart'), { recursive: true });
+    writeFileSync(path.join(stopped.root, 'docker-restart/server.mjs'), 'export const restart = 1;\n');
+    const off = runDeploy(stopped.env, ['main']);
+    expect(off.status, `${off.stdout}\n${off.stderr}`).toBe(0);
+    expect(log(stopped.dockerLog)).not.toContain('--profile restart');
+
+    const withHelper = 'name: omp-vps\nservices:\n  docker-restart:\n    image: node:24-alpine\n';
+    const box = world(release({
+      'ops/vps/docker-compose.yml': withHelper,
+      'ops/vps/docker-restart/server.mjs': 'export const restart = 3;\n',
+    }));
+    writeFileSync(path.join(box.root, 'docker-compose.yml'), withHelper);
+    mkdirSync(path.join(box.root, 'docker-restart'), { recursive: true });
+    writeFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'export const restart = 1;\n');
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-restart'), 'on');
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 3;\n');
+    const ups = upLines(box.dockerLog).filter((line) => line.includes('docker-restart'));
+    expect(ups).toHaveLength(1);
+    expect(ups[0]).toContain('--profile restart');
+    expect(ups[0]).toContain('--no-deps');
+    expect(ups[0]).toContain('--force-recreate');
+    const backup = backupFrom(result.stdout);
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'docker-restart/server.mjs'), 'utf8')).toBe('export const restart = 1;\n');
+    const again = upLines(box.dockerLog).filter((line) => line.includes('docker-restart'));
+    expect(again.length).toBeGreaterThanOrEqual(2);
+    expect(again[again.length - 1]).toContain('--force-recreate');
+  });
+
+  it('rolls billing back when the old compose has no docker-restart service', () => {
+    const files = release({
+      'ops/vps/docker-compose.yml': 'name: omp-vps\nservices:\n  docker-restart:\n    image: node:24-alpine\n',
+      'ops/vps/docker-restart/server.mjs': 'export const restart = 2;\n',
+      'ops/billing/src/server.mjs': 'export const version = 2;\n',
+    });
+    const box = world(files);
+    const state = path.join(box.parent, 'docker-state');
+    mkdirSync(state, { recursive: true });
+    writeFileSync(path.join(state, 'running-restart'), 'on');
+    const deployed = runDeploy(box.env, ['main']);
+    expect(deployed.status, `${deployed.stdout}\n${deployed.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 2;\n');
+    const backup = backupFrom(deployed.stdout);
+    const rolled = runDeploy(box.env, ['--rollback', backup]);
+    expect(rolled.status, `${rolled.stdout}\n${rolled.stderr}`).toBe(0);
+    expect(readFileSync(path.join(box.root, 'billing-src/src/server.mjs'), 'utf8')).toBe('export const version = 1;\n');
+    expect(readFileSync(path.join(box.root, 'docker-compose.yml'), 'utf8')).toBe('name: omp-vps\n');
+    expect(existsSync(path.join(state, 'running-restart'))).toBe(false);
   });
 
   it('a compose-only change recreates billing and does not start a stopped dht-peers', () => {
