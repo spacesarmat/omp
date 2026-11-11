@@ -304,6 +304,44 @@ fn torrserver_arguments_bind_http_and_peer_listeners_to_loopback() {
     assert_eq!(bound.local_addr().expect("addr").port(), port);
 }
 
+fn peer_helper_script() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../tests/peer_download.py")
+        .canonicalize()
+        .expect("peer helper path")
+}
+
+fn peer_helper_python() -> String {
+    if let Ok(python) = std::env::var("OMP_TEST_PYTHON") {
+        return python;
+    }
+    for candidate in ["python3", "python"] {
+        if std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+            .is_ok_and(|output| output.status.success())
+        {
+            return candidate.to_string();
+        }
+    }
+    panic!("python is required for the peer helper");
+}
+
+#[test]
+fn peer_helper_joins_tracker_threads_before_exit() {
+    let output = std::process::Command::new(peer_helper_python())
+        .arg(peer_helper_script())
+        .arg("--check-shutdown")
+        .output()
+        .expect("run peer helper shutdown check");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("shutdown clean"),
+        "peer helper shutdown check failed\nstdout:\n{stdout}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn server_peer_download() {
@@ -324,13 +362,8 @@ fn server_peer_download() {
         handle.error.as_deref().unwrap_or("")
     );
 
-    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../tests/peer_download.py")
-        .canonicalize()
-        .expect("peer helper path");
-    let python = std::env::var("OMP_TEST_PYTHON").unwrap_or_else(|_| "python".to_string());
-    let output = std::process::Command::new(python)
-        .arg(script)
+    let output = std::process::Command::new(peer_helper_python())
+        .arg(peer_helper_script())
         .arg("--origin")
         .arg(origin)
         .output()
