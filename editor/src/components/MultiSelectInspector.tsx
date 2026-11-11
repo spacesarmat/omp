@@ -52,7 +52,7 @@ export function MultiSelectInspector(props: MultiSelectInspectorProps) {
         <input
           type="text"
           data-testid="multi-margin"
-          value={props.margin === undefined ? '' : props.margin}
+          value={props.margin === 'mixed' || props.margin === undefined ? '' : props.margin}
           placeholder={props.margin === 'mixed' ? 'разные' : '0px'}
           onChange={(event) => {
             const parsed = parseSpacingField(event.currentTarget.value);

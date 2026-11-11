@@ -245,6 +245,38 @@ describe('multi-select', () => {
     expect(controller.draft.theme.layout?.containers.find((entry) => entry.nodeId === 'card-grid')?.alignment).toBeUndefined();
   });
 
+  it('shows the mixed placeholder for different margins and applies one shared margin in one undo step', () => {
+    buildPreview();
+    placeAbsolute('server-card', 100, 100, 200, 100, { margin: '8px' });
+    placeAbsolute('server-card-2', 50, 300, 100, 50, { margin: '16px' });
+
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+    pointer(overlay(), 'pointerdown', 200, 150, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 200, 150, { shiftKey: true });
+
+    const margin = host.querySelector<HTMLInputElement>('[data-testid="multi-margin"]')!;
+    expect(margin.value).toBe('');
+    expect(margin.placeholder).toBe('разные');
+
+    const update = vi.spyOn(controller, 'update');
+    act(() => {
+      margin.value = '12';
+      // preact maps onChange to native 'change'; when preact/compat is loaded in the shared
+      // worker it maps to 'input'. Exactly one of the two dispatches reaches the handler.
+      margin.dispatchEvent(new Event('input', { bubbles: true }));
+      margin.value = '12';
+      margin.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(placementOf('server-card')?.margin).toBe('12px');
+    expect(placementOf('server-card-2')?.margin).toBe('12px');
+    controller.undo();
+    expect(placementOf('server-card')?.margin).toBe('8px');
+    expect(placementOf('server-card-2')?.margin).toBe('16px');
+  });
+
   it('applies a shared margin to the selection in one undo step', () => {
     buildPreview();
     placeAbsolute('server-card', 100, 100, 200, 100);
