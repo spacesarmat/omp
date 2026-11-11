@@ -169,6 +169,7 @@ describe('Sheet grab handle and pull', () => {
     const users = files.filter((f) => /<Sheet[\s>]/.test(readFileSync(f, 'utf8'))).sort();
     expect(users).toEqual([
       'mobile/src/screens/Add.tsx',
+      'mobile/src/screens/Advanced.tsx',
       'mobile/src/screens/Calendar.tsx',
       'mobile/src/screens/InstallAssistant.tsx',
       'mobile/src/screens/Library.tsx',
