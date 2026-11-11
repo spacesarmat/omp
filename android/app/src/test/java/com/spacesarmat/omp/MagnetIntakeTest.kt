@@ -39,6 +39,15 @@ class MagnetIntakeTest {
     }
 
     @Test
+    fun sendTextSkipsAPageBeforeTheTorrent() {
+        val url = "https://x.test/a.torrent?file=b.torrent&token=abc"
+        val intent = Intent(Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, "https://x.test/page $url")
+        assertEquals(url, OmpNativePlugin.magnetFrom(intent))
+    }
+
+    @Test
     fun sendTextKeepsEveryQueryParameter() {
         val url = "https://x.test/a.torrent?file=b.torrent&token=abc"
         val intent = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, "see $url now")
