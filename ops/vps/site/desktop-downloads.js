@@ -37,7 +37,10 @@ export async function applyDesktopFeeds(root, fetchImpl) {
     try {
       const response = await fetchImpl(url);
       if (!response || !response.ok) return;
-      applyOne(root, kind, await response.json());
+      const feed = await response.json();
+      // The same feeds also carry desktop betas. A beta version must not replace the stable buttons.
+      if (!feed || typeof feed.version !== 'string' || /-beta/.test(feed.version)) return;
+      applyOne(root, kind, feed);
     } catch {
       // The v0.30.0 href stays in the page when a feed cannot be loaded.
     }

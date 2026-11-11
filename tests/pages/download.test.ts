@@ -73,6 +73,25 @@ describe('download page feeds', () => {
     ]);
   });
 
+  it('leaves stable desktop links unchanged when the feed is a beta', async () => {
+    document.body.innerHTML = `
+      <a data-download="stable-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">setup</a>
+      <span data-version="stable-windows">0.30.0</span>
+      <a data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">beta</a>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-windows.json')
+        ? { version: '0.31.0-beta.1', url: 'https://example.test/beta-setup.exe' }
+        : String(url).endsWith('update-android-beta.json')
+          ? { version: '0.31.0-beta.1', ipkUrl: 'https://example.test/beta.apk' }
+          : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    expect(link('stable-windows').href).toBe('https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe');
+    expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
+    expect(link('beta-android').href).toBe('https://example.test/beta.apk');
+  });
+
   it('keeps release-page fallbacks when feeds cannot be loaded', async () => {
     const fetchImpl = vi.fn(() => Promise.reject(new Error('offline')));
     await updateDownloads(document, fetchImpl as unknown as typeof fetch);
@@ -234,7 +253,7 @@ describe('download page languages and fallbacks', () => {
       expect(doc.querySelector('[data-download="stable-linux"]:not([data-asset])')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-linux-x64.AppImage');
       expect(doc.querySelector('[data-download="stable-linux"][data-asset="deb"]')!.getAttribute('href')).toBe(desktop + 'OMP-0.30.0-linux-x64.deb');
       expect(doc.querySelector('[data-download="stable-linux"][data-asset="deb"]')!.hasAttribute('hidden')).toBe(false);
-      expect(doc.querySelector('[data-platform="macos"]')!.textContent).toContain('xattr -d com.apple.quarantine');
+      expect(doc.querySelector('[data-platform="macos"]')!.textContent).toContain('xattr -d com.apple.quarantine "/Applications/OMP.app"');
       for (const platform of ['windows', 'macos', 'linux']) {
         expect(doc.querySelector(`[data-platform="${platform}"]`)!.textContent!.toLowerCase()).not.toMatch(/beta|бета/);
       }

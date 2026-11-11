@@ -4,7 +4,7 @@
 
 ## Не выпущено
 
-- [tech] Сайт omp-player.online и страница загрузки отдают стабильные сборки Windows (установщик и portable), macOS (Apple Silicon и Intel) и Linux (AppImage и deb). Подписи «бета» у компьютера убраны. Кнопки читают фиды update-windows.json, update-macos.json и update-linux.json: их уже пишет desktop workflow, поэтому следующая сборка не требует правки ссылок
+- [tech] Сайт omp-player.online и страница загрузки отдают стабильные сборки Windows (установщик и portable), macOS (Apple Silicon и Intel) и Linux (AppImage и deb). Подписи «бета» у компьютера убраны. Кнопки читают фиды update-windows.json, update-macos.json и update-linux.json: их уже пишет desktop workflow. Бета в том же фиде стабильные кнопки не подменяет, поэтому следующая стабильная сборка не требует правки ссылок
 
 ## 0.30.0
 

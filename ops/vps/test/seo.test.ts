@@ -139,7 +139,7 @@ describe('landing SEO', () => {
       const installFaq = [...d.querySelectorAll('#faq details')].find((details) =>
         /Как установить|How do I install/.test(details.querySelector('summary')?.textContent ?? ''),
       );
-      expect(installFaq?.textContent).toContain('xattr -d com.apple.quarantine');
+      expect(installFaq?.textContent).toContain('xattr -d com.apple.quarantine "/Applications/OMP.app"');
       expect(installFaq?.querySelector('[data-download="desktop-windows"]:not([data-asset])')).not.toBeNull();
     }
   });

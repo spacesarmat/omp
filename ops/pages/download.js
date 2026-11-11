@@ -193,6 +193,9 @@ export async function updateDownloads(root, fetchImpl) {
       const response = await fetchImpl(url);
       if (!response || !response.ok) return;
       const feed = await response.json();
+      // Desktop workflow publishes betas into the same feeds. Stable buttons keep their fallback until the feed version is not a beta.
+      if ((kind === 'stable-windows' || kind === 'stable-macos' || kind === 'stable-linux')
+        && (!feed || typeof feed.version !== 'string' || /-beta/.test(feed.version))) return;
       applyFeed(root, kind, versionKey || channel, feed);
       await fillDate(root, kind, feed && feed.releaseUrl, fetchImpl, dates);
     } catch {

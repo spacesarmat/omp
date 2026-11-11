@@ -24,6 +24,7 @@ describe('desktop download feeds', () => {
     `;
     const feeds: Record<string, unknown> = {
       [FEED + 'update-windows.json']: {
+        version: '0.31.0',
         url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-setup.exe',
         assets: {
           nsis: { url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-setup.exe' },
@@ -31,6 +32,7 @@ describe('desktop download feeds', () => {
         },
       },
       [FEED + 'update-macos.json']: {
+        version: '0.31.0',
         url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-macos-arm64.dmg',
         assets: {
           arm64: { url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-macos-arm64.dmg' },
@@ -38,6 +40,7 @@ describe('desktop download feeds', () => {
         },
       },
       [FEED + 'update-linux.json']: {
+        version: '0.31.0',
         url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-linux-x64.AppImage',
         assets: {
           appimage: { url: 'https://github.com/spacesarmat/omp/releases/download/v0.31.0/OMP-0.31.0-linux-x64.AppImage' },
@@ -60,6 +63,16 @@ describe('desktop download feeds', () => {
       FEED + 'update-macos.json',
       FEED + 'update-linux.json',
     ]);
+  });
+
+  it('keeps the stable fallback when the feed version is a beta', async () => {
+    document.body.innerHTML = '<a data-download="desktop-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">setup</a>';
+    const fetchImpl = vi.fn(() => Promise.resolve(response({
+      version: '0.31.0-beta.1',
+      url: 'https://github.com/spacesarmat/omp/releases/download/desktop-0.31.0-beta.1/OMP-0.31.0-beta.1-setup.exe',
+    })));
+    await applyDesktopFeeds(document, fetchImpl as unknown as typeof fetch);
+    expect(href('[data-download="desktop-windows"]')).toBe('https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe');
   });
 
   it('keeps the fallback href when a feed url is not a release file', async () => {
