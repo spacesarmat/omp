@@ -36,7 +36,7 @@ You need [TorrServer](https://github.com/YouROK/TorrServer) on the home network.
 
 ## Install
 
-Builds are on the [latest release](https://github.com/spacesarmat/omp/releases/latest): `OMP-<version>-webOS.ipk` for LG and three APKs for Android. Desktop betas (Windows, macOS, Linux) are on the [download page](https://spacesarmat.github.io/omp/en/). The full Russian steps are in [Установка](README.md#установка).
+Builds are on the [latest release](https://github.com/spacesarmat/omp/releases/latest): `OMP-<version>-webOS.ipk` for LG, three APKs for Android, a Windows installer and portable exe, DMG files for Apple Silicon and Intel, and an AppImage and deb for Linux. The same files are on the [download page](https://spacesarmat.github.io/omp/en/). The full Russian steps are in [Установка](README.md#установка).
 
 The short path: install OMP on the phone and open Settings → “Install OMP on TV”. The phone finds LG and Android TV on the network and installs OMP. On LG that is developer mode (the Passphrase from the Developer Mode app); on Android TV it is network debugging (port 5555). The assistant does not pair Android 11+ wireless debugging yet.
 

@@ -36,7 +36,7 @@ Samsung (Tizen) пока не поддерживается. Приставки X
 
 ## Установка
 
-Сборки лежат на странице [последнего выпуска](https://github.com/spacesarmat/omp/releases/latest): `OMP-<версия>-webOS.ipk` для LG и три APK для Android. Компьютерные беты (Windows, macOS, Linux) собраны на [странице загрузки](https://spacesarmat.github.io/omp/).
+Сборки лежат на странице [последнего выпуска](https://github.com/spacesarmat/omp/releases/latest): `OMP-<версия>-webOS.ipk` для LG, три APK для Android, установщик и portable для Windows, DMG для Apple Silicon и Intel, AppImage и deb для Linux. Те же файлы есть на [странице загрузки](https://spacesarmat.github.io/omp/).
 
 Проще всего с телефона: «Настройки» → «Установить OMP на телевизор». Телефон находит LG и Android TV в сети и ставит OMP сам. На LG это режим разработчика (код Passphrase из приложения Developer Mode), на Android TV - отладка по сети (порт 5555). Сопряжение «Беспроводной отладки» Android 11+ помощник пока не делает.
 

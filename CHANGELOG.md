@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Сайт omp-player.online и страница загрузки отдают стабильные сборки Windows (установщик и portable), macOS (Apple Silicon и Intel) и Linux (AppImage и deb). Подписи «бета» у компьютера убраны. Кнопки читают фиды update-windows.json, update-macos.json и update-linux.json: их уже пишет desktop workflow. Бета в том же фиде стабильные кнопки не подменяет, поэтому следующая стабильная сборка не требует правки ссылок. Основные кнопки в одном ряду стоят на одной линии
+
 ## 0.30.0
 
 - [phone] С пульта можно включить телевизор и приставку. OMP запоминает MAC и адрес рассылки сопряженного устройства, устройство можно добавить по MAC вручную. Кнопка «Включить» шлет Wake-on-LAN. Для LG, Samsung и Android TV есть команды питания, громкости и входа. На телефоне с ИК-портом есть марки и проверка кода, а кнопку можно обучить приемником ESP или вставить код Flipper, Pronto или raw

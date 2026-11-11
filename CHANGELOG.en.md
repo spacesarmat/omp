@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
+
 ## 0.30.0
 
 - [phone] The remote can turn a TV or a box on. OMP remembers the MAC and broadcast address of a paired device, and a device can be added by MAC. Turn on sends Wake-on-LAN. LG, Samsung and Android TV get power, volume and input commands. A phone with an IR blaster offers brands and a code test, and a button can be learned with an ESP receiver or pasted as Flipper, Pronto or raw

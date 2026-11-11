@@ -440,6 +440,7 @@ h2 {
 
 .platform ul {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
   margin: 0;
@@ -448,6 +449,21 @@ h2 {
 }
 
 .platform a { color: var(--accent); font-size: 13px; font-weight: 500; line-height: 20px; }
+
+.platform-downloads {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.platform-downloads .button {
+  width: 100%;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.platform code { overflow-wrap: anywhere; }
 
 .plan { gap: 16px; padding: 32px; }
 

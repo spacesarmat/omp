@@ -110,20 +110,37 @@ describe('landing SEO', () => {
     expect(robots.match(/^Clean-param: /gm)).toHaveLength(1);
   });
 
-  it('links the Windows beta and states its processor requirement on both pages', () => {
+  it('links stable desktop downloads and states the processor and macOS quarantine steps', () => {
+    const base = 'https://github.com/spacesarmat/omp/releases/download/v0.30.0/';
+    const files = [
+      base + 'OMP-0.30.0-setup.exe',
+      base + 'OMP-0.30.0-portable.exe',
+      base + 'OMP-0.30.0-macos-arm64.dmg',
+      base + 'OMP-0.30.0-macos-x64.dmg',
+      base + 'OMP-0.30.0-linux-x64.AppImage',
+      base + 'OMP-0.30.0-linux-x64.deb',
+    ];
     for (const p of PAGES) {
       const d = doc(p.file);
-      const betaRelease = 'https://github.com/spacesarmat/omp/releases/tag/desktop-0.20.12-beta.2';
-      const betaInstaller = 'https://github.com/spacesarmat/omp/releases/download/desktop-0.20.12-beta.2/OMP-0.20.12-beta.2-setup.exe';
-      expect(d.querySelectorAll(`a[href="${betaRelease}"]`)).toHaveLength(2);
-      expect(d.querySelectorAll(`a[href="${betaInstaller}"]`)).toHaveLength(4);
+      const html = d.documentElement.outerHTML;
+      expect(html).not.toContain('desktop-0.20.12');
+      expect(html).not.toContain('github.io/omp');
+      expect(html.toLowerCase()).not.toMatch(/бета|\(beta\)|beta channel|beta release/);
+      for (const href of files) expect(d.querySelectorAll(`a[href="${href}"]`).length).toBeGreaterThanOrEqual(2);
+      expect(d.querySelector('[data-download="desktop-windows"][data-asset="portable"]')).not.toBeNull();
+      expect(d.querySelector('[data-download="desktop-macos"][data-asset="arm64"]')).not.toBeNull();
+      expect(d.querySelector('[data-download="desktop-macos"][data-asset="x64"]')).not.toBeNull();
+      expect(d.querySelector('[data-download="desktop-linux"][data-asset="appimage"]')).not.toBeNull();
+      expect(d.querySelector('[data-download="desktop-linux"][data-asset="deb"]')).not.toBeNull();
+      expect(d.querySelector('script[src^="/desktop-downloads.js"]')).not.toBeNull();
 
       const card = [...d.querySelectorAll('article h3')].find((h) => h.textContent?.startsWith('Windows'));
       expect(card?.parentElement?.textContent).toContain('x86_64-v3');
       const installFaq = [...d.querySelectorAll('#faq details')].find((details) =>
         /Как установить|How do I install/.test(details.querySelector('summary')?.textContent ?? ''),
       );
-      expect(installFaq?.querySelector(`a[href="${betaRelease}"]`)).not.toBeNull();
+      expect(installFaq?.textContent).toContain('xattr -d com.apple.quarantine "/Applications/OMP.app"');
+      expect(installFaq?.querySelector('[data-download="desktop-windows"]:not([data-asset])')).not.toBeNull();
     }
   });
 
