@@ -818,6 +818,32 @@ dht_container_running() {
   [[ "$raw" == "true" ]]
 }
 
+# Node keeps server.mjs from process start. A bind-mount edit does not reload it.
+# up -d also skips a container whose compose spec did not change, so force-recreate.
+RESTART_CONTAINER="${OMP_RESTART_CONTAINER:-omp-docker-restart}"
+
+restart_container_running() {
+  local raw
+  raw="$(docker inspect --format '{{.State.Running}}' "$RESTART_CONTAINER" 2>/dev/null)" || return 1
+  raw="${raw,,}"
+  raw="${raw//$'\r'/}"
+  raw="${raw//$'\n'/}"
+  [[ "$raw" == "true" ]]
+}
+
+recreate_restart_helper() {
+  if ! restart_container_running; then
+    log "docker-restart profile is off"
+    return 0
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "would docker compose --profile restart up -d --no-deps --force-recreate docker-restart"
+    return 0
+  fi
+  log "restarting docker-restart"
+  compose --profile restart up -d --no-deps --force-recreate docker-restart || return 1
+}
+
 dht_current_image_id() {
   local raw
   raw="$(docker image inspect --format '{{.Id}}' "$DHT_IMAGE" 2>/dev/null)" || {
@@ -1026,6 +1052,11 @@ apply_restarts() {
   else
     log "dht-peers unchanged"
   fi
+  if [[ "$RESTART_CHANGED" -eq 1 ]]; then
+    recreate_restart_helper || return 1
+  else
+    log "docker-restart unchanged"
+  fi
   if caddy_mount_changed; then
     log "reloading caddy"
     caddy_reload || return 1
@@ -1075,6 +1106,11 @@ print_restart_plan() {
     log "would not restart dht-peers"
   else
     log "would not restart dht-peers"
+  fi
+  if [[ "$RESTART_CHANGED" -eq 1 ]] && restart_container_running; then
+    log "would docker compose --profile restart up -d --no-deps --force-recreate docker-restart"
+  else
+    log "would not restart docker-restart"
   fi
   if caddy_mount_changed; then
     log "would reload caddy"
@@ -1584,7 +1620,7 @@ restore_dht_service() {
 
 restore_backup() {
   local backup="$1"
-  local caddy_diff docker_diff compose_diff dht_diff reload_failed image_failed dht_failed billing_restarted
+  local caddy_diff docker_diff compose_diff dht_diff restart_diff reload_failed image_failed dht_failed billing_restarted
   [[ -d "$backup" ]] || die "backup not found: ${backup}"
   [[ -f "$backup/backup.manifest" ]] || die "not a deploy backup: ${backup}"
   read_manifest "$backup/backup.manifest"
@@ -1593,6 +1629,7 @@ restore_backup() {
   docker_diff=0
   compose_diff=0
   dht_diff=0
+  restart_diff=0
   reload_failed=0
   image_failed=0
   dht_failed=0
@@ -1633,6 +1670,13 @@ restore_backup() {
   elif [[ "$MANIFEST_HAD_DHT" == 0 && -e "$ROOT/dht-peers" ]]; then
     dht_diff=1
   fi
+  if [[ "$MANIFEST_HAD_RESTART" == 1 ]]; then
+    if dirs_differ "$backup/docker-restart" "$ROOT/docker-restart" restart; then
+      restart_diff=1
+    fi
+  elif [[ "$MANIFEST_HAD_RESTART" == 0 && -e "$ROOT/docker-restart" ]]; then
+    restart_diff=1
+  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     log "would roll back from ${backup}"
   else
@@ -1653,6 +1697,9 @@ restore_backup() {
   fi
   if [[ -n "$MANIFEST_HAD_RESTART" ]]; then
     restore_one_dir "$backup" docker-restart "$MANIFEST_HAD_RESTART" restart || return 1
+  fi
+  if [[ "$restart_diff" -eq 1 ]]; then
+    recreate_restart_helper || return 1
   fi
   # A failed Caddy reload must not skip the image restore. Each step finishes
   # before health checks, and any failure is still a failed rollback.
