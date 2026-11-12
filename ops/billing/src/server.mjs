@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
-import { applyReferralPost, publicReferral } from './referralAdmin.mjs';
+import { applyReferralPost, claimReferralNotices, publicReferral, restoreReferralNotices } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -1297,6 +1297,29 @@ async function finishDonate(state, applied, fetchImpl) {
   }
 }
 
+async function flushReferralNotices(store, fetchImpl) {
+  const peek = await store.read();
+  if (!peek || !peek.settings || !peek.settings.botToken) return;
+  if (!(peek.referralJournal || []).some((row) => row && (row.noticePending || row.friendNoticePending))) return;
+  const claimed = await store.update((cur) => {
+    const notes = claimReferralNotices(cur);
+    return { state: notes.state, result: { messages: notes.messages, token: (cur.settings && cur.settings.botToken) || '' } };
+  });
+  const list = claimed.messages || [];
+  const failed = [];
+  for (let i = 0; i < list.length; i++) {
+    let ok = false;
+    try {
+      const out = await telegramSend(claimed.token, list[i].chatId, list[i].text, fetchImpl);
+      ok = !!(out && out.ok);
+    } catch (e) {
+      ok = false;
+    }
+    if (!ok && list[i].restore) failed.push.apply(failed, list[i].restore);
+  }
+  if (failed.length) await store.update((state) => ({ state: restoreReferralNotices(state, failed) }));
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -2388,6 +2411,7 @@ export function createApp(file, fetchImpl, opts) {
               flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
               try {
                 await tellPayment((await store.read()), out, net);
+                await flushReferralNotices(store, net);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
               }
@@ -2496,19 +2520,13 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=donations';
         }
         if (path === '/admin/referral') {
+          let note = '';
           await store.update((state) => {
-            const r = applyReferralPost(body, state.referralJournal || [], state.referralBinds || []);
-            return {
-              state: {
-                ...state,
-                settings: { ...state.settings, referral: r.settings },
-                referralJournal: r.journal,
-                referralBinds: r.binds,
-              },
-              result: { ok: true },
-            };
+            const r = applyReferralPost(body, state, { now: Date.now(), actor: adminActor(admin) });
+            note = r.note || '';
+            return { state: r.state, result: { ok: true } };
           });
-          flashText = 'Реферальная программа сохранена';
+          flashText = note || 'Реферальная программа сохранена';
           redirectTo = '/admin/?tab=referral';
         }
         if (path === '/admin/ads/banner') {
@@ -2881,14 +2899,31 @@ export function createApp(file, fetchImpl, opts) {
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
         // Optional. A read-only cutover must still answer /v1/me.
         const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
+        let referralNotes = [];
         if (!readOnly && (settleReferrals(state, now).state !== state || countryDirty)) {
           const accountId = account.id;
           const next = await store.update((cur) => {
             let merged = settleReferrals(cur, now).state;
             if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
-            return { state: merged, result: merged };
+            const notes = claimReferralNotices(merged);
+            referralNotes = notes.messages;
+            return { state: notes.state, result: notes.state };
           });
           if (next && next.accounts) state = next;
+        }
+        if (referralNotes.length && state.settings && state.settings.botToken) {
+          const failed = [];
+          for (let n = 0; n < referralNotes.length; n++) {
+            let ok = false;
+            try {
+              const out = await telegramSend(state.settings.botToken, referralNotes[n].chatId, referralNotes[n].text, net);
+              ok = !!(out && out.ok);
+            } catch (e) {
+              ok = false;
+            }
+            if (!ok && referralNotes[n].restore) failed.push.apply(failed, referralNotes[n].restore);
+          }
+          if (failed.length) await store.update((cur) => ({ state: restoreReferralNotices(cur, failed) }));
         }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
@@ -3345,6 +3380,7 @@ export function createApp(file, fetchImpl, opts) {
         if (!applied.duplicate && !applied.error) {
           try {
             await tellPayment(freshPay, applied, net);
+            await flushReferralNotices(store, net);
           } catch (e) {
             /* the payment is stored either way */
           }
@@ -3426,7 +3462,10 @@ export function createApp(file, fetchImpl, opts) {
           await finishDonate(freshPay, applied, net);
           return send(res, 200, 'ok');
         }
-        if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
+        if (!applied.duplicate && !applied.error) {
+          await tellPayment(freshPay, applied, net);
+          await flushReferralNotices(store, net);
+        }
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
           if (chat) {
@@ -3722,6 +3761,7 @@ export async function pollBot(file, fetchImpl, opts) {
             if (!applied.duplicate && !applied.error) {
               try {
                 await tellPayment(freshStar, applied, net);
+                await flushReferralNotices(store, net);
               } catch (e) {
                 /* the payment is stored either way */
               }
@@ -3967,7 +4007,8 @@ export async function runReminders(file, fetchImpl, now) {
       messages.push(reminderMessage(state, rows[i], at));
       next = markReminder(next, { ...rows[i], now: at });
     }
-    return { state: next, result: { rows, messages, token: state.settings.botToken } };
+    const notes = claimReferralNotices(next);
+    return { state: notes.state, result: { rows, messages, referralMessages: notes.messages, token: state.settings.botToken } };
   });
   let sent = 0;
   let failed = 0;
@@ -3990,6 +4031,19 @@ export async function runReminders(file, fetchImpl, now) {
       await store.update((state) => ({ state: releaseReminder(state, row) }));
     }
   }
+  const extra = claimed.referralMessages || [];
+  const failedNotes = [];
+  for (let i = 0; i < extra.length; i++) {
+    let ok = false;
+    try {
+      const out = await telegramSend(claimed.token, extra[i].chatId, extra[i].text, net);
+      ok = !!(out && out.ok);
+    } catch (e) {
+      ok = false;
+    }
+    if (!ok && extra[i].restore) failedNotes.push.apply(failedNotes, extra[i].restore);
+  }
+  if (failedNotes.length) await store.update((state) => ({ state: restoreReferralNotices(state, failedNotes) }));
   return { sent, failed };
 }
 

@@ -47,7 +47,7 @@ interface MeBody {
   /** Popular-release cache. Omitted or false: the player keeps the local TorrServer. */
   cache?: { enabled?: boolean };
   /** Omitted by a server from before the referral screen. Missing means the program is off. */
-  referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
+  referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number; noticeCredit?: number };
   /** Paid donation on this account. Omitted by a server from before donations. */
   supporter?: boolean;
   bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
@@ -90,11 +90,13 @@ function referralOf(body: MeBody): BillingAccount['referral'] {
   if (!row || typeof row !== 'object') return undefined;
   const friends = typeof row.friends === 'number' && isFinite(row.friends) ? Math.max(0, Math.floor(row.friends)) : 0;
   const noticeDays = typeof row.noticeDays === 'number' && isFinite(row.noticeDays) ? Math.max(0, Math.floor(row.noticeDays)) : 0;
+  const noticeCredit = typeof row.noticeCredit === 'number' && isFinite(row.noticeCredit) ? Math.max(0, Math.floor(row.noticeCredit)) : 0;
   return {
     enabled: row.enabled === true,
     code: typeof row.code === 'string' ? row.code : '',
     friends,
     noticeDays,
+    noticeCredit,
   };
 }
 

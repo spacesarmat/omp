@@ -15,7 +15,7 @@ beforeEach(() => {
 
 describe('tell friends', () => {
   it('stays off when the phone is signed out', async () => {
-    expect(await loadPhoneReferral()).toEqual({ enabled: false, code: '', friends: 0, noticeDays: 0 });
+    expect(await loadPhoneReferral()).toEqual({ enabled: false, code: '', friends: 0, noticeDays: 0, noticeCredit: 0 });
   });
 
   it('says the program is off and hides the code', () => {

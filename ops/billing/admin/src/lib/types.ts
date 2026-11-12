@@ -194,15 +194,24 @@ export type HomeData = {
       enabled?: boolean;
       referrerDays?: number;
       friendDays?: number;
+      balance?: boolean;
       balancePercent?: number;
+      balanceMax?: number;
+      balanceMonthlyCap?: number;
       tiers?: boolean;
+      tierList?: { friends: number; days: number; percent: number }[];
       friendDiscount?: boolean;
+      friendDiscountPercent?: number;
+      friendDiscountRub?: number;
+      friendDiscountDays?: number;
       retention?: boolean;
+      retentionMonths?: number;
+      retentionDays?: number;
       delayDays?: number;
       yearlyCap?: number;
     };
   };
-  referralJournal?: { id: string; friendId?: string; status: string; days: number; reason?: string }[];
+  referralJournal?: { id: string; friendId?: string; status: string; days: number; reason?: string; variant?: string; credit?: number; shortfall?: string }[];
   donations?: {
     rows?: { id: string; atText: string; who: string; telegramId: string; amountRub: number; method: string; comment: string; commentHidden: boolean; nameHidden: boolean; status: string }[];
     summary?: { day: { sum: number; count: number; average: number }; week: { sum: number; count: number; average: number }; month: { sum: number; count: number; average: number } };

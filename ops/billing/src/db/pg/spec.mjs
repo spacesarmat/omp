@@ -295,6 +295,38 @@ export const COLLECTIONS = [
       ['refundedAt', 'refunded_at', 'int'],
     ],
   },
+  {
+    name: 'referralBinds',
+    table: 'referral_binds',
+    key: 'friendId',
+    cols: [
+      ['friendId', 'friend_id', 'text'],
+      ['referrerId', 'referrer_id', 'text'],
+      ['code', 'code', 'text'],
+      ['boundAt', 'bound_at', 'int'],
+      ['deviceId', 'device_id', 'text'],
+    ],
+  },
+  {
+    name: 'referralJournal',
+    table: 'referral_accruals',
+    key: 'id',
+    cols: [
+      ['referrerId', 'referrer_id', 'text'],
+      ['friendId', 'friend_id', 'text'],
+      ['status', 'status', 'text'],
+      ['days', 'days', 'int'],
+      ['reason', 'reason', 'text'],
+      ['at', 'created_at', 'int'],
+      ['variant', 'variant', 'text'],
+      ['credit', 'credit_rub', 'int'],
+      ['paidAt', 'paid_at', 'int'],
+      ['grantedAt', 'granted_at', 'int'],
+      ['friendDays', 'friend_days', 'int'],
+      ['shortfall', 'shortfall', 'text'],
+      ['reversedAt', 'reversed_at', 'int'],
+    ],
+  },
 ];
 
 /** Top-level keys stored elsewhere: settings (key/value), meta (key/value), supportClosed (telegram id → ms). */

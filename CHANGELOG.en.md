@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Invite: a balance credit shows the amount
+- [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 013
+
 ## 0.30.1-beta.5
 
 - [phone] Watch from: a server row stays dark, with the name and address on one line, the status under them, and the menu on the right. The light box is gone

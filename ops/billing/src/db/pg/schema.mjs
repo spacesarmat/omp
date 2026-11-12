@@ -707,6 +707,28 @@ CREATE UNIQUE INDEX donations_operation_settled ON donations (operation_id)
   WHERE coalesce(operation_id, '') <> '' AND status IN ('paid', 'refunded');
 `,
   },
+  {
+    version: '013_referral_variants',
+    sql: `
+-- Journal columns for balance, tiers, friend discount and retention.
+-- referral_binds and referral_accruals were created in 011 without ord/extra, so the store could not use them.
+-- Settings themselves stay in settings.referral. New variant flags default off.
+ALTER TABLE referral_binds ADD COLUMN device_id text;
+ALTER TABLE referral_binds ADD COLUMN ord bigint NOT NULL DEFAULT 0;
+ALTER TABLE referral_binds ADD COLUMN extra jsonb NOT NULL DEFAULT '{}';
+CREATE INDEX referral_binds_ord ON referral_binds (ord);
+ALTER TABLE referral_accruals ADD COLUMN variant text;
+ALTER TABLE referral_accruals ADD COLUMN credit_rub bigint;
+ALTER TABLE referral_accruals ADD COLUMN paid_at bigint;
+ALTER TABLE referral_accruals ADD COLUMN granted_at bigint;
+ALTER TABLE referral_accruals ADD COLUMN friend_days bigint;
+ALTER TABLE referral_accruals ADD COLUMN shortfall text;
+ALTER TABLE referral_accruals ADD COLUMN reversed_at bigint;
+ALTER TABLE referral_accruals ADD COLUMN ord bigint NOT NULL DEFAULT 0;
+ALTER TABLE referral_accruals ADD COLUMN extra jsonb NOT NULL DEFAULT '{}';
+CREATE INDEX referral_accruals_ord ON referral_accruals (ord);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
