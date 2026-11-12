@@ -21,9 +21,8 @@ export function saveItemProgress(
   if (!(duration > 0) || !(time >= 1)) return;
   saveProgress(hash, idx, time, duration, open);
   if (remote && c && time >= MIN_RESUME) {
-    // server: timecode < MIN_RESUME means watched, so send 0 once the file is (nearly) finished
-    const tc = !open && time / duration >= WATCHED_RATIO ? 0 : Math.floor(time);
-    c.setViewed(hash, idx, tc).catch(() => undefined);
+    // A finished file is stored locally. Never send 0: TorrServer also writes 0 when a file is only opened.
+    c.setViewed(hash, idx, Math.floor(time)).catch(() => undefined);
   }
   if (remote) {
     const title = item.torrentTitle || item.title;

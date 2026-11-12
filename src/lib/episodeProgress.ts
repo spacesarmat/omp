@@ -173,14 +173,17 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
   }
   const s = r.server(c.hash, c.fileIndex);
   if (!s) return null;
-  const at = s.timecode && s.timecode >= MIN_RESUME ? s.timecode : 0;
-  return { watched: !at, position: at, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  // TorrServer writes a viewed row with no play time as soon as a file is opened
+  // (ffprobe, the MKV tail preload). That is not a watch. Only a stored position counts.
+  const at = typeof s.timecode === 'number' && s.timecode >= MIN_RESUME ? s.timecode : 0;
+  if (!at) return null;
+  return { watched: false, position: at, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
 }
 
 /**
  * The progress of a file counting the copies of its episode in the other releases of the series.
- * A watched record (local or a server mark) wins over a position unless that position is strictly newer than a known
- * watched time; a server mark has no time, so it always wins. Among positions the most recently updated wins (the
+ * A watched record (a real local watch or a manual mark) wins over a position unless that position is strictly newer
+ * than the watched time. A server row with no play time is ignored. Among positions the most recently updated wins (the
  * file's own on a tie). A position from another copy is kept only below the file's own known duration.
  * Nothing recorded anywhere: not watched, no position.
  */

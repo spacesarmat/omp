@@ -33,7 +33,7 @@ describe('progress store', () => {
   });
   it('uses server viewed when no local data', () => {
     serverViewed.value = [{ hash: H, file_index: 2, timecode: 0 }, { hash: H, file_index: 3, timecode: 300 }];
-    expect(isWatched(H, 2)).toBe(true);
+    expect(isWatched(H, 2)).toBe(false);
     expect(isWatched(H, 3)).toBe(false);
     expect(resumePosition(H, 3)).toBe(300);
     expect(isWatched(H, 4)).toBe(false);
