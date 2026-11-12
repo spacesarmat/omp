@@ -5,7 +5,7 @@ import { showToast } from './toast';
 import { qualityLabels, gbText } from '../monitor/text';
 import { t, tp } from '../../../src/i18n';
 import { askNotifyOnce, reloadMonitor } from '../monitor/ui';
-import { askConfirm } from './confirm';
+import { askConfirm, askSaveChoice } from './confirm';
 import { addSubscription, loadSubs, removeSubscription, updateSubscription } from '../../../src/monitor/subs';
 import type { SubQuality, Subscription, SubscriptionInput } from '../../../src/monitor/types';
 import { allSources } from '../../../src/sources/registry';
@@ -120,9 +120,9 @@ export function SubSheet(p: {
   };
   const close = () => {
     if (!dirty()) { p.onClose(); return; }
-    void askConfirm(t('monitor.sub.saveAsk'), t('common.save'), { cancelLabel: t('monitor.sub.discard') }).then((yes) => {
-      if (yes) save();
-      else p.onClose();
+    void askSaveChoice(t('monitor.sub.saveAsk'), t('common.save'), t('monitor.sub.discard')).then((answer) => {
+      if (answer === 'save') save();
+      else if (answer === 'discard') p.onClose();
     });
   };
 

@@ -17,7 +17,7 @@ import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, 
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
-import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { acceptConfirm, confirmText, declineConfirm, dismissConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 
 let el: HTMLElement;
 let mon: FakeMonitor;
@@ -171,6 +171,12 @@ describe('SubSheet', () => {
     type('m-sub-query', 'Дюна 2');
     click(el.querySelector('.m-sheet-backdrop'));
     expect(confirmText()).toContain('Сохранить изменения');
+    await dismissConfirm();
+    expect(confirmText()).toBe('');
+    expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Дюна 2');
+    expect(getSubscription(s.id)!.query).toBe('Дюна');
+    expect(close).not.toHaveBeenCalled();
+    click(el.querySelector('.m-sheet-backdrop'));
     await declineConfirm();
     expect(getSubscription(s.id)!.query).toBe('Дюна');
     expect(close).toHaveBeenCalledTimes(1);
