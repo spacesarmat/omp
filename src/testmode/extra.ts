@@ -341,6 +341,16 @@ export const PHONE_SCREENS: ExtraScreen[] = [
     ],
   },
   {
+    key: 'phone:invite',
+    code: 'P36',
+    ru: 'Рассказать друзьям',
+    en: 'Tell friends',
+    items: [
+      it('P36.1', 'Назад', 'Back'),
+      it('P36.2', 'Поделиться', 'Share'),
+    ],
+  },
+  {
     key: 'phone:watchFrom',
     code: 'P35',
     ru: 'Откуда смотреть',

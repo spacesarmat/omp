@@ -63,8 +63,7 @@ describe('referral accrual', () => {
     const rows: ReferralJournalRow[] = [{ id: 'a', friendId: 'f', status: 'granted', days: 7, reason: 'paid' }];
     expect(cancelReferral(rows, 'a')[0].status).toBe('cancelled');
     expect(cancelReferral(rows, 'a')[0].reason).toBe('manual');
-    expect(referralNotice(rows[0])!.app).toContain('7');
-    expect(referralNotice(rows[0])!.bot).toContain('+7');
+    expect(referralNotice(rows[0])).toEqual({ days: 7 });
     expect(referralNotice(cancelReferral(rows, 'a')[0])).toBeNull();
   });
 

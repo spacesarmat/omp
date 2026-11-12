@@ -104,13 +104,10 @@ export function cancelReferral(rows: ReferralJournalRow[], id: string): Referral
   return rows.map((row) => (row.id === id && row.status !== 'cancelled' ? { ...row, status: 'cancelled', reason: 'manual' } : row));
 }
 
-/** Text for the phone and the bot. Nothing is sent until the program granted days. */
-export function referralNotice(row: ReferralJournalRow): { app: string; bot: string } | null {
+/** Days to announce. Copy lives in the dictionaries. */
+export function referralNotice(row: ReferralJournalRow): { days: number } | null {
   if (row.status !== 'granted' || row.days <= 0) return null;
-  return {
-    app: 'Друг оплатил подписку. Вам начислено ' + row.days + ' дн.',
-    bot: 'Реферал: другу засчитана оплата, вам +' + row.days + ' дн.',
-  };
+  return { days: row.days };
 }
 
 export interface InviteView {

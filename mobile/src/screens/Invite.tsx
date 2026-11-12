@@ -43,7 +43,7 @@ export function Invite({ enabled = false, code = '', friends = 0 }: { enabled?: 
   return (
     <div class="m-screen" data-route="invite">
       <div class="m-bar">
-        <button type="button" class="m-icon-btn" aria-label={t('common.back')} onClick={() => goBack()}>
+        <button type="button" class="m-icon-btn tm" data-code="P36.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
         </button>
         <h1 class="m-bar-title">{t('invite.title')}</h1>
@@ -56,7 +56,7 @@ export function Invite({ enabled = false, code = '', friends = 0 }: { enabled?: 
           <p data-invite-code>{t('invite.code', { code: view.code })}</p>
           <p data-invite-count>{t('invite.friends', { n: view.friends })}</p>
           {qr ? <img src={qr} alt={t('invite.qr')} width={180} height={180} /> : null}
-          <button type="button" class="m-btn m-btn-primary" data-invite-share onClick={share}>
+          <button type="button" class="m-btn m-btn-primary tm" data-code="P36.2" data-invite-share onClick={share}>
             {t('invite.share')}
           </button>
         </>
