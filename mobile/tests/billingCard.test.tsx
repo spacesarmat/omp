@@ -6,6 +6,11 @@ import { act } from 'preact/test-utils';
 import { fakeSite, page, type FakeSite } from '../../tests/sources/fakeSite';
 
 let site: FakeSite;
+const me: { telegramId: string; paidUntil: number; active: boolean; overLimit?: boolean } = {
+  telegramId: '',
+  paidUntil: 2e12,
+  active: true,
+};
 vi.mock('../src/searchContext', () => ({ phoneSourceContext: () => site.ctx }));
 
 import { OmpJackettCard } from '../src/screens/OmpJackettCard';
@@ -22,6 +27,10 @@ const flush = () =>
 
 beforeEach(async () => {
   localStorage.clear();
+  me.telegramId = '';
+  me.paidUntil = 2e12;
+  me.active = true;
+  me.overLimit = false;
   site = fakeSite((c) => {
     if (c.url.indexOf('/v1/activate') > 0) {
       return page(
@@ -35,7 +44,7 @@ beforeEach(async () => {
         c.url,
       );
     }
-    return page(JSON.stringify({ telegramId: '', paidUntil: 2e12, active: true }), c.url);
+    return page(JSON.stringify(me), c.url);
   }, {});
   document.body.innerHTML = '<div id="app"></div>';
   el = document.getElementById('app')!;
@@ -95,5 +104,38 @@ describe('OMP subscription card', () => {
       [BILLING_BOT_URL + '?start=renew', '_system'],
     ]);
     open.mockRestore();
+  });
+
+  it('shows days, hides the id and the bot line, and keeps Telegram in a menu', async () => {
+    me.telegramId = '424242';
+    me.paidUntil = Date.now() + 10 * 86400000;
+    me.active = true;
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.textContent).not.toContain('Подписка OMP');
+    expect(el.textContent).not.toContain('424242');
+    expect(el.textContent).not.toContain('@OMPBILLINGBOT');
+    expect(el.querySelector('[data-bill-dot]')).toBeTruthy();
+    expect(el.querySelector('[data-bill-days]')!.textContent).toContain('10');
+    expect(el.querySelector('[data-bill-about]')).toBeNull();
+    act(() => (el.querySelector('[data-bill-info]') as HTMLButtonElement).click());
+    expect(el.querySelector('[data-bill-about]')!.textContent).toContain('Действует до');
+    act(() => (el.querySelector('[data-tg-menu]') as HTMLButtonElement).click());
+    const actions = Array.from(el.querySelectorAll('[data-tg-actions] button')).map((b) => b.textContent);
+    expect(actions).toEqual(['Открыть бота', 'Отвязать']);
+  });
+
+  it('keeps the remaining days when only the extra device slot has ended', async () => {
+    me.paidUntil = Date.now() + 5 * 86400000;
+    me.active = false;
+    me.overLimit = true;
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.querySelector('[data-bill-dot]')).toBeNull();
+    expect(el.querySelector('[data-bill-days]')!.textContent).toContain('5');
+    expect(el.textContent).not.toContain('Подписка закончилась');
+    expect(el.textContent).toContain('Доп. устройство не продлено');
   });
 });
