@@ -99,7 +99,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
-import { applyRateSettings, ensureDonateRates, normalizeRateSettings } from './rates.mjs';
+import { applyRateSettings, donateRateWait, ensureDonateRates, normalizeRateSettings } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -3945,10 +3945,17 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   }
   const chatId = String(chat.id);
   let out = null;
+  // Amount, comment and a repeat of a frozen invoice do not call the rate hosts.
+  // A quote with a still-usable cache is answered first; the refresh continues after the answer.
+  // The tap waits only when that quote has no usable rate yet.
+  let rateWait = 'skip';
   try {
-    if (String(cq.data || '').indexOf('dn:') === 0) {
+    const rawData = String(cq.data || '');
+    if (rawData.indexOf('dn:n:') === 0 || rawData.indexOf('dn:p:') === 0) {
       try {
-        await ensureDonateRates(store, net, Date.now());
+        const peeked = await store.read();
+        rateWait = donateRateWait(rawData, peeked, Date.now());
+        if (rateWait === 'block') await ensureDonateRates(store, net, Date.now());
       } catch (e) {
         /* a rate host can fail; the last saved rate still prices the invoice */
       }
@@ -3984,6 +3991,11 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
     } catch (e) {
       /* Telegram unreachable or timed out — keep polling */
     }
+  }
+  if (rateWait === 'background') {
+    void ensureDonateRates(store, net, Date.now()).catch(() => {
+      /* a rate host can fail; the answer already used the last good rate */
+    });
   }
 }
 

@@ -32,6 +32,8 @@ export const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=
 export const CBR_URL = 'https://www.cbr-xml-daily.ru/daily_json.js';
 
 const PAY_HOSTS = new Set(['https://pay.crypt.bot', 'https://testnet-pay.crypt.bot']);
+/** After the coins are priced, wait this long for the CBR file, then use the USDT dollar. */
+const CBR_GRACE_MS = 250;
 const BOUNDS = {
   usdt: [10, 10000],
   ton: [0.1, 1e6],
@@ -334,20 +336,105 @@ async function getJson(fetchImpl, url, headers, label) {
   }
 }
 
-/** One round of Crypto Pay, CoinGecko and the CBR. The token is a header, never part of the url. */
+function quotesFromPartial(got) {
+  return combineRateQuotes(
+    got.pay === undefined ? {} : parseCryptoPayRates(got.pay),
+    got.gecko === undefined ? {} : parseCoinGeckoRub(got.gecko),
+    got.cbr === undefined ? 0 : parseCbrUsdRub(got.cbr),
+  );
+}
+
+function assetsPriced(quotes) {
+  return !!(quotes && quotes.usdt && quotes.ton && quotes.btc);
+}
+
+/** True when USDT, TON, BTC and a dollar rate are already known. */
+function quotesComplete(quotes) {
+  return assetsPriced(quotes) && !!quotes.usd;
+}
+
+function within(promise, ms) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(undefined), ms);
+  });
+  return Promise.race([promise, timeout]).then((value) => {
+    clearTimeout(timer);
+    return value;
+  });
+}
+
+/**
+ * One round of Crypto Pay, CoinGecko and the CBR. The token is a header, never part of the url.
+ * Returns as soon as every asset has a price, so a slow host does not hold a finished quote.
+ */
 export async function fetchRateQuotes(fetchImpl, creds) {
   const c = creds || {};
   const host = String(c.host || '').replace(/\/+$/, '');
   const payUrl = c.ready && c.token && PAY_HOSTS.has(host) ? host + '/api/getExchangeRates' : '';
   const headers = { accept: 'application/json' };
-  const [pay, gecko, cbr] = await Promise.all([
-    payUrl
-      ? getJson(fetchImpl, payUrl, { ...headers, 'Crypto-Pay-API-Token': String(c.token) }, 'cryptopay')
-      : Promise.resolve(null),
-    getJson(fetchImpl, COINGECKO_URL, headers, 'coingecko'),
-    getJson(fetchImpl, CBR_URL, headers, 'cbr'),
-  ]);
-  return combineRateQuotes(parseCryptoPayRates(pay), parseCoinGeckoRub(gecko), parseCbrUsdRub(cbr));
+  const jobs = [
+    {
+      key: 'pay',
+      run: payUrl
+        ? getJson(fetchImpl, payUrl, { ...headers, 'Crypto-Pay-API-Token': String(c.token) }, 'cryptopay')
+        : Promise.resolve(null),
+    },
+    { key: 'gecko', run: getJson(fetchImpl, COINGECKO_URL, headers, 'coingecko') },
+    { key: 'cbr', run: getJson(fetchImpl, CBR_URL, headers, 'cbr') },
+  ];
+  const got = {};
+  const pending = new Set(jobs);
+  while (pending.size) {
+    const winner = await Promise.race(
+      [...pending].map((job) => job.run.then((data) => ({ job, data }))),
+    );
+    pending.delete(winner.job);
+    got[winner.job.key] = winner.data;
+    const ready = quotesFromPartial(got);
+    if (quotesComplete(ready) && got.cbr !== undefined) return ready;
+    if (assetsPriced(ready) && got.cbr === undefined) {
+      const cbrJob = jobs.find((job) => job.key === 'cbr');
+      const cbrData = await within(cbrJob.run, CBR_GRACE_MS);
+      if (cbrData !== undefined) got.cbr = cbrData;
+      return quotesFromPartial(got);
+    }
+  }
+  return quotesFromPartial(got);
+}
+
+function bookCovers(book, now) {
+  if (book.auto.usdt && !fresh(book.cache.usdt, now, book.maxAgeMin)) return false;
+  if (book.auto.ton && !fresh(book.cache.ton, now, book.maxAgeMin)) return false;
+  if (book.auto.btc && !fresh(book.cache.btc, now, book.maxAgeMin)) return false;
+  if (book.auto.star && !fresh(book.cache.usd, now, book.maxAgeMin)) return false;
+  return true;
+}
+
+/**
+ * Whether this donate tap may call the rate hosts.
+ * 'skip': amount, comment, a repeat of a frozen invoice, manual rates, or a fresh cache.
+ * 'background': the cache can still price the quote, but a refresh is due. Answer first.
+ * 'block': the quote has no usable rate, so the invoice has to wait for one fetch.
+ */
+export function donateRateWait(data, state, now) {
+  const raw = String(data || '');
+  const naming = raw.indexOf('dn:n:') === 0;
+  const paying = raw.indexOf('dn:p:') === 0;
+  if (!naming && !paying) return 'skip';
+  const rows = (state && state.donations) || [];
+  if (paying) {
+    const id = raw.split(':')[2] || '';
+    const row = rows.find((d) => d && d.id === id);
+    if (!row || row.status !== 'draft' || row.step !== 'method') return 'skip';
+  }
+  const book = normalizeRateSettings(state && state.settings && state.settings.rates);
+  if (!anyAuto(book)) return 'skip';
+  const at = Number(now) > 0 ? Number(now) : Date.now();
+  if (!bookCovers(book, at)) return 'block';
+  const refreshMs = book.refreshMin * 60 * 1000;
+  if (book.fetchedAt && at >= book.fetchedAt && at - book.fetchedAt < refreshMs) return 'skip';
+  return 'background';
 }
 
 function anyAuto(book) {

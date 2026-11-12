@@ -7,6 +7,7 @@ import {
   applyRateSettings,
   combineRateQuotes,
   donatePricing,
+  donateRateWait,
   ensureDonateRates,
   fetchRateQuotes,
   mergeRateBook,
@@ -200,6 +201,86 @@ describe('donate rate fetch', () => {
     await ensureDonateRates(store, failed, NOW + 13 * 60 * 1000);
     expect(state.settings.rates.cache.usdt.rub).toBe(95);
     expect(state.settings.rates.fetchedAt).toBe(NOW + 13 * 60 * 1000);
+  });
+});
+
+describe('donate rate timing', () => {
+  const priced = {
+    settings: {
+      rates: {
+        fetchedAt: NOW,
+        auto: { usdt: true, ton: true, btc: true, star: true },
+        cache: {
+          usdt: { rub: 90, source: 'cryptopay', at: NOW },
+          ton: { rub: 200, source: 'coingecko', at: NOW },
+          btc: { rub: 8_000_000, source: 'coingecko', at: NOW },
+          usd: { rub: 90, source: 'cbr', at: NOW },
+        },
+      },
+    },
+    donations: [],
+  };
+
+  it('does not touch the rate hosts for an amount, a skipped comment or a frozen invoice', () => {
+    expect(donateRateWait('dn:a:100', priced, NOW)).toBe('skip');
+    expect(donateRateWait('dn:c', priced, NOW)).toBe('skip');
+    expect(donateRateWait('dn:s:row1', priced, NOW)).toBe('skip');
+    const pending = {
+      ...priced,
+      donations: [{ id: 'row1', status: 'pending', step: '', method: 'crypto', asset: 'USDT' }],
+    };
+    expect(donateRateWait('dn:p:row1:USDT', pending, NOW)).toBe('skip');
+  });
+
+  it('prices a new quote from a fresh cache and refreshes behind the answer when the interval has passed', () => {
+    expect(donateRateWait('dn:n:row1:0', priced, NOW + 60 * 1000)).toBe('skip');
+    expect(donateRateWait('dn:n:row1:0', priced, NOW + 13 * 60 * 1000)).toBe('background');
+    const draft = { ...priced, donations: [{ id: 'row1', status: 'draft', step: 'method' }] };
+    expect(donateRateWait('dn:p:row1:USDT', draft, NOW + 13 * 60 * 1000)).toBe('background');
+  });
+
+  it('waits for a quote only when the cache cannot price it', () => {
+    const empty = { settings: { rates: { auto: { usdt: true, ton: true, btc: true, star: true } } }, donations: [] };
+    expect(donateRateWait('dn:n:row1:0', empty, NOW)).toBe('block');
+    const manual = { settings: { rates: { auto: { usdt: false, ton: false, btc: false, star: false } } }, donations: [] };
+    expect(donateRateWait('dn:n:row1:0', manual, NOW)).toBe('skip');
+  });
+
+  it('returns as soon as one source has priced every asset', async () => {
+    let release = () => {};
+    const held = new Promise((resolve) => {
+      release = () => resolve(json(500, {}));
+    });
+    const fetchImpl = async (url: string) => {
+      if (String(url).indexOf('getExchangeRates') >= 0) {
+        return json(200, {
+          ok: true,
+          result: [
+            { is_valid: true, source: 'USDT', target: 'RUB', rate: '90' },
+            { is_valid: true, source: 'TON', target: 'RUB', rate: '200' },
+            { is_valid: true, source: 'BTC', target: 'RUB', rate: '8000000' },
+          ],
+        });
+      }
+      return held;
+    };
+    try {
+      const quotes = await Promise.race([
+        fetchRateQuotes(fetchImpl, {
+          ready: true,
+          token: TOKEN,
+          host: 'https://pay.crypt.bot',
+          testnet: false,
+        }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('waited for the slow host')), 400)),
+      ]);
+      expect(quotes.usdt).toEqual({ rub: 90, source: 'cryptopay' });
+      expect(quotes.ton).toEqual({ rub: 200, source: 'cryptopay' });
+      expect(quotes.btc).toEqual({ rub: 8_000_000, source: 'cryptopay' });
+      expect(quotes.usd).toEqual({ rub: 90, source: 'cryptopay' });
+    } finally {
+      release();
+    }
   });
 });
 
