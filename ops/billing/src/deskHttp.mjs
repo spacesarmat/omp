@@ -707,6 +707,31 @@ async function promoPost(ctx) {
     return hit || redeemPromo(cur, { code: rawCode, accountId: sub.accountId, now });
   });
   const err = out && out.error;
+  if (!err && out && out.kind === 'referral' && ctx.copyRepo && ctx.sendUser) {
+    const saved = await ctx.copyRepo.lookup('referral.bound', '', '');
+    if (saved) {
+      const fresh = await ctx.store.read();
+      const acc = (fresh.accounts || []).find((a) => a && a.id === sub.accountId);
+      if (acc && acc.telegramId) {
+        const applied = await ctx.copyRepo.apply(
+          {
+            id: 'referral.bound',
+            state: '',
+            lang: '',
+            vars: { ref_link: out.promoCode || '', name: acc.telegramName || acc.telegramUsername || '', promo: '' },
+          },
+          { text: '' },
+        );
+        if (applied.used === 'template' && applied.text) {
+          try {
+            await ctx.sendUser(acc.telegramId, applied);
+          } catch (e) {
+            /* the bind is already stored */
+          }
+        }
+      }
+    }
+  }
   ctx.json(ctx.res, 200, err ? { ok: false, error: err } : { ok: true, days: out.days || 0 });
   return true;
 }

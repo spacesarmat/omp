@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Admin: Bot replies. Text, buttons, a photo or video, variants by subscription and language, and history. Until a template is saved, the bot keeps the previous text. Billing was not deployed
+
 ## 0.30.1-beta.6
 
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button
