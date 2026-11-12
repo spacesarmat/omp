@@ -2,12 +2,12 @@
 // It is not a finding, so it does not notify.
 import { loadJson, saveJson } from '../store/storage';
 import type { SourceResult } from '../sources/types';
+import { loadSubs } from './subs';
 
 const KEY = 'tsp.subBest';
-const MAX = 40;
 
 function slim(r: SourceResult): SourceResult {
-  return {
+  const out: SourceResult = {
     Title: r.Title || '',
     Magnet: r.Magnet || '',
     Hash: r.Hash || '',
@@ -20,6 +20,9 @@ function slim(r: SourceResult): SourceResult {
     Tracker: r.Tracker || '',
     CreateDate: r.CreateDate || '',
   };
+  if (r.detailUrl) out.detailUrl = r.detailUrl;
+  if (r.torrentUrl) out.torrentUrl = r.torrentUrl;
+  return out;
 }
 
 export function rememberBestRelease(id: string, result: SourceResult): void {
@@ -29,12 +32,21 @@ export function rememberBestRelease(id: string, result: SourceResult): void {
     if (k !== id) next[k] = all[k];
   });
   next[id] = slim(result);
-  const keys = Object.keys(next);
-  while (keys.length > MAX) {
-    const drop = keys.shift();
-    if (drop) delete next[drop];
-  }
+  const live: { [id: string]: boolean } = {};
+  loadSubs().forEach((s) => {
+    live[s.id] = true;
+  });
+  Object.keys(next).forEach((k) => {
+    if (!live[k]) delete next[k];
+  });
   saveJson(KEY, next);
+}
+
+export function forgetBestRelease(id: string): void {
+  const all = loadJson<Record<string, SourceResult>>(KEY, {}, (v) => !!v && typeof v === 'object' && !Array.isArray(v));
+  if (!all[id]) return;
+  delete all[id];
+  saveJson(KEY, all);
 }
 
 export function bestRelease(id: string): SourceResult | null {

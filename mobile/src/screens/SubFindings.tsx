@@ -10,6 +10,7 @@ import { checkSubNow, checkingSubs, loadSubsSort, sortFindings } from '../monito
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { bestRelease } from '../../../src/monitor/bestRelease';
+import { resultKeys } from '../../../src/monitor/match';
 import { findingsOf, getSubscription, markFindingsSeen, removeSubscription, seenKeys, updateSubscription } from '../../../src/monitor/subs';
 import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
 import { qualityLabels, seriesSubLine, subRule, whenText } from '../monitor/text';
@@ -220,7 +221,8 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
           {rows.error && <LaunchError message={rows.error} />}
           {(() => {
             const best = bestRelease(id);
-            if (!best || list.some((f) => f.result.Title === best.Title)) return null;
+            const key = best ? resultKeys(best)[0] : '';
+            if (!best || list.some((f) => f.key === key)) return null;
             return (
               <div data-sub-best>
                 <p class="m-small m-muted">{t('monitor.sub.bestBelow')}</p>

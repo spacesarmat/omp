@@ -241,6 +241,8 @@ describe('«Только лучшее качество»', () => {
     expect(fourth.findings.map((f) => f.result.Title)).toEqual(['Северный ветер (2026) 2160p WEB-DL']);
     expect(bestRank(sub.id)).toBe(32);
     expect(findingsOf(sub.id)).toHaveLength(2);
+    updateSubscription(sub.id, { query: 'Другой фильм' });
+    expect(bestRelease(sub.id)).toBeNull();
   });
 
   it('a better release already listed is not news; a higher one is', async () => {

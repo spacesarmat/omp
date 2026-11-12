@@ -6,7 +6,7 @@ import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle 
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
 import { qualityRank } from './quality';
-import { rememberBestRelease } from './bestRelease';
+import { forgetBestRelease, rememberBestRelease } from './bestRelease';
 import { addFindings, bestRank, getSubscription, hasBestRank, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
@@ -160,6 +160,7 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
       rememberBestRank(sub.id, topRank(matched));
       const best = bestListed(matched);
       if (best) rememberBestRelease(sub.id, best);
+      else forgetBestRelease(sub.id);
     }
     return base;
   });
