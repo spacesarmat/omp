@@ -30,7 +30,7 @@ interface ResolvedNode {
   kind: LayoutNodeKind;
 }
 
-type IdentitySource = 'key' | 'adapter' | 'path' | 'clone';
+type IdentitySource = 'key' | 'adapter' | 'path' | 'clone' | 'stamp';
 
 interface IdentityCandidate {
   nodeId: string;
@@ -102,6 +102,9 @@ function pathNodeId(indices: number[]): string {
 // themselves, so entries disappear together with detached markup.
 const identityCache = new WeakMap<HTMLElement, IdentityCandidate>();
 
+// Every resolved identity is stamped onto its element as data-layout-node: the editor canvas runs
+// in a separate module realm and reads the stamp, so runtime and editor share one id per element
+// no matter which realm walks the tree first.
 function identityOf(
   element: HTMLElement,
   indices: number[],
@@ -119,6 +122,8 @@ function identityOf(
     seenKeys.add(key);
     return { nodeId: layoutKeyNodeId(key), kind: 'dynamic', source: 'key' };
   }
+  const stamped = element.dataset.layoutNode;
+  if (stamped && SCHEMA_ID.test(stamped)) return { nodeId: stamped, kind: 'element', source: 'stamp' };
   const remembered = identityCache.get(element);
   if (remembered) return remembered;
   const adapter = element.dataset.designId || element.dataset.designComponent || null;
@@ -155,11 +160,13 @@ function resolveNodes(root: HTMLElement): ResolvedNode[] {
   const seenKeys = new Set<string>();
   const usedIds = new Set<string>();
   const adapterCounts = new Map<string, number>();
-  // Reserve every remembered identity before assigning fresh adapter or path ids, so a reordered
-  // element keeps its id and no fresh element can collide with a remembered one.
+  // Reserve every remembered or stamped identity before assigning fresh adapter or path ids, so
+  // a reordered element keeps its id and no fresh element can collide with a remembered one.
   const reserve = (element: HTMLElement): void => {
     const remembered = identityCache.get(element);
     if (remembered) usedIds.add(remembered.nodeId);
+    const stamped = element.dataset.layoutNode;
+    if (stamped && SCHEMA_ID.test(stamped)) usedIds.add(stamped);
     for (const child of element.children) reserve(child as HTMLElement);
   };
   reserve(root);
@@ -167,6 +174,7 @@ function resolveNodes(root: HTMLElement): ResolvedNode[] {
     const candidate = identityOf(element, indices, seenKeys, usedIds, adapterCounts);
     identityCache.set(element, candidate);
     usedIds.add(candidate.nodeId);
+    if (element.dataset.layoutNode !== candidate.nodeId) element.dataset.layoutNode = candidate.nodeId;
     const elementId = element.dataset.designId || element.dataset.designComponent || candidate.nodeId;
     nodes.push({ element, nodeId: candidate.nodeId, elementId, parentId, kind: candidate.kind });
     let childIndex = 0;
@@ -234,7 +242,7 @@ function releaseManagedElement(element: HTMLElement): void {
 }
 
 const CLONE_BLOCKED_TAGS = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']);
-const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-layout-id', 'data-layout-clone'];
+const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-layout-id', 'data-layout-clone', 'data-layout-node'];
 
 // Clone snapshots copy real component markup only: scripts, embedded content, inline handlers,
 // javascript: URLs, per-node layout identity and baked placement styles never travel with a clone.
@@ -365,35 +373,24 @@ function applyPlacement(element: HTMLElement, placement: LayoutPlacement): void 
 // cross axis and distribution on the main axis. Direction auto and absent fields leave the real
 // component styles untouched.
 function applyContainerLayout(element: HTMLElement, container: LayoutContainer): void {
-  // Start from the remembered user values so fields the record no longer sets fall back to them
+  // Remember the authored values before the first managed write: fields the record sets are
+  // restored when it stops applying, fields it leaves alone keep their authored inline styles
   // instead of being deleted.
   restoreInlineStyles(element);
+  snapshotInlineStyles(element);
   const direction = container.direction && container.direction !== 'auto' ? container.direction : '';
   if (direction) {
-    snapshotInlineStyles(element);
     element.style.display = 'flex';
     element.style.setProperty('flex-direction', direction);
-  } else {
-    element.style.removeProperty('flex-direction');
-    if (element.style.display === 'flex') element.style.removeProperty('display');
   }
   if (container.alignment) {
-    snapshotInlineStyles(element);
     element.style.setProperty('align-items', FLEX_ALIGNMENT[container.alignment]);
-  } else {
-    element.style.removeProperty('align-items');
   }
   if (container.distribution) {
-    snapshotInlineStyles(element);
     element.style.setProperty('justify-content', FLEX_DISTRIBUTION[container.distribution]);
-  } else {
-    element.style.removeProperty('justify-content');
   }
   if (container.padding !== undefined) {
-    snapshotInlineStyles(element);
     element.style.setProperty('padding', container.padding);
-  } else {
-    element.style.removeProperty('padding');
   }
 }
 
@@ -423,10 +420,13 @@ function applyContainerOrder(
   moved: Set<HTMLElement>,
 ): void {
   // Resolve the destination order first: nodes recorded in the order but living in another parent
-  // move across parents before the in-parent sort runs.
+  // move across parents before the in-parent sort runs. A recorded order must never move a node
+  // into itself or into its own descendant: the DOM would throw HierarchyRequestError and leave
+  // the tree half-updated, so the cycle is skipped instead.
   for (const nodeId of container.order) {
     const node = nodeById.get(nodeId);
     if (!node || node.element.parentElement === containerElement) continue;
+    if (node.element === containerElement || node.element.contains(containerElement)) continue;
     if (!moveOrigins.has(node.element)) {
       moveOrigins.set(node.element, { parent: node.element.parentElement!, next: node.element.nextElementSibling });
     }

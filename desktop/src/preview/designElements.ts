@@ -42,6 +42,10 @@ export function decorateDesignElements(root: HTMLElement, theme: ThemeDocument, 
 }
 
 export function observeDesignElements(root: HTMLElement, theme: ThemeDocument, context: ThemeContext): () => void {
+  // Decorate before the layout runtime walks: the first resolve must already see the adapter
+  // ids, otherwise path ids freeze in the identity cache and disagree with the ids the editor
+  // canvas computes from the decorated tree.
+  decorateDesignElements(root, theme, context);
   const stopLayout = observeLayout(root, theme, context);
   const refresh = () => decorateDesignElements(root, theme, context);
   refresh();

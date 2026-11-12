@@ -262,9 +262,21 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     const aligned = axis === null
       ? alignRects(measured.map((entry) => entry.rect), alignment)
       : distributeRects(measured.map((entry) => entry.rect), axis);
+    // A selected node may sit inside another selected node: once the parent lands on its aligned
+    // rect, the child placement is rewritten against the parent final rect, so the child stays
+    // exactly on its own aligned artboard position instead of being shifted by the parent move.
+    const alignedById = new Map<string, LayoutRect>();
+    measured.forEach((entry, index) => alignedById.set(entry.item.node!.nodeId, aligned[index]));
+    const finalParentRect = (parentId: string | null): LayoutRect => {
+      const alignedParent = parentId ? alignedById.get(parentId) : undefined;
+      if (alignedParent) return alignedParent;
+      return parentId && layoutRects[parentId]
+        ? layoutRects[parentId]
+        : { x: 0, y: 0, width: viewport.width, height: viewport.height };
+    };
     const placements = measured.map((entry, index) => absolutePlacementFromRect(
       aligned[index],
-      entry.parentRect,
+      finalParentRect(entry.item.node!.parentId),
       layoutContext,
       entry.item.node!.nodeId,
       entry.item.node!.label,

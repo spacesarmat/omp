@@ -36,6 +36,68 @@ describe('design element adapter', () => {
   });
 });
 
+describe('design element adapter', () => {
+  it('registers adapter identities before the first walk so saved edits match after decoration', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div><button>Go</button></div>';
+    document.body.appendChild(root);
+    const theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [{
+        id: 'placement-button',
+        target: 'android-phone',
+        screenId: 'settings',
+        format: 'landscape',
+        nodeId: 'button',
+        mode: 'absolute',
+        x: 1000,
+        y: 1000,
+        anchor: 'top-left',
+        width: 'auto',
+        height: 'auto',
+        zIndex: 3,
+        hidden: false,
+        locked: false,
+        label: 'Go',
+      }],
+    };
+
+    cleanup = observeDesignElements(root, theme, { target: 'android-phone', screenId: 'settings', format: 'landscape', state: 'default' });
+
+    const button = root.querySelector('button') as HTMLElement;
+    // The edit was saved against the adapter id the editor canvas shows after decoration; the
+    // runtime must resolve the same id instead of a path id frozen by a pre-decoration walk.
+    expect(button.style.position).toBe('absolute');
+    expect(button.style.zIndex).toBe('3');
+    expect(collectLayoutNodes(root).some((node) => node.nodeId === 'button' && node.label === 'Go')).toBe(true);
+  });
+
+  it('shares the resolved node ids with the editor canvas through the layout node stamp', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div><button>One</button></div>';
+    document.body.appendChild(root);
+    const theme = createDefaultTheme(BASE);
+
+    cleanup = observeDesignElements(root, theme, { target: 'android-phone', screenId: 'settings', format: 'landscape', state: 'default' });
+
+    const button = root.querySelector('button') as HTMLElement;
+    // The runtime stamps every resolved identity onto its element; the editor canvas lives in a
+    // separate module realm and reads the same stamp, so both never disagree on an element id.
+    expect(button.dataset.layoutNode).toBeTruthy();
+    const collected = collectLayoutNodes(root);
+    expect(collected.find((node) => node.nodeId === button.dataset.layoutNode)?.label).toBe('One');
+
+    const extra = document.createElement('button');
+    extra.textContent = 'Two';
+    root.firstElementChild!.appendChild(extra);
+    await Promise.resolve();
+
+    expect(extra.dataset.layoutNode).toBeTruthy();
+    expect(collectLayoutNodes(root).some((node) => node.nodeId === extra.dataset.layoutNode)).toBe(true);
+  });
+});
+
 describe('layout root contract', () => {
   it('registers the application root so editor collection resolves exactly the runtime tree', () => {
     const chrome = document.createElement('div');

@@ -374,7 +374,7 @@ describe('checkLayoutAccessibility', () => {
     expect(contrast[0].message).toContain('4.5');
   });
 
-  it('reads focus styles by focusing the element during collection and restores the previous focus', () => {
+  it('reads focus styles without a real focus and restores the previous focus', () => {
     document.head.innerHTML = '<style>:focus { outline-style: solid; outline-width: 3px; outline-color: #ffffff; }</style>';
     const root = mountDom('<div data-design-id="screen"><button data-design-id="btn" style="color: #ffffff; background: #000000; outline: none;">Btn</button></div>');
     const button = root.querySelector<HTMLElement>('[data-design-id="btn"]')!;
@@ -387,11 +387,50 @@ describe('checkLayoutAccessibility', () => {
     document.addEventListener('focusin', record);
     try {
       const snapshot = collectTv(root);
-      expect(focusedDuringCollect).toContain('btn');
+      // Focus styles are inspected through probe rules, so no focus event fires at all and the
+      // user focus never leaves the previously focused control.
+      expect(focusedDuringCollect).toEqual([]);
       expect(document.activeElement).toBe(prior);
+      expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineStyle).toBe('solid');
+      expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineWidth).toBe(3);
+    } finally {
+      document.removeEventListener('focusin', record);
+      prior.remove();
+    }
+  });
+
+  it('collects interactive focus styles without focus, keypad or scroll side effects', () => {
+    document.head.innerHTML = '<style>:focus { outline-style: solid; outline-width: 2px; outline-color: #ffffff; }</style>';
+    const root = mountDom('<div data-design-id="screen"><input data-design-id="field" style="color: #ffffff; background: #000000; outline: none;"><button data-design-id="btn" style="color: #ffffff; background: #000000; outline: none;">Btn</button></div>');
+    const field = root.querySelector<HTMLElement>('[data-design-id="field"]')!;
+    const button = root.querySelector<HTMLElement>('[data-design-id="btn"]')!;
+    stubRect(field, { x: 10, y: 10, width: 200, height: 48 });
+    stubRect(button, { x: 10, y: 70, width: 120, height: 48 });
+    const prior = document.createElement('button');
+    document.body.appendChild(prior);
+    prior.focus();
+
+    const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus');
+    const scrollSpy = vi.spyOn(window, 'scrollTo');
+    const focusEvents: string[] = [];
+    const record = (event: Event) => focusEvents.push((event.target as HTMLElement).dataset?.designId ?? (event.target as HTMLElement).tagName);
+    document.addEventListener('focusin', record);
+    document.addEventListener('focus', record, true);
+    try {
+      const snapshot = collectTv(root);
+      // Focusing an input for real would open the phone keypad and fire the app focus handlers;
+      // the probe read must not call focus, scroll or emit any focus event.
+      expect(focusSpy).not.toHaveBeenCalled();
+      expect(scrollSpy).not.toHaveBeenCalled();
+      expect(focusEvents).toEqual([]);
+      expect(document.activeElement).toBe(prior);
+      expect(snapshot.nodes.find((node) => node.nodeId === 'field')!.styles.focusOutlineStyle).toBe('solid');
       expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineStyle).toBe('solid');
     } finally {
       document.removeEventListener('focusin', record);
+      document.removeEventListener('focus', record, true);
+      focusSpy.mockRestore();
+      scrollSpy.mockRestore();
       prior.remove();
     }
   });

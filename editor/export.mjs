@@ -202,13 +202,28 @@ function layoutEntryInScope(entry, scope) {
 }
 
 // Style overrides name what they style: a page scope owns every override carrying that
-// screenId, a component scope owns the overrides whose elementId is one of the layout node ids
-// covered by the scope (the node itself, its containers and their order members). Overrides
-// outside the scope always stay with the base theme.
-function overrideInScope(override, scope, scopedNodeIds) {
-  if (scope.kind === 'page') return override.screenId === scope.screenId;
-  if (scope.kind === 'component') return override.elementId != null && scopedNodeIds.has(override.elementId);
+// screenId inside its target contexts, a component scope owns the overrides whose elementId is
+// one of the layout node ids covered by the scope and whose target and page match the scoped
+// node contexts. Overrides outside those contexts stay with the base theme.
+function overrideInScope(override, scope, scopedNodeIds, scopeTargets, scopeScreens) {
+  if (scope.kind === 'page') return override.screenId === scope.screenId && scopeTargets.has(override.target);
+  if (scope.kind === 'component') {
+    return override.elementId != null && scopedNodeIds.has(override.elementId)
+      && scopeTargets.has(override.target) && scopeScreens.has(override.screenId);
+  }
   return false;
+}
+
+// One value per layout entry the scope covers: the target contexts for ownership checks and
+// css regeneration, the page contexts for the component ownership match.
+function layoutContextValues(layout, scope, pick) {
+  const source = layout ?? emptyLayout();
+  const values = new Set();
+  for (const entry of [...source.containers, ...source.placements, ...(source.clones ?? [])]) {
+    if (!layoutEntryInScope(entry, scope)) continue;
+    values.add(pick(entry));
+  }
+  return values;
 }
 
 function scopedNodeIds(layout, scope) {
@@ -241,14 +256,23 @@ function layoutForScope(layout, scope) {
 function targetsForScope(scope, theme) {
   if (scope.kind === 'all') return [...DESIGN_TARGETS];
   if (scope.kind === 'page') {
-    return DESIGN_TARGETS.filter((target) => getEditorPages(target).some((page) => page.id === scope.screenId));
+    const matched = new Set(DESIGN_TARGETS.filter((target) => getEditorPages(target).some((page) => page.id === scope.screenId)));
+    // Every override the page changes ships with its target: the css of each such target is
+    // regenerated so the theme file and the platform styles never drift apart.
+    for (const override of theme.overrides) {
+      if (override.screenId === scope.screenId) matched.add(override.target);
+    }
+    return DESIGN_TARGETS.filter((target) => matched.has(target));
   }
   const layout = theme.layout ?? emptyLayout();
-  const matched = new Set([
-    ...layout.containers,
-    ...layout.placements,
-    ...(layout.clones ?? []),
-  ].filter((entry) => layoutEntryInScope(entry, scope)).map((entry) => entry.target));
+  const matched = layoutContextValues(layout, scope, (entry) => entry.target);
+  const nodeIds = scopedNodeIds(layout, scope);
+  const screens = layoutContextValues(layout, scope, (entry) => entry.screenId);
+  for (const override of theme.overrides) {
+    if (override.elementId != null && nodeIds.has(override.elementId) && screens.has(override.screenId)) {
+      matched.add(override.target);
+    }
+  }
   return DESIGN_TARGETS.filter((target) => matched.has(target));
 }
 
@@ -330,7 +354,11 @@ async function exportContents(root, plan) {
       : { containers: scopedLayout.containers, placements: scopedLayout.placements };
   }
   const nodeIds = scopedNodeIds(plan.draft.theme.layout, plan.scope);
-  const inScopeOverride = (override) => overrideInScope(override, plan.scope, nodeIds);
+  const scopeTargets = new Set(plan.targets);
+  const scopeScreens = plan.scope.kind === 'component'
+    ? layoutContextValues(plan.draft.theme.layout, plan.scope, (entry) => entry.screenId)
+    : null;
+  const inScopeOverride = (override) => overrideInScope(override, plan.scope, nodeIds, scopeTargets, scopeScreens);
   const scopedOverrides = plan.theme.overrides.filter(inScopeOverride);
   const mergedOverrides = baseTheme
     ? [...baseTheme.overrides.filter((entry) => !inScopeOverride(entry)), ...scopedOverrides]

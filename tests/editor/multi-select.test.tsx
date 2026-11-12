@@ -81,6 +81,39 @@ function buildPreview(options: { toolbar?: boolean } = {}): void {
   });
 }
 
+// A stage with an absolute panel and child plus two free absolute boxes: the geometry for the
+// group drag, nested selection and descendant-insertion regressions.
+function buildNestedPreview(options: { panel?: { x: number; y: number; width: number; height: number } } = {}): void {
+  const panelRect = options.panel ?? { x: 0, y: 0, width: 400, height: 400 };
+  const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
+  iframe.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
+  const doc = iframe.contentDocument!;
+  if (!doc.documentElement) doc.appendChild(doc.createElement('html'));
+  let body = doc.body;
+  if (!body) {
+    body = doc.createElement('body');
+    doc.documentElement.appendChild(body);
+  }
+  body.innerHTML = '';
+  const make = (designId: string, x: number, y: number, width: number, height: number): HTMLElement => {
+    const element = doc.createElement('div');
+    element.dataset.designId = designId;
+    element.getBoundingClientRect = () => clientRect(x, y, width, height);
+    return element;
+  };
+  const stage = make('stage', 0, 0, 800, 800);
+  const panel = make('panel', panelRect.x, panelRect.y, panelRect.width, panelRect.height);
+  const kid = make('box-kid', 50, 50, 100, 100);
+  const boxA = make('box-a', 500, 100, 100, 100);
+  const boxB = make('box-b', 500, 300, 100, 100);
+  panel.appendChild(kid);
+  stage.append(panel, boxA, boxB);
+  body.appendChild(stage);
+  act(() => {
+    iframe.dispatchEvent(new Event('load'));
+  });
+}
+
 function overlay(): HTMLElement {
   const element = host.querySelector<HTMLElement>('[data-testid="selection-overlay"]');
   if (!element) throw new Error('selection overlay is missing');
@@ -380,5 +413,116 @@ describe('multi-select', () => {
     expect(placementOf('server-card-2')?.margin).toBe('12px');
     controller.undo();
     expect(placementOf('server-card')?.margin).toBeUndefined();
+  });
+});
+
+describe('group drag snapping', () => {
+  it('drags an absolute group with one snapped movement and keeps the member spacing', () => {
+    buildNestedPreview();
+    const context = contextOf();
+    const stageRect = { x: 0, y: 0, width: 800, height: 800 };
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 500, y: 100, width: 100, height: 100 }, stageRect, context, 'box-a', 'box-a'));
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 500, y: 300, width: 100, height: 100 }, stageRect, context, 'box-b', 'box-b'));
+
+    pointer(overlay(), 'pointerdown', 550, 150);
+    pointer(overlay(), 'pointerup', 550, 150);
+    pointer(overlay(), 'pointerdown', 550, 350, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 550, 350, { shiftKey: true });
+
+    const update = vi.spyOn(controller, 'update');
+    // The drag passes the leader bottom edge 2px below the other member original center line;
+    // that member is moving too, so it must not act as a snap guide and the group keeps one
+    // shared movement instead of shearing the spacing.
+    pointer(overlay(), 'pointerdown', 550, 150);
+    pointer(overlay(), 'pointermove', 550, 298);
+    pointer(overlay(), 'pointerup', 550, 298);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(placementOf('box-a')!.y).toBe(3100);
+    expect(placementOf('box-b')!.y).toBe(5600);
+
+    controller.undo();
+    expect(placementOf('box-a')!.y).toBe(1250);
+    expect(placementOf('box-b')!.y).toBe(3750);
+  });
+});
+
+describe('nested selection movement', () => {
+  it('moves only the outermost selected nodes so an absolute child is not moved twice', () => {
+    buildNestedPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 0, y: 0, width: 400, height: 400 }, { x: 0, y: 0, width: 800, height: 800 }, context, 'panel', 'panel'));
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 50, y: 50, width: 100, height: 100 }, { x: 0, y: 0, width: 400, height: 400 }, context, 'box-kid', 'box-kid'));
+
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointerup', 10, 10);
+    pointer(overlay(), 'pointerdown', 100, 100, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 100, 100, { shiftKey: true });
+
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointermove', 50, 50);
+    pointer(overlay(), 'pointerup', 50, 50);
+
+    expect(placementOf('panel')).toMatchObject({ mode: 'absolute', x: 500, y: 500 });
+    // The child rides along inside its parent; rewriting its placement against the old parent
+    // rect would shift it a second time when the runtime applies both records.
+    expect(placementOf('box-kid')).toMatchObject({ x: 1250, y: 1250 });
+  });
+
+  it('aligns a selected absolute parent and child through the parent final rect', () => {
+    // The panel stub matches its placement-derived rect, so the measured child rect is really in
+    // artboard coordinates and the align must move the parent.
+    buildNestedPreview({ panel: { x: 100, y: 0, width: 200, height: 200 } });
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 100, y: 0, width: 200, height: 200 }, { x: 0, y: 0, width: 800, height: 800 }, context, 'panel', 'panel'));
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 50, y: 0, width: 160, height: 100 }, { x: 0, y: 0, width: 200, height: 200 }, context, 'box-kid', 'box-kid'));
+
+    pointer(overlay(), 'pointerdown', 110, 10);
+    pointer(overlay(), 'pointerup', 110, 10);
+    pointer(overlay(), 'pointerdown', 100, 100, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 100, 100, { shiftKey: true });
+
+    clickButton('align-right');
+
+    expect(placementOf('panel')!.x).toBe(1375);
+    // The parent itself moved, so the child placement is rewritten against the parent final
+    // rect and the child lands exactly on its aligned artboard position.
+    expect(placementOf('box-kid')!.x).toBe(2000);
+    const stageRect = { x: 0, y: 0, width: 800, height: 800 };
+    const panelRect = placementToRect(placementOf('panel')!, stageRect);
+    const kidRect = placementToRect(placementOf('box-kid')!, panelRect);
+    expect(panelRect.x).toBeCloseTo(110, 6);
+    expect(kidRect.x).toBeCloseTo(150, 6);
+  });
+});
+
+describe('descendant insertion guard', () => {
+  it('rejects dropping a node into its own descendant instead of saving the cycle', () => {
+    buildNestedPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 0, y: 0, width: 400, height: 400 }, { x: 0, y: 0, width: 800, height: 800 }, context, 'panel', 'panel'));
+    // box-kid is a recorded container, so the canvas offers it as an insertion target while
+    // dragging panel even though it lives inside the dragged subtree.
+    act(() => {
+      controller.update((draft) => {
+        draft.theme.layout = {
+          containers: [{ id: 'flow-box-kid', ...context, nodeId: 'box-kid', order: [] }],
+          placements: draft.theme.layout?.placements ?? [],
+        };
+      });
+    });
+
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointerup', 10, 10);
+
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointermove', 60, 60);
+    pointer(overlay(), 'pointerup', 60, 60);
+
+    // The drop is rejected as a cycle: the panel keeps its free absolute movement and no order
+    // record points into its own subtree.
+    expect(placementOf('panel')).toMatchObject({ mode: 'absolute', x: 625, y: 625 });
+    const kidContainer = controller.draft.theme.layout?.containers.find((entry) => entry.nodeId === 'box-kid');
+    expect(kidContainer?.order ?? []).not.toContain('panel');
   });
 });

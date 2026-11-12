@@ -443,4 +443,58 @@ describe('scoped style export', () => {
     const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
     expect(theme.overrides).toEqual([]);
   });
+
+  it('regenerates css for every target a changed component override ships to', async () => {
+    const { root, head } = await makeRepo();
+    const phone = 'android-phone' as DesignTarget;
+    const tv = 'lg-webos' as DesignTarget;
+    const layout = { containers: [], placements: [placement('card-a', 'settings', { x: 5 }, phone)] };
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = layout;
+    first.theme.overrides = [
+      buildOverride(styleIdentity({ target: phone, elementId: 'card-a' }), { '--omp-color-accent': '#111111' }),
+      buildOverride(styleIdentity({ target: tv, elementId: 'card-a' }), { '--omp-color-accent': '#222222' }),
+    ];
+    await exportDraft({ root, draft: first });
+
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = layout;
+    second.theme.overrides = [
+      buildOverride(styleIdentity({ target: phone, elementId: 'card-a' }), { '--omp-color-accent': '#333333' }),
+      buildOverride(styleIdentity({ target: tv, elementId: 'card-a' }), { '--omp-color-accent': '#444444' }),
+    ];
+    const result = await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
+    expect(result.targets).toEqual(['android-phone', 'lg-webos']);
+
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    const byTarget = new Map((theme.overrides as Array<{ target?: string; tokens: Record<string, string> }>).map((entry) => [entry.target, entry]));
+    expect(byTarget.get('android-phone')?.tokens['--omp-color-accent']).toBe('#333333');
+    expect(byTarget.get('lg-webos')?.tokens['--omp-color-accent']).toBe('#444444');
+    // The theme and every target css stay consistent: the tv override ships together with its
+    // regenerated css instead of changing the theme while the platform css goes stale.
+    expect(await readFile(join(root, 'design', 'generated', 'android-phone.css'), 'utf8')).toContain('#333333');
+    expect(await readFile(join(root, 'design', 'generated', 'lg-webos.css'), 'utf8')).toContain('#444444');
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+  });
+
+  it('keeps overrides from other pages when exporting a component scope', async () => {
+    const { root, head } = await makeRepo();
+    const phone = 'android-phone' as DesignTarget;
+    const layout = { containers: [], placements: [placement('card-a', 'settings', { x: 5 }, phone)] };
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = layout;
+    first.theme.overrides = [buildOverride(styleIdentity({ target: phone, screenId: 'news', elementId: 'card-a' }), { '--omp-color-accent': '#111111' })];
+    await exportDraft({ root, draft: first });
+
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = layout;
+    second.theme.overrides = [buildOverride(styleIdentity({ target: phone, screenId: 'news', elementId: 'card-a' }), { '--omp-color-accent': '#555555' })];
+    await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
+
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    const news = (theme.overrides as Array<{ screenId?: string; tokens: Record<string, string> }>).find((entry) => entry.screenId === 'news');
+    // The scoped node lives on the settings page only, so its news page override stays with the
+    // base theme even though the element id matches.
+    expect(news?.tokens['--omp-color-accent']).toBe('#111111');
+  });
 });

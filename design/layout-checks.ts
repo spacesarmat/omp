@@ -128,55 +128,76 @@ function fontWeightValue(value: string): number {
   return value === 'bold' ? 700 : 400;
 }
 
-interface PriorFocus {
-  document: Document;
-  // Focused element of the measured document itself.
-  inner: Element | null;
-  // Focused element of the top-level document: focusing an element may move focus across
-  // documents (the measured root can live in an iframe preview), and the user's focus lives in
-  // the outermost document.
-  top: Element | null;
+// Browsers only expose :focus rules while an element really holds focus, but a real focus fires
+// focusin handlers, opens the phone keypad on inputs and can scroll the page. Probe rules instead
+// copy every matching :focus rule with the pseudo-class swapped for a plain class: the focused
+// styles compute for the probed element without any of those side effects, and the cascade order
+// is preserved by inserting each probe right after its source rule.
+const FOCUS_PROBE_CLASS = 'editor-focus-probe';
+const FOCUS_PSEUDO = /:(focus-visible|focus)\b/g;
+
+interface FocusProbeStyles {
+  outlineStyle: string;
+  outlineWidth: string;
+  boxShadow: string;
 }
 
-function capturePriorFocus(doc: Document): PriorFocus {
-  let topDoc = doc;
-  for (;;) {
-    const frame = topDoc.defaultView?.frameElement ?? null;
-    if (!frame) break;
-    topDoc = frame.ownerDocument;
+function focusProbeStyles(doc: Document, element: HTMLElement): FocusProbeStyles {
+  interface ProbeRule {
+    parent: CSSStyleSheet | CSSGroupingRule;
+    index: number;
+    css: string;
   }
-  return { document: doc, inner: doc.activeElement, top: topDoc.activeElement };
-}
-
-function restorePriorFocus(prior: PriorFocus): void {
-  const { document: doc, inner, top } = prior;
-  const innerIsDefault = !inner || inner === doc.body || inner === doc.documentElement;
-  const focusable = (element: Element | null): element is HTMLElement =>
-    element instanceof HTMLElement && typeof element.focus === 'function';
-  // The nested document is settled first and the outermost focus last, otherwise refocusing the
-  // nested document would steal the user's focus back from the outer document.
-  if (!innerIsDefault && focusable(inner)) {
-    inner.focus({ preventScroll: true });
-  } else if (innerIsDefault && focusable(doc.activeElement) && doc.activeElement !== inner) {
-    doc.activeElement.blur();
+  const matches: ProbeRule[] = [];
+  const collect = (rules: CSSRuleList): void => {
+    for (let index = 0; index < rules.length; index += 1) {
+      const rule = rules[index];
+      if (rule instanceof CSSStyleRule) {
+        if (!rule.selectorText.includes(':focus')) continue;
+        const selector = rule.selectorText.replace(FOCUS_PSEUDO, `.${FOCUS_PROBE_CLASS}`);
+        const parent = (rule.parentRule ?? rule.parentStyleSheet) as CSSStyleSheet | CSSGroupingRule;
+        matches.push({ parent, index, css: `${selector} { ${rule.style.cssText} }` });
+      } else if (rule instanceof CSSGroupingRule && rule.cssRules.length) {
+        collect(rule.cssRules);
+      }
+    }
+  };
+  for (const sheet of doc.styleSheets) {
+    try {
+      collect(sheet.cssRules);
+    } catch {
+      // Cross-origin sheets stay unreadable; their focus rules cannot be probed.
+    }
   }
-  if (top !== inner && focusable(top)) {
-    top.focus({ preventScroll: true });
+  const inserted: { parent: CSSStyleSheet | CSSGroupingRule; index: number }[] = [];
+  // Reverse order keeps the stored indices valid while inserting right after each source rule.
+  for (const match of [...matches].reverse()) {
+    try {
+      match.parent.insertRule(match.css, match.index + 1);
+      inserted.push({ parent: match.parent, index: match.index + 1 });
+    } catch {
+      // An unsupported selector stays unread, exactly as if the rule never matched.
+    }
+  }
+  element.classList.add(FOCUS_PROBE_CLASS);
+  try {
+    const computed = getComputedStyle(element);
+    return { outlineStyle: computed.outlineStyle || '', outlineWidth: computed.outlineWidth || '', boxShadow: computed.boxShadow || '' };
+  } finally {
+    element.classList.remove(FOCUS_PROBE_CLASS);
+    for (let index = inserted.length - 1; index >= 0; index -= 1) {
+      try {
+        inserted[index].parent.deleteRule(inserted[index].index);
+      } catch {
+        // The sheet may have changed while reading; leftover probes are removed on the next pass.
+      }
+    }
   }
 }
 
-// Browsers do not activate :focus for getComputedStyle(element, ':focus') - it keeps returning
-// the unfocused styles - so interactive elements are measured under a real temporary focus: each
-// of them is focused for its read and the focus captured before the walk is restored after it,
-// without scrolling the page.
-function focusAndRead(element: HTMLElement): CSSStyleDeclaration {
-  element.focus({ preventScroll: true });
-  return getComputedStyle(element);
-}
-
-// Interactive nodes carry their focused styles: their computed styles were captured while the
-// node held a real temporary focus, which is the only way engines expose the :focus rules.
-function readStyles(computed: CSSStyleDeclaration, interactive: boolean): GeometryNodeStyle {
+// Interactive nodes carry their focused styles: the computed :focus rules were replicated with a
+// probe class, so no real focus was needed to read them.
+function readStyles(computed: CSSStyleDeclaration, focus: FocusProbeStyles | null): GeometryNodeStyle {
   return {
     fontSize: Number.parseFloat(computed.fontSize) || 0,
     fontWeight: fontWeightValue(computed.fontWeight || ''),
@@ -188,9 +209,9 @@ function readStyles(computed: CSSStyleDeclaration, interactive: boolean): Geomet
     outlineStyle: computed.outlineStyle || '',
     outlineWidth: outlineWidthPx(computed.outlineWidth || ''),
     boxShadow: computed.boxShadow || '',
-    focusOutlineStyle: interactive ? computed.outlineStyle || '' : '',
-    focusOutlineWidth: interactive ? outlineWidthPx(computed.outlineWidth || '') : 0,
-    focusBoxShadow: interactive ? computed.boxShadow || '' : '',
+    focusOutlineStyle: focus ? focus.outlineStyle : '',
+    focusOutlineWidth: focus ? outlineWidthPx(focus.outlineWidth) : 0,
+    focusBoxShadow: focus ? focus.boxShadow : '',
   };
 }
 
@@ -209,30 +230,24 @@ function usedOverflow(overflowX: string, overflowY: string): { x: string; y: str
 // The descriptor walk in collectLayoutNodes pairs with a plain pre-order element walk, so the
 // same pairing here keeps node identity identical to the editor canvas and the layout runtime.
 export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapshotInit): GeometrySnapshot {
-  const priorFocus = capturePriorFocus(root.ownerDocument);
-  try {
-    return collectGeometrySnapshotUnchecked(root, init);
-  } finally {
-    restorePriorFocus(priorFocus);
-  }
-}
-
-function collectGeometrySnapshotUnchecked(root: HTMLElement, init: GeometrySnapshotInit): GeometrySnapshot {
   const rootBox = root.getBoundingClientRect();
   const scale = rootBox.width > 0 ? init.viewport.width / rootBox.width : 1;
   const elements: HTMLElement[] = [];
   const computedList: CSSStyleDeclaration[] = [];
+  const focusList: (FocusProbeStyles | null)[] = [];
   const clipList: { x: boolean; y: boolean; ancestor: HTMLElement | null }[] = [];
   const visit = (
     element: HTMLElement,
     inherited: { x: boolean; y: boolean; ancestor: HTMLElement | null },
   ): void => {
-    const computed = isInteractive(element) ? focusAndRead(element) : getComputedStyle(element);
+    const computed = getComputedStyle(element);
+    const focus = isInteractive(element) ? focusProbeStyles(root.ownerDocument, element) : null;
     const overflow = usedOverflow(computed.overflowX || '', computed.overflowY || '');
     const clipsX = overflow.x !== 'visible';
     const clipsY = overflow.y !== 'visible';
     elements.push(element);
     computedList.push(computed);
+    focusList.push(focus);
     clipList.push(inherited);
     const next = {
       x: inherited.x || clipsX,
@@ -266,7 +281,7 @@ function collectGeometrySnapshotUnchecked(root: HTMLElement, init: GeometrySnaps
         width: box.width * scale,
         height: box.height * scale,
       },
-      styles: readStyles(computedList[index], interactive),
+      styles: readStyles(computedList[index], focusList[index]),
       clip: {
         x: clip.x,
         y: clip.y,

@@ -629,6 +629,50 @@ describe('container layout styles', () => {
     expect(toolbar.style.justifyContent).toBe('');
     expect(toolbar.style.padding).toBe('');
   });
+
+  it('keeps authored container styles when layout fields are absent', () => {
+    const root = mount('<div data-design-id="toolbar" style="align-items: baseline; justify-content: space-between; padding: 20px"><button data-design-id="button">One</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button'], direction: 'column' });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.flexDirection).toBe('column');
+    // Fields the record does not set must keep the authored inline values, not be deleted.
+    expect(toolbar.style.alignItems).toBe('baseline');
+    expect(toolbar.style.justifyContent).toBe('space-between');
+    expect(toolbar.style.padding).toBe('20px');
+  });
+
+  it('restores authored container styles when a managed field disappears and on undo', async () => {
+    const root = mount('<div data-design-id="toolbar" style="align-items: baseline; padding: 20px"><button data-design-id="button">One</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button'], direction: 'column', alignment: 'center' });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.alignItems).toBe('center');
+
+    // The alignment edit is reverted: the record now only orders and directs, so the authored
+    // spacing must come back instead of being deleted together with the managed value.
+    theme.layout = { containers: [{ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button'], direction: 'column' }], placements: [] };
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(toolbar.style.alignItems).toBe('baseline');
+    expect(toolbar.style.padding).toBe('20px');
+
+    theme.layout = { containers: [], placements: [] };
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(toolbar.style.alignItems).toBe('baseline');
+    expect(toolbar.style.padding).toBe('20px');
+    expect(toolbar.style.flexDirection).toBe('');
+  });
 });
 
 describe('reparent across containers', () => {
@@ -657,6 +701,27 @@ describe('reparent across containers', () => {
 
     expect(texts(toolbarA())).toEqual(['Go']);
     expect(texts(toolbarB())).toEqual(['N']);
+  });
+
+  it('skips recorded orders that would move a node into its own descendant', () => {
+    const root = mount('<div data-design-id="screen"><div data-design-id="panel"><button data-design-id="button">Go</button></div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [{ id: 'flow-panel', ...context, nodeId: 'panel', order: ['screen'] }],
+      placements: [],
+    };
+    theme = parseThemeDocument(theme);
+
+    // A cycle would make the runtime append the screen into its own descendant and throw
+    // HierarchyRequestError; the move is rejected instead so the tree stays untouched.
+    expect(() => {
+      cleanup = observeLayout(root, theme, context);
+    }).not.toThrow();
+
+    const screen = root.querySelector<HTMLElement>('[data-design-id="screen"]')!;
+    const panel = root.querySelector<HTMLElement>('[data-design-id="panel"]')!;
+    expect(panel.parentElement).toBe(screen);
+    expect(screen.contains(panel)).toBe(true);
   });
 });
 

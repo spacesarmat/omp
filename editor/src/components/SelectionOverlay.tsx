@@ -145,6 +145,16 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
   const resolveInsertion = (point: ClientPoint, draggedId: string): InsertionTarget | null => {
     const dragged = props.nodes.find((node) => node.nodeId === draggedId);
     const draggedAbsolute = existingPlacement(draggedId)?.mode === 'absolute';
+    // A node never inserts into itself or its own descendant: the recorded order would make the
+    // runtime reparent it into its subtree and throw HierarchyRequestError.
+    const insideDragged = (nodeId: string): boolean => {
+      let current = props.nodes.find((node) => node.nodeId === nodeId)?.parentId ?? null;
+      while (current) {
+        if (current === draggedId) return true;
+        current = props.nodes.find((node) => node.nodeId === current)?.parentId ?? null;
+      }
+      return false;
+    };
     const eligible = new Map<string, boolean>();
     // Dragging an absolute node repositions it: only a drop into another recorded container is an
     // explicit flow insertion, so its own parent never offers one.
@@ -160,7 +170,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     }
     let best: { parentId: string; row: boolean } | null = null;
     for (const [parentId, row] of eligible) {
-      if (parentId === draggedId) continue;
+      if (parentId === draggedId || insideDragged(parentId)) continue;
       const rect = props.rects[parentId];
       if (!rect || !contains(rect, point)) continue;
       if (!best || area(rect) < area(props.rects[best.parentId])) best = { parentId, row };
@@ -227,6 +237,52 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     return { rect: { ...moved, x, y }, lines: snap.lines };
   };
 
+  // One snapped movement for the whole group: every moving member leaves the guide set, the
+  // leader rect snaps against the remaining guides and the resulting correction applies
+  // identically to all members, so the group spacing never shears.
+  const snapGroupRects = (rawRects: Record<string, LayoutRect>, leaderId: string, altKey: boolean): { rects: Record<string, LayoutRect>; lines: GuideLine[] } => {
+    const leader = rawRects[leaderId];
+    if (altKey || !guideSettings.snapToGuides || !leader) return { rects: rawRects, lines: [] };
+    const moving = new Set(Object.keys(rawRects));
+    const guideRects = Object.entries(props.rects)
+      .filter(([id, rect]) => !moving.has(id) && Boolean(rect))
+      .map(([, rect]) => rect as Rect);
+    const snap = findSnap(
+      { x: leader.x, y: leader.y },
+      [leader],
+      collectGuides(guideRects, { safeArea: safeAreaRect(), artboard: artboardRect() }),
+      guideSettings.snapThreshold,
+    );
+    let dx = 0;
+    let dy = 0;
+    if (snap.x !== null) dx = snap.x - leader.x;
+    else if (guideSettings.snapToGrid) dx = snapToGrid(leader.x, guideSettings.gridSize) - leader.x;
+    if (snap.y !== null) dy = snap.y - leader.y;
+    else if (guideSettings.snapToGrid) dy = snapToGrid(leader.y, guideSettings.gridSize) - leader.y;
+    if (!dx && !dy) return { rects: rawRects, lines: snap.lines };
+    const corrected: Record<string, LayoutRect> = {};
+    for (const [id, rect] of Object.entries(rawRects)) {
+      corrected[id] = { ...rect, x: rect.x + dx, y: rect.y + dy };
+    }
+    return { rects: corrected, lines: snap.lines };
+  };
+
+  // Only the outermost selected nodes move: a selected descendant of another selected node rides
+  // along inside its parent, and rewriting its placement against the parent old rect would shift
+  // it a second time when the runtime applies both records.
+  const outermostGroupMembers = (ids: string[]): string[] => {
+    const idSet = new Set(ids);
+    const nodeById = new Map(props.nodes.map((node) => [node.nodeId, node]));
+    return ids.filter((id) => {
+      let current = nodeById.get(id)?.parentId ?? null;
+      while (current) {
+        if (idSet.has(current)) return false;
+        current = nodeById.get(current)?.parentId ?? null;
+      }
+      return true;
+    });
+  };
+
   // The selection box follows the committed placement geometry for absolute nodes so the
   // handles and the numeric inspector agree with the draft even before the preview repaints.
   const resolvedRect = (nodeId: string): LayoutRect | undefined => {
@@ -277,23 +333,27 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     }
     const delta = { x: state.point.x - state.start.x, y: state.point.y - state.start.y };
     // A drag that started on a selected node moves the whole absolute group: every member follows
-    // the same delta and all placements land in one update, so one undo restores the group.
-    const members = state.groupIds.length ? state.groupIds : [state.nodeId];
-    const placements: LayoutPlacement[] = [];
+    // the same snapped movement and all placements land in one update, so one undo restores the
+    // group and the spacing between members never shears.
+    const members = outermostGroupMembers(state.groupIds.length ? state.groupIds : [state.nodeId]);
+    const rawRects: Record<string, LayoutRect> = {};
     for (const memberId of members) {
-      const member = props.nodes.find((entry) => entry.nodeId === memberId);
       const memberRect = resolvedRect(memberId);
-      if (!member || !memberRect) continue;
-      const moved = {
+      if (!memberRect) continue;
+      rawRects[memberId] = {
         x: memberRect.x + delta.x,
         y: memberRect.y + delta.y,
         width: memberRect.width,
         height: memberRect.height,
       };
-      const snapped = memberId === state.nodeId
-        ? snapDragRect(moved, memberId, state.altKey)
-        : { rect: moved, lines: [] };
-      placements.push(absolutePlacementFromRect(snapped.rect, nodeParentRect(member), props.context, member.nodeId, member.label, existingPlacement(member.nodeId)));
+    }
+    const snapped = snapGroupRects(rawRects, state.nodeId, state.altKey);
+    const placements: LayoutPlacement[] = [];
+    for (const memberId of members) {
+      const member = props.nodes.find((entry) => entry.nodeId === memberId);
+      const memberRect = snapped.rects[memberId];
+      if (!member || !memberRect) continue;
+      placements.push(absolutePlacementFromRect(memberRect, nodeParentRect(member), props.context, member.nodeId, member.label, existingPlacement(member.nodeId)));
     }
     if (placements.length === 1) props.onPlaceNode(placements[0]);
     else if (placements.length > 1) props.onPlaceNodes(placements);
@@ -473,19 +533,15 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         if (state.groupIds.length) {
           state.insertion = null;
           const delta = { x: point.x - state.start.x, y: point.y - state.start.y };
-          const groupRects: Record<string, LayoutRect> = {};
+          const rawRects: Record<string, LayoutRect> = {};
           for (const memberId of state.groupIds) {
             const base = resolvedRect(memberId);
             if (base) {
-              groupRects[memberId] = { x: base.x + delta.x, y: base.y + delta.y, width: base.width, height: base.height };
+              rawRects[memberId] = { x: base.x + delta.x, y: base.y + delta.y, width: base.width, height: base.height };
             }
           }
-          const leaderBase = resolvedRect(state.nodeId);
-          const snapped = leaderBase
-            ? snapDragRect({ x: leaderBase.x + delta.x, y: leaderBase.y + delta.y, width: leaderBase.width, height: leaderBase.height }, state.nodeId, event.altKey)
-            : null;
-          if (snapped) groupRects[state.nodeId] = snapped.rect;
-          setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped ? snapped.rect : null, groupRects, lines: snapped ? snapped.lines : [] });
+          const snapped = snapGroupRects(rawRects, state.nodeId, event.altKey);
+          setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped.rects[state.nodeId] ?? null, groupRects: snapped.rects, lines: snapped.lines });
           return;
         }
         state.insertion = resolveInsertion(point, state.nodeId);
