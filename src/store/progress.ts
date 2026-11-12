@@ -52,6 +52,7 @@ function persist() {
 
 export function reloadProgress(): void {
   local = sanitizeProgress(loadJson<unknown>(KEY, {}, isObject));
+  seenFinish = null;
   progressVersion.value++;
 }
 
@@ -73,8 +74,10 @@ function serverEntry(hash: string, idx: number): ViewedEntry | null {
   return serverViewed.value.find((e) => e.hash === hash && e.file_index === idx) || null;
 }
 
-function finishSeen(hash: string, idx: number): number {
-  const k = key(hash, idx);
+let seenFinish: { [id: string]: number } | null = null;
+
+function seenFinishMap(): { [id: string]: number } {
+  if (seenFinish) return seenFinish;
   const raw = loadJson<unknown>(SEEN_KEY, {}, isObject);
   const map: { [id: string]: number } = {};
   if (isObject(raw)) {
@@ -83,6 +86,13 @@ function finishSeen(hash: string, idx: number): number {
       if (typeof n === 'number' && isFinite(n)) map[id] = n;
     });
   }
+  seenFinish = map;
+  return map;
+}
+
+function finishSeen(hash: string, idx: number): number {
+  const map = seenFinishMap();
+  const k = key(hash, idx);
   if (typeof map[k] === 'number') return map[k];
   const at = stamp();
   map[k] = at;
