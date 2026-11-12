@@ -20,6 +20,7 @@ const ENV = {
   BILLING_BOT_TOKEN: '123456:env-bot-token-AAAA',
   BILLING_YOOMONEY_SECRET: 'env-yoomoney-secret-BBBB',
   CRYPTO_PAY_TOKEN: 'crypto-env-token-GGGG',
+  CRYPTO_PAY_TESTNET_TOKEN: 'crypto-testnet-token-HHHH',
   BILLING_SMTP_PASS: 'smtp-env-pass-CCCC',
   BILLING_JACKETT_API_KEY: 'jackett-env-key-DDDD',
   BILLING_JACRED_API_KEY: 'jacred-env-key-EEEE',
@@ -33,6 +34,7 @@ function oldState() {
   st.settings.botToken = '123456:db-bot-token';
   st.settings.yoomoneySecret = 'db-yoomoney-secret';
   st.settings.cryptoPayToken = 'db-crypto-pay-token';
+  st.settings.cryptoPayTestnetToken = 'db-crypto-pay-testnet-token';
   st.settings.smtpPass = 'db-smtp';
   st.settings.jackettApiKey = 'db-jackett';
   st.settings.jacredApiKey = 'db-jacred';
@@ -180,7 +182,7 @@ describe('the store with .env secrets', () => {
     expect((await raw.query("SELECT COUNT(*)::int AS n FROM kv WHERE key = 'token_secret'")).rows[0].n).toBe(0);
     // No secret value is left anywhere in the state tables.
     const dumpish = JSON.stringify((await raw.query('SELECT key, value FROM settings')).rows);
-    for (const v of ['db-bot-token', 'db-yoomoney-secret', 'db-smtp', 'db-jackett', 'db-jacred', 'db-pass']) expect(dumpish).not.toContain(v);
+    for (const v of ['db-bot-token', 'db-yoomoney-secret', 'db-smtp', 'db-jackett', 'db-jacred', 'db-pass', 'db-crypto-pay-token', 'db-crypto-pay-testnet-token']) expect(dumpish).not.toContain(v);
     // Idempotent.
     expect(await moveSecretsOutOfDb(raw, env)).toEqual({ moved: [], tokenKey: false });
     // A short BILLING_TOKEN_SECRET is ignored, so the kv key stays.
@@ -250,14 +252,14 @@ describe('secretsToEnv: the .env lines for the move', () => {
     expect(out.names).toEqual([...ENV_SECRETS.map((s) => s.env), 'BILLING_TOKEN_SECRET']);
     expect(out.lines).toContain("BILLING_BOT_TOKEN='123456:db-bot-token'");
     expect(out.lines).toContain("BILLING_TOKEN_SECRET='" + KV + "'");
-    for (const l of out.lines) expect(l).toMatch(/^(BILLING_[A-Z_]+|CRYPTO_PAY_TOKEN)='[^'\r\n]*'$/);
+    for (const l of out.lines) expect(l).toMatch(/^(BILLING_[A-Z_]+|CRYPTO_PAY_TOKEN|CRYPTO_PAY_TESTNET_TOKEN)='[^'\r\n]*'$/);
   });
 
   it('skips what .env already sets, empty values and a short kv key', () => {
     const st = oldState().settings;
     st.smtpPass = '';
     const out = envLinesFor(st, 'short', { BILLING_BOT_TOKEN: 'x:env', BILLING_TOKEN_SECRET: 'b'.repeat(40) });
-    expect(out.names).toEqual(['BILLING_YOOMONEY_SECRET', 'CRYPTO_PAY_TOKEN', 'BILLING_JACKETT_API_KEY', 'BILLING_JACRED_API_KEY', 'BILLING_BITMAGNET_API_KEY', 'BILLING_INDEXER_PASS']);
+    expect(out.names).toEqual(['BILLING_YOOMONEY_SECRET', 'CRYPTO_PAY_TOKEN', 'CRYPTO_PAY_TESTNET_TOKEN', 'BILLING_JACKETT_API_KEY', 'BILLING_JACRED_API_KEY', 'BILLING_BITMAGNET_API_KEY', 'BILLING_INDEXER_PASS']);
     expect(envLinesFor(st, KV, { BILLING_TOKEN_SECRET: 'too-short' }).names).toContain('BILLING_TOKEN_SECRET');
   });
 
@@ -279,6 +281,7 @@ describe('secretsToEnv: the .env lines for the move', () => {
       BILLING_BOT_TOKEN: 'same',
       BILLING_YOOMONEY_SECRET: 'differs',
       CRYPTO_PAY_TOKEN: 'db only',
+      CRYPTO_PAY_TESTNET_TOKEN: 'db only',
       BILLING_SMTP_PASS: 'none',
       BILLING_JACKETT_API_KEY: 'db only',
       BILLING_JACRED_API_KEY: 'env only',

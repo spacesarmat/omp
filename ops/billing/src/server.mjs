@@ -96,7 +96,7 @@ import {
 import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
-import { createCryptoInvoice, cryptoPayAuthentic, paidInvoice } from './cryptoPay.mjs';
+import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -912,10 +912,11 @@ async function ensureCryptoLink(store, purchaseId, fetchImpl) {
       webUrl: quote.webUrl || quote.payUrl,
     };
   }
-  if (!state.settings.cryptoPayToken) return { error: 'disabled' };
+  const creds = cryptoPayCredentials(state.settings);
+  if (!creds.ready) return { error: 'disabled' };
   const invoice = await createCryptoInvoice(fetchImpl, {
-    testnet: state.settings.cryptoTestnet === true,
-    token: state.settings.cryptoPayToken,
+    testnet: creds.testnet,
+    token: creds.token,
     asset: quote.asset,
     amount: quote.payAmount,
     payload: 'buy:' + quote.id,
@@ -3011,7 +3012,23 @@ export function createApp(file, fetchImpl, opts) {
         const state = await store.read();
         const now = Date.now();
         const header = req.headers['crypto-pay-api-signature'] || '';
-        if (!cryptoPayAuthentic(raw, header, state.settings.cryptoPayToken)) {
+        const signatureMode = cryptoPaySignatureMode(raw, header, state.settings);
+        if (signatureMode === 'inactive') {
+          let operationId = '';
+          try {
+            const parsed = JSON.parse(raw || '{}');
+            const paidOther = paidInvoice(parsed);
+            if (paidOther) operationId = 'crypto:' + paidOther.invoiceId;
+          } catch (e) {
+            operationId = '';
+          }
+          await store.update((cur) => ({
+            state: logWebhook(cur, { kind: 'ignored', operationId, label: '', amount: '', at: now }),
+          }));
+          process.stderr.write('crypto pay ignored inactive mode\n');
+          return send(res, 200, 'ok');
+        }
+        if (signatureMode !== 'active') {
           await store.update((cur) => ({
             state: logWebhook(cur, { kind: 'bad_signature', operationId: '', label: '', amount: '', at: now }),
           }));
