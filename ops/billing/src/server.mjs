@@ -2627,7 +2627,7 @@ export function createApp(file, fetchImpl, opts) {
           monitorMax: monitorMaxFor(isActive),
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
-          referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal),
+          referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),
         });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {

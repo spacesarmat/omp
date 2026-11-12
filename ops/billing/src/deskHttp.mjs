@@ -30,7 +30,7 @@ import {
   sourceStats,
   usersFrom,
 } from './desk.mjs';
-import { dailySeries, redeemPromo } from './logic.mjs';
+import { dailySeries, redeemPromo, redeemReferralCode } from './logic.mjs';
 import { betaCohort, broadcastAudience, crashDraft, crashLogText, ingestCrash, setCrashStatus, versionSummary } from './crashIn.mjs';
 import { monitorEnv } from './monitorChecks.mjs';
 import { probeAllServices } from './services.mjs';
@@ -701,7 +701,11 @@ async function promoPost(ctx) {
     ctx.json(ctx.res, 404, { error: 'not_linked' });
     return true;
   }
-  const out = await ctx.store.update((cur) => redeemPromo(cur, { code: body.code || body.promo || '', accountId: sub.accountId, now }));
+  const rawCode = body.code || body.promo || '';
+  const out = await ctx.store.update((cur) => {
+    const hit = redeemReferralCode(cur, { code: rawCode, accountId: sub.accountId, deviceId: device, now });
+    return hit || redeemPromo(cur, { code: rawCode, accountId: sub.accountId, now });
+  });
   const err = out && out.error;
   ctx.json(ctx.res, 200, err ? { ok: false, error: err } : { ok: true, days: out.days || 0 });
   return true;

@@ -48,17 +48,20 @@ export function referralCodeFor(accountId) {
  * What /v1/me tells the phone. Off until the master flag is on.
  * Friends are journal rows of this referrer that were not cancelled or rejected.
  */
-export function publicReferral(settings, accountId, journal) {
+export function publicReferral(settings, accountId, journal, binds) {
   const s = normalizeReferralSettings(settings);
   if (!s.enabled || !accountId) return { enabled: false, code: '', friends: 0, noticeDays: 0 };
   let friends = 0;
   let noticeDays = 0;
+  if (Array.isArray(binds)) {
+    for (let i = 0; i < binds.length; i++) if (binds[i] && binds[i].referrerId === accountId) friends++;
+  }
   const rows = journal || [];
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.referrerId !== accountId) continue;
     if (row.status === 'cancelled' || row.status === 'rejected') continue;
-    friends++;
+    if (!Array.isArray(binds)) friends++;
     if (row.status === 'granted' && row.days > 0) noticeDays = row.days;
   }
   return { enabled: true, code: referralCodeFor(accountId), friends, noticeDays };

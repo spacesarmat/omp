@@ -1,4 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
+import { normalizeReferralSettings, referralCodeFor } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, labelSettled, rubOfPayment, starDue } from './payMethods.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
@@ -2691,6 +2692,60 @@ export function revokePromo(state, promoId) {
  * fresh device activation code. A promo with bonus slots only needs a subscription (`needs_subscription`).
  * The same account cannot redeem the same promo twice.
  */
+function referralCodeMatches(accountId, raw) {
+  const code = referralCodeFor(accountId);
+  const compact = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return code === String(raw || '').trim().toUpperCase() || code.replace(/-/g, '') === compact;
+}
+
+/**
+ * Account-screen code that belongs to a referrer. Null when it is not a referral code,
+ * so the promo list still runs. A match binds the friend once and adds the friend's bonus days.
+ */
+export function redeemReferralCode(state, { code, accountId, deviceId, now }) {
+  const accounts = state.accounts || [];
+  let referrer = null;
+  for (let i = 0; i < accounts.length; i++) {
+    if (accounts[i] && referralCodeMatches(accounts[i].id, code)) {
+      referrer = accounts[i];
+      break;
+    }
+  }
+  if (!referrer) return null;
+  const settings = normalizeReferralSettings(state.settings && state.settings.referral);
+  if (!settings.enabled || !accountId) return { state, result: { error: 'bad_promo' } };
+  if (referrer.id === accountId) return { state, result: { error: 'bad_promo' } };
+  const friend = findAccount(state, accountId);
+  const friendTg = friend && friend.telegramId;
+  if (friendTg && referrer.telegramId && friendTg === referrer.telegramId) return { state, result: { error: 'bad_promo' } };
+  const device = String(deviceId || '');
+  if (device) {
+    const hit = (state.codes || []).find((row) => row && row.deviceId === device && !row.revoked);
+    const sub = hit ? (state.subscriptions || []).find((s) => s.id === hit.subscriptionId) : null;
+    if (sub && sub.accountId === referrer.id) return { state, result: { error: 'bad_promo' } };
+  }
+  const binds = state.referralBinds || [];
+  if (binds.some((row) => row && row.friendId === accountId)) return { state, result: { error: 'already' } };
+  const days = settings.friendDays;
+  let next = state;
+  let paidUntil = 0;
+  if (days > 0) {
+    const existing = anySub(state, accountId);
+    if (existing) {
+      const extended = extendGift(state, existing, days, now);
+      paidUntil = extended.paidUntil;
+      next = { ...state, subscriptions: state.subscriptions.map((s) => (s.id === existing.id ? extended : s)) };
+    }
+  }
+  return {
+    state: {
+      ...next,
+      referralBinds: binds.concat([{ friendId: accountId, referrerId: referrer.id, code: referralCodeFor(referrer.id), boundAt: now || 0 }]),
+    },
+    result: { kind: 'referral', days, paidUntil, promoCode: referralCodeFor(referrer.id) },
+  };
+}
+
 export function redeemPromo(state, { code, accountId, now }) {
   const plain = normalizePromo(code);
   if (!plain || !findAccount(state, accountId)) return { state, result: { error: 'bad_promo' } };

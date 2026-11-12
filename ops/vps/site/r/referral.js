@@ -5,7 +5,7 @@
     ru: {
       title: 'Приглашение в OMP',
       heading: 'Вас пригласили в OMP',
-      line: 'Промокод на этой странице вводится в приложении, в разделе аккаунта. Если OMP ещё не установлен, сначала скачайте его.',
+      line: 'Введите промокод в приложении, в разделе аккаунта: приглашение сохранится. Если OMP ещё не установлен, сначала скачайте его.',
       badHeading: 'Приглашение не распознано',
       badLine: 'В ссылке нет промокода. Попросите новую ссылку или скачайте OMP.',
       code: 'Промокод {code}',
@@ -17,7 +17,7 @@
     en: {
       title: 'Invitation to OMP',
       heading: 'You are invited to OMP',
-      line: 'Enter the code from this page in the app, on the account screen. Download OMP first if it is not installed yet.',
+      line: 'Enter the code in the app, on the account screen: the invitation is saved. Download OMP first if it is not installed yet.',
       badHeading: 'Invitation not recognized',
       badLine: 'This link has no code. Ask for a new link or download OMP.',
       code: 'Code {code}',
