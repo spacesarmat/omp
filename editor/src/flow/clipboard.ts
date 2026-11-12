@@ -14,14 +14,16 @@ import { FlowOperationError, OUTPUT_BRANCHES, type FlowPosition } from './nodeOp
 export const FLOW_CLIPBOARD_SCHEMA_VERSION = 1;
 const PASTE_OFFSET = 48;
 
-// Clipboard payload between copy and paste. Nodes keep their stepId and source ruleId so
-// paste can resolve the behavior steps; every pasted node, edge and step still gets a fresh
-// id, so one clipboard can be pasted many times without collisions.
+// Clipboard payload between copy and paste. Steps are embedded as structuredClone snapshots
+// at copy time, so the clipboard is self-contained: deleting the source nodes or editing
+// the source steps after copying cannot break or change a later paste. Every pasted node,
+// edge and step still gets a fresh id, so one clipboard can be pasted many times.
 export interface FlowClipboard {
   schemaVersion: 1;
   nodes: FlowNodeView[];
   edges: FlowEdge[];
   variables: FlowVariable[];
+  steps: InteractionStep[];
 }
 
 export type FlowClipboardErrorCode =
@@ -40,6 +42,9 @@ export type FlowClipboardErrorCode =
   | 'DUPLICATE_EDGE'
   | 'CYCLE'
   | 'DANGLING_STEP'
+  | 'DUPLICATE_STEP'
+  | 'EMPTY_STEP'
+  | 'STEP_MISMATCH'
   | 'UNKNOWN_VARIABLE_TYPE'
   | 'DUPLICATE_VARIABLE'
   | 'MULTIPLE_TRIGGERS';
@@ -92,8 +97,9 @@ function stepVariableIds(step: InteractionStep): string[] {
 }
 
 // Copies the selected nodes in graph order. Only edges whose both endpoints stay inside the
-// selection are kept, so the clipboard can never hold dangling references, and only variables
-// referenced by copied steps ride along.
+// selection are kept, so the clipboard can never hold dangling references, only variables
+// referenced by copied steps ride along, and the referenced steps are snapshotted into the
+// clipboard itself.
 export function copyFlowSelection(flow: FlowDocument, ruleId: string, nodeIds: string[]): FlowClipboard {
   const rule = ruleOf(flow, ruleId);
   const graph = rule.graph ?? { nodes: [], edges: [] };
@@ -111,14 +117,21 @@ export function copyFlowSelection(flow: FlowDocument, ruleId: string, nodeIds: s
     .filter((edge) => wanted.has(edge.from) && wanted.has(edge.to))
     .map((edge) => ({ ...edge }));
   const stepsById = new Map((rule.steps ?? []).map((step) => [step.id, step]));
-  const variableIds = new Set<string>();
+  const stepSnapshots = new Map<string, InteractionStep>();
   for (const node of nodes) {
-    if (!node.stepId) continue;
+    if (!node.stepId || stepSnapshots.has(node.stepId)) continue;
     const step = stepsById.get(node.stepId);
-    if (step) for (const id of stepVariableIds(step)) variableIds.add(id);
+    if (!step) {
+      throw new FlowClipboardError('DANGLING_STEP', `step ${node.stepId} of node ${node.id} not found in rule ${ruleId}`);
+    }
+    stepSnapshots.set(node.stepId, structuredClone(step));
+  }
+  const variableIds = new Set<string>();
+  for (const step of stepSnapshots.values()) {
+    for (const id of stepVariableIds(step)) variableIds.add(id);
   }
   const variables = (flow.variables ?? []).filter((variable) => variableIds.has(variable.id));
-  return { schemaVersion: FLOW_CLIPBOARD_SCHEMA_VERSION, nodes, edges, variables };
+  return { schemaVersion: FLOW_CLIPBOARD_SCHEMA_VERSION, nodes, edges, variables, steps: [...stepSnapshots.values()] };
 }
 
 function wouldReach(edges: FlowEdge[], from: string, target: string, visited: Set<string>): boolean {
@@ -129,8 +142,8 @@ function wouldReach(edges: FlowEdge[], from: string, target: string, visited: Se
 }
 
 // Validates the clipboard payload itself before touching the document: schema version,
-// shapes, node kinds and positions, and every edge invariant the graph rules enforce
-// (dangling endpoints, branch compatibility, self loops, duplicates, cycles).
+// shapes, node kinds and positions, step snapshots and every edge invariant the graph rules
+// enforce (dangling endpoints, branch compatibility, self loops, duplicates, cycles).
 function assertValidClipboard(clipboard: FlowClipboard): void {
   if (!clipboard || typeof clipboard !== 'object') {
     throw new FlowClipboardError('SHAPE', 'clipboard is not an object');
@@ -138,8 +151,28 @@ function assertValidClipboard(clipboard: FlowClipboard): void {
   if (clipboard.schemaVersion !== FLOW_CLIPBOARD_SCHEMA_VERSION) {
     throw new FlowClipboardError('SCHEMA_VERSION', `expected schemaVersion 1, got ${String(clipboard.schemaVersion)}`);
   }
-  if (!Array.isArray(clipboard.nodes) || !Array.isArray(clipboard.edges) || !Array.isArray(clipboard.variables)) {
-    throw new FlowClipboardError('SHAPE', 'nodes, edges and variables must be arrays');
+  if (!Array.isArray(clipboard.nodes) || !Array.isArray(clipboard.edges)
+    || !Array.isArray(clipboard.variables) || !Array.isArray(clipboard.steps)) {
+    throw new FlowClipboardError('SHAPE', 'nodes, edges, variables and steps must be arrays');
+  }
+  const stepContent = new Map<string, 'condition' | 'action'>();
+  const stepIds = new Set<string>();
+  for (const step of clipboard.steps) {
+    if (!step || typeof step !== 'object' || typeof step.id !== 'string' || step.id.length === 0) {
+      throw new FlowClipboardError('SHAPE', 'step without an id');
+    }
+    if (stepIds.has(step.id)) throw new FlowClipboardError('DUPLICATE_STEP', `step ${step.id} repeats in the clipboard`);
+    if (step.condition !== undefined && (typeof step.condition !== 'object' || step.condition === null)) {
+      throw new FlowClipboardError('SHAPE', `step ${step.id} carries a malformed condition`);
+    }
+    if (step.action !== undefined && (typeof step.action !== 'object' || step.action === null)) {
+      throw new FlowClipboardError('SHAPE', `step ${step.id} carries a malformed action`);
+    }
+    if (!step.condition && !step.action) {
+      throw new FlowClipboardError('EMPTY_STEP', `step ${step.id} carries neither condition nor action`);
+    }
+    stepIds.add(step.id);
+    stepContent.set(step.id, step.condition ? 'condition' : 'action');
   }
   const nodeKinds = new Map<string, FlowNodeView['kind']>();
   const nodeIds = new Set<string>();
@@ -153,8 +186,21 @@ function assertValidClipboard(clipboard: FlowClipboard): void {
     }
     nodeIds.add(node.id);
     nodeKinds.set(node.id, node.kind);
+    if (node.kind === 'trigger' && node.stepId) {
+      throw new FlowClipboardError('STEP_MISMATCH', `trigger node ${node.id} must not carry a step`);
+    }
     if ((node.kind === 'condition' || node.kind === 'action') && !node.stepId) {
       throw new FlowClipboardError('DANGLING_STEP', `node ${node.id} has no step to paste`);
+    }
+    if (node.stepId) {
+      const content = stepContent.get(node.stepId);
+      if (!content) {
+        throw new FlowClipboardError('DANGLING_STEP', `step ${node.stepId} of node ${node.id} not in the clipboard`);
+      }
+      const expected = node.kind === 'condition' ? 'condition' : 'action';
+      if (content !== expected && node.kind !== 'result') {
+        throw new FlowClipboardError('STEP_MISMATCH', `node ${node.id} expects an ${expected} step, got ${content}`);
+      }
     }
   }
   if (clipboard.nodes.filter((node) => node.kind === 'trigger').length > 1) {
@@ -201,9 +247,11 @@ export interface FlowPasteResult {
 }
 
 // Pastes a validated clipboard into the target rule with fresh ids for nodes, edges and
-// steps. Variables are reused by id when the document already declares them and appended
-// otherwise, so pasted steps never dangle. Positions shift by a small offset by default or
-// anchor the copied bounding box to `at` when the canvas passes a drop point.
+// steps. Steps come from the embedded copy-time snapshots, never from the current document,
+// so paste stays correct after the source was edited or deleted. Variables are reused by id
+// when the document already declares them and appended otherwise, so pasted steps never
+// dangle. Positions shift by a small offset by default or anchor the copied bounding box to
+// `at` when the canvas passes a drop point.
 export function pasteFlowSelection(
   flow: FlowDocument,
   ruleId: string,
@@ -216,13 +264,6 @@ export function pasteFlowSelection(
   const pastedTrigger = clipboard.nodes.find((node) => node.kind === 'trigger');
   if (pastedTrigger && graph.nodes.some((node) => node.kind === 'trigger')) {
     throw new FlowOperationError('MULTIPLE_TRIGGERS', `rule ${ruleId} already has a trigger node`);
-  }
-  const stepsById = new Map(flow.rules.flatMap((entry) => (entry.steps ?? []).map((step) => [step.id, step])));
-  for (const node of clipboard.nodes) {
-    if (!node.stepId) continue;
-    if (!stepsById.has(node.stepId)) {
-      throw new FlowClipboardError('DANGLING_STEP', `step ${node.stepId} of node ${node.id} not found in the document`);
-    }
   }
   let minX = Infinity;
   let minY = Infinity;
@@ -263,9 +304,11 @@ export function pasteFlowSelection(
     takenEdgeIds.push(fresh);
     return { id: fresh, from: idByNodeId.get(edge.from)!, to: idByNodeId.get(edge.to)!, branch: edge.branch as FlowEdgeBranch };
   });
-  const pastedSteps: InteractionStep[] = clipboard.nodes
-    .filter((node) => node.stepId)
-    .map((node) => ({ ...structuredClone(stepsById.get(node.stepId!)!), id: stepIdByOldId.get(node.stepId!)! }));
+  const clipboardStepsById = new Map(clipboard.steps.map((step) => [step.id, step]));
+  const pastedSteps: InteractionStep[] = [...stepIdByOldId.entries()].map(([oldId, freshId]) => ({
+    ...structuredClone(clipboardStepsById.get(oldId)!),
+    id: freshId,
+  }));
   const knownVariableIds = new Set((flow.variables ?? []).map((variable) => variable.id));
   const missingVariables = clipboard.variables.filter((variable) => !knownVariableIds.has(variable.id));
   const nextRule: InteractionRule = {

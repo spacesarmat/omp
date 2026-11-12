@@ -11,11 +11,16 @@ import {
   pasteFlowSelection,
   type FlowClipboard,
 } from '../../editor/src/flow/clipboard';
-import { FlowOperationError } from '../../editor/src/flow/nodeOperations';
+import { FlowOperationError, removeFlowNodes } from '../../editor/src/flow/nodeOperations';
 import type { EditorClient } from '../../editor/src/client';
-import type { FlowDocument, InteractionRule } from '../../design/schema.ts';
+import type { FlowDocument, InteractionRule, InteractionStep } from '../../design/schema.ts';
 
 const BASE = '0000000000000000000000000000000000000000';
+
+const clipboardSteps: InteractionStep[] = [
+  { id: 'step-1', condition: { kind: 'eq', path: 'server.connected', value: true } },
+  { id: 'step-3', action: { type: 'toast', message: 'Готово' } },
+];
 
 function graphRule(overrides: Partial<InteractionRule> = {}): InteractionRule {
   return {
@@ -239,6 +244,7 @@ describe('pasteFlowSelection', () => {
       ],
       edges: [],
       variables: [],
+      steps: [],
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', clipboard)).toThrow(FlowClipboardError);
     expect(() => pasteFlowSelection(flow, 'rule-2', clipboard)).toThrow('MULTIPLE_TRIGGERS');
@@ -260,6 +266,7 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'weird' as never, x: 0, y: 0 }],
       edges: [],
       variables: [],
+      steps: [],
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', badKind)).toThrow('UNKNOWN_KIND');
     const duplicated: FlowClipboard = {
@@ -270,6 +277,7 @@ describe('pasteFlowSelection', () => {
       ],
       edges: [],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', duplicated)).toThrow('DUPLICATE_NODE');
     const nanPosition: FlowClipboard = {
@@ -277,6 +285,7 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'condition', x: Number.NaN, y: 0, stepId: 'step-1' }],
       edges: [],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', nanPosition)).toThrow('INVALID_POSITION');
   });
@@ -288,6 +297,7 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'condition', x: 0, y: 0, stepId: 'step-1' }],
       edges: [{ id: 'edge-1', from: 'node-1', to: 'node-9', branch: 'true' }],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', dangling)).toThrow('DANGLING_EDGE');
     const triggerTarget: FlowClipboard = {
@@ -298,6 +308,7 @@ describe('pasteFlowSelection', () => {
       ],
       edges: [{ id: 'edge-1', from: 'node-2', to: 'node-1', branch: 'default' }],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', triggerTarget)).toThrow('TRIGGER_TARGET');
     const pair = [
@@ -309,6 +320,7 @@ describe('pasteFlowSelection', () => {
       nodes: pair,
       edges: [{ id: 'edge-1', from: 'node-1', to: 'node-2', branch: 'sideways' as never }],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', unknownBranch)).toThrow('UNKNOWN_BRANCH');
     const mismatch: FlowClipboard = {
@@ -316,6 +328,7 @@ describe('pasteFlowSelection', () => {
       nodes: pair,
       edges: [{ id: 'edge-1', from: 'node-1', to: 'node-2', branch: 'default' }],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', mismatch)).toThrow('BRANCH_MISMATCH');
   });
@@ -327,6 +340,7 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'condition', x: 0, y: 0, stepId: 'step-1' }],
       edges: [{ id: 'edge-1', from: 'node-1', to: 'node-1', branch: 'true' }],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', selfLoop)).toThrow('SELF_LOOP');
     const pair = [
@@ -341,6 +355,7 @@ describe('pasteFlowSelection', () => {
         { id: 'edge-2', from: 'node-1', to: 'node-2', branch: 'true' },
       ],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', duplicate)).toThrow('DUPLICATE_EDGE');
     const cycle: FlowClipboard = {
@@ -351,6 +366,7 @@ describe('pasteFlowSelection', () => {
         { id: 'edge-2', from: 'node-2', to: 'node-1', branch: 'error' },
       ],
       variables: [],
+      steps: clipboardSteps,
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', cycle)).toThrow('CYCLE');
   });
@@ -362,6 +378,7 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'condition', x: 0, y: 0, stepId: 'step-missing' }],
       edges: [],
       variables: [],
+      steps: [],
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', danglingStep)).toThrow('DANGLING_STEP');
     const badVariable: FlowClipboard = {
@@ -369,8 +386,55 @@ describe('pasteFlowSelection', () => {
       nodes: [{ id: 'node-1', kind: 'trigger', x: 0, y: 0 }],
       edges: [],
       variables: [{ id: 'var-1', name: 'flag', type: 'weird' as never, initial: false }],
+      steps: [],
     };
     expect(() => pasteFlowSelection(flow, 'rule-2', badVariable)).toThrow('UNKNOWN_VARIABLE_TYPE');
+  });
+
+  it('pastes cleanly after the copied nodes were deleted', () => {
+    const rule = graphRule({
+      steps: [
+        { id: 'step-1', condition: { kind: 'eq', path: 'server.connected', value: true } },
+        { id: 'step-3', action: { type: 'toast', message: 'Готово' } },
+      ],
+      graph: {
+        nodes: [
+          { id: 'node-1', kind: 'trigger', x: 60, y: 60 },
+          { id: 'node-2', kind: 'condition', x: 280, y: 60, stepId: 'step-1' },
+          { id: 'node-3', kind: 'action', x: 500, y: 60, stepId: 'step-3' },
+        ],
+        edges: [
+          { id: 'edge-1', from: 'node-1', to: 'node-2', branch: 'default' },
+          { id: 'edge-2', from: 'node-2', to: 'node-3', branch: 'true' },
+        ],
+      },
+    });
+    const flow = flowWithRules([rule, emptyRule('rule-2')]);
+    const clipboard = copyFlowSelection(flow, 'rule-1', ['node-2', 'node-3']);
+    const afterDelete = removeFlowNodes(flow, 'rule-1', ['node-3']);
+    expect(ruleOf(afterDelete, 'rule-1').steps!.map((step) => step.id)).toEqual(['step-1']);
+    const result = pasteFlowSelection(afterDelete, 'rule-2', clipboard);
+    const pastedRule = ruleOf(result.flow, 'rule-2');
+    expect(pastedRule.graph!.nodes.map((node) => node.kind)).toEqual(['condition', 'action']);
+    const action = pastedRule.graph!.nodes.find((node) => node.kind === 'action')!;
+    const steps = new Map(pastedRule.steps!.map((step) => [step.id, step]));
+    expect(steps.get(action.stepId!)).toMatchObject({ action: { type: 'toast', message: 'Готово' } });
+    const sourceStepIds = ruleOf(result.flow, 'rule-1').steps!.map((step) => step.id);
+    expect(pastedRule.steps!.map((step) => step.id).some((id) => sourceStepIds.includes(id))).toBe(false);
+  });
+
+  it('pastes the copy-time step snapshot instead of post-copy edits', () => {
+    const flow = flowWithRules([graphRule(), emptyRule('rule-2')]);
+    const clipboard = copyFlowSelection(flow, 'rule-1', ['node-3']);
+    const editedFlow = structuredClone(flow);
+    const sourceStep = ruleOf(editedFlow, 'rule-1').steps!.find((step) => step.id === 'step-2')!;
+    sourceStep.action = { type: 'variable.set', variableId: 'var-2', value: true };
+    const result = pasteFlowSelection(editedFlow, 'rule-2', clipboard);
+    const pastedRule = ruleOf(result.flow, 'rule-2');
+    const pastedNode = pastedRule.graph!.nodes[0];
+    const pastedStep = pastedRule.steps!.find((step) => step.id === pastedNode.stepId)!;
+    expect(pastedStep.action).toEqual({ type: 'variable.set', variableId: 'var-2', value: false });
+    expect(pastedStep.id).not.toBe('step-2');
   });
 });
 
