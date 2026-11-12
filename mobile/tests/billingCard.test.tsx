@@ -6,7 +6,13 @@ import { act } from 'preact/test-utils';
 import { fakeSite, page, type FakeSite } from '../../tests/sources/fakeSite';
 
 let site: FakeSite;
-const me: { telegramId: string; paidUntil: number; active: boolean; overLimit?: boolean } = {
+const me: {
+  telegramId: string;
+  paidUntil: number;
+  active: boolean;
+  overLimit?: boolean;
+  bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
+} = {
   telegramId: '',
   paidUntil: 2e12,
   active: true,
@@ -31,6 +37,7 @@ beforeEach(async () => {
   me.paidUntil = 2e12;
   me.active = true;
   me.overLimit = false;
+  delete me.bill;
   site = fakeSite((c) => {
     if (c.url.indexOf('/v1/activate') > 0) {
       return page(
@@ -137,5 +144,21 @@ describe('OMP subscription card', () => {
     expect(el.querySelector('[data-bill-days]')!.textContent).toContain('5');
     expect(el.textContent).not.toContain('Подписка закончилась');
     expect(el.textContent).toContain('Доп. устройство не продлено');
+  });
+
+  it('shows the price, the fee and the payments, and cancels auto-renew', async () => {
+    me.bill = {
+      priceRub: 200,
+      feeRub: 6,
+      totalRub: 206,
+      autoRenew: true,
+      payments: [{ at: 5, amount: '200', currency: 'RUB', title: 'sub' }],
+    };
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.querySelector('[data-bill-price]')!.textContent).toBe('200 ₽ + комиссия 6 ₽ = 206 ₽');
+    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('sub 200 RUB');
+    expect(el.querySelector('[data-bill-cancel]')).toBeTruthy();
   });
 });

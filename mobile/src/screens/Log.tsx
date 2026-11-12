@@ -6,6 +6,7 @@ import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { askConfirm } from '../ui/confirm';
 import { goBack } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { native } from '../platform/native';
 import {
   areaLabel,
@@ -102,6 +103,7 @@ export function Log() {
 
   return (
     <div class="m-screen" data-route="log">
+      <FaqDone mark="log" />
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P19.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />

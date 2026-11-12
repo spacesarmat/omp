@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { resetTo, afterConnectRoute, goBack } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { errorMessage } from '../../../src/api/http';
 import {
   localServer,
@@ -111,6 +112,7 @@ export function LocalServer() {
     if (askMobile) {
       return (
         <div class="m-screen" data-route="localServer">
+        <FaqDone mark="server" />
           <Header />
           <div class="m-local-card" data-local="mobile">
             <div class="m-local-title">{t('localServer.mobileAsk', { what: size ? size.replace('~', '') : 'TorrServer' })}</div>
@@ -127,6 +129,7 @@ export function LocalServer() {
     }
     return (
       <div class="m-screen" data-route="localServer">
+        <FaqDone mark="server" />
         <Header />
         <div class="m-local-card" data-local="offer">
           <div class="m-local-text">
@@ -167,6 +170,7 @@ export function LocalServer() {
   const ip = localServer.value.ip;
   return (
     <div class="m-screen" data-route="localServer">
+      <FaqDone mark="server" />
       <Header />
       <div class="m-steps">
         {labels.map((label, i) => {

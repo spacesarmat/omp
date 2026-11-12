@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
-import { goBack, navigate } from '../nav';
+import { goBack } from '../nav';
+import { openFromFaq } from '../ui/faqJump';
 import { BILLING_BOT_URL } from '../../../src/billing/config';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
+import { localServer } from '../server/localServer';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { TextField } from '../ui/TextField';
 
@@ -212,11 +214,22 @@ export function Faq(p: { q?: string } = {}) {
             ))}
           </div>
           <div class="m-faq-actions">
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => navigate({ name: 'install' })}>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => openFromFaq({ name: 'install' }, 'install')}>
               {t('faq.installTv')}
             </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => navigate({ name: 'tv' })}>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => openFromFaq({ name: 'tv' }, 'tv')}>
               {t('faq.findTv')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="renew" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
+              {t('faq.renew')}
+            </button>
+            {localServer.value.supported && (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="server" onClick={() => openFromFaq({ name: 'localServer' }, 'server')}>
+                {t('faq.phoneServer')}
+              </button>
+            )}
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="log" onClick={() => openFromFaq({ name: 'log' }, 'log')}>
+              {t('faq.logs')}
             </button>
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}

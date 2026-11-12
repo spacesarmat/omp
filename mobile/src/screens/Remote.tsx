@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
@@ -332,6 +333,11 @@ interface Scroll {
 }
 
 function Touchpad() {
+  const [hint, setHint] = useState(true);
+  useEffect(() => {
+    const id = window.setTimeout(() => setHint(false), 2400);
+    return () => window.clearTimeout(id);
+  }, []);
   const st = useRef<Gesture | null>(null);
   const sc = useRef<Scroll | null>(null);
   const run = (p: Promise<void>) => p.catch((e) => showToast(errorMessage(e)));
@@ -354,6 +360,7 @@ function Touchpad() {
       aria-label={t('remote.touchpad.title')}
       style={{ touchAction: 'none' }}
       onPointerDown={(e) => {
+        setHint(false);
         const el = e.currentTarget as HTMLElement;
         const s = st.current;
         if (s && s.id !== e.pointerId) {
@@ -447,7 +454,7 @@ function Touchpad() {
         release(e);
       }}
     >
-      <span class="m-muted m-small">{t('remote.touchpadArea')}</span>
+      {hint && <span class="m-pad-hint">{t('remote.touchpadArea')}</span>}
     </div>
   );
 }
@@ -544,24 +551,116 @@ function TvKeyboard({ typing, onClose }: { typing?: Typing; onClose: () => void 
   );
 }
 
-function dpadButton(name: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', label: string, press: (n: RemoteButton) => void) {
+/** First press at once, then a repeat while the finger stays down. A plain click() still fires once. */
+function useHold(fire: () => void) {
+  const delay = useRef(0);
+  const repeat = useRef(0);
+  const skip = useRef(false);
+  const stop = () => {
+    window.clearTimeout(delay.current);
+    window.clearInterval(repeat.current);
+  };
+  useEffect(() => stop, []);
+  return {
+    onPointerDown: (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      const el = e.currentTarget as HTMLElement;
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* the test DOM has no capture */
+      }
+      skip.current = true;
+      fire();
+      stop();
+      delay.current = window.setTimeout(() => {
+        repeat.current = window.setInterval(fire, 140);
+      }, 380);
+    },
+    onPointerUp: stop,
+    onPointerCancel: stop,
+    onLostPointerCapture: stop,
+    onClick: () => {
+      if (skip.current) {
+        skip.current = false;
+        return;
+      }
+      fire();
+    },
+  };
+}
+
+function HoldButton(p: { class: string; label: string; onFire: () => void; children: ComponentChildren }) {
+  const hold = useHold(p.onFire);
   return (
-    <button type="button" class={'m-dpad m-dpad-' + name.toLowerCase()} aria-label={label} onClick={() => press(name)}>
-      <Icon d={ARROW[name]} size={28} />
+    <button type="button" class={p.class} aria-label={p.label} {...hold}>
+      {p.children}
     </button>
   );
 }
 
+function useRemoteKeys(shown: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    const deck = node && (node.closest('.m-now-deck') as HTMLElement | null);
+    if (!deck) {
+      setOn(!!node);
+      return;
+    }
+    const read = () => setOn(deck.getAttribute('data-pane') === 'remote');
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(deck, { attributes: true, attributeFilter: ['data-pane'] });
+    return () => obs.disconnect();
+  }, [shown]);
+  return { ref, on };
+}
+
+function HwVolume(p: { on: boolean; fire: (dir: 'up' | 'down' | 'mute') => void }) {
+  const ref = useRef(p.fire);
+  ref.current = p.fire;
+  useEffect(() => {
+    if (!p.on) return;
+    void native.setHwVolume(true);
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key;
+      if (k === 'AudioVolumeUp' || k === 'VolumeUp') {
+        e.preventDefault();
+        ref.current('up');
+      } else if (k === 'AudioVolumeDown' || k === 'VolumeDown') {
+        e.preventDefault();
+        ref.current('down');
+      } else if (k === 'AudioVolumeMute' || k === 'VolumeMute') {
+        e.preventDefault();
+        ref.current('mute');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      void native.setHwVolume(false);
+    };
+  }, [p.on]);
+  return null;
+}
+
 function DPad({ press }: { press: (n: RemoteButton) => void }) {
+  const key = (name: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', label: string) => (
+    <HoldButton class={'m-dpad m-dpad-' + name.toLowerCase()} label={label} onFire={() => press(name)}>
+      <Icon d={ARROW[name]} size={28} />
+    </HoldButton>
+  );
   return (
     <div class="m-dpad-wrap">
-      {dpadButton('UP', t('remote.up'), press)}
-      {dpadButton('LEFT', t('remote.left'), press)}
-      {dpadButton('RIGHT', t('remote.right'), press)}
-      {dpadButton('DOWN', t('remote.down'), press)}
-      <button type="button" class="m-dpad-ok" onClick={() => press('ENTER')}>
+      {key('UP', t('remote.up'))}
+      {key('LEFT', t('remote.left'))}
+      {key('RIGHT', t('remote.right'))}
+      {key('DOWN', t('remote.down'))}
+      <HoldButton class="m-dpad-ok" label="OK" onFire={() => press('ENTER')}>
         OK
-      </button>
+      </HoldButton>
     </div>
   );
 }
@@ -784,6 +883,7 @@ function BoxRow({ tv }: { tv: SavedTv }) {
  * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
  */
 function AtvRemote({ tv }: { tv: SavedTv }) {
+  const keys = useRemoteKeys(true);
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
@@ -856,7 +956,19 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
     void act.warmUp();
   };
   return (
-    <div class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+    <div ref={keys.ref} class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+      <HwVolume
+        on={keys.on}
+        fire={(dir) => {
+          if (box) {
+            boxKey(dir === 'up' ? 'VOLUMEUP' : dir === 'down' ? 'VOLUMEDOWN' : 'MUTE');
+            return;
+          }
+          vibrate();
+          if (dir === 'mute') return;
+          act.volume(dir).catch(fail);
+        }}
+      />
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -940,13 +1052,13 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
         </div>
         <div class="m-rb-bottom">
           <div class="m-rocker">
-            <button type="button" class="m-rocker-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+            <HoldButton class="m-rocker-btn" label={t('remote.volUp')} onFire={() => vol('up')}>
               <span class="m-rocker-sign">+</span>
-            </button>
+            </HoldButton>
             <span class="m-rocker-cap">{t('remote.volShort')}</span>
-            <button type="button" class="m-rocker-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+            <HoldButton class="m-rocker-btn" label={t('remote.volDown')} onFire={() => vol('down')}>
               <span class="m-rocker-sign">−</span>
-            </button>
+            </HoldButton>
           </div>
           <div class="m-rb-play">
             <button type="button" class="m-rb-playbtn" aria-label={t('remote.nowPlaying')} onClick={() => ompKey('NOWPLAYING')}>
@@ -1000,6 +1112,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
 
 export function Remote() {
   const tv = activeTv.value;
+  const keys = useRemoteKeys(!!tv && tv.kind !== 'atv');
   const state = tvState.value;
   const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
   const pickMode = (next: 'buttons' | 'touchpad') => {
@@ -1157,7 +1270,15 @@ export function Remote() {
   );
 
   return (
-    <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+    <div ref={keys.ref} class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+      <HwVolume
+        on={keys.on}
+        fire={(dir) => {
+          vibrate();
+          if (dir === 'mute') act.pressButton('MUTE').catch(fail);
+          else act.volume(dir).catch(fail);
+        }}
+      />
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -1218,13 +1339,13 @@ export function Remote() {
           </div>
           <div class="m-rb-bottom">
             <div class="m-rocker">
-              <button type="button" class="m-rocker-btn" aria-label={t('remote.volUp')} onClick={() => vol('up')}>
+              <HoldButton class="m-rocker-btn" label={t('remote.volUp')} onFire={() => vol('up')}>
                 <span class="m-rocker-sign">+</span>
-              </button>
+              </HoldButton>
               <span class="m-rocker-cap">{t('remote.volShort')}</span>
-              <button type="button" class="m-rocker-btn" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
+              <HoldButton class="m-rocker-btn" label={t('remote.volDown')} onFire={() => vol('down')}>
                 <span class="m-rocker-sign">−</span>
-              </button>
+              </HoldButton>
             </div>
             <div class="m-rb-play">
               <button
