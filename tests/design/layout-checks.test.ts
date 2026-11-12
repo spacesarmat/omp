@@ -120,6 +120,22 @@ describe('checkLayoutAccessibility', () => {
     expect(issues.filter((issue) => issue.code === 'CONTRAST' && issue.nodeId === 'child')).toHaveLength(0);
   });
 
+  it('composites translucent backgrounds through ancestors instead of reading them as opaque', () => {
+    const root = mountDom([
+      '<div data-design-id="screen" style="background: #101010;">',
+      '<div data-design-id="badge" style="font-size: 30px; color: #ffffff; background: rgba(255, 255, 255, 0.18);">Beta</div>',
+      '</div>',
+    ].join(''));
+    const badge = root.querySelector('[data-design-id="badge"]')!;
+    stubRect(badge, { x: 10, y: 10, width: 300, height: 60 });
+    const snapshot = collectTv(root);
+    const issues = checkLayoutAccessibility(snapshot, createDefaultTheme(BASE));
+    // White text on an 82% transparent white badge over the dark screen composites to a dark
+    // gray with high contrast; treating the translucent layer as opaque would compare white
+    // against white and report a false 1:1 like m-badge-beta.
+    expect(issues.filter((issue) => issue.code === 'CONTRAST' && issue.nodeId === 'badge')).toHaveLength(0);
+  });
+
   it('falls back to the theme background token when no ancestor paints a background', () => {
     const root = mountDom('<div data-design-id="screen"><div data-design-id="lonely" style="font-size: 30px; color: #555555;">Lonely</div></div>');
     const lonely = root.querySelector('[data-design-id="lonely"]')!;

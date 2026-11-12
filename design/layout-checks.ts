@@ -374,15 +374,43 @@ function isHidden(node: GeometryNodeSnapshot): boolean {
     || Number.parseFloat(styles.opacity) === 0;
 }
 
+// Source-over blending of a translucent layer onto the accumulated backdrop; the alpha channel
+// tracks whether the composite is already opaque.
+function compositeColor(top: RgbaColor, backdrop: RgbaColor): RgbaColor {
+  const alpha = top.a + backdrop.a * (1 - top.a);
+  if (alpha <= 0) return { r: 0, g: 0, b: 0, a: 0 };
+  return {
+    r: Math.round((top.r * top.a + backdrop.r * backdrop.a * (1 - top.a)) / alpha),
+    g: Math.round((top.g * top.a + backdrop.g * backdrop.a * (1 - top.a)) / alpha),
+    b: Math.round((top.b * top.a + backdrop.b * backdrop.a * (1 - top.a)) / alpha),
+    a: alpha,
+  };
+}
+
 function effectiveBackground(snapshot: GeometrySnapshot, node: GeometryNodeSnapshot, fallback: string): string {
   const byId = new Map(snapshot.nodes.map((entry) => [entry.nodeId, entry]));
+  // Collect the translucent layers from the node up to the first opaque background, then
+  // composite them over the fallback backdrop. Reading the nearest non-transparent background
+  // as opaque would compare text against a color it never renders on: an 82% transparent
+  // badge over a dark screen is dark gray, not the translucent paint itself.
+  const layers: RgbaColor[] = [];
   let current: GeometryNodeSnapshot | undefined = node;
   while (current) {
     const color = parseColor(current.styles.backgroundColor);
-    if (color && color.a > 0) return current.styles.backgroundColor;
+    if (color && color.a > 0) {
+      layers.push(color);
+      if (color.a >= 1) break;
+    }
     current = current.parentId ? byId.get(current.parentId) : undefined;
   }
-  return fallback;
+  const fallbackColor = parseColor(fallback) ?? { r: 0, g: 0, b: 0, a: 1 };
+  let mixed = fallbackColor;
+  for (let index = layers.length - 1; index >= 0; index -= 1) {
+    mixed = compositeColor(layers[index], mixed);
+  }
+  return mixed.a >= 1
+    ? `rgb(${mixed.r}, ${mixed.g}, ${mixed.b})`
+    : `rgba(${mixed.r}, ${mixed.g}, ${mixed.b}, ${Number(mixed.a.toFixed(3))})`;
 }
 
 function outlineVisible(outlineStyle: string, outlineWidth: number): boolean {

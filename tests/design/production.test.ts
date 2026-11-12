@@ -158,6 +158,29 @@ describe('installProductionDesign', () => {
     expect(authored.getAttribute('data-design-id')).toBe('authored');
   });
 
+  it('maps the phone search route to the editor search screen in the production context', () => {
+    const root = document.createElement('div');
+    root.innerHTML = GRID;
+    document.body.appendChild(root);
+
+    // The standalone phone entry reports the app route name as-is; the shared mapping turns
+    // the historical 'add' route into the editor 'search' screen so exported search layouts
+    // match the real screen.
+    cleanup = installProductionDesign(root, { target: 'android-phone', screenOf: () => 'add' });
+
+    expect(root.getAttribute('data-design-screen')).toBe('search');
+  });
+
+  it('maps the TV search route to the editor search screen in the production context', () => {
+    const root = document.createElement('div');
+    root.innerHTML = GRID;
+    document.body.appendChild(root);
+
+    cleanup = installProductionDesign(root, { target: 'lg-webos', screenOf: () => 'add' });
+
+    expect(root.getAttribute('data-design-screen')).toBe('search');
+  });
+
   it('keeps production a no-op before an explicit export', async () => {
     const root = document.createElement('div');
     root.innerHTML = GRID;

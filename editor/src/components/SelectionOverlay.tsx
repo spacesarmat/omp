@@ -47,6 +47,7 @@ export interface SelectionOverlayProps {
   context: LayoutContext;
   nodes: LayoutNodeDescriptor[];
   rects: Record<string, LayoutRect>;
+  directions?: Record<string, 'row' | 'column'>;
   containers: LayoutContainer[];
   placements: LayoutPlacement[];
   guideSettings?: GuideSettings;
@@ -187,6 +188,17 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       .filter((rect): rect is LayoutRect => Boolean(rect));
   };
 
+  // The flow axis of a container: the recorded direction wins; without a record the computed
+  // flex-direction of the live preview container decides (only real flex containers report
+  // one); when neither exists the insertion keeps its documented column default, exactly like
+  // the alignment mapping in the App.
+  const insertionRow = (parentId: string): boolean => {
+    const recorded = props.containers.find((container) => container.nodeId === parentId);
+    if (recorded?.direction === 'row' || recorded?.direction === 'column') return recorded.direction === 'row';
+    const computed = props.directions?.[parentId];
+    return computed ? computed === 'row' : false;
+  };
+
   const resolveInsertion = (point: ClientPoint, draggedId: string): InsertionTarget | null => {
     const dragged = props.nodes.find((node) => node.nodeId === draggedId);
     const draggedAbsolute = existingPlacement(draggedId)?.mode === 'absolute';
@@ -204,13 +216,12 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     // Dragging an absolute node repositions it: only a drop into another recorded container is an
     // explicit flow insertion, so its own parent never offers one.
     if (!draggedAbsolute && dragged?.parentId && props.rects[dragged.parentId]) {
-      const recorded = props.containers.find((container) => container.nodeId === dragged!.parentId);
-      eligible.set(dragged.parentId, recorded?.direction === 'row');
+      eligible.set(dragged.parentId, insertionRow(dragged.parentId));
     }
     for (const container of props.containers) {
       if (draggedAbsolute && container.nodeId === dragged?.parentId) continue;
       if (!eligible.has(container.nodeId) && props.rects[container.nodeId]) {
-        eligible.set(container.nodeId, container.direction === 'row');
+        eligible.set(container.nodeId, insertionRow(container.nodeId));
       }
     }
     let best: { parentId: string; row: boolean } | null = null;

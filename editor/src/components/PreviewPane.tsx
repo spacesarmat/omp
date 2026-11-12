@@ -72,7 +72,7 @@ export function PreviewPane(props: PreviewPaneProps) {
   const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const keyTarget = useRef<Document | null>(null);
   const observer = useRef<MutationObserver | null>(null);
-  const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect> }>({ nodes: [], rects: {} });
+  const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect>; directions: Record<string, 'row' | 'column'> }>({ nodes: [], rects: {}, directions: {} });
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
   const layoutContext: LayoutContext = { target: props.target, screenId: props.route, format: props.format };
@@ -103,22 +103,25 @@ export function PreviewPane(props: PreviewPaneProps) {
     }
     // Flow axis decisions need the real rendered direction: the editor maps alignment and
     // distribution buttons to the flex main or cross axis through this computed value when the
-    // container record does not pin a direction. Read through the element's own window so a
-    // preview iframe from another realm reports its own layout.
+    // container record does not pin a direction, and drag insertion picks the index axis and
+    // guide orientation from it. Only true flex containers report a meaningful flex-direction;
+    // anything else keeps the documented column default for insertion. Read through the
+    // element's own window so a preview iframe from another realm reports its own layout.
     const directions: Record<string, 'row' | 'column'> = {};
     for (const [nodeId, element] of elements) {
       if (!element.children.length) continue;
       const view = element.ownerDocument.defaultView;
       if (!view) continue;
-      let value = '';
       try {
-        value = view.getComputedStyle(element).flexDirection;
+        const display = view.getComputedStyle(element).display;
+        if (!display.includes('flex')) continue;
+        const value = view.getComputedStyle(element).flexDirection;
+        if (value === 'row' || value === 'column') directions[nodeId] = value;
       } catch {
-        value = '';
+        // A document without a view or layout keeps the documented fallback.
       }
-      if (value === 'row' || value === 'column') directions[nodeId] = value;
     }
-    setCollected({ nodes, rects });
+    setCollected({ nodes, rects, directions });
     props.onNodesChange(nodes, rects, directions);
     props.onGeometryChange?.(collectGeometrySnapshot(rootEl, {
       target: props.target,
@@ -344,6 +347,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                 context={layoutContext}
                 nodes={collected.nodes}
                 rects={collected.rects}
+                directions={collected.directions}
                 guideSettings={guideSettings}
                 containers={(props.theme.layout?.containers ?? []).filter(
                   (container) => container.target === layoutContext.target

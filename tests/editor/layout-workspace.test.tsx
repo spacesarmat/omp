@@ -90,7 +90,10 @@ function buildPreview(horizontal = false, options: PreviewBuildOptions = {}): Pr
     return element;
   };
   const grid = make('card-grid', 0, 0, 400, horizontal ? 200 : 400);
-  if (options.gridDirection) grid.style.flexDirection = options.gridDirection;
+  if (options.gridDirection) {
+    grid.style.display = 'flex';
+    grid.style.flexDirection = options.gridDirection;
+  }
   const first = horizontal ? make('server-card', 0, 0, 200, 100) : make('server-card', 0, 0, 400, 100);
   const second = horizontal ? make('server-card', 200, 0, 200, 100) : make('server-card', 0, 100, 400, 100);
   const settings = { value: 'keep' };
@@ -434,6 +437,22 @@ describe('layout workspace', () => {
     pointer(overlay(), 'pointerup', 50, 150);
 
     expect(orderOf('card-grid')).toEqual(['server-card-2', 'server-card']);
+  });
+
+  it('uses the computed row direction for insertion when no container record exists', () => {
+    // The preview container renders as a real CSS row (display flex, row direction) but no
+    // container record pins a direction: the computed direction, not the column default,
+    // must drive the insertion index and the guide orientation.
+    buildPreview(false, { gridDirection: 'row' });
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointermove', 40, 150);
+    const line = host.querySelector<HTMLElement>('[data-testid="insertion-line"]')!;
+    expect(line.style.width).toBe('2px');
+    expect(line.style.height).toBe('400px');
+    pointer(overlay(), 'pointerup', 40, 150);
+
+    expect(orderOf('card-grid')[0]).toBe('server-card-2');
   });
 
   it('resizes an absolute node from a corner handle with one undo step', () => {

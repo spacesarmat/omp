@@ -44,7 +44,8 @@ function componentIdOf(element: HTMLElement): string | null {
 
 // The phone search tab keeps the historical route id 'add' (deep links and saved tabs), while
 // the editor design space speaks 'search': exported records, nav ids and the reported screen
-// all use the editor name.
+// all use the editor name. installProductionDesign applies the mapping to whatever screenOf
+// reports, so every entry path (phone, TV, desktop) shares one alias definition.
 export function desktopScreenIdOf(routeName: string | null): string | null {
   return routeName === 'add' ? 'search' : routeName;
 }
@@ -120,11 +121,11 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   };
   registerIdentities();
   const initialFormat = win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
-  writeContext(root, options.target, options.screenOf(), initialFormat);
+  writeContext(root, options.target, desktopScreenIdOf(options.screenOf()), initialFormat);
 
   const stopLayout = observeProductionLayout(root);
   const refreshScreen = (): void => {
-    writeContext(root, options.target, options.screenOf(), currentFormat());
+    writeContext(root, options.target, desktopScreenIdOf(options.screenOf()), currentFormat());
   };
   const currentFormat = (): DesignFormat =>
     win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
