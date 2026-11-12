@@ -46,24 +46,40 @@ if [ "$head" != "$SHA" ]; then
   exit 1
 fi
 
-# Required checks, when main has them, hold this until they are green.
-# When main has none, the pull request is merged now, and only because the
-# checks above already passed.
-gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto \
-  || echo "auto-merge was not accepted, merging directly"
-state=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
-if [ "$state" = "OPEN" ]; then
-  gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash
-fi
-
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+# Required checks, when main has them, hold auto-merge until they are green.
+# The direct merge runs only when auto-merge itself is unavailable. Both commands
+# refuse a head that is no longer the commit whose checks passed.
+set +e
+gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto --match-head-commit "$SHA"
+auto_code=$?
+set -e
+if [ "$auto_code" -eq 0 ]; then
+  echo "auto-merge enabled, waiting until the pull request merges"
+  merge_deadline=$((SECONDS + 30 * 60))
   state=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
-  [ "$state" = "MERGED" ] && break
-  sleep 3
-done
-if [ "$state" != "MERGED" ]; then
-  echo "::error::Pull request $PR did not merge"
-  exit 1
+  while [ "$state" != "MERGED" ] && [ "$SECONDS" -lt "$merge_deadline" ]; do
+    head=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+    if [ "$head" != "$SHA" ]; then
+      gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --disable-auto || true
+      echo "::error::Pull request head moved ($head), auto-merge disabled"
+      exit 1
+    fi
+    sleep 15
+    state=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state --jq .state)
+  done
+  if [ "$state" != "MERGED" ]; then
+    gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --disable-auto || true
+    echo "::error::Auto-merge did not finish. It was disabled so a later merge cannot skip the release."
+    exit 1
+  fi
+else
+  echo "auto-merge was not accepted, merging this commit directly"
+  head=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+  if [ "$head" != "$SHA" ]; then
+    echo "::error::Pull request head moved ($head), refusing to merge $SHA"
+    exit 1
+  fi
+  gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --match-head-commit "$SHA"
 fi
 
 merge=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json mergeCommit --jq .mergeCommit.oid)

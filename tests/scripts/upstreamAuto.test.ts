@@ -73,6 +73,8 @@ describe('upstream ship script', () => {
     }
     const ship = readFileSync('scripts/upstream-ship.sh', 'utf8');
     expect(ship).toContain('gh workflow run release.yml');
-    expect(ship).toContain('gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto');
+    expect(ship).toContain('gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto --match-head-commit "$SHA"');
+    expect(ship).toContain('gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --match-head-commit "$SHA"');
+    expect(ship).toContain('--disable-auto');
   });
 });
