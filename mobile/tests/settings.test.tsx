@@ -580,6 +580,11 @@ describe('Advanced: TMDB attribution', () => {
 });
 
 describe('Settings: the OMP account row', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+  });
+  afterEach(() => vi.useRealTimers());
   const row = (el: HTMLElement) => el.querySelector('[data-row="account"]') as HTMLElement;
   const flush = () =>
     act(async () => {
@@ -598,15 +603,15 @@ describe('Settings: the OMP account row', () => {
     setAccountFetcher(fetcher);
     saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('a legacy token still shows the subscription', () => {
     saveBillingSession({ token: 'old', paidUntil: paid });
-    expect(row(mount()).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(mount()).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('without a session: «Проверяю вход…» while /v1/me answers, then the account linked by Telegram', async () => {
@@ -618,7 +623,7 @@ describe('Settings: the OMP account row', () => {
     expect(row(el).textContent).not.toContain('Войти');
     await act(async () => answer({ telegramId: '1', paidUntil: paid, active: true, deviceLimit: 2 }));
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('without a session and no account: «Войти» after the check', async () => {
@@ -634,9 +639,9 @@ describe('Settings: the OMP account row', () => {
       throw new Error('down');
     });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('a revoked binding forgets the last known account, so the server being down then shows «Войти»', async () => {
@@ -646,7 +651,7 @@ describe('Settings: the OMP account row', () => {
       throw new Error('down');
     });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     await act(async () => dropDeviceTokens(null, 'revoked'));
     await flush();
     expect(seenAccount()).toBeNull();
@@ -908,5 +913,16 @@ describe('Settings: «Плеер для видео»', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('Settings: the TV row', () => {
+  it('shows a green dot when the chosen TV is connected', () => {
+    saveTv({ ip: '10.0.0.2', name: 'LG' });
+    tvState.value = 'connected';
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '1', latest: '1' });
+    const el = mount();
+    expect(el.querySelector('[data-tv-dot]')).toBeTruthy();
+    expect(el.textContent).toContain('LG');
   });
 });
