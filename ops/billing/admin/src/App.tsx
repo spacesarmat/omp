@@ -11,6 +11,7 @@ import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AdsPanel } from '@/panels/AdsPanel';
+import { ReferralPanel } from '@/panels/ReferralPanel';
 import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
 import { DhtPanel } from '@/panels/DhtPanel';
@@ -244,6 +245,7 @@ export function App() {
           <TabsTrigger value="fails">Отказы</TabsTrigger>
           <TabsTrigger value="audit">Журнал</TabsTrigger>
           <TabsTrigger value="ads">Реклама</TabsTrigger>
+          <TabsTrigger value="referral">Рефералы</TabsTrigger>
           <TabsTrigger value="services">Сервисы</TabsTrigger>
           <TabsTrigger value="cache">Кэш</TabsTrigger>
           <TabsTrigger value="dht">DHT</TabsTrigger>
@@ -375,6 +377,14 @@ export function App() {
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
         </TabsContent>
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
+        <TabsContent value="referral">
+          <ReferralPanel
+            csrf={d.csrf || ''}
+            settings={d.settings?.referral}
+            journal={d.referralJournal}
+            run={(fields) => run('/admin/referral', fields)}
+          />
+        </TabsContent>
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />
         </TabsContent>

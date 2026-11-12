@@ -886,6 +886,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P35.5 | Откуда смотреть | Where to watch | Запомнить имя | Remember the name |
 | P35.6 | Откуда смотреть | Where to watch | Добавить сервер | Add a server |
 | P35.7 | Откуда смотреть | Where to watch | Найти в сети | Find on the network |
+| P36 | Рассказать друзьям | Tell friends |  |  |
+| P36.1 | Рассказать друзьям | Tell friends | Назад | Back |
+| P36.2 | Рассказать друзьям | Tell friends | Поделиться | Share |
 | PD01 | Язык | Language |  |  |
 | PD01.1 | Язык | Language | Как в системе | Follow the system |
 | PD01.2 | Язык | Language | Русский | Russian |

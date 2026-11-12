@@ -64,6 +64,9 @@ omp-player.online {
 	# Pairing QR from the TV. The query (server address) stays on the rewrite.
 	@pair path /pair /pair/
 	rewrite @pair /pair/index.html
+	# Referral invite. The code stays in the path. Other /r/ paths stay 404.
+	@referral path_regexp invite ^/r/OMP-[A-Za-z0-9]+/?$
+	rewrite @referral /r/index.html
 	file_server
 	# Unknown paths get a real 404 with site/404.html (no SPA fallback, so
 	# search engines do not index soft-404 copies of the home page).

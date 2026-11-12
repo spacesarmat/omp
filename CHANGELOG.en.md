@@ -15,6 +15,8 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
 - [phone] Search remembers recent queries and offers a magnet that is already on the clipboard
 - [phone] A subscription edit has a seed stepper. Check now is the yellow button. A future calendar episode says Remind me, and "forever" reads as the season finale
+- [phone] Tell friends shows the link, code, QR and Share while the program is on. The link opens a page with the code. While the program is off, the screen says so
+- [tech] Referral admin: six switches, bonus days at most 14, a 7 day delay, a yearly cap of 12 months, a journal and manual cancel. App and bot notice text. Billing was not deployed
 
 ## 0.30.1-beta.3
 
