@@ -243,7 +243,7 @@ describe('layout dom runtime', () => {
     expect(badge.style.left).toBe('');
   });
 
-  it('applies hidden placements and skips locked ones in the editor runtime', () => {
+  it('applies hidden and locked placements in the editor runtime: locks only gate edits', () => {
     const root = mount('<div data-design-id="toolbar"><div data-design-id="badge">N</div><div data-design-id="hint">H</div></div>');
     let theme = createDefaultTheme(BASE);
     theme = upsertLayoutPlacement(theme, placement('badge', { mode: 'absolute', x: 40, y: 24, locked: true }));
@@ -252,7 +252,8 @@ describe('layout dom runtime', () => {
     cleanup = observeLayout(root, theme, context);
 
     const badge = root.querySelector<HTMLElement>('[data-design-id="badge"]')!;
-    expect(badge.style.position).toBe('');
+    expect(badge.style.position).toBe('absolute');
+    expect(badge.style.left).toBe('0.4%');
     const hint = root.querySelector<HTMLElement>('[data-design-id="hint"]')!;
     expect(hint.style.display).toBe('none');
   });
@@ -725,6 +726,147 @@ describe('reparent across containers', () => {
   });
 });
 
+describe('locked placements in the preview runtime', () => {
+  it('keeps applying the saved appearance and hidden state of a locked placement', async () => {
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24, locked: true, hidden: true }));
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const locked = root.querySelector<HTMLElement>('[data-key="hash-1"]')!;
+    expect(locked.style.position).toBe('absolute');
+    expect(locked.style.left).toBe('0.4%');
+    expect(locked.style.top).toBe('0.24%');
+    expect(locked.style.display).toBe('none');
+    expect(locked.dataset.layoutHidden).toBe('1');
+
+    // A refresh after any mutation must not reset the locked appearance: the lock only blocks
+    // editor edits, it never skips the record in the runtime.
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(locked.style.position).toBe('absolute');
+    expect(locked.style.display).toBe('none');
+  });
+
+  it('applies the newest saved coordinates when a locked placement is edited', async () => {
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24, locked: true }));
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+    const locked = root.querySelector<HTMLElement>('[data-key="hash-1"]')!;
+    expect(locked.style.left).toBe('0.4%');
+
+    theme.layout = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 80, y: 50, locked: true })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(locked.style.left).toBe('0.8%');
+    expect(locked.style.top).toBe('0.5%');
+  });
+});
+
+describe('container records alongside placements', () => {
+  it('keeps container padding, direction and alignment when the node also carries a placement', async () => {
+    const root = mount('<div data-design-id="toolbar"><button data-design-id="button">One</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout!.containers.push({
+      id: 'flow-toolbar',
+      ...context,
+      nodeId: 'toolbar',
+      order: ['button'],
+      direction: 'column',
+      padding: '8px',
+      alignment: 'center',
+    });
+    theme = upsertLayoutPlacement(theme, placement('toolbar', { margin: '12px' }));
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.flexDirection).toBe('column');
+    expect(toolbar.style.padding).toBe('8px');
+    expect(toolbar.style.alignItems).toBe('center');
+    expect(toolbar.style.margin).toBe('12px');
+  });
+
+  it('keeps container padding when a label-only placement lands after the padding edit', async () => {
+    const root = mount('<div data-design-id="toolbar"><button data-design-id="button">One</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button'], padding: '8px' });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.padding).toBe('8px');
+
+    // Renaming the container in the editor upserts a label-only placement record; the next
+    // refresh applies both records, and the placement pass must not wipe the container styles.
+    theme.layout = upsertLayoutPlacement(theme, placement('toolbar', { label: 'Панель инструментов' })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(toolbar.style.padding).toBe('8px');
+    expect(toolbar.dataset.layoutMode).toBe('flow');
+  });
+});
+
+describe('layout identity from anchors', () => {
+  it('maps a saved edit to the same anchored card after reopening in a different order', async () => {
+    const first = mount(`
+      <div data-design-id="card-grid">
+        <button class="m-card" data-anchor="aaa111" data-design-id="card">A</button>
+        <button class="m-card" data-anchor="bbb222" data-design-id="card">B</button>
+      </div>`);
+    const firstNodes = collectLayoutNodes(first);
+    const bNode = firstNodes.find((node) => node.label === 'B')!;
+    expect(bNode.nodeId).toBe('key-bbb222');
+
+    // The editor saved a hidden placement for card B.
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement(bNode.nodeId, { hidden: true }));
+    theme = parseThemeDocument(theme);
+    first.remove();
+
+    // Reopening the page brings the list in a different order: card B now renders first.
+    const second = mount(`
+      <div data-design-id="card-grid">
+        <button class="m-card" data-anchor="bbb222" data-design-id="card">B</button>
+        <button class="m-card" data-anchor="aaa111" data-design-id="card">A</button>
+      </div>`);
+    cleanup = observeLayout(second, theme, context);
+
+    const cardB = second.querySelector<HTMLElement>('[data-anchor="bbb222"]')!;
+    const cardA = second.querySelector<HTMLElement>('[data-anchor="aaa111"]')!;
+    expect(cardB.style.display).toBe('none');
+    expect(cardA.style.display).toBe('');
+  });
+
+  it('throws on duplicate anchors instead of mapping two items to one id', () => {
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <button class="m-card" data-anchor="dup1" data-design-id="card">A</button>
+        <button class="m-card" data-anchor="dup1" data-design-id="card">B</button>
+      </div>`);
+    const theme = createDefaultTheme(BASE);
+
+    expect(() => observeLayout(root, theme, context)).toThrow(/duplicate data anchor/);
+  });
+});
+
 describe('layout containing blocks', () => {
   it('sets position relative on an unpositioned layout parent and cleans it up', async () => {
     let theme = createDefaultTheme(BASE);
@@ -787,5 +929,37 @@ describe('layout containing blocks', () => {
     root.appendChild(document.createElement('span'));
     await Promise.resolve();
     expect(grid.style.position).toBe('');
+  });
+
+  it('restores the containing block on repeated refreshes while the parent has its own placement', async () => {
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('card-grid', { margin: '12px' }));
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', { mode: 'absolute', x: 40, y: 24 }));
+    const root = mount(`
+      <div data-design-id="card-grid">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    cleanup = observeLayout(root, theme, context);
+
+    const grid = root.querySelector<HTMLElement>('[data-design-id="card-grid"]')!;
+    expect(grid.style.position).toBe('relative');
+    expect(grid.dataset.layoutParent).toBe('1');
+
+    // The parent carries its own placement: every refresh its inline styles are rebuilt, which
+    // wipes the runtime-owned position. The containing block pass must notice the stale flag
+    // and promote the parent again so the absolute child cannot jump to another ancestor.
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(grid.style.position).toBe('relative');
+    expect(grid.dataset.layoutParent).toBe('1');
+    expect(grid.style.margin).toBe('12px');
+
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(grid.style.position).toBe('relative');
+    expect(grid.style.margin).toBe('12px');
   });
 });

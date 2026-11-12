@@ -41,6 +41,45 @@ function componentIdOf(element: HTMLElement): string | null {
   return null;
 }
 
+// The phone search tab keeps the historical route id 'add' (deep links and saved tabs), while
+// the editor design space speaks 'search': exported records, nav ids and the reported screen
+// all use the editor name.
+export function desktopScreenIdOf(routeName: string | null): string | null {
+  return routeName === 'add' ? 'search' : routeName;
+}
+
+const PHONE_NAV_ID_ALIAS: Record<string, string> = { add: 'search' };
+
+// The desktop app renders the phone shell, not the editor DesktopShell, so the exported chrome
+// ids do not exist in the real markup. The desktop sidebar buttons carry their route in
+// data-nav; stamping the same ids the editor exports (sidebar, content, nav-<route>) lets an
+// exported layout move, hide and reorder the real chrome. Runs before component inference so
+// the nav buttons are not claimed as generic buttons.
+function registerDesktopShellIdentity(root: HTMLElement, stamped: Set<HTMLElement>): void {
+  const sidebar = root.querySelector<HTMLElement>('aside.omp-side');
+  if (sidebar && !sidebar.dataset.designId && !sidebar.dataset.designComponent) {
+    sidebar.dataset.designId = 'sidebar';
+    sidebar.dataset.designComponent = 'sidebar';
+    stamped.add(sidebar);
+  }
+  for (const item of root.querySelectorAll<HTMLElement>('button.omp-side-item')) {
+    const nav = item.dataset.nav;
+    if (!nav || item.dataset.designId || item.dataset.designComponent) continue;
+    item.dataset.designId = `nav-${PHONE_NAV_ID_ALIAS[nav] ?? nav}`;
+    item.dataset.designComponent = 'sidebar-item';
+    stamped.add(item);
+  }
+  // One route screen renders at a time; it is the content area the editor wraps in
+  // main.desktop-content. Alternative branches may mount several screens, the first claim
+  // wins the plain id exactly like duplicate adapters in the preview.
+  for (const screen of root.querySelectorAll<HTMLElement>('.m-screen')) {
+    if (screen.dataset.designId || screen.dataset.designComponent) continue;
+    screen.dataset.designId = 'content';
+    screen.dataset.designComponent = 'content';
+    stamped.add(screen);
+  }
+}
+
 function registerComponentIdentity(root: HTMLElement, stamped: Set<HTMLElement>): void {
   const elements = [root, ...root.querySelectorAll<HTMLElement>('*')];
   for (const element of elements) {
@@ -71,6 +110,7 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   const stamped = new Set<HTMLElement>();
   const win = root.ownerDocument.defaultView ?? (typeof window !== 'undefined' ? window : null);
 
+  registerDesktopShellIdentity(root, stamped);
   registerComponentIdentity(root, stamped);
   const initialFormat = win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
   writeContext(root, options.target, options.screenOf(), initialFormat);
@@ -82,7 +122,10 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   const currentFormat = (): DesignFormat =>
     win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
 
-  const observer = new MutationObserver(() => registerComponentIdentity(root, stamped));
+  const observer = new MutationObserver(() => {
+    registerDesktopShellIdentity(root, stamped);
+    registerComponentIdentity(root, stamped);
+  });
   observer.observe(root, { childList: true, subtree: true });
   let unsubscribeScreen: (() => void) | undefined;
   if (options.subscribeScreen) unsubscribeScreen = options.subscribeScreen(refreshScreen);
@@ -97,7 +140,10 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
     win?.removeEventListener('resize', onResize);
     win?.removeEventListener('orientationchange', onResize);
     stopLayout();
-    for (const element of stamped) delete element.dataset.designComponent;
+    for (const element of stamped) {
+      delete element.dataset.designComponent;
+      delete element.dataset.designId;
+    }
     stamped.clear();
     root.removeAttribute('data-design-target');
     root.removeAttribute('data-design-screen');

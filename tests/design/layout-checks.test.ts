@@ -435,6 +435,28 @@ describe('checkLayoutAccessibility', () => {
     }
   });
 
+  it('matches focus rules by rule type when the sheet comes from another realm', () => {
+    document.head.innerHTML = '<style>:focus { outline-style: solid; outline-width: 3px; outline-color: #ffffff; }</style>';
+    const root = mountDom('<div data-design-id="screen"><button data-design-id="btn" style="color: #ffffff; background: #000000; outline: none;">Btn</button></div>');
+    const button = root.querySelector<HTMLElement>('[data-design-id="btn"]')!;
+    stubRect(button, { x: 10, y: 10, width: 120, height: 48 });
+    // The measured document may live in another realm (the preview iframe): its CSSRule
+    // constructors differ from the editor window ones, which must not hide real browser focus
+    // rules from the probe.
+    const RealStyleRule = globalThis.CSSStyleRule;
+    const RealGroupingRule = globalThis.CSSGroupingRule;
+    vi.stubGlobal('CSSStyleRule', class ForeignStyleRule {});
+    vi.stubGlobal('CSSGroupingRule', class ForeignGroupingRule {});
+    try {
+      const snapshot = collectTv(root);
+      expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineStyle).toBe('solid');
+      expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineWidth).toBe(3);
+    } finally {
+      vi.stubGlobal('CSSStyleRule', RealStyleRule);
+      vi.stubGlobal('CSSGroupingRule', RealGroupingRule);
+    }
+  });
+
   it('returns no issues for a clean snapshot', () => {
     const root = mountDom('<div data-design-id="screen"><button data-design-id="action" style="font-size: 30px; color: #ffffff; background: #000000; outline-style: solid; outline-width: 3px; outline-color: #ffffff;">Action</button></div>');
     stubRect(root, { x: 0, y: 0, ...DESKTOP_VIEWPORT });

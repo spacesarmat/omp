@@ -206,6 +206,74 @@ describe('installProductionDesign', () => {
     expect(productionItem.style.position).toBe('absolute');
   });
 
+  it('registers desktop shell ids on the real desktop markup and applies an exported sidebar move and nav hide', async () => {
+    const desktop = { target: 'desktop-windows' as const, screenId: 'library', format: 'landscape' as const };
+    generated.layout.containers = [];
+    generated.layout.placements = [
+      {
+        id: 'placement-sidebar',
+        ...desktop,
+        nodeId: 'sidebar',
+        mode: 'absolute',
+        x: 400,
+        y: 0,
+        anchor: 'top-left',
+        width: 'auto',
+        height: 'auto',
+        zIndex: 0,
+        hidden: false,
+        locked: false,
+        label: 'sidebar',
+      },
+      {
+        id: 'placement-nav-news',
+        ...desktop,
+        nodeId: 'nav-news',
+        mode: 'flow',
+        x: 0,
+        y: 0,
+        anchor: 'top-left',
+        width: 'auto',
+        height: 'auto',
+        zIndex: 0,
+        hidden: true,
+        locked: false,
+        label: 'nav-news',
+      },
+    ];
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <div class="omp-desk-chrome">
+        <aside class="omp-side is-expanded">
+          <div class="omp-side-brand">OMP</div>
+          <button type="button" class="omp-side-item" data-nav="library">Каталог</button>
+          <button type="button" class="omp-side-item" data-nav="news">Новое</button>
+          <button type="button" class="omp-side-item" data-nav="add">Поиск</button>
+        </aside>
+      </div>
+      <div class="m-screen m-library" data-route="library"><div class="m-card">A</div></div>`;
+    document.body.appendChild(root);
+
+    cleanup = installProductionDesign(root, { target: 'desktop-windows', screenOf: () => 'library' });
+    await Promise.resolve();
+
+    const sidebar = root.querySelector<HTMLElement>('aside.omp-side')!;
+    expect(sidebar.dataset.designId).toBe('sidebar');
+    expect(sidebar.dataset.designComponent).toBe('sidebar');
+    const news = root.querySelector<HTMLElement>('[data-nav="news"]')!;
+    expect(news.dataset.designId).toBe('nav-news');
+    expect(news.dataset.designComponent).toBe('sidebar-item');
+    // The phone search tab keeps the historical route id 'add'; the editor design space speaks 'search'.
+    expect(root.querySelector<HTMLElement>('[data-nav="add"]')!.dataset.designId).toBe('nav-search');
+    const screen = root.querySelector<HTMLElement>('.m-screen')!;
+    expect(screen.dataset.designId).toBe('content');
+
+    // The exported sidebar move and the nav hide land on the real chrome.
+    expect(sidebar.style.position).toBe('absolute');
+    expect(sidebar.style.left).toBe('4%');
+    expect(news.style.display).toBe('none');
+  });
+
   it('installs on a root only once', () => {
     const root = document.createElement('div');
     root.innerHTML = GRID;

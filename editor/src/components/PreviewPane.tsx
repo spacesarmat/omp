@@ -344,6 +344,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                   const box = iframe.current?.getBoundingClientRect();
                   return { x: box?.x ?? 0, y: box?.y ?? 0, width: box?.width ?? 0, height: box?.height ?? 0 };
                 }}
+                getPreviewDocument={() => iframe.current?.contentDocument ?? null}
                 onSelect={props.onSelectNode}
                 onMoveNode={props.onMoveNode}
                 onPlaceNode={props.onPlaceNode}

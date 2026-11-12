@@ -53,9 +53,9 @@ function toUnits(px: number, size: number): number {
   return clampGeometry((px * LAYOUT_GEOMETRY_LIMIT) / size);
 }
 
-// Explicit size conversions for resize commits: absolutePlacementFromRect keeps the base
-// sizes on purpose (mode switches preserve geometry), so resizing overrides them with
-// the freshly computed units.
+// Explicit size conversions for resize commits: absolutePlacementFromRect keeps explicit sizes
+// only for an already absolute base node, so resizing overrides them with the freshly computed
+// units and a flow conversion freezes the measured box instead of inheriting 'auto'.
 export function rectSizeToUnits(px: number, size: number): number {
   return toUnits(px, size);
 }
@@ -144,14 +144,18 @@ export function absolutePlacementFromRect(
   const bottom = parentRect.y + parentRect.height - rect.y - rect.height;
   const x = anchor === 'top-right' || anchor === 'bottom-right' ? right : left;
   const y = anchor === 'bottom-left' || anchor === 'bottom-right' ? bottom : top;
+  // Explicit sizes survive only for an already absolute base node: switching a flow node to
+  // absolute freezes the measured box instead of carrying 'auto' over and letting the node
+  // shrink around its content. Resize commits override the sizes with fresh units anyway.
+  const keepSize = base?.mode === 'absolute';
   const patch: Partial<LayoutPlacement> = {
     ...(base ?? {}),
     mode: 'absolute',
     anchor,
     x: toUnits(x, parentRect.width),
     y: toUnits(y, parentRect.height),
-    width: base?.width ?? toUnits(rect.width, parentRect.width),
-    height: base?.height ?? toUnits(rect.height, parentRect.height),
+    width: keepSize ? base!.width : toUnits(rect.width, parentRect.width),
+    height: keepSize ? base!.height : toUnits(rect.height, parentRect.height),
     zIndex: base?.zIndex ?? 0,
     hidden: base?.hidden ?? false,
     locked: base?.locked ?? false,

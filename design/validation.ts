@@ -37,6 +37,9 @@ const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current']
 const SCOPES = new Set(['target', 'component', 'screen', 'element', 'format', 'state']);
 export const LAYOUT_GEOMETRY_LIMIT = 10000;
 export const LAYOUT_ZINDEX_LIMIT = 999;
+// Spacing values (margins, paddings, size tokens) share one document limit so the editor fields,
+// the draft schema and the app runtime all accept the same range.
+export const LAYOUT_SIZE_PX_LIMIT = 512;
 const LAYOUT_CLONE_HTML_LIMIT = 50000;
 
 export function isLayoutGeometryValue(value: unknown): value is number {
@@ -52,7 +55,7 @@ export function isLayoutZIndexValue(value: unknown): value is number {
 }
 
 export function isLayoutMarginValue(value: unknown): value is string {
-  return typeof value === 'string' && SIZE.test(value) && Number.parseFloat(value) <= 512;
+  return typeof value === 'string' && SIZE.test(value) && Number.parseFloat(value) <= LAYOUT_SIZE_PX_LIMIT;
 }
 
 export class DesignValidationError extends Error {
@@ -109,8 +112,8 @@ function tokens(value: unknown, path: string, complete = false): TokenMap {
       if (typeof raw !== 'string' || !HEX.test(raw)) fail(`${path}.${key}`, 'six-digit hex color required');
       result[key] = raw.toUpperCase();
     } else if (SIZES.has(key)) {
-      if (typeof raw !== 'string' || !SIZE.test(raw) || Number.parseFloat(raw) > 512) {
-        fail(`${path}.${key}`, 'size from 0px to 512px with at most two decimals required');
+      if (typeof raw !== 'string' || !SIZE.test(raw) || Number.parseFloat(raw) > LAYOUT_SIZE_PX_LIMIT) {
+        fail(`${path}.${key}`, `size from 0px to ${LAYOUT_SIZE_PX_LIMIT}px with at most two decimals required`);
       }
       result[key] = raw;
     } else {
@@ -206,8 +209,8 @@ function layoutContainer(value: unknown, path: string): LayoutContainer {
   if (new Set(result.order).size !== result.order.length) fail(`${path}.order`, 'duplicate nodeId');
   if (source.direction !== undefined) result.direction = oneOf(source.direction, LAYOUT_DIRECTIONS, `${path}.direction`);
   if (source.padding !== undefined) {
-    if (typeof source.padding !== 'string' || !SIZE.test(source.padding) || Number.parseFloat(source.padding) > 512) {
-      fail(`${path}.padding`, 'size from 0px to 512px with at most two decimals required');
+    if (typeof source.padding !== 'string' || !SIZE.test(source.padding) || Number.parseFloat(source.padding) > LAYOUT_SIZE_PX_LIMIT) {
+      fail(`${path}.padding`, `size from 0px to ${LAYOUT_SIZE_PX_LIMIT}px with at most two decimals required`);
     }
     result.padding = source.padding;
   }

@@ -204,6 +204,45 @@ describe('scoped layout export', () => {
     await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
   });
 
+  it('keeps the old parent container record when a component export follows a reparent', async () => {
+    const { root, head } = await makeRepo();
+    const phone = 'android-phone' as DesignTarget;
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = {
+      containers: [
+        { ...container('list', 'settings', ['card-a', 'card-b'], phone), padding: '8px', alignment: 'center' },
+        container('other', 'settings', ['card-c'], phone),
+      ],
+      placements: [placement('card-a', 'settings', { x: 5 }, phone), placement('card-b', 'settings', { x: 6 }, phone)],
+    };
+    await exportDraft({ root, draft: first });
+
+    // Local edit: card-a moves from list to other. The old parent list stays in the draft with
+    // its padding and alignment, only the order loses card-a.
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = {
+      containers: [
+        { ...container('list', 'settings', ['card-b'], phone), padding: '8px', alignment: 'center' },
+        container('other', 'settings', ['card-c', 'card-a'], phone),
+      ],
+      placements: [placement('card-a', 'settings', { x: 5 }, phone), placement('card-b', 'settings', { x: 6 }, phone)],
+    };
+    const plan = createExportPlan(second, { kind: 'component', nodeId: 'card-a' });
+    expect(plan.targets).toEqual(['android-phone']);
+
+    await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
+    const shipped = await readProductionLayout(root);
+    // The moved node ships with its new parent; the old parent must not be deleted, its record
+    // comes from the draft so the runtime never pulls the node back through a stale order.
+    expect(shipped.containers).toEqual([
+      { ...container('list', 'settings', ['card-b'], phone), padding: '8px', alignment: 'center' },
+      container('other', 'settings', ['card-c', 'card-a'], phone),
+    ]);
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    expect(theme.layout.containers).toEqual(shipped.containers);
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+  });
+
   it('leaves dirty foreign files byte for byte and keeps manifest ownership', async () => {
     const { root, head } = await makeRepo();
     const first = createDefaultDraft('draft-1', head);

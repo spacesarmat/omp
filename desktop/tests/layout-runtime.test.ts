@@ -126,7 +126,7 @@ describe('production layout runtime', () => {
     expect(productionItem.style.left).toBe('0.4%');
   });
 
-  it('ignores editor-only locks in production while the editor runtime honors them', async () => {
+  it('applies locked placements in both runtimes: the lock blocks only editor edits', async () => {
     generated.layout.containers = [];
     generated.layout.placements = [placement({ mode: 'absolute', x: 40, y: 24, locked: true })];
 
@@ -147,7 +147,7 @@ describe('production layout runtime', () => {
     await Promise.resolve();
 
     expect(productionRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.position).toBe('absolute');
-    expect(previewRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.position).toBe('');
+    expect(previewRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.position).toBe('absolute');
   });
 
   it('keeps missing nodes in the production document order', async () => {

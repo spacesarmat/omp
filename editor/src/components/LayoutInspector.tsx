@@ -1,4 +1,5 @@
 import type { LayoutContainer, LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
+import { LAYOUT_SIZE_PX_LIMIT } from '../../../design/validation.ts';
 import type { LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import {
   absolutePlacementFromRect,
@@ -18,13 +19,16 @@ export function formatSizeField(value: EditorFieldValue | undefined): string {
 }
 
 // Spacing fields store CSS px sizes: plain numbers become "Npx", an empty input clears
-// the value and the mixed sentinel keeps multi-select edits representable for Task 5.
+// the value and the mixed sentinel keeps multi-select edits representable for Task 5. Values
+// above the document size limit are rejected here: a bigger number can never reach the draft,
+// where validation would throw without naming the field that produced it.
 export function parseSpacingField(text: string): string | 'mixed' | null {
   const trimmed = text.trim();
   if (!trimmed) return '';
   if (trimmed === 'mixed' || trimmed === 'разные') return 'mixed';
   const parsed = trimmed.replace(/px$/, '');
   if (!/^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/.test(parsed)) return null;
+  if (Number.parseFloat(parsed) > LAYOUT_SIZE_PX_LIMIT) return null;
   return `${parsed}px`;
 }
 

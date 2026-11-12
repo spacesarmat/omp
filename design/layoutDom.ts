@@ -30,7 +30,7 @@ interface ResolvedNode {
   kind: LayoutNodeKind;
 }
 
-type IdentitySource = 'key' | 'adapter' | 'path' | 'clone' | 'stamp';
+type IdentitySource = 'key' | 'anchor' | 'adapter' | 'path' | 'clone' | 'stamp';
 
 interface IdentityCandidate {
   nodeId: string;
@@ -121,6 +121,16 @@ function identityOf(
     if (seenKeys.has(key)) throw new Error(`duplicate data key "${key}"`);
     seenKeys.add(key);
     return { nodeId: layoutKeyNodeId(key), kind: 'dynamic', source: 'key' };
+  }
+  // Real lists stamp their stable item key on the markup (data-anchor, e.g. a torrent hash):
+  // Preact keys never reach the DOM, so without this read a reorder would remap saved edits
+  // onto the wrong item through path ids. The anchor wins over stamps and remembered ids, so
+  // identity stays attached to the real item data in every module realm.
+  const anchor = element.dataset.anchor;
+  if (anchor) {
+    if (seenKeys.has(anchor)) throw new Error(`duplicate data anchor "${anchor}"`);
+    seenKeys.add(anchor);
+    return { nodeId: layoutKeyNodeId(anchor), kind: 'dynamic', source: 'anchor' };
   }
   const stamped = element.dataset.layoutNode;
   if (stamped && SCHEMA_ID.test(stamped)) return { nodeId: stamped, kind: 'element', source: 'stamp' };
@@ -242,10 +252,11 @@ function releaseManagedElement(element: HTMLElement): void {
 }
 
 const CLONE_BLOCKED_TAGS = new Set(['SCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META']);
-const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-layout-id', 'data-layout-clone', 'data-layout-node'];
+const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-anchor', 'data-layout-id', 'data-layout-clone', 'data-layout-node'];
 
 // Clone snapshots copy real component markup only: scripts, embedded content, inline handlers,
-// javascript: URLs, per-node layout identity and baked placement styles never travel with a clone.
+// javascript: URLs, per-node layout identity, item anchors and baked placement styles never
+// travel with a clone (a copied anchor would read as a duplicate of the original item).
 // The root itself must be a renderable tag as well, never a live script or embedded document.
 function sanitizeCloneElement(element: HTMLElement): HTMLElement | null {
   if (CLONE_BLOCKED_TAGS.has(element.tagName)) return null;
@@ -292,8 +303,15 @@ function materializeCloneElement(clone: LayoutClone, doc: Document): HTMLElement
   return sanitized;
 }
 
-function resetManagedStyle(element: HTMLElement): void {
+// Originals are restored exactly once per refresh, before any record writes, and reapplied on
+// top: a node can carry both a container record and a placement record, and neither pass may
+// wipe the fields the other one just set. The snapshot lives until the release pass.
+function prepareManagedElement(element: HTMLElement): void {
   restoreInlineStyles(element);
+  snapshotInlineStyles(element);
+}
+
+function resetManagedPlacement(element: HTMLElement): void {
   delete element.dataset.layoutManaged;
   delete element.dataset.layoutHidden;
 }
@@ -303,12 +321,14 @@ function resetManagedStyle(element: HTMLElement): void {
 // containing block itself: the property is set only when nothing else positions the element,
 // it is flagged as runtime-owned and removed once no absolute child needs it anymore.
 function ensureContainingBlock(element: HTMLElement, managed: Set<HTMLElement>): void {
-  if (element.dataset.layoutParent === '1') {
-    managed.add(element);
+  // The flag alone cannot be trusted across refreshes: a node's own placement rebuilds its
+  // inline styles and wipes the runtime-owned position, so the actual value is checked every
+  // time and a flagged but unpositioned parent is promoted again instead of being skipped.
+  const inline = element.style.position;
+  if (inline && inline !== 'static') {
+    if (element.dataset.layoutParent === '1') managed.add(element);
     return;
   }
-  const inline = element.style.position;
-  if (inline && inline !== 'static') return;
   let computed = '';
   try {
     computed = typeof getComputedStyle === 'function' ? getComputedStyle(element).position : '';
@@ -332,7 +352,9 @@ function releaseContainingBlocks(held: Set<HTMLElement>, managed: Set<HTMLElemen
 }
 
 function applyPlacement(element: HTMLElement, placement: LayoutPlacement): void {
-  resetManagedStyle(element);
+  // No style restore here: originals come back once per refresh in prepareManagedElement, so a
+  // container record applied earlier in the same pass keeps its fields.
+  resetManagedPlacement(element);
   element.dataset.layoutMode = placement.mode;
   if (placement.mode === 'absolute') {
     snapshotInlineStyles(element);
@@ -371,12 +393,9 @@ function applyPlacement(element: HTMLElement, placement: LayoutPlacement): void 
 // Container layout speaks the schema vocabulary through plain flexbox properties that every
 // supported platform renders: direction row or column, token-sized padding, alignment on the
 // cross axis and distribution on the main axis. Direction auto and absent fields leave the real
-// component styles untouched.
+// component styles untouched. The restore-once-per-refresh contract lives in the caller, so
+// placement records applied after this pass never wipe these fields.
 function applyContainerLayout(element: HTMLElement, container: LayoutContainer): void {
-  // Remember the authored values before the first managed write: fields the record sets are
-  // restored when it stops applying, fields it leaves alone keep their authored inline styles
-  // instead of being deleted.
-  restoreInlineStyles(element);
   snapshotInlineStyles(element);
   const direction = container.direction && container.direction !== 'auto' ? container.direction : '';
   if (direction) {
@@ -454,15 +473,10 @@ function sameContext(entry: LayoutContext, context: LayoutContext): boolean {
   return entry.target === context.target && entry.screenId === context.screenId && entry.format === context.format;
 }
 
-interface LayoutRuntimeOptions {
-  production: boolean;
-}
-
 function createLayoutRuntime(
   root: HTMLElement,
   layoutOf: () => LayoutDocument | undefined,
   contextOf: () => LayoutContext | null,
-  options: LayoutRuntimeOptions,
 ): () => void {
   let applying = false;
   const heldParents = new Set<HTMLElement>();
@@ -497,6 +511,22 @@ function createLayoutRuntime(
       let nodes = resolveNodes(root);
       let nodeById = new Map(nodes.map((node) => [node.nodeId, node]));
       let nodeIdByElement = new Map(nodes.map((node) => [node.element, node.nodeId]));
+      const placementByNode = new Map<string, LayoutPlacement>();
+      for (const node of nodes) {
+        const placement = layout.placements.find((entry) => sameContext(entry, context) && entry.nodeId === node.nodeId);
+        if (placement) placementByNode.set(node.nodeId, placement);
+      }
+      // Originals come back exactly once per refresh and before any managed write: container and
+      // placement records frequently share one element, and neither pass may reset the fields the
+      // other one applies.
+      for (const container of matchingContainers) {
+        const target = nodeById.get(container.nodeId);
+        if (target) prepareManagedElement(target.element);
+      }
+      for (const nodeId of placementByNode.keys()) {
+        const target = nodeById.get(nodeId);
+        if (target) prepareManagedElement(target.element);
+      }
       const touched = new Set<HTMLElement>();
       const touchedContainers = new Set<HTMLElement>();
       // Containers run first: cross-parent moves change parenthood, and the second resolution
@@ -529,9 +559,10 @@ function createLayoutRuntime(
       }
       const activeParents = new Set<HTMLElement>();
       for (const node of nodes) {
-        const placement = layout.placements.find((entry) => sameContext(entry, context) && entry.nodeId === node.nodeId);
+        // Locked records still apply in every runtime: the lock only blocks editor edits, it
+        // must never reset the saved appearance or hidden state in the preview.
+        const placement = placementByNode.get(node.nodeId);
         if (!placement) continue;
-        if (placement.locked && !options.production) continue;
         applyPlacement(node.element, placement);
         touched.add(node.element);
         if (placement.mode === 'absolute' && node.element.parentElement) {
@@ -569,7 +600,7 @@ function createLayoutRuntime(
 }
 
 export function observeLayout(root: HTMLElement, theme: ThemeDocument, context: LayoutContext): () => void {
-  return createLayoutRuntime(root, () => theme.layout, () => context, { production: false });
+  return createLayoutRuntime(root, () => theme.layout, () => context);
 }
 
 function readProductionContext(root: HTMLElement): LayoutContext | null {
@@ -587,7 +618,7 @@ const observedProductionRoots = new WeakSet<HTMLElement>();
 export function observeProductionLayout(root: HTMLElement): () => void {
   if (observedProductionRoots.has(root)) return () => undefined;
   observedProductionRoots.add(root);
-  const stop = createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root), { production: true });
+  const stop = createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root));
   return () => {
     observedProductionRoots.delete(root);
     stop();

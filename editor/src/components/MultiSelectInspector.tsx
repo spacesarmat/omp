@@ -7,6 +7,9 @@ export interface MultiSelectInspectorProps {
   count: number;
   margin: string | 'mixed' | undefined;
   readOnly?: boolean;
+  // Effective direction of the shared flow container: distribution across the cross axis is not
+  // a flex operation, so that button stays disabled instead of writing an unsupported record.
+  flowDirection?: 'row' | 'column' | null;
   onAlign(alignment: SelectionAlignment): void;
   onDistribute(axis: 'x' | 'y'): void;
   onMargin(margin: string | undefined): void;
@@ -25,6 +28,7 @@ const ALIGN_BUTTONS: { alignment: SelectionAlignment; testId: string; label: str
 // record patch) from absolute nodes (coordinate rewrite) in the App handler, one click is one undo.
 export function MultiSelectInspector(props: MultiSelectInspectorProps) {
   const readOnly = props.readOnly ?? false;
+  const crossAxis = props.flowDirection === 'row' ? 'y' : props.flowDirection === 'column' ? 'x' : null;
   return (
     <div class="editor-multi-inspector" data-testid="multi-select-inspector">
       <h3>Выбрано элементов: {props.count}</h3>
@@ -45,10 +49,10 @@ export function MultiSelectInspector(props: MultiSelectInspectorProps) {
         ))}
       </div>
       <div class="editor-multi-distribute" role="group" aria-label="Распределение">
-        <button type="button" data-testid="distribute-x" title="Распределить по горизонтали" disabled={readOnly} onClick={() => { if (!readOnly) props.onDistribute('x'); }}>
+        <button type="button" data-testid="distribute-x" title="Распределить по горизонтали" disabled={readOnly || crossAxis === 'x'} onClick={() => { if (!readOnly) props.onDistribute('x'); }}>
           Распределить по X
         </button>
-        <button type="button" data-testid="distribute-y" title="Распределить по вертикали" disabled={readOnly} onClick={() => { if (!readOnly) props.onDistribute('y'); }}>
+        <button type="button" data-testid="distribute-y" title="Распределить по вертикали" disabled={readOnly || crossAxis === 'y'} onClick={() => { if (!readOnly) props.onDistribute('y'); }}>
           Распределить по Y
         </button>
       </div>

@@ -93,7 +93,18 @@ function mergeValue(base, local, incoming, path, issues) {
     return result;
   }
   if (Array.isArray(base) && Array.isArray(local) && Array.isArray(incoming)) {
-    const key = path === 'theme.releaseIntents' ? 'target' : path === 'theme.overrides' || path === 'flow.rules' ? 'id' : null;
+    // Layout records and style presets carry unique record ids, so independent edits to
+    // different nodes, containers, clones or presets merge entry by entry instead of
+    // conflicting as whole arrays.
+    const key = path === 'theme.releaseIntents' ? 'target'
+      : path === 'theme.overrides'
+        || path === 'flow.rules'
+        || path === 'theme.stylePresets'
+        || path === 'theme.layout.placements'
+        || path === 'theme.layout.containers'
+        || path === 'theme.layout.clones'
+        ? 'id'
+        : null;
     if (key) {
       const merged = new Map();
       const allIds = new Set([...base, ...local, ...incoming].map((entry) => entry[key]));

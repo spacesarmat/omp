@@ -10,6 +10,7 @@ import {
   createPlacement,
   moveNodeTransaction,
   placeNodeTransaction,
+  updateContainerTransaction,
 } from '../../editor/src/layout/transactions';
 import { getLayoutPlacement } from '../../design/layout';
 import { formatSizeField, parseSpacingField } from '../../editor/src/components/LayoutInspector';
@@ -123,6 +124,21 @@ function overlay(): HTMLElement {
   const element = host.querySelector<HTMLElement>('[data-testid="selection-overlay"]');
   if (!element) throw new Error('selection overlay is missing');
   return element;
+}
+
+function shiftPointer(target: HTMLElement, type: string, x: number, y: number): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, shiftKey: true });
+  Object.defineProperty(event, 'pointerId', { value: 7 });
+  act(() => {
+    target.dispatchEvent(event);
+  });
+}
+
+function selectBothCards(): void {
+  pointer(overlay(), 'pointerdown', 200, 50);
+  pointer(overlay(), 'pointerup', 200, 50);
+  shiftPointer(overlay(), 'pointerdown', 200, 150);
+  expect(host.querySelectorAll('[data-testid="selection-box"]')).toHaveLength(2);
 }
 
 beforeEach(() => {
@@ -547,5 +563,123 @@ describe('layout workspace', () => {
     expect(parseSpacingField('abc')).toBeNull();
     expect(formatSizeField('mixed')).toBe('разные');
     expect(formatSizeField(24)).toBe('24');
+  });
+
+  it('rejects spacing above the document size limit instead of failing validation later', () => {
+    // The design document accepts sizes up to 512px; a bigger value must never reach the draft,
+    // where saving would throw a validation error without naming the field.
+    expect(parseSpacingField('512')).toBe('512px');
+    expect(parseSpacingField('512.5')).toBeNull();
+    expect(parseSpacingField('513')).toBeNull();
+    expect(parseSpacingField('999')).toBeNull();
+    expect(parseSpacingField('1200')).toBeNull();
+  });
+
+  it('lets a plain click focus and type into a preview text control without selecting it', () => {
+    const { input, settings } = buildPreview();
+    const doc = input.ownerDocument;
+    doc.elementFromPoint = () => input;
+    try {
+      pointer(overlay(), 'pointerdown', 200, 225);
+      pointer(overlay(), 'pointerup', 200, 225);
+
+      // The control inside the preview iframe holds the focus; the canvas keeps no selection.
+      expect(doc.activeElement).toBe(input);
+      expect(host.querySelector('[data-testid="selection-box"]')).toBeNull();
+
+      // Typing reaches the control: it receives key events and edits its value.
+      const typed: string[] = [];
+      input.addEventListener('keydown', (event) => typed.push(event.key));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+      expect(typed).toEqual(['x']);
+      input.value = 'xy';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(settings.value).toBe('xy');
+    } finally {
+      delete (doc as Partial<Document>).elementFromPoint;
+    }
+  });
+
+  it('saves the measured size when a flow node switches to absolute', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, createPlacement(context, 'server-card', 'Карточка сервера'));
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+
+    select('layout-mode', 'absolute');
+
+    // The flow node had width and height 'auto'; the conversion freezes the measured box so
+    // the absolute node cannot shrink around its content.
+    expect(placementOf('server-card')).toMatchObject({
+      mode: 'absolute',
+      x: 0,
+      y: 0,
+      width: 10000,
+      height: 2500,
+    });
+  });
+
+  it('maps flow alignment buttons to the container axes in a row container', () => {
+    buildPreview();
+    const context = contextOf();
+    moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+    updateContainerTransaction(controller, {
+      context,
+      nodeId: 'card-grid',
+      seed: ['server-card', 'server-card-2'],
+      patch: { direction: 'row' },
+    });
+    selectBothCards();
+
+    const container = () => controller.draft.theme.layout!.containers.find((entry) => entry.nodeId === 'card-grid')!;
+    // Horizontal alignment on a row container is a main-axis operation (justify-content).
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!.click());
+    expect(container()).toMatchObject({ direction: 'row', distribution: 'start' });
+    expect(container().alignment).toBeUndefined();
+
+    // Vertical alignment on a row container is a cross-axis operation (align-items).
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-top"]')!.click());
+    expect(container()).toMatchObject({ direction: 'row', distribution: 'start', alignment: 'start' });
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.click());
+    expect(container().distribution).toBe('space-between');
+
+    // Distribution across the cross axis is not a flex operation and stays disabled.
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="distribute-y"]')!.disabled).toBe(true);
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-y"]')!.click());
+    expect(container().distribution).toBe('space-between');
+  });
+
+  it('maps flow alignment buttons to the container axes in a column container', () => {
+    buildPreview();
+    const context = contextOf();
+    moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+    updateContainerTransaction(controller, {
+      context,
+      nodeId: 'card-grid',
+      seed: ['server-card', 'server-card-2'],
+      patch: { direction: 'column' },
+    });
+    selectBothCards();
+
+    const container = () => controller.draft.theme.layout!.containers.find((entry) => entry.nodeId === 'card-grid')!;
+    // Horizontal alignment on a column container is a cross-axis operation (align-items).
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!.click());
+    expect(container()).toMatchObject({ direction: 'column', alignment: 'start' });
+    expect(container().distribution).toBeUndefined();
+
+    // Vertical alignment on a column container is a main-axis operation (justify-content).
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-middle"]')!.click());
+    expect(container()).toMatchObject({ direction: 'column', alignment: 'start', distribution: 'center' });
+
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-y"]')!.click());
+    expect(container().distribution).toBe('space-between');
+
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.disabled).toBe(true);
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.click());
+    expect(container().distribution).toBe('space-between');
   });
 });

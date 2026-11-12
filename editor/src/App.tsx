@@ -14,7 +14,7 @@ import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
 import { moveNodeTransaction, placeNodeTransaction, nudgePlacement, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, absolutePlacementFromRect, placementToRect, type LayoutRect } from './layout/transactions';
-import { alignRects, distributeRects, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
+import { alignRects, distributeRects, flowAlignmentFor, flowDistributionFor, alignmentAxisOf, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
 import { copyNodes, duplicateNode, parseLayoutClipboard, pasteNodes, renameNode, setNodeHidden, setNodeLocked } from './layout/layerOperations';
 import { DEFAULT_GUIDE_SETTINGS, resolveGuideSettings, type GuideSettings } from './layout/guides';
 import type { LayerRowModel } from './components/LayersPanel';
@@ -229,6 +229,24 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     .filter((item) => item.node && item.node.parentId !== null && !item.placement?.locked && !item.placement?.hidden);
   // Flow children of one container are aligned through the container record, absolute nodes
   // through their coordinates; either way the whole group lands in a single draft transaction.
+  // The button axis maps to the flex main or cross axis through the container direction:
+  // horizontal names drive justify-content in a row and align-items in a column, vertical names
+  // do the opposite. A container without a recorded direction renders as a row, the flex default.
+  const flowSelectionDirection = (): 'row' | 'column' | null => {
+    const items = selectedItems();
+    if (items.length < 2) return null;
+    const parentIds = new Set(items.map((item) => item.node!.parentId));
+    if (parentIds.size !== 1) return null;
+    if (!items.every((item) => (item.placement?.mode ?? 'flow') === 'flow')) return null;
+    const parentId = String([...parentIds][0]);
+    const record = draft.theme.layout?.containers.find(
+      (container) => container.target === layoutContext.target
+        && container.screenId === layoutContext.screenId
+        && container.format === layoutContext.format
+        && container.nodeId === parentId,
+    );
+    return record?.direction === 'column' ? 'column' : 'row';
+  };
   const alignSelection = (alignment: SelectionAlignment, axis: 'x' | 'y' | null) => {
     const items = selectedItems();
     if (items.length < 2) return;
@@ -237,9 +255,17 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (allFlow && parentIds.size === 1) {
       const parentId = String([...parentIds][0]);
       const seed = layoutNodes.filter((node) => node.parentId === parentId).map((node) => node.nodeId);
+      const mainAxis = (flowSelectionDirection() ?? 'row') === 'row' ? 'x' : 'y';
       const patch = axis === null
-        ? { alignment: flowAlignmentFor(alignment) }
-        : { distribution: 'space-between' as const };
+        ? (alignmentAxisOf(alignment) === mainAxis
+          ? { distribution: flowDistributionFor(alignment) }
+          : { alignment: flowAlignmentFor(alignment) })
+        : axis === mainAxis
+          ? { distribution: 'space-between' as const }
+          : null;
+      // Distribution across the cross axis is not a flex operation: the button stays disabled
+      // and the handler ignores the call, so an unsupported request can never land in the draft.
+      if (!patch) return;
       alignSelectionTransaction(controller, { context: layoutContext, container: { nodeId: parentId, seed, patch } });
       return;
     }
@@ -651,6 +677,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                   count={selection.ids.length}
                   margin={margin}
                   readOnly={!previewEditable}
+                  flowDirection={flowSelectionDirection()}
                   onAlign={handleAlignSelection}
                   onDistribute={handleDistributeSelection}
                   onMargin={handleSelectionMargin}

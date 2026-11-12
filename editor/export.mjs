@@ -332,21 +332,47 @@ async function exportContents(root, plan) {
     }
   }
   const scopedLayout = plan.theme.layout ?? emptyLayout();
+  // Layout records merge by identity (target, screen, format, node), not by scope match alone:
+  // after a reparent the old parent container no longer references the scoped node, so the
+  // scope filter misses it, while the base record still references it and would be dropped or
+  // duplicated. Every in-scope base identity is replaced by the draft record with that
+  // identity: the scoped record when the scope covers it, otherwise the draft copy (the old
+  // parent ships with its padding and alignment and without the moved node). A draft without
+  // the record exports the deletion.
+  const layoutIdentityKey = (entry) => `${entry.target}|${entry.screenId}|${entry.format}|${entry.nodeId}`;
+  const draftLayout = plan.draft.theme.layout ?? emptyLayout();
+  const draftContainers = new Map(draftLayout.containers.map((entry) => [layoutIdentityKey(entry), entry]));
+  const draftPlacements = new Map(draftLayout.placements.map((entry) => [layoutIdentityKey(entry), entry]));
+  const draftClones = new Map((draftLayout.clones ?? []).map((entry) => [layoutIdentityKey(entry), entry]));
+  const scopedContainers = new Set(scopedLayout.containers.map(layoutIdentityKey));
+  const scopedPlacements = new Set(scopedLayout.placements.map(layoutIdentityKey));
+  const scopedClones = new Set((scopedLayout.clones ?? []).map(layoutIdentityKey));
   let mergedLayout;
   if (baseTheme) {
     const inScope = (entry) => layoutEntryInScope(entry, plan.scope);
-    const containers = [
-      ...(baseTheme.layout?.containers ?? []).filter((entry) => !inScope(entry)),
-      ...scopedLayout.containers,
-    ];
-    const placements = [
-      ...(baseTheme.layout?.placements ?? []).filter((entry) => !inScope(entry)),
-      ...scopedLayout.placements,
-    ];
-    const clones = [
-      ...(baseTheme.layout?.clones ?? []).filter((entry) => !inScope(entry)),
-      ...(scopedLayout.clones ?? []),
-    ];
+    const mergeRecords = (baseRecords, scopedRecords, draftRecords, scopedKeys) => {
+      const merged = [];
+      for (const entry of baseRecords) {
+        const key = layoutIdentityKey(entry);
+        // Identities the scoped layout carries are replaced by the scoped record below; this
+        // also covers the new parent of a reparented node, which the base record cannot
+        // reference yet and would otherwise duplicate.
+        if (scopedKeys.has(key)) continue;
+        if (inScope(entry)) {
+          // Stale reference the scope no longer covers (the old parent after a reparent): ship
+          // the draft record for this identity, or drop it when the draft deleted the record.
+          const draftEntry = draftRecords.get(key);
+          if (draftEntry) merged.push(draftEntry);
+          continue;
+        }
+        merged.push(entry);
+      }
+      merged.push(...scopedRecords);
+      return merged;
+    };
+    const containers = mergeRecords(baseTheme.layout?.containers ?? [], scopedLayout.containers, draftContainers, scopedContainers);
+    const placements = mergeRecords(baseTheme.layout?.placements ?? [], scopedLayout.placements, draftPlacements, scopedPlacements);
+    const clones = mergeRecords(baseTheme.layout?.clones ?? [], scopedLayout.clones ?? [], draftClones, scopedClones);
     mergedLayout = clones.length ? { containers, placements, clones } : { containers, placements };
   } else {
     mergedLayout = scopedLayout.clones?.length

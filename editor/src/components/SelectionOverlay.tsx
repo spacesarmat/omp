@@ -53,6 +53,7 @@ export interface SelectionOverlayProps {
   selectedIds: string[];
   anchorId: string | null;
   getIframeRect(): ClientRectLike;
+  getPreviewDocument?(): Document | null;
   onSelect(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
   onPlaceNode(placement: LayoutPlacement): void;
@@ -76,6 +77,9 @@ interface DragState {
   point: ClientPoint;
   insertion: InsertionTarget | null;
   altKey: boolean;
+  // A press on a preview text control queues a click forward instead of a selection: the
+  // control focuses and receives the click on pointerup when no drag occurred.
+  editable: HTMLElement | null;
 }
 
 interface DragPreview {
@@ -105,6 +109,18 @@ function area(rect: LayoutRect): number {
   return rect.width * rect.height;
 }
 
+// Text-like input types only: buttons, checkboxes, ranges and submits stay canvas-owned, the
+// canvas never forwards real actions, only typing controls.
+const TEXT_CONTROL_TYPES = new Set(['text', 'search', 'url', 'tel', 'password', 'email', 'number']);
+
+function isTextControl(element: HTMLElement): boolean {
+  if (element.isContentEditable) return true;
+  const tag = element.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag !== 'INPUT') return false;
+  return TEXT_CONTROL_TYPES.has((element.getAttribute('type') ?? 'text').toLowerCase());
+}
+
 export function SelectionOverlay(props: SelectionOverlayProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const drag = useRef<DragState | null>(null);
@@ -119,6 +135,35 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     props.viewport,
     props.zoom,
   );
+
+  // The control under the pointer in the preview document, if it is a typing control. Tag and
+  // attribute checks stay realm-proof: the preview iframe runs in its own window, where the
+  // overlay's instanceof constructors would never match its nodes.
+  const editableControlAt = (clientX: number, clientY: number): HTMLElement | null => {
+    const doc = props.getPreviewDocument?.() ?? null;
+    if (!doc || typeof doc.elementFromPoint !== 'function') return null;
+    const frame = props.getIframeRect();
+    const hit = doc.elementFromPoint((clientX - frame.x) / zoomScale, (clientY - frame.y) / zoomScale);
+    if (!hit || hit.ownerDocument !== doc) return null;
+    let current: Element | null = hit;
+    while (current) {
+      const element = current as HTMLElement;
+      if (typeof element.tagName === 'string' && isTextControl(element)) return element;
+      current = current.parentElement;
+    }
+    return null;
+  };
+
+  // A plain click on a preview typing control focuses it and replays the press as mouse
+  // events, so the control behaves exactly as if the overlay were not covering the iframe.
+  const forwardControlClick = (element: HTMLElement): void => {
+    const doc = element.ownerDocument;
+    element.focus();
+    const init = { bubbles: true, cancelable: true, view: doc.defaultView };
+    element.dispatchEvent(new MouseEvent('mousedown', init));
+    element.dispatchEvent(new MouseEvent('mouseup', init));
+    element.dispatchEvent(new MouseEvent('click', init));
+  };
 
   const hitTest = (point: ClientPoint): LayoutNodeDescriptor | null => {
     for (let index = props.nodes.length - 1; index >= 0; index -= 1) {
@@ -481,6 +526,27 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         if (!props.active || event.button !== 0) return;
         event.preventDefault();
         const point = artboardPoint(event);
+        // A typing control under the pointer keeps its plain click: the press forwards as a
+        // focus and a click on pointerup when no drag occurs, buttons and links never get
+        // through. Selection of the node stays available through the layers panel.
+        const editable = editableControlAt(event.clientX, event.clientY);
+        if (editable) {
+          drag.current = {
+            pointerId: event.pointerId,
+            nodeId: '',
+            groupIds: [],
+            start: point,
+            started: false,
+            emptyClick: false,
+            marquee: false,
+            point,
+            insertion: null,
+            altKey: event.altKey,
+            editable,
+          };
+          (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+          return;
+        }
         const hit = hitTest(point);
         if (event.shiftKey && hit) {
           props.onSelect(reduceSelection(selectionState(), { type: 'toggle', id: hit.nodeId }));
@@ -502,6 +568,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           point,
           insertion: null,
           altKey: event.altKey,
+          editable: null,
         };
         if (hit) {
           // A drag starting on an already selected node keeps the group; only a fresh hit
@@ -536,6 +603,23 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         const point = artboardPoint(event);
         state.point = point;
         state.altKey = event.altKey;
+        if (state.editable) {
+          // A press on a typing control becomes a canvas drag only past the threshold; until
+          // then the queued click forward stays pending, so a shaky press still focuses the
+          // control instead of rubber-banding the canvas.
+          const distance = Math.hypot(point.x - state.start.x, point.y - state.start.y);
+          if (distance < DRAG_THRESHOLD_PX) return;
+          state.editable = null;
+          state.started = true;
+          state.marquee = true;
+          setMarqueeRect({
+            x: Math.min(state.start.x, point.x),
+            y: Math.min(state.start.y, point.y),
+            width: Math.abs(point.x - state.start.x),
+            height: Math.abs(point.y - state.start.y),
+          });
+          return;
+        }
         if (!state.started) {
           const distance = Math.hypot(point.x - state.start.x, point.y - state.start.y);
           if (distance < DRAG_THRESHOLD_PX) return;
@@ -604,6 +688,11 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         const state = drag.current;
         if (!state || state.pointerId !== event.pointerId) return;
         if (!state.started) {
+          if (state.editable) {
+            forwardControlClick(state.editable);
+            release(state, event);
+            return;
+          }
           if (state.emptyClick) props.onSelect({ ids: [], anchorId: null });
           release(state, event);
           return;

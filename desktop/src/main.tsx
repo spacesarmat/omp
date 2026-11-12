@@ -3,7 +3,7 @@ import { currentRoute, routeStack } from '../../mobile/src/nav';
 import { createBridge } from './platform/bridge';
 import { flushCrashes, queueCrash } from '../../src/report/crash';
 import { setDesktopUpdatePlatform } from '../../src/lib/updateInfo';
-import { desktopTargetForPlatform, installProductionDesign } from '../../design/production.ts';
+import { desktopScreenIdOf, desktopTargetForPlatform, installProductionDesign } from '../../design/production.ts';
 
 async function boot(): Promise<void> {
   let platform = '';
@@ -16,7 +16,7 @@ async function boot(): Promise<void> {
   await import('../../mobile/src/main');
   const stopProductionLayout = installProductionDesign(document.body, {
     target: desktopTargetForPlatform(platform),
-    screenOf: () => currentRoute.value.name,
+    screenOf: () => desktopScreenIdOf(currentRoute.value.name),
     subscribeScreen: (notify) => routeStack.subscribe(notify),
   });
   window.addEventListener('pagehide', stopProductionLayout, { once: true });

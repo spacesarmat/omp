@@ -10,6 +10,7 @@ import {
   moveNodeTransaction,
   placeNodeTransaction,
   placementToRect,
+  updateContainerTransaction,
 } from '../../editor/src/layout/transactions';
 import { getLayoutPlacement } from '../../design/layout';
 import type { LayoutContext } from '../../design/schema';
@@ -331,11 +332,19 @@ describe('multi-select', () => {
     expect(placementOf('settings-continue')!.x).toBe(1250);
   });
 
-  it('aligns flow children through the container record with one undo step', () => {
+  it('aligns flow children through the container record with one undo step', async () => {
     buildPreview();
     const context = contextOf();
     moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
     moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+    // The container records its column direction: horizontal alignment is a cross-axis
+    // operation and lands on align-items.
+    updateContainerTransaction(controller, {
+      context,
+      nodeId: 'card-grid',
+      seed: ['server-card', 'server-card-2'],
+      patch: { direction: 'column' },
+    });
 
     pointer(overlay(), 'pointerdown', 200, 50);
     pointer(overlay(), 'pointerup', 200, 50);

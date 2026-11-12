@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getCommittedDesign, rebaseDraft } from '../../editor/design.mjs';
 import { createDefaultDraft } from '../../editor/shared/draft';
+import type { LayoutClone, LayoutContainer, LayoutPlacement } from '../../design/schema';
 
 const execute = promisify(execFile);
 const roots: string[] = [];
@@ -118,6 +119,76 @@ describe('committed editor designs', () => {
       issues: [{ path: 'theme.name' }],
     });
     expect(JSON.stringify(local)).toBe(before);
+  });
+
+  it('merges independent layout placements, containers, clones and preset additions by id', async () => {
+    const root = await makeRepo();
+    const layoutContext = { target: 'desktop-windows', screenId: 'settings', format: 'landscape' } as const;
+    const placementOf = (nodeId: string, x: number): LayoutPlacement => ({
+      id: `place-${nodeId}`,
+      ...layoutContext,
+      nodeId,
+      mode: 'absolute',
+      x,
+      y: 24,
+      anchor: 'top-left',
+      width: 200,
+      height: 'auto',
+      zIndex: 1,
+      hidden: false,
+      locked: false,
+      label: nodeId,
+    });
+    const containerOf = (nodeId: string, order: string[]): LayoutContainer => ({ id: `flow-${nodeId}`, ...layoutContext, nodeId, order });
+    const cloneOf = (nodeId: string): LayoutClone => ({
+      id: `clone-${nodeId}`,
+      ...layoutContext,
+      nodeId,
+      parentId: 'panel',
+      label: nodeId,
+      html: `<div data-design-id="${nodeId}">Copy</div>`,
+    });
+    const presetOf = (id: string) => ({ id, name: id, tokens: { '--omp-color-accent': '#112233' } });
+
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.theme.layout = {
+      containers: [containerOf('list', ['card-a', 'card-b'])],
+      placements: [placementOf('card-a', 10), placementOf('card-b', 20)],
+      clones: [],
+    };
+    initial.theme.stylePresets = [presetOf('preset-base')];
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+
+    // Local moves card-a and adds its own container, clone and preset.
+    const local = createDefaultDraft('draft-1', base);
+    local.theme.layout = {
+      containers: [containerOf('list', ['card-a', 'card-b']), containerOf('local-grid', ['card-c'])],
+      placements: [placementOf('card-a', 500), placementOf('card-b', 20)],
+      clones: [cloneOf('copy-local')],
+    };
+    local.theme.stylePresets = [presetOf('preset-base'), presetOf('preset-local')];
+
+    // Incoming independently moves card-b and adds its own container, clone and preset.
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.theme.layout = {
+      containers: [containerOf('list', ['card-a', 'card-b']), containerOf('incoming-grid', ['card-d'])],
+      placements: [placementOf('card-a', 10), placementOf('card-b', 300)],
+      clones: [cloneOf('copy-incoming')],
+    };
+    incoming.theme.stylePresets = [presetOf('preset-base'), presetOf('preset-incoming')];
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    const result = await rebaseDraft({ root, draft: local });
+    const layout = result.draft.theme.layout!;
+    // Both node placements survive: each side edited a different node of the same collection.
+    expect(layout.placements.find((entry) => entry.nodeId === 'card-a')?.x).toBe(500);
+    expect(layout.placements.find((entry) => entry.nodeId === 'card-b')?.x).toBe(300);
+    // Both new containers, clones and presets survive instead of conflicting as whole arrays.
+    expect(layout.containers.map((entry) => entry.nodeId).sort()).toEqual(['incoming-grid', 'list', 'local-grid']);
+    expect((layout.clones ?? []).map((entry) => entry.nodeId).sort()).toEqual(['copy-incoming', 'copy-local']);
+    expect((result.draft.theme.stylePresets ?? []).map((entry) => entry.id).sort()).toEqual(['preset-base', 'preset-incoming', 'preset-local']);
   });
 
   it('preserves committed precedence while merging edited entries', async () => {

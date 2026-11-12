@@ -60,6 +60,7 @@ export function DesktopSidebar({ active }: { active: Tab }) {
                 type="button"
                 key={item.id}
                 class={'omp-side-item' + (item.id === active ? ' is-on' : '')}
+                data-nav={item.id}
                 aria-current={item.id === active ? 'page' : undefined}
                 aria-label={item.label}
                 title={item.label}

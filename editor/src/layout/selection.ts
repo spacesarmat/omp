@@ -1,4 +1,4 @@
-import type { LayoutAlignment, LayoutPlacement } from '../../../design/schema.ts';
+import type { LayoutAlignment, LayoutDistribution, LayoutPlacement } from '../../../design/schema.ts';
 import { LAYOUT_GEOMETRY_LIMIT, type LayoutRect } from './transactions.ts';
 
 export interface SelectionState {
@@ -42,6 +42,17 @@ export function flowAlignmentFor(alignment: SelectionAlignment): LayoutAlignment
   if (alignment === 'left' || alignment === 'top') return 'start';
   if (alignment === 'right' || alignment === 'bottom') return 'end';
   return 'center';
+}
+
+// The start/center/end buttons drive the container main axis through justify-content, which
+// speaks the same value space as alignment for those three names.
+export function flowDistributionFor(alignment: SelectionAlignment): LayoutDistribution {
+  const flow = flowAlignmentFor(alignment);
+  return flow === 'stretch' ? 'start' : flow;
+}
+
+export function alignmentAxisOf(alignment: SelectionAlignment): 'x' | 'y' {
+  return alignment === 'left' || alignment === 'center' || alignment === 'right' ? 'x' : 'y';
 }
 
 type Axis = 'x' | 'y';

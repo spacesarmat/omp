@@ -152,6 +152,11 @@ export function focusProbeVersion(doc: Document): number {
   return focusProbeVersions.get(doc) ?? 0;
 }
 
+// CSSRule.type values are identical in every realm; style rules are type 1. Instanceof with the
+// editor window constructors would skip every rule of a sheet from another realm (the preview
+// iframe), so the type decides and grouping rules are recognized by their cssRules collection.
+const CSS_RULE_STYLE = 1;
+
 function focusProbeStyles(doc: Document, element: HTMLElement): FocusProbeStyles {
   focusProbeVersions.set(doc, (focusProbeVersions.get(doc) ?? 0) + 1);
   interface ProbeRule {
@@ -163,13 +168,14 @@ function focusProbeStyles(doc: Document, element: HTMLElement): FocusProbeStyles
   const collect = (rules: CSSRuleList): void => {
     for (let index = 0; index < rules.length; index += 1) {
       const rule = rules[index];
-      if (rule instanceof CSSStyleRule) {
-        if (!rule.selectorText.includes(':focus')) continue;
-        const selector = rule.selectorText.replace(FOCUS_PSEUDO, `.${FOCUS_PROBE_CLASS}`);
-        const parent = (rule.parentRule ?? rule.parentStyleSheet) as CSSStyleSheet | CSSGroupingRule;
-        matches.push({ parent, index, css: `${selector} { ${rule.style.cssText} }` });
-      } else if (rule instanceof CSSGroupingRule && rule.cssRules.length) {
-        collect(rule.cssRules);
+      if (rule.type === CSS_RULE_STYLE) {
+        const styleRule = rule as CSSStyleRule;
+        if (!styleRule.selectorText.includes(':focus')) continue;
+        const selector = styleRule.selectorText.replace(FOCUS_PSEUDO, `.${FOCUS_PROBE_CLASS}`);
+        const parent = (styleRule.parentRule ?? styleRule.parentStyleSheet) as CSSStyleSheet | CSSGroupingRule;
+        matches.push({ parent, index, css: `${selector} { ${styleRule.style.cssText} }` });
+      } else if ('cssRules' in rule && (rule as CSSGroupingRule).cssRules.length) {
+        collect((rule as CSSGroupingRule).cssRules);
       }
     }
   };
