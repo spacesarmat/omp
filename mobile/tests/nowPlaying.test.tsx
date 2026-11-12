@@ -167,7 +167,7 @@ describe('NowPlaying', () => {
       expect(el.textContent).not.toContain('Главы');
       expect(el.querySelectorAll('.m-seek-tick').length).toBe(0);
     });
-    const openChapters = () => click(el.querySelector('[data-now-chapters]'));
+    const openChapters = () => click(el.querySelector('[data-now-chapters]')!);
     it('ticks, «Глава N из M · название», list with the current highlighted', () => {
       setState(state({ chapters, chapter: 2 }));
       mount(<NowPlaying volume={volume} />);
@@ -240,7 +240,9 @@ describe('NowPlaying', () => {
       expect(el.querySelector('[data-now-skip-intro]')).toBeNull();
       setState(state({ chapters: [{ t: 0, title: 'A' }, { t: 40, title: 'B' }], chapter: 0 }));
       mount(<NowPlaying volume={volume} />);
-      act(() => el.querySelector('[data-now-chapters]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+      act(() => {
+        el.querySelector('[data-now-chapters]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      });
       expect(el.textContent).toContain('Пропускать Recap и Credits всегда');
       click(el.querySelector('[data-now-skip-always]')!);
       expect(localStorage.getItem('tsp.nowSkipMarks')).toBe('true');
