@@ -366,7 +366,8 @@ function within(promise, ms) {
 
 /**
  * One round of Crypto Pay, CoinGecko and the CBR. The token is a header, never part of the url.
- * Returns as soon as every asset has a price, so a slow host does not hold a finished quote.
+ * A finished CoinGecko quote still waits the short CBR window for Crypto Pay, so the
+ * primary source wins when it is only slightly slower. A host that misses that window is dropped.
  */
 export async function fetchRateQuotes(fetchImpl, creds) {
   const c = creds || {};
@@ -392,11 +393,15 @@ export async function fetchRateQuotes(fetchImpl, creds) {
     pending.delete(winner.job);
     got[winner.job.key] = winner.data;
     const ready = quotesFromPartial(got);
-    if (quotesComplete(ready) && got.cbr !== undefined) return ready;
-    if (assetsPriced(ready) && got.cbr === undefined) {
-      const cbrJob = jobs.find((job) => job.key === 'cbr');
-      const cbrData = await within(cbrJob.run, CBR_GRACE_MS);
-      if (cbrData !== undefined) got.cbr = cbrData;
+    if (quotesComplete(ready) && got.cbr !== undefined && got.pay !== undefined) return ready;
+    if (assetsPriced(ready) && (got.cbr === undefined || got.pay === undefined)) {
+      const late = [];
+      if (got.cbr === undefined) late.push(jobs.find((job) => job.key === 'cbr'));
+      if (got.pay === undefined) late.push(jobs.find((job) => job.key === 'pay'));
+      const rows = await Promise.all(
+        late.map((job) => within(job.run, CBR_GRACE_MS).then((data) => ({ key: job.key, data }))),
+      );
+      for (let i = 0; i < rows.length; i++) if (rows[i].data !== undefined) got[rows[i].key] = rows[i].data;
       return quotesFromPartial(got);
     }
   }

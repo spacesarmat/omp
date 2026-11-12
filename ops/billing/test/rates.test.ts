@@ -246,6 +246,36 @@ describe('donate rate timing', () => {
     expect(donateRateWait('dn:n:row1:0', manual, NOW)).toBe('skip');
   });
 
+  it('keeps a Crypto Pay price that arrives during the short wait after CoinGecko', async () => {
+    const fetchImpl = async (url: string) => {
+      if (String(url).indexOf('getExchangeRates') >= 0) {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return json(200, {
+          ok: true,
+          result: [
+            { is_valid: true, source: 'USDT', target: 'RUB', rate: '95' },
+            { is_valid: true, source: 'TON', target: 'RUB', rate: '210' },
+            { is_valid: true, source: 'BTC', target: 'RUB', rate: '8100000' },
+          ],
+        });
+      }
+      if (String(url).indexOf('coingecko') >= 0) {
+        return json(200, { tether: { rub: 80 }, 'the-open-network': { rub: 150 }, bitcoin: { rub: 7_000_000 } });
+      }
+      return json(200, { Valute: { USD: { Nominal: 1, Value: 91 } } });
+    };
+    const quotes = await fetchRateQuotes(fetchImpl, {
+      ready: true,
+      token: TOKEN,
+      host: 'https://pay.crypt.bot',
+      testnet: false,
+    });
+    expect(quotes.usdt).toEqual({ rub: 95, source: 'cryptopay' });
+    expect(quotes.ton).toEqual({ rub: 210, source: 'cryptopay' });
+    expect(quotes.btc).toEqual({ rub: 8_100_000, source: 'cryptopay' });
+    expect(quotes.usd).toEqual({ rub: 91, source: 'cbr' });
+  });
+
   it('returns as soon as one source has priced every asset', async () => {
     let release = () => {};
     const held = new Promise((resolve) => {
