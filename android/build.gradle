@@ -9,7 +9,7 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:9.4.1'
         classpath 'com.google.gms:google-services:4.4.4'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
@@ -31,7 +31,7 @@ allprojects {
 subprojects {
     configurations.configureEach {
         resolutionStrategy {
-            force 'commons-io:commons-io:2.18.0', 'org.apache.commons:commons-lang3:3.18.0'
+            force 'commons-io:commons-io:2.22.0', 'org.apache.commons:commons-lang3:3.21.0'
         }
     }
 }
