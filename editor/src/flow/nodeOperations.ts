@@ -92,8 +92,19 @@ function withGraph(flow: FlowDocument, ruleId: string, graph: FlowGraph): FlowDo
   };
 }
 
-export function addFlowNode(flow: FlowDocument, screenId: string, kind: FlowNodeKind, position?: FlowPosition): FlowNodeRef {
-  const ensured = ensureGraphRule(flow, screenId);
+export function addFlowNode(
+  flow: FlowDocument,
+  screenId: string,
+  kind: FlowNodeKind,
+  position?: FlowPosition,
+  options: { ruleId?: string } = {},
+): FlowNodeRef {
+  // The canvas may target a chosen graph rule of the screen (rule selector); anything else
+  // falls back to the first graph rule or a fresh rule, exactly like before.
+  const chosen = options.ruleId
+    ? flow.rules.find((rule) => rule.id === options.ruleId && rule.screenId === screenId && rule.graph)
+    : undefined;
+  const ensured = chosen ? { flow, ruleId: chosen.id } : ensureGraphRule(flow, screenId);
   const rule = ruleOf(ensured.flow, ensured.ruleId);
   const graph = graphOf(rule);
   if (kind === 'trigger' && graph.nodes.some((node) => node.kind === 'trigger')) {

@@ -100,6 +100,59 @@ describe('FlowCanvas template insertion', () => {
     expect(validateFlowGraph(flow, ROUTE_IDS)).toEqual([]);
   });
 
+  it.each(['connect-server', 'offline-retry', 'episode-queue', 'playback-fallback', 'restore-position'] as const)(
+    'inserts template %s onto the current screen so its nodes show on the canvas',
+    (templateId) => {
+      click('[data-action="toggle-templates"]');
+      click(`[data-action="insert-${templateId}"]`);
+      const inserted = controller.draft.flow.rules.filter((entry) => entry.graph && entry.screenId === 'settings');
+      expect(inserted.length).toBeGreaterThan(0);
+      const renderedNodeIds = [...host.querySelectorAll('[data-node-id]')].map((entry) => entry.getAttribute('data-node-id'));
+      const displayed = inserted.find((rule) => (rule.graph?.nodes ?? []).every((node) => renderedNodeIds.includes(node.id)));
+      expect(displayed).toBeDefined();
+      expect(validateFlowGraph(controller.draft.flow, ROUTE_IDS)).toEqual([]);
+    },
+  );
+
+  it('lists every graph rule of the screen in the rule selector and scopes edits and clipboard to the chosen rule', () => {
+    click('[data-action="toggle-templates"]');
+    click('[data-action="insert-restore-position"]');
+    const rules = controller.draft.flow.rules.filter((entry) => entry.graph && entry.screenId === 'settings');
+    expect(rules).toHaveLength(2);
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="flow-rule-select"]');
+    expect(select).not.toBeNull();
+    expect([...select!.options].map((option) => option.value)).toEqual(rules.map((entry) => entry.id));
+    expect(select!.value).toBe(rules[0].id);
+
+    act(() => {
+      select!.value = rules[1].id;
+      select!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const secondTrigger = rules[1].graph!.nodes.find((node) => node.kind === 'trigger')!;
+    expect(host.querySelector(`[data-node-id="${secondTrigger.id}"]`)).not.toBeNull();
+
+    click('[data-action="add-action"]');
+    const firstAfter = controller.draft.flow.rules.find((entry) => entry.id === rules[0].id)!;
+    const secondAfter = controller.draft.flow.rules.find((entry) => entry.id === rules[1].id)!;
+    expect(firstAfter.graph!.nodes).toHaveLength(rules[0].graph!.nodes.length);
+    expect(secondAfter.graph!.nodes).toHaveLength(rules[1].graph!.nodes.length + 1);
+
+    const sourceNode = rules[1].graph!.nodes.find((node) => node.kind === 'condition')!;
+    click(`[data-node-id="${sourceNode.id}"]`);
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true })); });
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true })); });
+    const firstPasted = controller.draft.flow.rules.find((entry) => entry.id === rules[0].id)!;
+    const secondPasted = controller.draft.flow.rules.find((entry) => entry.id === rules[1].id)!;
+    expect(firstPasted.graph!.nodes).toHaveLength(rules[0].graph!.nodes.length);
+    expect(secondPasted.graph!.nodes).toHaveLength(rules[1].graph!.nodes.length + 2);
+
+    act(() => {
+      select!.value = rules[0].id;
+      select!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('.flow-node-selected')).toHaveLength(0);
+  });
+
   it('appends template variables without duplicating existing declarations', () => {
     click('[data-action="toggle-templates"]');
     click('[data-action="insert-restore-position"]');

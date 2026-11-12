@@ -69,6 +69,15 @@ export function isLayoutZIndexValue(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_ZINDEX_LIMIT;
 }
 
+// Element ids keep the same safe id shape the flow document schema enforces, so an inspector
+// edit can never smuggle arbitrary JavaScript or URLs into a trigger binding. The wildcard is
+// accepted only where the schema accepts it (timer rules).
+export function isFlowElementIdValue(value: unknown, options: { allowWildcard?: boolean } = {}): value is string {
+  if (typeof value !== 'string' || value.length > 64) return false;
+  if (value === '*') return Boolean(options.allowWildcard);
+  return ID.test(value);
+}
+
 export function isLayoutMarginValue(value: unknown): value is string {
   return typeof value === 'string' && SIZE.test(value) && Number.parseFloat(value) <= LAYOUT_SIZE_PX_LIMIT;
 }

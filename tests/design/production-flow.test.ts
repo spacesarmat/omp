@@ -359,6 +359,47 @@ describe('installProductionFlow', () => {
     expect(spy.calls).toHaveLength(16);
   });
 
+  it('runs each wildcard timer rule on its own interval instead of the first rule twice', () => {
+    vi.useFakeTimers();
+    generated.flow.rules = [
+      timerRule('tick-a', '*', 'tick a'),
+      { ...timerRule('tick-b', '*', 'tick b'), intervalMs: 2500 },
+    ];
+    const spy = dispatcherSpy();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    installProductionFlow(root, optionsFor(spy));
+    vi.advanceTimersByTime(4500);
+    expect(spy.calls).toEqual([
+      'toast:tick a',
+      'toast:tick a',
+      'toast:tick b',
+      'toast:tick a',
+      'toast:tick a',
+    ]);
+  });
+
+  it('keeps session variables across per-rule timer ticks', () => {
+    vi.useFakeTimers();
+    generated.flow.rules = [
+      {
+        ...timerRule('bump', '*', 'unused'),
+        steps: [{ id: 'bump-s1', action: { type: 'variable.set', variableId: 'count', value: 1 } }],
+      },
+      {
+        ...timerRule('read', '*', 'count seen'),
+        condition: { kind: 'eq', path: 'variable.count', value: 1 },
+      },
+    ];
+    generated.flow.variables = [{ id: 'count', name: 'Count', type: 'number', initial: 0 }];
+    const spy = dispatcherSpy();
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    installProductionFlow(root, optionsFor(spy));
+    vi.advanceTimersByTime(2500);
+    expect(spy.calls).toEqual(['toast:count seen', 'toast:count seen']);
+  });
+
   it('takes over a matched click before native handlers and passes unmatched clicks through', () => {
     generated.flow.rules = [rule({ id: 'go', elementId: 'settings-continue' })];
     const spy = dispatcherSpy();

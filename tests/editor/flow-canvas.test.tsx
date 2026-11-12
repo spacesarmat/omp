@@ -5,6 +5,7 @@ import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { FlowCanvas, type FlowNodeSelection } from '../../editor/src/components/FlowCanvas';
 import { FlowNodeInspector } from '../../editor/src/components/FlowNodeInspector';
+import { instantiateFlowTemplate } from '../../design/flow-templates';
 import type { EditorClient } from '../../editor/src/client';
 
 const BASE = '0000000000000000000000000000000000000000';
@@ -340,6 +341,70 @@ describe('flow canvas', () => {
     expect(graphOf().nodes.map((node) => node.kind).sort()).toEqual(['action', 'trigger']);
     expect(host.querySelector('[data-testid="flow-canvas-error"]')).toBeNull();
   });
+
+  it('cascades consecutive new nodes away from the viewport center', () => {
+    mountCanvas();
+    click('[data-action="add-action"]');
+    click('[data-action="add-action"]');
+    const nodes = graphOf().nodes;
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0]).toMatchObject({ x: 312, y: 268 });
+    expect(nodes[1]).toMatchObject({ x: 348, y: 304 });
+  });
+
+  it('scopes new nodes and links to the graph rule chosen in the rule selector', () => {
+    mountCanvas();
+    act(() => {
+      controller.update((current) => {
+        const instance = instantiateFlowTemplate('restore-position', {
+          id: current.flow.id,
+          baseCommit: current.flow.baseCommit,
+          screenId: 'settings',
+        });
+        current.flow.rules.push(...instance.rules);
+        current.flow.variables = [...(current.flow.variables ?? []), ...(instance.variables ?? [])];
+      });
+    });
+    const rules = controller.draft.flow.rules.filter((entry) => entry.graph && entry.screenId === 'settings');
+    expect(rules).toHaveLength(2);
+    const select = host.querySelector<HTMLSelectElement>('[data-testid="flow-rule-select"]')!;
+    act(() => {
+      select.value = rules[1].id;
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const trigger = rules[1].graph!.nodes.find((node) => node.kind === 'trigger')!;
+    expect(host.querySelector(`[data-node-id="${trigger.id}"]`)).not.toBeNull();
+
+    click('[data-action="add-action"]');
+    const first = controller.draft.flow.rules.find((entry) => entry.id === rules[0].id)!;
+    const second = controller.draft.flow.rules.find((entry) => entry.id === rules[1].id)!;
+    expect(first.graph!.nodes).toHaveLength(rules[0].graph!.nodes.length);
+    const action = second.graph!.nodes.find((node) => node.kind === 'action')!;
+    pointer(nodeEl(trigger.id).querySelector('[data-port="out"][data-branch="default"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(action.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    const secondLinked = controller.draft.flow.rules.find((entry) => entry.id === rules[1].id)!;
+    const firstLinked = controller.draft.flow.rules.find((entry) => entry.id === rules[0].id)!;
+    expect(secondLinked.graph!.edges.some((edge) => edge.to === action.id)).toBe(true);
+    expect(firstLinked.graph!.edges).toHaveLength(rules[0].graph!.edges.length);
+  });
+
+  it('shows the first graph rule when the screen prop changes', () => {
+    mountCanvas();
+    act(() => {
+      controller.update((current) => {
+        current.flow.rules.push({
+          id: 'library-rule',
+          screenId: 'library',
+          elementId: 'content',
+          event: 'screen.enter',
+          action: { type: 'back' },
+          graph: { nodes: [{ id: 'ln1', kind: 'trigger', ruleId: 'library-rule', x: 0, y: 0 }], edges: [] },
+        });
+      });
+    });
+    act(() => render(h(FlowCanvas, { controller, screenId: 'library', readOnly: false }), host));
+    expect(nodeEl('ln1')).not.toBeNull();
+  });
 });
 
 describe('flow node inspector', () => {
@@ -399,6 +464,37 @@ describe('flow node inspector', () => {
     const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
     mountInspector(nodeId, rule.id, true);
     expect(host.querySelector<HTMLSelectElement>('[data-testid="inspector-condition-op"]')!.disabled).toBe(true);
+  });
+
+  it('edits the trigger element id with validation and keeps the change one undo step', () => {
+    mountCanvas();
+    act(() => {
+      controller.update((current) => {
+        const instance = instantiateFlowTemplate('connect-server', {
+          id: current.flow.id,
+          baseCommit: current.flow.baseCommit,
+          screenId: 'settings',
+        });
+        current.flow.rules.push(...instance.rules);
+      });
+    });
+    const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
+    const trigger = rule.graph!.nodes.find((node) => node.kind === 'trigger')!;
+    mountInspector(trigger.id, rule.id);
+    const typeElement = (value: string) => {
+      const field = host.querySelector<HTMLInputElement>('[data-testid="inspector-trigger-element"]')!;
+      act(() => {
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    typeElement('continue-button');
+    expect(controller.draft.flow.rules.find((entry) => entry.id === rule.id)!.elementId).toBe('continue-button');
+    typeElement('http://example.com');
+    expect(host.querySelector('[data-testid="inspector-error"]')!.textContent).toContain('INVALID_ELEMENT_ID');
+    expect(controller.draft.flow.rules.find((entry) => entry.id === rule.id)!.elementId).toBe('continue-button');
+    act(() => { controller.undo(); });
+    expect(controller.draft.flow.rules.find((entry) => entry.id === rule.id)!.elementId).toBe('connect-continue');
   });
 
   it('offers variable.set with typed variable id and value fields', () => {

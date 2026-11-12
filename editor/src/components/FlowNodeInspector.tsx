@@ -7,6 +7,7 @@ import type {
   InteractionRule,
 } from '../../../design/schema.ts';
 import { DESKTOP_ROUTES } from '../../../desktop/src/shell/routes';
+import { isFlowElementIdValue } from '../../../design/validation.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 
@@ -99,6 +100,22 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
       const target = current.flow.rules.find((entry) => entry.id === ruleId);
       const targetNode = target?.graph?.nodes.find((entry) => entry.id === nodeId);
       if (targetNode) targetNode.label = label;
+    });
+  };
+
+  const setTriggerElementId = (raw: string) => {
+    if (readOnly) return;
+    // The same safe id shape the document schema enforces: no spaces, no arbitrary text, so
+    // JavaScript or URLs can never become a trigger target. The wildcard stays timer-only.
+    const value = raw.trim();
+    if (!isFlowElementIdValue(value, { allowWildcard: rule.event === 'timer' })) {
+      setError('INVALID_ELEMENT_ID');
+      return;
+    }
+    setError('');
+    controller.update((current) => {
+      const target = current.flow.rules.find((entry) => entry.id === ruleId);
+      if (target) target.elementId = value;
     });
   };
 
@@ -217,7 +234,12 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
         <input data-testid="inspector-label" value={node.label ?? ''} disabled={readOnly} onInput={(event) => setLabel(event.currentTarget.value)} />
       </label>
       {node.kind === 'trigger' && (
-        <p class="editor-notice">Событие {rule.event} на {rule.elementId === '*' ? rule.screenId : rule.elementId}</p>
+        <>
+          <p class="editor-notice">Событие {rule.event} на экране {rule.screenId}</p>
+          <label>Элемент
+            <input data-testid="inspector-trigger-element" value={rule.elementId} disabled={readOnly} onInput={(event) => setTriggerElementId(event.currentTarget.value)} />
+          </label>
+        </>
       )}
       {node.kind === 'condition' && step && (
         <>

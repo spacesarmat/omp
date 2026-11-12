@@ -33,6 +33,7 @@ const MAX_ZOOM = 2;
 const ZOOM_STEP = 1.2;
 const NODE_WIDTH = 176;
 const NODE_HEIGHT = 64;
+const NODE_CASCADE_STEP = 36;
 
 interface DragState {
   nodeId: string;
@@ -56,7 +57,12 @@ function portCenter(node: FlowNodeView, port: 'in' | 'out'): FlowPosition {
 
 export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNode, onOpenSimulation }: FlowCanvasProps) {
   const draft = useDraftController(controller);
-  const rule = draft.flow.rules.find((entry) => entry.screenId === screenId && entry.graph) ?? null;
+  const screenRules = draft.flow.rules.filter((entry) => entry.screenId === screenId && entry.graph);
+  const [activeRuleId, setActiveRuleId] = useState<string | null>(null);
+  // The chosen rule is derived, never trusted: after a screen switch, an undo or a deleted
+  // rule the id can only fall back to the first graph rule of the current screen, so the
+  // canvas never shows nodes another screen owns.
+  const rule = screenRules.find((entry) => entry.id === activeRuleId) ?? screenRules[0] ?? null;
   const nodes = rule?.graph?.nodes ?? [];
   const edges = rule?.graph?.edges ?? [];
   const [zoom, setZoom] = useState(1);
@@ -71,6 +77,7 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
   const linkRef = useRef<LinkState | null>(null);
   const clipboardRef = useRef<FlowClipboard | null>(null);
   const suppressGroupRef = useRef<string[] | null>(null);
+  const cascadeRef = useRef(0);
   linkRef.current = link;
 
   // Selection is canvas-local state derived against the live graph, so undo or a screen
@@ -158,12 +165,19 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     setError('');
     const rect = viewportRef.current?.getBoundingClientRect();
     const center = toWorld((rect?.width || 800) / 2, (rect?.height || 600) / 2);
-    const position = { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 };
+    // Consecutive nodes cascade from the viewport center in small steps, so additions never
+    // stack invisibly on one point until the user runs auto layout.
+    const step = cascadeRef.current;
+    cascadeRef.current += 1;
+    const position = {
+      x: center.x - NODE_WIDTH / 2 + step * NODE_CASCADE_STEP,
+      y: center.y - NODE_HEIGHT / 2 + step * NODE_CASCADE_STEP,
+    };
     let created = '';
     let createdRuleId = '';
     try {
       controller.update((current) => {
-        const ref = addFlowNode(current.flow, screenId, kind, position);
+        const ref = addFlowNode(current.flow, screenId, kind, position, { ruleId: rule?.id });
         created = ref.nodeId;
         createdRuleId = ref.ruleId;
         current.flow = ref.flow;
@@ -264,6 +278,7 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
   const autoLayout = () => {
     if (readOnly || !rule) return;
     setError('');
+    cascadeRef.current = 0;
     commit((flow) => autoLayoutFlow(flow, rule.id));
   };
 
@@ -271,7 +286,9 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     if (readOnly) return;
     setError('');
     try {
-      const instance = instantiateFlowTemplate(templateId, { id: draft.flow.id, baseCommit: draft.flow.baseCommit });
+      // Rules bind to the screen the canvas currently shows, so an inserted template is
+      // visible and editable right away instead of landing on a default route.
+      const instance = instantiateFlowTemplate(templateId, { id: draft.flow.id, baseCommit: draft.flow.baseCommit, screenId });
       controller.update((current) => {
         // Instance ids carry a fresh random token, so appended rules never collide with the
         // existing document; variables merge by id like a clipboard paste.
@@ -284,6 +301,13 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         };
       });
       setTemplatesOpen(false);
+      // Show the freshly inserted rule (the first of its screen) and drop any node selection
+      // that belonged to the previously displayed rule.
+      const firstInserted = instance.rules[0];
+      if (firstInserted) {
+        setActiveRuleId(firstInserted.id);
+        dispatchSelection({ type: 'clear' });
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -297,6 +321,19 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         <button type="button" data-action="add-condition" disabled={readOnly} onClick={() => addNode('condition')}>+ Условие</button>
         <button type="button" data-action="add-action" disabled={readOnly} onClick={() => addNode('action')}>+ Действие</button>
         <button type="button" data-action="add-result" disabled={readOnly} onClick={() => addNode('result')}>+ Результат</button>
+        {screenRules.length > 1 && (
+          <select
+            data-testid="flow-rule-select"
+            aria-label="Правило потока"
+            value={rule?.id ?? ''}
+            onChange={(event) => {
+              setActiveRuleId(event.currentTarget.value);
+              dispatchSelection({ type: 'clear' });
+            }}
+          >
+            {screenRules.map((entry) => <option key={entry.id} value={entry.id}>{entry.id}</option>)}
+          </select>
+        )}
         <span class="editor-toolbar-separator" role="separator" aria-orientation="vertical" />
         <button type="button" data-action="zoom-out" aria-label="Уменьшить масштаб" onClick={() => setZoom((value) => Math.max(MIN_ZOOM, value / ZOOM_STEP))}>-</button>
         <button type="button" data-action="zoom-in" aria-label="Увеличить масштаб" onClick={() => setZoom((value) => Math.min(MAX_ZOOM, value * ZOOM_STEP))}>+</button>

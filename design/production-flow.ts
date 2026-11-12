@@ -232,11 +232,14 @@ export function activateProductionFlow(root: HTMLElement, flow: FlowDocument, op
 
   for (const rule of flow.rules) {
     if (rule.event !== 'timer' || flowTimers.size >= FLOW_TIMER_REGISTRY_LIMIT) continue;
-    // A timer belongs to its rule: the interval is the rule's own, so the event carries the
-    // rule elementId directly instead of broadcasting to every timer rule.
+    // Per-rule dispatch, exactly like dispatchForRules for the published events: the interval
+    // belongs to its rule, so every tick executes this rule's own graph (never the first
+    // matching timer rule of the whole document twice) and session variables persist between
+    // ticks through the shared session.
+    if (!(rule.graph || (rule.steps && rule.steps.length))) continue;
     const elementId = rule.elementId === '*' ? WILDCARD_EVENT_ELEMENT : rule.elementId;
     const timer = setInterval(() => {
-      executeFlow(flow, { type: 'timer', screenId: screen, elementId }, options.dispatcher);
+      executeGraphRule(rule, { type: 'timer', screenId: screen, elementId }, options.dispatcher, flow.variables ?? []);
     }, rule.intervalMs ?? 0);
     flowTimers.add(timer);
   }
