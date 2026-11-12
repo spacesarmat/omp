@@ -109,9 +109,10 @@ function filesNow(c: CarryClient, t: Torrent): Promise<TorrentFile[]> {
   );
 }
 
-/** A server mark without a resume position (timecode below MIN_RESUME) means the file was watched. */
+/** A finish this app recorded (timecode 1..MIN_RESUME-1). 0 is only an opened file. */
 function markWatched(e: ViewedEntry): boolean {
-  return !(e.timecode && e.timecode >= MIN_RESUME);
+  const tc = typeof e.timecode === 'number' ? e.timecode : 0;
+  return tc >= 1 && tc < MIN_RESUME;
 }
 
 /**
@@ -184,7 +185,7 @@ export function carryWatch(c: CarryClient, removed: Torrent, keeper: Torrent, se
             // the keeper's own mark stays, unless it is only a resume position and this one says watched
             const have = known.filter((x) => sameHash(x.hash, to.hash) && x.file_index === id)[0];
             if (have && (markWatched(have) || !markWatched(e))) return;
-            const next: ViewedEntry = { ...e, hash: to.hash, file_index: id, timecode: markWatched(e) ? 0 : e.timecode };
+            const next: ViewedEntry = { ...e, hash: to.hash, file_index: id, timecode: markWatched(e) ? 1 : e.timecode };
             const dup = marks.filter((x) => x.file_index === id)[0];
             if (dup) {
               if (markWatched(next) && !markWatched(dup)) marks[marks.indexOf(dup)] = next;
