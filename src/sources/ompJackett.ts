@@ -48,7 +48,7 @@ interface MeBody {
   cache?: { enabled?: boolean };
   /** Omitted by a server from before the referral screen. Missing means the program is off. */
   referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
-  bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; title?: string }[] };
+  bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
 }
 
 interface ErrorBody {
@@ -59,6 +59,10 @@ function whole(n: unknown): number {
   return typeof n === 'number' && isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
 }
 
+function money(n: unknown): number {
+  return typeof n === 'number' && isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+}
+
 function billOf(body: MeBody): BillingAccount['bill'] {
   const row = body.bill;
   if (!row || typeof row !== 'object') return undefined;
@@ -66,13 +70,14 @@ function billOf(body: MeBody): BillingAccount['bill'] {
     ? row.payments.slice(0, 8).map((p) => ({
         at: whole(p && p.at),
         amount: p && typeof p.amount === 'string' ? p.amount : '',
+        currency: p && typeof p.currency === 'string' ? p.currency : '',
         title: p && typeof p.title === 'string' ? p.title : '',
       }))
     : [];
   return {
-    priceRub: whole(row.priceRub),
-    feeRub: whole(row.feeRub),
-    totalRub: whole(row.totalRub),
+    priceRub: money(row.priceRub),
+    feeRub: money(row.feeRub),
+    totalRub: money(row.totalRub),
     autoRenew: row.autoRenew === true,
     payments,
   };

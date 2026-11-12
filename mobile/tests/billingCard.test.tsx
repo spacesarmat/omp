@@ -11,7 +11,7 @@ const me: {
   paidUntil: number;
   active: boolean;
   overLimit?: boolean;
-  bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; title: string }[] };
+  bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
 } = {
   telegramId: '',
   paidUntil: 2e12,
@@ -152,13 +152,13 @@ describe('OMP subscription card', () => {
       feeRub: 6,
       totalRub: 206,
       autoRenew: true,
-      payments: [{ at: 5, amount: '200', title: 'sub' }],
+      payments: [{ at: 5, amount: '200', currency: 'RUB', title: 'sub' }],
     };
     saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
     await act(async () => render(<OmpJackettCard />, el));
     await flush();
     expect(el.querySelector('[data-bill-price]')!.textContent).toBe('200 ₽ + комиссия 6 ₽ = 206 ₽');
-    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('sub 200');
+    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('sub 200 RUB');
     expect(el.querySelector('[data-bill-cancel]')).toBeTruthy();
   });
 });

@@ -170,9 +170,13 @@ export function OmpJackettCard() {
   async function cancelRenew() {
     if (!(await askConfirm(t('sources.billing.cancelRenewAsk'), t('sources.billing.cancelRenew')))) return;
     try {
-      await withDeviceToken(phoneSourceContext(), (headers) =>
+      const res = await withDeviceToken(phoneSourceContext(), (headers) =>
         billingPost(phoneSourceContext(), '/v1/auto-renew', { on: 'false' }, { headers, timeoutMs: 12000 }),
       );
+      if (!res || res.status < 200 || res.status >= 300) {
+        setError(t('sources.billing.down'));
+        return;
+      }
       await refreshAccount();
     } catch (e) {
       setError(e instanceof Error ? e.message : t('sources.billing.down'));
@@ -239,7 +243,7 @@ export function OmpJackettCard() {
                 <div class="m-small m-muted">{t('sources.billing.payments')}</div>
                 <ul class="m-sub-log">
                   {account.bill.payments.map((p) => (
-                    <li key={p.at + ':' + p.amount}>{(p.title ? p.title + ' ' : '') + p.amount}</li>
+                    <li key={p.at + ':' + p.amount}>{(p.title ? p.title + ' ' : '') + p.amount + (p.currency ? ' ' + p.currency : '')}</li>
                   ))}
                 </ul>
               </div>

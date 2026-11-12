@@ -1144,8 +1144,10 @@ export function phoneBill(state, accountId, now) {
   const sub = (state.subscriptions || []).find((s) => s.accountId === accountId && s.product === 'jackett') || null;
   const prices = priceText(state.settings || {});
   const quote = sub ? renewalPrice(state, sub, nowMs) : { total: prices.price, days: prices.days };
-  const price = Math.max(0, Math.floor(Number(quote.total) || 0));
-  const fee = Math.round(price * 0.03);
+  const price = Math.max(0, Math.round((Number(quote.total) || 0) * 100) / 100);
+  const up = grossUp(price, 'AC');
+  const fee = up ? up.fee : 0;
+  const total = up ? up.gross : price;
   const account = (state.accounts || []).find((a) => a.id === accountId);
   const payments = [];
   const rows = state.payments || [];
@@ -1155,13 +1157,14 @@ export function phoneBill(state, accountId, now) {
     payments.push({
       at: Math.floor(Number(p.at) || 0),
       amount: String(p.withdrawAmount || p.amount || ''),
+      currency: String(p.currency || p.asset || (p.withdrawAmount ? 'RUB' : '')),
       title: String(p.label || ''),
     });
   }
   return {
     priceRub: price,
     feeRub: fee,
-    totalRub: price + fee,
+    totalRub: total,
     days: Math.floor(Number(quote.days) || prices.days || 0),
     autoRenew: !!(account && account.autoRenew),
     payments,
