@@ -308,11 +308,18 @@ export function Add({
   useEffect(() => {
     if (scope !== 'sources' || magnetOpen) return;
     let alive = true;
-    void readClipboardText().then((text) => {
-      if (alive) setClipHint(magnetInClipboard(text));
-    });
+    const read = () => {
+      void readClipboardText().then((text) => {
+        if (alive) setClipHint(magnetInClipboard(text));
+      });
+    };
+    read();
+    window.addEventListener('focus', read);
+    document.addEventListener('visibilitychange', read);
     return () => {
       alive = false;
+      window.removeEventListener('focus', read);
+      document.removeEventListener('visibilitychange', read);
     };
   }, [scope, magnetOpen]);
   void monitorVersion.value;
@@ -811,7 +818,7 @@ export function Add({
           {t('add.clipMagnet')}
         </button>
       )}
-      {!rows && !searching && recent.length > 0 && (
+      {(!rows || rows.length === 0) && !searching && recent.length > 0 && (
         <div class="m-chips" data-recent>
           <span class="m-muted m-small">{t('add.recent')}</span>
           {recent.map((q) => (

@@ -439,12 +439,15 @@ describe('Add category', () => {
     click(hint);
     expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
     setClipboardReader(null);
+    setSourceOn('ts-rutor', false);
+    setSourceOn('ts-torznab', false);
     registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([]) });
     resetAddSearch();
     act(() => render(null, el));
     mount();
     search('Дюна');
     await flush();
+    expect(el.querySelector('[data-recent]')!.textContent).toContain('Дюна');
     resetAddSearch();
     act(() => render(null, el));
     mount();

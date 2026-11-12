@@ -16,7 +16,11 @@ export function rememberQuery(raw: string): string[] {
   const q = raw.replace(/\s+/g, ' ').trim();
   if (!q || q.length > 80) return loadRecentQueries();
   const next = [q].concat(loadRecentQueries().filter((x) => x.toLowerCase() !== q.toLowerCase())).slice(0, MAX);
-  localStorage.setItem(KEY, JSON.stringify(next));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch {
+    // a full store must not stop the search that asked to remember the query
+  }
   return next;
 }
 
