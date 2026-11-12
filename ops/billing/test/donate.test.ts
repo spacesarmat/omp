@@ -3,6 +3,7 @@ import { botCallback, botReply, mainKeyboard } from '../src/bot.mjs';
 import {
   accountSupported,
   applyDonation,
+  donateCryptoLinkLive,
   donateCsv,
   donateNoticeText,
   donateReport,
@@ -11,6 +12,7 @@ import {
   markDonateRefund,
   normalizeDonateSettings,
   publicThanks,
+  rememberDonateInvoice,
   starsForRub,
   validateDonateAmount,
   validateDonateComment,
@@ -293,6 +295,22 @@ describe('donate settlement', () => {
     expect(confirmed.state.subscriptions).toEqual(state.subscriptions);
     const report = donateReport(held.state, NOW + 1500, {});
     expect(report.rows.find((r) => r.id === row.id).held).toBe(true);
+  });
+});
+
+describe('donate crypto invoice', () => {
+  it('keeps a live Crypto Pay link and replaces it after 24 hours', () => {
+    const row = { id: 'd1', payUrl: 'https://old', webUrl: 'https://old', invoiceId: '1', invoiceExpiresAt: NOW + 1000 };
+    const state = { donations: [row] };
+    expect(donateCryptoLinkLive(row, NOW)).toBe(true);
+    expect(donateCryptoLinkLive(row, NOW + 1000)).toBe(false);
+    expect(donateCryptoLinkLive({ id: 'd1', payUrl: 'https://old' }, NOW)).toBe(false);
+    const kept = rememberDonateInvoice(state, 'd1', { invoiceId: '2', botUrl: 'https://new', webUrl: 'https://new' }, NOW);
+    expect(kept.donations[0].invoiceId).toBe('1');
+    const next = rememberDonateInvoice(state, 'd1', { invoiceId: '2', botUrl: 'https://new', webUrl: 'https://new' }, NOW + 1000);
+    expect(next.donations[0].invoiceId).toBe('2');
+    expect(next.donations[0].payUrl).toBe('https://new');
+    expect(next.donations[0].invoiceExpiresAt).toBe(NOW + 1000 + 24 * 60 * 60 * 1000);
   });
 });
 

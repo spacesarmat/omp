@@ -168,6 +168,7 @@ import {
   applyDonateSettings,
   applyDonation,
   confirmDonateHold,
+  donateCryptoLinkLive,
   donateCsv,
   donateNoticeText,
   donateReport,
@@ -967,7 +968,8 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
   const quote = (state.donations || []).find((p) => p && p.id === donationId);
   if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
   if (!state.settings.donate || state.settings.donate.crypto !== true) return { error: 'disabled' };
-  if (quote.payUrl || quote.webUrl) {
+  const issuedAt = Date.now();
+  if (donateCryptoLinkLive(quote, issuedAt)) {
     return { asset: quote.asset, amount: quote.payAmount, url: quote.payUrl || quote.webUrl, webUrl: quote.webUrl || quote.payUrl };
   }
   if (!state.settings.cryptoPayToken) return { error: 'disabled' };
@@ -981,7 +983,7 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
   });
   if (!invoice) return { error: 'down' };
   return store.update((cur) => {
-    const next = rememberDonateInvoice(cur, donationId, invoice);
+    const next = rememberDonateInvoice(cur, donationId, invoice, issuedAt);
     const row = (next.donations || []).find((p) => p && p.id === donationId) || quote;
     return {
       state: next,

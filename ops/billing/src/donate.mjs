@@ -10,6 +10,7 @@ import { altCovers, starInvoiceBody } from './payMethods.mjs';
 import { grossUp, payUrl, settledCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
+const CRYPTO_INVOICE_MS = 24 * 60 * 60 * 1000;
 const DRAFT_MS = 2 * 60 * 60 * 1000;
 export const DONATE_THANKS_DEFAULT = 'Спасибо! Вы поддержали проект OMP.';
 
@@ -722,14 +723,23 @@ export function hideDonateField(state, { id, field }) {
   return state;
 }
 
-export function rememberDonateInvoice(state, id, invoice) {
+/** A saved Crypto Pay link is usable only until the 24 hour invoice expiry. A link with no expiry is not reused. */
+export function donateCryptoLinkLive(row, now) {
+  if (!row || !(row.payUrl || row.webUrl)) return false;
+  const exp = Number(row.invoiceExpiresAt) || 0;
+  return exp > (now || Date.now());
+}
+
+export function rememberDonateInvoice(state, id, invoice, now) {
   const row = (state.donations || []).find((d) => d && d.id === id);
   if (!row || !invoice) return state;
-  if (row.invoiceId && (row.payUrl || row.webUrl)) return state;
+  const at = now || Date.now();
+  if (donateCryptoLinkLive(row, at)) return state;
   return putDonation(state, {
     ...row,
-    invoiceId: String(invoice.invoiceId || row.invoiceId || ''),
-    payUrl: invoice.botUrl || row.payUrl || '',
-    webUrl: invoice.webUrl || row.webUrl || '',
+    invoiceId: String(invoice.invoiceId || ''),
+    payUrl: invoice.botUrl || '',
+    webUrl: invoice.webUrl || '',
+    invoiceExpiresAt: at + CRYPTO_INVOICE_MS,
   });
 }
