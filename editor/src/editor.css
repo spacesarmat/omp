@@ -2098,3 +2098,54 @@ h2 svg {
   padding: 4px 10px;
   cursor: pointer;
 }
+
+.flow-template-library {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 8px;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.flow-template-library h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.flow-template-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  background: var(--editor-control);
+}
+
+.flow-template-card p {
+  margin: 0;
+  color: var(--editor-muted);
+  font-size: 12px;
+}
+
+.flow-template-card button {
+  align-self: flex-start;
+  border: 1px solid var(--editor-border);
+  background: var(--editor-control);
+  color: var(--editor-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.flow-template-card button:hover:not(:disabled) {
+  background: var(--editor-control-hover);
+}
+
+.flow-template-card button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

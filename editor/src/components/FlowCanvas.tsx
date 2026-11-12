@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { FlowEdgeBranch, FlowNodeKind, FlowNodeView } from '../../../design/schema.ts';
+import { instantiateFlowTemplate, type FlowTemplateId } from '../../../design/flow-templates.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
+import { FlowTemplateLibrary } from './FlowTemplateLibrary';
 import {
   OUTPUT_BRANCHES,
   addFlowNode,
@@ -63,6 +65,7 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
   const [error, setError] = useState('');
   const [override, setOverride] = useState<Record<string, FlowPosition>>({});
   const [link, setLink] = useState<LinkState | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const linkRef = useRef<LinkState | null>(null);
@@ -264,6 +267,28 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     commit((flow) => autoLayoutFlow(flow, rule.id));
   };
 
+  const insertTemplate = (templateId: FlowTemplateId) => {
+    if (readOnly) return;
+    setError('');
+    try {
+      const instance = instantiateFlowTemplate(templateId, { id: draft.flow.id, baseCommit: draft.flow.baseCommit });
+      controller.update((current) => {
+        // Instance ids carry a fresh random token, so appended rules never collide with the
+        // existing document; variables merge by id like a clipboard paste.
+        const knownVariableIds = new Set((current.flow.variables ?? []).map((variable) => variable.id));
+        const missingVariables = (instance.variables ?? []).filter((variable) => !knownVariableIds.has(variable.id));
+        current.flow = {
+          ...current.flow,
+          rules: [...current.flow.rules, ...instance.rules],
+          variables: missingVariables.length ? [...(current.flow.variables ?? []), ...missingVariables] : current.flow.variables,
+        };
+      });
+      setTemplatesOpen(false);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+
   const byId = new Map(nodes.map((node) => [node.id, { ...node, ...positionOf(node) }]));
   return (
     <div class="flow-canvas" data-testid="flow-canvas">
@@ -276,8 +301,10 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         <button type="button" data-action="zoom-out" aria-label="Уменьшить масштаб" onClick={() => setZoom((value) => Math.max(MIN_ZOOM, value / ZOOM_STEP))}>-</button>
         <button type="button" data-action="zoom-in" aria-label="Увеличить масштаб" onClick={() => setZoom((value) => Math.min(MAX_ZOOM, value * ZOOM_STEP))}>+</button>
         <button type="button" data-action="auto-layout" disabled={readOnly} onClick={autoLayout}>Авторазметка</button>
+        {!readOnly && <button type="button" data-action="toggle-templates" onClick={() => setTemplatesOpen((open) => !open)}>Шаблоны</button>}
         {onOpenSimulation && <button type="button" data-action="open-simulation" onClick={onOpenSimulation}>Симуляция</button>}
       </div>
+      {templatesOpen && <FlowTemplateLibrary readOnly={readOnly} onInsert={insertTemplate} />}
       {readOnly && <p class="editor-notice" data-testid="flow-canvas-readonly">Базовая тема - редактирование выключено</p>}
       {selectedNodeIds.length > 1 && (
         <p class="editor-notice" data-testid="flow-canvas-multiselect">
