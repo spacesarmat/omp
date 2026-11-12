@@ -126,7 +126,7 @@ export function Faq(p: { q?: string } = {}) {
     if (!open) return;
     const el = document.querySelector('.m-faq-item.open');
     if (el && typeof (el as HTMLElement).scrollIntoView === 'function') (el as HTMLElement).scrollIntoView({ block: 'start' });
-  }, []);
+  }, [open, device]);
 
   const searching = query.trim() !== '';
   const hits = searching ? searchFaq(query, device) : [];
@@ -185,10 +185,10 @@ export function Faq(p: { q?: string } = {}) {
               <Lines lines={v.short} query={badge ? query : undefined} />
             </div>
             <div class="m-faq-vote">
-              <button type="button" class="m-btn m-btn-secondary" data-faq-vote="up" aria-pressed={votes[it.id] === 'up'} onClick={() => vote(it.id, 'up')}>
+              <button type="button" class={'m-btn m-btn-secondary' + (votes[it.id] === 'up' ? ' on' : '')} data-faq-vote="up" aria-pressed={votes[it.id] === 'up'} onClick={() => vote(it.id, 'up')}>
                 {t('faq.useful')}
               </button>
-              <button type="button" class="m-btn m-btn-secondary" data-faq-vote="down" aria-pressed={votes[it.id] === 'down'} onClick={() => vote(it.id, 'down')}>
+              <button type="button" class={'m-btn m-btn-secondary' + (votes[it.id] === 'down' ? ' on' : '')} data-faq-vote="down" aria-pressed={votes[it.id] === 'down'} onClick={() => vote(it.id, 'down')}>
                 {t('faq.notUseful')}
               </button>
             </div>
@@ -204,9 +204,9 @@ export function Faq(p: { q?: string } = {}) {
               <button type="button" class="m-btn m-btn-secondary" data-faq-action="updates" onClick={() => openFromFaq({ name: 'settings' }, 'updates')}>
                 {t('faq.updates')}
               </button>
-            ) : it.id === 'sound-subs' ? (
-              <button type="button" class="m-btn m-btn-secondary" data-faq-action="player" onClick={() => openFromFaq({ name: 'videoPlayer' }, 'player')}>
-                {t('faq.playerSound')}
+            ) : it.id === 'sound-subs' || it.id === 'control' ? (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="playing" onClick={() => openFromFaq({ name: 'nowPlaying' }, 'playing')}>
+                {t('faq.nowPlaying')}
               </button>
             ) : null}
             {v.more.length > 0 && (
@@ -228,6 +228,9 @@ export function Faq(p: { q?: string } = {}) {
   };
 
   const shown = SECTIONS.map((s) => ({ s, items: FAQ.filter((it) => it.section === s.id && it.devices.includes(device)) })).filter((g) => g.items.length);
+  const trouble = shown.filter((g) => g.s.id === 'trouble');
+  const rest = shown.filter((g) => g.s.id !== 'trouble');
+  const ordered = trouble.concat(rest);
   const tvName = activeTv.value?.name;
 
   return (
@@ -308,7 +311,7 @@ export function Faq(p: { q?: string } = {}) {
             </button>
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
-          {shown.map((g) => (
+          {ordered.map((g) => (
             <section class="m-set-group" key={g.s.id}>
               <div class="m-set-label">{g.s.label}</div>
               <div class="m-faq-list">{g.items.map((it) => row(it, device, false))}</div>

@@ -7,6 +7,7 @@ import { Icon } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { askConfirm } from '../ui/confirm';
 import { navigate } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { activeTv, ATV_PORT, isAtv, isTvRenamed, setActiveTv, tvs, type SavedTv } from '../tv/tvStore';
 import { TvRenameSheet } from '../ui/TvRenameSheet';
 import { useLongPress } from '../ui/longPress';
@@ -1271,6 +1272,7 @@ export function Remote() {
 
   return (
     <div ref={keys.ref} class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+      <FaqDone mark="remote" />
       <HwVolume
         on={keys.on}
         fire={(dir) => {

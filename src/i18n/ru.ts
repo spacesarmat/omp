@@ -2753,6 +2753,7 @@ export const ru = {
     promo: 'Промокод',
     useful: 'Полезно',
     notUseful: 'Не помогло',
+    nowPlaying: 'Сейчас играет',
     hintBack: 'Назад - к настройкам',
     hintQuestion: '▲ ▼ - вопрос',
     hintSection: '◀ ▶ - раздел',

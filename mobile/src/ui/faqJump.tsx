@@ -14,6 +14,7 @@ const MARK_ROUTE: { [mark: string]: string } = {
   remote: 'remote',
   player: 'videoPlayer',
   updates: 'settings',
+  playing: 'nowPlaying',
 };
 
 effect(() => {

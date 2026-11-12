@@ -2703,6 +2703,7 @@ export const en: EnDict<typeof ru> = {
     promo: 'Promo code',
     useful: 'Useful',
     notUseful: 'Did not help',
+    nowPlaying: 'Now playing',
     hintBack: 'Back - to settings',
     hintQuestion: '▲ ▼ - question',
     hintSection: '◀ ▶ - section',

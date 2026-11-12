@@ -25,10 +25,10 @@ export const DEVICES: { id: Device; readonly label: string }[] = [
 
 /** Section order on the screen; a device skips the sections it has no items in. */
 export const SECTIONS: { id: SectionId; readonly label: string }[] = [
-  { id: 'trouble', get label() { return t('faq.sec.trouble'); } },
   { id: 'install', get label() { return t('faq.sec.install'); } },
   { id: 'connect', get label() { return t('faq.sec.connect'); } },
   { id: 'player', get label() { return t('faq.sec.player'); } },
+  { id: 'trouble', get label() { return t('faq.sec.trouble'); } },
   { id: 'setup', get label() { return t('faq.sec.setup'); } },
   { id: 'about', get label() { return t('faq.sec.about'); } },
   { id: 'log', get label() { return t('faq.sec.log'); } },

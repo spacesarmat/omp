@@ -181,6 +181,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.indexerScan', // when Jackett/Prowlarr was last searched for on the LAN: per device
   'tsp.torznabHosts', // which Torznab hosts this device has seen: per device
   'tsp.faqDevice', // FAQ device filter: per device
+  'tsp.faqVotes', // useful / not useful marks: per device
   'tsp.flareScan', // when FlareSolverr was last searched for on the LAN: per device
   'tsp.firstRun', // when this install was first used: per device
   'tsp.adsConfig', // cache of the catalog ads config from the billing server

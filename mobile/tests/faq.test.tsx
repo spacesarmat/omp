@@ -491,6 +491,7 @@ describe('Faq screen', () => {
     expect(up.getAttribute('aria-pressed')).toBe('false');
     await act(async () => up.click());
     expect(el.querySelector('[data-faq-vote="up"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector('[data-faq-vote="up"]')!.className).toContain('on');
     expect(localStorage.getItem('tsp.faqVotes')).toContain('up');
     await act(async () => el.querySelector<HTMLButtonElement>('[data-faq-vote="up"]')!.click());
     expect(el.querySelector('[data-faq-vote="up"]')!.getAttribute('aria-pressed')).toBe('false');
