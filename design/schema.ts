@@ -156,8 +156,14 @@ export const FLOW_EVENT_TYPES = [
   'download.started',
   'download.completed',
   'download.failed',
+  'timer',
 ] as const;
 export type FlowEventType = (typeof FLOW_EVENT_TYPES)[number];
+
+// Timer triggers are representable now, but nothing starts them in the background:
+// a bounded interval is validated here, and only an explicit timer event runs the rule.
+export const FLOW_TIMER_INTERVAL_MIN = 1000;
+export const FLOW_TIMER_INTERVAL_MAX = 3600000;
 
 export const FLOW_NODE_KINDS = ['trigger', 'condition', 'action', 'result'] as const;
 export type FlowNodeKind = (typeof FLOW_NODE_KINDS)[number];
@@ -254,6 +260,7 @@ export interface InteractionRule {
   steps?: InteractionStep[];
   graph?: FlowGraph;
   cooldownMs?: number;
+  intervalMs?: number;
 }
 
 export interface FlowDocument {

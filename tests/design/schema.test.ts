@@ -397,4 +397,39 @@ describe('flow graph schema', () => {
       rule.cooldownMs = 1.5;
     });
   });
+
+  it('represents timer triggers with a bounded interval and no background execution', () => {
+    const flow = graphFlow();
+    flow.rules = [{
+      id: 'heartbeat',
+      screenId: 'library',
+      elementId: '*',
+      event: 'timer',
+      intervalMs: 60000,
+      action: { type: 'toast', message: 'tick' },
+    }];
+    expect(parseFlowDocument(flow)).toEqual(flow);
+
+    const reject = (patch: (rule: InteractionRule) => void) => {
+      const invalid = graphFlow();
+      invalid.rules = [flow.rules[0]];
+      patch(invalid.rules[0]);
+      expect(() => parseFlowDocument(invalid)).toThrow(DesignValidationError);
+    };
+    reject((rule) => {
+      delete (rule as { intervalMs?: number }).intervalMs;
+    });
+    reject((rule) => {
+      rule.intervalMs = 500;
+    });
+    reject((rule) => {
+      rule.intervalMs = 3600001;
+    });
+    reject((rule) => {
+      rule.intervalMs = 1500.5;
+    });
+    reject((rule) => {
+      rule.event = 'click';
+    });
+  });
 });

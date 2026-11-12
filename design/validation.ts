@@ -7,6 +7,8 @@ import {
   FLOW_LINK_HOSTS,
   FLOW_NODE_KINDS,
   FLOW_TELEGRAM_TARGETS,
+  FLOW_TIMER_INTERVAL_MAX,
+  FLOW_TIMER_INTERVAL_MIN,
   FLOW_VARIABLE_TYPES,
   LAYOUT_ALIGNMENTS,
   LAYOUT_ANCHORS,
@@ -517,14 +519,21 @@ function flowGraph(value: unknown, path: string, ruleId: string, steps: Readonly
 }
 
 function rule(value: unknown, path: string, variables: ReadonlyMap<string, FlowVariable>): InteractionRule {
-  const source = plain(value, path, ['id', 'screenId', 'elementId', 'event', 'condition', 'action', 'steps', 'graph', 'cooldownMs']);
+  const source = plain(value, path, ['id', 'screenId', 'elementId', 'event', 'condition', 'action', 'steps', 'graph', 'cooldownMs', 'intervalMs']);
   const screenId = text(source.screenId, `${path}.screenId`, 64);
   if (screenId !== '*' && !ID.test(screenId)) fail(`${path}.screenId`, 'invalid screen id or wildcard');
+  const event = oneOf(source.event, [...FLOW_EVENT_TYPES], `${path}.event`);
+  const elementId = text(source.elementId, `${path}.elementId`, 64);
+  if (event === 'timer') {
+    if (elementId !== '*' && !ID.test(elementId)) fail(`${path}.elementId`, 'invalid element id or wildcard');
+  } else {
+    id(source.elementId, `${path}.elementId`);
+  }
   const result: InteractionRule = {
     id: id(source.id, `${path}.id`),
     screenId,
-    elementId: id(source.elementId, `${path}.elementId`),
-    event: oneOf(source.event, [...FLOW_EVENT_TYPES], `${path}.event`),
+    elementId,
+    event,
     action: action(source.action, `${path}.action`, variables),
   };
   const variableIds = new Set(variables.keys());
@@ -544,6 +553,16 @@ function rule(value: unknown, path: string, variables: ReadonlyMap<string, FlowV
       fail(`${path}.cooldownMs`, `integer from 0 to ${FLOW_COOLDOWN_LIMIT} required`);
     }
     result.cooldownMs = source.cooldownMs;
+  }
+  if (event === 'timer') {
+    if (source.intervalMs === undefined) fail(`${path}.intervalMs`, 'timer rules require intervalMs');
+    if (typeof source.intervalMs !== 'number' || !Number.isInteger(source.intervalMs)
+      || source.intervalMs < FLOW_TIMER_INTERVAL_MIN || source.intervalMs > FLOW_TIMER_INTERVAL_MAX) {
+      fail(`${path}.intervalMs`, `integer from ${FLOW_TIMER_INTERVAL_MIN} to ${FLOW_TIMER_INTERVAL_MAX} required`);
+    }
+    result.intervalMs = source.intervalMs;
+  } else if (source.intervalMs !== undefined) {
+    fail(`${path}.intervalMs`, 'intervalMs is only allowed for timer rules');
   }
   return result;
 }

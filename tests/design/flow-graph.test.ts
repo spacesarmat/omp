@@ -359,4 +359,39 @@ describe('flow graph interpreter', () => {
     expect(result.status).toBe('not-matched');
     expect(calls).toEqual([]);
   });
+
+  it('runs timer triggers only from explicit timer events without background execution', () => {
+    const flow = flowDoc([
+      graphRule('heartbeat', '*', graph(
+        [node('t', 'trigger', 0), node('a', 'action', 1, 's1')],
+        [edge('e1', 't', 'a')],
+      ), [{ id: 's1', action: { type: 'toast', message: 'tick' } }], { event: 'timer', intervalMs: 60000 }),
+    ]);
+    const calls: string[] = [];
+    const timer = executeFlow(flow, { type: 'timer', screenId: 'settings', elementId: 'heartbeat' }, makeDispatcher(calls));
+    expect(timer.matched).toBe('graph');
+    expect(calls).toEqual(['toast(tick)']);
+    executeFlow(flow, click('heartbeat'), makeDispatcher(calls));
+    expect(calls).toEqual(['toast(tick)']);
+  });
+
+  it('applies cooldownMs between repeated triggers', () => {
+    const flow = flowDoc([
+      graphRule('cool', 'settings-continue', graph(
+        [node('t', 'trigger', 0), node('a', 'action', 1, 's1')],
+        [edge('e1', 't', 'a')],
+      ), [{ id: 's1', action: { type: 'toast', message: 'once' } }], { cooldownMs: 50000 }),
+    ]);
+    const calls: string[] = [];
+    const first = executeFlow(flow, click('settings-continue'), makeDispatcher(calls));
+    expect(first.matched).toBe('graph');
+    const second = executeFlow(flow, click('settings-continue'), makeDispatcher(calls));
+    expect(second.status).toBe('not-matched');
+    expect(calls).toHaveLength(1);
+    resetFlowSession();
+    beginFlowSession(ENV);
+    const third = executeFlow(flow, click('settings-continue'), makeDispatcher(calls));
+    expect(third.matched).toBe('graph');
+    expect(calls).toHaveLength(2);
+  });
 });

@@ -395,7 +395,8 @@ function triggerMatches(rule: InteractionRule, event: FlowEvent, context: Execut
     return false;
   }
   if (rule.screenId !== '*' && rule.screenId !== event.screenId) return false;
-  if (rule.elementId !== event.elementId || rule.event !== event.type) return false;
+  if (rule.event !== event.type) return false;
+  if (rule.elementId !== '*' && rule.elementId !== event.elementId) return false;
   if (rule.condition && !evaluateCondition(rule.condition, context)) return false;
   active.lastRunAt[rule.id] = Date.now();
   return true;
