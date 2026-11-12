@@ -14,6 +14,7 @@ import { TorrServerClient } from '../../src/api/torrserver';
 import { reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, seenKeys, unseenCount } from '../../src/monitor/subs';
+import { rememberCheck } from '../src/monitor/subHold';
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
@@ -275,7 +276,7 @@ describe('SubFindings', () => {
     navigate({ name: 'subFindings', id: s.id });
     mount({ id: s.id });
     expect(el.textContent).toContain('Подписка ещё не проверялась');
-    click(byText('Изменить'));
+    click(el.querySelector('[aria-label="Изменить"]'));
     click(byText('Удалить'));
     expect(confirmText()).toBe('Удалить подписку «Дюна»?');
     await acceptConfirm();
@@ -298,6 +299,31 @@ describe('SubFindings', () => {
     click(el.querySelector('[aria-label^="Добавить и смотреть на ТВ:"]'));
     await flush();
     expect(launch).toHaveBeenCalled();
+  });
+
+  it('chips, pause, the poster, the card and the check log', () => {
+    const s = addSubscription({
+      query: 'Дюна',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: 'https://img.test/dune.jpg' },
+    })!;
+    mount({ id: s.id });
+    expect(el.querySelectorAll('.m-sub-tool')).toHaveLength(3);
+    expect(el.querySelector('[data-sub-poster]')!.getAttribute('src')).toBe('https://img.test/dune.jpg');
+    click(byText('2160p+'));
+    expect(getSubscription(s.id)!.quality).toBe('2160');
+    click(el.querySelector('[data-sub-notify]'));
+    expect(getSubscription(s.id)!.notify).toBe(false);
+    click(el.querySelector('[data-sub-pause]'));
+    expect(el.querySelector('[data-sub-hold]')!.textContent).toContain('на паузе');
+    expect(el.querySelector('[data-check-sub]')).toBeNull();
+    click(el.querySelector('[data-sub-card]'));
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'movie', id: 7 });
+    rememberCheck(s.id, 5);
+    mount({ id: s.id });
+    expect(el.querySelector('[data-sub-checks]')!.textContent).toContain('1');
   });
 
   it('a subscription that is gone says so', () => {
@@ -369,7 +395,7 @@ describe('SubFindings in English', () => {
     mount({ id: s.id });
     await flush();
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
-    expect(byText('Edit')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Edit"]')).toBeTruthy();
     expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there - OMP will report new releases after it.');
     rememberSeen(s.id, []);
     addFindings([{ subId: s.id, key: 'new', at: 5, result: row({ Title: 'Dune Part Three', Size: '41 GB' }) }]);
