@@ -239,6 +239,7 @@ export function Discover() {
   );
   return (
     <div class="m-discover" ref={rootRef}>
+      <div class="m-discover-bar">
       {compactBar && headSlot ? createPortal(head, headSlot) : head}
       <div class="m-disc-chips" role="group" aria-label={home ? t('discover.browse') : t('discover.novelties')}>
         {chips().map((c) => (
@@ -256,6 +257,7 @@ export function Discover() {
         <button type="button" class={'m-hfilter m-disc-filters tm' + (nFilters ? ' on' : '')} data-code="P34.8" aria-haspopup="dialog" onClick={() => setSheet('filters')}>
           {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
         </button>
+      </div>
       </div>
       {home ? (
         <DiscoverHome

@@ -183,6 +183,10 @@ describe('Library', () => {
     expect(cards.length).toBe(3);
     expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
     expect(cards[0].querySelector('.m-poster-foot')!.textContent).toContain('сезон');
+    const stack = cards[0].querySelector('.m-poster-stack')!;
+    const stackKids = Array.from(stack.children);
+    expect(stackKids[0].classList.contains('m-new-badge')).toBe(true);
+    expect(stackKids[stackKids.length - 1].classList.contains('m-poster-foot')).toBe(true);
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
@@ -263,7 +267,12 @@ describe('Library', () => {
       const i = css.indexOf('\n' + sel + ' {');
       return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
     };
-    expect(rule('.m-clist > .m-row-wrap')).toMatch(/border-bottom:/);
+    expect(rule('.m-clist > .m-row-swipe')).toMatch(/border-bottom:/);
+    expect(rule('.m-library[data-collapsed=\'1\'] .m-lib-head')).toBe('');
+    expect(rule('.m-lib-sticky')).toMatch(/position:\s*sticky/);
+    expect(rule('.m-discover-bar')).toMatch(/position:\s*sticky/);
+    expect(rule('.m-poster-stack .m-new-badge')).toMatch(/position:\s*static/);
+    expect(rule('.m-poster-stack')).toMatch(/flex-direction:\s*column/);
     expect(rule('.m-crow')).not.toMatch(/border-bottom:\s*1px/);
     expect(rule('.m-crow')).not.toMatch(/(^|[^-])height:\s*48px/);
     expect(rule('.m-crow-title')).toMatch(/-webkit-line-clamp:\s*2/);

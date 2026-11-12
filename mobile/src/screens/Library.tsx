@@ -23,7 +23,6 @@ import { continueWatching, refreshViewed, progressVersion, serverViewed, getLoca
 import { buildHistory, collapseHistoryShows, unfinishedFirst, resumeFrom, sourceLine, historyFilters, type HistoryItem } from '../../../src/lib/history';
 import { continueCards, continueSourceLine, isLocalWatch, type ContinueCard, type ContinueFile, type ContinueWatch } from '../../../src/lib/phoneContinue';
 import { continueStatus, movieRowLine, seriesRowLine } from '../../../src/lib/phoneRows';
-import { nextHeaderCollapsed } from '../../../src/lib/headerCollapse';
 import { hiddenHistory, hideHistory, isHistoryHidden } from '../../../src/store/historyHide';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { sortTorrents, sortLabel, phoneSortOptions } from '../../../src/lib/librarySearch';
@@ -40,6 +39,7 @@ import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import { episodeCountOf } from '../lib/releaseContents';
 import { tileBadgeInfo } from '../../../src/lib/seriesStatus';
 import { catalogMode, setCatalogMode } from '../catalog/phoneCatalog';
+import { openRowKey, RowSwipe } from '../ui/RowSwipe';
 import { Discover } from './catalog/Discover';
 import { setDiscoverHeadSlot, useCompactCatalogBar } from './catalog/compactBar';
 import { usePinchStep } from '../ui/usePinchStep';
@@ -255,22 +255,31 @@ export function Library() {
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
 
-  const collapsed = useRef(false);
+  const scrolled = useRef(false);
   useEffect(() => {
+    const measure = () => {
+      const node = rootRef.current;
+      const bar = node && node.querySelector('.m-lib-sticky');
+      if (node && bar) node.style.setProperty('--m-lib-sticky-h', (bar as HTMLElement).offsetHeight + 'px');
+    };
     const onScroll = () => {
       const y = window.scrollY || document.documentElement.scrollTop || 0;
-      const on = nextHeaderCollapsed(collapsed.current, y);
-      collapsed.current = on;
-      document.querySelectorAll('.m-row-wrap[data-open="1"]').forEach((n) => {
-        delete (n as HTMLElement).dataset.open;
-      });
+      const on = y > 8;
+      if (openRowKey.peek()) openRowKey.value = '';
       const node = rootRef.current;
-      if (!node || node.getAttribute('data-collapsed') === (on ? '1' : '0')) return;
-      node.setAttribute('data-collapsed', on ? '1' : '0');
+      if (node && scrolled.current !== on) {
+        scrolled.current = on;
+        node.setAttribute('data-scrolled', on ? '1' : '0');
+      }
     };
+    measure();
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    window.addEventListener('resize', measure);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', measure);
+    };
   }, []);
 
   useEffect(() => {
@@ -528,6 +537,11 @@ export function Library() {
   });
 
   const selecting = selected !== null;
+  useEffect(() => {
+    const node = rootRef.current;
+    const bar = node && node.querySelector('.m-lib-sticky');
+    if (node && bar) node.style.setProperty('--m-lib-sticky-h', (bar as HTMLElement).offsetHeight + 'px');
+  }, [mode, compactBar, selecting]);
   // ads among the cards of «Мои» (not in History, a search, selection mode or a failed list); the same cell size as
   // the cards in every view, only below the screen when it appears
   const ads = useAdSlots({
@@ -620,23 +634,10 @@ export function Library() {
       </span>
     ) : null;
   const sel = (it: PhoneItem) => (selecting && isChosen(it) ? ' selected' : '');
-  const openSwipe = (el: HTMLElement) => {
-    document.querySelectorAll('.m-row-wrap[data-open="1"]').forEach((n) => {
-      if (n !== el) delete (n as HTMLElement).dataset.open;
-    });
-    el.dataset.open = '1';
-  };
   const markCurrent = (tor: Torrent) => {
     const f = watchTarget(tor.hash, playableFiles(filesOf(tor)));
     if (f) markWatched(tor.hash, f.id);
   };
-  const swipeBtns = (tor: Torrent, key: string) => (
-    <span class="m-swipe-actions">
-      <button type="button" class="danger" onClick={() => { hideHistory(key); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-      <button type="button" class="ok" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
-    </span>
-  );
-
   const watchOnTv = (tor: Torrent) => {
     const target = watchTarget(tor.hash, playableFiles(filesOf(tor)));
     if (!target) return;
@@ -1066,15 +1067,7 @@ export function Library() {
                   const k = itemKey(it);
                   if (it.kind === 'series') {
                     return (
-                      <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
-                        onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
-                        onTouchEnd={(ev) => {
-                          const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
-                          const dx = ev.changedTouches[0].clientX - start;
-                          if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
-                          else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
-                        }}
-                      >
+                      <RowSwipe key={k} id={k} anchor={k} class={sel(it)} disabled={selecting} onRemove={() => { hideHistory(it.key); setHideTick((n) => n + 1); }} onWatched={() => markCurrent(it.lead)}>
                         <button type="button" class="m-vrow m-series-card" {...pressProps(it)}>
                           <Poster torrent={it.lead} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(it.lead)) || undefined} />
                           {mark(it)}
@@ -1084,35 +1077,25 @@ export function Library() {
                             <span class="m-muted m-small m-tile-meta">{rowBottom(it)}</span>
                           </span>
                         </button>
-                        {swipeBtns(it.lead, it.key)}
                         {moreBtn(it)}
-                      </div>
+                      </RowSwipe>
                     );
                   }
                   const film = it.kind === 'film' ? it : null;
                   const t = it.kind === 'film' ? it.lead : it.tor;
                   return (
-                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
-                      onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
-                      onTouchEnd={(ev) => {
-                        const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
-                        const dx = ev.changedTouches[0].clientX - start;
-                        if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
-                        else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
-                      }}
-                    >
+                    <RowSwipe key={k} id={k} anchor={k} class={sel(it)} disabled={selecting} onRemove={() => { hideHistory(showKeyOf(t)); setHideTick((n) => n + 1); }} onWatched={() => markCurrent(t)}>
                       <button type="button" class={'m-vrow' + (film ? ' m-film-card' : '')} {...pressProps(it)}>
                         <Poster torrent={t} class="m-poster-row" morphKey={k} badge={qualityBadge(titleOf(t)) || undefined} />
                         {mark(it)}
-                          <span class="m-vrow-text">
+                        <span class="m-vrow-text">
                           <span class="m-card-title"><TileName tor={t} /></span>
                           {statusFor(showKeyOf(t)) && <span class="m-vrow-status">{statusFor(showKeyOf(t))}</span>}
                           <span class="m-muted m-small m-tile-meta">{rowBottom(it)}</span>
                         </span>
                       </button>
-                      {swipeBtns(t, showKeyOf(t))}
                       {moreBtn(it)}
-                    </div>
+                    </RowSwipe>
                   );
                 })}
               </div>
@@ -1128,15 +1111,7 @@ export function Library() {
                   const meta = rowBottom(it);
                   const q = qualityBadge(titleOf(tor));
                   return (
-                    <div class={'m-row-wrap' + sel(it)} key={k} data-anchor={k}
-                      onTouchStart={(ev) => { (ev.currentTarget as HTMLElement).dataset.x = String(ev.changedTouches[0].clientX); }}
-                      onTouchEnd={(ev) => {
-                        const start = +((ev.currentTarget as HTMLElement).dataset.x || '0');
-                        const dx = ev.changedTouches[0].clientX - start;
-                        if (dx < -48) openSwipe(ev.currentTarget as HTMLElement);
-                        else if (dx > 24) delete (ev.currentTarget as HTMLElement).dataset.open;
-                      }}
-                    >
+                    <RowSwipe key={k} id={k} anchor={k} class={sel(it)} disabled={selecting} onRemove={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }} onWatched={() => markCurrent(tor)}>
                       <button type="button" class={'m-crow' + (g ? ' m-series-card' : film ? ' m-film-card' : '')} {...pressProps(it)}>
                         {mark(it)}
                         <span class="m-crow-main">
@@ -1152,12 +1127,8 @@ export function Library() {
                           </span>
                         </span>
                       </button>
-                      <span class="m-swipe-actions">
-                        <button type="button" class="danger" onClick={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }}>{t('history.removeItem')}</button>
-                        <button type="button" class="ok" onClick={() => markCurrent(tor)}>{t('history.markWatched')}</button>
-                      </span>
                       {moreBtn(it)}
-                    </div>
+                    </RowSwipe>
                   );
                 })}
               </div>
@@ -1177,12 +1148,14 @@ export function Library() {
                     <button type="button" class={'m-card' + (g ? ' m-series-card' : film ? ' m-film-card' : '') + sel(it)} key={k} data-anchor={k} {...pressProps(it)}>
                       <span class="m-poster-box">
                         <Poster torrent={tor} morphKey={k} initial />
-                        {foot && <span class="m-poster-foot">{foot}</span>}
+                        <span class="m-poster-stack">
+                          {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
+                          {foot && <span class="m-poster-foot">{foot}</span>}
+                        </span>
                         {hit && <span class="m-watch-tag">{statusFor(show)}</span>}
                         {hit && hit.duration > 0 && (
                           <span class="m-poster-bar"><span style={{ width: Math.min(100, (hit.time / hit.duration) * 100) + '%' }} /></span>
                         )}
-                        {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
                       </span>
                       {mark(it)}
                       <span class="m-card-title"><TileName tor={g ? g.named : tor} g={g} /></span>

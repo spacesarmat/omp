@@ -2250,6 +2250,7 @@ export const en: EnDict<typeof ru> = {
     betaNote: 'Beta - new features first, but it may have bugs. The stable version replaces the beta by itself',
     checkFailed: 'Could not check for updates',
     latest: 'You have the latest version',
+    betaOffHint: 'Beta updates are off. Turn them on in Advanced',
     installFailed: 'Could not install: {error}',
     openHbFailed: 'Could not open Homebrew Channel',
     installNow: 'Install now',
