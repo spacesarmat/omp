@@ -63,6 +63,7 @@ import {
   unlinkDeviceTelegram,
   findAccount,
   accountByTelegram,
+  settleReferrals,
 } from './logic.mjs';
 import {
   adminBroadcast,
@@ -2238,16 +2239,18 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=ads';
         }
         if (path === '/admin/referral') {
-          const current = await store.read();
-          const r = applyReferralPost(body, current.referralJournal || [], current.referralBinds || []);
-          await store.update((state) => ({
-            state: {
-              ...state,
-              settings: { ...state.settings, referral: r.settings },
-              referralJournal: r.journal,
-              referralBinds: r.binds,
-            },
-          }));
+          await store.update((state) => {
+            const r = applyReferralPost(body, state.referralJournal || [], state.referralBinds || []);
+            return {
+              state: {
+                ...state,
+                settings: { ...state.settings, referral: r.settings },
+                referralJournal: r.journal,
+                referralBinds: r.binds,
+              },
+              result: { ok: true },
+            };
+          });
           flashText = 'Реферальная программа сохранена';
           redirectTo = '/admin/?tab=referral';
         }
@@ -2594,9 +2597,15 @@ export function createApp(file, fetchImpl, opts) {
         if (!account) return json(res, 404, { error: 'not_linked' });
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
         // Optional. A read-only cutover must still answer /v1/me.
-        if (!readOnly && seenCountry && account.country !== seenCountry) {
+        const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
+        if (settleReferrals(state, now).state !== state || countryDirty) {
           const accountId = account.id;
-          await store.update((cur) => ({ state: rememberCountry(cur, accountId, seenCountry) }));
+          const next = await store.update((cur) => {
+            let merged = settleReferrals(cur, now).state;
+            if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
+            return { state: merged, result: merged };
+          });
+          if (next && next.accounts) state = next;
         }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
