@@ -1,5 +1,10 @@
 name: Release
 
+# One release at a time. A second tag or update waits; nothing already running is cancelled.
+concurrency:
+  group: omp-release
+  cancel-in-progress: false
+
 on:
   push:
     tags: ['v*']
@@ -13,12 +18,20 @@ on:
         description: Create the GitHub release, update feed and Telegram post
         type: boolean
         default: true
+      notice:
+        description: Short Telegram text instead of the usual release post. Empty keeps the usual post.
+        type: string
+        default: ''
   workflow_call:
     inputs:
       tag:
         description: Release tag (vX.Y.Z) to build
         type: string
         required: true
+      notice:
+        description: Short Telegram text instead of the usual release post. Empty keeps the usual post.
+        type: string
+        default: ''
     secrets:
       ANDROID_KEYSTORE_BASE64:
         required: true
@@ -284,11 +297,16 @@ jobs:
       # buttons link every build and the release page). A failure must not fail the release.
       # A stable release whose docs/screenshots/release-<version>/ is in the tag checkout above goes as a photo album.
       - name: Post to Telegram
-        # betas are not posted: the channel gets releases only
-        if: ${{ !contains(inputs.tag || github.ref_name, '-beta.') }}
+        # A notice is the short update line (also for a beta). Otherwise betas are not posted.
+        if: ${{ inputs.notice != '' || !contains(inputs.tag || github.ref_name, '-beta.') }}
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          NOTICE: ${{ inputs.notice }}
         run: |
-          node scripts/telegram-post.mjs "$TAG"
+          if [ -n "$NOTICE" ]; then
+            node scripts/telegram-post.mjs "$TAG" --notice "$NOTICE"
+          else
+            node scripts/telegram-post.mjs "$TAG"
+          fi
