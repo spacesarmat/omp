@@ -171,7 +171,9 @@ describe('pinch step', () => {
     expect(zoomView('compact', 1)).toBe('list');
     expect(zoomView('list', 1)).toBe('small');
     expect(zoomView('small', 1)).toBe('large');
-    expect(zoomView('large', 1)).toBe('large');
+    expect(zoomView('large', 1)).toBe('one');
+    expect(zoomView('one', 1)).toBe('one');
+    expect(zoomView('one', -1)).toBe('large');
     expect(zoomView('large', -1)).toBe('small');
     expect(zoomView('small', -1)).toBe('list');
     expect(zoomView('list', -1)).toBe('compact');
@@ -498,7 +500,11 @@ describe('pinch in «Мои»', () => {
     await flush();
     pinch(body(), 160);
     await flush();
-    expect(settings.value.libraryView).toBe('large');
+    expect(settings.value.libraryView).toBe('one');
+    pinch(body(), 160);
+    await flush();
+    expect(settings.value.libraryView).toBe('one');
+    vibrate.mockClear();
     updateSettings({ libraryView: 'compact' });
     await flush();
     pinch(body(), 50);

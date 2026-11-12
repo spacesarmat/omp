@@ -1,6 +1,7 @@
 package com.spacesarmat.omp
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import android.view.KeyEvent
@@ -29,6 +30,7 @@ class MainActivity : BridgeActivity() {
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)
         tvMode = TvMode.isTv(this)
+        if (!tvMode) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below
         super.onCreate(savedInstanceState)
         installCleartextClient()

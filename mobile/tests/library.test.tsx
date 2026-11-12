@@ -182,8 +182,7 @@ describe('Library', () => {
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(3);
     expect(cards[0].querySelector('.m-card-title')!.textContent).toBe('Starbound Frontier');
-    expect(cards[0].querySelector('.m-card-meta')!.textContent).toBe('2 сезон');
-    expect(cards[0].textContent).toContain('2,0 ГБ');
+    expect(cards[0].querySelector('.m-poster-foot')!.textContent).toContain('сезон');
     expect(cards[1].querySelector('.m-badge')!.textContent).toBe('4K');
   });
 
@@ -227,7 +226,9 @@ describe('Library', () => {
       await flush();
       const sel = view === 'compact' ? '.m-crow-title' : '.m-card-title';
       expect(Array.from(el.querySelectorAll(sel)).map((n) => n.textContent), view).toEqual(want);
-      expect(Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent), view).toEqual(['2 сезон · серии 1-6 из 10', '2026']);
+      const meta = Array.from(el.querySelectorAll('.m-tile-meta')).map((n) => n.textContent);
+      if (view === 'list' || view === 'compact') expect(meta, view).toEqual(['2 сезон · 6 серий', 'Фильм · 2026', 'Фильм']);
+      else expect(Array.from(el.querySelectorAll('.m-poster-foot')).map((n) => n.textContent), view).toEqual(['2 сезон · 6 серий', 'Фильм · 2026', 'Фильм']);
       expect(el.querySelector('.m-title-meta'), view).toBeNull();
       act(() => render(null, el));
     }
@@ -248,16 +249,15 @@ describe('Library', () => {
     await flush();
     const row = el.querySelector('.m-clist .m-crow')!;
     const main = row.querySelector('.m-crow-main')!;
-    expect(main.children[0].classList.contains('m-crow-title')).toBe(true);
+    expect(main.children[0].classList.contains('m-crow-titleline')).toBe(true);
     expect(main.querySelector('.m-crow-title')!.textContent).toBe('Американская история преступлений');
+    const line = main.querySelector('.m-crow-titleline')!;
+    expect(line.querySelector('.m-crow-title')).toBeTruthy();
+    expect(line.querySelector('.m-new-badge')).toBeTruthy();
     const sub = main.querySelector('.m-crow-sub')!;
-    expect(Array.from(sub.children).map((c) => c.className.split(' ').filter((x) => /^m-(crow-meta|new-badge|crow-size)$/.test(x))[0])).toEqual([
-      'm-crow-meta',
-      'm-new-badge',
-      'm-crow-size',
-    ]);
-    // nothing of the second line sits next to the name
-    expect(row.querySelector(':scope > .m-crow-size, :scope > .m-new-badge, :scope > .m-crow-meta')).toBeNull();
+    expect(sub.querySelector('.m-crow-meta')).toBeTruthy();
+    expect(sub.querySelector('.m-crow-size')).toBeTruthy();
+    expect(sub.querySelector('.m-new-badge')).toBeNull();
     const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
     const rule = (sel: string) => {
       const i = css.indexOf('\n' + sel + ' {');
@@ -281,7 +281,7 @@ describe('Library', () => {
     mount();
     await flush();
     expect(el.querySelector('.m-card-title')!.textContent).toBe('Темная материя');
-    expect(el.querySelector('.m-card-meta')!.textContent).toBe('season 2 · episodes 1-6 of 10');
+    expect(el.querySelector('.m-poster-foot')!.textContent).toBe('season 2 · 6 episodes');
     expect(Array.from(el.querySelectorAll('.m-lib-head [role=tab]')).map((b) => b.textContent)).toEqual(['Mine', 'Discover']);
   });
 
@@ -505,20 +505,22 @@ describe('Library', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('«Продолжить просмотр» on top of «Мои»: a card per started item, «Вся история» opens the history', async () => {
+  it('«Продолжить просмотр» on top of «Мои»: a card per started item, the clock opens the history', async () => {
     saveProgress('h1', 2, 1394, 3651);
     mount();
     await flush();
     const row = el.querySelector('[data-code="P02.19"]')!;
     expect(row).toBeTruthy();
     expect(row.querySelector('.m-resume-title')!.textContent).toBe('Продолжить просмотр');
+    expect(row.querySelector('.m-resume-layouts')).toBeTruthy();
+    expect(row.querySelector('[data-code="P02.21"]')).toBeNull();
     const cards = row.querySelectorAll('[data-resume-hash]');
     expect(cards.length).toBe(1);
     expect(cards[0].getAttribute('data-resume-hash')).toBe('h1');
     expect(cards[0].textContent).toContain('осталось 38 мин');
     // the chips have no «История» any more
     expect(tab('История')).toBeUndefined();
-    act(() => (row.querySelector('[data-code="P02.21"]') as HTMLElement).click());
+    act(() => (el.querySelector('[data-code="P02.20"]') as HTMLElement).click());
     expect(libraryTab.value).toBe('history');
     expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
     expect(el.querySelectorAll('.m-history .m-hrow').length).toBe(1);
@@ -538,9 +540,7 @@ describe('Library', () => {
     const cards = el.querySelectorAll('.m-grid .m-card');
     expect(cards.length).toBe(2);
     expect(cards[0].classList.contains('m-film-card')).toBe(true);
-    expect(cards[0].querySelector('.m-badge')!.textContent).toBe('2 раздачи');
-    // the size of both releases
-    expect(cards[0].textContent).toContain('3,0 ГБ');
+    expect(cards[0].querySelector('.m-badge')!.textContent).toBe('1080p');
     act(() => (cards[0] as HTMLElement).click());
     expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'f1' });
   });
@@ -760,7 +760,7 @@ describe('Library', () => {
     expect(el.querySelector('.m-vlist')).toBeTruthy();
     const rows = el.querySelectorAll('.m-vrow');
     expect(rows.length).toBe(3);
-    expect(rows[0].querySelector('.m-badge-inline')!.textContent).toBe('1080p');
+    expect(rows[0].querySelector('.m-badge')!.textContent).toBe('1080p');
     expect(rows[0].textContent).toContain('2 серии');
     pick('[data-view="compact"]');
     expect(el.querySelectorAll('.m-crow').length).toBe(3);
@@ -975,7 +975,6 @@ describe('Library in English', () => {
     expect(el.querySelector('[aria-label^="View and sort: "]')).toBeTruthy();
     expect(el.querySelector('[aria-label="History"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Search"]')).toBeTruthy();
-    expect(el.textContent).toContain('2.0 GB');
     act(() => updateSettings({ libraryView: 'list' }));
     expect(el.textContent).toContain('2 episodes');
     updateSettings({ libraryView: 'large' });

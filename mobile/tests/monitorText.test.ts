@@ -35,6 +35,7 @@ describe('monitoring texts', () => {
       'NNM-Club · от 1080p · от 1 сида · до 8,5 ГБ · без уведомлений',
     );
     expect(subRule({ id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 0 })).toBe('Все источники · любое качество');
+    expect(subRule({ id: 'a', query: 'q', quality: '', sources: null, notify: true, createdAt: 0, better: true })).toBe('Все источники · лучшее');
   });
 
   it('episode ranges', () => {

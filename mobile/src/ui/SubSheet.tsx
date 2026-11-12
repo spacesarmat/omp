@@ -155,12 +155,12 @@ export function SubSheet(p: {
           <TextField id="m-sub-query" class="m-input" type="text" value={query} onInput={(e) => setQuery((e.target as HTMLInputElement).value)} />
         </div>
         <div class="m-muted m-small">{t('monitor.sub.quality')}</div>
-        <div class="m-chips" style={{ flexWrap: 'wrap' }}>
+        <div class="m-seg m-sub-quality" role="group" aria-label={t('monitor.sub.quality')}>
           {qualityLabels().map((q) => (
             <button
               key={q.id}
               type="button"
-              class={'m-chip' + (quality === q.id ? ' on' : '')}
+              class={'m-seg-btn' + (quality === q.id ? ' on' : '')}
               aria-pressed={quality === q.id}
               onClick={() => setQuality(q.id)}
             >
@@ -171,7 +171,7 @@ export function SubSheet(p: {
         <div class="m-marks-pair">
           <div class="m-field">
             <label for="m-sub-seeds">{t('monitor.sub.seeds')}</label>
-            <TextField id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
+            <TextField id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" placeholder={t('monitor.sub.anySeeds')} value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
           </div>
           <div class="m-field">
             <label for="m-sub-size">{t('monitor.sub.size')}</label>

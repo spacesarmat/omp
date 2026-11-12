@@ -338,6 +338,10 @@ export interface CalMonthCell {
   iso: string;
   inMonth: boolean;
   today: boolean;
+  /** Before today. */
+  past: boolean;
+  /** At least one episode belongs to a subscription. */
+  mine: boolean;
   /** Episodes that day. */
   count: number;
   /** A poster for the marker; '' when none of that day's shows has one. */
@@ -360,15 +364,43 @@ export function monthCells(year: number, month: number, entries: CalEntry[], now
     const iso = isoDay(d.getTime());
     const list = byDay[iso] || [];
     let poster = '';
-    for (let j = 0; j < list.length && !poster; j++) poster = list[j].show.card.poster || '';
-    cells.push({ iso, inMonth: d.getMonth() === month, today: iso === today, count: list.length, poster });
+    let mine = false;
+    for (let j = 0; j < list.length; j++) {
+      if (!poster && list[j].show.card.poster) poster = list[j].show.card.poster;
+      if (list[j].show.subIds.length) mine = true;
+    }
+    cells.push({ iso, inMonth: d.getMonth() === month, today: iso === today, past: iso < today, mine, count: list.length, poster });
   }
   return cells;
 }
 
-/** «+3» when a day has several episodes; '' for one or none. */
+/** Extra beyond three dots: «+2» for five episodes, '' for three or fewer. */
 export function dayCountLabel(n: number): string {
-  return n > 1 ? '+' + n : '';
+  return n > 3 ? '+' + (n - 3) : '';
+}
+
+export interface CalListSection {
+  id: string;
+  label: string;
+  rows: CalRow[];
+  /** «Ранее» starts closed. */
+  collapsed: boolean;
+}
+
+/** List by day. Days before yesterday fold into «Ранее». Empty days are absent. */
+export function listDaySections(entries: CalEntry[], now: number = Date.now()): CalListSection[] {
+  const yesterday = addDays(isoDay(now), -1);
+  const earlier: CalEntry[] = [];
+  const out: CalListSection[] = [];
+  groupByDay(entries, now).forEach((day) => {
+    if (day.iso < yesterday) earlier.push.apply(earlier, day.entries);
+    else if (day.entries.length) out.push({ id: day.iso, label: day.label, rows: dayRows(day.entries), collapsed: false });
+  });
+  if (earlier.length) {
+    const rows = dayRows(earlier);
+    out.unshift({ id: 'earlier', label: t('news.calEarlier', { n: String(earlier.length) }), rows, collapsed: true });
+  }
+  return out;
 }
 
 export function monthTitle(year: number, month: number): string {

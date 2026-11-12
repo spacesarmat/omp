@@ -123,9 +123,10 @@ describe('Tv screen', () => {
     renameTv('192.168.1.57', 'Детская');
     const el = mount();
     await flush();
-    const row = Array.from(el.querySelectorAll('.m-tv')).find((r) => (r.textContent || '').indexOf('192.168.1.57') >= 0)!;
+    const row = el.querySelector('[data-ip="192.168.1.57"]')!;
     expect(row.querySelector('.m-server-name')!.textContent).toBe('Детская');
-    expect(row.textContent).toContain('LG в спальне · 192.168.1.57');
+    expect(row.textContent).toContain('LG в спальне · webOS · сохранён');
+    expect(row.textContent).not.toContain('192.168.1.57');
     await act(async () => (el.querySelector('[aria-label="Переименовать Детская"]') as HTMLButtonElement).click());
     const dlg = document.querySelector('[role="dialog"]') as HTMLElement;
     expect((dlg.querySelector('input') as HTMLInputElement).value).toBe('Детская');
@@ -268,7 +269,7 @@ describe('Tv screen in English', () => {
     expect(el.textContent).toContain('1. Phone and TV on the same Wi-Fi.');
     expect(btn(el, 'No OMP on the TV? Install assistant')).toBeTruthy();
     await flush();
-    expect(el.textContent).toContain('192.168.1.9 · saved');
+    expect(el.textContent).toContain('webOS · saved');
     expect(el.textContent).toContain('192.168.1.42 · webOS 6');
     expect(el.querySelector('[aria-label="Rename Bedroom"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Forget Bedroom"]')).toBeTruthy();

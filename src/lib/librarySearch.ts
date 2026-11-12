@@ -3,7 +3,7 @@ import { naturalCompare } from './episodes';
 import { displayTitle } from './torrentName';
 import { t } from '../i18n';
 
-export type LibrarySort = 'new' | 'title' | 'size';
+export type LibrarySort = 'new' | 'title' | 'size' | 'fresh';
 
 export const sortOptions = (): { value: LibrarySort; label: string }[] => [
   { value: 'new', label: t('library.sortNew') },
@@ -23,7 +23,13 @@ export function nextSort(s: LibrarySort): LibrarySort {
 }
 
 export function sortLabel(s: LibrarySort): string {
+  if (s === 'fresh') return t('library.sortFresh');
   return sortOptions()[indexOfSort(s)].label;
+}
+
+/** Phone catalog sort. «Сначала с новинками» is not offered on the TV. */
+export function phoneSortOptions(): { value: LibrarySort; label: string }[] {
+  return [{ value: 'fresh', label: t('library.sortFresh') } as { value: LibrarySort; label: string }].concat(sortOptions());
 }
 
 function norm(s: string): string {

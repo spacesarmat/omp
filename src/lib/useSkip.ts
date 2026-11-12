@@ -30,6 +30,7 @@ export type SkipUpdate = SkipPatch | ((prev: SkipPrefs) => SkipPatch);
 /** `known`: the torrent itself is loaded (the phone card may render before it is fetched); the settings load then. */
 export function useSkip(c: SkipClient | null | undefined, hash: string, fileIndex: number | null, known = true) {
   const [prefs, setPrefs] = useState<SkipPrefs>(OFF);
+  const [ready, setReady] = useState(false);
   const [hasChapters, setHasChapters] = useState(false);
   const alive = useRef(true);
   const cur = useRef(prefs);
@@ -50,10 +51,17 @@ export function useSkip(c: SkipClient | null | undefined, hash: string, fileInde
     if (!c || !known) return;
     let dead = false;
     touched.current = false;
+    setReady(false);
     loadSkip(c, hash).then(
       // a switch tapped before the load answered is newer than the saved value
-      (p) => !dead && !touched.current && apply(p),
-      () => undefined,
+      (p) => {
+        if (dead) return;
+        if (!touched.current) apply(p);
+        setReady(true);
+      },
+      () => {
+        if (!dead) setReady(true);
+      },
     );
     return () => {
       dead = true;
@@ -98,5 +106,5 @@ export function useSkip(c: SkipClient | null | undefined, hash: string, fileInde
     );
   };
 
-  return { prefs, hasChapters, save };
+  return { prefs, hasChapters, ready, save };
 }

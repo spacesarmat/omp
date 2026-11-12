@@ -169,6 +169,7 @@ describe('Sheet grab handle and pull', () => {
     const users = files.filter((f) => /<Sheet[\s>]/.test(readFileSync(f, 'utf8'))).sort();
     expect(users).toEqual([
       'mobile/src/screens/Add.tsx',
+      'mobile/src/screens/Advanced.tsx',
       'mobile/src/screens/Calendar.tsx',
       'mobile/src/screens/InstallAssistant.tsx',
       'mobile/src/screens/Library.tsx',
@@ -182,6 +183,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/screens/catalog/Discover.tsx',
       'mobile/src/screens/catalog/DiscoverSheets.tsx',
       'mobile/src/screens/catalog/PosterSheet.tsx',
+      'mobile/src/screens/catalog/SeasonEpisodes.tsx',
       'mobile/src/screens/catalog/WantSheet.tsx',
       'mobile/src/servers/WifiBox.tsx',
       'mobile/src/share/ShareMenu.tsx',

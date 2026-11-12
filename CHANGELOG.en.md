@@ -10,6 +10,33 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The editor gained a layers panel with filtering, renaming, hiding, locking, duplicating and pasting clones, plus a style library with presets, style copy and token usage search
 - [tech] The editor compares the current theme with the original via the Before/After button and shows platforms side by side; the Accessibility panel checks contrast, font size and geometry, and geometry warnings must be confirmed before export
 - [tech] Editor export became scoped: everything, one page or one component by node id, with a diff preview and a list of affected platforms. Production applies the reviewed layout through the generated module design/generated/layout.ts only on explicit export
+- [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
+- [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
+- [phone] Calendar lists days, Earlier stays folded, and the aired/today plates are gone. Month view marks today with a yellow circle, the selected day in gray, up to three dots plus a count, and a yellow dot for a subscription. A subscription that is any quality and best-only reads "best"
+- [phone] Remote: the settings button is a gear, not a sun. HDMI inputs stay hidden until the TV is connected
+- [phone] Account: Renew opens card, stars and crypto. There is no separate Crypto button. The promo field and Activate sit on one row, and an empty button stays dark
+- [phone] Settings: each video player option has a subtitle, Built-in is marked recommended, and the yellow outline is gone. The TV list hides the IP and the active TV has a thin yellow frame. Watch-from shows only the selected rule. The bug report opens as a sheet. Stop server is a link
+- [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
+
+## 0.30.1-beta.3
+
+- [phone] Catalog header hides with 24px hysteresis and the chips stay. Continue layout sits on the title row. History link is gone. List swipe uses dark, red and green actions and only one open row
+- [phone] The phone stays in portrait, including after the player. TV orientation is unchanged
+- [tech] Referral accrual rules and migration 011, off by default. Billing was not deployed
+
+## 0.30.1-beta.2
+
+- [phone] Catalog chips show that the row scrolls: the right edge fades, the next chip is cut, and the row nudges once on the first open
+- [phone] Continue watching collapses with a chevron. The row can be large cards, mini tiles, or one line. The choice is remembered
+- [phone] In the poster list the quality mark is a ribbon on the right edge of the poster. Swipe left removes the item or marks it watched. Grid items that are already in Continue are marked "watching"
+- [phone] When a TV is paired, the series button and an episode tap play on the TV. "on the phone" stays a separate link. With no TV, playback stays on the phone. Skip and monitoring sit at the bottom of the series page
+- [tech] On a pull request, desktop CI installs apt packages, Python and cargo test only when desktop/src-tauri, Cargo files, this workflow or the Rust test inputs change. Push, tags and manual runs still always run them. Apt packages are cached and installed with --no-install-recommends, the man-db trigger is disabled, mirror retries are capped, and the apt step times out after 10 minutes. The CI apt install (shellcheck, rsync) does the same
+
+## 0.30.1-beta.1
+
+- [phone] Catalog header: Mine is filled, icon buttons are 40 by 40. Scrolling hides the Mine / Discover row and keeps the chips on a solid dark bar. Continue shows the device and time, only items at 2-90%, a finished episode moves to the next one, and anything untouched for 30 days leaves the row. Long press: remove, mark watched, start over. Settings: Shared history across devices
+- [phone] A series opens at the top. The main button is two lines, and the release line has one Change action. Season chips stay when there is one season, and voice-over is stored per season. The episode list is shorter: number on the left, a check for watched, missing episodes stay visible, and a watched counter
+- [phone] List and compact rows keep the title on the first line, then "1 season, 6 episodes" or "Movie, year". New season is a filled badge, new episode is an outline. Sort: new episodes first
 - [tech] omp-player.online and the download page serve stable Windows (installer and portable), macOS (Apple Silicon and Intel) and Linux (AppImage and deb) builds. Desktop beta labels are gone. The buttons read update-windows.json, update-macos.json and update-linux.json, which the desktop workflow already publishes. A beta in the same feed does not replace the stable buttons, so the next stable build does not need new links. Primary buttons in one row sit on the same line
 
 ## 0.30.0

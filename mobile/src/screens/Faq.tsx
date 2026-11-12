@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
-import { goBack } from '../nav';
+import { goBack, navigate } from '../nav';
+import { BILLING_BOT_URL } from '../../../src/billing/config';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
 import { loadJson, saveJson } from '../../../src/store/storage';
@@ -194,6 +195,11 @@ export function Faq(p: { q?: string } = {}) {
           <div class="m-faq-hint" role="status">
             {hits.length ? t('faq.found', { n: hits.length }) : t('faq.nothing')}
           </div>
+          {!hits.length && (
+            <button type="button" class="m-btn m-btn-primary" data-faq-action="ask" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+              {t('faq.askTelegram')}
+            </button>
+          )}
           <div class="m-faq-list">{hits.map((h) => row(h.item, h.device, true))}</div>
         </>
       ) : (
@@ -204,6 +210,14 @@ export function Faq(p: { q?: string } = {}) {
                 {d.label}
               </button>
             ))}
+          </div>
+          <div class="m-faq-actions">
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => navigate({ name: 'install' })}>
+              {t('faq.installTv')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => navigate({ name: 'tv' })}>
+              {t('faq.findTv')}
+            </button>
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
           {shown.map((g) => (

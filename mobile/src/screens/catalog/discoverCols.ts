@@ -8,12 +8,13 @@ export const DISCOVER_COLS_KEY = 'tsp.discoverCols';
 
 /** Home-rail tile width (px). Large cards are wider; the others stay the readable portrait size. */
 export function railTilePx(view: DiscoverView): number {
+  if (view === 'one') return 220;
   return view === 'large' ? 156 : 112;
 }
 
-/** Old 2 columns are large cards. Old 3 and 4 columns are medium cards. The four names pass through. */
+/** Old 2 columns are large cards. Old 3 and 4 columns are medium cards. Named modes pass through. */
 export function migrateDiscoverView(v: unknown): DiscoverView | null {
-  if (v === 'large' || v === 'small' || v === 'list' || v === 'compact') return v;
+  if (v === 'one' || v === 'large' || v === 'small' || v === 'list' || v === 'compact') return v;
   if (v === 2) return 'large';
   if (v === 3 || v === 4) return 'small';
   return null;
@@ -45,9 +46,10 @@ export function cleanDiscoverView(v: unknown): DiscoverView | undefined {
 export function discoverGridClass(view: DiscoverView): string {
   if (view === 'list') return 'm-vlist m-disc-rows';
   if (view === 'compact') return 'm-vlist m-clist m-disc-rows';
+  if (view === 'one') return 'm-disc-grid m-cards-one';
   return 'm-disc-grid' + (view === 'small' ? ' m-cards-medium m-cols-3' : ' m-cards-large');
 }
 
 export function isGridDiscoverView(view: DiscoverView): boolean {
-  return view === 'large' || view === 'small';
+  return view === 'one' || view === 'large' || view === 'small';
 }

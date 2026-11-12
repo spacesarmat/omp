@@ -8,7 +8,8 @@ import { dataFiles } from '../lib/knownFiles';
 import { noteSupport } from './support';
 import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 import { t } from '../i18n';
-import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
+import { readVoice, withSeasonVoice } from '../lib/seasonVoice';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -297,7 +298,7 @@ setCategoryWriter(saveCategoryAuto);
  * other key of `data` are kept. Resolves with the record written; rejects on failure (the series screen shows it, the
  * players swallow it).
  */
-export function saveSeriesTracks(c: JournalClient, hash: string, members: string[], patch: SeriesTracksPatch, now: number = Date.now()): Promise<SeriesTracks> {
+export function saveSeriesTracks(c: JournalClient, hash: string, members: string[], patch: SeriesTracksPatch, now: number = Date.now(), season?: number): Promise<SeriesTracks> {
   const prev = chains[hash] || Promise.resolve();
   const run = prev.then(() =>
     c.list().then((all) => {
@@ -308,7 +309,16 @@ export function saveSeriesTracks(c: JournalClient, hash: string, members: string
       const own = members.map((h) => torrentOf(all, h)).filter((x): x is Torrent => !!x);
       const rec = nextSeriesTracks(newestSeriesTracks(own.concat([tor])), patch, now);
       const base = baseOf(tor, parsed);
-      const data = serializeData(withSeriesTracks(base.obj, rec), base.journal, base.skip);
+      let obj = withSeriesTracks(base.obj, rec);
+      if (season && season > 0) {
+        if (patch === 'reset') obj = withSeasonVoice(obj, season, { at: now, l: '' });
+        else if (rec.l) {
+          const prev = readVoice(own.concat([tor]).map((m) => m.data));
+          const priority = [rec.l].concat(prev.priority.filter((s) => !sameDub(s, rec.l)));
+          obj = withSeasonVoice(obj, season, { at: now, l: rec.l, m: true }, priority);
+        }
+      }
+      const data = serializeData(obj, base.journal, base.skip);
       return c.setData(tor, data).then(() => {
         patchLibrary(tor.hash, data);
         return rec;

@@ -54,10 +54,10 @@ function BackgroundAudioRow() {
   );
 }
 
-const OPTIONS: { id: PhonePlayer; label: () => string }[] = [
-  { id: 'embedded', label: () => t('player.embeddedPlayerPhone') },
-  { id: 'p2160', label: () => t('player.p2160AppPhone') },
-  { id: 'chooser', label: () => t('player.builtinPlayerPhone') },
+const OPTIONS: { id: PhonePlayer; label: () => string; hint: () => string }[] = [
+  { id: 'embedded', label: () => t('player.embeddedPlayerPhone'), hint: () => t('player.embeddedHint') },
+  { id: 'p2160', label: () => t('player.p2160AppPhone'), hint: () => t('player.p2160Hint') },
+  { id: 'chooser', label: () => t('player.builtinPlayerPhone'), hint: () => t('player.chooserHint') },
 ];
 
 /** «Плеер для видео»: list of three choices; background audio under «Встроенный». */
@@ -100,7 +100,10 @@ export function VideoPlayer() {
                 data-code={o.id === 'embedded' ? 'P14.2' : o.id === 'p2160' ? 'P14.3' : 'P14.4'}
                 onClick={() => !disabled && updateSettings({ phonePlayer: o.id })}
               >
-                <span class="m-opt-name m-grow">{o.label()}</span>
+                <span class="m-opt-text m-grow">
+                  <span class="m-opt-name">{o.label()}</span>
+                  <span class="m-opt-sub">{o.hint()}</span>
+                </span>
                 {cur === o.id && <Icon d={CHECK} size={20} />}
               </button>
             );
@@ -111,7 +114,6 @@ export function VideoPlayer() {
             {t('player.p2160Missing')}
           </button>
         )}
-        <p class="m-muted m-small">{t('player.p2160NotePhone')}</p>
         {cur === 'embedded' && <BackgroundAudioRow />}
       </section>
     </div>

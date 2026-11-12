@@ -3,6 +3,7 @@ import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
+import { stashFile } from '../../../src/api/torrentFiles';
 import { TvChip } from '../ui/TvChip';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { showToast } from '../ui/toast';
@@ -147,12 +148,21 @@ function FixLinks({ ids }: { ids: string[] }) {
 
 const HASH = /^[0-9a-fA-F]{40}$/;
 
-/** Accepts a magnet link or a bare 40-char info hash; returns a magnet link or null. */
+/** A pasted search is a magnet, a .torrent link, or an ordinary query. */
+export function intakeKind(raw: string): 'magnet' | 'torrent' | null {
+  const s = raw.trim();
+  if (/^magnet:\?/i.test(s) || /^[0-9a-fA-F]{40}$/.test(s)) return 'magnet';
+  if (/^https?:\/\/\S+\.torrent(?:$|\?)/i.test(s)) return 'torrent';
+  return null;
+}
+
+/** Accepts a magnet, a bare 40-char info hash, or an http(s) .torrent link. */
 export function normalizeLink(raw: string): string | null {
   const s = raw.trim();
   if (!s) return null;
   if (HASH.test(s)) return 'magnet:?xt=urn:btih:' + s;
   if (/^magnet:\?/i.test(s)) return s;
+  if (/^https?:\/\/\S+\.torrent(?:$|\?\S*)/i.test(s)) return s;
   return null;
 }
 
@@ -275,6 +285,9 @@ export function Add({
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
+  const [plusOpen, setPlusOpen] = useState(false);
+  const [fileError, setFileError] = useState('');
+  const [fileBusy, setFileBusy] = useState(false);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
   // the route's fields choose only the first tab of the entry
   const [scope, setScopeState] = useState<SearchScope>(
@@ -294,11 +307,39 @@ export function Add({
   const [alive] = useState({ v: true });
   const pendingRef = useRef<Map<string, RowBusy>>(memo.busy);
   const launch = useTvLaunch();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const onTorrentFile = async (file: File) => {
+    const c = client.value;
+    if (!c) {
+      setFileError(t('errors.noServerSelected'));
+      return;
+    }
+    setFileError('');
+    setFileBusy(true);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const added = await c.add({ link: stashFile(bytes), title: file.name, category: '' });
+      void rememberAdded(c, added, file.name);
+    } catch (e) {
+      if (alive.v) setFileError(errorMessage(e));
+    } finally {
+      if (alive.v) setFileBusy(false);
+    }
+  };
   const tv = activeTv.value;
 
   const setQuery = (v: string) => {
     memo.query = v;
     setQueryState(v);
+    const kind = intakeKind(v);
+    if (kind === 'magnet' || kind === 'torrent') {
+      const next = normalizeLink(v);
+      if (next) {
+        setValue(next);
+        setMagnetOpen(true);
+        setScope('sources');
+      }
+    }
   };
   const setChosen = (v: string[] | null) => {
     memo.chosen = v;
@@ -738,10 +779,19 @@ export function Add({
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <button type="button" class="m-btn m-btn-secondary m-add-magnet-btn tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>
-          {t('add.byMagnet')}
-        </button>
+        <div class="m-add-plus" data-open={plusOpen ? '1' : '0'}>
+          <button type="button" class="m-icon-btn" aria-label={t('common.add')} aria-expanded={plusOpen} onClick={() => setPlusOpen(!plusOpen)}>+</button>
+          <div class="m-add-plus-menu">
+            <button type="button" class="tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
+            <button type="button" disabled={fileBusy} onClick={() => fileRef.current && fileRef.current.click()}>{t('add.openTorrent')}</button>
+          </div>
+          <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden aria-label={t('add.openTorrent')} onChange={(e) => {
+            const f = (e.target as HTMLInputElement).files && (e.target as HTMLInputElement).files![0];
+            if (f) void onTorrentFile(f);
+          }} />
+        </div>
       )}
+      {fileError && <div class="m-error" data-file-error>{fileError}</div>}
       {memo.handle && memo.searched && online.value && !noSourceAnswered && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}

@@ -52,7 +52,11 @@ describe('node_modules CI caching', () => {
         expect(cache).toContain(`\${{ runner.os }}-node24-${scope}-modules-`);
       }
 
-      const gate = "needs.changes.outputs.desktop == 'true' && ";
+      const gates = [
+        '',
+        "needs.changes.outputs.desktop == 'true' && ",
+        "steps.filter.outputs.android == 'true' && ",
+      ];
       const cachedInstalls = steps.filter(
         (step) => field(step, 'run') === `npm install ${directory}--prefer-offline --no-audit --no-fund`,
       );
@@ -60,8 +64,7 @@ describe('node_modules CI caching', () => {
         const cond = field(step, 'if');
         return (
           field(step, 'run') === `npm ci ${directory}`.trim() &&
-          (cond === `steps.${id}.outputs.cache-hit != 'true'` ||
-            cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`)
+          gates.some((gate) => cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`)
         );
       });
       expect(cachedInstalls).toHaveLength(copies);
@@ -69,11 +72,11 @@ describe('node_modules CI caching', () => {
 
       for (const step of cachedInstalls) {
         const cond = field(step, 'if');
-        expect(cond === `steps.${id}.outputs.cache-hit == 'true'` || cond === `${gate}steps.${id}.outputs.cache-hit == 'true'`).toBe(true);
+        expect(gates.some((gate) => cond === `${gate}steps.${id}.outputs.cache-hit == 'true'`)).toBe(true);
       }
       for (const step of cleanInstalls) {
         const cond = field(step, 'if');
-        expect(cond === `steps.${id}.outputs.cache-hit != 'true'` || cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`).toBe(true);
+        expect(gates.some((gate) => cond === `${gate}steps.${id}.outputs.cache-hit != 'true'`)).toBe(true);
       }
     }
 

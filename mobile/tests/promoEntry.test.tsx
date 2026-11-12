@@ -43,13 +43,16 @@ describe('promo on the account screen', () => {
     await act(async () => render(<Account />, el));
     await flush();
     expect(el.querySelector('[data-paid-until]')!.getAttribute('data-paid-until')).toBe('01.01.2026');
+    const apply = () => Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Активировать')!;
+    expect(apply().disabled).toBe(true);
     const input = el.querySelector('input') as HTMLInputElement;
     await act(async () => {
       input.value = 'GIFT';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await flush();
-    const button = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Активировать')!;
+    expect(apply().disabled).toBe(false);
+    const button = apply();
     await act(async () => button.click());
     await flush();
     expect(el.textContent).toContain('Промокод принят');

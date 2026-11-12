@@ -387,11 +387,11 @@ describe('Add category', () => {
     expect(el.querySelector(MAGNET)).toBeNull();
     expect(el.querySelector('[data-magnet-block]')).toBeNull();
     const open = el.querySelector('[data-magnet-open]')!;
-    expect(open.textContent).toBe('Добавить по magnet-ссылке');
+    expect(open.textContent).toBe('Вставить magnet');
     expect(open.getAttribute('aria-expanded')).toBe('false');
     expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам']);
+    expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам', 'Открыть .torrent файл']);
   });
 
   it('a tap on the link opens the magnet field in place; the category chips come once a valid link is entered', () => {
@@ -418,6 +418,53 @@ describe('Add category', () => {
     expect(el.querySelector('[data-magnet-open]')).toBeNull();
     expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe(M);
     expect(el.querySelector('[data-magnet-category]')).toBeTruthy();
+  });
+
+  it('a shared torrent url is added as that url', async () => {
+    const add = vi.spyOn(TorrServerClient.prototype, 'add').mockResolvedValue({ hash: HASH } as any);
+    mount('https://x.test/a.torrent?dl=1');
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('https://x.test/a.torrent?dl=1');
+    click(byText('Добавить'));
+    await flush();
+    expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: 'https://x.test/a.torrent?dl=1' }));
+  });
+
+  it('the plus menu announces whether it is open', () => {
+    mount();
+    const plus = el.querySelector('.m-add-plus > button') as HTMLButtonElement;
+    expect(plus.getAttribute('aria-expanded')).toBe('false');
+    click(plus);
+    expect(plus.getAttribute('aria-expanded')).toBe('true');
+    expect(el.querySelector('.m-add-plus')!.getAttribute('data-open')).toBe('1');
+  });
+
+  it('a torrent file without a server shows the reason beside the closed magnet field', async () => {
+    for (const s of servers.value.slice()) removeServer(s.id);
+    setActiveServer(null);
+    mount();
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['x'], 'a.torrent', { type: 'application/x-bittorrent' });
+    await act(async () => {
+      Object.defineProperty(input, 'files', { configurable: true, value: { 0: file, length: 1, item: () => file } });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
+    expect(el.querySelector('[data-file-error]')!.textContent).toBe('Сервер не выбран');
+  });
+
+  it('a failed torrent file shows the error outside the magnet field', async () => {
+    vi.spyOn(TorrServerClient.prototype, 'add').mockRejectedValue(new Error('upload failed'));
+    mount();
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const file = new File(['x'], 'a.torrent', { type: 'application/x-bittorrent' });
+    await act(async () => {
+      Object.defineProperty(input, 'files', { configurable: true, value: { 0: file, length: 1, item: () => file } });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(el.querySelector('[data-file-error]')!.textContent).toBe('upload failed');
+    expect(el.querySelector('[data-magnet-block]')).toBeNull();
   });
 
   it('a link arriving while the screen is open opens the field', () => {
@@ -992,7 +1039,7 @@ describe('Add «Подписаться»', () => {
     click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === '4K')!);
     click(el.querySelector('.m-sheet-backdrop')!);
     click(Array.from(el.querySelector('[data-plate="subscribe"]')!.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
-    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('Любое');
+    expect(el.querySelector('.m-sub-quality .on')!.textContent).toBe('Любое');
   });
 
   it('no plate before a search', () => {
@@ -1018,7 +1065,7 @@ describe('Add «Подписаться»', () => {
     expect(plate.textContent).toContain('Сообщить, когда появятся новые раздачи по этому запросу');
     click(Array.from(plate.querySelectorAll('button')).find((b) => b.textContent === 'Подписаться')!);
     expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Северный ветер сезон 2');
-    expect(el.querySelector('.m-sheet .m-chip.on')!.textContent).toBe('1080p+');
+    expect(el.querySelector('.m-sub-quality .on')!.textContent).toBe('1080p+');
     expect(el.querySelector('.m-sheet .m-set-pick')!.textContent).toContain('Фейк ›');
     click(Array.from(el.querySelectorAll('.m-sheet button')).find((b) => b.textContent === 'Сохранить')!);
     const subs = JSON.parse(localStorage.getItem('tsp.subs') || '[]');
@@ -1048,7 +1095,7 @@ describe('Add in English', () => {
     expect(el.textContent).not.toContain('Category');
     expect(el.querySelector('input[aria-label="Search in sources"]')).toBeTruthy();
     expect(el.querySelector('[data-scope="sources"]')!.textContent).toBe('Sources');
-    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Add by magnet link');
+    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Paste magnet');
     click(el.querySelector('[data-magnet-open]')!);
     expect(byText('Add')).toBeTruthy();
     expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own - via “Share”.');
@@ -1174,6 +1221,13 @@ describe('one «Поиск»: «Мои / Каталог / Источники»',
     act(() => render(null, el));
     mount('magnet:?xt=urn:btih:' + HASH);
     expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+  });
+
+  it('a magnet pasted on «Мои» opens «Источники» and the field', () => {
+    mountScope('mine');
+    typeQuery('magnet:?xt=urn:btih:' + HASH);
+    expect(scopes()).toEqual(['mine', 'catalog', 'sources*']);
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
   });
 });
 

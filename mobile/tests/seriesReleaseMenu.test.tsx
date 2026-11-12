@@ -87,7 +87,8 @@ async function menuOf(hash: string) {
     await flush();
   }
   expect(shown()).toBe(hash);
-  act(() => (el.querySelector('.m-release-more') as HTMLElement).click());
+  openReleases();
+  act(() => (document.querySelector('[data-release-actions]') as HTMLElement).click());
 }
 const option = (text: string) =>
   Array.from(document.querySelectorAll('.m-opt')).find((b) => (b.textContent || '').trim() === text) as HTMLButtonElement | undefined;

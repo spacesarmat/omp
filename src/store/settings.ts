@@ -102,6 +102,15 @@ export interface AppSettings {
    * Off: the player only offers the switch.
    */
   fallbackAuto: boolean;
+  /**
+   * Phone: «Общая история между устройствами». On: TV, phone and desktop watches share one continue row.
+   * Off: only this device. Default on.
+   */
+  sharedHistory: boolean;
+  /** Phone «Продолжить просмотр»: the row is open. */
+  continueOpen: boolean;
+  /** Phone continue row: large cards, mini tiles, or one line. */
+  continueLayout: 'cards' | 'mini' | 'line';
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -140,6 +149,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   testLabelPhonePx: 12,
   prebufferOnMetered: false,
   fallbackAuto: false,
+  sharedHistory: true,
+  continueOpen: true,
+  continueLayout: 'cards',
 };
 
 const KEY = 'tsp.settings';
@@ -189,8 +201,9 @@ export function sanitizeSettings(v: unknown): AppSettings {
   out.testLabelPhonePx = clampLabelPx(out.testLabelPhonePx, PHONE_LABEL_PX);
   if (SUB_COLORS.indexOf(out.subColor) < 0) out.subColor = DEFAULT_SETTINGS.subColor;
   if ([5, 10, 15].indexOf(out.edgeSeekStep) < 0) out.edgeSeekStep = DEFAULT_SETTINGS.edgeSeekStep;
-  if (['large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
-  if (['new', 'title', 'size'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
+  if (['one', 'large', 'small', 'list', 'compact'].indexOf(out.libraryView) < 0) out.libraryView = DEFAULT_SETTINGS.libraryView;
+  if (['cards', 'mini', 'line'].indexOf(out.continueLayout) < 0) out.continueLayout = DEFAULT_SETTINGS.continueLayout;
+  if (['new', 'title', 'size', 'fresh'].indexOf(out.librarySort) < 0) out.librarySort = DEFAULT_SETTINGS.librarySort;
   if (!isHistoryFilter(out.historyFilter)) out.historyFilter = DEFAULT_SETTINGS.historyFilter;
   if (['auto', 'builtin', 'vlc'].indexOf(out.playerEngine) < 0) out.playerEngine = DEFAULT_SETTINGS.playerEngine;
   if (['builtin', 'p2160'].indexOf(out.videoPlayer) < 0) out.videoPlayer = DEFAULT_SETTINGS.videoPlayer;

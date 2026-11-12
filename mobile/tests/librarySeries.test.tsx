@@ -4,7 +4,9 @@ import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
 import { Series } from '../src/screens/Series';
 import { currentRoute, navigate, resetTo } from '../src/nav';
-import { reloadTvs, saveTv } from '../src/tv/tvStore';
+import { forgetTv, reloadTvs, saveTv } from '../src/tv/tvStore';
+import * as tvClient from '../src/tv/tvClient';
+import * as watchHere from '../src/watchHere';
 import { groupLibrary, findGroup, seriesKey, type SeriesGroup } from '../../src/lib/seriesGroups';
 import { updateSettings } from '../../src/store/settings';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
@@ -217,7 +219,8 @@ describe('Library series card', () => {
     expect(cards().length).toBe(4);
     const card = seriesCard()!;
     expect(card.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
-    expect(card.querySelector('.m-badge')!.textContent).toBe('2 сезона');
+    expect(card.querySelector('.m-poster-foot')!.textContent).toBe('2 сезона · 4 серии');
+    expect(card.querySelector('.m-badge')!.textContent).not.toBe('2 сезона');
     act(() => updateSettings({ libraryView: 'small' }));
     expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
     for (const v of ['list', 'compact'] as const) {
@@ -225,7 +228,7 @@ describe('Library series card', () => {
       expect(cards().length).toBe(4);
       // no poster badge in a row: the count is on the line beside the name
       expect(seriesCard()!.querySelector(v === 'list' ? '.m-card-title' : '.m-crow-title')!.textContent).toBe('Тёмная материя');
-      expect(seriesCard()!.querySelector('.m-tile-meta')!.textContent).toBe('2 сезона');
+      expect(seriesCard()!.querySelector('.m-tile-meta')!.textContent).toBe('2 сезона · 4 серии');
     }
   });
 
@@ -237,7 +240,6 @@ describe('Library series card', () => {
     mount();
     await flush();
     const card = seriesCard()!;
-    expect(card.querySelector('.m-badge')!.textContent).toBe('2 раздачи');
     expect(card.querySelector('.m-card-title')!.textContent).toBe('Повелитель духов');
     expect(card.textContent).not.toContain('· 2 раздачи');
   });
@@ -314,7 +316,7 @@ describe('Library series card', () => {
     mount();
     await flush();
     expect(seriesCard()!.querySelector('.m-card-title')!.textContent).toBe('Тёмная материя');
-    expect(seriesCard()!.querySelector('.m-badge')!.textContent).toBe('2 seasons');
+    expect(seriesCard()!.querySelector('.m-poster-foot')!.textContent).toBe('2 seasons · 4 episodes');
     longPress(seriesCard()!);
     expect(btn('Delete series (2 torrents)')).toBeTruthy();
   });
@@ -350,14 +352,51 @@ describe('Series screen', () => {
     expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 1');
     const main = el.querySelector('[data-code="P26.5"]')!;
     expect(main.getAttribute('data-main')).toBe('phone');
-    expect(main.textContent).toContain('Продолжить на телефоне');
+    expect(main.textContent).toContain('Продолжить S01E02');
+    expect(main.textContent).toContain('на телефоне');
     expect(el.querySelector('[data-code="P26.6"]')!.textContent).toBe('На ТВ');
     expect(el.querySelector('.m-ep .m-bar-fill')).toBeTruthy();
     act(() => render(null, el));
     saveTv({ ip: '192.168.1.5', name: 'LG' });
     mount(<Series seriesKey={key()} />);
-    expect(btn('Продолжить на ТВ')).toBeTruthy();
+    expect(el.querySelector('[data-main="tv"]')!.textContent).toContain('на ТВ');
+    expect(el.querySelector('[data-where="phone"]')!.textContent).toBe('на телефоне');
     expect(el.querySelector('[data-code="P26.6"]')).toBeNull();
+  });
+
+  it('a saved TV is the main target: «Смотреть на ТВ», episode taps included; the tail holds skip and monitoring', async () => {
+    const version = vi.spyOn(tvClient, 'ompVersionOnTv').mockResolvedValue('9.9.9');
+    const phone = vi.spyOn(watchHere, 'playOnPhone').mockResolvedValue();
+    try {
+      saveTv({ ip: '192.168.1.5', name: 'LG' });
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      const main = el.querySelector('[data-main="tv"]')!;
+      expect(main.querySelector('.m-btn-title')!.textContent).toBe('Смотреть на ТВ');
+      expect(main.querySelector('.m-btn-sub')!.textContent).toBe('S02E01');
+      expect(el.querySelector('[data-where="phone"]')!.textContent).toBe('на телефоне');
+      const ep = el.querySelector('.m-ep')!;
+      const tail = el.querySelector('[data-series-tail]')!;
+      expect(ep.compareDocumentPosition(tail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(tail.querySelector('[data-block="skip"]')).toBeTruthy();
+      expect(tail.querySelector('[data-block="monitoring"]')).toBeTruthy();
+      expect(tail.textContent || '').not.toContain('Найти в лучшем');
+      act(() => (ep as HTMLElement).click());
+      await flush();
+      expect(version).toHaveBeenCalled();
+      expect(phone).not.toHaveBeenCalled();
+      act(() => render(null, el));
+      forgetTv('192.168.1.5');
+      version.mockClear();
+      mount(<Series seriesKey={key()} />);
+      act(() => (el.querySelector('.m-ep') as HTMLElement).click());
+      await flush();
+      expect(phone).toHaveBeenCalled();
+      expect(version).not.toHaveBeenCalled();
+    } finally {
+      version.mockRestore();
+      phone.mockRestore();
+    }
   });
 
   it('a series gone from the library says so', () => {
@@ -386,7 +425,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('HDRezka · 5.1');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
     });
 
@@ -394,7 +433,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('по умолчанию');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
       expect(choices()).toEqual([]);
       const about = el.querySelector('button[aria-label*="общая для ТВ и телефона"]') as HTMLElement;
@@ -413,7 +452,7 @@ describe('Series screen', () => {
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('LostFilm');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       expect(choices()).toEqual(['LostFilm · Русский', 'HDrezka Studio · Русский', 'По умолчанию (сбросить)']);
       expect(el.querySelector('[data-dub-choice].on')!.textContent).toBe('LostFilm · Русский');
       act(() => (el.querySelector('[data-dub-choice="k1"]') as HTMLElement).click());
@@ -423,7 +462,7 @@ describe('Series screen', () => {
       // the rest of the torrent's data stays
       expect(JSON.parse(sets[0].data).TorrServer.Files).toHaveLength(2);
       expect(value()).toBe('HDrezka Studio');
-      act(() => btn('Сменить')!.click());
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
       act(() => (el.querySelector('[data-dub-choice="reset"]') as HTMLElement).click());
       await flush();
       expect(JSON.parse(sets[1].data).omp.a.l).toBeUndefined();

@@ -105,7 +105,8 @@ describe('Tv screen with Android TV', () => {
     const el = mount();
     await flush();
     expect(el.querySelectorAll('.m-tv')).toHaveLength(2);
-    expect(card(el, 'Зал').textContent).toContain('192.168.1.40 · OMP 0.10.0');
+    expect(card(el, 'Зал').textContent).toContain('Android TV · OMP 0.10.0');
+    expect(card(el, 'Зал').textContent).not.toContain('192.168.1.40');
     expect(card(el, 'Спальня').textContent).toContain('сохранён');
   });
 

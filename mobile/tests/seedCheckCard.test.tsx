@@ -85,7 +85,8 @@ describe('seed check on a result card', () => {
     expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
     expect(bottom.querySelector('.m-rc-date')).toBeNull();
     expect(el.querySelector('.m-rc-meta .m-rc-date')!.textContent).toContain('окт');
-    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('3 сида');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('по данным трекера');
     act(() => btn.click());
     expect(probeSeeds).toHaveBeenCalledTimes(1);
     await act(async () => {
@@ -153,7 +154,8 @@ describe('seed check on a result card', () => {
     expect(btn.getAttribute('data-code')).toBe('P07.6');
     expect(btn.querySelector('.seed-check-long')!.textContent).toBe('Проверить сиды');
     expect(btn.querySelector('.seed-check-short')!.textContent).toBe('Сиды');
-    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('3 сида');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('по данным трекера');
     expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('Нет адреса трекера');
     act(() => btn.click());
     expect(probeSeeds).not.toHaveBeenCalled();
@@ -204,7 +206,8 @@ describe('seed check on a result card', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('по данным трекера');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).toContain('3 сида');
+    expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('по данным трекера');
     expect(el.querySelector('.m-rc-meta-text')!.textContent).not.toContain('сейчас');
 
     await act(async () => {
@@ -213,7 +216,8 @@ describe('seed check on a result card', () => {
       await Promise.resolve();
     });
     let meta = el.querySelector('.m-rc-meta-text')!.textContent || '';
-    expect(meta).toContain('по данным трекера');
+    expect(meta).toContain('3 сида');
+    expect(meta).not.toContain('по данным трекера');
     expect(meta).not.toContain('сейчас');
     expect(meta).not.toContain('по DHT');
 

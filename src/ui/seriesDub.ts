@@ -101,8 +101,8 @@ export interface SeriesDub {
   pick(value: string): Promise<void>;
 }
 
-/** The «Озвучка» row of a series: the newest record among its torrents, a choice shown at once. */
-export function useSeriesDub(members: Torrent[], c: JournalClient | null): SeriesDub {
+/** The «Озвучка» row of a series. `season` also stores the choice on that season (phone). */
+export function useSeriesDub(members: Torrent[], c: JournalClient | null, season?: number): SeriesDub {
   const [local, setLocal] = useState<SeriesTracks | null>(null);
   const stored = newestSeriesTracks(members);
   const rec = local && (!stored || local.at >= stored.at) ? local : stored;
@@ -110,7 +110,7 @@ export function useSeriesDub(members: Torrent[], c: JournalClient | null): Serie
     const patch = dubPatch(rec, value);
     const target = dubTarget(members);
     if (!patch || !target || !c) return Promise.resolve();
-    return saveSeriesTracks(c, target.hash, members.map((m) => m.hash), patch).then((saved) => {
+    return saveSeriesTracks(c, target.hash, members.map((m) => m.hash), patch, Date.now(), season).then((saved) => {
       setLocal(saved);
     });
   };

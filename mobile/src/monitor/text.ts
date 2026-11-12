@@ -67,7 +67,7 @@ export function qualityLabels(): { id: SubQuality; label: string }[] {
     { id: '', label: t('monitor.anyQuality') },
     { id: '720', label: '720p+' },
     { id: '1080', label: '1080p+' },
-    { id: '2160', label: '2160p' },
+    { id: '2160', label: '2160p+' },
   ];
 }
 
@@ -89,8 +89,12 @@ export function subSources(s: Pick<Subscription, 'sources'>): string {
 
 /** The conditions under the query: «Все источники · от 1080p · от 20 сидов · до 30 ГБ». */
 export function subRule(s: Subscription): string {
-  const parts = [subSources(s), qualityRule(s.quality)];
-  if (s.better) parts.push(t('monitor.betterRule'));
+  const parts = [subSources(s)];
+  if (s.better && s.quality === '') parts.push(t('monitor.bestShort'));
+  else {
+    parts.push(qualityRule(s.quality));
+    if (s.better) parts.push(t('monitor.betterRule'));
+  }
   if (s.minSeeds) parts.push(tp('monitor.minSeeds', s.minSeeds));
   if (s.maxSizeGb) parts.push(t('monitor.maxSize', { size: gbText(s.maxSizeGb) }));
   if (!s.notify) parts.push(t('monitor.noNotify'));

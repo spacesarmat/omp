@@ -53,8 +53,25 @@ jobs:
         run: npm ci --prefix desktop
       - name: Verify lockfiles
         run: git diff --exit-code -- package-lock.json desktop/package-lock.json
+      - name: Apt cache identity
+        id: apt-image
+        run: |
+          image=$(printf '%s' "${ImageVersion:-unknown}" | tr -c 'A-Za-z0-9_-' '-')
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+      - name: Cache apt packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .apt-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-ci-${{ steps.apt-image.outputs.image }}-${{ steps.apt-image.outputs.week }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-apt-ci-${{ steps.apt-image.outputs.image }}-
+            ${{ runner.os }}-${{ runner.arch }}-apt-ci-
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck rsync
+        timeout-minutes: 10
+        env:
+          APT_CACHE_DIR: ${{ github.workspace }}/.apt-cache
+        run: bash scripts/ci-apt-install.sh shellcheck rsync
       - run: npm test
       - run: npm run build
         env:
@@ -85,15 +102,43 @@ jobs:
       - run: npm run check:overflow
 
   # the Android app (phone + Android TV): debug build and the Kotlin unit tests, so a broken native side
-  # shows up in the pull request and not only when a release is cut
+  # shows up in the pull request and not only when a release is cut.
+  # Pull requests run the steps only when an Android input changed (scripts/android-ci-paths.sh).
+  # The job itself always runs. Skipped steps still leave a successful android check, so a required
+  # check is not left pending. Push and workflow_dispatch always build.
   android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
-          submodules: recursive
+          fetch-depth: 1
+      - name: Detect Android paths
+        id: filter
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          files="$(git diff --no-renames --name-only "$BASE_SHA" HEAD)"
+          result="$(bash scripts/android-ci-paths.sh <<< "$files")"
+          printf '%s\n' "$result" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$result"
+          printf '%s\n' "$files"
+      - name: Skip unchanged Android paths
+        if: steps.filter.outputs.android != 'true'
+        run: echo "Pull request does not change Android inputs."
+      # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
+      - name: Checkout 2160 Player submodule
+        if: steps.filter.outputs.android == 'true'
+        run: git submodule update --init --recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.filter.outputs.android == 'true'
         with:
           node-version: 24
           cache: npm
@@ -102,6 +147,7 @@ jobs:
             desktop/package-lock.json
       - name: Cache root node_modules
         id: root-node-modules
+        if: steps.filter.outputs.android == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
@@ -110,6 +156,7 @@ jobs:
             ${{ runner.os }}-node24-root-modules-
       - name: Cache desktop node_modules
         id: desktop-node-modules
+        if: steps.filter.outputs.android == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: desktop/node_modules
@@ -117,56 +164,81 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node24-desktop-modules-
       - name: Install root dependencies
-        if: steps.root-node-modules.outputs.cache-hit == 'true'
+        if: steps.filter.outputs.android == 'true' && steps.root-node-modules.outputs.cache-hit == 'true'
         run: npm install --prefer-offline --no-audit --no-fund
       - name: Install root dependencies exactly
-        if: steps.root-node-modules.outputs.cache-hit != 'true'
+        if: steps.filter.outputs.android == 'true' && steps.root-node-modules.outputs.cache-hit != 'true'
         run: npm ci
       - name: Install desktop dependencies
-        if: steps.desktop-node-modules.outputs.cache-hit == 'true'
+        if: steps.filter.outputs.android == 'true' && steps.desktop-node-modules.outputs.cache-hit == 'true'
         run: npm install --prefix desktop --prefer-offline --no-audit --no-fund
       - name: Install desktop dependencies exactly
-        if: steps.desktop-node-modules.outputs.cache-hit != 'true'
+        if: steps.filter.outputs.android == 'true' && steps.desktop-node-modules.outputs.cache-hit != 'true'
         run: npm ci --prefix desktop
       - name: Verify lockfiles
+        if: steps.filter.outputs.android == 'true'
         run: git diff --exit-code -- package-lock.json desktop/package-lock.json
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        if: steps.filter.outputs.android == 'true'
         with:
           distribution: temurin
-          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle
+          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle.
+          # Gradle User Home is cached by setup-gradle below, not here (the two caches conflict).
           java-version: |
             17
             21
-          cache: gradle
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        if: steps.filter.outputs.android == 'true'
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      # Dependencies, wrapper distributions and the local build cache (~/.gradle/caches/build-cache-1).
+      # PRs write the entry so the next run on the same branch restores it. GitHub does not let that
+      # entry replace the one written on main.
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        if: steps.filter.outputs.android == 'true'
+        with:
+          cache-read-only: false
       - name: Cache Gradle configuration
+        if: steps.filter.outputs.android == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             android/.gradle/configuration-cache
             android/vendor/2160player/.gradle/configuration-cache
-          key: ${{ runner.os }}-gradle-config-${{ hashFiles('android/**/*.gradle', 'android/**/*.gradle.kts', 'android/**/*.properties', 'android/**/*.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-config-v2-${{ hashFiles('android/**/*.gradle', 'android/**/*.gradle.kts', 'android/**/*.properties', 'android/**/*.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
       - name: Sync the web app into the Android project
+        if: steps.filter.outputs.android == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: npm run android:sync
       - name: Build and test
+        if: steps.filter.outputs.android == 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eu
           # Pull requests pass -PompAbi=arm64-v8a: one debug split, no universal APK.
           # Push and workflow_dispatch omit it and keep every ABI. assembleDebug is the real task (splits are not flavors).
+          # --build-cache (org.gradle.caching) and --parallel (org.gradle.parallel) apply to this invocation,
+          # including the player-core build. They are not in gradle.properties: the release job packages three
+          # APKs and does not restore a build cache, so writing one there only costs disk and heap.
           # Configuration cache is org.gradle.configuration-cache in android/gradle.properties.
-          args=(-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64)
+          # Unit-test failures only name the exception unless the Test task prints the full comparison.
+          cat > "$RUNNER_TEMP/test-log.init.gradle" << 'EOF'
+          allprojects {
+              tasks.withType(Test).configureEach {
+                  testLogging.exceptionFormat = "FULL"
+              }
+          }
+          EOF
+          args=(--build-cache --parallel --init-script "$RUNNER_TEMP/test-log.init.gradle" -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64)
           if [ "$EVENT_NAME" = "pull_request" ]; then
             args+=(-PompAbi=arm64-v8a)
           fi
           (cd android && ./gradlew "${args[@]}" assembleDebug testDebugUnitTest)
       - name: APK size per ABI
+        if: steps.filter.outputs.android == 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
@@ -183,7 +255,7 @@ jobs:
             test -f "$dir"/*universal*.apk
           fi
       - name: Upload debug APKs
-        if: github.event_name != 'pull_request'
+        if: steps.filter.outputs.android == 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: apk-debug

@@ -138,6 +138,23 @@ describe('Remote header and layout', () => {
     });
   });
 
+  it('HDMI inputs show only while the LG remote is connected', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    tvState.value = 'idle';
+    mount();
+    const hdmi = () => Array.from(el.querySelectorAll('button')).filter((b) => /^HDMI /.test(b.textContent || '')).map((b) => b.textContent);
+    expect(hdmi()).toEqual([]);
+    act(() => {
+      tvState.value = 'connected';
+    });
+    expect(hdmi()).toEqual(['HDMI 1', 'HDMI 2', 'HDMI 3']);
+    act(() => {
+      tvState.value = 'error';
+    });
+    expect(hdmi()).toEqual([]);
+    tvState.value = 'idle';
+  });
+
   it('buttons mode (Magic Remote): d-pad, colour keys, Back/Home/Menu, volume · play · keyboard/mute', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();
@@ -416,7 +433,7 @@ describe('Remote with a TV', () => {
         i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
       });
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 40));
+        await new Promise((r) => setTimeout(r, 150));
       });
       expect(order).toEqual(['type:a', 'type:b', 'enter', 'del:1']);
     });
@@ -645,6 +662,9 @@ describe('Remote with a TV', () => {
   it('touchpad settings sheet: opens from the header, saves each change', () => {
     mount();
     expect(document.querySelector('.m-sheet-host')).toBeNull();
+    const gear = lbl('Настройки пульта').querySelector('svg path') as SVGPathElement;
+    expect(gear.getAttribute('d') || '').toContain('M19.4');
+    expect(gear.getAttribute('d') || '').not.toContain('M12 2v2');
     click(lbl('Настройки пульта'));
     const sheet = document.querySelector('.m-sheet-host')!;
     expect(sheet.textContent).toContain('3 из 5');
