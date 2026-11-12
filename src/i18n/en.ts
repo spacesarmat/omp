@@ -1290,6 +1290,8 @@ export const en: EnDict<typeof ru> = {
       sourcesN: { one: '{n} source', other: '{n} sources' },
       notify: 'Notify',
       notifyHint: 'about every new release',
+      telegram: 'Telegram',
+      telegramHint: 'separate from the phone. The bot does not send findings',
       better: 'Better quality only',
       betterHint: 'only when the quality beats earlier finds',
       silentNote: 'Releases already found will not notify. The next check only remembers what is already there.',

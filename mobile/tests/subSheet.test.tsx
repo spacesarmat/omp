@@ -320,6 +320,9 @@ describe('SubFindings', () => {
     expect(getSubscription(s.id)!.quality).toBe('2160');
     click(el.querySelector('[data-sub-notify]'));
     expect(getSubscription(s.id)!.notify).toBe(false);
+    click(el.querySelector('[data-sub-telegram]'));
+    expect(getSubscription(s.id)!.notifyTelegram).toBe(true);
+    expect(getSubscription(s.id)!.notify).toBe(false);
     click(el.querySelector('[data-sub-pause]'));
     expect(el.querySelector('[data-sub-hold]')!.textContent).toContain('на паузе');
     expect(el.querySelector('[data-check-sub]')).toBeNull();

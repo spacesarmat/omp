@@ -156,6 +156,26 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
               <span class="m-switch-knob" />
             </button>
           </div>
+          <div class="m-skip-row">
+            <span class="m-skip-text">
+              {t('monitor.sub.telegram')}
+              <span class="m-muted m-small">{t('monitor.sub.telegramHint')}</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sub.notifyTelegram === true}
+              aria-label={t('monitor.sub.telegram')}
+              class={'m-switch' + (sub.notifyTelegram ? ' on' : '')}
+              data-sub-telegram
+              onClick={() => {
+                updateSubscription(id, { notifyTelegram: sub.notifyTelegram !== true });
+                reloadMonitor();
+              }}
+            >
+              <span class="m-switch-knob" />
+            </button>
+          </div>
           {sub.catalog && (
             <button
               type="button"
