@@ -339,6 +339,46 @@ function draftById(state, account, id, now) {
   return row;
 }
 
+function pendingById(state, account, id) {
+  return (
+    (state.donations || []).find((d) => d && d.id === id && d.accountId === account.id && d.status === 'pending' && d.held !== true) ||
+    null
+  );
+}
+
+/** The same frozen checkout, so a lost Telegram message can be asked for again. */
+function resendCheckout(state, row) {
+  if (row.method === 'PC' || row.method === 'AC') {
+    if (!state.settings.yoomoneyWallet || !row.gross) return { error: 'Счёт не найден' };
+    const title = row.method === 'PC' ? 'Кошелёк' : 'Карта';
+    const url = payUrl(state.settings.yoomoneyWallet, { sum: row.gross, label: 'don:' + row.id, paymentType: row.method });
+    return {
+      text: title + ' - ' + rubText(row.gross) + '. Комиссия уже в сумме.',
+      inline: { inline_keyboard: [[{ text: title + ' - ' + rubText(row.gross), url }]] },
+    };
+  }
+  if (row.method === 'stars') {
+    const stars = Number(row.payAmount);
+    if (!Number.isInteger(stars) || stars < 1) return { error: 'Счёт не найден' };
+    return {
+      text: 'Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.',
+      invoice: starInvoiceBody(row.telegramId, {
+        title: 'Донат OMP',
+        description: 'Донат OMP, ' + row.amountRub + ' ₽',
+        payload: 'don:' + row.id,
+        stars,
+      }),
+    };
+  }
+  if (row.method === 'crypto' && row.asset && row.payAmount) {
+    return {
+      text: row.asset + ' ' + row.payAmount + '. Ссылка на оплату:',
+      cryptoIssue: { donationId: row.id },
+    };
+  }
+  return { error: 'Счёт не найден' };
+}
+
 export function donateOnCallback(state, account, data, now) {
   const raw = String(data || '');
   if (raw.indexOf('dn:') !== 0) return null;
@@ -366,6 +406,27 @@ export function donateOnCallback(state, account, data, now) {
   const bits = raw.split(':');
   const id = bits[2] || '';
   const row = draftById(state, account, id, at);
+  if (bits[1] === 'p') {
+    const pending = pendingById(state, account, id);
+    if (pending) {
+      const again = resendCheckout(state, pending);
+      if (again.error) return { state, answer: again.error };
+      return { state, text: again.text, inline: again.inline, invoice: again.invoice, cryptoIssue: again.cryptoIssue, answer: '' };
+    }
+    const heldRow = (state.donations || []).find((d) => d && d.id === id && d.accountId === account.id && d.status === 'pending' && d.held === true);
+    if (heldRow) return { state, answer: 'Платёж уже у ЮMoney и ждёт подтверждения' };
+    if (!row || row.step !== 'method') return { state, answer: 'Кнопка устарела' };
+    const locked = lockMethod(state, account, row, bits[3] || '');
+    if (locked.error) return { state, text: locked.error, answer: locked.error };
+    return {
+      state: putDonation(state, locked.row),
+      text: locked.text,
+      inline: locked.inline,
+      invoice: locked.invoice,
+      cryptoIssue: locked.cryptoIssue,
+      answer: '',
+    };
+  }
   if (!row) return { state, answer: 'Кнопка устарела' };
   if (bits[1] === 's') {
     if (row.step !== 'comment') return { state, answer: 'Кнопка устарела' };
@@ -378,19 +439,6 @@ export function donateOnCallback(state, account, data, now) {
     const next = { ...row, showName: bits[3] === '1', step: 'method', displayName: nameOf(account) || row.displayName };
     const screen = methodScreen(state, account, next);
     return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '' };
-  }
-  if (bits[1] === 'p') {
-    if (row.step !== 'method') return { state, answer: 'Кнопка устарела' };
-    const locked = lockMethod(state, account, row, bits[3] || '');
-    if (locked.error) return { state, text: locked.error, answer: locked.error };
-    return {
-      state: putDonation(state, locked.row),
-      text: locked.text,
-      inline: locked.inline,
-      invoice: locked.invoice,
-      cryptoIssue: locked.cryptoIssue,
-      answer: '',
-    };
   }
   return { state, answer: 'Кнопка устарела' };
 }
@@ -451,16 +499,53 @@ export function applyDonation(state, notice) {
     return { state: noted('bad_label'), result: { error: 'bad_label', kind: 'donate' } };
   }
   if (isUnaccepted(src.unaccepted)) {
-    return { state, result: { pending: true, kind: 'donate', accountId: row.accountId, amountRub: row.amountRub } };
+    if (row.held && row.operationId) {
+      return {
+        state: noted('duplicate'),
+        result: { duplicate: true, pending: true, kind: 'donate', accountId: row.accountId, amountRub: row.amountRub },
+      };
+    }
+    const saved = {
+      ...row,
+      held: true,
+      operationId,
+      heldAmount: String(src.amount || ''),
+      heldCurrency: String(src.currency || ''),
+      withdrawAmount: src.withdrawAmount == null ? '' : String(src.withdrawAmount),
+      notificationType: String(src.notificationType || ''),
+      requireWithdraw: src.requireWithdraw === true || src.requireWithdraw === 'true',
+      heldAt: now,
+    };
+    return {
+      state: putDonation(state, saved),
+      result: { pending: true, kind: 'donate', accountId: row.accountId, amountRub: row.amountRub, donation: saved },
+    };
   }
   if (!coversDonation(row, src)) {
     return { state: noted('amount'), result: { error: 'amount', kind: 'donate', accountId: row.accountId } };
   }
-  const saved = { ...row, status: 'paid', operationId, paidAt: now, step: '' };
+  const saved = { ...row, status: 'paid', held: false, operationId, paidAt: now, step: '' };
   return {
     state: putDonation(state, saved),
     result: { kind: 'donate', accountId: row.accountId, amountRub: row.amountRub, donation: saved },
   };
+}
+
+/** Admin confirms a held YooMoney donation. It does not go through subscription payments. */
+export function confirmDonateHold(state, { id, now }) {
+  const row = (state.donations || []).find((d) => d && d.id === id && d.status === 'pending' && d.held === true);
+  if (!row || !row.operationId) return { state, result: { error: 'not_found' } };
+  return applyDonation(state, {
+    operationId: row.operationId,
+    label: 'don:' + row.id,
+    amount: row.heldAmount,
+    currency: row.heldCurrency || '643',
+    unaccepted: false,
+    withdrawAmount: row.withdrawAmount,
+    notificationType: row.notificationType,
+    requireWithdraw: row.requireWithdraw === true,
+    now: now || Date.now(),
+  });
 }
 
 export function donateStarCheckout(state, query) {
@@ -541,6 +626,7 @@ function feedRow(d) {
     nameHidden: d.nameHidden === true,
     showName: d.showName === true,
     status: d.status || '',
+    held: d.held === true && d.status === 'pending',
     operationId: d.operationId || '',
   };
 }

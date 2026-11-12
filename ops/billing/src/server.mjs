@@ -167,6 +167,7 @@ import {
   accountSupported,
   applyDonateSettings,
   applyDonation,
+  confirmDonateHold,
   donateCsv,
   donateNoticeText,
   donateReport,
@@ -2364,6 +2365,25 @@ export function createApp(file, fetchImpl, opts) {
           }));
           await audit(file, 'donate_settings', 'Донат', admin);
           flashText = 'Настройки доната сохранены';
+          redirectTo = '/admin/?tab=donations';
+        }
+        if (path === '/admin/donate/confirm') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const id = String(body.id || '');
+            const out = await store.update((state) => confirmDonateHold(state, { id, now: Date.now() }));
+            if (out.error === 'not_found') flashError = 'Удержанный донат не найден';
+            else if (out.error) flashError = 'Донат не подтверждён: ' + out.error;
+            else {
+              await audit(file, 'donate_confirm', id, admin);
+              flashText = 'Донат подтверждён. Подписка не продлена.';
+              try {
+                await finishDonate(await store.read(), out, net);
+              } catch (e) {
+                /* the donation is stored either way */
+              }
+            }
+          }
           redirectTo = '/admin/?tab=donations';
         }
         if (path === '/admin/donate/refund') {

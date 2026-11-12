@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, type PostResult } from '@/lib/api';
+import { formFromDonateSettings, keepOrRefreshForm, takeFilterRows, type DonateForm } from '@/lib/donateForm';
 
 type Settings = {
   enabled?: boolean;
@@ -32,6 +33,7 @@ type Row = {
   commentHidden: boolean;
   nameHidden: boolean;
   status: string;
+  held?: boolean;
 };
 
 type Report = {
@@ -60,31 +62,28 @@ export function DonationsPanel({
   report?: Report;
   run: (path: string, fields: Record<string, unknown>) => Promise<PostResult | undefined>;
 }) {
-  const src = settings || {};
-  const [enabled, setEnabled] = useState(src.enabled === true);
-  const [yoomoney, setYoomoney] = useState(src.yoomoney === true);
-  const [stars, setStars] = useState(src.stars === true);
-  const [crypto, setCrypto] = useState(src.crypto === true);
-  const [notifyAll, setNotifyAll] = useState(src.notifyAll === true);
-  const [showAmounts, setShowAmounts] = useState(src.showAmounts === true);
-  const [amounts, setAmounts] = useState(src.amounts || '100,300,500,1000');
-  const [minRub, setMinRub] = useState(String(src.minRub ?? 50));
-  const [maxRub, setMaxRub] = useState(String(src.maxRub ?? 100000));
-  const [commentMax, setCommentMax] = useState(String(src.commentMax ?? 200));
-  const [thanksText, setThanksText] = useState(src.thanksText || 'Спасибо! Вы поддержали проект OMP.');
-  const [rubPerStar, setRubPerStar] = useState(String(src.rubPerStar ?? 0));
-  const [notifyMin, setNotifyMin] = useState(String(src.notifyMin ?? 0));
+  const [dirty, setDirty] = useState(false);
+  const [form, setForm] = useState<DonateForm>(() => formFromDonateSettings(settings));
   const [filtered, setFiltered] = useState<Row[] | null>(null);
   const [status, setStatus] = useState('all');
   const [method, setMethod] = useState('all');
+  const requestId = useRef(0);
+  const filterRef = useRef({ status, method });
+  filterRef.current = { status, method };
   const rows = filtered ?? report?.rows ?? [];
   const summary = report?.summary;
   const chart = report?.chart || [];
   const top = report?.top || [];
 
+  useEffect(() => {
+    setForm((local) => keepOrRefreshForm(local, formFromDonateSettings(settings), dirty));
+  }, [settings, dirty]);
+
   async function reload(nextStatus = status, nextMethod = method) {
+    const mine = ++requestId.current;
     if (nextStatus === 'all' && nextMethod === 'all') {
-      setFiltered(null);
+      const taken = takeFilterRows<Row>(mine, requestId.current, null);
+      if (taken !== undefined) setFiltered(taken);
       return;
     }
     const q = new URLSearchParams();
@@ -92,7 +91,19 @@ export function DonationsPanel({
     if (nextMethod !== 'all') q.set('method', nextMethod);
     const data = await api<Report>('/admin/api/donations?' + q.toString());
     if (data.auth === false) return;
-    setFiltered(data.rows || []);
+    const taken = takeFilterRows<Row>(mine, requestId.current, data.rows || []);
+    if (taken !== undefined) setFiltered(taken);
+  }
+
+  useEffect(() => {
+    const current = filterRef.current;
+    if (current.status === 'all' && current.method === 'all') return;
+    void reload(current.status, current.method);
+  }, [report]);
+
+  function edit(patch: Partial<DonateForm>) {
+    setDirty(true);
+    setForm((prev) => ({ ...prev, ...patch }));
   }
 
   const max = Math.max(1, ...chart.map((r) => r.rub));
@@ -110,45 +121,47 @@ export function DonationsPanel({
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            <input type="checkbox" checked={form.enabled} onChange={(e) => edit({ enabled: e.target.checked })} />
             Принимать донаты
           </label>
           <div className="flex flex-wrap gap-4 text-sm">
-            <label className="flex items-center gap-2"><input type="checkbox" checked={yoomoney} onChange={(e) => setYoomoney(e.target.checked)} /> ЮMoney</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={stars} onChange={(e) => setStars(e.target.checked)} /> Telegram Stars</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={crypto} onChange={(e) => setCrypto(e.target.checked)} /> Crypto Pay</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={notifyAll} onChange={(e) => setNotifyAll(e.target.checked)} /> Уведомлять о каждом</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={showAmounts} onChange={(e) => setShowAmounts(e.target.checked)} /> Суммы в списке благодарностей</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.yoomoney} onChange={(e) => edit({ yoomoney: e.target.checked })} /> ЮMoney</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.stars} onChange={(e) => edit({ stars: e.target.checked })} /> Telegram Stars</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.crypto} onChange={(e) => edit({ crypto: e.target.checked })} /> Crypto Pay</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.notifyAll} onChange={(e) => edit({ notifyAll: e.target.checked })} /> Уведомлять о каждом</label>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={form.showAmounts} onChange={(e) => edit({ showAmounts: e.target.checked })} /> Суммы в списке благодарностей</label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="Кнопки сумм" value={amounts} onChange={setAmounts} />
-            <Field label="Минимум, ₽" value={minRub} onChange={setMinRub} />
-            <Field label="Максимум, ₽" value={maxRub} onChange={setMaxRub} />
-            <Field label="Комментарий, символов" value={commentMax} onChange={setCommentMax} />
-            <Field label="₽ за 1 звезду" value={rubPerStar} onChange={setRubPerStar} />
-            <Field label="Порог уведомления, ₽" value={notifyMin} onChange={setNotifyMin} />
+            <Field label="Кнопки сумм" value={form.amounts} onChange={(v) => edit({ amounts: v })} />
+            <Field label="Минимум, ₽" value={form.minRub} onChange={(v) => edit({ minRub: v })} />
+            <Field label="Максимум, ₽" value={form.maxRub} onChange={(v) => edit({ maxRub: v })} />
+            <Field label="Комментарий, символов" value={form.commentMax} onChange={(v) => edit({ commentMax: v })} />
+            <Field label="₽ за 1 звезду" value={form.rubPerStar} onChange={(v) => edit({ rubPerStar: v })} />
+            <Field label="Порог уведомления, ₽" value={form.notifyMin} onChange={(v) => edit({ notifyMin: v })} />
           </div>
           <div>
             <Label>Текст благодарности</Label>
-            <Input value={thanksText} onChange={(e) => setThanksText(e.target.value)} />
+            <Input value={form.thanksText} onChange={(e) => edit({ thanksText: e.target.value })} />
           </div>
           <Button
             type="button"
             onClick={() =>
               void run('/admin/donate', {
-                enabled: enabled ? 'true' : 'false',
-                yoomoney: yoomoney ? 'true' : 'false',
-                stars: stars ? 'true' : 'false',
-                crypto: crypto ? 'true' : 'false',
-                notifyAll: notifyAll ? 'true' : 'false',
-                showAmounts: showAmounts ? 'true' : 'false',
-                amounts,
-                minRub,
-                maxRub,
-                commentMax,
-                thanksText,
-                rubPerStar,
-                notifyMin,
+                enabled: form.enabled ? 'true' : 'false',
+                yoomoney: form.yoomoney ? 'true' : 'false',
+                stars: form.stars ? 'true' : 'false',
+                crypto: form.crypto ? 'true' : 'false',
+                notifyAll: form.notifyAll ? 'true' : 'false',
+                showAmounts: form.showAmounts ? 'true' : 'false',
+                amounts: form.amounts,
+                minRub: form.minRub,
+                maxRub: form.maxRub,
+                commentMax: form.commentMax,
+                thanksText: form.thanksText,
+                rubPerStar: form.rubPerStar,
+                notifyMin: form.notifyMin,
+              }).then((res) => {
+                if (res && !res.flash?.error) setDirty(false);
               })
             }
           >
@@ -233,8 +246,11 @@ export function DonationsPanel({
                     <td className="py-1 pr-2">{money(row.amountRub)}</td>
                     <td className="py-1 pr-2">{row.method}</td>
                     <td className="py-1 pr-2">{row.commentHidden ? 'скрыт' : row.comment}</td>
-                    <td className="py-1 pr-2">{STATUS[row.status] || row.status}</td>
+                    <td className="py-1 pr-2">{row.held && row.status === 'pending' ? 'ждёт в ЮMoney' : STATUS[row.status] || row.status}</td>
                     <td className="py-1 space-x-2 whitespace-nowrap">
+                      {row.held && row.status === 'pending' ? (
+                        <button type="button" className="text-primary" onClick={() => { if (window.confirm('Подтвердить удержанный донат? Подписка не продлится.')) void run('/admin/donate/confirm', { id: row.id, confirm: 'yes' }).then(() => reload()); }}>Подтвердить</button>
+                      ) : null}
                       {row.status === 'paid' ? (
                         <button type="button" className="text-primary" onClick={() => { if (window.confirm('Отметить возврат? Деньги этой кнопкой не уходят.')) void run('/admin/donate/refund', { id: row.id, confirm: 'yes' }).then(() => reload()); }}>Возврат</button>
                       ) : null}

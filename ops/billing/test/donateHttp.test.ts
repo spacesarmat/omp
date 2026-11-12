@@ -269,4 +269,41 @@ describe('donate admin', () => {
     const me = await call(b.app, 'GET', '/v1/me', { headers: { authorization: 'Bearer ' + b.token, 'x-device-id': DEV } });
     expect(me.data && me.data.supporter).toBe(false);
   });
+
+  it('confirms a held YooMoney donation without a subscription payment', async () => {
+    const b = await boot();
+    const notice = signed({
+      notification_type: 'card-incoming',
+      operation_id: 'op-held-http',
+      amount: '300.00',
+      withdraw_amount: b.gross,
+      currency: '643',
+      datetime: '2026-11-12T12:00:00Z',
+      sender: '',
+      codepro: 'false',
+      label: 'don:aabbccddeeff0011',
+      unaccepted: 'true',
+    });
+    const held = await call(b.app, 'POST', '/v1/yoomoney', { form: notice });
+    expect(held.status).toBe(200);
+    const before = await readState(b.store);
+    expect(before.donations[0].status).toBe('pending');
+    expect(before.donations[0].held).toBe(true);
+    expect(before.payments).toEqual([]);
+    const login = issueCliAdminLogin(before, { now: Date.now() });
+    await writeState(b.store, login.state);
+    const once = await call(b.app, 'GET', '/admin/login/once?token=' + encodeURIComponent(login.result.token));
+    const cookie = String(once.headers['set-cookie'] || '');
+    const home = await call(b.app, 'GET', '/admin/api/home', { cookie });
+    const csrf = String((home.data && home.data.csrf) || '');
+    const confirmed = await call(b.app, 'POST', '/admin/donate/confirm', {
+      cookie,
+      body: { csrf, id: 'aabbccddeeff0011', confirm: 'yes' },
+    });
+    expect(confirmed.data && confirmed.data.ok).toBe(true);
+    const after = await readState(b.store);
+    expect(after.donations[0].status).toBe('paid');
+    expect(after.payments).toEqual([]);
+    expect(after.subscriptions[0].paidUntil).toBe(b.until);
+  });
 });

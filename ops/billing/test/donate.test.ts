@@ -6,6 +6,7 @@ import {
   donateCsv,
   donateNoticeText,
   donateReport,
+  confirmDonateHold,
   hideDonateField,
   markDonateRefund,
   normalizeDonateSettings,
@@ -250,5 +251,64 @@ describe('donate settlement', () => {
     expect(csv).toContain('Анна');
     expect(csv).toContain('300');
     expect(csv).not.toContain('secret');
+  });
+
+  it('keeps a held YooMoney transfer on the donation and confirms it without a subscription payment', () => {
+    const { state, row } = pendingCard();
+    const held = applyDonation(state, {
+      operationId: 'op-held',
+      label: 'don:' + row.id,
+      amount: String(row.amountRub),
+      currency: '643',
+      withdrawAmount: row.gross,
+      notificationType: 'card-incoming',
+      requireWithdraw: true,
+      unaccepted: 'true',
+      now: NOW + 1000,
+    });
+    const saved = held.state.donations.find((d) => d.id === row.id);
+    expect(saved.status).toBe('pending');
+    expect(saved.held).toBe(true);
+    expect(saved.operationId).toBe('op-held');
+    expect(saved.withdrawAmount).toBe(row.gross);
+    expect(saved.notificationType).toBe('card-incoming');
+    expect(held.state.payments || []).toEqual([]);
+    const again = applyDonation(held.state, {
+      operationId: 'op-held',
+      label: 'don:' + row.id,
+      amount: String(row.amountRub),
+      currency: '643',
+      withdrawAmount: row.gross,
+      notificationType: 'card-incoming',
+      requireWithdraw: true,
+      unaccepted: 'true',
+      now: NOW + 1500,
+    });
+    expect(again.result.duplicate).toBe(true);
+    const confirmed = confirmDonateHold(held.state, { id: row.id, now: NOW + 2000 });
+    expect(confirmed.result.kind).toBe('donate');
+    expect(confirmed.result.error).toBeUndefined();
+    expect(confirmed.state.donations.find((d) => d.id === row.id).status).toBe('paid');
+    expect(confirmed.state.payments || []).toEqual([]);
+    expect(confirmed.state.subscriptions).toEqual(state.subscriptions);
+    const report = donateReport(held.state, NOW + 1500, {});
+    expect(report.rows.find((r) => r.id === row.id).held).toBe(true);
+  });
+});
+
+describe('donate checkout retry', () => {
+  it('sends the same frozen YooMoney link again when the first message did not go out', () => {
+    const start = on();
+    const menu = botReply(start.state, { chatId: '42', text: '/donate', now: NOW, from: { firstName: 'Анна' } });
+    const picked = botCallback(menu.state, { chatId: '42', data: 'dn:a:100', now: NOW });
+    const draft = picked.state.donations.find((d) => d.amountRub === 100);
+    const skipped = botCallback(picked.state, { chatId: '42', data: 'dn:s:' + draft.id, now: NOW });
+    const hidden = botCallback(skipped.state, { chatId: '42', data: 'dn:n:' + draft.id + ':0', now: NOW });
+    const pay = botCallback(hidden.state, { chatId: '42', data: 'dn:p:' + draft.id + ':AC', now: NOW });
+    const again = botCallback(pay.state, { chatId: '42', data: 'dn:p:' + draft.id + ':AC', now: NOW + 5000 });
+    expect(again.answer).not.toContain('устарела');
+    expect(again.messages[0].inline.inline_keyboard[0][0].url).toBe(pay.messages[0].inline.inline_keyboard[0][0].url);
+    expect(again.state.donations.filter((d) => d.status !== 'cancelled')).toHaveLength(1);
+    expect(again.state.donations.find((d) => d.id === draft.id).gross).toBe(pay.state.donations.find((d) => d.id === draft.id).gross);
   });
 });
