@@ -9,7 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## 0.30.1-beta.6
 
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button
-- [atv] On Android TV the embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed and remaining time sit under it, and buffering shows a spinner in the centre button
+- [atv] On Android TV the embedded 2160 Player is updated to 0.2.26. The TV screen still uses OMP's own controls
 - [tech] The android/vendor/2160player submodule is updated to v0.2.26 (54ad1a1), player-core coordinate 0.2.26. OMP's host does not call safeDrawingPadding, so the inset is not applied twice
 
 ## 0.30.1-beta.5
