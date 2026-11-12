@@ -25,6 +25,8 @@ import { LayoutInspector } from './components/LayoutInspector';
 import { MultiSelectInspector } from './components/MultiSelectInspector';
 import { LogicEditor } from './components/LogicEditor';
 import { FlowMap } from './components/FlowMap';
+import { FlowCanvas, type FlowNodeSelection } from './components/FlowCanvas';
+import { FlowNodeInspector } from './components/FlowNodeInspector';
 import { SimulationPanel } from './components/SimulationPanel';
 import { ExportPanel } from './components/ExportPanel';
 import { EditorIcon } from './components/EditorIcon';
@@ -85,6 +87,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const [geometrySnapshot, setGeometrySnapshot] = useState<GeometrySnapshot | null>(null);
   const [geometryConfirmed, setGeometryConfirmed] = useState(false);
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
+  const [flowSelection, setFlowSelection] = useState<FlowNodeSelection | null>(null);
   const [serverConnected, setServerConnected] = useState(false);
   const [previewMode, setPreviewMode] = useState<'before' | 'after'>('after');
   const [trace, setTrace] = useState<InteractionTrace[]>([]);
@@ -151,6 +154,34 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       ?? layoutNodes.find((entry) => entry.elementId === elementId);
     handleSelectNode(node ? { ids: [node.nodeId], anchorId: node.nodeId } : { ids: [], anchorId: null });
   };
+  // Canvas selection reports the node so the inspector can show its typed fields; the linked
+  // element or destination screen stays highlighted for the Design mode switch.
+  const handleFlowNodeSelected = (selection: FlowNodeSelection) => {
+    setFlowSelection(selection);
+    const rule = controller.draft.flow.rules.find((entry) => entry.id === selection.ruleId);
+    const node = rule?.graph?.nodes.find((entry) => entry.id === selection.nodeId);
+    if (!rule || !node) return;
+    let target = rule.screenId;
+    if (node.kind === 'trigger' && rule.elementId !== '*') target = rule.elementId;
+    if (node.kind === 'action' || node.kind === 'result') {
+      const step = rule.steps?.find((entry) => entry.id === node.stepId);
+      if (step?.action && (step.action.type === 'navigate' || step.action.type === 'openScreen')) target = step.action.screenId;
+    }
+    if (isDesignElementAvailable(target, draft.screenId, draft.target)) {
+      setSelected(target);
+    } else if (isEditorRoute(draft.target, target)) {
+      setView({ screenId: target as DesktopRouteId });
+    }
+  };
+  const handleFlowReveal = (selection: FlowNodeSelection) => {
+    handleFlowNodeSelected(selection);
+    setMode('design');
+  };
+  useEffect(() => {
+    if (!flowSelection) return;
+    const rule = draft.flow.rules.find((entry) => entry.id === flowSelection.ruleId);
+    if (!rule?.graph?.nodes.some((entry) => entry.id === flowSelection.nodeId)) setFlowSelection(null);
+  }, [draft.flow, flowSelection]);
   const handleMoveNode = (args: { nodeId: string; parentId: string; index: number; placement?: LayoutPlacement; siblings?: string[] }) => {
     const placement = getLayoutPlacement(draft.theme, layoutContext, args.nodeId);
     if (placement?.locked || placement?.hidden) return;
@@ -654,36 +685,46 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         />
         <section class="editor-canvas-area" aria-label="Холст">
           <div class="editor-canvas-caption"><span>{routeLabel}</span><small>{viewport.width} × {viewport.height}</small>{!previewEditable && <small class="editor-canvas-readonly" data-testid="canvas-readonly">Базовая тема - редактирование выключено</small>}</div>
-          <PreviewPane
-            target={draft.target}
-            route={draft.screenId}
-            format={draft.format}
-            language={draft.language}
-            mode={mode}
-            serverConnected={serverConnected}
-            state={designState}
-            theme={previewTheme}
-            flow={draft.flow}
-            sessionId={sessionId}
-            zoom={zoom}
-            tool={tool}
-            selection={selection}
-            editable={previewEditable}
-            guideSettings={guideSettings}
-            nodeSource={nodeSourceRef}
-            onZoomChange={setZoom}
-            onTool={setTool}
-            onGuideSettingsChange={updateGuideSettings}
-            onSelect={handleElementSelected}
-            onNavigate={(screenId) => setView({ screenId })}
-            onTrace={setTrace}
-            onNodesChange={handleNodesChange}
-            onGeometryChange={setGeometrySnapshot}
-            onSelectNode={handleSelectNode}
-            onMoveNode={handleMoveNode}
-            onPlaceNode={handlePlaceNode}
-            onPlaceNodes={handlePlaceNodes}
-          />
+          {mode === 'logic' ? (
+            <FlowCanvas
+              controller={controller}
+              screenId={draft.screenId}
+              readOnly={!previewEditable}
+              onSelectNode={handleFlowNodeSelected}
+              onOpenSimulation={() => setMode('simulate')}
+            />
+          ) : (
+            <PreviewPane
+              target={draft.target}
+              route={draft.screenId}
+              format={draft.format}
+              language={draft.language}
+              mode={mode}
+              serverConnected={serverConnected}
+              state={designState}
+              theme={previewTheme}
+              flow={draft.flow}
+              sessionId={sessionId}
+              zoom={zoom}
+              tool={tool}
+              selection={selection}
+              editable={previewEditable}
+              guideSettings={guideSettings}
+              nodeSource={nodeSourceRef}
+              onZoomChange={setZoom}
+              onTool={setTool}
+              onGuideSettingsChange={updateGuideSettings}
+              onSelect={handleElementSelected}
+              onNavigate={(screenId) => setView({ screenId })}
+              onTrace={setTrace}
+              onNodesChange={handleNodesChange}
+              onGeometryChange={setGeometrySnapshot}
+              onSelectNode={handleSelectNode}
+              onMoveNode={handleMoveNode}
+              onPlaceNode={handlePlaceNode}
+              onPlaceNodes={handlePlaceNodes}
+            />
+          )}
         </section>
         <aside class="editor-inspector" aria-label="Инспектор свойств">
           <div class="editor-inspector-heading"><div><strong>{mode === 'design' ? 'Дизайн' : mode === 'logic' ? 'Логика' : 'Проверка'}</strong><span>{selected}</span></div><EditorIcon name="design" /></div>
@@ -728,7 +769,18 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                 onMargin={handleNodeMargin}
               />
             )}
-            {mode === 'logic' && <><LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" readOnly={!previewEditable} /><FlowMap flow={draft.flow} /></>}
+            {mode === 'logic' && <LogicEditor controller={controller} screenId={draft.screenId} elementId="settings-continue" readOnly={!previewEditable} />}
+            {mode === 'logic' && flowSelection && (
+              <FlowNodeInspector
+                controller={controller}
+                ruleId={flowSelection.ruleId}
+                nodeId={flowSelection.nodeId}
+                readOnly={!previewEditable}
+                onSelectNode={handleFlowReveal}
+                onOpenSimulation={() => setMode('simulate')}
+              />
+            )}
+            {mode === 'logic' && !flowSelection && <FlowMap flow={draft.flow} />}
             {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
             <ExportPanel

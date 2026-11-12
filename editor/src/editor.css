@@ -1847,3 +1847,191 @@ h2 svg {
   cursor: default;
   opacity: 0.5;
 }
+
+/* Flow node canvas (logic mode) */
+.flow-canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.flow-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 6px;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+  flex-wrap: wrap;
+}
+
+.flow-canvas-toolbar button {
+  border: 1px solid var(--editor-border);
+  background: var(--editor-control);
+  color: var(--editor-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.flow-canvas-toolbar button:hover:not(:disabled) {
+  background: var(--editor-control-hover);
+}
+
+.flow-canvas-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.flow-canvas-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--editor-canvas);
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  touch-action: none;
+}
+
+.flow-canvas-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4000px;
+  height: 3000px;
+}
+
+.flow-canvas-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.flow-edge {
+  fill: none;
+  stroke-width: 2;
+}
+
+.flow-edge-default { stroke: var(--editor-muted); }
+.flow-edge-true { stroke: #3fb950; }
+.flow-edge-false { stroke: #f85149; }
+.flow-edge-error { stroke: #f5b700; }
+.flow-edge-draft { stroke: var(--editor-accent); stroke-dasharray: 6 4; }
+
+.flow-node {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--editor-panel);
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  color: var(--editor-text);
+  cursor: grab;
+  user-select: none;
+  padding: 8px 10px;
+}
+
+.flow-node-selected {
+  outline: 2px solid var(--editor-accent);
+}
+
+.flow-node-trigger { border-left: 4px solid var(--editor-brand); }
+.flow-node-condition { border-left: 4px solid var(--editor-accent); }
+.flow-node-action { border-left: 4px solid #3fb950; }
+.flow-node-result { border-left: 4px solid #f85149; }
+
+.flow-node-head {
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.flow-node-head small {
+  color: var(--editor-muted);
+}
+
+.flow-port {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--editor-control-hover);
+  border: 2px solid var(--editor-border);
+  box-sizing: border-box;
+}
+
+.flow-port:hover {
+  background: var(--editor-accent);
+}
+
+.flow-port-in {
+  left: -6px;
+  top: 50%;
+  margin-top: -6px;
+}
+
+.flow-port-out {
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+}
+
+.flow-port-true { background: #3fb950; }
+.flow-port-false { background: #f85149; top: 70%; }
+.flow-port-error { background: #f5b700; top: 70%; }
+
+.flow-canvas-minimap {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 180px;
+  height: 120px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.flow-minimap-dot {
+  position: absolute;
+  width: 8px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--editor-muted);
+}
+
+.flow-minimap-trigger { background: var(--editor-brand); }
+.flow-minimap-condition { background: var(--editor-accent); }
+.flow-minimap-action { background: #3fb950; }
+.flow-minimap-result { background: #f85149; }
+
+.editor-flow-error {
+  margin: 6px 8px 0;
+  padding: 6px 10px;
+  border: 1px solid #f85149;
+  border-radius: 6px;
+  color: #ffb3ae;
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.flow-inspector-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.flow-inspector-actions button {
+  border: 1px solid var(--editor-border);
+  background: var(--editor-control);
+  color: var(--editor-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}

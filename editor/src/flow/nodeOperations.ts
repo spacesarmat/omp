@@ -1,0 +1,229 @@
+import type {
+  FlowDocument,
+  FlowEdge,
+  FlowEdgeBranch,
+  FlowGraph,
+  FlowNodeKind,
+  FlowNodeView,
+  InteractionRule,
+} from '../../../design/schema.ts';
+
+// Node operations are pure FlowDocument -> FlowDocument transforms. The canvas wraps each
+// operation in exactly one controller.update, so one edit is one undo step. Legacy rules
+// without a graph are never touched: the canvas only edits rules that already own a graph
+// or creates a new screen.enter rule, which the legacy click dispatcher never matches.
+export class FlowOperationError extends Error {
+  readonly code: 'SELF_LOOP' | 'TRIGGER_TARGET' | 'RESULT_SOURCE' | 'DUPLICATE_EDGE' | 'CYCLE' | 'BRANCH_MISMATCH' | 'UNKNOWN_NODE' | 'NO_GRAPH_RULE';
+
+  constructor(code: FlowOperationError['code'], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export interface FlowPosition {
+  x: number;
+  y: number;
+}
+
+export interface FlowNodeRef {
+  flow: FlowDocument;
+  ruleId: string;
+  nodeId: string;
+}
+
+const NODE_SIZE = { width: 176, height: 64 };
+export const FLOW_COLUMN_WIDTH = 220;
+export const FLOW_ROW_HEIGHT = 120;
+
+function ruleOf(flow: FlowDocument, ruleId: string): InteractionRule {
+  const rule = flow.rules.find((entry) => entry.id === ruleId);
+  if (!rule) throw new FlowOperationError('NO_GRAPH_RULE', `rule ${ruleId} not found`);
+  return rule;
+}
+
+function graphOf(rule: InteractionRule): FlowGraph {
+  return rule.graph ?? { nodes: [], edges: [] };
+}
+
+function uniqueId(prefix: string, taken: Iterable<string>): string {
+  const used = new Set(taken);
+  let index = used.size + 1;
+  let id = `${prefix}-${index}`;
+  while (used.has(id)) {
+    index += 1;
+    id = `${prefix}-${index}`;
+  }
+  return id;
+}
+
+function flowNodeIds(flow: FlowDocument): string[] {
+  return flow.rules.flatMap((rule) => rule.graph?.nodes.map((node) => node.id) ?? []);
+}
+
+function flowStepIds(flow: FlowDocument): string[] {
+  return flow.rules.flatMap((rule) => rule.steps?.map((step) => step.id) ?? []);
+}
+
+// Creates an editable graph rule for the screen. The placeholder terminal action keeps the
+// document schema-valid; behavior comes from the graph and its steps, not from this action.
+function ensureGraphRule(flow: FlowDocument, screenId: string): { flow: FlowDocument; ruleId: string } {
+  const existing = flow.rules.find((rule) => rule.screenId === screenId && rule.graph);
+  if (existing) return { flow, ruleId: existing.id };
+  const ruleId = uniqueId(`flow-${screenId}`, flow.rules.map((rule) => rule.id));
+  const rule: InteractionRule = {
+    id: ruleId,
+    screenId,
+    elementId: 'flow-canvas',
+    event: 'screen.enter',
+    action: { type: 'back' },
+    steps: [],
+    graph: { nodes: [], edges: [] },
+  };
+  return { flow: { ...flow, rules: flow.rules.concat(rule) }, ruleId };
+}
+
+function withGraph(flow: FlowDocument, ruleId: string, graph: FlowGraph): FlowDocument {
+  return {
+    ...flow,
+    rules: flow.rules.map((rule) => (rule.id === ruleId ? { ...rule, graph } : rule)),
+  };
+}
+
+export function addFlowNode(flow: FlowDocument, screenId: string, kind: FlowNodeKind, position?: FlowPosition): FlowNodeRef {
+  const ensured = ensureGraphRule(flow, screenId);
+  const rule = ruleOf(ensured.flow, ensured.ruleId);
+  const graph = graphOf(rule);
+  const nodeId = uniqueId('node', flowNodeIds(ensured.flow));
+  const offset = graph.nodes.length * 36;
+  const node: FlowNodeView = {
+    id: nodeId,
+    kind,
+    ruleId: ensured.ruleId,
+    x: Math.round(position?.x ?? 80 + offset),
+    y: Math.round(position?.y ?? 80 + offset),
+  };
+  if (kind === 'condition' || kind === 'action') {
+    node.stepId = uniqueId('step', flowStepIds(ensured.flow));
+  }
+  const nextGraph = { nodes: graph.nodes.concat(node), edges: graph.edges };
+  let nextFlow = withGraph(ensured.flow, ensured.ruleId, nextGraph);
+  if (node.stepId) {
+    nextFlow = {
+      ...nextFlow,
+      rules: nextFlow.rules.map((entry) => {
+        if (entry.id !== ensured.ruleId) return entry;
+        const step = node.kind === 'condition'
+          ? { id: node.stepId!, condition: { kind: 'eq' as const, path: 'server.connected' as const, value: true } }
+          : { id: node.stepId!, action: { type: 'toast' as const, message: 'Сообщение' } };
+        return { ...entry, steps: [...(entry.steps ?? []), step] };
+      }),
+    };
+  }
+  return { flow: nextFlow, ruleId: ensured.ruleId, nodeId };
+}
+
+export function moveFlowNode(flow: FlowDocument, ruleId: string, nodeId: string, position: FlowPosition): FlowDocument {
+  const rule = ruleOf(flow, ruleId);
+  const graph = graphOf(rule);
+  if (!graph.nodes.some((node) => node.id === nodeId)) {
+    throw new FlowOperationError('UNKNOWN_NODE', `node ${nodeId} not found`);
+  }
+  return withGraph(flow, ruleId, {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id === nodeId ? { ...node, x: Math.round(position.x), y: Math.round(position.y) } : node)),
+  });
+}
+
+export const OUTPUT_BRANCHES: Record<FlowNodeKind, FlowEdgeBranch[]> = {
+  trigger: ['default'],
+  condition: ['true', 'false'],
+  action: ['default', 'error'],
+  result: [],
+};
+
+export function defaultBranchFor(kind: FlowNodeKind): FlowEdgeBranch {
+  return kind === 'condition' ? 'true' : 'default';
+}
+
+function wouldReach(edges: FlowEdge[], from: string, target: string, visited: Set<string>): boolean {
+  if (from === target) return true;
+  if (visited.has(from)) return false;
+  visited.add(from);
+  return edges.filter((edge) => edge.from === from).some((edge) => wouldReach(edges, edge.to, target, visited));
+}
+
+export function connectFlowNodes(
+  flow: FlowDocument,
+  ruleId: string,
+  fromId: string,
+  toId: string,
+  branch?: FlowEdgeBranch,
+): { flow: FlowDocument; edgeId: string } {
+  const rule = ruleOf(flow, ruleId);
+  const graph = graphOf(rule);
+  const from = graph.nodes.find((node) => node.id === fromId);
+  const to = graph.nodes.find((node) => node.id === toId);
+  if (!from || !to) throw new FlowOperationError('UNKNOWN_NODE', 'connection endpoint missing');
+  if (fromId === toId) throw new FlowOperationError('SELF_LOOP', 'connection would loop into the same node');
+  if (to.kind === 'trigger') throw new FlowOperationError('TRIGGER_TARGET', 'trigger cannot have incoming connections');
+  const resolvedBranch = branch ?? defaultBranchFor(from.kind);
+  if (!OUTPUT_BRANCHES[from.kind].includes(resolvedBranch)) {
+    throw new FlowOperationError('BRANCH_MISMATCH', `branch ${resolvedBranch} is not an output of ${from.kind}`);
+  }
+  if (graph.edges.some((edge) => edge.from === fromId && edge.to === toId && edge.branch === resolvedBranch)) {
+    throw new FlowOperationError('DUPLICATE_EDGE', 'identical connection already exists');
+  }
+  if (wouldReach(graph.edges, toId, fromId, new Set())) {
+    throw new FlowOperationError('CYCLE', 'connection would create a cycle in the flow');
+  }
+  const edge: FlowEdge = { id: uniqueId('edge', graph.edges.map((entry) => entry.id)), from: fromId, to: toId, branch: resolvedBranch };
+  return { flow: withGraph(flow, ruleId, { ...graph, edges: graph.edges.concat(edge) }), edgeId: edge.id };
+}
+
+export function removeFlowNodes(flow: FlowDocument, ruleId: string, nodeIds: string[]): FlowDocument {
+  const rule = ruleOf(flow, ruleId);
+  const graph = graphOf(rule);
+  const removed = new Set(nodeIds);
+  const nodes = graph.nodes.filter((node) => !removed.has(node.id));
+  const edges = graph.edges.filter((edge) => !removed.has(edge.from) && !removed.has(edge.to));
+  const keptStepIds = new Set(nodes.map((node) => node.stepId).filter((stepId): stepId is string => Boolean(stepId)));
+  const steps = (rule.steps ?? []).filter((step) => keptStepIds.has(step.id));
+  const nextRule: InteractionRule = { ...rule, graph: { nodes, edges }, steps };
+  return { ...flow, rules: flow.rules.map((entry) => (entry.id === ruleId ? nextRule : entry)) };
+}
+
+// Depth columns from the trigger (or from roots without incoming edges); unconnected nodes
+// are appended after the last column. Positions never affect execution.
+export function autoLayoutFlow(flow: FlowDocument, ruleId: string): FlowDocument {
+  const rule = ruleOf(flow, ruleId);
+  const graph = graphOf(rule);
+  const incoming = new Map<string, number>();
+  for (const edge of graph.edges) incoming.set(edge.to, (incoming.get(edge.to) ?? 0) + 1);
+  const roots = graph.nodes.filter((node) => (incoming.get(node.id) ?? 0) === 0);
+  const depth = new Map<string, number>();
+  const queue = roots.map((node) => ({ id: node.id, depth: 0 }));
+  while (queue.length) {
+    const current = queue.shift()!;
+    if ((depth.get(current.id) ?? -1) >= current.depth) continue;
+    depth.set(current.id, current.depth);
+    for (const edge of graph.edges.filter((entry) => entry.from === current.id)) {
+      queue.push({ id: edge.to, depth: current.depth + 1 });
+    }
+  }
+  let maxDepth = -1;
+  for (const value of depth.values()) maxDepth = Math.max(maxDepth, value);
+  const columns = new Map<number, number>();
+  const nodes = graph.nodes.map((node) => {
+    const column = depth.get(node.id) ?? maxDepth + 1;
+    const row = columns.get(column) ?? 0;
+    columns.set(column, row + 1);
+    return { ...node, x: column * FLOW_COLUMN_WIDTH + 60, y: row * FLOW_ROW_HEIGHT + 60 };
+  });
+  return withGraph(flow, ruleId, { ...graph, nodes });
+}
+
+export function flowNodeSize(kind: FlowNodeKind): { width: number; height: number } {
+  void kind;
+  return { ...NODE_SIZE };
+}
