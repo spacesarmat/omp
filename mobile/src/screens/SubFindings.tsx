@@ -9,6 +9,7 @@ import { monitorVersion, reloadMonitor } from '../monitor/ui';
 import { checkSubNow, checkingSubs, loadSubsSort, sortFindings } from '../monitor/subsView';
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
+import { bestRelease } from '../../../src/monitor/bestRelease';
 import { findingsOf, getSubscription, markFindingsSeen, removeSubscription, seenKeys, updateSubscription } from '../../../src/monitor/subs';
 import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
 import { qualityLabels, seriesSubLine, subRule, whenText } from '../monitor/text';
@@ -217,6 +218,16 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
             <WatchPrompt title={shortTitle(target.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => void rows.add(target.result, true)} />
           )}
           {rows.error && <LaunchError message={rows.error} />}
+          {(() => {
+            const best = bestRelease(id);
+            if (!best || list.some((f) => f.result.Title === best.Title)) return null;
+            return (
+              <div data-sub-best>
+                <p class="m-small m-muted">{t('monitor.sub.bestBelow')}</p>
+                {rows.card(best)}
+              </div>
+            );
+          })()}
           {list.length === 0 && (
             <div class="m-muted">
               {seenKeys(id) === null

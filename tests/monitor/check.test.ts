@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { checkSubscriptions, checkSubscription, type SearchFn } from '../../src/monitor/check';
+import { bestRelease } from '../../src/monitor/bestRelease';
 import { addSubscription, bestRank, hasBestRank, findingsOf, loadFound, removeSubscription, seenKeys, unseenCount, updateSubscription } from '../../src/monitor/subs';
 import { resultKeys } from '../../src/monitor/match';
 import type { Subscription } from '../../src/monitor/types';
@@ -233,6 +234,8 @@ describe('«Только лучшее качество»', () => {
     expect(bestRank(sub.id)).toBe(22);
     pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) WEB-DL 1080p от Группы')]);
     expect((await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 3 })).findings).toEqual([]);
+    expect(bestRelease(sub.id)!.Title).toBe('Северный ветер (2026) WEB-DL 1080p от Группы');
+    expect(findingsOf(sub.id).map((f) => f.result.Title)).not.toContain('Северный ветер (2026) WEB-DL 1080p от Группы');
     pages['Северный ветер'] = pages['Северный ветер'].concat([res('Северный ветер (2026) 2160p WEB-DL')]);
     const fourth = await checkSubscription(ctx, sub, { search: fakeSearch(pages, calls), now: 4 });
     expect(fourth.findings.map((f) => f.result.Title)).toEqual(['Северный ветер (2026) 2160p WEB-DL']);

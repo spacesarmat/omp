@@ -158,6 +158,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.finishSeen', // when this device first saw a shared finish: per device
   'tsp.subHold', // subscriptions paused by hand on this phone
   'tsp.subChecks', // times a manual check ran: rebuilt by the next checks
+  'tsp.subBest', // best release seen by a quality subscription: rebuilt by the next check
   'tsp.nowSkipMarks', // always skip recap and credits from the phone remote
   'tsp.remoteMode', // buttons or touchpad: per device
   'tsp.historyHide', // phone: shows hidden from continue and history on this device

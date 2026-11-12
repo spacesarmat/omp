@@ -1291,6 +1291,7 @@ export const en: EnDict<typeof ru> = {
       notify: 'Notify',
       notifyHint: 'about every new release',
       telegram: 'Telegram',
+      bestBelow: 'Best release, even below the notification bar',
       telegramHint: 'separate from the phone. The bot does not send findings',
       better: 'Better quality only',
       betterHint: 'only when the quality beats earlier finds',
