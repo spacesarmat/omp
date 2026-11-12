@@ -302,7 +302,7 @@ describe('trial day, gift days, menu', () => {
   });
 
   it('has 6 buttons and keeps the old labels as aliases', () => {
-    expect(mainKeyboard().keyboard.flat().map((b: { text: string }) => b.text)).toEqual(['Кабинет', 'Оплатить', 'Устройства', 'Промокод', 'Цены', 'Поддержка']);
+    expect(mainKeyboard().keyboard.flat().map((b: { text: string }) => b.text)).toEqual(['Кабинет', 'Оплатить', 'Устройства', 'Промокод', 'Цены', 'Поддержка', 'Поддержать проект']);
     expect(parseAction('Подписка').action).toBe('pay');
     expect(parseAction('Продлить').action).toBe('pay');
     expect(parseAction('Код').action).toBe('devices');
