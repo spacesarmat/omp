@@ -431,18 +431,23 @@ function restoreContainerOrder(element: HTMLElement): void {
 // moves them back once no active order lists them anymore.
 const moveOrigins = new WeakMap<HTMLElement, { parent: HTMLElement; next: Element | null }>();
 
+// One node has exactly one destination per refresh: container records are processed in array
+// order and the first order claiming a node wins, so a crafted document that lists one node in
+// two destination orders cannot bounce it between containers on every mutation.
 function applyContainerOrder(
   containerElement: HTMLElement,
   container: LayoutContainer,
   nodeById: Map<string, ResolvedNode>,
   nodeIdByElement: Map<HTMLElement, string>,
   moved: Set<HTMLElement>,
+  claimed: Set<string>,
 ): void {
   // Resolve the destination order first: nodes recorded in the order but living in another parent
   // move across parents before the in-parent sort runs. A recorded order must never move a node
   // into itself or into its own descendant: the DOM would throw HierarchyRequestError and leave
   // the tree half-updated, so the cycle is skipped instead.
   for (const nodeId of container.order) {
+    if (claimed.has(nodeId)) continue;
     const node = nodeById.get(nodeId);
     if (!node || node.element.parentElement === containerElement) continue;
     if (node.element === containerElement || node.element.contains(containerElement)) continue;
@@ -452,6 +457,7 @@ function applyContainerOrder(
     containerElement.appendChild(node.element);
     moved.add(node.element);
   }
+  for (const nodeId of container.order) claimed.add(nodeId);
   const children = [...containerElement.children] as HTMLElement[];
   if (children.length < 2) return;
   const rank = new Map(container.order.map((nodeId, index) => [nodeId, index]));
@@ -529,12 +535,13 @@ function createLayoutRuntime(
       }
       const touched = new Set<HTMLElement>();
       const touchedContainers = new Set<HTMLElement>();
+      const claimedDestinations = new Set<string>();
       // Containers run first: cross-parent moves change parenthood, and the second resolution
       // below pairs placements with the updated tree. Node ids stay stable across the moves.
       for (const container of matchingContainers) {
         const target = nodeById.get(container.nodeId);
         if (!target) continue;
-        applyContainerOrder(target.element, container, nodeById, nodeIdByElement, movedNodes);
+        applyContainerOrder(target.element, container, nodeById, nodeIdByElement, movedNodes, claimedDestinations);
         applyContainerLayout(target.element, container);
         touched.add(target.element);
         touchedContainers.add(target.element);

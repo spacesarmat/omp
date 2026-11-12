@@ -867,6 +867,46 @@ describe('layout identity from anchors', () => {
   });
 });
 
+describe('competing container destinations', () => {
+  const competingTheme = () => {
+    const theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [
+        { id: 'flow-pane-b', ...context, nodeId: 'pane-b', order: ['node-x'] },
+        { id: 'flow-pane-c', ...context, nodeId: 'pane-c', order: ['node-x'] },
+      ],
+      placements: [],
+    };
+    return parseThemeDocument(theme);
+  };
+
+  it('keeps a node in the first destination order when a crafted document lists it twice', () => {
+    const root = mount('<div data-design-id="screen"><div data-design-id="pane-b"></div><div data-design-id="pane-c"></div><div data-design-id="node-x">X</div></div>');
+    cleanup = observeLayout(root, competingTheme(), context);
+
+    const nodeX = root.querySelector<HTMLElement>('[data-design-id="node-x"]')!;
+    const paneB = root.querySelector<HTMLElement>('[data-design-id="pane-b"]')!;
+    const paneC = root.querySelector<HTMLElement>('[data-design-id="pane-c"]')!;
+    // One refresh, one decision: the first destination order wins and the later claim is
+    // ignored, so a crafted document cannot bounce the node between containers.
+    expect(nodeX.parentElement).toBe(paneB);
+    expect(paneC.contains(nodeX)).toBe(false);
+  });
+
+  it('does not oscillate between two destination orders across refreshes', async () => {
+    const root = mount('<div data-design-id="screen"><div data-design-id="pane-b"></div><div data-design-id="pane-c"></div><div data-design-id="node-x">X</div></div>');
+    cleanup = observeLayout(root, competingTheme(), context);
+
+    const nodeX = root.querySelector<HTMLElement>('[data-design-id="node-x"]')!;
+    const paneB = root.querySelector<HTMLElement>('[data-design-id="pane-b"]')!;
+    for (let round = 0; round < 4; round += 1) {
+      root.appendChild(document.createElement('span'));
+      await Promise.resolve();
+      expect(nodeX.parentElement).toBe(paneB);
+    }
+  });
+});
+
 describe('layout containing blocks', () => {
   it('sets position relative on an unpositioned layout parent and cleans it up', async () => {
     let theme = createDefaultTheme(BASE);
