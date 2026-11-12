@@ -1138,6 +1138,48 @@ export function renewableExtras(state, sub, now) {
   return n && (Number(sub.extraUntil) || 0) >= (Number(sub.paidUntil) || 0) ? n : 0;
 }
 
+/** What the phone account screen shows: price, the 3% card fee, auto-renew and this account's payments. */
+export function phoneBill(state, accountId, now) {
+  const nowMs = now || Date.now();
+  const sub = (state.subscriptions || []).find((s) => s.accountId === accountId && s.product === 'jackett') || null;
+  const prices = priceText(state.settings || {});
+  const quote = sub ? renewalPrice(state, sub, nowMs) : { total: prices.price, days: prices.days };
+  const price = Math.max(0, Math.floor(Number(quote.total) || 0));
+  const fee = Math.round(price * 0.03);
+  const account = (state.accounts || []).find((a) => a.id === accountId);
+  const payments = [];
+  const rows = state.payments || [];
+  for (let i = rows.length - 1; i >= 0 && payments.length < 8; i--) {
+    const p = rows[i];
+    if (!p || p.accountId !== accountId || p.error || p.pending) continue;
+    payments.push({
+      at: Math.floor(Number(p.at) || 0),
+      amount: String(p.withdrawAmount || p.amount || ''),
+      title: String(p.label || ''),
+    });
+  }
+  return {
+    priceRub: price,
+    feeRub: fee,
+    totalRub: price + fee,
+    days: Math.floor(Number(quote.days) || prices.days || 0),
+    autoRenew: !!(account && account.autoRenew),
+    payments,
+  };
+}
+
+/** Turns auto-renew on or off for one account. Missing account is an error and does not write. */
+export function setAutoRenew(state, accountId, on) {
+  let found = false;
+  const accounts = (state.accounts || []).map((a) => {
+    if (a.id !== accountId) return a;
+    found = true;
+    return { ...a, autoRenew: !!on };
+  });
+  if (!found) return { state, result: { error: 'not_linked' } };
+  return { state: { ...state, accounts }, result: { ok: true, autoRenew: !!on } };
+}
+
 export function renewalPrice(state, sub, now, opts) {
   const prices = priceText(state.settings);
   const add = opts && opts.addExtra > 0 ? Math.floor(opts.addExtra) : 0;

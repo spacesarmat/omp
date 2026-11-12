@@ -48,10 +48,34 @@ interface MeBody {
   cache?: { enabled?: boolean };
   /** Omitted by a server from before the referral screen. Missing means the program is off. */
   referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
+  bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; title?: string }[] };
 }
 
 interface ErrorBody {
   error?: string;
+}
+
+function whole(n: unknown): number {
+  return typeof n === 'number' && isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
+function billOf(body: MeBody): BillingAccount['bill'] {
+  const row = body.bill;
+  if (!row || typeof row !== 'object') return undefined;
+  const payments = Array.isArray(row.payments)
+    ? row.payments.slice(0, 8).map((p) => ({
+        at: whole(p && p.at),
+        amount: p && typeof p.amount === 'string' ? p.amount : '',
+        title: p && typeof p.title === 'string' ? p.title : '',
+      }))
+    : [];
+  return {
+    priceRub: whole(row.priceRub),
+    feeRub: whole(row.feeRub),
+    totalRub: whole(row.totalRub),
+    autoRenew: row.autoRenew === true,
+    payments,
+  };
 }
 
 function referralOf(body: MeBody): BillingAccount['referral'] {
@@ -373,6 +397,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
             ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
             : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
           referral: referralOf(body),
+          bill: billOf(body),
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
@@ -416,6 +441,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         deviceLimit: body.deviceLimit || 0,
         sources: flags,
         referral: referralOf(body),
+        bill: billOf(body),
       };
     },
     (e) => {
