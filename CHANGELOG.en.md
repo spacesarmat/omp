@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Invite: a balance credit shows the amount
+- [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 013
+
 ## 0.30.1-beta.6
 
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button

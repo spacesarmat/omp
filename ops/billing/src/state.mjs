@@ -2,6 +2,7 @@
  * Billing state shape and its normalization (every read runs the one-time migrations). Used by the Postgres
  * store (db/pg/store.mjs) and the logic; no storage code here.
  */
+import { normalizeReferralState } from './referralAdmin.mjs';
 import {
   BASE_DEVICES_DEFAULT,
   DEVICE_BASE,
@@ -151,7 +152,7 @@ export function emptyState() {
 
 export function normalizeState(parsed) {
   const base = emptyState();
-  if (!parsed || typeof parsed !== 'object') return migrateRowIds(migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(base)))));
+  if (!parsed || typeof parsed !== 'object') return normalizeReferralState(migrateRowIds(migrateTruncatedIps(migrateExtraSlots(migrateDeviceBase(enrichActors(base))))));
   const next = {
     settings: { ...base.settings, ...(parsed.settings || {}) },
     accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
@@ -182,5 +183,5 @@ export function normalizeState(parsed) {
   for (let i = 0; i < keys.length; i++) {
     if (!Object.prototype.hasOwnProperty.call(next, keys[i])) next[keys[i]] = parsed[keys[i]];
   }
-  return migrateRowIds(migrateTruncatedIps(migrateLimitModel(migrateExtraSlots(migrateDeviceBase(enrichActors(next))))));
+  return normalizeReferralState(migrateRowIds(migrateTruncatedIps(migrateLimitModel(migrateExtraSlots(migrateDeviceBase(enrichActors(next)))))));
 }

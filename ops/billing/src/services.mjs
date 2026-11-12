@@ -1,5 +1,6 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
 import { normalizeDonateSettings } from './donate.mjs';
+import { normalizeReferralSettings } from './referralAdmin.mjs';
 import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
@@ -113,7 +114,7 @@ export function publicAdminSettings(settings, env) {
     starsExtra: Number(s.starsExtra) || 0,
     cryptoEnabled: s.cryptoEnabled === true,
     cryptoTestnet: s.cryptoTestnet === true,
-    referral: s.referral || { enabled: false, referrerDays: 0, friendDays: 0, balancePercent: 0, tiers: false, friendDiscount: false, retention: false, delayDays: 7, yearlyCap: 12 },
+    referral: normalizeReferralSettings(s.referral),
     donate: normalizeDonateSettings(s.donate),
     cryptoNonRu: s.cryptoNonRu === true,
     cryptoUsdt: Number(s.cryptoUsdt) || 0,

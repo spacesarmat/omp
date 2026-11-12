@@ -1,4 +1,5 @@
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
+import { capReferralOff } from './referralAdmin.mjs';
 import { donateMenu, donateOnCallback, donateOnText } from './donate.mjs';
 import { cryptoOffered, labelSettled, starBlurb, starInvoiceBody, starsOffered } from './payMethods.mjs';
 import { payUrl } from './yoomoney.mjs';
@@ -34,6 +35,7 @@ import {
   pendingDeviceLink,
   priceText,
   quotePurchase,
+  referralDiscountOf,
   redeemPromo,
   subscriptionView,
   supportReplyTarget,
@@ -407,19 +409,30 @@ function statusText(state, sub, account, opts) {
  */
 export function renewalText(state, subRow, sub, now, opts) {
   const quote = renewalPrice(state, subRow, now, opts);
+  const priced = capReferralOff(quote.total, referralDiscountOf(state, subRow && subRow.accountId, quote.base, now));
+  const off = priced.off;
   const from = sub.active ? sub.paidUntil : now;
   const lines = ['Продление на ' + daysText(quote.days) + ', до ' + mskDateTime(from + quote.days * 86400000) + ':'];
   lines.push('• подписка - ' + rub(quote.base));
+  if (off > 0) lines.push('• скидка по приглашению - ' + rub(off));
   if (quote.extras > 0) lines.push('• доп. устройство × ' + quote.extras + ' - ' + rub(quote.extraSum));
   if (quote.credit > 0) lines.push('• зачёт - −' + rub(quote.credit));
-  if (quote.extras > 0 || quote.credit > 0) lines.push('Итого: ' + rub(quote.total));
+  if (quote.extras > 0 || quote.credit > 0 || off > 0) lines.push('Итого: ' + rub(priced.due));
   return { text: lines.join('\n'), quote };
+}
+
+function withInviteOff(state, subRow, quote, now) {
+  if (!quote) return quote;
+  const priced = capReferralOff(quote.total, referralDiscountOf(state, subRow && subRow.accountId, quote.base, now));
+  if (!(priced.off > 0)) return quote;
+  return { ...quote, total: priced.due, referralOff: priced.off };
 }
 
 function renewalPriceLine(quote) {
   const bits = [];
   if (quote.extras > 0) bits.push('подписка ' + rub(quote.base) + ' + доп. устройство ' + rub(quote.extraRub) + ' × ' + quote.extras);
   if (quote.credit > 0) bits.push('зачёт −' + rub(quote.credit));
+  if (quote.referralOff > 0) bits.push('скидка по приглашению ' + rub(quote.referralOff));
   return 'Продление на ' + daysText(quote.days) + ': ' + rub(quote.total) + (bits.length ? ' (' + bits.join(', ') + ')' : '') + '.';
 }
 
@@ -435,11 +448,11 @@ function graceEndMessage(state, row, subRow, grace, now) {
   const lines = [
     grace > 0 ? '⚠️ Льготный период закончился - поиск в OMP отключён.' : '⚠️ Подписка OMP закончилась - поиск отключён.',
   ];
-  const quote = subRow ? renewalPrice(state, subRow, now) : null;
+  const quote = subRow ? withInviteOff(state, subRow, renewalPrice(state, subRow, now), now) : null;
   if (quote && quote.base > 0) {
     lines.push(renewalPriceLine(quote));
     lines.push('Привязанные устройства заработают сами, код вводить не нужно.');
-    if (quote.extras > 0) lines.push('Без доп. устройств - ' + rub(renewalPrice(state, subRow, now, { withExtras: false }).total) + '.');
+    if (quote.extras > 0) lines.push('Без доп. устройств - ' + rub(withInviteOff(state, subRow, renewalPrice(state, subRow, now, { withExtras: false }), now).total) + '.');
   } else {
     lines.push('Продлите подписку, чтобы продолжить.');
   }
@@ -468,7 +481,7 @@ export function reminderMessage(state, row, now) {
     if (grace > 0) head += '\nЛьготный период: поиск работает до ' + mskDateTime(accessEnd) + '.';
   }
   const lines = [head];
-  const quote = subRow ? renewalPrice(state, subRow, now) : null;
+  const quote = subRow ? withInviteOff(state, subRow, renewalPrice(state, subRow, now), now) : null;
   if (quote && quote.base > 0) lines.push(renewalPriceLine(quote));
   lines.push('Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.');
   return { chatId: String(row.telegramId), text: lines.join('\n'), keyboard: mainKeyboard(), inline: payInline(state.settings) };
@@ -1258,8 +1271,10 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     const altOn = starsOffered(cur.settings, 'new') || cryptoOffered(cur.settings, country);
     if (!yo && !altOn) say('Оплата ещё не настроена.' + trialLine(cur));
     else if (!sub) {
+      const inviteOff = referralDiscountOf(cur, account.id, prices.price, now);
       let text =
-        'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.';
+        'Подписка OMP - ' + rub(Math.max(0, prices.price - inviteOff)) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.';
+      if (inviteOff > 0) text += '\nСкидка по приглашению: ' + rub(inviteOff) + '.';
       let buttons = [];
       if (yo) {
         const offers = payOffers(pay, cur, { kind: 'new', accountId: account.id, now });
