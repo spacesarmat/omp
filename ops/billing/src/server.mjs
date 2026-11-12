@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
-import { applyReferralPost } from './referralAdmin.mjs';
+import { applyReferralPost, publicReferral } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -2627,6 +2627,7 @@ export function createApp(file, fetchImpl, opts) {
           monitorMax: monitorMaxFor(isActive),
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
+          referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal),
         });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {

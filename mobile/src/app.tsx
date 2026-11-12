@@ -5,6 +5,7 @@ import { parseBillingDeepLink } from '../../src/billing/deepLink';
 import { flushTitleLink, queueTitleLink } from './share/open';
 import { applyPairUrl, isPairUrl } from './share/pairOpen';
 import { setPendingBillingCode } from '../../src/billing/session';
+import { loadPhoneReferral } from './lib/referralLoad';
 import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
@@ -511,7 +512,7 @@ export function App() {
       ) : route.name === 'account' ? (
         <Account />
       ) : route.name === 'invite' ? (
-        <Invite />
+        <Invite load={loadPhoneReferral} />
       ) : route.name === 'advanced' ? (
         <Advanced />
       ) : route.name === 'remote' ? (

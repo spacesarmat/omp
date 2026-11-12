@@ -378,7 +378,12 @@ export function App() {
         </TabsContent>
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="referral">
-          <ReferralPanel csrf={d.csrf || ''} settings={d.settings?.referral} journal={d.referralJournal} />
+          <ReferralPanel
+            csrf={d.csrf || ''}
+            settings={d.settings?.referral}
+            journal={d.referralJournal}
+            run={(fields) => run('/admin/referral', fields)}
+          />
         </TabsContent>
         <TabsContent value="services">
           <ServicesCard csrf={d.csrf || ''} settings={d.settings || {}} secrets={d.secrets} onSaved={() => void reload()} />

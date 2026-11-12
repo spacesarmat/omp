@@ -46,10 +46,25 @@ interface MeBody {
   monitorMax?: number;
   /** Popular-release cache. Omitted or false: the player keeps the local TorrServer. */
   cache?: { enabled?: boolean };
+  /** Omitted by a server from before the referral screen. Missing means the program is off. */
+  referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
 }
 
 interface ErrorBody {
   error?: string;
+}
+
+function referralOf(body: MeBody): BillingAccount['referral'] {
+  const row = body.referral;
+  if (!row || typeof row !== 'object') return undefined;
+  const friends = typeof row.friends === 'number' && isFinite(row.friends) ? Math.max(0, Math.floor(row.friends)) : 0;
+  const noticeDays = typeof row.noticeDays === 'number' && isFinite(row.noticeDays) ? Math.max(0, Math.floor(row.noticeDays)) : 0;
+  return {
+    enabled: row.enabled === true,
+    code: typeof row.code === 'string' ? row.code : '',
+    friends,
+    noticeDays,
+  };
 }
 
 function parseBody<T extends object>(text: string): T {
@@ -357,6 +372,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           sources: body.sources
             ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
             : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
+          referral: referralOf(body),
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
@@ -399,6 +415,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         overLimit: !!body.overLimit,
         deviceLimit: body.deviceLimit || 0,
         sources: flags,
+        referral: referralOf(body),
       };
     },
     (e) => {

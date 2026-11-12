@@ -33,6 +33,37 @@ export function cancelReferralRow(rows, id) {
   return (rows || []).map((row) => (row.id === id ? { ...row, status: 'cancelled', reason: 'manual' } : row));
 }
 
+/** Stable invite code for one account. The same id always gets the same code. */
+export function referralCodeFor(accountId) {
+  const id = String(accountId || '');
+  let n = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    n ^= id.charCodeAt(i);
+    n = Math.imul(n, 16777619);
+  }
+  return 'OMP-' + (n >>> 0).toString(36).toUpperCase();
+}
+
+/**
+ * What /v1/me tells the phone. Off until the master flag is on.
+ * Friends are journal rows of this referrer that were not cancelled or rejected.
+ */
+export function publicReferral(settings, accountId, journal) {
+  const s = normalizeReferralSettings(settings);
+  if (!s.enabled || !accountId) return { enabled: false, code: '', friends: 0, noticeDays: 0 };
+  let friends = 0;
+  let noticeDays = 0;
+  const rows = journal || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.referrerId !== accountId) continue;
+    if (row.status === 'cancelled' || row.status === 'rejected') continue;
+    friends++;
+    if (row.status === 'granted' && row.days > 0) noticeDays = row.days;
+  }
+  return { enabled: true, code: referralCodeFor(accountId), friends, noticeDays };
+}
+
 /** POST /admin/referral. Does not talk to Telegram. */
 export function applyReferralPost(body, journal) {
   const src = body && typeof body === 'object' ? body : {};

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyReferralPost, normalizeReferralSettings } from '../src/referralAdmin.mjs';
+import { applyReferralPost, normalizeReferralSettings, publicReferral, referralCodeFor } from '../src/referralAdmin.mjs';
 
 describe('referral admin', () => {
   it('starts off and caps bonus days at 14', () => {
@@ -28,5 +28,20 @@ describe('referral admin', () => {
     const out = applyReferralPost({ settings: s, cancelId: 'a' }, [{ id: 'a', status: 'granted', days: 7 }]);
     expect(out.journal[0].status).toBe('cancelled');
     expect(out.settings.enabled).toBe(false);
+  });
+
+  it('hides the code while the program is off and counts one referrer', () => {
+    expect(publicReferral({}, 'acc-1', []).enabled).toBe(false);
+    expect(publicReferral({}, 'acc-1', []).code).toBe('');
+    const on = publicReferral({ enabled: true, referrerDays: 7 }, 'acc-1', [
+      { referrerId: 'acc-1', status: 'granted', days: 7 },
+      { referrerId: 'acc-2', status: 'granted', days: 7 },
+      { referrerId: 'acc-1', status: 'cancelled', days: 7 },
+    ]);
+    expect(on.enabled).toBe(true);
+    expect(on.code).toBe(referralCodeFor('acc-1'));
+    expect(on.friends).toBe(1);
+    expect(on.noticeDays).toBe(7);
+    expect(referralCodeFor('acc-1')).toBe(referralCodeFor('acc-1'));
   });
 });
