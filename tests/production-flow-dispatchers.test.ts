@@ -3,7 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const connectServerMock = vi.hoisted(() => vi.fn(async () => ({ ok: true as const, server: { id: 's1' }, version: '1' })));
 const sendCmdMock = vi.hoisted(() => vi.fn());
 const watchOnPhoneMock = vi.hoisted(() => vi.fn(async (_c: unknown, _t: unknown, _w: unknown) => ({})));
-const searchAllMock = vi.hoisted(() => vi.fn((_query: string, _options: unknown) => ({ results: () => [], pending: () => [] })));
+const searchAllMock = vi.hoisted(() => {
+  let failed: string[] = [];
+  const mock = vi.fn((_query: string, _options: unknown) => ({
+    results: () => [],
+    pending: () => [],
+    failed: () => failed,
+    done: Promise.resolve(),
+  }));
+  return Object.assign(mock, {
+    __setFailed: (ids: string[]) => {
+      failed = ids;
+    },
+  });
+});
 const buildTorrentQueueMock = vi.hoisted(() => vi.fn((_c: unknown, _t: unknown, _files: unknown) => [{ url: 'u', title: 't', hash: 'h', fileIndex: 0 }]));
 
 vi.mock('../mobile/src/connect/connectServer', () => ({ connectServer: connectServerMock }));
@@ -23,6 +36,7 @@ vi.mock('../src/player/queue', () => ({ buildTorrentQueue: buildTorrentQueueMock
 
 import { nowPlaying } from '../mobile/src/tv/playerLink';
 import { torrents } from '../src/store/library';
+import { clearHealth, setHealth } from '../src/sources/store';
 import type { Torrent } from '../src/api/types';
 
 import { createTvFlowDispatcher } from '../src/productionFlowDispatcher';
@@ -59,6 +73,9 @@ beforeEach(() => {
   sendCmdMock.mockClear();
   watchOnPhoneMock.mockClear();
   searchAllMock.mockClear();
+  searchAllMock.__setFailed([]);
+  clearHealth('ts-rutor');
+  clearHealth('ts-torznab');
   buildTorrentQueueMock.mockClear();
   tvStack.value = [{ name: 'connect' }];
   phoneStack.value = [{ name: 'connect' }];
@@ -99,12 +116,11 @@ describe('tv flow dispatcher', () => {
     expect(connectServerMock).toHaveBeenCalledWith({ url: server.url });
   });
 
-  it('reports documented errors for player-owned and append-only actions', () => {
+  it('reports documented errors for player-owned actions', () => {
     const dispatcher = createTvFlowDispatcher();
     for (const call of [
       () => dispatcher.playbackPlayPause(),
       () => dispatcher.playbackNextEpisode(),
-      () => dispatcher.queueAdd(),
     ]) {
       const outcome = call();
       expect(outcome.ok).toBe(false);
@@ -133,16 +149,43 @@ describe('tv flow dispatcher', () => {
     expect(tvRoute.value.name).toBe('player');
   });
 
-  it('retries the search and rotates to the next enabled source', () => {
+  it('appends the active torrent to the open player queue without touching playback', () => {
+    const dispatcher = createTvFlowDispatcher();
+    expect(dispatcher.queueAdd()).toMatchObject({ ok: false, error: expect.stringContaining('torrent screen') });
+    torrents.value = [{ hash: 'abc', title: 'T', stat: 5, stat_string: 'Done', torrent_size: 10, loaded_size: 10, file_stats: [{ id: 1, path: '/T.mkv', length: 5 }] }];
+    addServer({ url: 'http://192.168.1.9:8090' });
+    activeServerId.value = servers.value[0].id;
+    tvStack.value = [{ name: 'library' }, { name: 'torrent', hash: 'abc' }];
+    expect(dispatcher.queueAdd()).toMatchObject({ ok: false, error: expect.stringContaining('no open player queue') });
+    const existing = { url: 'old', title: 'old', hash: 'old', fileIndex: 0 };
+    tvStack.value = [{ name: 'library' }, { name: 'player', queue: [existing], index: 0 }, { name: 'torrent', hash: 'abc' }];
+    expect(dispatcher.queueAdd()).toEqual({ ok: true });
+    const player = tvStack.value[1];
+    expect(player.name).toBe('player');
+    if (player.name !== 'player') throw new Error('player route expected');
+    expect(player.queue[0]).toEqual(existing);
+    expect(player.queue).toHaveLength(2);
+    expect(player.index).toBe(0);
+    expect(tvRoute.value.name).toBe('torrent');
+  });
+
+  it('retries the failed sources of the current search and rotates to the next available one', async () => {
     const dispatcher = createTvFlowDispatcher({ sourceContext: () => ({}) as never });
     expect(dispatcher.sourceRetry()).toMatchObject({ ok: false, error: expect.stringContaining('query') });
     tvStack.value = [{ name: 'library' }, { name: 'add', query: 'terminator' }];
+    searchAllMock.__setFailed(['ts-rutor']);
     expect(dispatcher.sourceRetry()).toEqual({ ok: true });
-    expect(searchAllMock).toHaveBeenLastCalledWith('terminator', expect.objectContaining({ ctx: expect.anything() }));
-    const first = searchAllMock.mock.calls.length;
+    expect(searchAllMock).toHaveBeenLastCalledWith('terminator', expect.not.objectContaining({ sources: expect.anything() }));
+    await Promise.resolve();
+    searchAllMock.mockClear();
+    expect(dispatcher.sourceRetry()).toEqual({ ok: true });
+    expect(searchAllMock).toHaveBeenLastCalledWith('terminator', expect.objectContaining({ sources: ['ts-rutor'] }));
+    searchAllMock.mockClear();
+    setHealth('ts-rutor', { state: 'error', at: Date.now() });
     expect(dispatcher.sourceNext()).toEqual({ ok: true });
-    expect(searchAllMock).toHaveBeenCalledTimes(first + 1);
-    expect(searchAllMock.mock.calls[first][1]).toHaveProperty('sources');
+    expect(searchAllMock).toHaveBeenLastCalledWith('terminator', expect.objectContaining({ sources: ['ts-torznab'] }));
+    setHealth('ts-torznab', { state: 'login', at: Date.now() });
+    expect(dispatcher.sourceNext()).toMatchObject({ ok: false, error: expect.stringContaining('unavailable') });
   });
 });
 

@@ -9,9 +9,8 @@ import { torrents } from '../../src/store/library';
 import { getLocalProgress, isWatched } from '../../src/store/progress';
 import { baseName } from '../../src/lib/episodes';
 import { connectServer } from './connect/connectServer';
-import { allSources } from '../../src/sources/registry';
-import { sourcesForSearch, searchAll, type SearchHandle } from '../../src/sources/search';
-import { enabledSources } from '../../src/sources/store';
+import type { SearchHandle } from '../../src/sources/search';
+import { createFlowSourceSearch } from '../../src/flowSourceSearch';
 import { nowPlaying, sendCmd } from './tv/playerLink';
 import type { SourceContext } from '../../src/sources/types';
 import {
@@ -28,12 +27,6 @@ export interface PhoneFlowDispatcherOptions {
   sourceContext?: () => SourceContext;
 }
 
-function enabledSourceIds(): string[] {
-  return sourcesForSearch(enabledSources(allSources())).map((source) => source.id);
-}
-
-// Reports the merged result count once a search drains; the handle itself stays with the
-// caller, so the outcome of a flow-triggered search is explicit instead of silent.
 function reportSearchCount(handle: SearchHandle): void {
   if (handle.pending().length === 0) {
     showToast(String(handle.results().length));
@@ -85,26 +78,15 @@ export function createPhoneFlowDispatcher(options: PhoneFlowDispatcherOptions): 
     }).catch((error) => showToast(error instanceof Error ? error.message : String(error)));
     return { ok: true };
   };
-  // The search screen route carries the query. retry re-runs all enabled sources; next runs
-  // the next enabled source in order (rotating) - the existing searchAll API both times.
-  let sourceCursor = -1;
-  const sourceSearch = (action: string, next: boolean): FlowDispatchOutcome => {
-    const route = currentRoute.value;
-    const query = route.name === 'add' ? route.query : undefined;
-    if (!query) {
-      return { ok: false, error: `${action} is unavailable on phone: the search screen has no active query` };
-    }
-    const ids = enabledSourceIds();
-    if (!ids.length) return { ok: false, error: `${action}: no search source is enabled` };
-    let sources: string[] | undefined;
-    if (next) {
-      sourceCursor = (sourceCursor + 1) % ids.length;
-      sources = [ids[sourceCursor]];
-    }
-    const handle = searchAll(query, { ctx: context(), ...(sources ? { sources } : {}) });
-    reportSearchCount(handle);
-    return { ok: true };
-  };
+  const sourceSearch = createFlowSourceSearch({
+    platform: 'phone',
+    query: () => {
+      const route = currentRoute.value;
+      return route.name === 'add' ? route.query : undefined;
+    },
+    context,
+    report: reportSearchCount,
+  });
   return createProductionDispatcher({
     navigate: (screenId) => {
       navigate({ name: screenId } as MRoute);
@@ -158,10 +140,11 @@ export function createPhoneFlowDispatcher(options: PhoneFlowDispatcherOptions): 
       return { ok: true };
     },
     queueReplace: () => queueReplace('queue.replace'),
-    // The player takes a whole queue per launch; appending to a running queue is not an
-    // existing app API.
-    queueAdd: () => unavailableProductionAction('queue.add', 'phone', 'the player takes a whole queue per launch; use queue.replace from a torrent screen'),
-    sourceRetry: () => sourceSearch('source.retry', false),
-    sourceNext: () => sourceSearch('source.next', true),
+    // The phone player takes a whole queue per launch (Open2160Options) and the player-link
+    // protocol has no append command, so an append without forcing playback genuinely does
+    // not exist on the phone; use queue.replace from the torrent screen.
+    queueAdd: () => unavailableProductionAction('queue.add', 'phone', 'the player takes a whole queue per launch and the player-link protocol has no append; use queue.replace from a torrent screen'),
+    sourceRetry: () => sourceSearch.retry(),
+    sourceNext: () => sourceSearch.next(),
   });
 }

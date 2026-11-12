@@ -3,6 +3,7 @@ import { SESSION_KEY } from './billing/session';
 import { activeServer } from './store/servers';
 import { torrents } from './store/library';
 import { currentRoute, routeStack } from './ui/nav';
+import { tvPlayerState } from './phone/link';
 import type { Torrent } from './api/types';
 import type {
   DownloadFlowUpdate,
@@ -84,18 +85,43 @@ export function subscribeLibraryDownloads(notify: (update: DownloadFlowUpdate) =
   });
 }
 
-// The TV player is a route of its own: entering it starts playback, leaving it stops
-// playback. Pause and finish are not observable at the shell, so no events are invented.
+// TV playback: the player route gives started/stopped; the registered player's own snapshot
+// (refreshed on the existing phone-link cadence and on player state jumps) gives paused and
+// finished. A state that ends while the player screen stays open is a finished item; leaving
+// the route is a stopped playback. Without a registered player no pause/finish events are
+// published - none are invented.
 export function subscribeTvPlayback(notify: (update: PlaybackFlowUpdate) => void): () => void {
-  let playing = currentRoute.value.name === 'player';
-  return routeStack.subscribe(() => {
+  let routePlaying = currentRoute.value.name === 'player';
+  let previous = tvPlayerState.value;
+  const unsubscribeRoute = routeStack.subscribe(() => {
     const next = currentRoute.value.name === 'player';
-    if (next === playing) return;
-    playing = next;
+    if (next === routePlaying) return;
+    routePlaying = next;
     notify(next
       ? { state: 'playing', event: 'playback.started' }
       : { state: 'stopped', event: 'playback.stopped' });
   });
+  const unsubscribeState = tvPlayerState.subscribe((next) => {
+    const last = previous;
+    previous = next;
+    if (!last && next) return;
+    if (last && !next) {
+      if (currentRoute.value.name === 'player') notify({ state: 'stopped', event: 'playback.finished' });
+      return;
+    }
+    if (!last || !next) return;
+    if (last.hash !== next.hash || last.file !== next.file) {
+      notify({ state: 'playing', event: 'playback.started' });
+    } else if (last.paused !== next.paused) {
+      notify(next.paused
+        ? { state: 'paused', event: 'playback.paused' }
+        : { state: 'playing', event: 'playback.started' });
+    }
+  });
+  return () => {
+    unsubscribeRoute();
+    unsubscribeState();
+  };
 }
 
 export function createTvFlowPublishers(): ProductionFlowPublishers {

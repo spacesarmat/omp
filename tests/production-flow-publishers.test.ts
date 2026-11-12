@@ -23,6 +23,7 @@ import { SESSION_KEY } from '../src/billing/session';
 import { torrents } from '../src/store/library';
 import { routeStack as phoneStack } from '../mobile/src/nav';
 import { routeStack as tvStack } from '../src/ui/nav';
+import { tvPlayerState } from '../src/phone/link';
 import { nowPlaying } from '../mobile/src/tv/playerLink';
 
 function rule(id: string, event: import('../design/schema').FlowEventType, message: string): import('../design/schema').InteractionRule {
@@ -109,6 +110,7 @@ beforeEach(() => {
   localStorage.clear();
   torrents.value = [];
   nowPlaying.value = null;
+  tvPlayerState.value = null;
   phoneStack.value = [{ name: 'library' }];
   tvStack.value = [{ name: 'library' }];
   document.body.innerHTML = '';
@@ -189,15 +191,20 @@ describe('production flow publishers (main-entry subscriptions)', () => {
     stop();
   });
 
-  it('fires playback started and stopped on the TV player route transitions', () => {
+  it('fires started, stopped, paused and finished from the TV route and player state', () => {
     generated.flow.rules = [
       rule('tv-start', 'playback.started', 'tv started'),
+      rule('tv-pause', 'playback.paused', 'tv paused'),
       rule('tv-stop', 'playback.stopped', 'tv stopped'),
+      rule('tv-finish', 'playback.finished', 'tv finished'),
     ];
     const { calls, stop } = install(createTvFlowPublishers());
     tvStack.value = [{ name: 'library' }, { name: 'player', queue: [], index: 0 }];
+    tvPlayerState.value = playing();
+    tvPlayerState.value = playing({ paused: true });
+    tvPlayerState.value = null;
     tvStack.value = [{ name: 'library' }];
-    expect(calls).toEqual(['toast:tv started', 'toast:tv stopped']);
+    expect(calls).toEqual(['toast:tv started', 'toast:tv paused', 'toast:tv finished', 'toast:tv stopped']);
     stop();
   });
 });

@@ -1,4 +1,4 @@
-import { currentRoute, goBack, navigate, openPlayer, type Route } from './ui/nav';
+import { currentRoute, goBack, navigate, openPlayer, routeStack, type Route } from './ui/nav';
 import { toast } from './ui/toast';
 import { confirmWithBody } from './ui/dialog';
 import { BILLING_BOT_URL } from './billing/config';
@@ -6,9 +6,8 @@ import { activeServer, client } from './store/servers';
 import { torrents } from './store/library';
 import { buildTorrentQueue } from './player/queue';
 import { tvSourceContext } from './sources/tvContext';
-import { allSources } from './sources/registry';
-import { sourcesForSearch, searchAll, type SearchHandle } from './sources/search';
-import { enabledSources } from './sources/store';
+import type { SearchHandle } from './sources/search';
+import { createFlowSourceSearch } from './flowSourceSearch';
 import { connectServer } from '../mobile/src/connect/connectServer';
 import type { SourceContext } from './sources/types';
 import {
@@ -21,10 +20,6 @@ import {
 export interface TvFlowDispatcherOptions {
   /** Search source context; defaults to the TV's existing search context. */
   sourceContext?: () => SourceContext;
-}
-
-function enabledSourceIds(): string[] {
-  return sourcesForSearch(enabledSources(allSources())).map((source) => source.id);
 }
 
 function reportSearchCount(handle: SearchHandle): void {
@@ -53,42 +48,49 @@ export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): F
     });
     return { ok: true };
   };
-  // The active torrent screen is the queue context: queue.replace builds the player queue
+  // The active torrent screen is the queue context. queue.replace builds the player queue
   // with the existing builder and opens the player route, replacing what played before.
-  const queueReplace = (action: string): FlowDispatchOutcome => {
+  const torrentQueue = (action: string): { error: FlowDispatchOutcome } | { queue: import('./player/types').PlayItem[] } => {
     const route = currentRoute.value;
     if (route.name !== 'torrent') {
-      return { ok: false, error: `${action} is unavailable on tv: open the torrent screen of what should play` };
+      return { error: { ok: false, error: `${action} is unavailable on tv: open the torrent screen of what should play` } };
     }
     const torrent = torrents.value.find((entry) => entry.hash === route.hash);
-    if (!torrent) return { ok: false, error: `${action}: the torrent is not in the library yet` };
+    if (!torrent) return { error: { ok: false, error: `${action}: the torrent is not in the library yet` } };
     const c = client.value;
-    if (!c) return { ok: false, error: `${action} is unavailable on tv: no active server` };
+    if (!c) return { error: { ok: false, error: `${action} is unavailable on tv: no active server` } };
     const files = c.files(torrent);
-    if (!files.length) return { ok: false, error: `${action}: the torrent has no files yet` };
+    if (!files.length) return { error: { ok: false, error: `${action}: the torrent has no files yet` } };
     const queue = buildTorrentQueue(c, torrent, files);
-    if (!queue.length) return { ok: false, error: `${action}: the torrent has no playable files` };
-    openPlayer({ name: 'player', queue, index: 0 });
+    if (!queue.length) return { error: { ok: false, error: `${action}: the torrent has no playable files` } };
+    return { queue };
+  };
+  // queue.add appends to the open player route in the stack: the current index and the
+  // playing item stay untouched, playback is not forced.
+  const queueAdd = (): FlowDispatchOutcome => {
+    const built = torrentQueue('queue.add');
+    if ('error' in built) return built.error;
+    const stack = routeStack.value;
+    const at = stack.findIndex((entry) => entry.name === 'player');
+    if (at < 0) {
+      return { ok: false, error: 'queue.add is unavailable on tv: no open player queue; use queue.replace to start playback' };
+    }
+    routeStack.value = stack.map((entry, index) => (
+      index === at && entry.name === 'player'
+        ? { ...entry, queue: [...entry.queue, ...built.queue] }
+        : entry
+    ));
     return { ok: true };
   };
-  let sourceCursor = -1;
-  const sourceSearch = (action: string, next: boolean): FlowDispatchOutcome => {
-    const route = currentRoute.value;
-    const query = route.name === 'add' ? route.query : undefined;
-    if (!query) {
-      return { ok: false, error: `${action} is unavailable on tv: the search screen has no active query` };
-    }
-    const ids = enabledSourceIds();
-    if (!ids.length) return { ok: false, error: `${action}: no search source is enabled` };
-    let sources: string[] | undefined;
-    if (next) {
-      sourceCursor = (sourceCursor + 1) % ids.length;
-      sources = [ids[sourceCursor]];
-    }
-    const handle = searchAll(query, { ctx: context(), ...(sources ? { sources } : {}) });
-    reportSearchCount(handle);
-    return { ok: true };
-  };
+  const sourceSearch = createFlowSourceSearch({
+    platform: 'tv',
+    query: () => {
+      const route = currentRoute.value;
+      return route.name === 'add' ? route.query : undefined;
+    },
+    context,
+    report: reportSearchCount,
+  });
   return createProductionDispatcher({
     navigate: (screenId) => {
       navigate({ name: screenId } as Route);
@@ -128,11 +130,14 @@ export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): F
       }
       return { ok: goBack() };
     },
-    queueReplace: () => queueReplace('queue.replace'),
-    // The TV queue is built per player launch; appending to a running queue is not an
-    // existing app API.
-    queueAdd: () => unavailableProductionAction('queue.add', 'tv', 'the player queue is built per launch; use queue.replace from a torrent screen'),
-    sourceRetry: () => sourceSearch('source.retry', false),
-    sourceNext: () => sourceSearch('source.next', true),
+    queueReplace: () => {
+      const built = torrentQueue('queue.replace');
+      if ('error' in built) return built.error;
+      openPlayer({ name: 'player', queue: built.queue, index: 0 });
+      return { ok: true };
+    },
+    queueAdd,
+    sourceRetry: () => sourceSearch.retry(),
+    sourceNext: () => sourceSearch.next(),
   });
 }
