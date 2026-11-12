@@ -136,6 +136,7 @@ function onBody(body: string): void {
 }
 
 function clearLink(): void {
+  sentSkip = null;
   nowPlaying.value = null;
   lastSeen.value = 0;
   launchedAt.value = 0;
@@ -179,6 +180,7 @@ export function setPlayerLinkDeps(d: Partial<PlayerLinkDeps> | null): void {
   overlay = null;
   attaching = null;
   cmdSeq = 0;
+  sentSkip = null;
 }
 
 /** Records a successful launch: «Запускаем на телевизоре…» until the TV reports or the wait ends. */
@@ -224,17 +226,26 @@ function optimisticFields(s: PlayerState, c: DistributiveOmit<Cmd, 'id'>): { pau
 }
 
 const SKIP_KEY = 'tsp.nowSkipMarks';
+/** A queued command can vanish after three seconds. Until then the same file and chapter must not queue another next. */
+const SKIP_RETRY_MS = 3000;
+let sentSkip: { token: string; at: number } | null = null;
 
-/** Skips a recap or credits chapter while the saved switch is on. Runs from the link, not only the open screen.
- *  Each report retries until the TV says playback moved: a queued command can be dropped. */
+/** Skips a recap or credits chapter while the saved switch is on. Runs from the link, not only the open screen. */
 export function applyAutoSkip(): void {
   const s = nowPlaying.value;
   if (!s || loadJson<unknown>(SKIP_KEY, false, (v) => v === true) !== true) return;
-  if (statusAt(deps.now()) !== 'live') return;
+  const now = deps.now();
+  if (statusAt(now) !== 'live') return;
   if (!s.chapters || s.chapter === undefined || s.chapter < 0) return;
   const ch = s.chapters[s.chapter];
   const kind = ch ? titleMarkKind(ch.title) : '';
-  if (kind !== 'recap' && kind !== 'credits') return;
+  if (kind !== 'recap' && kind !== 'credits') {
+    sentSkip = null;
+    return;
+  }
+  const token = s.hash + ':' + String(s.file) + ':' + s.chapter;
+  if (sentSkip && sentSkip.token === token && now - sentSkip.at < SKIP_RETRY_MS) return;
+  sentSkip = { token, at: now };
   if (s.chapter + 1 < s.chapters.length) sendCmd({ type: 'chapter', i: s.chapter + 1 });
   else if (s.next) sendCmd({ type: 'next' });
   else if (s.duration > 0) sendCmd({ type: 'seek', t: s.duration });

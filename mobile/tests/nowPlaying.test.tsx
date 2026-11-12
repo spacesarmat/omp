@@ -23,6 +23,7 @@ async function flush() {
 
 let el: HTMLElement;
 const NOW = 100000;
+let clock = NOW;
 const queue = vi.fn();
 const volume = vi.fn();
 const fgApp = vi.fn();
@@ -62,6 +63,7 @@ const byText = (t: string) => Array.from(el.querySelectorAll('button')).find((b)
 const sent = () => queue.mock.calls.map((c) => c[0][0]);
 
 beforeEach(() => {
+  clock = NOW;
   localStorage.clear();
   reloadTvs();
   saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
@@ -69,7 +71,7 @@ beforeEach(() => {
   volume.mockReset().mockResolvedValue(undefined);
   fgApp.mockReset().mockResolvedValue(null);
   setPlayerLinkDeps({
-    now: () => NOW,
+    now: () => clock,
     foregroundAppId: fgApp,
     tvFailed: () => false,
     native: { startPlayerServer: vi.fn(), queuePlayerCommands: queue, onPlayerMessage: () => () => {} } as any,
@@ -254,6 +256,9 @@ describe('NowPlaying', () => {
       queue.mockClear();
       applyAutoSkip();
       expect(sent()[0]).toEqual(expect.objectContaining({ type: 'next' }));
+      applyAutoSkip();
+      expect(sent().filter((c) => c.type === 'next')).toHaveLength(1);
+      clock += 3000;
       applyAutoSkip();
       expect(sent().filter((c) => c.type === 'next')).toHaveLength(2);
       setState(state({ chapters: [{ t: 0, title: 'Рекап' }, { t: 30, title: 'Scene' }], chapter: 0, time: 2 }));
