@@ -357,7 +357,8 @@ describe('donate crypto pay mode', () => {
     const b = await boot();
     const state = await readState(b.store);
     Object.assign(state.settings, { cryptoPayToken: LIVE, cryptoPayTestnetToken: TESTNET, cryptoRateUsdt: 100, ...patch });
-    state.donations[0] = { ...state.donations[0], ...donation };
+    // boot() stamps the row at 09:00 UTC. A draft older than two hours is a stale button, so a later run never creates an invoice.
+    state.donations[0] = { ...state.donations[0], createdAt: Date.now(), ...donation };
     await writeState(b.store, state);
     return b;
   }
@@ -390,7 +391,32 @@ describe('donate crypto pay mode', () => {
     const http = net();
     await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
     expect(http.calls.some((c) => c.url.indexOf('crypt.bot') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).toContain('Не удалось создать счёт');
     expect(JSON.stringify(http.calls)).not.toContain(LIVE);
+    const saved = (await readState(b.store)).donations[0];
+    expect(saved.method).toBe('crypto');
+    expect(saved.payUrl || '').toBe('');
+  });
+
+  it('does not create an invoice when the draft is older than two hours', async () => {
+    const b = await ready(
+      { cryptoTestnet: false },
+      {
+        method: '',
+        asset: '',
+        payAmount: '',
+        gross: '',
+        fee: '',
+        status: 'draft',
+        step: 'method',
+        createdAt: Date.now() - 2 * 60 * 60 * 1000 - 1000,
+      },
+    );
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    expect(http.calls.some((c) => c.url.indexOf('/api/createInvoice') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).toContain('Кнопка устарела');
+    expect((await readState(b.store)).donations[0].status).toBe('draft');
   });
 
   it('reuses a live donation link and replaces it when the mode changes', async () => {
