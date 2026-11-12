@@ -1,6 +1,7 @@
 import {
   DESIGN_FORMATS,
   DESIGN_TARGETS,
+  DESKTOP_DESIGN_TARGETS,
   type DesignFormat,
   type DesignTarget,
   type DesktopDesignTarget,
@@ -54,7 +55,9 @@ const PHONE_NAV_ID_ALIAS: Record<string, string> = { add: 'search' };
 // ids do not exist in the real markup. The desktop sidebar buttons carry their route in
 // data-nav; stamping the same ids the editor exports (sidebar, content, nav-<route>) lets an
 // exported layout move, hide and reorder the real chrome. Runs before component inference so
-// the nav buttons are not claimed as generic buttons.
+// the nav buttons are not claimed as generic buttons. The sidebar/content/nav contract is
+// desktop-only: phone and TV previews register a different root structure, so the shell ids
+// are stamped exclusively on desktop targets while component inference runs everywhere.
 function registerDesktopShellIdentity(root: HTMLElement, stamped: Set<HTMLElement>): void {
   const sidebar = root.querySelector<HTMLElement>('aside.omp-side');
   if (sidebar && !sidebar.dataset.designId && !sidebar.dataset.designComponent) {
@@ -109,9 +112,13 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   installedProductionRoots.add(root);
   const stamped = new Set<HTMLElement>();
   const win = root.ownerDocument.defaultView ?? (typeof window !== 'undefined' ? window : null);
+  const shellIdentityTarget = (DESKTOP_DESIGN_TARGETS as readonly string[]).includes(options.target);
 
-  registerDesktopShellIdentity(root, stamped);
-  registerComponentIdentity(root, stamped);
+  const registerIdentities = (): void => {
+    if (shellIdentityTarget) registerDesktopShellIdentity(root, stamped);
+    registerComponentIdentity(root, stamped);
+  };
+  registerIdentities();
   const initialFormat = win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
   writeContext(root, options.target, options.screenOf(), initialFormat);
 
@@ -122,10 +129,7 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   const currentFormat = (): DesignFormat =>
     win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
 
-  const observer = new MutationObserver(() => {
-    registerDesktopShellIdentity(root, stamped);
-    registerComponentIdentity(root, stamped);
-  });
+  const observer = new MutationObserver(registerIdentities);
   observer.observe(root, { childList: true, subtree: true });
   let unsubscribeScreen: (() => void) | undefined;
   if (options.subscribeScreen) unsubscribeScreen = options.subscribeScreen(refreshScreen);

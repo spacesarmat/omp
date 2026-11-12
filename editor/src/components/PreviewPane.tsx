@@ -27,7 +27,7 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   onSelect(elementId: string): void;
   onNavigate(route: DesktopRouteId): void;
   onTrace(trace: InteractionTrace[]): void;
-  onNodesChange(nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>): void;
+  onNodesChange(nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>, directions: Record<string, 'row' | 'column'>): void;
   onGeometryChange?(snapshot: GeometrySnapshot | null): void;
   onSelectNode(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
@@ -101,8 +101,25 @@ export function PreviewPane(props: PreviewPaneProps) {
         height: box.height,
       };
     }
+    // Flow axis decisions need the real rendered direction: the editor maps alignment and
+    // distribution buttons to the flex main or cross axis through this computed value when the
+    // container record does not pin a direction. Read through the element's own window so a
+    // preview iframe from another realm reports its own layout.
+    const directions: Record<string, 'row' | 'column'> = {};
+    for (const [nodeId, element] of elements) {
+      if (!element.children.length) continue;
+      const view = element.ownerDocument.defaultView;
+      if (!view) continue;
+      let value = '';
+      try {
+        value = view.getComputedStyle(element).flexDirection;
+      } catch {
+        value = '';
+      }
+      if (value === 'row' || value === 'column') directions[nodeId] = value;
+    }
     setCollected({ nodes, rects });
-    props.onNodesChange(nodes, rects);
+    props.onNodesChange(nodes, rects, directions);
     props.onGeometryChange?.(collectGeometrySnapshot(rootEl, {
       target: props.target,
       screenId: props.route,

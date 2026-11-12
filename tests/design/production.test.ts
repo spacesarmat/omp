@@ -274,6 +274,26 @@ describe('installProductionDesign', () => {
     expect(news.style.display).toBe('none');
   });
 
+  it('stamps desktop shell ids only on desktop targets and keeps component inference everywhere', () => {
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <aside class="omp-side is-expanded">
+        <button type="button" class="omp-side-item" data-nav="library">Каталог</button>
+      </aside>
+      <div class="m-screen" data-route="library"><div class="m-card">A</div></div>`;
+    document.body.appendChild(root);
+
+    cleanup = installProductionDesign(root, { target: 'android-phone', screenOf: () => 'library' });
+
+    // The sidebar/content/nav contract is desktop-only; phone and TV previews use a different
+    // root contract, so the shell ids must not appear on their production markup.
+    expect(root.querySelector<HTMLElement>('aside.omp-side')!.dataset.designId).toBeUndefined();
+    expect(root.querySelector<HTMLElement>('.omp-side-item')!.dataset.designId).toBeUndefined();
+    expect(root.querySelector<HTMLElement>('.m-screen')!.dataset.designId).toBeUndefined();
+    // Generic component inference still runs on every target.
+    expect(root.querySelector<HTMLElement>('.m-card')!.dataset.designComponent).toBe('card');
+  });
+
   it('installs on a root only once', () => {
     const root = document.createElement('div');
     root.innerHTML = GRID;

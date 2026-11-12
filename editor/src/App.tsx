@@ -81,6 +81,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   const [selection, setSelection] = useState<SelectionState>({ ids: [], anchorId: null });
   const [layoutNodes, setLayoutNodes] = useState<LayoutNodeDescriptor[]>([]);
   const [layoutRects, setLayoutRects] = useState<Record<string, LayoutRect>>({});
+  const [layoutDirections, setLayoutDirections] = useState<Record<string, 'row' | 'column'>>({});
   const [geometrySnapshot, setGeometrySnapshot] = useState<GeometrySnapshot | null>(null);
   const [geometryConfirmed, setGeometryConfirmed] = useState(false);
   const [mode, setMode] = useState<'design' | 'logic' | 'simulate'>('design');
@@ -124,9 +125,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     // (including their disappearance) revokes it.
     setGeometryConfirmed(false);
   }, [geometryWarningKey]);
-  const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>) => {
+  const handleNodesChange = (nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>, directions: Record<string, 'row' | 'column'>) => {
     setLayoutNodes(nodes);
     setLayoutRects(rects);
+    setLayoutDirections(directions);
   };
   const applySelection = (next: SelectionState) => {
     setSelection(next);
@@ -229,9 +231,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     .filter((item) => item.node && item.node.parentId !== null && !item.placement?.locked && !item.placement?.hidden);
   // Flow children of one container are aligned through the container record, absolute nodes
   // through their coordinates; either way the whole group lands in a single draft transaction.
-  // The button axis maps to the flex main or cross axis through the container direction:
-  // horizontal names drive justify-content in a row and align-items in a column, vertical names
-  // do the opposite. A container without a recorded direction renders as a row, the flex default.
+  // The button axis maps to the flex main or cross axis through the container direction: the
+  // recorded direction wins, a record without one falls back to the computed flex-direction of
+  // the live preview container, and only a missing computed value falls back to the row
+  // default documented for the runtime.
   const flowSelectionDirection = (): 'row' | 'column' | null => {
     const items = selectedItems();
     if (items.length < 2) return null;
@@ -245,7 +248,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         && container.format === layoutContext.format
         && container.nodeId === parentId,
     );
-    return record?.direction === 'column' ? 'column' : 'row';
+    if (record?.direction === 'row' || record?.direction === 'column') return record.direction;
+    const computed = layoutDirections[parentId];
+    if (computed === 'row' || computed === 'column') return computed;
+    return 'row';
   };
   const alignSelection = (alignment: SelectionAlignment, axis: 'x' | 'y' | null) => {
     const items = selectedItems();

@@ -68,6 +68,7 @@ interface PreviewBuildOptions {
   toolbar?: boolean;
   frameRect?: DOMRect;
   rooted?: boolean;
+  gridDirection?: 'row' | 'column';
 }
 
 function buildPreview(horizontal = false, options: PreviewBuildOptions = {}): PreviewShape {
@@ -89,6 +90,7 @@ function buildPreview(horizontal = false, options: PreviewBuildOptions = {}): Pr
     return element;
   };
   const grid = make('card-grid', 0, 0, 400, horizontal ? 200 : 400);
+  if (options.gridDirection) grid.style.flexDirection = options.gridDirection;
   const first = horizontal ? make('server-card', 0, 0, 200, 100) : make('server-card', 0, 0, 400, 100);
   const second = horizontal ? make('server-card', 200, 0, 200, 100) : make('server-card', 0, 100, 400, 100);
   const settings = { value: 'keep' };
@@ -680,6 +682,27 @@ describe('layout workspace', () => {
 
     expect(host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.disabled).toBe(true);
     act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.click());
+    expect(container().distribution).toBe('space-between');
+  });
+
+  it('reads the computed column direction when the container record has no direction', () => {
+    // The preview container renders as a CSS column but no container record exists yet: the
+    // computed direction, not the flex default, must decide which axis a button edits.
+    buildPreview(false, { gridDirection: 'column' });
+    const context = contextOf();
+    moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+    selectBothCards();
+
+    const container = () => controller.draft.theme.layout!.containers.find((entry) => entry.nodeId === 'card-grid')!;
+    // Horizontal alignment against a computed column is a cross-axis operation (align-items).
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!.click());
+    expect(container().alignment).toBe('start');
+    expect(container().distribution).toBeUndefined();
+
+    // Distribution across the computed cross axis stays disabled.
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.disabled).toBe(true);
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="distribute-y"]')!.click());
     expect(container().distribution).toBe('space-between');
   });
 });
