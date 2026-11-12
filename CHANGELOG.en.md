@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Catalog list: a row swipe reveals the actions under that row, clipped to it. The same gesture no longer switches tabs. A manual update check on a beta, with betas off, says so
+- [phone] Catalog: the header and chips stay pinned and do not jump while scrolling. On a poster the badge sits above the season line
 - [phone] Account: a Supporter mark on a linked account that donated, and a thanks list. The list shows only people who opened their name
 - [tech] Bot and admin donations: a separate payment, migration 012, flag and methods off. It does not change a subscription or referral bonuses. A donation Crypto Pay invoice uses the active mode token and host. Billing was not deployed
 

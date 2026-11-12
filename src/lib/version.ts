@@ -40,6 +40,11 @@ export function isBetaVersion(v: string): boolean {
   return /-beta\.[0-9]+$/.test((v || '').trim());
 }
 
+/** A manual check that found nothing newer. A beta install with betas off says so, a stable install says it is current. */
+export function manualLatestHint(version: string, betaUpdates: boolean): 'betaOff' | 'latest' {
+  return isBetaVersion(version) && !betaUpdates ? 'betaOff' : 'latest';
+}
+
 /**
  * Android versionCode. Each patch has 100 slots: betas use 1..98, a stable release uses 99,
  * so 0.20.4-beta.1 < 0.20.4-beta.2 < 0.20.4 < 0.20.5-beta.1. The old code (major*10000+minor*100+patch)
