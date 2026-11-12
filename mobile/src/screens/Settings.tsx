@@ -35,6 +35,15 @@ import { sendShare } from '../share/send';
 import { phonePlayerName } from './videoPlayerSettings';
 import { localServer, canRun } from '../server/localServer';
 import { loadWifiPrefs, wifiPrefsVersion } from '../servers/wifiRun';
+import { ReportRow } from './Advanced';
+
+/** True when the settings search is empty or `text` contains every typed word. */
+export function settingsHit(query: string, text: string): boolean {
+  const words = query.trim().toLowerCase().replace(/ё/g, 'е').split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = text.toLowerCase().replace(/ё/g, 'е');
+  return words.every((w) => hay.includes(w));
+}
 
 function testLabelPhone(): number {
   return clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX);
@@ -152,7 +161,8 @@ function VideoPlayerRow() {
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.6" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
       <span>{t('player.videoPlayer')}</span>
-      <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
+      <span class="m-muted">{settings.value.phonePlayer === 'chooser' ? t('player.askShort') : phonePlayerName(settings.value.phonePlayer)}</span>
+      <Icon d={CHEVRON} size={20} />
     </button>
   );
 }
@@ -322,6 +332,7 @@ function AccountRow() {
             : t('settings.signedIn');
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" data-account={view.kind} aria-busy={view.kind === 'checking' ? 'true' : undefined} onClick={() => navigate({ name: 'account' })}>
+      {left > 0 ? <span class="m-bill-dot" data-account-dot /> : null}
       <span class={view.kind === 'checking' ? 'm-muted' : undefined}>{label}</span>
       <Icon d={CHEVRON} size={20} />
     </button>
@@ -372,6 +383,7 @@ function PhoneServerRow() {
 }
 
 export function Settings() {
+  const [query, setQuery] = useState('');
   const server = activeServer.value;
   const tv = activeTv.value;
   const monitor = loadMonitorSettings();
@@ -392,11 +404,37 @@ export function Settings() {
   void wifiPrefsVersion.value;
   const mode = wifi.enabled && !wifi.overrideId ? t('settings.watchFromModeAuto') : t('settings.watchFromModeAlways');
   const whereLine = (server ? where + ' · ' + reachText(reach) : where) + ' · ' + mode;
+  const tvPlatform = tv ? (tv.kind === 'atv' ? 'Android TV' : 'webOS') : '';
+  const tvLine = tv ? tv.name + ' · ' + tvPlatform : t('settings.notChosen');
+  const accountText = [t('settings.account'), t('invite.title'), t('common.signIn'), t('settings.signedIn'), t('settings.accountChecking')].join(' ');
+  const tvText = [t('history.tv'), tvLine, t('settings.tvSearch'), t('install.assistant.title'), t('settings.change'), t('settings.choose')].join(' ');
+  const watchText = [t('settings.watch'), t('settings.watchFrom'), whereLine, t('settings.phoneServer'), t('player.videoPlayer'), t('player.askShort'), t('settings.language.title'), t('settings.sharedHistory'), t('settings.prebufferMetered')].join(' ');
+  const searchText = [t('settings.search'), t('audiobooks.title'), t('settings.whereSearch'), t('settings.liveSeeds'), t('settings.helpRank'), t('settings.followNew')].join(' ');
+  const appText = [t('settings.app'), t('settings.version'), t('updateScreen.check'), t('updateScreen.latest'), t('settings.help'), t('settings.tellFriends'), t('settings.showOnboarding'), t('settings.resetHints'), t('settings.support'), t('settings.reportTitle'), t('whatsNew.title')].join(' ');
+  const advancedText = t('settings.advanced');
+  const any = settingsHit(query, [accountText, tvText, watchText, searchText, appText, advancedText].join(' '));
 
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
+      <label class="m-faq-search">
+        <input
+          class="m-input"
+          type="search"
+          data-settings-search=""
+          aria-label={t('settings.find')}
+          placeholder={t('settings.find')}
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        />
+      </label>
+      {query.trim() && !any && (
+        <p class="m-muted" data-settings-empty>
+          {t('settings.findEmpty')}
+        </p>
+      )}
 
+      {settingsHit(query, accountText) && (
       <section class="m-set-group" data-section="account">
         <div class="m-set-label">{t('settings.account')}</div>
         <AccountRow />
@@ -405,20 +443,21 @@ export function Settings() {
           <Icon d={CHEVRON} size={20} />
         </button>
       </section>
+      )}
 
+      {settingsHit(query, tvText) && (
       <section class="m-set-group" data-section="tv">
         <div class="m-set-label">{t('history.tv')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>
-              {tv && tvState.value === 'connected' ? <span class="m-bill-dot" data-tv-dot /> : null}
-              {tv ? tv.name : t('settings.notChosen')}
-            </span>
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P11.2" onClick={() => navigate({ name: 'tv' })}>
-            {tv ? t('settings.change') : t('settings.choose')}
-          </button>
-        </div>
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.2" data-row="tv" onClick={() => navigate({ name: 'tv' })}>
+          <i class="m-set-ico" aria-hidden="true">
+            <Icon d="M3 5h18v11H3zM8 20h8" size={18} />
+          </i>
+          <span>
+            {tv && connected ? <span class="m-bill-dot" data-tv-dot /> : null}
+            {tvLine}
+          </span>
+          <Icon d={CHEVRON} size={20} />
+        </button>
         {!tv && <FoundTvs />}
         <TvOmpRow v={omp.v} />
         <TvSearchRow />
@@ -429,7 +468,9 @@ export function Settings() {
           </button>
         )}
       </section>
+      )}
 
+      {settingsHit(query, watchText) && (
       <section class="m-set-group" data-section="watch">
         <div class="m-set-label">{t('settings.watch')}</div>
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.5" data-row="watch-from" onClick={() => navigate({ name: 'watchFrom' })}>
@@ -475,7 +516,9 @@ export function Settings() {
           </button>
         </div>
       </section>
+      )}
 
+      {settingsHit(query, searchText) && (
       <section class="m-set-group" data-section="search">
         <div class="m-set-label">{t('settings.search')}</div>
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.8" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
@@ -523,7 +566,9 @@ export function Settings() {
           <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
         </button>
       </section>
+      )}
 
+      {settingsHit(query, appText) && (
       <section class="m-set-group" data-section="app">
         <div class="m-set-label">{t('settings.app')}</div>
         {isBetaBuild() && (
@@ -578,6 +623,7 @@ export function Settings() {
             {t('updateScreen.check')}
           </button>
         )}
+        <ReportRow />
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.14" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
@@ -609,13 +655,16 @@ export function Settings() {
           </button>
         )}
       </section>
+      )}
 
+      {settingsHit(query, advancedText) && (
       <section class="m-set-group" data-section="advanced">
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.18" data-row="advanced" onClick={() => navigate({ name: 'advanced' })}>
           <span>{t('settings.advanced')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
       </section>
+      )}
     </div>
   );
 }

@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { applyLanguageSetting, tp } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate } from '../src/screens/Settings';
+import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate, settingsHit } from '../src/screens/Settings';
 import { saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
 import { dropDeviceTokens } from '../../src/billing/tokens';
-import { Advanced } from '../src/screens/Advanced';
+import { Advanced, storageBarPct } from '../src/screens/Advanced';
 import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
@@ -69,6 +69,51 @@ afterEach(() => {
   reloadTvs();
 });
 
+describe('settings search', () => {
+  it('matches a word and ignores an empty query', () => {
+    expect(settingsHit('', 'Плеер')).toBe(true);
+    expect(settingsHit('плеер', 'Плеер для видео')).toBe(true);
+    expect(settingsHit('неттакого', 'Плеер для видео')).toBe(false);
+  });
+
+  it('hides rows that do not match and shows an empty note', () => {
+    const el = mount();
+    const input = el.querySelector<HTMLInputElement>('[data-settings-search]')!;
+    expect(el.querySelector('[data-row="account"]')).toBeTruthy();
+    input.value = 'плеер';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-row="video-player"]')).toBeTruthy();
+    expect(el.querySelector('[data-row="account"]')).toBeNull();
+    input.value = 'неттакого';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-settings-empty]')!.textContent).toBe('Ничего не найдено');
+    expect(el.querySelector('[data-row="video-player"]')).toBeNull();
+  });
+
+  it('the TV row is one line with the platform and a dot while connected', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED55C9PLA' });
+    tvState.value = 'connected';
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '1', latest: '1' });
+    const el = mount();
+    const row = el.querySelector('[data-row="tv"]')!;
+    expect(row.textContent).toContain('LG OLED55C9PLA · webOS');
+    expect(row.querySelector('[data-tv-dot]')).toBeTruthy();
+    act(() => (row as HTMLButtonElement).click());
+    expect(currentRoute.value.name).toBe('tv');
+  });
+
+  it('cache bar stays inside 0..100', () => {
+    expect(storageBarPct(null)).toBe(0);
+    expect(storageBarPct(0)).toBe(0);
+    expect(storageBarPct(1)).toBe(8);
+    expect(storageBarPct(2 * 1024 * 1024 * 1024)).toBe(100);
+  });
+});
+
 describe('Settings', () => {
   it('the TV search row switches the phone search server off', async () => {
     const set = vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(null);
@@ -125,7 +170,7 @@ describe('Settings', () => {
     await act(async () => el.querySelector<HTMLButtonElement>('[data-row="watch-from"]')!.click());
     expect(currentRoute.value.name).toBe('watchFrom');
     resetTo({ name: 'settings' });
-    await act(async () => btn(el, 'Выбрать').click());
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-row="tv"]')!.click());
     expect(currentRoute.value.name).toBe('tv');
   });
 
@@ -605,6 +650,7 @@ describe('Settings: the OMP account row', () => {
     const el = mount();
     const left = Math.ceil((paid - Date.now()) / 86400000);
     expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
+    expect(row(el).querySelector('[data-account-dot]')).toBeTruthy();
     await flush();
     expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
     expect(fetcher).not.toHaveBeenCalled();
@@ -649,6 +695,7 @@ describe('Settings: the OMP account row', () => {
     const el = mount();
     await flush();
     expect(row(el).textContent).toBe('Войти');
+    expect(row(el).querySelector('[data-account-dot]')).toBeNull();
     expect(row(el).getAttribute('data-account')).toBe('out');
   });
 
@@ -721,7 +768,7 @@ describe('Settings in English', () => {
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
     expect(labels).toEqual(['OMP account', 'TV', 'Viewing', 'Search', 'App']);
     const text = el.textContent!;
-    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'by network', 'Choose', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
+    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'by network', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
       expect(text, w).toContain(w);
     }
     expect(text).not.toContain('Server settings');
