@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { BILLING_BOT, BILLING_BOT_URL } from '../../../src/billing/config';
+import { BILLING_BOT_URL } from '../../../src/billing/config';
 import {
   billingNotice,
   billingSession,
@@ -8,7 +8,7 @@ import {
   setPendingBillingCode,
   type BillingAccount,
 } from '../../../src/billing/session';
-import { t } from '../../../src/i18n';
+import { t, tp } from '../../../src/i18n';
 import {
   activateCode,
   allowBillingSignIn,
@@ -23,6 +23,11 @@ import {
 } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
 import { TextField } from '../ui/TextField';
+
+function daysLeft(until: number, now: number): number {
+  if (!until || until <= now) return 0;
+  return Math.ceil((until - now) / 86400000);
+}
 
 function day(ms: number): string {
   if (!ms) return '';
@@ -40,6 +45,8 @@ export function OmpJackettCard() {
   const [account, setAccount] = useState<BillingAccount | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
+  const [info, setInfo] = useState(false);
+  const [tgMenu, setTgMenu] = useState(false);
   const [cryptoBusy, setCryptoBusy] = useState(false);
   const [cryptoError, setCryptoError] = useState('');
   const [cryptoLinks, setCryptoLinks] = useState<{ asset: string; amount: string; webUrl: string; url: string }[]>([]);
@@ -159,26 +166,29 @@ export function OmpJackettCard() {
 
   const linked = !!(account && account.telegramId);
 
+  const until = (account && account.paidUntil) || (session && session.paidUntil) || 0;
+  const left = daysLeft(until, Date.now());
+  const on = session ? (account ? !!account.active && !account.inGrace && left > 0 : left > 0) : false;
   return (
     <section class="m-set-group" data-billing="jackett">
-      <div class="m-set-label">{t('sources.billing.title')}</div>
       <div class="m-set-card m-src-card">
         <div class="m-src-row m-note m-muted">{t('sources.billing.text')}</div>
 
         <div class="m-src-row" data-row="billing-telegram">
-          <div class="m-set-text" style="flex-grow: 1">
-            <span>{t('sources.billing.telegramTitle')}</span>
-            {linked ? (
-              <span class="m-small m-accent" data-telegram="linked">
-                {t('sources.billing.linked', { id: account!.telegramId })}
-              </span>
-            ) : (
-              <span class="m-small m-muted">{t('sources.billing.telegramHint')}</span>
-            )}
-          </div>
+          <span>{t('sources.billing.telegramTitle')}</span>
+          <span class="m-grow" />
+          {linked ? (
+            <button type="button" class="m-btn m-btn-secondary" data-tg-menu aria-expanded={tgMenu} onClick={() => setTgMenu(!tgMenu)}>
+              {t('sources.billing.tgMenu')}
+            </button>
+          ) : (
+            <button type="button" class="m-btn m-btn-primary" disabled={linkBusy} onClick={() => void linkTelegram()}>
+              {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
+            </button>
+          )}
         </div>
-        {linked ? (
-          <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+        {linked && tgMenu && (
+          <div class="m-src-row" data-tg-actions>
             <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
               {t('sources.billing.openBot')}
             </button>
@@ -186,27 +196,24 @@ export function OmpJackettCard() {
               {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
             </button>
           </div>
-        ) : (
-          <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
-            <button type="button" class="m-btn m-btn-primary" disabled={linkBusy} onClick={() => void linkTelegram()}>
-              {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
-              {t('sources.billing.openBot')}
-            </button>
-          </div>
         )}
-        <div class="m-src-row m-note m-muted">{t('sources.billing.bot', { name: BILLING_BOT })}</div>
 
         {session ? (
           <>
-            <div class="m-src-row" data-paid-until={day((account && account.paidUntil) || session.paidUntil)}>
-              {account && account.inGrace
-                ? t('sources.billing.grace', { date: day(account.paidUntil), until: day(account.accessUntil || 0) || '-' })
-                : t('sources.billing.paidUntil', {
-                    date: day((account && account.paidUntil) || session.paidUntil) || '-',
-                  })}
+            <div class="m-bill-status" data-bill-status>
+              {on ? <span class="m-bill-dot" data-bill-dot /> : null}
+              <span class="m-bill-days" data-bill-days>{on ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
+              <button type="button" class="m-bill-info" data-bill-info aria-expanded={info} aria-label={t('sources.billing.about')} onClick={() => setInfo(!info)}>
+                i
+              </button>
             </div>
+            {info && (
+              <div class="m-src-row m-note m-muted" data-bill-about data-paid-until={day(until)}>
+                {account && account.inGrace
+                  ? t('sources.billing.grace', { date: day(account.paidUntil), until: day(account.accessUntil || 0) || '-' })
+                  : t('sources.billing.paidUntil', { date: day(until) || '-' })}
+              </div>
+            )}
             {account && account.overLimit ? <div class="m-src-row m-note">{t('sources.billing.overLimit')}</div> : null}
             {cryptoError ? (
               <div class="m-src-row m-note" role="alert">

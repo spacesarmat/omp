@@ -1558,6 +1558,10 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-src-item { display: flex; flex-direction: column; flex-shrink: 0; }
 /* every row: the same height and padding; the right side is only two fixed columns — › (or its empty slot) and the switch */
 .m-src-row { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 0; box-sizing: border-box; flex-shrink: 0; }
+.m-bill-status { display: flex; align-items: center; min-height: 48px; }
+.m-bill-dot { width: 10px; height: 10px; border-radius: 10px; background: #3DDC84; margin-right: 8px; flex: none; }
+.m-bill-days { font-size: 22px; font-weight: 700; }
+.m-bill-info { margin-left: 8px; width: 28px; height: 28px; border-radius: 14px; border: 0; background: transparent; color: #8b93a7; font-size: 16px; font-weight: 700; }
 .m-src-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
 .m-src-open { flex: 0 0 44px; width: 44px; display: flex; align-items: center; justify-content: center; }
 .m-src-open .m-icon-btn { background: none; color: var(--muted); }
