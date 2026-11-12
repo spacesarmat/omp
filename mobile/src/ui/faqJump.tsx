@@ -1,11 +1,11 @@
 import { signal } from '@preact/signals';
 import { t } from '../../../src/i18n';
-import { navigate, type Route } from '../nav';
+import { navigate, type MRoute } from '../nav';
 
 /** The screen a help button just opened. Empty when the question was answered. */
 export const faqMark = signal('');
 
-export function openFromFaq(route: Route, mark: string): void {
+export function openFromFaq(route: MRoute, mark: string): void {
   faqMark.value = mark;
   navigate(route);
 }
