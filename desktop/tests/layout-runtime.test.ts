@@ -272,4 +272,63 @@ describe('production layout runtime', () => {
       expect(original.textContent).toBe('A');
     }
   });
+
+  it('applies margin and container layout fields in production like in preview', async () => {
+    generated.layout.containers = [container({
+      order: ['key-hash-1', 'key-hash-2'],
+      direction: 'column',
+      padding: '8px',
+      alignment: 'center',
+      distribution: 'space-between',
+    })];
+    generated.layout.placements = [placement({ nodeId: 'key-hash-1', margin: '12px' })];
+
+    const productionRoot = mount(GRID);
+    const stopProduction = observeProductionLayout(productionRoot);
+    cleanup = () => stopProduction();
+
+    const previewRoot = mount(GRID);
+    const theme = createDefaultTheme(BASE);
+    theme.layout = structuredClone(generated.layout as LayoutDocument);
+    const stopPreview = observeLayout(previewRoot, theme, { ...productionContext });
+    const previous = cleanup;
+    cleanup = () => {
+      previous?.();
+      stopPreview();
+    };
+
+    await Promise.resolve();
+
+    for (const root of [previewRoot, productionRoot]) {
+      const grid = root.querySelector<HTMLElement>('[data-design-id="card-grid"]')!;
+      expect(grid.style.flexDirection).toBe('column');
+      expect(grid.style.padding).toBe('8px');
+      expect(grid.style.alignItems).toBe('center');
+      expect(grid.style.justifyContent).toBe('space-between');
+      expect(grid.getAttribute('style') ?? '').not.toContain('gap');
+      expect(root.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.margin).toBe('12px');
+    }
+  });
+
+  it('restores inline styles and document order when the orientation context changes', async () => {
+    generated.layout.containers = [container({ order: ['key-hash-2', 'key-hash-1'] })];
+    generated.layout.placements = [placement({ mode: 'absolute', x: 40, y: 24, hidden: true })];
+
+    const root = mount(GRID);
+    cleanup = observeProductionLayout(root);
+    await Promise.resolve();
+
+    const first = () => root.querySelector<HTMLElement>('[data-key="hash-1"]')!;
+    expect(first().style.position).toBe('absolute');
+    expect(first().style.display).toBe('none');
+    expect(keys(root)).toEqual(['hash-2', 'hash-1']);
+
+    root.setAttribute('data-design-format', 'portrait');
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(first().style.position).toBe('');
+    expect(first().style.display).toBe('');
+    expect(keys(root)).toEqual(['hash-1', 'hash-2']);
+  });
 });

@@ -72,7 +72,7 @@ export function DesktopPreview(props: DesktopPreviewProps) {
   };
 
   return (
-    <div ref={root} onClick={onClick}>
+    <div ref={root} data-design-root onClick={onClick}>
       <style>{generateThemeCss(props.theme, props.target, props.state)}</style>
       <DesktopShell key={props.language} {...props}>
         <PreviewRoute {...props} />

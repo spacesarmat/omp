@@ -3,6 +3,7 @@ import { DESIGN_FORMATS, DESIGN_TARGETS, type DesignFormat, type DesignState, ty
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes.ts';
 import { EDITOR_TARGET_LABELS, getEditorViewport, isEditorRoute, isTvTarget } from '../../shared/routes.ts';
 import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
+import { layoutRootOf } from '../../../design/layoutDom.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewCommandInput } from '../preview/protocol.ts';
 import type { DraftController } from '../drafts.ts';
 import { useDraftController } from '../useDraftController.ts';
@@ -87,21 +88,23 @@ function CompareFrame(props: CompareFrameProps) {
     });
   };
   const layoutNodeForElement = (elementId: string): string | null => {
-    const body = iframe.current?.contentDocument?.body;
-    if (!body) return null;
-    for (const [nodeId, element] of collectLayoutElements(body)) {
+    const doc = iframe.current?.contentDocument;
+    const root = doc ? layoutRootOf(doc) : null;
+    if (!root) return null;
+    for (const [nodeId, element] of collectLayoutElements(root)) {
       if (element.dataset.designId === elementId) return nodeId;
     }
     return null;
   };
   const refreshHighlight = () => {
     const current = iframe.current;
-    const body = current?.contentDocument?.body;
-    if (!current || !body || !props.selectedNodeId) {
+    const doc = current?.contentDocument;
+    const root = doc ? layoutRootOf(doc) : null;
+    if (!current || !root || !props.selectedNodeId) {
       setHighlight(null);
       return;
     }
-    const element = collectLayoutElements(body).get(props.selectedNodeId);
+    const element = collectLayoutElements(root).get(props.selectedNodeId);
     if (!element) {
       setHighlight(null);
       return;

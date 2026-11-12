@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDefaultTheme } from '../../design/defaults';
 import { collectLayoutNodes, observeLayout } from '../../design/layoutDom';
@@ -454,6 +456,207 @@ describe('layout dom runtime', () => {
     expect(() => parseThemeDocument(theme)).toThrow(/html/);
     theme.layout.clones = [{ ...baseClone, html: '<iframe src="https://evil.example"></iframe>' }];
     expect(() => parseThemeDocument(theme)).not.toThrow();
+  });
+});
+
+describe('layout key hashing', () => {
+  it('stays free of BigInt so legacy TV and webOS builds can parse the module', () => {
+    const source = readFileSync(resolve(process.cwd(), 'design/layoutDom.ts'), 'utf8');
+    expect(source).not.toContain('BigInt');
+    expect(source).not.toMatch(/[0-9]n\b/);
+  });
+
+  it('hashes unsafe data keys to deterministic legacy-compatible ids', () => {
+    const root = mount(`
+      <div>
+        <div data-key="HASH-1">A</div>
+        <div data-key="Ключ Ω">B</div>
+        <div data-key="${'c'.repeat(61)}">C</div>
+      </div>`);
+
+    const nodes = collectLayoutNodes(root);
+    const nodeIdOf = (label: string) => nodes.find((node) => node.label === label)!.nodeId;
+
+    expect(nodeIdOf('A')).toBe('keyh-cfd2b455e879087f');
+    expect(nodeIdOf('B')).toBe('keyh-d957f271851c7596');
+    expect(nodeIdOf('C')).toBe('keyh-9b26faeadf926e36');
+    for (const node of nodes) {
+      expect(node.nodeId).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+      expect(node.nodeId.length).toBeLessThanOrEqual(64);
+    }
+  });
+});
+
+describe('layout identity stability', () => {
+  it('keeps adapter identities and placements attached to their elements across repeated order swaps', async () => {
+    const root = mount('<div data-design-id="toolbar"><button data-design-id="button">One</button><button data-design-id="button">Two</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('button', { mode: 'absolute', x: 1000, y: 1000 }));
+    theme = upsertLayoutPlacement(theme, placement('button-2', { mode: 'absolute', x: 2000, y: 2000 }));
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button', 'button-2'] });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+    const one = () => [...root.querySelectorAll('button')].find((button) => button.textContent === 'One') as HTMLElement;
+    const two = () => [...root.querySelectorAll('button')].find((button) => button.textContent === 'Two') as HTMLElement;
+    const texts = () => [...root.querySelectorAll('button')].map((button) => button.textContent);
+    const nodeIdOf = (label: string) => collectLayoutNodes(root).find((node) => node.label === label)!.nodeId;
+
+    expect(texts()).toEqual(['One', 'Two']);
+    expect(one().style.left).toBe('10%');
+    expect(two().style.left).toBe('20%');
+
+    const swap = async (order: string[]) => {
+      theme.layout!.containers = [{ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order }];
+      root.appendChild(document.createElement('span'));
+      await Promise.resolve();
+    };
+
+    for (let round = 0; round < 3; round += 1) {
+      await swap(['button-2', 'button']);
+      expect(texts()).toEqual(['Two', 'One']);
+      expect(nodeIdOf('One')).toBe('button');
+      expect(nodeIdOf('Two')).toBe('button-2');
+      expect(one().style.left).toBe('10%');
+      expect(two().style.left).toBe('20%');
+
+      await swap(['button', 'button-2']);
+      expect(texts()).toEqual(['One', 'Two']);
+      expect(nodeIdOf('One')).toBe('button');
+      expect(nodeIdOf('Two')).toBe('button-2');
+      expect(one().style.left).toBe('10%');
+      expect(two().style.left).toBe('20%');
+    }
+  });
+});
+
+describe('layout style lifecycle', () => {
+  it('restores original inline styles and document order when the first placement is undone', async () => {
+    const root = mount('<div data-design-id="toolbar"><button data-design-id="button" style="position: relative; margin: 3px">One</button><button data-design-id="button">Two</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('button', { mode: 'absolute', x: 1000, y: 1000, hidden: true }));
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button-2', 'button'] });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+    const one = () => [...root.querySelectorAll('button')].find((button) => button.textContent === 'One') as HTMLElement;
+    const texts = () => [...root.querySelectorAll('button')].map((button) => button.textContent);
+    expect(one().style.display).toBe('none');
+    expect(one().style.position).toBe('absolute');
+    expect(texts()).toEqual(['Two', 'One']);
+
+    theme.layout = { containers: [], placements: [] };
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(one().style.display).toBe('');
+    expect(one().style.position).toBe('relative');
+    expect(one().style.margin).toBe('3px');
+    expect(one().dataset.layoutManaged).toBeUndefined();
+    expect(one().dataset.layoutHidden).toBeUndefined();
+    expect(texts()).toEqual(['One', 'Two']);
+  });
+
+  it('restores flow-mode inline styles when an absolute placement switches back to flow', async () => {
+    const root = mount('<div data-design-id="toolbar"><div data-design-id="badge" style="z-index: 4">N</div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('badge', { mode: 'absolute', x: 40, y: 24 }));
+
+    cleanup = observeLayout(root, theme, context);
+    const badge = () => root.querySelector<HTMLElement>('[data-design-id="badge"]')!;
+    expect(badge().style.position).toBe('absolute');
+    expect(badge().style.zIndex).toBe('0');
+
+    theme.layout = upsertLayoutPlacement(theme, placement('badge', { mode: 'flow', x: 0, y: 0 })).layout;
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(badge().style.position).toBe('');
+    expect(badge().style.zIndex).toBe('4');
+  });
+});
+
+describe('container layout styles', () => {
+  it('applies margin and container direction, padding, alignment and distribution with cleanup on undo', async () => {
+    const root = mount('<div data-design-id="panel"><div data-design-id="toolbar" style="align-items: baseline"><button data-design-id="button">One</button></div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('button', { margin: '12px' }));
+    theme.layout!.containers.push({
+      id: 'flow-toolbar',
+      ...context,
+      nodeId: 'toolbar',
+      order: ['button'],
+      direction: 'column',
+      padding: '8px',
+      alignment: 'center',
+      distribution: 'space-between',
+    });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.flexDirection).toBe('column');
+    expect(toolbar.style.padding).toBe('8px');
+    expect(toolbar.style.alignItems).toBe('center');
+    expect(toolbar.style.justifyContent).toBe('space-between');
+    expect(toolbar.getAttribute('style') ?? '').not.toContain('gap');
+    expect(root.querySelector<HTMLElement>('button')!.style.margin).toBe('12px');
+
+    theme.layout = { containers: [], placements: [] };
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(toolbar.style.flexDirection).toBe('');
+    expect(toolbar.style.padding).toBe('');
+    expect(toolbar.style.alignItems).toBe('baseline');
+    expect(toolbar.style.justifyContent).toBe('');
+    expect(root.querySelector<HTMLElement>('button')!.style.margin).toBe('');
+  });
+
+  it('leaves container styles alone when direction is auto or layout fields are absent', () => {
+    const root = mount('<div data-design-id="toolbar"><button data-design-id="button">One</button></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout!.containers.push({ id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['button'], direction: 'auto' });
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const toolbar = root.querySelector<HTMLElement>('[data-design-id="toolbar"]')!;
+    expect(toolbar.style.display).toBe('');
+    expect(toolbar.style.flexDirection).toBe('');
+    expect(toolbar.style.alignItems).toBe('');
+    expect(toolbar.style.justifyContent).toBe('');
+    expect(toolbar.style.padding).toBe('');
+  });
+});
+
+describe('reparent across containers', () => {
+  it('moves nodes across parents to match the recorded container order and moves them back on undo', async () => {
+    const root = mount('<div data-design-id="screen"><div data-design-id="toolbar-a"><button data-design-id="button">Go</button></div><div data-design-id="toolbar-b"><span data-design-id="badge">N</span></div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [
+        { id: 'flow-a', ...context, nodeId: 'toolbar-a', order: [] },
+        { id: 'flow-b', ...context, nodeId: 'toolbar-b', order: ['badge', 'button'] },
+      ],
+      placements: [],
+    };
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const toolbarA = () => root.querySelector<HTMLElement>('[data-design-id="toolbar-a"]')!;
+    const toolbarB = () => root.querySelector<HTMLElement>('[data-design-id="toolbar-b"]')!;
+    const texts = (element: HTMLElement) => [...element.children].map((child) => child.textContent);
+    expect(texts(toolbarB())).toEqual(['N', 'Go']);
+
+    theme.layout = { containers: [], placements: [] };
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(texts(toolbarA())).toEqual(['Go']);
+    expect(texts(toolbarB())).toEqual(['N']);
   });
 });
 

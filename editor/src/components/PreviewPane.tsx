@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../../design/interaction.ts';
 import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
-import { collectLayoutNodes, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
+import { collectLayoutNodes, layoutRootOf, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import { collectGeometrySnapshot, type GeometrySnapshot } from '../../../design/layout-checks.ts';
 import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
@@ -83,10 +83,11 @@ export function PreviewPane(props: PreviewPaneProps) {
 
   const collect = () => {
     const frame = iframe.current;
-    const body = frame?.contentDocument?.body;
-    if (!frame || !body) return;
-    const elements = collectLayoutElements(body);
-    const nodes = collectLayoutNodes(body);
+    const doc = frame?.contentDocument;
+    const rootEl = doc ? layoutRootOf(doc) : null;
+    if (!frame || !doc || !rootEl) return;
+    const elements = collectLayoutElements(rootEl);
+    const nodes = collectLayoutNodes(rootEl);
     const frameBox = frame.getBoundingClientRect();
     const scale = zoomRef.current > 0 ? zoomRef.current : 1;
     const rects: Record<string, LayoutRect> = {};
@@ -103,7 +104,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     }
     setCollected({ nodes, rects });
     props.onNodesChange(nodes, rects);
-    props.onGeometryChange?.(collectGeometrySnapshot(body, {
+    props.onGeometryChange?.(collectGeometrySnapshot(rootEl, {
       target: props.target,
       screenId: props.route,
       format: props.format,
@@ -118,9 +119,10 @@ export function PreviewPane(props: PreviewPaneProps) {
   useEffect(() => {
     if (!props.nodeSource) return;
     props.nodeSource.current = (nodeId) => {
-      const body = iframe.current?.contentDocument?.body;
-      if (!body) return null;
-      const element = collectLayoutElements(body).get(nodeId);
+      const doc = iframe.current?.contentDocument;
+      const rootEl = doc ? layoutRootOf(doc) : null;
+      if (!rootEl) return null;
+      const element = collectLayoutElements(rootEl).get(nodeId);
       return element ? snapshotCloneHtml(element) : null;
     };
     return () => {
