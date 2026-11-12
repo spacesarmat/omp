@@ -20,6 +20,16 @@ function emptyLayout(): LayoutDocument {
   return { containers: [], placements: [] };
 }
 
+// Container record ids must stay inside the schema id space /^[a-z0-9][a-z0-9-]{0,63}$/, so the
+// flow- prefix plus the longest 64-char node id is truncated and suffixes keep room.
+const CONTAINER_ID_LIMIT = 64;
+const CONTAINER_ID_PREFIX = 'flow-';
+const CONTAINER_ID_SUFFIX_ROOM = 8;
+
+function containerRecordId(nodeId: string): string {
+  return `${CONTAINER_ID_PREFIX}${nodeId}`.slice(0, CONTAINER_ID_LIMIT - CONTAINER_ID_SUFFIX_ROOM);
+}
+
 function sameContext(entry: LayoutContext, context: LayoutContext): boolean {
   return entry.target === context.target && entry.screenId === context.screenId && entry.format === context.format;
 }
@@ -48,7 +58,7 @@ export function createContainer(
   patch: Partial<Pick<LayoutContainer, 'padding' | 'direction' | 'alignment' | 'distribution'>> = {},
 ): LayoutContainer {
   return {
-    id: `flow-${nodeId}`,
+    id: containerRecordId(nodeId),
     ...context,
     nodeId,
     order: [...seed],
@@ -77,11 +87,13 @@ export function upsertLayoutClone(theme: ThemeDocument, clone: LayoutClone): The
 
 function containerId(theme: ThemeDocument, parentId: string): string {
   const taken = new Set(theme.layout?.containers.map((container) => container.id) ?? []);
-  let candidate = `flow-${parentId}`;
+  const base = containerRecordId(parentId);
+  if (!taken.has(base)) return base;
   let suffix = 2;
+  let candidate = `${base}-${suffix}`;
   while (taken.has(candidate)) {
-    candidate = `flow-${parentId}-${suffix}`;
     suffix += 1;
+    candidate = `${base}-${suffix}`.slice(0, CONTAINER_ID_LIMIT);
   }
   return candidate;
 }

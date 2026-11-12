@@ -120,12 +120,17 @@ function CompareFrame(props: CompareFrameProps) {
       height: box.height,
     });
   };
+  // The observer created on iframe load outlives this render: route, format and selection change
+  // without a reload, so the callback must always reach the latest refreshHighlight instead of
+  // closing over the load-render props.
+  const refreshHighlightRef = useRef<() => void>(() => undefined);
+  refreshHighlightRef.current = refreshHighlight;
   const attachObserver = () => {
     observer.current?.disconnect();
     observer.current = null;
     const body = iframe.current?.contentDocument?.body;
     if (!body || typeof MutationObserver === 'undefined') return;
-    observer.current = new MutationObserver(() => refreshHighlight());
+    observer.current = new MutationObserver(() => refreshHighlightRef.current());
     observer.current.observe(body, { childList: true, subtree: true });
   };
 

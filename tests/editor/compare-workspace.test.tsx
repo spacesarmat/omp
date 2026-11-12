@@ -250,6 +250,33 @@ describe('compare workspace', () => {
     expect(mark.style.height).toBe('100px');
   });
 
+  it('keeps the compare highlight alive through DOM mutations after a format change', async () => {
+    buildMainPreview();
+    openCompare();
+    const phone = frame('phone');
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: phone.contentWindow,
+        data: { type: 'element-selected', elementId: 'server-card', messageId: 'msg-stale', sessionId: phone.name },
+      }));
+    });
+    expect(host.querySelector<HTMLElement>('[data-testid="compare-view-phone"] [data-testid="compare-selection"]')).not.toBeNull();
+
+    select('compare-format-phone', 'portrait');
+
+    const doc = phone.contentDocument!;
+    await act(async () => {
+      doc.body.appendChild(doc.createElement('div'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const mark = host.querySelector<HTMLElement>('[data-testid="compare-view-phone"] [data-testid="compare-selection"]');
+    expect(mark).not.toBeNull();
+    expect(mark!.dataset.layoutNode).toBe('server-card');
+  });
+
   it('does not change compare views when the main draft is edited', () => {
     openCompare();
     const phoneSession = frame('phone').name;

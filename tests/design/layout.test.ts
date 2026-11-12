@@ -127,4 +127,34 @@ describe('layout operations', () => {
     expect(getLayoutPlacement(portraitCopy, landscape, 'card-a')).toMatchObject({ x: 40, y: 24 });
     expect(parseThemeDocument(portraitCopy)).toEqual(portraitCopy);
   });
+
+  it('bounds generated container ids to the schema limit for the longest node ids', () => {
+    let theme = createDefaultTheme(BASE);
+    const longParent = 'a'.repeat(64);
+
+    theme = moveLayoutNode(theme, landscape, 'card-a', longParent, 0);
+
+    const container = theme.layout!.containers.find((entry) => entry.nodeId === longParent)!;
+    expect(container.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    const roundTripped = parseThemeDocument(JSON.parse(JSON.stringify(theme)));
+    expect(roundTripped.layout?.containers.find((entry) => entry.nodeId === longParent)?.id).toBe(container.id);
+  });
+
+  it('keeps generated container ids unique when longest node ids share a prefix', () => {
+    let theme = createDefaultTheme(BASE);
+    const firstParent = `${'g'.repeat(60)}-aaa`;
+    const secondParent = `${'g'.repeat(60)}-bbb`;
+    expect(firstParent).toHaveLength(64);
+    expect(secondParent).toHaveLength(64);
+
+    theme = moveLayoutNode(theme, landscape, 'card-a', firstParent, 0);
+    theme = moveLayoutNode(theme, landscape, 'card-b', secondParent, 0);
+
+    const containers = theme.layout!.containers;
+    expect(containers).toHaveLength(2);
+    const ids = containers.map((entry) => entry.id);
+    for (const id of ids) expect(id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    expect(new Set(ids).size).toBe(2);
+    expect(() => parseThemeDocument(JSON.parse(JSON.stringify(theme)))).not.toThrow();
+  });
 });
