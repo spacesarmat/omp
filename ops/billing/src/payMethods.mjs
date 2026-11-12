@@ -141,10 +141,25 @@ export function altCovers(amount, currency, quote) {
   return false;
 }
 
-/** A stored Crypto Pay invoice id must be the one that was paid. An order with no id yet still matches. */
-export function cryptoInvoiceMatches(quote, operationId) {
-  if (!quote || quote.method !== 'crypto' || !quote.invoiceId) return true;
-  return String(operationId || '') === 'crypto:' + String(quote.invoiceId);
+/**
+ * A Crypto Pay notice must name an invoice of the mode that is on.
+ * When that mode has its own stored link, only that id matches: the last requested
+ * link can belong to the other mode. A quote that never recorded a mode still matches
+ * its single invoice id. An order with no id yet still matches.
+ * `testnet` is settings.cryptoTestnet. Omitted means the live mode.
+ */
+export function cryptoInvoiceMatches(quote, operationId, testnet) {
+  if (!quote || quote.method !== 'crypto') return true;
+  const mode = testnet === true;
+  const bag = quote.cryptoLinks;
+  const saved = bag && bag[mode ? 'testnet' : 'live'];
+  const op = String(operationId || '');
+  if (saved && saved.invoiceId != null && String(saved.invoiceId) !== '') {
+    return op === 'crypto:' + String(saved.invoiceId);
+  }
+  if (quote.cryptoTestnet != null && quote.cryptoTestnet !== mode) return false;
+  if (!quote.invoiceId) return true;
+  return op === 'crypto:' + String(quote.invoiceId);
 }
 
 /**

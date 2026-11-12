@@ -598,3 +598,99 @@ fn player_smoke_codecs() {
     });
     assert_eq!(status.state, PlayerState::Error);
 }
+
+fn gzip_tar(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut raw = tar::Builder::new(Vec::new());
+    for (name, bytes) in entries {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(bytes.len() as u64);
+        header.set_mode(0o644);
+        header.set_entry_type(tar::EntryType::Regular);
+        let name_bytes = name.as_bytes();
+        assert!(name_bytes.len() < 100, "tar name fits the ustar field");
+        header.as_mut_bytes()[..name_bytes.len()].copy_from_slice(name_bytes);
+        header.set_cksum();
+        raw.append(&header, *bytes).unwrap();
+    }
+    let raw = raw.into_inner().unwrap();
+    let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    std::io::Write::write_all(&mut gzip, &raw).unwrap();
+    gzip.finish().unwrap()
+}
+
+fn zip_archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let mut cursor = std::io::Cursor::new(Vec::new());
+    {
+        let mut writer = zip::ZipWriter::new(&mut cursor);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, bytes) in entries {
+            writer.start_file(*name, options).unwrap();
+            std::io::Write::write_all(&mut writer, bytes).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+    cursor.into_inner()
+}
+
+fn archive_file(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("mpv.zip");
+    std::fs::write(&path, bytes).unwrap();
+    (dir, path)
+}
+
+#[test]
+fn extract_mpv_zip_unpacks_the_bundled_binary() {
+    let payload = b"mpv-binary";
+    let packed = gzip_tar(&[("mpv.app/Contents/MacOS/mpv", payload)]);
+    let archive = zip_archive(&[("payload/mpv.tar.gz", packed.as_slice())]);
+    let (dir, path) = archive_file(&archive);
+    let data = dir.path().join("data");
+
+    let executable = super::extract_mpv(&path, &data).unwrap();
+
+    assert_eq!(executable, data.join("mpv.app/Contents/MacOS/mpv"));
+    assert_eq!(std::fs::read(&executable).unwrap(), payload);
+}
+
+#[test]
+fn extract_mpv_zip_rejects_a_parent_directory_entry() {
+    let packed = gzip_tar(&[("mpv.app/Contents/MacOS/mpv", b"mpv-binary")]);
+    let archive = zip_archive(&[
+        ("../mpv.tar.gz", packed.as_slice()),
+        ("payload/mpv.tar.gz", packed.as_slice()),
+    ]);
+    let (dir, path) = archive_file(&archive);
+    let data = dir.path().join("data");
+
+    let error = super::extract_mpv(&path, &data).unwrap_err();
+
+    assert_eq!(error, "mpv archive path rejected");
+    assert!(!dir.path().join("mpv.tar.gz").exists());
+}
+
+#[test]
+fn extract_mpv_zip_rejects_an_absolute_entry() {
+    let packed = gzip_tar(&[("mpv.app/Contents/MacOS/mpv", b"mpv-binary")]);
+    let archive = zip_archive(&[("/mpv.tar.gz", packed.as_slice())]);
+    let (dir, path) = archive_file(&archive);
+    let data = dir.path().join("data");
+
+    let error = super::extract_mpv(&path, &data).unwrap_err();
+
+    assert_eq!(error, "mpv archive path rejected");
+}
+
+#[test]
+fn extract_mpv_zip_rejects_a_parent_path_inside_the_tar() {
+    let packed = gzip_tar(&[("../escaped", b"nope")]);
+    let archive = zip_archive(&[("mpv.tar.gz", packed.as_slice())]);
+    let (dir, path) = archive_file(&archive);
+    let data = dir.path().join("data");
+
+    let error = super::extract_mpv(&path, &data).unwrap_err();
+
+    assert_eq!(error, "mpv archive path rejected");
+    assert!(!dir.path().join("escaped").exists());
+}

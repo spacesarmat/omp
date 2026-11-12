@@ -70,7 +70,7 @@ export function emptyState() {
       starsEnabled: false,
       starsPrice: 0,
       starsExtra: 0,
-      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. The token is CRYPTO_PAY_TOKEN, not stored here. */
+      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. Tokens are env secrets, not stored here. */
       cryptoEnabled: false,
       cryptoTestnet: false,
       /** When true, crypto is offered only when the country code is present and is not RU. */
@@ -85,6 +85,27 @@ export function emptyState() {
       cryptoExtraBtc: 0,
       cryptoRateBtc: 0,
       cryptoPayToken: '',
+      /** CRYPTO_PAY_TESTNET_TOKEN. Empty while cryptoTestnet is on means crypto stays disabled. */
+      cryptoPayTestnetToken: '',
+      /**
+       * Donations. Off until an admin turns the flag on. A donation does not extend a subscription.
+       * Method switches are separate from the subscription switches and also start off.
+       */
+      donate: {
+        enabled: false,
+        amounts: '100,300,500,1000',
+        minRub: 50,
+        maxRub: 100000,
+        commentMax: 200,
+        thanksText: 'Спасибо! Вы поддержали проект OMP.',
+        yoomoney: false,
+        stars: false,
+        crypto: false,
+        rubPerStar: 0,
+        notifyAll: false,
+        notifyMin: 0,
+        showAmounts: false,
+      },
       /** Devices every subscription includes (1-20) unless an admin set an individual limit (limitOverride). */
       baseDevices: BASE_DEVICES_DEFAULT,
       /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */
@@ -116,6 +137,8 @@ export function emptyState() {
     outbox: [],
     /** Quoted YooMoney checkouts. The label is buy:<id>; the price is the one quoted, not a later settings change. */
     purchases: [],
+    /** Donation quotes and settled gifts. Label don:<id>. Not a subscription payment. */
+    donations: [],
     /**
      * Data-shape markers. deviceBase: devices included in a base subscription when deviceLimit was stored.
      * extraMonthly: extra devices are monthly slots (extraSlots/extraUntil), not part of deviceLimit.
@@ -151,6 +174,7 @@ export function normalizeState(parsed) {
     audit: Array.isArray(parsed.audit) ? parsed.audit : [],
     outbox: Array.isArray(parsed.outbox) ? parsed.outbox : [],
     purchases: Array.isArray(parsed.purchases) ? parsed.purchases : [],
+    donations: Array.isArray(parsed.donations) ? parsed.donations : [],
     // A snapshot without meta predates DEVICE_BASE: its limits were counted from 1.
     meta: parsed.meta && typeof parsed.meta === 'object' && !Array.isArray(parsed.meta) ? parsed.meta : {},
   };

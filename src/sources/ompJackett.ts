@@ -48,6 +48,8 @@ interface MeBody {
   cache?: { enabled?: boolean };
   /** Omitted by a server from before the referral screen. Missing means the program is off. */
   referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
+  /** Paid donation on this account. Omitted by a server from before donations. */
+  supporter?: boolean;
   bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
 }
 
@@ -402,6 +404,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
             ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
             : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
           referral: referralOf(body),
+          supporter: body.supporter === true,
           bill: billOf(body),
         };
       }
@@ -446,6 +449,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         deviceLimit: body.deviceLimit || 0,
         sources: flags,
         referral: referralOf(body),
+        supporter: body.supporter === true,
         bill: billOf(body),
       };
     },

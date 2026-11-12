@@ -16,6 +16,7 @@ import {
   supportThreads,
   telegramDisplay,
 } from './logic.mjs';
+import { donateReport } from './donate.mjs';
 import { publicAdminSettings } from './services.mjs';
 import { paymentFee, watchFor } from './desk.mjs';
 import { backupAlert } from './pgBackup.mjs';
@@ -148,6 +149,7 @@ export function homePayload(state, file, opts) {
     series: dailySeries(state, now, 90),
     settings: publicAdminSettings(s, opts && opts.env),
     referralJournal: state.referralJournal || [],
+    donations: donateReport(state, now, {}),
     // The server passes the store's info (Postgres: engine, database name, size).
     storage: (opts && opts.storage) || null,
     // Postgres dumps: null when BILLING_PG_BACKUP_DIR is not set (file names and sizes only, no paths with secrets).
