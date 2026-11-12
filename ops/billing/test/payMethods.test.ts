@@ -607,6 +607,79 @@ describe('crypto pay invoice host', () => {
     const sent = http.calls.find((c) => c.url.indexOf('/sendMessage') >= 0);
     expect(sent && sent.body).toContain('Не удалось создать счёт');
   });
+
+  it('issues a new testnet invoice instead of reusing a live link, and reuses that testnet link', async () => {
+    const b = await quoted({ cryptoTestnet: false, cryptoPayToken: TOKEN, cryptoPayTestnetToken: TESTNET_TOKEN });
+    const calls: { url: string; token: string; body: string }[] = [];
+    const fetchImpl = async (url: string, init?: { headers?: Record<string, string>; body?: string }) => {
+      calls.push({
+        url: String(url),
+        token: init && init.headers ? String(init.headers['Crypto-Pay-API-Token'] || '') : '',
+        body: init && init.body ? String(init.body) : '',
+      });
+      if (String(url).indexOf('/api/createInvoice') >= 0) {
+        const n = calls.filter((c) => c.url.indexOf('/api/createInvoice') >= 0).length;
+        const host = String(url).indexOf('testnet-pay.crypt.bot') >= 0 ? 'testnet-pay.crypt.bot' : 'pay.crypt.bot';
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            result: {
+              invoice_id: n,
+              bot_invoice_url: 'https://' + host + '/i/' + n,
+              pay_url: 'https://' + host + '/i/' + n,
+              asset: 'USDT',
+              amount: '2.00',
+            },
+          }),
+          text: async () => '',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
+    };
+    await handleCallback(b.store, BOT, press(b.id), fetchImpl, 5000);
+    const state = await readState(b.store);
+    state.settings.cryptoTestnet = true;
+    await writeState(b.store, state);
+    await handleCallback(b.store, BOT, press(b.id), fetchImpl, 5000);
+    const invoices = calls.filter((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoices.map((c) => c.url + ' ' + c.token)).toEqual([
+      'https://pay.crypt.bot/api/createInvoice ' + TOKEN,
+      'https://testnet-pay.crypt.bot/api/createInvoice ' + TESTNET_TOKEN,
+    ]);
+    const sent = calls.filter((c) => c.url.indexOf('/sendMessage') >= 0);
+    expect(JSON.stringify(sent)).toContain('https://testnet-pay.crypt.bot/i/2');
+    expect(JSON.stringify(sent[sent.length - 1])).not.toContain('https://pay.crypt.bot/i/1');
+    await handleCallback(b.store, BOT, press(b.id), fetchImpl, 5000);
+    expect(calls.filter((c) => c.url.indexOf('/api/createInvoice') >= 0)).toHaveLength(2);
+    const back = await readState(b.store);
+    back.settings.cryptoTestnet = false;
+    await writeState(b.store, back);
+    await handleCallback(b.store, BOT, press(b.id), fetchImpl, 5000);
+    expect(calls.filter((c) => c.url.indexOf('/api/createInvoice') >= 0)).toHaveLength(2);
+    const again = calls.filter((c) => c.url.indexOf('/sendMessage') >= 0);
+    expect(JSON.stringify(again[again.length - 1])).toContain('https://pay.crypt.bot/i/1');
+  });
+
+  it('does not hand out a saved live link when testnet is on and the testnet token is missing', async () => {
+    const b = await quoted({ cryptoTestnet: false, cryptoPayToken: TOKEN, cryptoPayTestnetToken: '' });
+    const row = (await readState(b.store)).purchases.find((p: { id: string }) => p.id === b.id);
+    row.payUrl = 'https://pay.crypt.bot/i/live';
+    row.webUrl = 'https://pay.crypt.bot/i/live';
+    row.invoiceId = 'live';
+    const state = await readState(b.store);
+    state.purchases = state.purchases.map((p: { id: string }) => (p.id === b.id ? row : p));
+    state.settings.cryptoTestnet = true;
+    await writeState(b.store, state);
+    const http = net();
+    await handleCallback(b.store, BOT, press(b.id), http.fetchImpl, 5000);
+    expect(http.calls.some((c) => c.url.indexOf('crypt.bot') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).not.toContain('https://pay.crypt.bot/i/live');
+    expect(JSON.stringify(http.calls)).not.toContain(TOKEN);
+    const sent = http.calls.find((c) => c.url.indexOf('/sendMessage') >= 0);
+    expect(sent && sent.body).toContain('Не удалось создать счёт');
+  });
 });
 
 describe('stars poll durability', () => {
