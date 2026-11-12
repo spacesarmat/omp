@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { applyLanguageSetting } from '../../src/i18n';
+import { applyLanguageSetting, tp } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate } from '../src/screens/Settings';
@@ -603,10 +603,29 @@ describe('Settings: the OMP account row', () => {
     setAccountFetcher(fetcher);
     saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
     const el = mount();
-    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
+    const left = Math.ceil((paid - Date.now()) / 86400000);
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
     await flush();
-    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('uses one day and two days, and refreshes after a minute', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+    saveBillingSession({ token: 'old', paidUntil: Date.now() + 20 * 3600 * 1000 });
+    expect(row(mount()).textContent).toBe(tp('sources.billing.daysLeft', 1));
+    saveBillingSession({ token: 'old', paidUntil: Date.now() + 2 * 86400000 });
+    expect(row(mount()).textContent).toBe(tp('sources.billing.daysLeft', 2));
+    const until = new Date(2026, 10, 13, 12).getTime();
+    saveBillingSession({ token: 'old', paidUntil: until });
+    const el = mount();
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', 1));
+    vi.setSystemTime(new Date(2026, 10, 13, 12, 30));
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(row(el).textContent).toBe('Подписка до ' + day(until));
   });
 
   it('a legacy token still shows the subscription', () => {

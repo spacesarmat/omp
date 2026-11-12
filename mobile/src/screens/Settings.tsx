@@ -260,6 +260,18 @@ function localAccountView(): AccountView {
  */
 function AccountRow() {
   const [view, setView] = useState<AccountView>(localAccountView);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', tick);
+    const id = window.setInterval(tick, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      window.clearInterval(id);
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     // only the latest check may paint: an older answer that arrives late (before «Отключить») is dropped
@@ -296,7 +308,7 @@ function AccountRow() {
     };
   }, []);
   const untilMs = view.kind === 'in' ? view.until : 0;
-  const left = untilMs > Date.now() ? Math.ceil((untilMs - Date.now()) / 86400000) : 0;
+  const left = untilMs > now ? Math.ceil((untilMs - now) / 86400000) : 0;
   const until = untilMs ? billingDay(untilMs) : '';
   const label =
     view.kind === 'checking'
