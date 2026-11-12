@@ -345,6 +345,10 @@ export function Calendar() {
             setRemind(null);
             void reload(true);
           }}
+          onDeleted={() => {
+            setRemind(null);
+            void reload(true);
+          }}
         />
       )}
     </div>
