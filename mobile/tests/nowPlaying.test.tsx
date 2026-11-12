@@ -167,9 +167,12 @@ describe('NowPlaying', () => {
       expect(el.textContent).not.toContain('Главы');
       expect(el.querySelectorAll('.m-seek-tick').length).toBe(0);
     });
+    const openChapters = () => click(el.querySelector('[data-now-chapters]'));
     it('ticks, «Глава N из M · название», list with the current highlighted', () => {
       setState(state({ chapters, chapter: 2 }));
       mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('[data-now-next]')!.textContent).toContain('Следующая серия');
+      openChapters();
       expect(el.querySelectorAll('.m-seek-tick').length).toBe(3);
       expect(el.querySelector('.m-now-chapter')!.textContent).toContain('Глава 3 из 4');
       expect(el.querySelector('.m-now-chapter')!.textContent).toContain('Погоня');
@@ -182,6 +185,7 @@ describe('NowPlaying', () => {
     it('the list is announced: current item has aria-current, labels name chapter, time and state', () => {
       setState(state({ chapters, chapter: 2 }));
       mount(<NowPlaying volume={volume} />);
+      openChapters();
       const items = Array.from(el.querySelectorAll('.m-now-chitem'));
       expect(items.map((x) => x.getAttribute('aria-current'))).toEqual([null, null, 'true', null]);
       expect(items[2].getAttribute('aria-label')).toBe('Погоня, с 20:00, сейчас идёт');
@@ -196,6 +200,7 @@ describe('NowPlaying', () => {
     it('a list item sends the chapter command', () => {
       setState(state({ chapters, chapter: 2 }));
       mount(<NowPlaying volume={volume} />);
+      openChapters();
       click(el.querySelectorAll('.m-now-chitem')[1]);
       expect(sent()).toEqual([expect.objectContaining({ type: 'chapter', i: 1 })]);
     });
@@ -221,7 +226,24 @@ describe('NowPlaying', () => {
       setState(state({ chapters, chapter: 3, time: 2900 }), 6000);
       mount(<NowPlaying volume={volume} />);
       expect((lbl('Предыдущая глава') as HTMLButtonElement).disabled).toBe(true);
+      openChapters();
       expect((el.querySelector('.m-now-chitem') as HTMLButtonElement).disabled).toBe(true);
+    });
+    it('skip intro seeks past the intro, a film has no next card, a long press opens the menu', () => {
+      setState(state({ time: 40, chapters: [{ t: 0, title: 'A' }, { t: 30, title: 'Заставка' }, { t: 90, title: 'B' }], chapter: 1 }));
+      mount(<NowPlaying volume={volume} />);
+      click(el.querySelector('[data-now-skip-intro]')!);
+      expect(sent()[0]).toEqual(expect.objectContaining({ type: 'seek', t: 90 }));
+      setState(state({ subtitle: 'Фильм', next: null, chapters: undefined, chapter: undefined }));
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('[data-now-next]')).toBeNull();
+      expect(el.querySelector('[data-now-skip-intro]')).toBeNull();
+      setState(state({ chapters: [{ t: 0, title: 'A' }, { t: 40, title: 'B' }], chapter: 0 }));
+      mount(<NowPlaying volume={volume} />);
+      act(() => el.querySelector('[data-now-chapters]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+      expect(el.textContent).toContain('Пропускать Recap и Credits всегда');
+      click(el.querySelector('[data-now-skip-always]')!);
+      expect(localStorage.getItem('tsp.nowSkipMarks')).toBe('true');
     });
     it('before the first chapter: previous seeks to the start', () => {
       setState(state({ chapters: [{ t: 30, title: 'A' }, { t: 90, title: 'B' }], chapter: -1, time: 10 }));
@@ -363,7 +385,8 @@ describe('NowPlaying', () => {
       expect(fold.querySelector('.m-now-controls')).not.toBeNull();
       expect(fold.querySelector('.m-now-row')).not.toBeNull();
       expect(fold.querySelector('.m-now-chlist')).toBeNull();
-      expect(el.querySelector('.m-now-bleed > .m-now-chlist')).not.toBeNull();
+      expect(el.querySelector('.m-now-bleed > .m-now-chlist')).toBeNull();
+      expect(fold.querySelector('[data-now-next]')).not.toBeNull();
     });
 
     it('css: the first screen fits the viewport and the pane scrolls the chapter list', () => {
@@ -590,9 +613,10 @@ describe('NowPlaying in English', () => {
     }
     expect(el.querySelector('.m-now-chnum')!.textContent).toBe('Chapter 1 of 2');
     expect(byText('Audio and subtitles')).toBeTruthy();
+    expect(el.querySelector('[data-now-next]')!.textContent).toContain('Next episode');
+    click(lbl('Chapters'));
     expect(el.querySelector('.m-now-chhead')!.textContent).toBe('Chapters');
     expect(el.querySelector('.m-now-chitem')!.getAttribute('aria-label')).toBe('Opening, from 0:00, playing now');
-    expect(el.querySelector('.m-now-next')).toBeNull();
     expect(el.textContent).not.toMatch(/[А-Яа-яЁё]/);
   });
 

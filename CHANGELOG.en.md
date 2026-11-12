@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Now on TV: the empty gap above chapters is gone. A next-episode card and Skip the intro when an intro exists. Tap Chapter N of M for the list. A long press skips, repeats, or always skips Recap and Credits
 - [phone] A subscription page has edit, pause and delete in the header, a poster, quality chips, notifications, a link to the card and a check count
 - [phone] The subscription sheet keeps Delete and Save above the system bar. A swipe down with unsaved edits asks whether to save them. Releases already found do not notify
 - [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark

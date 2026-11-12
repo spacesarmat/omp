@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
@@ -13,8 +13,29 @@ import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
 import { Remote } from './Remote';
 import { NowDeck } from './nowPager';
+import { Sheet } from '../ui/Sheet';
+import { loadJson, saveJson } from '../../../src/store/storage';
+
 const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
+const SKIP_KEY = 'tsp.nowSkipMarks';
+const CHEVRON = 'M9 6l6 6-6 6';
+
+function markKind(title: string): 'intro' | 'recap' | 'credits' | '' {
+  const s = (title || '').toLowerCase();
+  if (/заставк|intro|opening|опенинг|вступлен/.test(s)) return 'intro';
+  if (/recap|рекап|ранее в|previously/.test(s)) return 'recap';
+  if (/credits|титры|эндинг|outro|ending/.test(s)) return 'credits';
+  return '';
+}
+
+function episodeLine(subtitle: string): boolean {
+  return /s\d+\s*e\d+/i.test(subtitle) || /сери/i.test(subtitle) || /episode/i.test(subtitle);
+}
+
+function skipMarksOn(): boolean {
+  return loadJson<unknown>(SKIP_KEY, false, (v) => v === true) === true;
+}
 
 function Skip({
   label,
@@ -41,6 +62,10 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const [drag, setDrag] = useState<number | null>(null);
   const [held, setHeld] = useState<{ t: number; seen: number; at: number } | null>(null);
   const [tracks, setTracks] = useState(false);
+  const [panel, setPanel] = useState<'' | 'chapters' | 'menu'>('');
+  const [skipAlways, setSkipAlways] = useState(skipMarksOn);
+  const skipClick = useRef(false);
+  const holdTimer = useRef(0);
   const s = nowPlaying.value;
   const names = usePlayingNames(s);
   const poster = usePlayingPoster(s);
@@ -59,6 +84,13 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     const t = setTimeout(() => setHeld(null), HOLD_MS);
     return () => clearTimeout(t);
   }, [held]);
+  useEffect(() => {
+    if (!skipAlways || !s || !s.chapters || s.chapter === undefined || s.chapter < 0) return;
+    const ch = s.chapters[s.chapter];
+    const kind = ch ? markKind(ch.title) : '';
+    if (kind !== 'recap' && kind !== 'credits') return;
+    if (s.chapter + 1 < s.chapters.length) sendCmd({ type: 'chapter', i: s.chapter + 1 });
+  }, [skipAlways, s && s.hash, s && s.chapter]);
   const tv = activeTv.value;
   const vol = (dir: 'up' | 'down') => void Promise.resolve(volume(dir)).catch(() => {});
 
@@ -118,6 +150,13 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const local = chapterIndexAt(list, shown);
   const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
   const chapterName = (i: number) => namedChapterTitle(list[i].title) || t('player.chapterN', { n: i + 1 });
+  let introEnd = -1;
+  for (let i = 0; i < list.length; i++) {
+    if (markKind(list[i].title) !== 'intro') continue;
+    introEnd = i + 1 < list.length ? list[i + 1].start : s.duration;
+    break;
+  }
+  const showNext = !!(s.next && episodeLine(s.subtitle || ''));
   const chapterLabelAria = (i: number, start: number) => t('now.chapterAria', { name: chapterName(i), time: formatDuration(start) });
   const stepChapter = (dir: 1 | -1) => {
     const i = chapterStepIndex(list, shown, dir);
@@ -198,12 +237,38 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                   >
                     <Icon d={ICONS.prev} size={22} />
                   </button>
-                  <span class="m-now-chtext">
+                  <button
+                    type="button"
+                    class="m-now-chtext"
+                    data-now-chapters
+                    aria-label={t('player.chapters')}
+                    onPointerDown={() => {
+                      holdTimer.current = window.setTimeout(() => {
+                        skipClick.current = true;
+                        setPanel('menu');
+                      }, 450);
+                    }}
+                    onPointerUp={() => window.clearTimeout(holdTimer.current)}
+                    onPointerLeave={() => window.clearTimeout(holdTimer.current)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      skipClick.current = true;
+                      setPanel('menu');
+                    }}
+                    onClick={() => {
+                      if (skipClick.current) {
+                        skipClick.current = false;
+                        return;
+                      }
+                      setPanel('chapters');
+                    }}
+                  >
                     <span class="m-now-chnum">
                       {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
                     </span>
                     {cur >= 0 && namedChapterTitle(list[cur].title) !== '' && chapterName(cur)}
-                  </span>
+                    <Icon d={CHEVRON} size={18} />
+                  </button>
                   <button
                     type="button"
                     class="m-now-chbtn"
@@ -263,32 +328,76 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                   </button>
                 </div>
               </div>
+              {introEnd > shown && (
+                <button type="button" class="m-btn m-btn-secondary" data-now-skip-intro disabled={off} onClick={() => sendCmd({ type: 'seek', t: introEnd })}>
+                  {t('now.skipIntro')}
+                </button>
+              )}
+              {showNext && s.next && (
+                <div class="m-now-next" data-now-next>
+                  {poster ? <img src={poster} alt="" width={54} height={80} /> : <span class="m-now-next-frame" />}
+                  <span class="m-now-next-text">
+                    <span class="m-small m-muted">{t('now.nextCard')}</span>
+                    <span>{s.next.title}</span>
+                  </span>
+                  <button type="button" class="m-btn m-btn-primary" data-now-watch disabled={off} onClick={() => sendCmd({ type: 'next' })}>
+                    {t('now.watchNext')}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-          {list.length > 0 && (
-            <div class="m-now-chlist" role="group" aria-label={t('player.chapters')}>
-              <div class="m-now-chhead">{t('player.chapters')}</div>
-              {list.map((c, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  class={'m-now-chitem' + (i === cur ? ' on' : '')}
-                  aria-current={i === cur ? 'true' : undefined}
-                  aria-label={i === cur ? t('now.chapterNow', { label: chapterLabelAria(i, c.start) }) : chapterLabelAria(i, c.start)}
-                  disabled={off}
-                  onClick={() => {
-                    sendCmd({ type: 'chapter', i });
-                    setHeld({ t: c.start, seen: lastSeen.value, at: Date.now() });
-                  }}
-                >
-                  <span class="m-now-chtime">{formatDuration(c.start)}</span>
-                  <span class="m-now-chname">{chapterName(i)}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </NowDeck>
+      {panel === 'chapters' && list.length > 0 && (
+        <Sheet label={t('player.chapters')} onClose={() => setPanel('')}>
+          <div class="m-now-chlist" role="group" aria-label={t('player.chapters')}>
+            <div class="m-now-chhead">{t('player.chapters')}</div>
+            {list.map((c, i) => (
+              <button
+                key={i}
+                type="button"
+                class={'m-now-chitem' + (i === cur ? ' on' : '')}
+                aria-current={i === cur ? 'true' : undefined}
+                aria-label={i === cur ? t('now.chapterNow', { label: chapterLabelAria(i, c.start) }) : chapterLabelAria(i, c.start)}
+                disabled={off}
+                onClick={() => {
+                  sendCmd({ type: 'chapter', i });
+                  setHeld({ t: c.start, seen: lastSeen.value, at: Date.now() });
+                  setPanel('');
+                }}
+              >
+                <span class="m-now-chtime">{formatDuration(c.start)}</span>
+                <span class="m-now-chname">{chapterName(i)}</span>
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+      {panel === 'menu' && (
+        <Sheet label={t('now.openChapters')} onClose={() => setPanel('')}>
+          <button type="button" class="m-opt" data-now-skip-chapter disabled={off} onClick={() => { stepChapter(1); setPanel(''); }}>
+            {t('now.skipChapter')}
+          </button>
+          <button type="button" class="m-opt" data-now-repeat disabled={off || cur < 0} onClick={() => { if (cur >= 0) sendCmd({ type: 'chapter', i: cur }); setPanel(''); }}>
+            {t('now.repeatChapter')}
+          </button>
+          <button
+            type="button"
+            class="m-opt"
+            role="switch"
+            aria-checked={skipAlways}
+            data-now-skip-always
+            onClick={() => {
+              const next = !skipAlways;
+              setSkipAlways(next);
+              saveJson(SKIP_KEY, next);
+            }}
+          >
+            {t('now.skipAlways')}
+          </button>
+        </Sheet>
+      )}
       {tracks && !off && (
         <TracksSheet
           state={s}
