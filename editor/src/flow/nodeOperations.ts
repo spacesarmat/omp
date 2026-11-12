@@ -6,14 +6,16 @@ import type {
   FlowNodeKind,
   FlowNodeView,
   InteractionRule,
+  InteractionStep,
 } from '../../../design/schema.ts';
+import { TERMINAL_ACTIONS } from '../../../design/flow-graph.ts';
 
 // Node operations are pure FlowDocument -> FlowDocument transforms. The canvas wraps each
 // operation in exactly one controller.update, so one edit is one undo step. Legacy rules
 // without a graph are never touched: the canvas only edits rules that already own a graph
 // or creates a new screen.enter rule, which the legacy click dispatcher never matches.
 export class FlowOperationError extends Error {
-  readonly code: 'SELF_LOOP' | 'TRIGGER_TARGET' | 'RESULT_SOURCE' | 'DUPLICATE_EDGE' | 'CYCLE' | 'BRANCH_MISMATCH' | 'UNKNOWN_NODE' | 'NO_GRAPH_RULE' | 'NO_TRIGGER' | 'MULTIPLE_TRIGGERS' | 'UNREACHABLE_NODE';
+  readonly code: 'SELF_LOOP' | 'TRIGGER_TARGET' | 'RESULT_SOURCE' | 'DUPLICATE_EDGE' | 'CYCLE' | 'BRANCH_MISMATCH' | 'UNKNOWN_NODE' | 'NO_GRAPH_RULE' | 'NO_TRIGGER' | 'MULTIPLE_TRIGGERS' | 'UNREACHABLE_NODE' | 'NO_TERMINAL_PATH';
 
   constructor(code: FlowOperationError['code'], message: string) {
     super(`${code}: ${message}`);
@@ -196,15 +198,36 @@ function reachableFrom(nodes: FlowNodeView[], edges: FlowEdge[], roots: FlowNode
   return reachable;
 }
 
+// Mirrors the NO_TERMINAL_PATH rule of validateFlowGraph: some node reachable from a trigger
+// must be a result or carry a terminal action.
+function hasTerminalPath(nodes: FlowNodeView[], edges: FlowEdge[], steps: ReadonlyMap<string, InteractionStep>): boolean {
+  const triggers = nodes.filter((node) => node.kind === 'trigger');
+  if (!triggers.length) return false;
+  const reachable = reachableFrom(nodes, edges, triggers);
+  return [...reachable].some((id) => {
+    const node = nodes.find((entry) => entry.id === id);
+    if (!node) return false;
+    if (node.kind === 'result') return true;
+    if (!node.stepId) return false;
+    const action = steps.get(node.stepId)?.action;
+    return Boolean(action && TERMINAL_ACTIONS.has(action.type));
+  });
+}
+
 export function removeFlowNodes(flow: FlowDocument, ruleId: string, nodeIds: string[]): FlowDocument {
   const rule = ruleOf(flow, ruleId);
   const graph = graphOf(rule);
   const removed = new Set(nodeIds);
   const nodes = graph.nodes.filter((node) => !removed.has(node.id));
   const edges = graph.edges.filter((edge) => !removed.has(edge.from) && !removed.has(edge.to));
+  // Deleting the last node deletes the containing rule: an empty graph rule is invalid
+  // (NO_TRIGGER at validation), and one undo restores rule, nodes and steps together.
+  if (nodes.length === 0) {
+    return { ...flow, rules: flow.rules.filter((entry) => entry.id !== ruleId) };
+  }
   // Removing the last trigger strands every remaining node, and dropping a middle node can
   // orphan nodes that were reachable before. Refuse both instead of writing an invalid graph.
-  if (graph.nodes.some((node) => removed.has(node.id) && node.kind === 'trigger') && nodes.length > 0) {
+  if (graph.nodes.some((node) => removed.has(node.id) && node.kind === 'trigger')) {
     throw new FlowOperationError('NO_TRIGGER', 'rule graph requires its trigger node');
   }
   const triggersBefore = graph.nodes.filter((node) => node.kind === 'trigger');
@@ -215,6 +238,14 @@ export function removeFlowNodes(flow: FlowDocument, ruleId: string, nodeIds: str
     if (orphaned) {
       throw new FlowOperationError('UNREACHABLE_NODE', `removing the node orphans ${orphaned.id}`);
     }
+  }
+  const stepsById = new Map((rule.steps ?? []).map((step) => [step.id, step]));
+  if (
+    hasTerminalPath(graph.nodes, graph.edges, stepsById)
+    && nodes.some((node) => node.kind === 'trigger')
+    && !hasTerminalPath(nodes, edges, stepsById)
+  ) {
+    throw new FlowOperationError('NO_TERMINAL_PATH', 'removing the node leaves no path to a result or terminal action');
   }
   const keptStepIds = new Set(nodes.map((node) => node.stepId).filter((stepId): stepId is string => Boolean(stepId)));
   const steps = (rule.steps ?? []).filter((step) => keptStepIds.has(step.id));

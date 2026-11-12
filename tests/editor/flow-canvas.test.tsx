@@ -198,7 +198,7 @@ describe('flow canvas', () => {
     const nodeId = graphOf().nodes[0].id;
     click(`[data-node-id="${nodeId}"]`);
     keydown(window, 'Delete');
-    expect(graphOf().nodes).toHaveLength(0);
+    expect(controller.draft.flow.rules.some((entry) => entry.graph)).toBe(false);
     act(() => { controller.undo(); });
     expect(graphOf().nodes).toHaveLength(1);
   });
@@ -282,6 +282,63 @@ describe('flow canvas', () => {
     const graph = graphOf();
     expect(graph.edges).toHaveLength(1);
     expect(graph.nodes.find((node) => node.id === action.id)!.label).toBe('renamed-between-events');
+  });
+
+  it('removes the containing rule when deleting its last node', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    const trigger = graphOf().nodes.find((node) => node.kind === 'trigger')!;
+    click(`[data-node-id="${trigger.id}"]`);
+    keydown(window, 'Delete');
+    expect(controller.draft.flow.rules.some((entry) => entry.graph)).toBe(false);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')).toBeNull();
+    act(() => { controller.undo(); });
+    expect(controller.draft.flow.rules.some((entry) => entry.graph)).toBe(true);
+  });
+
+  it('prevents deleting the only result and reports NO_TERMINAL_PATH', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    click('[data-action="add-condition"]');
+    click('[data-action="add-result"]');
+    const nodes = graphOf().nodes;
+    const trigger = nodes.find((node) => node.kind === 'trigger')!;
+    const condition = nodes.find((node) => node.kind === 'condition')!;
+    const result = nodes.find((node) => node.kind === 'result')!;
+    pointer(nodeEl(trigger.id).querySelector('[data-port="out"][data-branch="default"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(condition.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    pointer(nodeEl(condition.id).querySelector('[data-port="out"][data-branch="true"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(result.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    click(`[data-node-id="${result.id}"]`);
+    keydown(window, 'Delete');
+    expect(graphOf().nodes).toHaveLength(3);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')!.textContent).toContain('NO_TERMINAL_PATH');
+  });
+
+  it('allows deleting a result when a terminal action remains', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    click('[data-action="add-action"]');
+    const nodes = graphOf().nodes;
+    const trigger = nodes.find((node) => node.kind === 'trigger')!;
+    const action = nodes.find((node) => node.kind === 'action')!;
+    act(() => {
+      controller.update((current) => {
+        const rule = current.flow.rules.find((entry) => entry.graph);
+        const step = rule?.steps?.[0];
+        if (step) step.action = { type: 'navigate', screenId: 'library' };
+      });
+    });
+    click('[data-action="add-result"]');
+    const result = graphOf().nodes.find((node) => node.kind === 'result')!;
+    pointer(nodeEl(trigger.id).querySelector('[data-port="out"][data-branch="default"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(action.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    pointer(nodeEl(action.id).querySelector('[data-port="out"][data-branch="default"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(result.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    click(`[data-node-id="${result.id}"]`);
+    keydown(window, 'Delete');
+    expect(graphOf().nodes.map((node) => node.kind).sort()).toEqual(['action', 'trigger']);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')).toBeNull();
   });
 });
 
