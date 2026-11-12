@@ -1,3 +1,4 @@
+import { useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Sheet } from './Sheet';
 import { touchpad, updateTouchpad } from '../tv/touchpad';
@@ -8,6 +9,27 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
     <button type="button" role="switch" aria-checked={p.on} aria-label={p.label} class={'m-switch' + (p.on ? ' on' : '')} onClick={p.onToggle}>
       <span class="m-switch-knob" />
     </button>
+  );
+}
+
+function TryPad() {
+  const [p, setP] = useState({ x: 50, y: 50 });
+  return (
+    <div
+      class="m-tp-try"
+      data-tp-try
+      aria-hidden="true"
+      onPointerMove={(e) => {
+        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        setP({
+          x: Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)),
+          y: Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)),
+        });
+      }}
+    >
+      <span class="m-tp-dot" style={{ left: p.x + '%', top: p.y + '%' }} />
+    </div>
   );
 }
 
@@ -24,23 +46,21 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
           <span class="m-tp-label">{t('remote.touchpad.speed')}</span>
           <span class="m-muted m-small">{t('remote.touchpad.speedOf', { n: s.speed })}</span>
         </div>
-        <div class="m-tp-steps" role="radiogroup" aria-label={t('remote.touchpad.speed')}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={s.speed === n}
-              aria-label={t('remote.touchpad.speedN', { n })}
-              class={'m-tp-step' + (n <= s.speed ? ' on' : '')}
-              onClick={() => updateTouchpad({ speed: n })}
-            />
-          ))}
-        </div>
+        <input
+          class="m-tp-range"
+          type="range"
+          min={1}
+          max={5}
+          step={1}
+          value={s.speed}
+          aria-label={t('remote.touchpad.speed')}
+          onInput={(e) => updateTouchpad({ speed: Number((e.target as HTMLInputElement).value) })}
+        />
         <div class="m-tp-ends m-muted m-small">
           <span>{t('remote.touchpad.slow')}</span>
           <span>{t('remote.touchpad.fast')}</span>
         </div>
+        <TryPad />
       </div>
       <div class="m-tp-row">
         <div class="m-tp-text">
@@ -63,9 +83,6 @@ export function TouchpadSheet({ onClose }: { onClose: () => void }) {
         </div>
         <Switch on={s.invertScroll} label={t('remote.touchpad.invert')} onToggle={() => updateTouchpad({ invertScroll: !s.invertScroll })} />
       </div>
-      <button type="button" class="m-btn m-btn-primary" onClick={onClose}>
-        {t('common.done')}
-      </button>
     </Sheet>,
     document.body,
   );

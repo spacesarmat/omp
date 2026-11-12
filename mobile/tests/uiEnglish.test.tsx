@@ -183,7 +183,8 @@ describe('phone shared UI in English', () => {
     expect(sheet.textContent).toContain('Tap to click');
     expect(sheet.textContent).toContain('Reverse scrolling');
     expect(sheet.textContent).not.toContain('Scroll strip');
-    expect(Array.from(sheet.querySelectorAll('button')).map((b) => b.textContent)).toContain('Done');
+    expect(sheet.querySelector('input[type="range"]')).toBeTruthy();
+    expect(Array.from(sheet.querySelectorAll('button')).map((b) => b.textContent)).not.toContain('Done');
     expect(sheet.innerHTML).not.toMatch(CYR);
   });
 
