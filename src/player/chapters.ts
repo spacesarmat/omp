@@ -4,7 +4,7 @@ import type { SkipPrefs } from '../lib/journal';
 
 const INTRO_RE = /(^|[^a-zа-яё])(intro|opening|op|заставк[а-яё]*|опенинг|вступлени[а-яё]*)([^a-zа-яё]|$)/i;
 const CREDITS_RE = /(^|[^a-zа-яё])(credits|end credits|ending|ed|outro|титры|эндинг)([^a-zа-яё]|$)/i;
-const RECAP_RE = /(^|[^a-zа-яё])(recap|previously|ранее)([^a-zа-яё]|$)/i;
+const RECAP_RE = /(^|[^a-zа-яё])(recap|рекап|previously|ранее)([^a-zа-яё]|$)/i;
 
 /** Intro, recap or credits from a chapter title. Same words the player already uses, plus Recap. */
 export function titleMarkKind(title: string): 'intro' | 'credits' | 'recap' | '' {

@@ -136,7 +136,6 @@ function onBody(body: string): void {
 }
 
 function clearLink(): void {
-  skippedMark = '';
   nowPlaying.value = null;
   lastSeen.value = 0;
   launchedAt.value = 0;
@@ -225,9 +224,9 @@ function optimisticFields(s: PlayerState, c: DistributiveOmit<Cmd, 'id'>): { pau
 }
 
 const SKIP_KEY = 'tsp.nowSkipMarks';
-let skippedMark = '';
 
-/** Skips a recap or credits chapter while the saved switch is on. Runs from the link, not only the open screen. */
+/** Skips a recap or credits chapter while the saved switch is on. Runs from the link, not only the open screen.
+ *  Each report retries until the TV says playback moved: a queued command can be dropped. */
 export function applyAutoSkip(): void {
   const s = nowPlaying.value;
   if (!s || loadJson<unknown>(SKIP_KEY, false, (v) => v === true) !== true) return;
@@ -235,13 +234,7 @@ export function applyAutoSkip(): void {
   if (!s.chapters || s.chapter === undefined || s.chapter < 0) return;
   const ch = s.chapters[s.chapter];
   const kind = ch ? titleMarkKind(ch.title) : '';
-  if (kind !== 'recap' && kind !== 'credits') {
-    skippedMark = '';
-    return;
-  }
-  const token = s.hash + ':' + s.file + ':' + s.chapter;
-  if (skippedMark === token) return;
-  skippedMark = token;
+  if (kind !== 'recap' && kind !== 'credits') return;
   if (s.chapter + 1 < s.chapters.length) sendCmd({ type: 'chapter', i: s.chapter + 1 });
   else if (s.next) sendCmd({ type: 'next' });
   else if (s.duration > 0) sendCmd({ type: 'seek', t: s.duration });

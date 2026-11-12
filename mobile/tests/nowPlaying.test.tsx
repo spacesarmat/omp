@@ -254,6 +254,12 @@ describe('NowPlaying', () => {
       queue.mockClear();
       applyAutoSkip();
       expect(sent()[0]).toEqual(expect.objectContaining({ type: 'next' }));
+      applyAutoSkip();
+      expect(sent().filter((c) => c.type === 'next')).toHaveLength(2);
+      setState(state({ chapters: [{ t: 0, title: 'Рекап' }, { t: 30, title: 'Scene' }], chapter: 0, time: 2 }));
+      queue.mockClear();
+      applyAutoSkip();
+      expect(sent()[0]).toEqual(expect.objectContaining({ type: 'chapter', i: 1 }));
     });
     it('before the first chapter: previous seeks to the start', () => {
       setState(state({ chapters: [{ t: 30, title: 'A' }, { t: 90, title: 'B' }], chapter: -1, time: 10 }));
