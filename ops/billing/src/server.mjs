@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
-import { applyReferralPost, publicReferral } from './referralAdmin.mjs';
+import { applyReferralPost, normalizeReferralSettings, publicReferral, referralCodeFor } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -54,6 +54,7 @@ import {
   startDeviceLink,
   claimLinkedDevice,
   subscriptionView,
+  telegramDisplay,
   monitorMaxFor,
   supportThread,
   closeSupportThread,
@@ -73,6 +74,7 @@ import {
   botCallback,
   botDeepLink,
   botReply,
+  daysText,
   grantUserMessage,
   isPrivateChat,
   mainKeyboard,
@@ -151,6 +153,9 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
+import { isBotCopyPath, routeBotCopy } from './botCopyHttp.mjs';
+import { botCopyRepoFor } from './botCopyStore.mjs';
+import { referralNotes } from './botCopy.mjs';
 import { browserReadCors, handleDesk, isBrowserRead } from './deskHttp.mjs';
 import { publishAdmin } from './adminLive.mjs';
 import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
@@ -880,10 +885,27 @@ export async function telegramCall(net, url, init, timeoutMs) {
 
 async function telegramSend(token, chatId, text, fetchImpl, opts) {
   if (!token || !chatId) return { ok: false, messageId: 0 };
+  const o = opts || {};
+  if (o.media && o.media.url) {
+    const kind = o.media.kind === 'video' ? 'video' : 'photo';
+    const mediaBody = { chat_id: chatId, caption: text || '' };
+    mediaBody[kind] = o.media.url;
+    if (o.parseMode) mediaBody.parse_mode = o.parseMode;
+    if (o.inline) mediaBody.reply_markup = o.inline;
+    else if (o.keyboard) mediaBody.reply_markup = o.keyboard;
+    const { res, data } = await telegramCall(
+      fetchImpl,
+      'https://api.telegram.org/bot' + token + '/' + (kind === 'video' ? 'sendVideo' : 'sendPhoto'),
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(mediaBody) },
+      o.timeoutMs || TG_SEND_TIMEOUT_MS,
+    );
+    const messageId = data && data.result && data.result.message_id ? data.result.message_id : 0;
+    return { ok: !!(res.ok && data.ok !== false && messageId), messageId };
+  }
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
-  if (opts && opts.parseMode) body.parse_mode = opts.parseMode;
-  if (opts && opts.inline) body.reply_markup = opts.inline;
-  else if (opts && opts.keyboard) body.reply_markup = opts.keyboard;
+  if (o.parseMode) body.parse_mode = o.parseMode;
+  if (o.inline) body.reply_markup = o.inline;
+  else if (o.keyboard) body.reply_markup = o.keyboard;
   const { res, data } = await telegramCall(
     fetchImpl,
     'https://api.telegram.org/bot' + token + '/sendMessage',
@@ -1080,9 +1102,39 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
   });
 }
 
+async function applyCopy(store, spec, built) {
+  const repo = botCopyRepoFor(store);
+  if (!repo || !spec || !spec.id) {
+    return { text: built.text, inline: built.inline, parseMode: built.parseMode, media: null, used: 'code' };
+  }
+  return repo.apply(spec, built);
+}
+
+async function sendCopied(store, token, chatId, text, fetchImpl, opts) {
+  const o = opts || {};
+  const applied = await applyCopy(store, o.copy, { text, inline: o.inline, parseMode: o.parseMode });
+  return telegramSend(token, chatId, applied.text, fetchImpl, {
+    keyboard: o.keyboard,
+    inline: applied.inline,
+    parseMode: applied.parseMode,
+    timeoutMs: o.timeoutMs,
+    media: applied.media,
+  });
+}
+
 /** A bot row that is a Stars invoice or a Crypto Pay link. Other rows stay on telegramSend. */
 async function sendBotRow(token, row, net, timeoutMs, store) {
-  if (row && row.invoice) return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
+  if (row && row.invoice) {
+    const applied = await applyCopy(store, row.copy, { text: row.text || '', parseMode: row.parseMode });
+    if (applied.used === 'template') {
+      const plain = String(applied.text || '').replace(/<[^>]+>/g, '').slice(0, 255);
+      const invoice = { ...row.invoice };
+      if (plain) invoice.description = plain;
+      return telegramMethod(token, 'sendInvoice', invoice, net, timeoutMs);
+    }
+    return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
+  }
+  const failCopy = { id: 'pay.invoice_failed', vars: {}, state: '', lang: row && row.copy ? row.copy.lang || '' : '' };
   if (row && row.cryptoIssue && row.cryptoIssue.donationId && store) {
     const issued = await ensureDonateCryptoLink(store, row.cryptoIssue.donationId, net);
     const webUrl = issued && (issued.webUrl || issued.url);
@@ -1090,11 +1142,14 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
     const buttons = [];
     if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
     if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
-    return telegramSend(token, row.chatId, webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.', net, {
+    const text = webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.';
+    const inline = buttons.length ? { inline_keyboard: buttons } : undefined;
+    return sendCopied(store, token, row.chatId, text, net, {
       keyboard: row.keyboard,
-      inline: buttons.length ? { inline_keyboard: buttons } : undefined,
+      inline,
       parseMode: row.parseMode,
       timeoutMs,
+      copy: webUrl ? row.copy : failCopy,
     });
   }
   if (row && row.cryptoIssue && store) {
@@ -1104,18 +1159,22 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
     const buttons = [];
     if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
     if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
-    return telegramSend(token, row.chatId, webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.', net, {
+    const text = webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.';
+    const inline = buttons.length ? { inline_keyboard: buttons } : undefined;
+    return sendCopied(store, token, row.chatId, text, net, {
       keyboard: row.keyboard,
-      inline: buttons.length ? { inline_keyboard: buttons } : undefined,
+      inline,
       parseMode: row.parseMode,
       timeoutMs,
+      copy: webUrl ? row.copy : failCopy,
     });
   }
-  return telegramSend(token, row.chatId, row.text, net, {
+  return sendCopied(store, token, row.chatId, row.text, net, {
     keyboard: row.keyboard,
     inline: row.inline,
     parseMode: row.parseMode,
     timeoutMs,
+    copy: row.copy,
   });
 }
 
@@ -1270,7 +1329,7 @@ function settleMoney(state, notice) {
   return applyPayment(state, notice);
 }
 
-async function finishDonate(state, applied, fetchImpl) {
+async function finishDonate(state, applied, fetchImpl, store) {
   if (!applied || applied.kind !== 'donate' || applied.duplicate) return;
   publishAdmin({ type: applied.error ? 'error' : 'payment' });
   if (applied.error) return;
@@ -1278,9 +1337,18 @@ async function finishDonate(state, applied, fetchImpl) {
   const text = applied.pending
     ? 'Донат ждёт подтверждения в ЮMoney. Он ещё не засчитан.'
     : donateThanksText(state.settings);
+  const amount = applied.donation && applied.donation.amountRub ? String(applied.donation.amountRub) + ' ₽' : '';
   if (chat) {
     try {
-      await telegramSend(state.settings.botToken, chat, text, fetchImpl, { keyboard: mainKeyboard() });
+      await sendCopied(store, state.settings.botToken, chat, text, fetchImpl, {
+        keyboard: mainKeyboard(),
+        copy: {
+          id: applied.pending ? 'donate.pending' : 'donate.thanks',
+          vars: { amount, name: '' },
+          state: '',
+          lang: '',
+        },
+      });
     } catch (e) {
       /* the donation is stored either way */
     }
@@ -1297,7 +1365,7 @@ async function finishDonate(state, applied, fetchImpl) {
   }
 }
 
-function tellPayment(state, result, fetchImpl) {
+function tellPayment(state, result, fetchImpl, store) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
     : '';
@@ -1305,7 +1373,57 @@ function tellPayment(state, result, fetchImpl) {
   if (!chat) return Promise.resolve();
   const msg = paymentUserMessage(state, result);
   if (!msg) return Promise.resolve();
-  return telegramSend(state.settings.botToken, chat, msg.text, fetchImpl, { parseMode: msg.parseMode, inline: msg.inline, keyboard: msg.keyboard });
+  return sendCopied(store, state.settings.botToken, chat, msg.text, fetchImpl, {
+    parseMode: msg.parseMode,
+    inline: msg.inline,
+    keyboard: msg.keyboard,
+    copy: msg.copy,
+  });
+}
+
+/** Referral texts go out only after an admin saved that template. Until then nothing is sent. */
+async function notifyReferralGrants(store, notes, state, fetchImpl) {
+  const list = notes || [];
+  if (!list.length || !store) return;
+  const repo = botCopyRepoFor(store);
+  if (!repo) return;
+  if (!(await repo.anyCustom(['referral.referrer', 'referral.friend']))) return;
+  const settings = normalizeReferralSettings(state.settings && state.settings.referral);
+  const token = state.settings && state.settings.botToken;
+  for (let i = 0; i < list.length; i++) {
+    const note = list[i];
+    const id = note.role === 'friend' ? 'referral.friend' : 'referral.referrer';
+    const acc = (state.accounts || []).find((a) => a && a.id === note.accountId);
+    if (!acc || !acc.telegramId) continue;
+    const sub = subscriptionView(state, acc.id, Date.now());
+    const days = note.role === 'friend' ? settings.friendDays : note.days;
+    if (!(days > 0)) continue;
+    const applied = await repo.apply(
+      {
+        id,
+        state: '',
+        lang: '',
+        vars: {
+          days: daysText(days),
+          expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil) : '',
+          name: telegramDisplay(acc),
+          ref_link: referralCodeFor(acc.id),
+        },
+      },
+      { text: '' },
+    );
+    if (applied.used !== 'template' || !applied.text) continue;
+    try {
+      await telegramSend(token, acc.telegramId, applied.text, fetchImpl, {
+        parseMode: applied.parseMode,
+        inline: applied.inline,
+        keyboard: mainKeyboard(),
+        media: applied.media,
+      });
+    } catch (e) {
+      /* the days are already stored */
+    }
+  }
 }
 
 export function createApp(file, fetchImpl, opts) {
@@ -1548,6 +1666,16 @@ export function createApp(file, fetchImpl, opts) {
           readBody,
           clientIp,
           audit: (action, detail, who) => audit(file, action, detail, who),
+          copyRepo: botCopyRepoFor(store),
+          sendUser: async (chatId, applied) => {
+            const cur = await store.read();
+            await telegramSend(cur.settings.botToken, chatId, applied.text, net, {
+              parseMode: applied.parseMode,
+              inline: applied.inline,
+              keyboard: mainKeyboard(),
+              media: applied.media,
+            });
+          },
           notifyAdmins: async (state, messages) => {
             const rows = typeof messages === 'string' ? adminBroadcast(state.settings, messages) : messages || [];
             let ok = 0;
@@ -1572,6 +1700,20 @@ export function createApp(file, fetchImpl, opts) {
         res.setHeader('retry-after', '600');
         if (path === '/v1/yoomoney' || path === '/v1/crypto-pay') return send(res, 503, 'read only');
         return json(res, 503, { error: 'read_only' });
+      }
+      if (isBotCopyPath(path)) {
+        await routeBotCopy(req, res, {
+          path,
+          url,
+          req,
+          store,
+          repo: botCopyRepoFor(store),
+          json,
+          readBody,
+          adminOf,
+          telegramSend: (token, chatId, text, opts) => telegramSend(token, chatId, text, net, opts),
+        });
+        return;
       }
       if (isCachePath(path)) {
         await routeCache(req, res, {
@@ -1896,8 +2038,9 @@ export function createApp(file, fetchImpl, opts) {
         const ask = 'Подтвердите вход в админку\nIP: ' + (ip || '-') + '\nУстройство: ' + (ua || '-');
         for (let i = 0; i < ids.length; i++) {
           try {
-            await telegramSend(state.settings.botToken, ids[i], ask, net, {
+            await sendCopied(store, state.settings.botToken, ids[i], ask, net, {
               inline: { inline_keyboard: [[{ text: 'Подтвердить вход', callback_data: 'alin:' + started.token }]] },
+              copy: { id: 'login.ask', vars: { arg: ip || '-', text: ua || '-' }, state: '', lang: '' },
             });
           } catch (e) {
             /* one admin chat can fail */
@@ -2148,7 +2291,9 @@ export function createApp(file, fetchImpl, opts) {
               until +
               '.\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
             if (body.channel === 'telegram' && result.account.telegramId) {
-              await telegramSend(fresh.settings.botToken, result.account.telegramId, text, net);
+              await sendCopied(store, fresh.settings.botToken, result.account.telegramId, text, net, {
+                copy: { id: 'issue.code', vars: { code: result.code, until }, state: '', lang: '' },
+              });
             }
             if (body.channel === 'email' && result.account.email) {
               await sendMail(fresh.settings, { to: result.account.email, subject: 'Код подписки OMP', text });
@@ -2182,7 +2327,12 @@ export function createApp(file, fetchImpl, opts) {
             if (acc && acc.telegramId) {
               const note = grantUserMessage(fresh.settings.publicOrigin || '', result);
               try {
-                await telegramSend(fresh.settings.botToken, acc.telegramId, note.text, net, { parseMode: note.parseMode, inline: note.inline, keyboard: note.keyboard });
+                await sendCopied(store, fresh.settings.botToken, acc.telegramId, note.text, net, {
+                  parseMode: note.parseMode,
+                  inline: note.inline,
+                  keyboard: note.keyboard,
+                  copy: note.copy,
+                });
               } catch (e) {
                 /* days are granted; the notice is best effort */
               }
@@ -2288,7 +2438,10 @@ export function createApp(file, fetchImpl, opts) {
                 let told = false;
                 try {
                   const cur = (await store.read());
-                  told = (await telegramSend(cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, { keyboard: mainKeyboard() })).ok;
+                  told = (await sendCopied(store, cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, {
+                    keyboard: mainKeyboard(),
+                    copy: { id: 'error.revoke', vars: { device: out.device }, state: '', lang: '' },
+                  })).ok;
                 } catch (e) {
                   told = false;
                 }
@@ -2376,7 +2529,11 @@ export function createApp(file, fetchImpl, opts) {
               const chat = out.accountId ? telegramOf(cur, out.accountId) : '';
               if (chat) {
                 try {
-                  const told = await telegramSend(cur.settings.botToken, chat, rejectUserText(out.amount), net, { keyboard: mainKeyboard() });
+                  const sum = String(out.amount || '').trim();
+                  const told = await sendCopied(store, cur.settings.botToken, chat, rejectUserText(out.amount), net, {
+                    keyboard: mainKeyboard(),
+                    copy: { id: 'pay.rejected', vars: { amount: sum ? ' ' + sum + ' ₽' : '' }, state: '', lang: '' },
+                  });
                   flashText += told.ok ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
                 } catch (e) {
                   flashText += '. Сообщение в Telegram не ушло';
@@ -2387,7 +2544,7 @@ export function createApp(file, fetchImpl, opts) {
             else {
               flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
               try {
-                await tellPayment((await store.read()), out, net);
+                await tellPayment((await store.read()), out, net, store);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
               }
@@ -2463,7 +2620,7 @@ export function createApp(file, fetchImpl, opts) {
               await audit(file, 'donate_confirm', id, admin);
               flashText = 'Донат подтверждён. Подписка не продлена.';
               try {
-                await finishDonate(await store.read(), out, net);
+                await finishDonate(await store.read(), out, net, store);
               } catch (e) {
                 /* the donation is stored either way */
               }
@@ -2590,7 +2747,9 @@ export function createApp(file, fetchImpl, opts) {
           if (!telegramId || !text) flashError = 'Нужны Telegram id и текст';
           else {
             const state = (await store.read());
-            const sent = await telegramSend(state.settings.botToken, telegramId, text, net);
+            const sent = await sendCopied(store, state.settings.botToken, telegramId, text, net, {
+              copy: { id: 'support.relay', vars: { text }, state: '', lang: '' },
+            });
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
               await store.update((cur) =>
@@ -2609,7 +2768,9 @@ export function createApp(file, fetchImpl, opts) {
           const lastAt = rows.reduce((max, row) => Math.max(max, row.at || 0), 0);
           if (!telegramId || !rows.length || (closedAt && lastAt <= closedAt)) flashError = 'Диалог уже закрыт';
           else {
-            const sent = await telegramSend(state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net);
+            const sent = await sendCopied(store, state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net, {
+              copy: { id: 'support.closed', vars: {}, state: '', lang: '' },
+            });
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
               await store.update((cur) => closeSupportThread(cur, { telegramId, now: Date.now() }));
@@ -2883,12 +3044,22 @@ export function createApp(file, fetchImpl, opts) {
         const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
         if (!readOnly && (settleReferrals(state, now).state !== state || countryDirty)) {
           const accountId = account.id;
+          let notes = [];
           const next = await store.update((cur) => {
+            const before = cur.referralJournal || [];
             let merged = settleReferrals(cur, now).state;
+            notes = referralNotes(before, merged.referralJournal || []);
             if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
             return { state: merged, result: merged };
           });
-          if (next && next.accounts) state = next;
+          if (next && next.accounts) {
+            state = next;
+            try {
+              await notifyReferralGrants(store, notes, state, net);
+            } catch (e) {
+              /* the grant is stored either way */
+            }
+          }
         }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
@@ -3339,12 +3510,12 @@ export function createApp(file, fetchImpl, opts) {
         );
         const freshPay = await store.read();
         if (applied.kind === 'donate') {
-          await finishDonate(freshPay, applied, net);
+          await finishDonate(freshPay, applied, net, store);
           return send(res, 200, 'ok');
         }
         if (!applied.duplicate && !applied.error) {
           try {
-            await tellPayment(freshPay, applied, net);
+            await tellPayment(freshPay, applied, net, store);
           } catch (e) {
             /* the payment is stored either way */
           }
@@ -3423,15 +3594,19 @@ export function createApp(file, fetchImpl, opts) {
         );
         const freshPay = (await store.read());
         if (applied.kind === 'donate') {
-          await finishDonate(freshPay, applied, net);
+          await finishDonate(freshPay, applied, net, store);
           return send(res, 200, 'ok');
         }
-        if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
+        if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net, store);
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
           if (chat) {
             try {
-              await telegramSend(freshPay.settings.botToken, chat, pendingUserText(applied.amount), net, { keyboard: mainKeyboard() });
+              const sum = String(applied.amount || '').trim();
+              await sendCopied(store, freshPay.settings.botToken, chat, pendingUserText(applied.amount), net, {
+                keyboard: mainKeyboard(),
+                copy: { id: 'pay.pending', vars: { amount: sum ? ' ' + sum + ' ₽' : '' }, state: '', lang: '' },
+              });
             } catch (e) {
               /* the payment is held either way; the notice is best effort */
             }
@@ -3549,6 +3724,14 @@ export async function pollBot(file, fetchImpl, opts) {
     loops += 1;
     try {
       const state = (await store.read());
+      const copyRepo = botCopyRepoFor(store);
+      if (copyRepo) {
+        try {
+          await copyRepo.warm();
+        } catch (e) {
+          /* a copy outage keeps the in-code texts */
+        }
+      }
       const token = state.settings.botToken;
       if (!token) {
         await sleep(5000);
@@ -3716,12 +3899,12 @@ export async function pollBot(file, fetchImpl, opts) {
             }
             const freshStar = await store.read();
             if (applied.kind === 'donate') {
-              await finishDonate(freshStar, applied, net);
+              await finishDonate(freshStar, applied, net, store);
               continue;
             }
             if (!applied.duplicate && !applied.error) {
               try {
-                await tellPayment(freshStar, applied, net);
+                await tellPayment(freshStar, applied, net, store);
               } catch (e) {
                 /* the payment is stored either way */
               }
@@ -3752,6 +3935,7 @@ export async function pollBot(file, fetchImpl, opts) {
               username: msg.from.username || '',
               firstName: msg.from.first_name || '',
               lastName: msg.from.last_name || '',
+              lang: msg.from.language_code || '',
             }
           : null;
         const text = msg.text || '';
@@ -3759,12 +3943,13 @@ export async function pollBot(file, fetchImpl, opts) {
           // Cutover: only /start admin_TOKEN may run; never claim a promo/unbind success without a write.
           if (parseAction(text).action !== 'admin_login') {
             try {
-              await telegramSend(
+              await sendCopied(
+                store,
                 token,
                 chatId,
                 'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.',
                 net,
-                { timeoutMs: sendTimeoutMs },
+                { timeoutMs: sendTimeoutMs, copy: { id: 'error.maintenance', vars: {}, state: '', lang: '' } },
               );
             } catch (e) {
               /* ignore */
@@ -3780,11 +3965,12 @@ export async function pollBot(file, fetchImpl, opts) {
           for (let j = 0; j < rows.length; j++) {
             const row = rows[j];
             try {
-              await telegramSend(token, row.chatId || chatId, row.text, net, {
+              await sendCopied(store, token, row.chatId || chatId, row.text, net, {
                 keyboard: row.keyboard,
                 inline: row.inline,
                 parseMode: row.parseMode,
                 timeoutMs: sendTimeoutMs,
+                copy: row.copy,
               });
             } catch (e) {
               /* ignore */
@@ -3922,7 +4108,13 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
       info = await deviceInfoForAccount(file, state, acct && acct.id);
     }
     out = await store.update((cur) => {
-      const r = botCallback(cur, { chatId, data: cq.data, now: Date.now(), info });
+      const r = botCallback(cur, {
+        chatId,
+        data: cq.data,
+        now: Date.now(),
+        info,
+        lang: cq.from && cq.from.language_code,
+      });
       return { state: r.state, result: { messages: r.messages, answer: r.answer, clearMarkup: r.clearMarkup } };
     });
   } catch (e) {
@@ -3976,7 +4168,12 @@ export async function runReminders(file, fetchImpl, now) {
     const msg = claimed.messages[i];
     let ok = false;
     try {
-      const out = await telegramSend(claimed.token, msg.chatId, msg.text, net, { inline: msg.inline, keyboard: msg.keyboard });
+      const out = await sendCopied(store, claimed.token, msg.chatId, msg.text, net, {
+        inline: msg.inline,
+        keyboard: msg.keyboard,
+        parseMode: msg.parseMode,
+        copy: msg.copy,
+      });
       ok = out.ok;
     } catch (e) {
       ok = false;

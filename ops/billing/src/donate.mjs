@@ -211,12 +211,14 @@ function commentScreen(settings, id) {
   return {
     text: 'Комментарий к донату, по желанию. До ' + cfg.commentMax + ' символов.',
     inline: { inline_keyboard: [[{ text: 'Без комментария', callback_data: 'dn:s:' + id }]] },
+    copy: { id: 'donate.comment', vars: { comment_max: String(cfg.commentMax) }, state: '', lang: '' },
   };
 }
 
 function nameScreen(id) {
   return {
     text: 'Показать моё имя в списке благодарностей? Сейчас имя скрыто.',
+    copy: { id: 'donate.name', vars: {}, state: '', lang: '' },
     inline: {
       inline_keyboard: [[
         { text: 'Показать имя', callback_data: 'dn:n:' + id + ':1' },
@@ -258,8 +260,8 @@ function methodScreen(state, account, row) {
       buttons.push([{ text: asset + ' - ' + amount, callback_data: 'dn:p:' + row.id + ':' + asset }]);
     }
   }
-  if (!buttons.length) return { text: 'Способы оплаты доната не включены.', inline: undefined };
-  return { text: lines.join('\n'), inline: { inline_keyboard: buttons } };
+  if (!buttons.length) return { text: 'Способы оплаты доната не включены.', inline: undefined, copy: { id: 'donate.methods_off', vars: {}, state: '', lang: '' } };
+  return { text: lines.join('\n'), inline: { inline_keyboard: buttons }, copy: { id: 'donate.methods', vars: { amount: row.amountRub + ' ₽', fee: lines.slice(1).join('\n') }, state: '', lang: '' } };
 }
 
 function lockMethod(state, account, row, method) {
@@ -275,6 +277,7 @@ function lockMethod(state, account, row, method) {
       row: { ...named, method, asset: '', payAmount: up.gross, gross: up.gross, fee: up.fee, status: 'pending', step: '' },
       text: title + ' - ' + rubText(up.gross) + '. Комиссия уже в сумме.',
       inline: { inline_keyboard: [[{ text: title + ' - ' + rubText(up.gross), url }]] },
+      copy: { id: 'donate.pay', vars: { method: title, amount: rubText(up.gross) }, state: '', lang: '' },
     };
   }
   if (method === 'XTR') {
@@ -283,6 +286,7 @@ function lockMethod(state, account, row, method) {
     return {
       row: { ...named, method: 'stars', asset: 'XTR', payAmount: String(stars), gross: '', fee: '', status: 'pending', step: '' },
       text: 'Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.',
+      copy: { id: 'donate.stars', vars: { stars: String(stars), amount: named.amountRub + ' ₽' }, state: '', lang: '' },
       invoice: starInvoiceBody(named.telegramId, {
         title: 'Донат OMP',
         description: 'Донат OMP, ' + named.amountRub + ' ₽',
@@ -297,6 +301,7 @@ function lockMethod(state, account, row, method) {
     return {
       row: { ...named, method: 'crypto', asset: method, payAmount: amount, gross: '', fee: '', status: 'pending', step: '' },
       text: method + ' ' + amount + '. Ссылка на оплату:',
+      copy: { id: 'donate.crypto', vars: { asset: method, pay_amount: amount }, state: '', lang: '' },
       cryptoIssue: { donationId: named.id },
     };
   }
@@ -305,11 +310,12 @@ function lockMethod(state, account, row, method) {
 
 export function donateMenu(state, account, now) {
   const cfg = cfgOf(state);
-  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.' };
+  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', copy: { id: 'donate.off', vars: {}, state: '', lang: '' } };
   return {
     state,
     text: 'Поддержать проект OMP. Выберите сумму.',
     inline: amountKeyboard(cfg),
+    copy: { id: 'donate.menu', vars: { name: nameOf(account) }, state: '', lang: '' },
     now,
   };
 }
@@ -321,16 +327,16 @@ export function donateOnText(state, account, text, now) {
   const cfg = cfgOf(state);
   if (draft.step === 'amount') {
     const check = validateDonateAmount(cfg, text);
-    if (!check.ok) return { state, text: check.error };
+    if (!check.ok) return { state, text: check.error, copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error }, state: '', lang: '' } };
     const row = { ...draft, amountRub: check.rub, step: 'comment', displayName: nameOf(account) || draft.displayName };
     const screen = commentScreen(cfg, row.id);
-    return { state: putDonation(state, row), text: screen.text, inline: screen.inline };
+    return { state: putDonation(state, row), text: screen.text, inline: screen.inline, copy: screen.copy };
   }
   const check = validateDonateComment(cfg, text);
-  if (!check.ok) return { state, text: check.error };
+  if (!check.ok) return { state, text: check.error, copy: { id: 'donate.comment_bad', vars: { comment_max: String(cfg.commentMax), text: check.error }, state: '', lang: '' } };
   const row = { ...draft, comment: check.comment, step: 'name' };
   const screen = nameScreen(row.id);
-  return { state: putDonation(state, row), text: screen.text, inline: screen.inline };
+  return { state: putDonation(state, row), text: screen.text, inline: screen.inline, copy: screen.copy };
 }
 
 function draftById(state, account, id, now) {
@@ -386,21 +392,22 @@ export function donateOnCallback(state, account, data, now) {
   if (!account) return { state, answer: 'Кнопка устарела' };
   const at = now || Date.now();
   const cfg = cfgOf(state);
-  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', answer: 'Выключено' };
+  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', answer: 'Выключено', copy: { id: 'donate.off', vars: {}, state: '', lang: '' } };
   if (raw.indexOf('dn:a:') === 0) {
     const check = validateDonateAmount(cfg, raw.slice(5));
-    if (!check.ok) return { state, text: check.error, answer: 'Сумма не подходит' };
+    if (!check.ok) return { state, text: check.error, answer: 'Сумма не подходит', copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error }, state: '', lang: '' } };
     const row = freshDraft(account, at);
     row.amountRub = check.rub;
     row.step = 'comment';
     const screen = commentScreen(cfg, row.id);
-    return { state: addDraft(state, row), text: screen.text, inline: screen.inline, answer: '' };
+    return { state: addDraft(state, row), text: screen.text, inline: screen.inline, answer: '', copy: screen.copy };
   }
   if (raw === 'dn:c') {
     const row = freshDraft(account, at);
     return {
       state: addDraft(state, row),
       text: 'Напишите сумму от ' + cfg.minRub + ' до ' + cfg.maxRub + ' ₽, целым числом.',
+      copy: { id: 'donate.amount', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub) }, state: '', lang: '' },
       answer: '',
     };
   }
@@ -436,13 +443,13 @@ export function donateOnCallback(state, account, data, now) {
     if (row.step !== 'comment') return { state, answer: 'Кнопка устарела' };
     const next = { ...row, comment: '', step: 'name' };
     const screen = nameScreen(next.id);
-    return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '' };
+    return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '', copy: screen.copy };
   }
   if (bits[1] === 'n') {
     if (row.step !== 'name') return { state, answer: 'Кнопка устарела' };
     const next = { ...row, showName: bits[3] === '1', step: 'method', displayName: nameOf(account) || row.displayName };
     const screen = methodScreen(state, account, next);
-    return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '' };
+    return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '', copy: screen.copy };
   }
   return { state, answer: 'Кнопка устарела' };
 }
