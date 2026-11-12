@@ -316,6 +316,13 @@ class OmpNativePlugin : Plugin() {
             .put("needsOverlay", BootLaunch.needsOverlayPrompt(Build.VERSION.SDK_INT, overlay, blocked, enabling))
     }
 
+    /** { on }: while the phone remote is open, volume keys go to the page instead of the phone. */
+    @PluginMethod
+    fun setHwVolume(call: PluginCall) {
+        PhoneVolume.capture = call.getBoolean("on") == true
+        call.resolve()
+    }
+
     /** { mode: portrait | unlock }: phone Activity orientation for «Сейчас играет»; no-op on TV. */
     @PluginMethod
     fun setOrientation(call: PluginCall) {

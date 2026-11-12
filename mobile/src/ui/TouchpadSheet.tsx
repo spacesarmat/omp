@@ -1,7 +1,7 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Sheet } from './Sheet';
-import { touchpad, updateTouchpad } from '../tv/touchpad';
+import { cursorGain, touchpad, updateTouchpad } from '../tv/touchpad';
 import { t } from '../../../src/i18n';
 
 function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
@@ -13,19 +13,32 @@ function Switch(p: { on: boolean; label: string; onToggle: () => void }) {
 }
 
 function TryPad() {
+  const s = touchpad.value;
   const [p, setP] = useState({ x: 50, y: 50 });
+  const last = useRef<{ x: number; y: number; t: number } | null>(null);
   return (
     <div
       class="m-tp-try"
       data-tp-try
       aria-hidden="true"
+      onPointerDown={(e) => {
+        last.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+      }}
       onPointerMove={(e) => {
-        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        if (!r.width || !r.height) return;
-        setP({
-          x: Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)),
-          y: Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)),
-        });
+        const prev = last.current;
+        if (!prev) return;
+        const dt = Math.max(1, Date.now() - prev.t);
+        const dx = e.clientX - prev.x;
+        const dy = e.clientY - prev.y;
+        const gain = cursorGain(s, Math.hypot(dx, dy) / dt);
+        last.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+        setP((cur) => ({
+          x: Math.min(100, Math.max(0, cur.x + dx * gain * 0.4)),
+          y: Math.min(100, Math.max(0, cur.y + dy * gain * 0.4)),
+        }));
+      }}
+      onPointerUp={() => {
+        last.current = null;
       }}
     >
       <span class="m-tp-dot" style={{ left: p.x + '%', top: p.y + '%' }} />

@@ -564,6 +564,12 @@ function useHold(fire: () => void) {
   return {
     onPointerDown: (e: PointerEvent) => {
       if (e.button !== 0) return;
+      const el = e.currentTarget as HTMLElement;
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* the test DOM has no capture */
+      }
       skip.current = true;
       fire();
       stop();
@@ -573,6 +579,7 @@ function useHold(fire: () => void) {
     },
     onPointerUp: stop,
     onPointerCancel: stop,
+    onLostPointerCapture: stop,
     onClick: () => {
       if (skip.current) {
         skip.current = false;
@@ -592,10 +599,11 @@ function HoldButton(p: { class: string; label: string; onFire: () => void; child
   );
 }
 
-function useHwVolume(fire: (dir: 'up' | 'down' | 'mute') => void) {
-  const ref = useRef(fire);
-  ref.current = fire;
+function HwVolume(p: { fire: (dir: 'up' | 'down' | 'mute') => void }) {
+  const ref = useRef(p.fire);
+  ref.current = p.fire;
   useEffect(() => {
+    void native.setHwVolume(true);
     const onKey = (e: KeyboardEvent) => {
       const k = e.key;
       if (k === 'AudioVolumeUp' || k === 'VolumeUp') {
@@ -610,8 +618,12 @@ function useHwVolume(fire: (dir: 'up' | 'down' | 'mute') => void) {
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      void native.setHwVolume(false);
+    };
   }, []);
+  return null;
 }
 
 function DPad({ press }: { press: (n: RemoteButton) => void }) {
@@ -924,6 +936,17 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   };
   return (
     <div class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+      <HwVolume
+        fire={(dir) => {
+          if (box) {
+            boxKey(dir === 'up' ? 'VOLUMEUP' : dir === 'down' ? 'VOLUMEDOWN' : 'MUTE');
+            return;
+          }
+          vibrate();
+          if (dir === 'mute') return;
+          act.volume(dir).catch(fail);
+        }}
+      />
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -1066,11 +1089,6 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
 }
 
 export function Remote() {
-  useHwVolume((dir) => {
-    vibrate();
-    if (dir === 'mute') act.pressButton('MUTE').catch(fail);
-    else act.volume(dir).catch(fail);
-  });
   const tv = activeTv.value;
   const state = tvState.value;
   const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
@@ -1230,6 +1248,13 @@ export function Remote() {
 
   return (
     <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+      <HwVolume
+        fire={(dir) => {
+          vibrate();
+          if (dir === 'mute') act.pressButton('MUTE').catch(fail);
+          else act.volume(dir).catch(fail);
+        }}
+      />
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
