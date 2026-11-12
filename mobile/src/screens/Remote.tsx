@@ -869,7 +869,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       />
       {mode !== 'touchpad' && (
         <>
-          {!(state === 'error' && !tvWaking.value) && (
+          {!(!forgot && !box && state === 'error' && !tvWaking.value) && (
             <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
           )}
           <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />

@@ -875,6 +875,8 @@ describe('Remote for Android TV', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(tvForgot());
+    expect(el.querySelector('[data-no-answer]')).toBeNull();
+    expect(el.querySelector('[data-power]')).toBeTruthy();
     click(text('Подключить заново'));
     const d = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(d.textContent).toContain('Гостиная · Android TV');
