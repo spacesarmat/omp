@@ -37,13 +37,6 @@ button, .m-btn {
   font-family: inherit;
   color: var(--text);
 }
-/* Short actions only. A row or a question must still wrap; nowrap on every button clips it. */
-.m-link, .m-btn-sm {
-  white-space: nowrap;
-  overflow-wrap: normal;
-  word-break: normal;
-  flex-shrink: 0;
-}
 
 .m-nav {
   position: fixed;
@@ -1129,6 +1122,7 @@ textarea.m-input, textarea.m-area {
 .m-set-group[hidden] { display: none; }
 .m-set-label { margin: 0 0 8px; padding-left: 14px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row > .m-link, .m-set-row > .m-btn { flex-shrink: 0; }
+.m-set-row > .m-link { white-space: nowrap; }
 .m-set-text > .m-link { margin: 0; padding: 0; min-width: 0; min-height: 0; align-self: flex-start; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
 .m-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
@@ -2125,7 +2119,7 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 /* ---- robustness for long words, narrow screens and a large system font: only what does not fit changes ---- */
 /* sub-screen titles («Установить OMP на телевизор») shrink beside the back button and wrap */
 .m-bar-title { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.m-link { max-width: 100%; overflow-wrap: anywhere; }
+.m-link { max-width: 100%; overflow-wrap: normal; word-break: normal; white-space: normal; }
 /* a tile's «новая серия …» and a series' status pill never get wider than the tile / the title column */
 .m-new-badge, .m-status-pill { max-width: 100%; white-space: normal; }
 /* the remote on a narrow screen: key labels end in «…» (the icons stay), OK follows the size of the pad */
