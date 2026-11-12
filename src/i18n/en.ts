@@ -2645,6 +2645,15 @@ export const en: EnDict<typeof ru> = {
     writeFailed: 'Could not write the settings to the phone',
     restored: 'Backup restored',
   },
+  invite: {
+    title: 'Tell friends',
+    off: 'The referral program is off',
+    code: 'Code {code}',
+    friends: 'Friends: {n}',
+    share: 'Share',
+    copied: 'Link copied',
+    qr: 'Invite QR code',
+  },
   faq: {
     searchLabel: 'Search the questions',
     searchPlaceholder: 'Search: “no sound”, “update”…',

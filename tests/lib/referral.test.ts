@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { REFERRAL_OFF, accrueReferral, clampBonusDays, type ReferralConfig } from '../../src/lib/referral';
+import { REFERRAL_OFF, accrueReferral, cancelReferral, clampBonusDays, inviteView, referralNotice, type ReferralConfig, type ReferralJournalRow } from '../../src/lib/referral';
 
 const on: ReferralConfig = {
   ...REFERRAL_OFF,
@@ -47,5 +47,31 @@ describe('referral accrual', () => {
     expect(accrueReferral({ ...base, paymentsToday: 6 }).status).toBe('review');
     expect(accrueReferral({ ...base, grantedThisMonth: 30 }).reason).toBe('month');
     expect(accrueReferral({ ...base, grantedThisYear: 90 }).status).toBe('waiting');
+  });
+
+  it('waits seven days, rejects the same Telegram, and stops after twelve months', () => {
+    expect(accrueReferral({ ...base, paidDaysAgo: 3 }).reason).toBe('delay');
+    expect(accrueReferral({ ...base, paidDaysAgo: 7 }).status).toBe('granted');
+    expect(accrueReferral({ ...base, sameTelegram: true }).reason).toBe('telegram');
+    expect(accrueReferral({ ...base, grantedMonthsThisYear: 12 }).reason).toBe('year');
+    expect(REFERRAL_OFF.enabled).toBe(false);
+    expect(REFERRAL_OFF.yearlyCap).toBe(12);
+    expect(REFERRAL_OFF.delayDays).toBe(7);
+  });
+
+  it('cancels a journal row and writes a notice only after a grant', () => {
+    const rows: ReferralJournalRow[] = [{ id: 'a', friendId: 'f', status: 'granted', days: 7, reason: 'paid' }];
+    expect(cancelReferral(rows, 'a')[0].status).toBe('cancelled');
+    expect(cancelReferral(rows, 'a')[0].reason).toBe('manual');
+    expect(referralNotice(rows[0])!.app).toContain('7');
+    expect(referralNotice(rows[0])!.bot).toContain('+7');
+    expect(referralNotice(cancelReferral(rows, 'a')[0])).toBeNull();
+  });
+
+  it('hides the invite while the program is off', () => {
+    expect(inviteView({ enabled: false, code: 'OMP-1', friends: 4 }).link).toBe('');
+    const onCard = inviteView({ enabled: true, code: 'OMP-1', friends: 4 });
+    expect(onCard.link).toBe('https://omp-player.online/r/OMP-1');
+    expect(onCard.friends).toBe(4);
   });
 });

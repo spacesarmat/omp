@@ -384,6 +384,10 @@ export function Settings() {
       <section class="m-set-group" data-section="account">
         <div class="m-set-label">{t('settings.account')}</div>
         <AccountRow />
+        <button type="button" class="m-set-row m-set-pick" data-row="invite" onClick={() => navigate({ name: 'invite' })}>
+          <span>{t('invite.title')}</span>
+          <Icon d={CHEVRON} size={20} />
+        </button>
       </section>
 
       <section class="m-set-group" data-section="tv">

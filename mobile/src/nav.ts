@@ -28,6 +28,8 @@ export type MRoute =
   | { name: 'settings' }
   /** «Настройки» → «Аккаунт OMP»: login, plan, logout. */
   | { name: 'account' }
+  /** «Настройки» → «Рассказать друзьям». Hidden rewards while the program is off. */
+  | { name: 'invite' }
   /** «Настройки» → «Расширенные». */
   | { name: 'advanced' }
   /** «Настройки» → «Плеер для видео». */

@@ -18,6 +18,7 @@ const PAGES: { id: string; label: string }[] = [
   ['fails', 'Отказы'],
   ['audit', 'Журнал'],
   ['ads', 'Реклама'],
+  ['referral', 'Рефералы'],
   ['services', 'Сервисы'],
   ['dht', 'DHT'],
   ['monitor', 'Мониторинг'],

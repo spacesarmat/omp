@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
+import { applyReferralPost } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -2235,6 +2236,19 @@ export function createApp(file, fetchImpl, opts) {
             flashText = 'Настройки рекламы сохранены';
           }
           redirectTo = '/admin/?tab=ads';
+        }
+        if (path === '/admin/referral') {
+          const current = await store.read();
+          const r = applyReferralPost(body, current.referralJournal || []);
+          await store.update((state) => ({
+            state: {
+              ...state,
+              settings: { ...state.settings, referral: r.settings },
+              referralJournal: r.journal,
+            },
+          }));
+          flashText = 'Реферальная программа сохранена';
+          redirectTo = '/admin/?tab=referral';
         }
         if (path === '/admin/ads/banner') {
           const r = await store.update((state) => {
