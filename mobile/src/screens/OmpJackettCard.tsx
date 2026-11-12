@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { BILLING_BOT_URL } from '../../../src/billing/config';
+import { billingPost } from '../../../src/billing/client';
+import { withDeviceToken } from '../../../src/billing/tokens';
 import {
   billingNotice,
   billingSession,
@@ -23,6 +25,7 @@ import {
 } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
 import { TextField } from '../ui/TextField';
+import { askConfirm } from '../ui/confirm';
 
 function daysLeft(until: number, now: number): number {
   if (!until || until <= now) return 0;
@@ -164,6 +167,22 @@ export function OmpJackettCard() {
     }
   }
 
+  async function cancelRenew() {
+    if (!(await askConfirm(t('sources.billing.cancelRenewAsk'), t('sources.billing.cancelRenew')))) return;
+    try {
+      const res = await withDeviceToken(phoneSourceContext(), (headers) =>
+        billingPost(phoneSourceContext(), '/v1/auto-renew', { on: 'false' }, { headers, timeoutMs: 12000 }),
+      );
+      if (!res || res.status < 200 || res.status >= 300) {
+        setError(t('sources.billing.down'));
+        return;
+      }
+      await refreshAccount();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('sources.billing.down'));
+    }
+  }
+
   const linked = !!(account && account.telegramId);
 
   const until = (account && account.paidUntil) || (session && session.paidUntil) || 0;
@@ -209,6 +228,26 @@ export function OmpJackettCard() {
                 i
               </button>
             </div>
+            {account && account.bill && account.bill.priceRub > 0 && (
+              <p class="m-small" data-bill-price>
+                {t('sources.billing.priceLine', { price: account.bill.priceRub, fee: account.bill.feeRub, total: account.bill.totalRub })}
+              </p>
+            )}
+            {account && account.bill && account.bill.autoRenew && (
+              <button type="button" class="m-bill-cancel" data-bill-cancel onClick={() => void cancelRenew()}>
+                {t('sources.billing.cancelRenew')}
+              </button>
+            )}
+            {account && account.bill && account.bill.payments.length > 0 && (
+              <div data-bill-payments>
+                <div class="m-small m-muted">{t('sources.billing.payments')}</div>
+                <ul class="m-sub-log">
+                  {account.bill.payments.map((p) => (
+                    <li key={p.at + ':' + p.amount}>{(p.title ? p.title + ' ' : '') + p.amount + (p.currency ? ' ' + p.currency : '')}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {info && (
               <div class="m-src-row m-note m-muted" data-bill-about>
                 {account && account.inGrace

@@ -1568,6 +1568,7 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-bill-dot { display: inline-block; width: 10px; height: 10px; border-radius: 10px; background: #3DDC84; margin-right: 8px; flex: none; vertical-align: middle; }
 .m-bill-days { font-size: 22px; font-weight: 700; }
 .m-bill-info { margin-left: 8px; width: 28px; height: 28px; border-radius: 14px; border: 0; background: transparent; color: #8b93a7; font-size: 16px; font-weight: 700; }
+.m-bill-cancel { margin: 0; padding: 0; border: 0; background: none; color: #8b93a7; font: inherit; font-size: 14px; text-align: left; }
 .m-src-name { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
 .m-src-open { flex: 0 0 44px; width: 44px; display: flex; align-items: center; justify-content: center; }
 .m-src-open .m-icon-btn { background: none; color: var(--muted); }
