@@ -1046,6 +1046,69 @@ h2 svg {
   padding: 15px 14px;
 }
 
+.editor-debugger {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #3b3b3b;
+}
+
+.editor-debugger h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.editor-debugger label {
+  display: block;
+  margin: 4px 0;
+  font-size: 11px;
+}
+
+.editor-debugger-mocks,
+.editor-debugger-breakpoints,
+.editor-debugger-variables,
+.editor-debugger-trace {
+  margin: 8px 0;
+}
+
+.editor-debugger-mocks strong,
+.editor-debugger-breakpoints strong,
+.editor-debugger-variables strong,
+.editor-debugger-trace strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.editor-debugger-controls {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.editor-debugger-controls button {
+  margin: 0 6px 6px 0;
+}
+
+.editor-debugger-trace ol,
+.editor-debugger-variables ul {
+  margin: 0;
+  padding-left: 18px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10px;
+}
+
+.editor-debugger-trace-error {
+  color: #ff6b6b;
+}
+
+.editor-debugger [data-testid="debug-status"],
+.editor-debugger [data-testid="debug-current-node"],
+.editor-debugger [data-testid="debug-trace-diff"] {
+  margin: 6px 0;
+  font-size: 11px;
+}
+
 .editor-theme-inspector {
   border-bottom: 1px solid #3b3b3b;
 }

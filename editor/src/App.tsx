@@ -781,7 +781,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
               />
             )}
             {mode === 'logic' && !flowSelection && <FlowMap flow={draft.flow} />}
-            {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} />}
+            {mode === 'simulate' && isDesktopTarget(draft.target) && <SimulationPanel target={draft.target} flow={draft.flow} serverConnected={serverConnected} onServerConnected={setServerConnected} route={draft.screenId} orientation={draft.format} />}
             {historyOpen && <SnapshotPanel controller={controller} comparison={comparison} onCompare={setComparison} />}
             <ExportPanel
               controller={controller}

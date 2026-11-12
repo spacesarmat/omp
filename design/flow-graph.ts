@@ -157,7 +157,7 @@ function variableAccepts(variable: FlowVariable, value: FlowVariableValue): bool
   return typeof value === 'string' && (variable.values ?? []).includes(value);
 }
 
-interface MutableContext extends ExecutionContext {
+export interface MutableContext extends ExecutionContext {
   route?: string;
   toast?: string;
   error?: string;
@@ -246,7 +246,7 @@ interface RunState {
   steps: number;
 }
 
-interface RunOutcome {
+export interface RunOutcome {
   status: ExecutionStatus;
 }
 
@@ -258,7 +258,11 @@ function nextByBranch(edges: FlowEdge[], from: string, branch: FlowEdgeBranch): 
   return edges.find((edge) => edge.from === from && edge.branch === branch);
 }
 
-function runGraph(
+// The walk is a generator so a debugger can drive the same execution node by node:
+// executeGraphRule ignores the yielded node ids and drives to completion, the editor
+// debugger steps and pauses on them. Yields happen after a node executed and, for graph
+// rules, once for the trigger before any node runs.
+function* runGraphWalk(
   rule: InteractionRule,
   graph: FlowGraph,
   context: MutableContext,
@@ -266,7 +270,7 @@ function runGraph(
   declared: ReadonlyMap<string, FlowVariable>,
   trace: ExecutionTraceEntry[],
   state: RunState,
-): RunOutcome {
+): Generator<string, RunOutcome> {
   const steps = new Map((rule.steps ?? []).map((entry) => [entry.id, entry]));
   const outgoing = new Map<string, FlowEdge[]>();
   for (const edge of graph.edges) {
@@ -276,6 +280,7 @@ function runGraph(
     ?? graph.nodes.find((node) => !graph.edges.some((edge) => edge.to === node.id));
   let current: FlowNodeView | undefined;
   if (trigger) {
+    yield trigger.id;
     const entryEdge = nextByBranch(outgoing.get(trigger.id) ?? [], trigger.id, 'default');
     current = entryEdge ? graph.nodes.find((node) => node.id === entryEdge.to) : undefined;
   }
@@ -291,6 +296,7 @@ function runGraph(
       const matched = step?.condition ? evaluateCondition(step.condition, context) : false;
       trace.push({ ruleId: rule.id, nodeId: current.id, stepId: current.stepId, kind: 'condition', condition: matched });
       const edge = nextByBranch(outgoing.get(current.id) ?? [], current.id, matched ? 'true' : 'false');
+      yield current.id;
       current = edge ? graph.nodes.find((node) => node.id === edge.to) : undefined;
       continue;
     }
@@ -311,12 +317,17 @@ function runGraph(
           entry.error = outcome.error ?? 'action failed';
           context.error = entry.error;
           const edge = nextByBranch(outgoing.get(current.id) ?? [], current.id, 'error');
+          yield current.id;
           if (!edge) return { status: 'error' };
           current = graph.nodes.find((node) => node.id === edge.to);
           continue;
         }
       }
-      if (current.kind === 'result' || (step?.action && TERMINAL_ACTIONS.has(step.action.type))) return { status: 'completed' };
+      if (current.kind === 'result' || (step?.action && TERMINAL_ACTIONS.has(step.action.type))) {
+        yield current.id;
+        return { status: 'completed' };
+      }
+      yield current.id;
       const edge = nextByBranch(outgoing.get(current.id) ?? [], current.id, 'default');
       current = edge ? graph.nodes.find((node) => node.id === edge.to) : undefined;
       continue;
@@ -327,14 +338,32 @@ function runGraph(
   return { status: 'completed' };
 }
 
-function runSteps(
+function driveWalk(walk: Generator<string, RunOutcome>): RunOutcome {
+  let result = walk.next();
+  while (!result.done) result = walk.next();
+  return result.value;
+}
+
+function runGraph(
   rule: InteractionRule,
+  graph: FlowGraph,
   context: MutableContext,
   dispatcher: FlowDispatcher,
   declared: ReadonlyMap<string, FlowVariable>,
   trace: ExecutionTraceEntry[],
   state: RunState,
 ): RunOutcome {
+  return driveWalk(runGraphWalk(rule, graph, context, dispatcher, declared, trace, state));
+}
+
+function* runStepsWalk(
+  rule: InteractionRule,
+  context: MutableContext,
+  dispatcher: FlowDispatcher,
+  declared: ReadonlyMap<string, FlowVariable>,
+  trace: ExecutionTraceEntry[],
+  state: RunState,
+): Generator<string, RunOutcome> {
   for (const step of rule.steps ?? []) {
     if (state.steps >= FLOW_STEP_LIMIT) {
       traceError(trace, rule.id, `step limit of ${FLOW_STEP_LIMIT} reached`);
@@ -345,7 +374,10 @@ function runSteps(
     if (step.condition) {
       const matched = evaluateCondition(step.condition, context);
       trace.push({ ruleId: rule.id, stepId: step.id, kind: 'condition', condition: matched });
-      if (!matched) return { status: 'completed' };
+      if (!matched) {
+        yield step.id;
+        return { status: 'completed' };
+      }
     }
     if (step.action) {
       const entry: ExecutionTraceEntry = { ruleId: rule.id, stepId: step.id, kind: 'action', action: step.action.type };
@@ -359,10 +391,15 @@ function runSteps(
       if (!outcome.ok) {
         entry.error = outcome.error ?? 'action failed';
         context.error = entry.error;
+        yield step.id;
         return { status: 'error' };
       }
-      if (TERMINAL_ACTIONS.has(step.action.type)) return { status: 'completed' };
+      if (TERMINAL_ACTIONS.has(step.action.type)) {
+        yield step.id;
+        return { status: 'completed' };
+      }
     }
+    yield step.id;
   }
   // The rule action is the terminal step of an ordered chain without a graph.
   if (state.steps >= FLOW_STEP_LIMIT) {
@@ -437,9 +474,63 @@ export function executeGraphRule(
   const declared = new Map(variables.map((variable) => [variable.id, variable]));
   const outcome = rule.graph
     ? runGraph(rule, rule.graph, context, dispatcher, declared, trace, state)
-    : runSteps(rule, context, dispatcher, declared, trace, state);
+    : driveWalk(runStepsWalk(rule, context, dispatcher, declared, trace, state));
   commitContext(context);
   return buildResult(outcome.status, 'graph', trace, state, context);
+}
+
+export interface RuleWalkStep {
+  done: boolean;
+  nodeId?: string;
+  outcome?: RunOutcome;
+}
+
+// A re-entrant rule execution: the editor debugger drives it one node at a time while
+// executeGraphRule drives an identical walk to completion, so stepping and running share
+// one implementation. An optional external context (the debug session context) is mutated
+// in place instead of the module session; variables commit stays with the module session.
+export interface RuleWalk {
+  readonly matched: boolean;
+  readonly context: MutableContext;
+  readonly trace: ExecutionTraceEntry[];
+  readonly steps: number;
+  step(): RuleWalkStep;
+}
+
+export function createRuleWalk(
+  rule: InteractionRule,
+  event: FlowEvent,
+  dispatcher: FlowDispatcher,
+  variables: FlowVariable[] = [],
+  context?: ExecutionContext,
+): RuleWalk {
+  const active: MutableContext = context ? (context as MutableContext) : createContext(event);
+  const state: RunState = { steps: 0 };
+  const trace: ExecutionTraceEntry[] = [];
+  const matched = triggerMatches(rule, event, active);
+  const declared = new Map(variables.map((variable) => [variable.id, variable]));
+  const walk = matched
+    ? rule.graph
+      ? runGraphWalk(rule, rule.graph, active, dispatcher, declared, trace, state)
+      : runStepsWalk(rule, active, dispatcher, declared, trace, state)
+    : null;
+  return {
+    matched,
+    context: active,
+    trace,
+    get steps() {
+      return state.steps;
+    },
+    step() {
+      if (!walk) return { done: true, outcome: { status: 'not-matched' } };
+      const result = walk.next();
+      if (result.done) {
+        if (!context) commitContext(active);
+        return { done: true, outcome: result.value };
+      }
+      return { done: false, nodeId: result.value };
+    },
+  };
 }
 
 function isGraphRule(rule: InteractionRule): boolean {
