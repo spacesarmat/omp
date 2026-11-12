@@ -23,7 +23,7 @@ export interface StoredProgress {
 /** Where the progress of one file comes from: the local record, else the server's viewed mark. */
 export interface ProgressReader {
   local(hash: string, idx: number): StoredProgress | null;
-  server(hash: string, idx: number): { timecode?: number } | null;
+  server(hash: string, idx: number): { timecode?: number; updated?: number } | null;
 }
 
 export interface EpisodeProgress {
@@ -177,7 +177,8 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
   // 1..MIN_RESUME-1: a finish this app recorded on purpose, so another device can tell it from a probe.
   const tc = typeof s.timecode === 'number' ? s.timecode : 0;
   if (tc >= 1 && tc < MIN_RESUME) {
-    return { watched: true, position: 0, ratio: 1, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+    const updated = typeof s.updated === 'number' && isFinite(s.updated) ? s.updated : 0;
+    return { watched: true, position: 0, ratio: 1, updated: updated, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
   }
   if (tc >= MIN_RESUME) {
     return { watched: false, position: tc, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };

@@ -12,6 +12,7 @@ export interface Progress {
 }
 
 const KEY = 'tsp.progress';
+const SEEN_KEY = 'tsp.finishSeen';
 export const WATCHED_RATIO = 0.9;
 export const MIN_RESUME = 10;
 
@@ -72,10 +73,33 @@ function serverEntry(hash: string, idx: number): ViewedEntry | null {
   return serverViewed.value.find((e) => e.hash === hash && e.file_index === idx) || null;
 }
 
+function finishSeen(hash: string, idx: number): number {
+  const k = key(hash, idx);
+  const raw = loadJson<unknown>(SEEN_KEY, {}, isObject);
+  const map: { [id: string]: number } = {};
+  if (isObject(raw)) {
+    Object.keys(raw).forEach((id) => {
+      const n = raw[id];
+      if (typeof n === 'number' && isFinite(n)) map[id] = n;
+    });
+  }
+  if (typeof map[k] === 'number') return map[k];
+  const at = stamp();
+  map[k] = at;
+  saveJson(SEEN_KEY, map);
+  return at;
+}
+
 /** The two sources of a file's progress, for reading copies of one episode together (src/lib/episodeProgress). */
 export const progressReader = {
   local: getLocalProgress,
-  server: serverEntry,
+  server: (hash: string, idx: number) => {
+    const s = serverEntry(hash, idx);
+    if (!s) return null;
+    const tc = typeof s.timecode === 'number' ? s.timecode : 0;
+    if (tc >= 1 && tc < MIN_RESUME) return { timecode: tc, updated: finishSeen(hash, idx) };
+    return { timecode: s.timecode };
+  },
 };
 
 function ratio(p: Progress): number {

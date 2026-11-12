@@ -13,10 +13,18 @@ const FILM: Torrent = { hash: 'film', title: 'Star Trek: Strange New Worlds 2160
 const EXTRAS = tv('ext', 'Star Trek: Strange New Worlds Extras', ['Making of.mkv']);
 const LIST = [UHD, HD, EN, OTHER, FILM, EXTRAS];
 
-function reader(local: { [k: string]: StoredProgress }, server: { [k: string]: number | undefined } = {}): ProgressReader {
+function reader(
+  local: { [k: string]: StoredProgress },
+  server: { [k: string]: number | undefined | { timecode?: number; updated?: number } } = {},
+): ProgressReader {
   return {
     local: (h, i) => local[h + ':' + i] || null,
-    server: (h, i) => (Object.prototype.hasOwnProperty.call(server, h + ':' + i) ? { timecode: server[h + ':' + i] } : null),
+    server: (h, i) => {
+      if (!Object.prototype.hasOwnProperty.call(server, h + ':' + i)) return null;
+      const v = server[h + ':' + i];
+      if (v && typeof v === 'object') return v;
+      return { timecode: v };
+    },
   };
 }
 
@@ -49,10 +57,21 @@ describe('episodeProgress', () => {
     expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 1 })).watched).toBe(true);
   });
 
-  it('a later replay or restart beats an old shared finish', () => {
-    const replay = reader({ 'uhd:1': { time: 1200, duration: 3600, updated: 9 } }, { 'hd:2': 1 });
+  it('a later replay or restart beats an old shared finish, an older pause does not', () => {
+    const older = reader(
+      { 'uhd:1': { time: 1200, duration: 3600, updated: 5 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
+    expect(episodeProgress(LIST, 'uhd', 1, older).watched).toBe(true);
+    const replay = reader(
+      { 'uhd:1': { time: 1200, duration: 3600, updated: 12 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
     expect(episodeProgress(LIST, 'uhd', 1, replay)).toMatchObject({ watched: false, position: 1200 });
-    const restart = reader({ 'uhd:1': { time: 0, duration: 1, updated: 9 } }, { 'hd:2': 1 });
+    const restart = reader(
+      { 'uhd:1': { time: 0, duration: 1, updated: 12 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
     expect(episodeProgress(LIST, 'uhd', 1, restart)).toMatchObject({ watched: false, position: 0 });
   });
 
