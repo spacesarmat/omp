@@ -23,7 +23,10 @@ import { tvSourceContext } from './sources/tvContext';
 import { expectBetaGate } from './store/updates';
 import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
 import { installProductionDesign } from '../design/production.ts';
-import { currentRoute, routeStack } from './ui/nav';
+import { createProductionDispatcher, installProductionFlow } from '../design/production-flow.ts';
+import { currentRoute, goBack, navigate, routeStack, type Route } from './ui/nav';
+import { toast } from './ui/toast';
+import { BILLING_BOT_URL } from './billing/config';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -89,6 +92,54 @@ function start(): void {
     subscribeScreen: (notify) => routeStack.subscribe(notify),
   });
   window.addEventListener('pagehide', stopProductionLayout, { once: true });
+  // Exported logic flows run through the typed dispatcher on top of the existing shell APIs;
+  // the empty generated document keeps this a no-op until an explicit export.
+  const stopProductionFlow = installProductionFlow(document.body, {
+    target: productionTarget,
+    screenOf: () => currentRoute.value.name,
+    subscribeScreen: (notify) => routeStack.subscribe(notify),
+    environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
+    publishers: {
+      subscribeNetwork: (notify) => {
+        const update = () => notify(navigator.onLine);
+        window.addEventListener('online', update);
+        window.addEventListener('offline', update);
+        return () => {
+          window.removeEventListener('online', update);
+          window.removeEventListener('offline', update);
+        };
+      },
+      subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
+    },
+    dispatcher: createProductionDispatcher({
+      navigate: (screenId) => {
+        navigate({ name: screenId } as Route);
+        return { ok: true };
+      },
+      openScreen: (screenId) => {
+        navigate({ name: screenId } as Route);
+        return { ok: true };
+      },
+      back: () => ({ ok: goBack() }),
+      toast: (message) => {
+        toast(message);
+        return { ok: true };
+      },
+      dialog: (title, message) => {
+        void confirmWithBody(title, message, 'OK');
+        return { ok: true };
+      },
+      linkOpen: (url) => {
+        window.open(url, '_blank', 'noopener');
+        return { ok: true };
+      },
+      telegramOpen: (target) => {
+        window.open(target === 'billing-bot' ? BILLING_BOT_URL : 'https://t.me/ompplyaer', '_blank', 'noopener');
+        return { ok: true };
+      },
+    }),
+  });
+  window.addEventListener('pagehide', stopProductionFlow, { once: true });
 
   runLaunchParams(readLaunchParams());
   onRelaunch(runLaunchParams);

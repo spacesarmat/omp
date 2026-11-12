@@ -7,9 +7,10 @@ import { promisify } from 'node:util';
 import { DESIGN_ELEMENTS } from '../design/catalog.ts';
 import { generateThemeCss } from '../design/theme.ts';
 import { checkTheme } from '../design/theme-checks.ts';
-import { validateFlow } from '../design/flow-validation.ts';
+import { validateFlow, validateFlowGraph } from '../design/flow-validation.ts';
 import { generateLayoutModule } from '../design/generate.ts';
-import { parseThemeDocument } from '../design/validation.ts';
+import { parseFlowDocument, parseThemeDocument } from '../design/validation.ts';
+import { createFlowExportPlan, diffFlowDocuments, flowRuleInScope } from '../design/production-flow.ts';
 import { parseEditorDraft } from './shared/draft.ts';
 import { DESIGN_TARGETS, DESIGN_FORMATS, DESIGN_STATES } from '../design/schema.ts';
 import { DESKTOP_ROUTES } from '../desktop/src/shell/routes.ts';
@@ -157,7 +158,6 @@ function contexts() {
 function outputFiles(draft) {
   const files = [
     { path: `design/themes/${draft.theme.id}.json`, content: json(draft.theme) },
-    { path: `design/flows/${draft.flow.id}.json`, content: json(draft.flow) },
     ...DESIGN_TARGETS.map((target) => ({
       path: `design/generated/${target}.css`,
       content: generateThemeCss(draft.theme, target),
@@ -287,18 +287,28 @@ export function createExportPlan(input, scopeInput) {
     throw new ExportError('INVALID_DRAFT', 400);
   }
   const scope = normalizeScope(scopeInput);
+  let flowPlan;
+  try {
+    flowPlan = createFlowExportPlan(draft, scope);
+  } catch (error) {
+    throw new ExportError(error && typeof error === 'object' && error.message === 'INVALID_EXPORT_SCOPE' ? 'INVALID_EXPORT_SCOPE' : 'INVALID_FLOW', 400);
+  }
   const theme = scope.kind === 'all'
     ? draft.theme
     : { ...draft.theme, layout: layoutForScope(draft.theme.layout, scope) };
+  const routes = DESKTOP_ROUTES.map((route) => route.id);
+  const flowIssues = [
+    ...validateFlow(flowPlan.flow, routes),
+    ...validateFlowGraph(flowPlan.flow, routes),
+  ];
+  if (flowIssues.length) throw new ExportError('INVALID_FLOW', 400, flowIssues);
   if (scope.kind === 'all') {
-    const flowIssues = validateFlow(draft.flow, DESKTOP_ROUTES.map((route) => route.id));
-    if (flowIssues.length) throw new ExportError('INVALID_FLOW', 400, flowIssues);
     const designIssues = checkTheme(draft.theme, contexts());
     if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
   }
   const targets = targetsForScope(scope, theme);
   const files = scope.kind === 'all'
-    ? outputFiles({ ...draft, theme })
+    ? [...outputFiles({ ...draft, theme }), ...flowPlan.files].sort((a, b) => a.path.localeCompare(b.path))
     : [
         // A scoped export ships the selected style edits too: the theme file merges the
         // in-scope overrides with the base theme and the generated CSS for the scope targets
@@ -310,8 +320,66 @@ export function createExportPlan(input, scopeInput) {
           path: safePath(`design/generated/${target}.css`),
           content: generateThemeCss(theme, target),
         })),
+        ...flowPlan.files,
       ].sort((a, b) => a.path.localeCompare(b.path));
-  return { scope, targets, draft, theme, files };
+  return { scope, targets, draft, theme, flow: flowPlan.flow, files };
+}
+
+// Scoped flow merge mirrors the layout merge: rules merge by id, so independent edits to
+// other screens survive, a scoped rule the draft edited ships with its new trigger, and a
+// scoped rule the draft dropped exports the deletion. Variables are global state: a scoped
+// export may add or update the variables its rules reference, but never deletes base ones.
+async function mergedFlowContents(root, plan) {
+  const flowFile = plan.files.find((file) => file.path.startsWith('design/flows/'));
+  let baseFlow = null;
+  try {
+    baseFlow = parseFlowDocument(JSON.parse(await readFile(join(root, flowFile.path), 'utf8')));
+  } catch (error) {
+    if (!(error && typeof error === 'object' && error.code === 'ENOENT')) {
+      throw new ExportError('INVALID_EXPORT_BASE', 409);
+    }
+  }
+  const scopedFlow = plan.flow;
+  const scopedIds = new Set(scopedFlow.rules.map((rule) => rule.id));
+  const draftRules = new Map(plan.draft.flow.rules.map((rule) => [rule.id, rule]));
+  const mergedRules = [];
+  for (const baseRule of baseFlow?.rules ?? []) {
+    if (scopedIds.has(baseRule.id)) continue;
+    if (flowRuleInScope(baseRule, plan.scope)) {
+      // The scope no longer covers this rule: ship the draft record (its trigger moved), or
+      // drop it when the draft deleted the rule.
+      const draftRule = draftRules.get(baseRule.id);
+      if (draftRule) mergedRules.push(draftRule);
+      continue;
+    }
+    mergedRules.push(baseRule);
+  }
+  mergedRules.push(...scopedFlow.rules);
+  const baseVariables = baseFlow?.variables ?? [];
+  const scopedVariables = new Map((scopedFlow.variables ?? []).map((variable) => [variable.id, variable]));
+  const mergedVariables = [
+    ...baseVariables.map((variable) => scopedVariables.get(variable.id) ?? variable),
+    ...(scopedFlow.variables ?? []).filter((variable) => !baseVariables.some((base) => base.id === variable.id)),
+  ];
+  let mergedFlow;
+  try {
+    mergedFlow = parseFlowDocument({
+      schemaVersion: 1,
+      id: scopedFlow.id,
+      baseCommit: baseFlow?.baseCommit ?? scopedFlow.baseCommit,
+      rules: mergedRules,
+      ...(mergedVariables.length ? { variables: mergedVariables } : {}),
+    });
+  } catch {
+    throw new ExportError('INVALID_EXPORT_BASE', 409);
+  }
+  const routes = DESKTOP_ROUTES.map((route) => route.id);
+  const flowIssues = [
+    ...validateFlow(mergedFlow, routes),
+    ...validateFlowGraph(mergedFlow, routes),
+  ];
+  if (flowIssues.length) throw new ExportError('INVALID_FLOW', 422, flowIssues);
+  return json(mergedFlow);
 }
 
 async function exportContents(root, plan) {
@@ -405,7 +473,14 @@ async function exportContents(root, plan) {
     const target = file.path.slice('design/generated/'.length, -'.css'.length);
     contents.set(file.path, generateThemeCss(mergedTheme, target));
   }
+  if (plan.files.some((file) => file.path.startsWith('design/flows/'))) {
+    contents.set(flowFilePathOf(plan), await mergedFlowContents(root, plan));
+  }
   return contents;
+}
+
+function flowFilePathOf(plan) {
+  return plan.files.find((file) => file.path.startsWith('design/flows/')).path;
 }
 
 export async function createExportDiff(root, plan) {
@@ -430,6 +505,20 @@ export async function createExportDiff(root, plan) {
       before,
       after,
     });
+  }
+  // Flow files carry a structured review diff by rule, node, edge and variable ids. A
+  // foreign hand edit can make the base unparsable; the ownership checks guard that, and
+  // the file-level before/after stay available either way.
+  for (const file of files) {
+    if (!file.path.startsWith('design/flows/') || file.action !== 'update' || file.before === null) continue;
+    try {
+      file.flow = diffFlowDocuments(
+        parseFlowDocument(JSON.parse(file.before)),
+        parseFlowDocument(JSON.parse(file.after)),
+      );
+    } catch {
+      // keep the plain before/after diff
+    }
   }
   return { baseCommit, targets: plan.targets, files, foreignDirty };
 }

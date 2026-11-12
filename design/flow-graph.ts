@@ -115,6 +115,12 @@ export function resetFlowSession(): void {
   session = null;
 }
 
+// Production publishers refresh the read-only environment values between events without
+// dropping session variables or cooldown bookkeeping.
+export function updateFlowEnvironment(env: FlowEnvironment): void {
+  currentSession().env = { ...env };
+}
+
 function createContext(event: FlowEvent): ExecutionContext & { route?: string; toast?: string; error?: string } {
   const active = currentSession();
   return { ...active.env, screenId: event.screenId, variables: { ...active.variables } };

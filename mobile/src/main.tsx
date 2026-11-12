@@ -31,7 +31,11 @@ import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
 import { expectBetaGate } from '../../src/store/updates';
 import { installProductionDesign } from '../../design/production.ts';
-import { currentRoute, routeStack } from './nav';
+import { createProductionDispatcher, installProductionFlow } from '../../design/production-flow.ts';
+import { BILLING_BOT_URL } from '../../src/billing/config';
+import { currentRoute, goBack, navigate, routeStack } from './nav';
+import { showToast } from './ui/toast';
+import { askConfirm } from './ui/confirm';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -149,4 +153,52 @@ if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
     subscribeScreen: (notify) => routeStack.subscribe(notify),
   });
   window.addEventListener('pagehide', stopProductionLayout, { once: true });
+  // Exported logic flows run through the typed dispatcher on top of the existing app APIs;
+  // the empty generated document keeps this a no-op until an explicit export.
+  const stopProductionFlow = installProductionFlow(document.body, {
+    target: 'android-phone',
+    screenOf: () => currentRoute.value.name,
+    subscribeScreen: (notify) => routeStack.subscribe(notify),
+    environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
+    publishers: {
+      subscribeNetwork: (notify) => {
+        const update = () => notify(navigator.onLine);
+        window.addEventListener('online', update);
+        window.addEventListener('offline', update);
+        return () => {
+          window.removeEventListener('online', update);
+          window.removeEventListener('offline', update);
+        };
+      },
+      subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
+    },
+    dispatcher: createProductionDispatcher({
+      navigate: (screenId) => {
+        navigate({ name: screenId } as MRoute);
+        return { ok: true };
+      },
+      openScreen: (screenId) => {
+        navigate({ name: screenId } as MRoute);
+        return { ok: true };
+      },
+      back: () => ({ ok: goBack() }),
+      toast: (message) => {
+        showToast(message);
+        return { ok: true };
+      },
+      dialog: (title, message) => {
+        void askConfirm(title ? `${title}. ${message}` : message, 'OK');
+        return { ok: true };
+      },
+      linkOpen: (url) => {
+        window.open(url, '_system');
+        return { ok: true };
+      },
+      telegramOpen: (target) => {
+        window.open(target === 'billing-bot' ? BILLING_BOT_URL : 'https://t.me/ompplyaer', '_system');
+        return { ok: true };
+      },
+    }),
+  });
+  window.addEventListener('pagehide', stopProductionFlow, { once: true });
 }
