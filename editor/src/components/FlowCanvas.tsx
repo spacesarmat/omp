@@ -7,10 +7,11 @@ import {
   addFlowNode,
   autoLayoutFlow,
   connectFlowNodes,
-  moveFlowNode,
   removeFlowNodes,
   type FlowPosition,
 } from '../flow/nodeOperations';
+import { copyFlowSelection, pasteFlowSelection, type FlowClipboard } from '../flow/clipboard';
+import { EMPTY_FLOW_SELECTION, moveFlowSelection, reduceFlowSelection, type FlowSelection } from '../flow/selection';
 
 export interface FlowNodeSelection {
   ruleId: string;
@@ -33,9 +34,10 @@ const NODE_HEIGHT = 64;
 
 interface DragState {
   nodeId: string;
+  groupNodeIds: string[];
+  origins: Record<string, FlowPosition>;
   startClientX: number;
   startClientY: number;
-  origin: FlowPosition;
   moved: boolean;
 }
 
@@ -57,14 +59,26 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
   const edges = rule?.graph?.edges ?? [];
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<FlowPosition>({ x: 0, y: 0 });
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<FlowSelection>(EMPTY_FLOW_SELECTION);
   const [error, setError] = useState('');
   const [override, setOverride] = useState<Record<string, FlowPosition>>({});
   const [link, setLink] = useState<LinkState | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const linkRef = useRef<LinkState | null>(null);
+  const clipboardRef = useRef<FlowClipboard | null>(null);
+  const suppressGroupRef = useRef<string[] | null>(null);
   linkRef.current = link;
+
+  // Selection is canvas-local state derived against the live graph, so undo or a screen
+  // switch can never point it at nodes that no longer exist.
+  const liveNodeIds = new Set(nodes.map((node) => node.id));
+  const selectedNodeIds = selection.nodeIds.filter((id) => liveNodeIds.has(id));
+  const selectedIdSet = new Set(selectedNodeIds);
+  const selectedNodeId = selectedNodeIds.length === 1 ? selectedNodeIds[0] : null;
+  const dispatchSelection = (action: Parameters<typeof reduceFlowSelection>[1]) => {
+    setSelection((current) => reduceFlowSelection(current, action));
+  };
 
   const positionOf = (node: FlowNodeView): FlowPosition => override[node.id] ?? { x: node.x, y: node.y };
   const commit = (recipe: (flow: typeof draft.flow) => typeof draft.flow) => {
@@ -89,7 +103,14 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         const dy = (event.clientY - active.startClientY) / zoom;
         if (!active.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
         active.moved = true;
-        setOverride((prev) => ({ ...prev, [active.nodeId]: { x: active.origin.x + dx, y: active.origin.y + dy } }));
+        setOverride((prev) => {
+          const next = { ...prev };
+          for (const id of active.groupNodeIds) {
+            const origin = active.origins[id];
+            if (origin) next[id] = { x: origin.x + dx, y: origin.y + dy };
+          }
+          return next;
+        });
         return;
       }
       if (linkRef.current) {
@@ -101,19 +122,21 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
       const active = dragRef.current;
       if (active) {
         dragRef.current = null;
-        if (!active.moved) {
-          setSelectedNodeId(active.nodeId);
-          onSelectNode?.(selectionOf(active.nodeId));
-        } else if (rule && !readOnly) {
-          const dx = (event.clientX - active.startClientX) / zoom;
-          const dy = (event.clientY - active.startClientY) / zoom;
-          const next = { x: active.origin.x + dx, y: active.origin.y + dy };
-          try {
-            commit((flow) => moveFlowNode(flow, rule.id, active.nodeId, next));
-          } catch (reason) {
-            setError(reason instanceof Error ? reason.message : String(reason));
+        if (active.moved) {
+          if (rule && !readOnly) {
+            const dx = (event.clientX - active.startClientX) / zoom;
+            const dy = (event.clientY - active.startClientY) / zoom;
+            // The whole group commits in one update, so one drag of any size is one undo.
+            if (active.groupNodeIds.length > 1) suppressGroupRef.current = active.groupNodeIds;
+            try {
+              commit((flow) => moveFlowSelection(flow, rule.id, active.groupNodeIds, { x: dx, y: dy }));
+            } catch (reason) {
+              setError(reason instanceof Error ? reason.message : String(reason));
+            }
           }
         }
+        // A plain click selects in the node click handler, so pointerup stays silent here
+        // and shift-click toggle cannot be overwritten by the drag path.
         setOverride({});
       }
     };
@@ -134,17 +157,47 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     const center = toWorld((rect?.width || 800) / 2, (rect?.height || 600) / 2);
     const position = { x: center.x - NODE_WIDTH / 2, y: center.y - NODE_HEIGHT / 2 };
     let created = '';
+    let createdRuleId = '';
     try {
       controller.update((current) => {
         const ref = addFlowNode(current.flow, screenId, kind, position);
         created = ref.nodeId;
+        createdRuleId = ref.ruleId;
         current.flow = ref.flow;
       });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
       return;
     }
-    if (created) setSelectedNodeId(created);
+    if (created) setSelection({ ruleId: createdRuleId, nodeIds: [created] });
+  };
+
+  const copySelection = () => {
+    if (!rule || selectedNodeIds.length === 0) return;
+    setError('');
+    try {
+      // Copying is a pure read, so it stays available in read-only compare mode.
+      clipboardRef.current = copyFlowSelection(controller.draft.flow, rule.id, selectedNodeIds);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+
+  const pasteClipboard = () => {
+    if (readOnly || !rule || !clipboardRef.current) return;
+    setError('');
+    let pasted: string[] = [];
+    try {
+      controller.update((current) => {
+        const result = pasteFlowSelection(current.flow, rule.id, clipboardRef.current!);
+        current.flow = result.flow;
+        pasted = result.nodeIds;
+      });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+      return;
+    }
+    if (pasted.length) setSelection({ ruleId: rule.id, nodeIds: pasted });
   };
 
   const startLink = (node: FlowNodeView, branch: FlowEdgeBranch, event: PointerEvent) => {
@@ -180,12 +233,22 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         addNode('condition');
         return;
       }
-      if (event.key === 'Delete' && selectedNodeId && rule && !readOnly) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        copySelection();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+        event.preventDefault();
+        pasteClipboard();
+        return;
+      }
+      if (event.key === 'Delete' && selectedNodeIds.length > 0 && rule && !readOnly) {
         event.preventDefault();
         setError('');
         try {
-          commit((flow) => removeFlowNodes(flow, rule.id, [selectedNodeId]));
-          setSelectedNodeId(null);
+          commit((flow) => removeFlowNodes(flow, rule.id, selectedNodeIds));
+          dispatchSelection({ type: 'clear' });
         } catch (reason) {
           setError(reason instanceof Error ? reason.message : String(reason));
         }
@@ -216,6 +279,11 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         {onOpenSimulation && <button type="button" data-action="open-simulation" onClick={onOpenSimulation}>Симуляция</button>}
       </div>
       {readOnly && <p class="editor-notice" data-testid="flow-canvas-readonly">Базовая тема - редактирование выключено</p>}
+      {selectedNodeIds.length > 1 && (
+        <p class="editor-notice" data-testid="flow-canvas-multiselect">
+          Выбрано узлов: {selectedNodeIds.length}. Shift - добавить или убрать узел, Delete - удалить все.
+        </p>
+      )}
       {error && <p class="editor-flow-error" role="alert" data-testid="flow-canvas-error">{error}</p>}
       <div
         class="flow-canvas-viewport"
@@ -266,7 +334,7 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
           </svg>
           {nodes.map((node) => {
             const pos = positionOf(node);
-            const selected = node.id === selectedNodeId;
+            const selected = selectedIdSet.has(node.id);
             return (
               <div
                 key={node.id}
@@ -274,8 +342,20 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
                 data-kind={node.kind}
                 class={`flow-node flow-node-${node.kind}${selected ? ' flow-node-selected' : ''}`}
                 style={{ left: `${pos.x}px`, top: `${pos.y}px`, width: `${NODE_WIDTH}px`, minHeight: `${NODE_HEIGHT}px` }}
-                onClick={() => {
-                  setSelectedNodeId(node.id);
+                onClick={(event) => {
+                  // Browsers fire a click right after a drag; swallow that single click on a
+                  // dragged node so it cannot collapse the multi-selection, and self-heal on
+                  // the next click anywhere else.
+                  if (suppressGroupRef.current) {
+                    const suppressed = suppressGroupRef.current;
+                    suppressGroupRef.current = null;
+                    if (suppressed.includes(node.id)) return;
+                  }
+                  if (event.shiftKey) {
+                    dispatchSelection({ type: 'toggle', ruleId: rule?.id ?? '', nodeId: node.id });
+                    return;
+                  }
+                  dispatchSelection({ type: 'select', ruleId: rule?.id ?? '', nodeId: node.id });
                   onSelectNode?.(selectionOf(node.id));
                 }}
                 onPointerDown={(event) => {
@@ -283,7 +363,23 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
                   if (event.button !== 0) return;
                   const target = event.target as HTMLElement;
                   if (target.closest('[data-port]')) return;
-                  dragRef.current = { nodeId: node.id, startClientX: event.clientX, startClientY: event.clientY, origin: { ...pos }, moved: false };
+                  if (!event.shiftKey && !selectedIdSet.has(node.id)) {
+                    dispatchSelection({ type: 'select', ruleId: rule?.id ?? '', nodeId: node.id });
+                  }
+                  const groupNodeIds = !event.shiftKey && selectedIdSet.has(node.id) ? [...selectedNodeIds] : [node.id];
+                  const origins: Record<string, FlowPosition> = {};
+                  for (const id of groupNodeIds) {
+                    const member = byId.get(id);
+                    origins[id] = member ? { x: member.x, y: member.y } : { ...pos };
+                  }
+                  dragRef.current = {
+                    nodeId: node.id,
+                    groupNodeIds,
+                    origins,
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    moved: false,
+                  };
                 }}
               >
                 <div class="flow-node-head">

@@ -15,6 +15,7 @@ export interface FlowNodeInspectorProps {
   ruleId: string;
   nodeId: string;
   readOnly?: boolean;
+  selectedCount?: number;
   onSelectNode?: (selection: { ruleId: string; nodeId: string }) => void;
   onOpenSimulation?: () => void;
 }
@@ -71,7 +72,7 @@ function stepOf(rule: InteractionRule | undefined, node: { stepId?: string } | u
   return rule.steps?.find((step) => step.id === node.stepId);
 }
 
-export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false, onSelectNode, onOpenSimulation }: FlowNodeInspectorProps) {
+export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false, selectedCount = 1, onSelectNode, onOpenSimulation }: FlowNodeInspectorProps) {
   const draft = useDraftController(controller);
   const [error, setError] = useState('');
   const rule = draft.flow.rules.find((entry) => entry.id === ruleId);
@@ -211,6 +212,7 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
     <section class="editor-logic flow-inspector">
       <h3>Узел: {kindLabel[node.kind]}</h3>
       {readOnly && <p class="editor-notice" data-testid="inspector-readonly">Режим сравнения - редактирование выключено</p>}
+      {selectedCount > 1 && <p class="editor-notice" data-testid="inspector-multiselect">Выбрано узлов: {selectedCount}</p>}
       <label>Метка
         <input data-testid="inspector-label" value={node.label ?? ''} disabled={readOnly} onInput={(event) => setLabel(event.currentTarget.value)} />
       </label>
