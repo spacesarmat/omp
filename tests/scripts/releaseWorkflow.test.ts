@@ -10,6 +10,7 @@ describe('release workflow asset names', () => {
     expect(paths.length).toBeGreaterThan(0);
     paths.forEach((p: string) => {
       if (p.indexOf('com.spacesarmat') >= 0) return; // the packager's own output name
+      if (p.indexOf('*') >= 0) return; // artifact upload glob, not a published name
       expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-armv7)?\.(apk|ipk)$/);
     });
   });
@@ -118,6 +119,31 @@ describe('desktop workflow scope', () => {
     for (const path of ['desktop/*', 'src/*', 'mobile/*', 'design/*', 'package.json', 'package-lock.json', 'torrserver.version', '.github/workflows/desktop.yml']) {
       expect(paths).toContain(path);
     }
+  });
+});
+
+describe('release jobs run side by side', () => {
+  it('keeps tests, webOS and Android independent, and publishes only after all three', () => {
+    const test = yml.slice(yml.indexOf('\n  test:'), yml.indexOf('\n  web:'));
+    const web = yml.slice(yml.indexOf('\n  web:'), yml.indexOf('\n  android:'));
+    const android = yml.slice(yml.indexOf('\n  android:'), yml.indexOf('\n  publish:'));
+    const publish = yml.slice(yml.indexOf('\n  publish:'));
+    expect(test).not.toContain('needs:');
+    expect(web).not.toContain('needs:');
+    expect(android).not.toContain('needs:');
+    expect(publish).toContain('needs: [test, web, android]');
+    expect(publish).toContain("github.event_name != 'workflow_dispatch' || inputs.publish");
+    expect(android).toContain('--build-cache --parallel');
+    expect(android).toContain('gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c');
+    expect(android).not.toContain('cache: gradle');
+    expect(android).not.toContain('gh release create');
+    expect(android).not.toContain('telegram-post');
+    expect(test).toContain('scripts/release-ci-skip.mjs');
+    expect(test).toContain('if [ ! -f scripts/release-ci-skip.mjs ]');
+    expect(test).toContain("if: steps.ci.outputs.skip != 'true'");
+    expect(android.indexOf('mkdir -p build')).toBeGreaterThan(-1);
+    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/app-universal-release.apk"'));
+    expect(publish).toContain('publish is off');
   });
 });
 
