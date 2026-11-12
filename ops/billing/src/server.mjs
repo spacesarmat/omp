@@ -3094,6 +3094,7 @@ export function createApp(file, fetchImpl, opts) {
             amount: paid.paidAmount,
             currency: paid.asset,
             now,
+            cryptoTestnet: state.settings.cryptoTestnet === true,
           }),
         );
         const freshPay = await store.read();
