@@ -13,7 +13,7 @@ import { shortTitle } from '../../../src/lib/libraryView';
 import { findingsOf, getSubscription, markFindingsSeen, removeSubscription, seenKeys, updateSubscription } from '../../../src/monitor/subs';
 import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
 import { qualityLabels } from '../monitor/text';
-import { checkLog, isSubHeld, setSubHeld } from '../monitor/subHold';
+import { checkCount, isSubHeld, setSubHeld } from '../monitor/subHold';
 import { askConfirm } from '../ui/confirm';
 import { ICONS } from '../ui/Icon';
 
@@ -49,7 +49,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
   const target = finding ? list.filter((f) => f.key === finding)[0] : undefined;
   const held = !!sub && isSubHeld(id);
   const poster = sub ? (sub.catalog && sub.catalog.poster) || sub.poster || '' : '';
-  const checks = checkLog(id);
+  const checks = checkCount(id);
   const remove = async () => {
     if (!sub) return;
     if (!(await askConfirm(t('monitor.sub.deleteAsk', { query: sub.query }), t('common.delete'), { destructive: true }))) return;
@@ -113,20 +113,23 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
             ))}
           </div>
           <div class="m-muted m-small">{subRule(sub)}</div>
-          <button
-            type="button"
-            class="m-skip-row"
-            role="switch"
-            aria-checked={sub.notify}
-            aria-label={t('monitor.sub.notify')}
-            data-sub-notify
-            onClick={() => {
-              updateSubscription(id, { notify: !sub.notify });
-              reloadMonitor();
-            }}
-          >
-            <span>{t('monitor.sub.notify')}</span>
-          </button>
+          <div class="m-skip-row">
+            <span class="m-skip-text">{t('monitor.sub.notify')}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sub.notify}
+              aria-label={t('monitor.sub.notify')}
+              class={'m-switch' + (sub.notify ? ' on' : '')}
+              data-sub-notify
+              onClick={() => {
+                updateSubscription(id, { notify: !sub.notify });
+                reloadMonitor();
+              }}
+            >
+              <span class="m-switch-knob" />
+            </button>
+          </div>
           {sub.catalog && (
             <button
               type="button"
@@ -137,7 +140,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
               {t('monitor.sub.openCard')}
             </button>
           )}
-          {checks.length > 0 && <p class="m-small m-muted" data-sub-checks>{t('monitor.sub.checks', { n: checks.length })}</p>}
+          {checks > 0 && <p class="m-small m-muted" data-sub-checks>{t('monitor.sub.checks', { n: checks })}</p>}
           {held ? (
             <div class="m-small m-sub-paused-note" data-sub-hold>
               {t('monitor.sub.held')}
