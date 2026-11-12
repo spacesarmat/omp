@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Faq, highlightFaq, normalizeFaq, searchFaq } from '../src/screens/Faq';
+import { Account } from '../src/screens/Account';
+import { faqMark } from '../src/ui/faqJump';
 import { Settings } from '../src/screens/Settings';
 import { DEVICES, FAQ, OLD_Q_LINKS, SECTIONS, itemFor, resolveFaqLink, type FaqLine } from '../../src/faq/faq';
 import { currentRoute, resetTo, routeStack } from '../src/nav';
@@ -434,10 +436,31 @@ describe('Faq screen', () => {
     const el = mount(<Faq />);
     act(() => (el.querySelector('[data-faq-action="install"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'install' });
+    expect(faqMark.value).toBe('install');
+    act(() => (el.querySelector('[data-faq-action="renew"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'account' });
+    act(() => render(<Account />, el));
+    const done = el.querySelector('[data-faq-done="account"]') as HTMLButtonElement;
+    expect(done.textContent).toBe('Получилось?');
+    act(() => done.click());
+    expect(el.querySelector('[data-faq-done]')).toBeNull();
     resetTo({ name: 'faq' });
     act(() => render(<Faq />, el));
     act(() => (el.querySelector('[data-faq-action="tv"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'tv' });
+    resetTo({ name: 'faq' });
+    expect(faqMark.value).toBe('');
+  });
+
+  it('hides phone TorrServer when this phone cannot run it', () => {
+    const prev = localServer.value;
+    localServer.value = { ...prev, supported: false };
+    const el = mount(<Faq />);
+    expect(el.querySelector('[data-faq-action="server"]')).toBeNull();
+    localServer.value = { ...prev, supported: true };
+    act(() => render(<Faq />, el));
+    expect(el.querySelector('[data-faq-action="server"]')).not.toBeNull();
+    localServer.value = prev;
   });
 
   it('the search input is labelled and rows are real buttons', () => {

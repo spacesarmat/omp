@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { native, type FoundTv, type FoundOmpTv } from '../platform/native';
 import {
   connectTv,
@@ -222,6 +223,7 @@ export function Tv() {
 
   return (
     <div class="m-screen m-tvscreen">
+      <FaqDone mark="tv" />
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P10.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />

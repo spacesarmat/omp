@@ -7,6 +7,7 @@ import { goBack } from '../nav';
 import { phoneSourceContext } from '../searchContext';
 import { Icon } from '../ui/Icon';
 import { OmpJackettCard } from './OmpJackettCard';
+import { FaqDone } from '../ui/faqJump';
 
 const BACK = 'M15 5l-7 7 7 7';
 
@@ -14,6 +15,7 @@ const BACK = 'M15 5l-7 7 7 7';
 export function Account() {
   return (
     <div class="m-screen" data-route="account">
+      <FaqDone mark="account" />
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P12.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
