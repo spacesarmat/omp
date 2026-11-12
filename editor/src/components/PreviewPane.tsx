@@ -72,6 +72,7 @@ export function PreviewPane(props: PreviewPaneProps) {
   const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const keyTarget = useRef<Document | null>(null);
   const observer = useRef<MutationObserver | null>(null);
+  const scrollListener = useRef<{ doc: Document; onScroll: () => void } | null>(null);
   const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect>; directions: Record<string, 'row' | 'column'> }>({ nodes: [], rects: {}, directions: {} });
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
@@ -184,12 +185,23 @@ export function PreviewPane(props: PreviewPaneProps) {
     autoFit.current = false;
     props.onZoomChange(clampZoom(value));
   };
+  const detachScroll = () => {
+    if (!scrollListener.current) return;
+    scrollListener.current.doc.removeEventListener('scroll', scrollListener.current.onScroll, true);
+    scrollListener.current = null;
+  };
   const attachObserver = () => {
     observer.current?.disconnect();
     observer.current = null;
+    detachScroll();
     const doc = iframe.current?.contentDocument;
     const body = doc?.body;
     if (!doc || !body || typeof MutationObserver === 'undefined') return;
+    // Scroll does not mutate the DOM, so the observer never sees a phone page move under the
+    // hand tool. Capture on the document hears every descendant scroller and refreshes hit targets.
+    const onScroll = () => collectRef.current();
+    doc.addEventListener('scroll', onScroll, true);
+    scrollListener.current = { doc, onScroll };
     let observedProbeVersion = focusProbeVersion(doc);
     observer.current = new MutationObserver((mutations) => {
       const currentVersion = focusProbeVersion(doc);
@@ -224,6 +236,7 @@ export function PreviewPane(props: PreviewPaneProps) {
   useEffect(() => () => {
     observer.current?.disconnect();
     observer.current = null;
+    detachScroll();
   }, []);
   useEffect(() => {
     if (loaded.current) send({ type: 'navigate', route: props.route });

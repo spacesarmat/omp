@@ -135,6 +135,10 @@ export interface LayoutClipboardNode {
   // sizes against the original parent instead of whatever parent receives it.
   basisWidth?: number;
   basisHeight?: number;
+  minWidth?: number | 'auto';
+  maxWidth?: number | 'auto';
+  minHeight?: number | 'auto';
+  maxHeight?: number | 'auto';
   margin?: string;
   zIndex: number;
   hidden: boolean;
@@ -162,6 +166,10 @@ export function copyNodes(placements: LayoutPlacement[], resolveHtml?: (nodeId: 
         height: placement.height,
         ...(placement.basisWidth !== undefined ? { basisWidth: placement.basisWidth } : {}),
         ...(placement.basisHeight !== undefined ? { basisHeight: placement.basisHeight } : {}),
+        ...(placement.minWidth !== undefined ? { minWidth: placement.minWidth } : {}),
+        ...(placement.maxWidth !== undefined ? { maxWidth: placement.maxWidth } : {}),
+        ...(placement.minHeight !== undefined ? { minHeight: placement.minHeight } : {}),
+        ...(placement.maxHeight !== undefined ? { maxHeight: placement.maxHeight } : {}),
         ...(placement.margin !== undefined ? { margin: placement.margin } : {}),
         zIndex: placement.zIndex,
         hidden: placement.hidden,
@@ -194,6 +202,9 @@ function validateClipboardNode(raw: unknown, index: number, errors: string[]): v
   }
   for (const key of ['basisWidth', 'basisHeight'] as const) {
     if (node[key] !== undefined && !isLayoutGeometryValue(node[key])) errors.push(`${prefix}: basis должен быть целым от 0 до ${LAYOUT_GEOMETRY_LIMIT}`);
+  }
+  for (const key of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const) {
+    if (node[key] !== undefined && !isLayoutSizeValue(node[key])) errors.push(`${prefix}: ограничение размера должно быть целым от 0 до ${LAYOUT_GEOMETRY_LIMIT} или auto`);
   }
   for (const key of ['hidden', 'locked'] as const) {
     if (typeof node[key] !== 'boolean') errors.push(`${prefix}: флаг ${key} должен быть булевым`);

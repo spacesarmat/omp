@@ -136,4 +136,18 @@ describe('PreviewPane geometry collection', () => {
     });
     expect(geometryCalls()).toBe(callsBefore + 1);
   });
+
+  it('refreshes measured rectangles when the preview document scrolls', async () => {
+    const props = createProps();
+    act(() => render(h(PreviewPane, props), host));
+    const { doc } = loadIframe();
+    const callsBefore = (props.onGeometryChange as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    await act(async () => {
+      doc.dispatchEvent(new Event('scroll'));
+      await Promise.resolve();
+    });
+
+    expect((props.onGeometryChange as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore + 1);
+  });
 });

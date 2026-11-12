@@ -300,6 +300,35 @@ describe('clipboard', () => {
     controller.dispose();
   });
 
+  it('carries size limits through copy and paste', () => {
+    const controller = createController();
+    const placement = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute',
+      x: 0,
+      y: 0,
+      width: 8000,
+      height: 2000,
+      minWidth: 7500,
+      maxWidth: 9000,
+      minHeight: 1000,
+      maxHeight: 4000,
+    });
+
+    const clipboard = copyNodes([placement]);
+    expect(clipboard.nodes[0]).toMatchObject({ minWidth: 7500, maxWidth: 9000, minHeight: 1000, maxHeight: 4000 });
+
+    const parsed = parseLayoutClipboard(JSON.parse(JSON.stringify(clipboard)));
+    expect(parsed.errors).toEqual([]);
+    const [pastedId] = pasteNodes(controller, { context, clipboard });
+    const pasted = controller.draft.theme.layout?.placements.find((entry) => entry.nodeId === pastedId);
+    expect(pasted).toMatchObject({ minWidth: 7500, maxWidth: 9000, minHeight: 1000, maxHeight: 4000 });
+
+    const broken = JSON.parse(JSON.stringify(clipboard)) as { nodes: Array<Record<string, unknown>> };
+    broken.nodes[0].minWidth = 10001;
+    expect(parseLayoutClipboard(broken).clipboard).toBeNull();
+    controller.dispose();
+  });
+
   it('copyNodes strips node ids, context and placement ids and keeps layout data', () => {
     const placement = createPlacement(context, 'card-a', 'Card A', {
       mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000, margin: '8px', zIndex: 3, hidden: true, locked: true,
