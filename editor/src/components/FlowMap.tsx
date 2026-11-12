@@ -4,7 +4,10 @@ function conditionLabel(condition: InteractionCondition | undefined): string {
   if (!condition) return 'always';
   if (condition.kind === 'eq') return `${condition.path} = ${String(condition.value)}`;
   if (condition.kind === 'not') return `not ${conditionLabel(condition.condition)}`;
-  return `${condition.kind}(${condition.conditions.map(conditionLabel).join(', ')})`;
+  if (condition.kind === 'all' || condition.kind === 'any') {
+    return `${condition.kind}(${condition.conditions.map(conditionLabel).join(', ')})`;
+  }
+  return `${condition.kind} ${condition.path}`;
 }
 
 export function FlowMap({ flow }: { flow: FlowDocument }) {

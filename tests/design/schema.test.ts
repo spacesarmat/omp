@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
-import type { LayoutContainer, LayoutPlacement } from '../../design/schema';
+import type { FlowDocument, FlowVariable, InteractionCondition, InteractionRule, LayoutContainer, LayoutPlacement } from '../../design/schema';
 import { DesignValidationError, parseFlowDocument, parseThemeDocument } from '../../design/validation';
 
 const BASE = '0000000000000000000000000000000000000000';
@@ -200,5 +200,201 @@ describe('layout schema validation', () => {
 
     theme.stylePresets = [{ id: 'extra', name: 'Extra', tokens: {}, effect: 'glow' } as never];
     expect(() => parseThemeDocument(theme)).toThrow(DesignValidationError);
+  });
+});
+
+describe('flow graph schema', () => {
+  const graphFlow = (): FlowDocument => ({
+    schemaVersion: 1,
+    id: 'graph-flow',
+    baseCommit: BASE,
+    variables: [
+      { id: 'server-name', name: 'Server', type: 'string', initial: 'omp' },
+      { id: 'retries', name: 'Retries', type: 'number', initial: 0 },
+      { id: 'active', name: 'Active', type: 'boolean', initial: false },
+      { id: 'mode', name: 'Mode', type: 'enum', initial: 'a', values: ['a', 'b'] },
+    ],
+    rules: [
+      {
+        id: 'enter-library',
+        screenId: 'library',
+        elementId: 'library-root',
+        event: 'screen.enter',
+        condition: { kind: 'gte', path: 'variable.retries', value: 0 },
+        steps: [
+          { id: 'check', condition: { kind: 'exists', path: 'network.online' } },
+          { id: 'mark', action: { type: 'variable.set', variableId: 'active', value: true } },
+          { id: 'notify', action: { type: 'dialog', title: 'Hi', message: 'There' } },
+        ],
+        action: { type: 'navigate', screenId: 'library' },
+        graph: {
+          nodes: [
+            { id: 't', kind: 'trigger', ruleId: 'enter-library', x: 0, y: 0 },
+            { id: 'c', kind: 'condition', stepId: 'check', x: 160, y: 0, label: 'Online' },
+            { id: 'r', kind: 'result', stepId: 'mark', x: 320, y: 0 },
+          ],
+          edges: [
+            { id: 'e1', from: 't', to: 'c', branch: 'default' },
+            { id: 'e2', from: 'c', to: 'r', branch: 'true' },
+          ],
+        },
+        cooldownMs: 500,
+      },
+    ],
+  });
+
+  it('accepts graph rules, typed variables and new events', () => {
+    expect(parseFlowDocument(graphFlow())).toEqual(graphFlow());
+  });
+
+  it('keeps legacy documents without graph unchanged', () => {
+    expect(parseFlowDocument(createDefaultFlow(BASE))).toEqual(createDefaultFlow(BASE));
+  });
+
+  it('keeps legacy rule order in a mixed document', () => {
+    const flow = createDefaultFlow(BASE);
+    const graphDoc = graphFlow();
+    flow.variables = graphDoc.variables;
+    flow.rules.push(graphDoc.rules[0]);
+    flow.rules.unshift({ id: 'first', screenId: '*', elementId: 'top', event: 'click', action: { type: 'back' } });
+    const parsed = parseFlowDocument(flow);
+    expect(parsed.rules.map((rule) => rule.id)).toEqual(['first', ...createDefaultFlow(BASE).rules.map((rule) => rule.id), 'enter-library']);
+  });
+
+  it('rejects variables whose initial value does not match the type', () => {
+    const reject = (variable: FlowVariable) => {
+      const flow = graphFlow();
+      flow.variables = [variable];
+      expect(() => parseFlowDocument(flow), JSON.stringify(variable)).toThrow(DesignValidationError);
+    };
+    reject({ id: 'v', name: 'V', type: 'number', initial: '0' });
+    reject({ id: 'v', name: 'V', type: 'boolean', initial: 1 });
+    reject({ id: 'v', name: 'V', type: 'string', initial: true });
+    reject({ id: 'v', name: 'V', type: 'enum', initial: 'c', values: ['a', 'b'] });
+    reject({ id: 'v', name: 'V', type: 'enum', initial: 'a' });
+    reject({ id: 'v', name: 'V', type: 'enum', initial: 'a', values: [] });
+    reject({ id: 'v', name: 'V', type: 'number', initial: 0, values: ['a'] } as never);
+  });
+
+  it('rejects duplicate variable ids', () => {
+    const flow = graphFlow();
+    flow.variables = [
+      { id: 'same', name: 'One', type: 'boolean', initial: false },
+      { id: 'same', name: 'Two', type: 'boolean', initial: true },
+    ];
+    expect(() => parseFlowDocument(flow)).toThrow(DesignValidationError);
+  });
+
+  it('rejects variable.set and condition paths against unknown variables', () => {
+    const unknownSet = graphFlow();
+    (unknownSet.rules[0].steps![1].action as { variableId: string }).variableId = 'missing';
+    expect(() => parseFlowDocument(unknownSet)).toThrow(DesignValidationError);
+
+    const wrongType = graphFlow();
+    (wrongType.rules[0].steps![1].action as { value: unknown }).value = 'not-a-boolean';
+    expect(() => parseFlowDocument(wrongType)).toThrow(DesignValidationError);
+
+    const unknownPath = graphFlow();
+    unknownPath.rules[0].condition = { kind: 'eq', path: 'variable.missing', value: 1 };
+    expect(() => parseFlowDocument(unknownPath)).toThrow(DesignValidationError);
+  });
+
+  it('rejects executable actions, arbitrary paths and network access', () => {
+    const mutate = (patch: (rule: InteractionRule) => void) => {
+      const flow = graphFlow();
+      patch(flow.rules[0]);
+      return flow;
+    };
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'eval', code: 'alert(1)' } as never }];
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'fetch', url: 'https://evil.example.com' } as never }];
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'variable.set', variableId: 'active', value: { injected: true } } as never }];
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.condition = { kind: 'eq', path: 'window.location' as never, value: true };
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'link.open', url: 'http://t.me/omp' } }];
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'link.open', url: 'https://evil.example.com/x' } }];
+    }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate((rule) => {
+      rule.steps = [{ id: 'x', action: { type: 'telegram.open', target: 'random-chat' } }];
+    }))).toThrow(DesignValidationError);
+    const allowed = mutate((rule) => {
+      rule.steps = [
+        ...(rule.steps ?? []),
+        { id: 'x', action: { type: 'link.open', url: 'https://t.me/ompplyaer' } },
+        { id: 'y', action: { type: 'telegram.open', target: 'channel' } },
+      ];
+    });
+    expect(() => parseFlowDocument(allowed)).not.toThrow();
+  });
+
+  it('rejects condition values that do not match the operator', () => {
+    const mutate = (condition: InteractionCondition) => {
+      const flow = graphFlow();
+      flow.rules[0].condition = condition;
+      return flow;
+    };
+    expect(() => parseFlowDocument(mutate({ kind: 'gt', path: 'variable.retries', value: '10' }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate({ kind: 'contains', path: 'server-name' as never, value: 5 }))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate({ kind: 'eq', path: 'server.connected' } as never))).toThrow(DesignValidationError);
+    expect(() => parseFlowDocument(mutate({ kind: 'exists', path: 'network.online', value: true } as never))).toThrow(DesignValidationError);
+  });
+
+  it('rejects malformed graphs and steps', () => {
+    const mutate = (patch: (rule: InteractionRule) => void) => {
+      const flow = graphFlow();
+      patch(flow.rules[0]);
+      expect(() => parseFlowDocument(flow)).toThrow(DesignValidationError);
+    };
+    mutate((rule) => {
+      rule.graph = { nodes: [{ id: 't', kind: 'trigger', x: 0, y: 0 }], edges: [{ id: 'e', from: 't', to: 't', branch: 'default' }] };
+    });
+    mutate((rule) => {
+      rule.graph = { nodes: [{ id: 't', kind: 'trigger', x: 0, y: 0 }], edges: [{ id: 'e', from: 't', to: 'missing', branch: 'default' }] };
+    });
+    mutate((rule) => {
+      rule.graph = {
+        nodes: [{ id: 't', kind: 'trigger', x: 0, y: 0 }, { id: 't', kind: 'action', x: 1, y: 0 }],
+        edges: [],
+      };
+    });
+    mutate((rule) => {
+      rule.graph = { nodes: [{ id: 't', kind: 'delay' as never, x: 0, y: 0 }], edges: [] };
+    });
+    mutate((rule) => {
+      rule.graph = {
+        nodes: [{ id: 't', kind: 'trigger', x: 0, y: 0 }, { id: 'a', kind: 'action', x: 1, y: 0 }],
+        edges: [{ id: 'e', from: 't', to: 'a', branch: 'maybe' as never }],
+      };
+    });
+    mutate((rule) => {
+      rule.graph = { nodes: [{ id: 't', kind: 'trigger', x: -1, y: 0 }], edges: [] };
+    });
+    mutate((rule) => {
+      rule.graph = { nodes: [{ id: 't', kind: 'trigger', ruleId: 'other-rule', x: 0, y: 0 }], edges: [] };
+    });
+    mutate((rule) => {
+      rule.steps = [{ id: 'same', action: { type: 'back' } }, { id: 'same', action: { type: 'back' } }];
+    });
+    mutate((rule) => {
+      rule.steps = [{ id: 'empty' }];
+    });
+    mutate((rule) => {
+      delete (rule as { action?: InteractionRule['action'] }).action;
+    });
+    mutate((rule) => {
+      rule.cooldownMs = -1;
+    });
+    mutate((rule) => {
+      rule.cooldownMs = 1.5;
+    });
   });
 });
