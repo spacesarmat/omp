@@ -47,6 +47,12 @@ export interface LayoutPlacement extends LayoutContext {
   anchor: LayoutAnchor;
   width: number | 'auto';
   height: number | 'auto';
+  // Size basis captured when a flow node converts to absolute: percent width and height keep
+  // resolving against these pixel sizes instead of the current parent, so a content-sized
+  // parent that shrinks after the child leaves the flow cannot collapse the absolute size.
+  // Absent on legacy documents, which keep the responsive percent behavior.
+  basisWidth?: number;
+  basisHeight?: number;
   minWidth?: number | 'auto';
   maxWidth?: number | 'auto';
   minHeight?: number | 'auto';

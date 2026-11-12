@@ -5,6 +5,7 @@ import {
   absolutePlacementFromRect,
   createPlacement,
   marginOffsetPx,
+  placementSizeBasis,
   placementToRect,
   rectSizeToUnits,
   type LayoutRect,
@@ -143,8 +144,8 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     const base = placement ?? createPlacement(props.context, node.nodeId, label);
     const placed = absolutePlacementFromRect(next, parentRect, props.context, node.nodeId, label, base);
     const override: Partial<LayoutPlacement> = {};
-    if (patch.width !== undefined) override.width = rectSizeToUnits(next.width, parentRect.width);
-    if (patch.height !== undefined) override.height = rectSizeToUnits(next.height, parentRect.height);
+    if (patch.width !== undefined) override.width = rectSizeToUnits(next.width, placementSizeBasis(base, parentRect.width, 'width'));
+    if (patch.height !== undefined) override.height = rectSizeToUnits(next.height, placementSizeBasis(base, parentRect.height, 'height'));
     props.onPlace({ ...placed, ...override });
   };
 

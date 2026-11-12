@@ -220,7 +220,7 @@ function layoutContainer(value: unknown, path: string): LayoutContainer {
 }
 
 function layoutPlacement(value: unknown, path: string): LayoutPlacement {
-  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'mode', 'x', 'y', 'anchor', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'margin', 'zIndex', 'hidden', 'locked', 'label'];
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'mode', 'x', 'y', 'anchor', 'width', 'height', 'basisWidth', 'basisHeight', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'margin', 'zIndex', 'hidden', 'locked', 'label'];
   const source = plain(value, path, keys);
   const result = {} as LayoutPlacement;
   layoutContextFields(source, path, result);
@@ -232,6 +232,8 @@ function layoutPlacement(value: unknown, path: string): LayoutPlacement {
   result.anchor = oneOf(source.anchor, LAYOUT_ANCHORS, `${path}.anchor`);
   result.width = layoutSize(source.width, `${path}.width`);
   result.height = layoutSize(source.height, `${path}.height`);
+  if (source.basisWidth !== undefined) result.basisWidth = layoutGeometry(source.basisWidth, `${path}.basisWidth`);
+  if (source.basisHeight !== undefined) result.basisHeight = layoutGeometry(source.basisHeight, `${path}.basisHeight`);
   if (source.minWidth !== undefined) result.minWidth = layoutSize(source.minWidth, `${path}.minWidth`);
   if (source.maxWidth !== undefined) result.maxWidth = layoutSize(source.maxWidth, `${path}.maxWidth`);
   if (source.minHeight !== undefined) result.minHeight = layoutSize(source.minHeight, `${path}.minHeight`);

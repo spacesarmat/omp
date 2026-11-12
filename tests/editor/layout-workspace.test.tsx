@@ -663,6 +663,26 @@ describe('layout workspace', () => {
     });
   });
 
+  it('captures the parent size basis when converting a flow node to absolute', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, createPlacement(context, 'server-card-2', 'Карточка 2'));
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+
+    select('layout-mode', 'absolute');
+
+    // The percent sizes must keep resolving against the 400x400 parent captured at conversion
+    // time, so a content-sized parent cannot collapse under the removed child later.
+    expect(placementOf('server-card-2')).toMatchObject({
+      mode: 'absolute',
+      width: 10000,
+      height: 2500,
+      basisWidth: 400,
+      basisHeight: 400,
+    });
+  });
+
   it('maps flow alignment buttons to the container axes in a row container', () => {
     buildPreview();
     const context = contextOf();

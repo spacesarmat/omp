@@ -150,6 +150,34 @@ describe('production layout runtime', () => {
     expect(previewRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.position).toBe('absolute');
   });
 
+  it('resolves percent sizes from the captured basis in production like in preview', async () => {
+    generated.layout.containers = [];
+    generated.layout.placements = [placement({
+      mode: 'absolute', x: 0, y: 0, width: 5000, height: 5000, basisWidth: 400, basisHeight: 400,
+    })];
+
+    const productionRoot = mount(GRID);
+    const stopProduction = observeProductionLayout(productionRoot);
+    cleanup = () => stopProduction();
+
+    const previewRoot = mount(GRID);
+    const theme = createDefaultTheme(BASE);
+    theme.layout = structuredClone(generated.layout as LayoutDocument);
+    const stopPreview = observeLayout(previewRoot, theme, { ...productionContext });
+    const previous = cleanup;
+    cleanup = () => {
+      previous?.();
+      stopPreview();
+    };
+
+    await Promise.resolve();
+
+    // The shared runtime resolves percent sizes against the captured basis in both realms, so
+    // a parent that shrinks after the flow conversion cannot collapse the absolute size.
+    expect(productionRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.height).toBe('200px');
+    expect(previewRoot.querySelector<HTMLElement>('[data-key="hash-1"]')!.style.height).toBe('200px');
+  });
+
   it('keeps missing nodes in the production document order', async () => {
     generated.layout.containers = [container({ order: ['key-hash-1', 'key-hash-3', 'key-hash-2'] })];
     generated.layout.placements = [];

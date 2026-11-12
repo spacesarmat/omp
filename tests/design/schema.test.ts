@@ -149,6 +149,24 @@ describe('layout schema validation', () => {
     }
   });
 
+  it('accepts and validates the captured size basis on placements', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.layout?.placements.push(placement({ basisWidth: 400, basisHeight: 300 }));
+    const parsed = parseThemeDocument(theme);
+    expect(parsed.layout?.placements[0]).toMatchObject({ basisWidth: 400, basisHeight: 300 });
+
+    for (const patch of [
+      { basisWidth: 10001 },
+      { basisWidth: -1 },
+      { basisHeight: 12.5 },
+      { basisHeight: 'auto' },
+    ] as Array<Partial<LayoutPlacement>>) {
+      const invalid = createDefaultTheme(BASE);
+      invalid.layout?.placements.push({ ...placement(), ...patch } as LayoutPlacement);
+      expect(() => parseThemeDocument(invalid), JSON.stringify(patch)).toThrow(DesignValidationError);
+    }
+  });
+
   it('rejects duplicate placement ids, identities and unknown layout fields', () => {
     const theme = createDefaultTheme(BASE);
     theme.layout?.placements.push(placement(), placement({ id: 'other-id' }));

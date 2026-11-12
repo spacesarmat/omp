@@ -867,6 +867,42 @@ describe('layout identity from anchors', () => {
   });
 });
 
+describe('placement size basis', () => {
+  it('resolves percent sizes against the captured basis when the parent shrinks', async () => {
+    const root = mount(`
+      <div data-design-id="pane" style="height: 200px">
+        <div class="m-card" data-key="hash-1" data-design-id="card">A</div>
+        <div class="m-card" data-key="hash-2" data-design-id="card">B</div>
+      </div>`);
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('key-hash-1', {
+      mode: 'absolute', x: 0, y: 0, width: 5000, height: 5000, basisWidth: 400, basisHeight: 400,
+    }));
+    theme = upsertLayoutPlacement(theme, placement('key-hash-2', {
+      mode: 'absolute', x: 0, y: 0, width: 5000, height: 5000,
+    }));
+    theme = parseThemeDocument(theme);
+
+    cleanup = observeLayout(root, theme, context);
+
+    const withBasis = root.querySelector<HTMLElement>('[data-key="hash-1"]')!;
+    const withoutBasis = root.querySelector<HTMLElement>('[data-key="hash-2"]')!;
+    // 50% resolved at apply time: hash-1 against the captured 400px basis (200px), hash-2 as
+    // a live percent of the 200px pane.
+    expect(withBasis.style.height).toBe('200px');
+    expect(withoutBasis.style.height).toBe('50%');
+
+    // The pane shrinks once its children leave the flow; the basis-backed child keeps the
+    // measured size while the plain percent child follows the smaller parent.
+    root.querySelector<HTMLElement>('[data-design-id="pane"]')!.style.height = '100px';
+    root.appendChild(document.createElement('span'));
+    await Promise.resolve();
+
+    expect(withBasis.style.height).toBe('200px');
+    expect(withoutBasis.style.height).toBe('50%');
+  });
+});
+
 describe('competing container destinations', () => {
   const competingTheme = () => {
     const theme = createDefaultTheme(BASE);

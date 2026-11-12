@@ -10,6 +10,7 @@ import {
   type LayoutPlacement,
   type ThemeDocument,
 } from './schema.ts';
+import { LAYOUT_GEOMETRY_LIMIT } from './validation.ts';
 import { PRODUCTION_LAYOUT } from './generated/layout.ts';
 
 export type LayoutNodeKind = 'element' | 'dynamic';
@@ -375,8 +376,19 @@ function applyPlacement(element: HTMLElement, placement: LayoutPlacement): void 
       element.style.right = x;
       element.style.bottom = y;
     }
-    if (typeof placement.width === 'number') element.style.width = `${placement.width / 100}%`;
-    if (typeof placement.height === 'number') element.style.height = `${placement.height / 100}%`;
+    if (typeof placement.width === 'number') {
+      // Percent sizes resolve against the captured flow-conversion basis when one exists, so
+      // a content-sized parent that shrinks after the child leaves the flow cannot collapse
+      // the absolute size; legacy records without a basis keep the live percent.
+      element.style.width = typeof placement.basisWidth === 'number'
+        ? `${(placement.width / LAYOUT_GEOMETRY_LIMIT) * placement.basisWidth}px`
+        : `${placement.width / 100}%`;
+    }
+    if (typeof placement.height === 'number') {
+      element.style.height = typeof placement.basisHeight === 'number'
+        ? `${(placement.height / LAYOUT_GEOMETRY_LIMIT) * placement.basisHeight}px`
+        : `${placement.height / 100}%`;
+    }
     element.style.zIndex = String(placement.zIndex);
   }
   if (placement.margin !== undefined) {

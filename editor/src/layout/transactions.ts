@@ -62,10 +62,10 @@ export function rectSizeToUnits(px: number, size: number): number {
 
 export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRect, fallback?: LayoutRect | null): LayoutRect {
   const width = typeof placement.width === 'number'
-    ? (placement.width / LAYOUT_GEOMETRY_LIMIT) * parentRect.width
+    ? (placement.width / LAYOUT_GEOMETRY_LIMIT) * (placement.basisWidth ?? parentRect.width)
     : fallback?.width ?? parentRect.width;
   const height = typeof placement.height === 'number'
-    ? (placement.height / LAYOUT_GEOMETRY_LIMIT) * parentRect.height
+    ? (placement.height / LAYOUT_GEOMETRY_LIMIT) * (placement.basisHeight ?? parentRect.height)
     : fallback?.height ?? parentRect.height;
   const xUnits = (placement.x / LAYOUT_GEOMETRY_LIMIT) * parentRect.width;
   const yUnits = (placement.y / LAYOUT_GEOMETRY_LIMIT) * parentRect.height;
@@ -85,6 +85,13 @@ export function marginOffsetPx(margin: string | undefined): number {
   if (!margin) return 0;
   const parsed = Number.parseFloat(margin);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+// Percent size conversions resolve against the captured basis when a record carries one, so
+// written units always describe what the runtime renders.
+export function placementSizeBasis(placement: LayoutPlacement | undefined, parentSize: number, axis: 'width' | 'height'): number {
+  const basis = axis === 'width' ? placement?.basisWidth : placement?.basisHeight;
+  return typeof basis === 'number' && basis > 0 ? basis : parentSize;
 }
 
 function placementRecordId(nodeId: string): string {
@@ -170,6 +177,13 @@ export function absolutePlacementFromRect(
     locked: base?.locked ?? false,
     label: base?.label ?? label,
   };
+  if (!keepSize) {
+    // A flow conversion pins the size basis to the current parent: the percent sizes keep
+    // resolving against these pixel sizes, so the parent shrinking after the removal cannot
+    // collapse the absolute node. An absolute base keeps its own basis untouched.
+    patch.basisWidth = Math.round(parentRect.width);
+    patch.basisHeight = Math.round(parentRect.height);
+  }
   if (base?.id) patch.id = base.id;
   return createPlacement(context, nodeId, label, patch);
 }
