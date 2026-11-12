@@ -1,4 +1,5 @@
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
+import { donateMenu, donateOnCallback, donateOnText } from './donate.mjs';
 import { cryptoOffered, labelSettled, starBlurb, starInvoiceBody, starsOffered } from './payMethods.mjs';
 import { payUrl } from './yoomoney.mjs';
 import { sha256 } from './crypto.mjs';
@@ -77,6 +78,7 @@ export const BTN = {
   promo: 'Промокод',
   price: 'Цены',
   support: 'Поддержка',
+  donate: 'Поддержать проект',
 };
 
 /** Labels of the old 8-button keyboard. Phones that still show it keep working. */
@@ -103,6 +105,7 @@ export function mainKeyboard() {
       [{ text: BTN.cabinet }, { text: BTN.pay }],
       [{ text: BTN.devices }, { text: BTN.promo }],
       [{ text: BTN.price }, { text: BTN.support }],
+      [{ text: BTN.donate }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -303,6 +306,7 @@ export function parseAction(text) {
   if (is(BTN.promo, '/promo')) return { action: 'promo', arg: '' };
   if (is(BTN.price, '/price', '/prices')) return { action: 'price', arg: '' };
   if (is(BTN.support, '/support')) return { action: 'support', arg: '' };
+  if (is(BTN.donate, '/donate')) return { action: 'donate', arg: '' };
   if (is('/admin', 'Админ')) return { action: 'admin', arg: '' };
   if (is(ADMIN_BTN.user, '/user', 'В кабинет')) return { action: 'user_mode', arg: '' };
   if (is(ADMIN_BTN.summary, '/summary')) return { action: 'admin_summary', arg: '' };
@@ -756,6 +760,14 @@ export function botCallback(state, { chatId, data, now, info }) {
     for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode });
   };
   if (!account) return { state, messages, answer: stale, clearMarkup: true };
+
+  if (raw.indexOf('dn:') === 0) {
+    const out = donateOnCallback(cur, account, raw, now);
+    if (!out) return { state, messages, answer: stale, clearMarkup: true };
+    cur = out.state;
+    if (out.text) say(out.text, { inline: out.inline, invoice: out.invoice, cryptoIssue: out.cryptoIssue });
+    return { state: cur, messages, answer: out.answer || '', clearMarkup: false };
+  }
 
   if (raw.indexOf('st:') === 0) {
     const id = raw.slice(3);
@@ -1334,8 +1346,16 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(), supportNotify: String(chatId) });
       }
     }
+  } else if (action === 'donate') {
+    const out = donateMenu(cur, account, now);
+    cur = out.state;
+    say(out.text, { inline: out.inline });
   } else if (action === 'unknown') {
-    say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(cur, sub, account));
+    const drafted = donateOnText(cur, account, String(text || ''), now);
+    if (drafted) {
+      cur = drafted.state;
+      say(drafted.text, { inline: drafted.inline });
+    } else say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(cur, sub, account));
   } else {
     const hint = admin && mode === 'user' ? '\n\nВы админ. /admin - админ-кабинет.' : '';
     say('Личный кабинет\n\n' + statusText(cur, sub, account) + hint);

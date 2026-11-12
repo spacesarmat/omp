@@ -175,6 +175,21 @@ export type HomeData = {
   series?: SeriesPoint[];
   secrets?: SecretView[];
   settings?: Record<string, string | number | boolean> & {
+    donate?: {
+      enabled?: boolean;
+      amounts?: string;
+      minRub?: number;
+      maxRub?: number;
+      commentMax?: number;
+      thanksText?: string;
+      yoomoney?: boolean;
+      stars?: boolean;
+      crypto?: boolean;
+      rubPerStar?: number;
+      notifyAll?: boolean;
+      notifyMin?: number;
+      showAmounts?: boolean;
+    };
     referral?: {
       enabled?: boolean;
       referrerDays?: number;
@@ -188,6 +203,12 @@ export type HomeData = {
     };
   };
   referralJournal?: { id: string; friendId?: string; status: string; days: number; reason?: string }[];
+  donations?: {
+    rows?: { id: string; atText: string; who: string; telegramId: string; amountRub: number; method: string; comment: string; commentHidden: boolean; nameHidden: boolean; status: string }[];
+    summary?: { day: { sum: number; count: number; average: number }; week: { sum: number; count: number; average: number }; month: { sum: number; count: number; average: number } };
+    chart?: { day: string; rub: number }[];
+    top?: { who: string; sum: number; count: number }[];
+  };
   storage?: { engine: string; path: string; bytes: number };
   /** Postgres dumps; null when backups are not configured on the server. */
   backup?: BackupStatus | null;

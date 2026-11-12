@@ -1,4 +1,5 @@
 /** VPS service health, secret masking, search rate-limit and short cache. */
+import { normalizeDonateSettings } from './donate.mjs';
 import { BASE_DEVICES_MAX, baseDevices, graceDays } from './logic.mjs';
 import { backupEveryHours, backupKeepDays, validBackupEveryHours, validBackupKeepDays } from './pgBackup.mjs';
 import { dhtPerMinute, validDhtPerMinute } from './dhtPeers.mjs';
@@ -113,6 +114,7 @@ export function publicAdminSettings(settings, env) {
     cryptoEnabled: s.cryptoEnabled === true,
     cryptoTestnet: s.cryptoTestnet === true,
     referral: s.referral || { enabled: false, referrerDays: 0, friendDays: 0, balancePercent: 0, tiers: false, friendDiscount: false, retention: false, delayDays: 7, yearlyCap: 12 },
+    donate: normalizeDonateSettings(s.donate),
     cryptoNonRu: s.cryptoNonRu === true,
     cryptoUsdt: Number(s.cryptoUsdt) || 0,
     cryptoExtraUsdt: Number(s.cryptoExtraUsdt) || 0,
@@ -124,6 +126,7 @@ export function publicAdminSettings(settings, env) {
     cryptoExtraBtc: Number(s.cryptoExtraBtc) || 0,
     cryptoRateBtc: Number(s.cryptoRateBtc) || 0,
     cryptoPayToken: secretText(s.cryptoPayToken),
+    cryptoPayTestnetToken: secretText(s.cryptoPayTestnetToken),
     baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
@@ -220,6 +223,7 @@ export function mergeSettings(prev, body) {
     cryptoExtraBtc: rateField(b.cryptoExtraBtc, cur.cryptoExtraBtc),
     cryptoRateBtc: rateField(b.cryptoRateBtc, cur.cryptoRateBtc),
     cryptoPayToken: String(cur.cryptoPayToken || ''),
+    cryptoPayTestnetToken: String(cur.cryptoPayTestnetToken || ''),
     // 1-20; an empty or bad value keeps the current one
     baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),

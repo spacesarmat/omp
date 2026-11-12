@@ -11,6 +11,7 @@ import { SupportPanel } from '@/panels/SupportPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AdsPanel } from '@/panels/AdsPanel';
+import { DonationsPanel } from '@/panels/DonationsPanel';
 import { ReferralPanel } from '@/panels/ReferralPanel';
 import { ChangelogPanel } from '@/panels/ChangelogPanel';
 import { MonitorPanel } from '@/panels/MonitorPanel';
@@ -377,6 +378,9 @@ export function App() {
           <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
         </TabsContent>
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
+        <TabsContent value="donations">
+          <DonationsPanel settings={d.settings?.donate} report={d.donations} run={run} />
+        </TabsContent>
         <TabsContent value="referral">
           <ReferralPanel
             csrf={d.csrf || ''}

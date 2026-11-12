@@ -670,6 +670,43 @@ CREATE TABLE referral_accruals (
 );
 `,
   },
+  {
+    version: '012_donations',
+    sql: `
+-- Donations. Separate from subscription payments. The flag lives in settings and starts off.
+CREATE TABLE donations (
+  id text PRIMARY KEY,
+  account_id text,
+  telegram_id text,
+  display_name text,
+  show_name boolean,
+  name_hidden boolean,
+  comment text,
+  comment_hidden boolean,
+  amount_rub bigint,
+  method text,
+  asset text,
+  pay_amount text,
+  gross text,
+  fee text,
+  status text,
+  step text,
+  operation_id text,
+  invoice_id text,
+  pay_url text,
+  web_url text,
+  created_at bigint,
+  paid_at bigint,
+  refunded_at bigint,
+  ord bigint NOT NULL,
+  extra jsonb NOT NULL DEFAULT '{}'
+);
+CREATE INDEX donations_ord ON donations (ord);
+CREATE INDEX donations_account ON donations (account_id, paid_at);
+CREATE UNIQUE INDEX donations_operation_settled ON donations (operation_id)
+  WHERE coalesce(operation_id, '') <> '' AND status IN ('paid', 'refunded');
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

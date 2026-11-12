@@ -117,7 +117,7 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
 export const NAV = [
   { title: 'Обзор', items: [['home', 'Обзор'], ['users', 'Пользователи'], ['subs', 'Подписки и оплаты'], ['devices', 'Устройства']] },
   { title: 'Сеть', items: [['sources', 'Источники'], ['rank', 'Подбор'], ['cache', 'Кэш'], ['nuc', 'NUC']] },
-  { title: 'Деньги', items: [['funnel', 'Воронка'], ['revenue', 'Выручка'], ['finance', 'Финансы'], ['promos', 'Промо'], ['referral', 'Рефералы']] },
+  { title: 'Деньги', items: [['funnel', 'Воронка'], ['revenue', 'Выручка'], ['finance', 'Финансы'], ['donations', 'Донаты'], ['promos', 'Промо'], ['referral', 'Рефералы']] },
   { title: 'Работа', items: [['support', 'Поддержка'], ['fails', 'Отказы'], ['ads', 'Реклама'], ['services', 'Сервисы'], ['dht', 'DHT'], ['monitor', 'Мониторинг'], ['changes', 'Изменения']] },
   { title: 'Система', items: [['settings', 'Настройки'], ['audit', 'Журнал'], ['security', 'Доступ'], ['crashes', 'Сбои'], ['broadcast', 'Рассылка'], ['versions', 'Версии']] },
 ];
