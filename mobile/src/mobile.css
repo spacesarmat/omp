@@ -1080,6 +1080,7 @@ button, .m-btn {
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
+.m-set-group[hidden] { display: none; }
 .m-set-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
 .m-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }

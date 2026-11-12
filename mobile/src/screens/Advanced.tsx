@@ -26,11 +26,12 @@ import { activeServer, addServer, servers } from '../../../src/store/servers';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { fmtSize, t } from '../../../src/i18n';
 
-/** Share of a 2 GB soft cap. A non-empty cache still shows a sliver. */
+/** The same 1 GB the cache line names ("of 1 GB"). A non-empty cache still shows a sliver. */
+export const CACHE_CAP_BYTES = 1024 * 1024 * 1024;
+
 export function storageBarPct(bytes: number | null): number {
   if (bytes == null || bytes <= 0) return 0;
-  const cap = 2 * 1024 * 1024 * 1024;
-  return Math.max(8, Math.min(100, Math.round((bytes / cap) * 100)));
+  return Math.max(8, Math.min(100, Math.round((bytes / CACHE_CAP_BYTES) * 100)));
 }
 
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';

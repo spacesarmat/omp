@@ -86,6 +86,8 @@ describe('settings search', () => {
     });
     expect(el.querySelector('[data-row="video-player"]')).toBeTruthy();
     expect(el.querySelector('[data-row="account"]')).toBeNull();
+    expect(el.querySelector('[data-row="language"]')).toBeNull();
+    expect(el.querySelector('[data-row="shared-history"]')).toBeNull();
     input.value = 'неттакого';
     act(() => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -110,6 +112,8 @@ describe('settings search', () => {
     expect(storageBarPct(null)).toBe(0);
     expect(storageBarPct(0)).toBe(0);
     expect(storageBarPct(1)).toBe(8);
+    expect(storageBarPct(512 * 1024 * 1024)).toBe(50);
+    expect(storageBarPct(1024 * 1024 * 1024)).toBe(100);
     expect(storageBarPct(2 * 1024 * 1024 * 1024)).toBe(100);
   });
 });
