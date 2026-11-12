@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Donation rates are fetched: USDT, TON and BTC from Crypto Pay (CoinGecko fallback), a star as 0.013 USD times the CBR dollar. The admin can leave auto on, type a manual rate, set a markup and a max age. A zero or too-old rate hides that method. Billing was not deployed
+
 ## 0.30.1-beta.6
 
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button

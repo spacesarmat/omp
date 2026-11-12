@@ -14,6 +14,24 @@ export type SupportMsg = { id: string; text: string; direction: string; at: numb
 
 export type SeriesPoint = { day: string; revenue: number; subs: number };
 
+export type DonateRateRow = {
+  auto: boolean;
+  manual: number;
+  value: number;
+  source: string;
+  at: number;
+  usable: boolean;
+  last: number;
+};
+
+export type DonateRates = {
+  refreshMin: number;
+  maxAgeMin: number;
+  markupPercent: number;
+  starUsd: number;
+  rows: { star: DonateRateRow; usdt: DonateRateRow; ton: DonateRateRow; btc: DonateRateRow };
+};
+
 export type PaymentRow = {
   at?: number;
   amount?: string;
@@ -190,6 +208,7 @@ export type HomeData = {
       notifyMin?: number;
       showAmounts?: boolean;
     };
+    rates?: DonateRates;
     referral?: {
       enabled?: boolean;
       referrerDays?: number;

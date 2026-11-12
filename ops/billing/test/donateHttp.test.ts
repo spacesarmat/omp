@@ -356,7 +356,13 @@ describe('donate crypto pay mode', () => {
   async function ready(patch: Record<string, unknown>, donation: Record<string, unknown>) {
     const b = await boot();
     const state = await readState(b.store);
-    Object.assign(state.settings, { cryptoPayToken: LIVE, cryptoPayTestnetToken: TESTNET, cryptoRateUsdt: 100, ...patch });
+    Object.assign(state.settings, {
+      cryptoPayToken: LIVE,
+      cryptoPayTestnetToken: TESTNET,
+      cryptoRateUsdt: 100,
+      rates: { auto: { usdt: false, ton: false, btc: false, star: false } },
+      ...patch,
+    });
     // boot() stamps the row at 09:00 UTC. A draft older than two hours is a stale button, so a later run never creates an invoice.
     state.donations[0] = { ...state.donations[0], createdAt: Date.now(), ...donation };
     await writeState(b.store, state);
@@ -384,6 +390,54 @@ describe('donate crypto pay mode', () => {
     expect(invoice && invoice.url).toBe('https://pay.crypt.bot/api/createInvoice');
     expect(invoice && invoice.token).toBe(LIVE);
     expect(JSON.stringify(http.calls)).not.toContain(TESTNET);
+  });
+
+  it('prices a donation invoice from Crypto Pay when the manual USDT rate is zero', async () => {
+    const b = await ready(
+      {
+        cryptoTestnet: false,
+        cryptoRateUsdt: 0,
+        rates: { auto: { usdt: true, ton: true, btc: true, star: true }, fetchedAt: 0 },
+      },
+      { method: '', asset: '', payAmount: '', gross: '', fee: '', status: 'draft', step: 'method' },
+    );
+    const calls: { url: string; body: string }[] = [];
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+      if (String(url).indexOf('/api/getExchangeRates') >= 0) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, result: [{ is_valid: true, source: 'USDT', target: 'RUB', rate: '50' }] }),
+          text: async () => '',
+        };
+      }
+      if (String(url).indexOf('/api/createInvoice') >= 0) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            result: {
+              invoice_id: 11,
+              bot_invoice_url: 'https://t.me/CryptoBot?start=inv11',
+              pay_url: 'https://pay.crypt.bot/i/11',
+              web_app_invoice_url: 'https://pay.crypt.bot/i/11',
+              asset: 'USDT',
+              amount: '6.00',
+            },
+          }),
+          text: async () => '',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ Valute: { USD: { Nominal: 1, Value: 50 } } }), text: async () => '' };
+    };
+    await handleCallback(b.store, '123:fake', press(), fetchImpl, 5000);
+    const invoice = calls.find((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoice && JSON.parse(invoice.body).amount).toBe('6.00');
+    const saved = (await readState(b.store)).donations[0];
+    expect(saved.payAmount).toBe('6.00');
+    expect(saved.method).toBe('crypto');
   });
 
   it('does not call Crypto Pay for a donation when testnet is on without a testnet token', async () => {

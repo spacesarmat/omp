@@ -28,6 +28,7 @@ function on() {
   const state = opened.state;
   state.settings.yoomoneyWallet = '410011111111111';
   state.settings.cryptoRateUsdt = 100;
+  state.settings.rates = { auto: { usdt: false, ton: false, btc: false, star: false } };
   state.settings.donate = {
     enabled: true,
     amounts: '100,300,500,1000',
@@ -144,6 +145,46 @@ describe('donate bot', () => {
     expect(paid.result.kind).toBe('donate');
     expect(paid.state.donations.find((d) => d.id === row.id).status).toBe('paid');
     expect(paid.state.payments || []).toHaveLength(0);
+  });
+
+  it('prices stars and USDT from a fresh auto rate and hides them when that rate is too old', () => {
+    const start = on();
+    start.state.settings.cryptoRateUsdt = 0;
+    start.state.settings.donate.rubPerStar = 0;
+    start.state.settings.rates = {
+      auto: { usdt: true, ton: true, btc: true, star: true },
+      starUsd: 0.013,
+      markupPercent: 0,
+      maxAgeMin: 1440,
+      cache: {
+        usdt: { rub: 100, source: 'cryptopay', at: NOW },
+        usd: { rub: 100, source: 'cbr', at: NOW },
+      },
+      fetchedAt: NOW,
+    };
+    const menu = botReply(start.state, { chatId: '42', text: '/donate', now: NOW, from: { firstName: 'Анна' } });
+    const picked = botCallback(menu.state, { chatId: '42', data: 'dn:a:100', now: NOW });
+    const draft = picked.state.donations.find((d) => d.amountRub === 100);
+    const skipped = botCallback(picked.state, { chatId: '42', data: 'dn:s:' + draft.id, now: NOW });
+    const hidden = botCallback(skipped.state, { chatId: '42', data: 'dn:n:' + draft.id + ':0', now: NOW });
+    const buttons = JSON.stringify(hidden.messages[0].inline);
+    expect(buttons).toContain('Звёзды - 77');
+    expect(buttons).toContain('USDT - 1.00');
+    const pay = botCallback(hidden.state, { chatId: '42', data: 'dn:p:' + draft.id + ':XTR', now: NOW });
+    expect(pay.messages[0].invoice.prices[0].amount).toBe(77);
+    const stale = JSON.parse(JSON.stringify(start.state));
+    const old = NOW - 25 * 60 * 60 * 1000;
+    stale.settings.rates.cache.usdt.at = old;
+    stale.settings.rates.cache.usd.at = old;
+    const again = botReply(stale, { chatId: '42', text: '/donate', now: NOW, from: { firstName: 'Анна' } });
+    const pickedOld = botCallback(again.state, { chatId: '42', data: 'dn:a:100', now: NOW });
+    const oldDraft = pickedOld.state.donations.find((d) => d.amountRub === 100 && d.status === 'draft');
+    const skipOld = botCallback(pickedOld.state, { chatId: '42', data: 'dn:s:' + oldDraft.id, now: NOW });
+    const screen = botCallback(skipOld.state, { chatId: '42', data: 'dn:n:' + oldDraft.id + ':0', now: NOW });
+    const oldButtons = JSON.stringify(screen.messages[0].inline);
+    expect(oldButtons).not.toContain('Звёзды');
+    expect(oldButtons).not.toContain('USDT');
+    expect(oldButtons).toContain('Карта');
   });
 
   it('asks again when the custom amount is outside the limits', () => {
