@@ -429,6 +429,28 @@ describe('Add category', () => {
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ link: 'https://x.test/a.torrent?dl=1' }));
   });
 
+  it('a magnet on the clipboard opens the field, and a search stays in recent queries', async () => {
+    const { setClipboardReader } = await import('../src/lib/recentQueries');
+    setClipboardReader(async () => 'magnet:?xt=urn:btih:' + HASH);
+    mount();
+    await flush();
+    const hint = el.querySelector('[data-clip-magnet]') as HTMLButtonElement;
+    expect(hint.textContent).toBe('В буфере magnet-ссылка');
+    click(hint);
+    expect((el.querySelector(MAGNET) as HTMLInputElement).value).toBe('magnet:?xt=urn:btih:' + HASH);
+    setClipboardReader(null);
+    registerSource({ id: 'fake', name: 'Фейк', kind: 'builtin', search: () => Promise.resolve([]) });
+    resetAddSearch();
+    act(() => render(null, el));
+    mount();
+    search('Дюна');
+    await flush();
+    resetAddSearch();
+    act(() => render(null, el));
+    mount();
+    expect(el.querySelector('[data-recent]')!.textContent).toContain('Дюна');
+  });
+
   it('the plus menu announces whether it is open', () => {
     mount();
     const plus = el.querySelector('.m-add-plus > button') as HTMLButtonElement;

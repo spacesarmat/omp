@@ -3,6 +3,7 @@ import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
+import { magnetInClipboard, rememberQuery, loadRecentQueries, readClipboardText } from '../lib/recentQueries';
 import { stashFile } from '../../../src/api/torrentFiles';
 import { TvChip } from '../ui/TvChip';
 import { ScreenHeader } from '../ui/ScreenHeader';
@@ -288,6 +289,8 @@ export function Add({
   const [plusOpen, setPlusOpen] = useState(false);
   const [fileError, setFileError] = useState('');
   const [fileBusy, setFileBusy] = useState(false);
+  const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
+  const [clipHint, setClipHint] = useState<string | null>(null);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
   // the route's fields choose only the first tab of the entry
   const [scope, setScopeState] = useState<SearchScope>(
@@ -302,6 +305,16 @@ export function Add({
     lastScope = scope;
     if (entry) entryScopes.set(entry, scope);
   }, []);
+  useEffect(() => {
+    if (scope !== 'sources' || magnetOpen) return;
+    let alive = true;
+    void readClipboardText().then((text) => {
+      if (alive) setClipHint(magnetInClipboard(text));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [scope, magnetOpen]);
   void monitorVersion.value;
   const [pending, setPending] = useState<Record<string, RowBusy>>(() => Object.fromEntries(memo.busy));
   const [alive] = useState({ v: true });
@@ -497,6 +510,7 @@ export function Add({
     if (mode) ctx.searchMode = mode;
     // live list, not the ids from the render that opened the screen
     const ids = sourcesForSearch(allSources(), memo.chosen, { fallback: true }).map((s) => s.id);
+    setRecent(rememberQuery(q));
     const h: SearchHandle = searchAll(q, {
       ctx,
       sources: ids,
@@ -792,6 +806,19 @@ export function Add({
         </div>
       )}
       {fileError && <div class="m-error" data-file-error>{fileError}</div>}
+      {clipHint && !magnetOpen && (
+        <button type="button" class="m-btn m-btn-secondary" data-clip-magnet onClick={() => { setValue(clipHint); setMagnetOpen(true); }}>
+          {t('add.clipMagnet')}
+        </button>
+      )}
+      {!rows && !searching && recent.length > 0 && (
+        <div class="m-chips" data-recent>
+          <span class="m-muted m-small">{t('add.recent')}</span>
+          {recent.map((q) => (
+            <button key={q} type="button" class="m-chip" onClick={() => { setQuery(q); runSearch(q, {}); }}>{q}</button>
+          ))}
+        </div>
+      )}
       {memo.handle && memo.searched && online.value && !noSourceAnswered && (
         <SubscribePlate query={memo.searched} onSubscribe={() => setSubSheet(true)} />
       )}

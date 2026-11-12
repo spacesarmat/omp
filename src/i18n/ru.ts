@@ -2234,6 +2234,8 @@ export const ru = {
     magnetLabel: 'Magnet-ссылка или хеш',
     byMagnet: 'Добавить по magnet-ссылке',
     pasteMagnet: 'Вставить magnet',
+    recent: 'Недавние запросы',
+    clipMagnet: 'В буфере magnet-ссылка',
     openTorrent: 'Открыть .torrent файл',
     openSourceSettings: 'Открыть настройки {name}',
     fixHint: 'Войдите на сайте или включите обход проверки - это на его странице.',
