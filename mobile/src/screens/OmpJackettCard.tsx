@@ -332,7 +332,7 @@ export function OmpJackettCard() {
                 <div class="m-set-label">{t('sources.billing.payments')}</div>
                 <div class="m-acct-card" data-bill-payments>
                   {account.bill.payments.map((p) => {
-                    const kind = paymentKind(p.title);
+                    const kind = paymentKind(p.title, p.currency);
                     const label = kind === 'card' ? t('sources.billing.payLineCard')
                       : kind === 'stars' ? t('sources.billing.payLineStars')
                       : kind === 'crypto' ? t('sources.billing.payLineCrypto')

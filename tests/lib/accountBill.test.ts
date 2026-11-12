@@ -10,11 +10,16 @@ describe('account bill line', () => {
   });
 
   it('turns a raw purchase id into a card renewal and formats kopecks', () => {
-    expect(paymentKind('buy:f9b7b96aaf3c802e')).toBe('card');
+    expect(paymentKind('buy:f9b7b96aaf3c802e', 'RUB')).toBe('card');
+    expect(paymentKind('buy:f9b7b96aaf3c802e', 'XTR')).toBe('stars');
+    expect(paymentKind('buy:f9b7b96aaf3c802e', 'TON')).toBe('crypto');
+    expect(paymentKind('buy:f9b7b96aaf3c802e', 'BTC')).toBe('crypto');
     expect(paymentKind('stars-pack')).toBe('stars');
     expect(paymentKind('sub')).toBe('named');
     expect(formatPayAmount('10.31', 'RUB')).toBe('10,31 ₽');
     expect(formatPayAmount('200', 'RUB')).toBe('200 ₽');
+    expect(formatPayAmount('0.0001', 'TON')).toBe('0,0001 TON');
+    expect(formatPayAmount('0.0000001', 'BTC')).toBe('0,0000001 BTC');
     expect(paymentDate(Date.UTC(2026, 9, 31))).toBe('31.10.2026');
   });
 });

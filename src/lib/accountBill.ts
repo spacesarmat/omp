@@ -20,8 +20,13 @@ export function billShown(price: number, fee: number, total: number): BillShow {
 
 export type PayKind = 'card' | 'stars' | 'crypto' | 'promo' | 'named';
 
-/** A raw purchase id (buy:hex) is a card renewal, not a label. */
-export function paymentKind(title: string): PayKind {
+const CRYPTO = ['USDT', 'TON', 'BTC'];
+
+/** Stars and crypto share the buy:hex title, so the currency decides the method. */
+export function paymentKind(title: string, currency?: string): PayKind {
+  const cur = (currency || '').trim().toUpperCase();
+  if (cur === 'XTR') return 'stars';
+  if (CRYPTO.indexOf(cur) >= 0) return 'crypto';
   const s = (title || '').trim();
   const low = s.toLowerCase();
   if (/star/.test(low)) return 'stars';
@@ -31,13 +36,19 @@ export function paymentKind(title: string): PayKind {
   return 'named';
 }
 
-/** "10.31" RUB -> "10,31 ₽". Whole amounts stay without kopecks. */
+/** "10.31" RUB -> "10,31 ₽". Crypto keeps its own decimals (TON 4, BTC 8), not two. */
 export function formatPayAmount(amount: string, currency: string): string {
-  const n = Number(String(amount || '').replace(/\s/g, '').replace(',', '.'));
+  const raw = String(amount || '').trim().replace(/\s/g, '');
+  const n = Number(raw.replace(',', '.'));
   if (!isFinite(n)) return amount || '';
+  const cur = (currency || '').trim().toUpperCase();
+  if (cur === 'XTR') return String(Math.round(n)) + ' XTR';
+  if (CRYPTO.indexOf(cur) >= 0) {
+    const text = raw.replace('.', ',');
+    return text + ' ' + cur;
+  }
   const whole = Math.abs(Math.round(n * 100) - Math.round(n) * 100) < 1;
   const text = whole ? String(Math.round(n)) : n.toFixed(2).replace('.', ',');
-  const cur = (currency || '').trim().toUpperCase();
   if (!cur || cur === 'RUB' || cur === '₽') return text + ' ₽';
   return text + ' ' + currency.trim();
 }

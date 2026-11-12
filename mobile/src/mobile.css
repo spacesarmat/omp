@@ -36,9 +36,13 @@ button, .m-btn {
   min-width: 44px;
   font-family: inherit;
   color: var(--text);
+}
+/* Short actions only. A row or a question must still wrap; nowrap on every button clips it. */
+.m-link, .m-btn-sm {
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
+  flex-shrink: 0;
 }
 
 .m-nav {
