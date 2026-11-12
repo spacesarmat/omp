@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, post } from '@/lib/api';
 import { useLive } from '@/lib/live';
 import { toast } from '@/components/chrome';
+import { LogDialog } from '@/components/logDialog';
 import { Stamp } from '@/components/stamp';
 import type { DeskData } from '@/lib/desk';
 
@@ -29,6 +30,16 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
     queryFn: () => api<{ groups?: Group[] }>('/admin/api/crashes'),
   });
   const groups = q.data?.groups || [];
+  const [crash, setCrash] = useState<{ title: string; text: string } | null>(null);
+  async function openLog(g: Group) {
+    setCrash({ title: g.title, text: '' });
+    try {
+      const res = await fetch('/admin/api/crashes/log?id=' + encodeURIComponent(g.id), { credentials: 'same-origin' });
+      setCrash({ title: g.title, text: await res.text() });
+    } catch {
+      setCrash({ title: g.title, text: 'лог недоступен' });
+    }
+  }
   return (
     <div className="space-y-2">
       {groups.length === 0 ? <p className="text-sm text-muted-foreground">Сбоев нет</p> : null}
@@ -45,9 +56,9 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
                 <div className="text-xs text-muted-foreground">{(g.versions || []).join(', ')}</div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <a className="text-sm text-primary" href={'/admin/api/crashes/log?id=' + encodeURIComponent(g.id)}>
+                <Button variant="secondary" onClick={() => void openLog(g)}>
                   Лог
-                </a>
+                </Button>
                 <Button
                   variant="secondary"
                   onClick={() =>
@@ -75,7 +86,8 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
             </div>
           </CardContent>
         </Card>
-      ))}
+        ))}
+      {crash ? <LogDialog title={'Сбой: ' + crash.title} text={crash.text} onClose={() => setCrash(null)} /> : null}
     </div>
   );
 }

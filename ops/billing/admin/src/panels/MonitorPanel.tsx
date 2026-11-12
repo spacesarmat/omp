@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { LogDialog } from '@/components/logDialog';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import {
   type MonitorItem,
   type MonitorPrefs,
   type MonitorSort,
+  monitorDetailText,
 } from '@/lib/monitorView';
 
 export type { MonitorCheck } from '@/lib/monitorView';
@@ -52,6 +54,16 @@ const ROW_STATE_TEXT: Record<RowState, string> = { queued: 'в очереди', 
 /** What a table row needs from the panel: the live run states and the per-row recheck. */
 type RowCtxValue = { states: Record<string, RowState>; running: boolean; pending: string[]; recheck: (ids: string[]) => void };
 const RowCtx = createContext<RowCtxValue>({ states: {}, running: false, pending: [], recheck: () => {} });
+const OpenCtx = createContext<(row: MonitorCheck) => void>(() => {});
+
+function More({ row }: { row: MonitorCheck }) {
+  const open = useContext(OpenCtx);
+  return (
+    <button type="button" className="ml-2 text-xs text-primary underline" onClick={() => open(row)}>
+      Подробнее
+    </button>
+  );
+}
 
 /** Live state of the checks in a row while a run goes, plus «Перепроверить» on a red row when nothing runs. */
 function RowRun({ ids, red, recheckIds }: { ids: string[]; red: boolean; recheckIds?: string[] }) {
@@ -142,6 +154,7 @@ function Detail({ row }: { row?: MonitorCheck }) {
       {row.at ? <span className="text-muted-foreground"> · {clock(row.at)}</span> : null}
       {row.retried && row.ok === false ? <span className="text-muted-foreground"> · повтор через 30 с</span> : null}
       {!row.alert && row.ok === false ? <span className="text-muted-foreground"> · без алерта</span> : null}
+      <More row={row} />
     </span>
   );
 }
@@ -198,6 +211,7 @@ function Cell({ row }: { row?: MonitorCheck }) {
       <StatusBadge ok={row.ok} alerted={row.alerted} warn={row.warn} />
       <div className="max-w-[260px] text-xs text-muted-foreground">
         {row.detail}
+        <More row={row} />
         {row.ms ? ' · ' + row.ms + ' мс' : ''}
         {row.at ? ' · ' + clock(row.at) : ''}
       </div>
@@ -254,7 +268,16 @@ function TrackerTable({ rows, withSearch }: { rows: MonitorItem[]; withSearch: b
                   <Cell row={t.search} />
                 </TableCell>
               ) : null}
-              <TableCell>{t.site ? <span className="text-xs text-muted-foreground">{t.site.detail}</span> : <Cell row={t.direct} />}</TableCell>
+              <TableCell>
+                {t.site ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t.site.detail}
+                    <More row={t.site} />
+                  </span>
+                ) : (
+                  <Cell row={t.direct} />
+                )}
+              </TableCell>
               <TableCell>{t.site ? null : <Cell row={t.warp} />}</TableCell>
               <TableCell>{main ? <HistoryStrip strip={main.history} uptime={main.uptime} /> : null}</TableCell>
             </TableRow>
@@ -405,7 +428,9 @@ export function MonitorView({
   const summary = !running ? data?.lastSummary || null : null;
   const nameOf = (id: string) => checks.find((c) => c.id === id)?.name || id;
   const rowCtx: RowCtxValue = { states: progress?.states || {}, running, pending: pending || [], recheck: onRowRecheck || (() => {}) };
+  const [picked, setPicked] = useState<MonitorCheck | null>(null);
   return (
+    <OpenCtx.Provider value={setPicked}>
     <RowCtx.Provider value={rowCtx}>
     <div className="space-y-4">
       <Card>
@@ -476,8 +501,10 @@ export function MonitorView({
       {view.map((g) => (
         <GroupCard key={g.id} view={g} onToggle={(id, open) => setPrefs({ ...prefs, open: { ...prefs.open, [id]: open } })} />
       ))}
+      {picked ? <LogDialog title={'Проверка ' + picked.name} text={monitorDetailText(picked)} onClose={() => setPicked(null)} /> : null}
     </div>
     </RowCtx.Provider>
+    </OpenCtx.Provider>
   );
 }
 

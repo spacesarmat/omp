@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { createLoadGate } from '@/lib/dhtLoad';
+import { LogDialog } from '@/components/logDialog';
 import { probeText, type DhtProbeResult } from '@/lib/dhtProbe';
 import { when } from '@/lib/text';
 
@@ -89,7 +90,7 @@ function Bars({ rows, field, label, color }: { rows: DhtPoint[]; field: 'request
 export function DhtPanel({ csrf }: { csrf: string }) {
   const [data, setData] = useState<DhtPayload | null>(null);
   const [err, setErr] = useState('');
-  const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [probeView, setProbeView] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
   const loads = useRef(createLoadGate());
 
@@ -128,10 +129,11 @@ export function DhtPanel({ csrf }: { csrf: string }) {
         headers: { 'content-type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ csrf }),
       });
-      setProbe(res);
+      setProbeView(probeText(res) + '\n\n' + JSON.stringify(res, null, 2));
       await load();
     } catch (e) {
-      setProbe({ ok: false, error: e instanceof Error ? e.message : 'проверка' });
+      const fail: ProbeResult = { ok: false, error: e instanceof Error ? e.message : 'проверка' };
+      setProbeView(probeText(fail) + '\n\n' + JSON.stringify(fail, null, 2));
     } finally {
       setProbing(false);
     }
@@ -173,7 +175,7 @@ export function DhtPanel({ csrf }: { csrf: string }) {
                 {mem ? <span className="text-muted-foreground">память {mem}</span> : null}
               </div>
               <p className="text-muted-foreground">Лимит: {limitText(data.limit)}. Меняется в «Настройках». Обновление само, раз в 20 с.</p>
-              {probe ? <p>{probeText(probe)}</p> : null}
+              {probeView != null ? <LogDialog title="Проверка DHT" text={probeView} onClose={() => setProbeView(null)} /> : null}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <div className="text-muted-foreground">Запросов за 24 ч</div>
