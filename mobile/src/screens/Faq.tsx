@@ -277,38 +277,23 @@ export function Faq(p: { q?: string } = {}) {
             ))}
           </div>
           <div class="m-faq-actions">
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => openFromFaq({ name: 'install' }, 'install')}>
-              {t('faq.installTv')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => openFromFaq({ name: 'tv' }, 'tv')}>
-              {t('faq.findTv')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="renew" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
-              {t('faq.renew')}
-            </button>
-            {localServer.value.supported && (
-              <button type="button" class="m-btn m-btn-secondary" data-faq-action="server" onClick={() => openFromFaq({ name: 'localServer' }, 'server')}>
-                {t('faq.phoneServer')}
+            {([
+              ['install', t('faq.installTv'), () => openFromFaq({ name: 'install' }, 'install')],
+              ['tv', t('faq.findTv'), () => openFromFaq({ name: 'tv' }, 'tv')],
+              ['renew', t('faq.renew'), () => openFromFaq({ name: 'account' }, 'account')],
+              ...(localServer.value.supported ? [['server', t('faq.phoneServer'), () => openFromFaq({ name: 'localServer' }, 'server')] as const] : []),
+              ['log', t('faq.logs'), () => openFromFaq({ name: 'log' }, 'log')],
+              ['dev', t('faq.devMode'), openDev],
+              ['wake', t('faq.wake'), () => openFromFaq({ name: 'remote' }, 'remote')],
+              ['updates', t('faq.updates'), () => openFromFaq({ name: 'settings' }, 'updates')],
+              ['player', t('faq.playerSound'), () => openFromFaq({ name: 'videoPlayer' }, 'player')],
+              ['promo', t('faq.promo'), () => openFromFaq({ name: 'account' }, 'account')],
+            ] as [string, string, () => void][]).map(([id, label, go]) => (
+              <button type="button" class="m-set-row m-set-pick" data-faq-action={id} key={id} onClick={go}>
+                <span>{label}</span>
+                <Icon d="M9 6l6 6-6 6" size={18} />
               </button>
-            )}
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="log" onClick={() => openFromFaq({ name: 'log' }, 'log')}>
-              {t('faq.logs')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="dev" onClick={openDev}>
-              {t('faq.devMode')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="wake" onClick={() => openFromFaq({ name: 'remote' }, 'remote')}>
-              {t('faq.wake')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="updates" onClick={() => openFromFaq({ name: 'settings' }, 'updates')}>
-              {t('faq.updates')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="player" onClick={() => openFromFaq({ name: 'videoPlayer' }, 'player')}>
-              {t('faq.playerSound')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="promo" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
-              {t('faq.promo')}
-            </button>
+            ))}
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
           {ordered.map((g) => (

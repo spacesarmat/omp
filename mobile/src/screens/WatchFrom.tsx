@@ -340,17 +340,18 @@ export function WatchFrom() {
         <div class="m-set-label">{t('settings.watchFromServers')}</div>
         {list.map((s) => {
           const st = checks[s.id];
-          const line = st === 'ok' ? t('settings.watchFromChecked', { name: serverLabel(s) }) : st === 'down' ? t('settings.watchFromCheckDown', { name: serverLabel(s) }) : st === 'checking' ? t('settings.checking') : '';
+          const line = st === 'ok' ? t('settings.reachable') : st === 'down' ? t('settings.unreachable') : st === 'checking' ? t('settings.checking') : '';
           return (
             <div key={s.id} class="m-set-row m-watch-server" data-server={s.id}>
-              <button type="button" class="m-set-text m-watch-pick" data-select={s.id} onClick={() => select(s.id)}>
+              <button type="button" class="m-watch-pick" data-select={s.id} onClick={() => select(s.id)}>
                 <span class={'m-status-dot' + (checks[s.id] === 'ok' || activeServerId.value === s.id ? ' on' : '')} />
-                <span>{serverLabel(s)}{activeServerId.value === s.id ? ' · ' + t('settings.watchFromCurrent') : ''}</span>
-                {activeServerId.value === s.id && <Icon d="M5 12l5 5 9-10" size={16} />}
+                <span class="m-watch-lines">
+                  <span class="m-watch-name">{serverLabel(s)}{activeServerId.value === s.id ? ' · ' + t('settings.watchFromCurrent') : ''}</span>
+                  {line && <span class="m-muted m-small" data-check-line={s.id}>{line}</span>}
+                </span>
               </button>
-              {line && <span class="m-muted m-small" data-check-line={s.id}>{line}</span>}
               <details class="m-inline-menu">
-                <summary aria-label={t('settings.watchFromMenu', { name: serverLabel(s) })}>⋯</summary>
+                <summary class="m-icon-btn" aria-label={t('settings.watchFromMenu', { name: serverLabel(s) })}>⋯</summary>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-check={s.id} onClick={() => void check(s)}>{t('settings.watchFromCheck')}</button>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-edit={s.id} onClick={() => navigate({ name: 'serverSettings', url: s.url })}>{t('connect.edit')}</button>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-remove={s.id} onClick={() => void remove(s)}>{t('settings.watchFromRemove')}</button>

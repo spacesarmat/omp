@@ -125,7 +125,10 @@ function LocalServerSection() {
         <div class="m-set-row tm" data-code="P13.2">
           <span class={'m-status-dot' + (st.running ? ' on' : '')} />
           <div class="m-set-text" style="flex-grow: 1">
-            <span style="font-weight: 700">{starting ? t('settings.localStarting') : st.running ? t('sources.flare.works') : missing ? t('settings.localNotDownloaded') : t('settings.localStopped')}</span>
+            <span class="m-local-titleline">
+              <span style="font-weight: 700">{starting ? t('settings.localStarting') : st.running ? t('sources.flare.works') : missing ? t('settings.localNotDownloaded') : t('settings.localStopped')}</span>
+              <button type="button" class="m-bill-info" data-server-about aria-label={t('settings.serverAbout')} onClick={() => setAbout(true)}>i</button>
+            </span>
             {meta && <span class="m-muted m-small">{meta}</span>}
           </div>
           <Switch on={st.running} label={t('localServer.title')} disabled={starting} onToggle={() => void toggle()} />
@@ -176,18 +179,15 @@ function LocalServerSection() {
             {t('tvSettings.clear')}
           </button>
         </div>
+        <p class="m-muted m-small m-local-foot" data-row="lan-warn">{t('settings.lanWarn')}</p>
       </div>
-      <button type="button" class="m-icon-btn" data-server-about aria-expanded={about} aria-label={t('settings.serverAbout')} onClick={() => setAbout((v) => !v)}>
-        i
-      </button>
-      <div hidden={!about}>
-        <div class="m-hint-ok">
-          <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
-          <span>{t('settings.serverNote')}</span>
-        </div>
-        <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
-      </div>
-      {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
+      {st.vpn && <div class="m-hint-warn m-local-vpn" role="alert">{t('localServer.vpn')}</div>}
+      {about && (
+        <Sheet label={t('settings.serverAbout')} onClose={() => setAbout(false)}>
+          <div class="m-sheet-title">{t('settings.serverAbout')}</div>
+          <p class="m-watch-note">{t('settings.serverNote')}</p>
+        </Sheet>
+      )}
     </section>
   );
 }
@@ -286,10 +286,16 @@ export function Advanced() {
   );
 }
 
+const REPORT_MAX = 500;
+
 export function ReportRow() {
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [note, setNote] = useState('');
+  const grow = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 12 * 16) + 'px';
+  };
   return (
     <>
       <button type="button" class="m-set-row m-set-pick" data-report-open onClick={() => setOpen(true)}>
@@ -297,15 +303,29 @@ export function ReportRow() {
         <Icon d="M9 6l6 6-6 6" size={20} />
       </button>
       {open && (
-        <Sheet label={t('settings.reportTitle')} onClose={() => setOpen(false)}>
+        <Sheet className="m-report-sheet" label={t('settings.reportTitle')} onClose={() => setOpen(false)}>
           <div class="m-sheet-title">{t('settings.reportTitle')}</div>
-          <textarea class="m-input" rows={4} value={comment} onInput={(e) => setComment((e.target as HTMLTextAreaElement).value)} />
+          <textarea
+            class="m-input m-area"
+            rows={5}
+            maxLength={REPORT_MAX}
+            placeholder={t('settings.reportPlaceholder')}
+            value={comment}
+            onInput={(e) => {
+              const el = e.target as HTMLTextAreaElement;
+              setComment(el.value.slice(0, REPORT_MAX));
+              grow(el);
+            }}
+          />
+          <div class="m-area-count" data-report-count>{comment.length + '/' + REPORT_MAX}</div>
           <button
             type="button"
             class="m-btn m-btn-primary"
+            data-report-send
+            disabled={!comment.trim()}
             onClick={() => {
               const platform = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone';
-              void sendManualReport(phoneSourceContext, platform, comment, '').then((ok) => setNote(ok ? t('settings.promoOk') : t('settings.promoBad')));
+              void sendManualReport(phoneSourceContext, platform, comment.trim(), '').then((ok) => setNote(ok ? t('settings.promoOk') : t('settings.promoBad')));
             }}
           >
             {t('settings.reportSend')}

@@ -372,8 +372,10 @@ describe('Settings: TorrServer on the phone', () => {
     expect(t).toContain('Место под видео');
     expect(t).toContain('Временные файлы просмотра, можно удалить');
     expect(t).toContain('Занято 412 МБ из 1 ГБ');
-    expect(t).toContain('Новая версия сервера приходит вместе с обновлением OMP');
+    expect(t).not.toContain('Новая версия сервера приходит вместе с обновлением OMP');
     expect(t).toContain('Сервер доступен всем устройствам в этой сети Wi‑Fi');
+    await act(async () => (el.querySelector('[data-server-about]') as HTMLButtonElement).click());
+    expect(el.textContent).toContain('Новая версия сервера приходит вместе с обновлением OMP');
   });
 
   it('«Настройки сервера» is a single entry and opens the phone server while it is the only one running', async () => {
@@ -822,8 +824,10 @@ describe('Settings in English', () => {
     expect(t).toContain('Used 412 MB of 1 GB');
     expect(t).not.toContain('Server settings');
     expect(el.textContent).toContain('Server settings');
-    expect(t).toContain('A new server version comes with an OMP update');
+    expect(t).not.toContain('A new server version comes with an OMP update');
     expect(t).toContain('The server is available to all devices on this Wi‑Fi network');
+    await act(async () => (section.querySelector('[data-server-about]') as HTMLButtonElement).click());
+    expect(el.textContent).toContain('A new server version comes with an OMP update');
     expect(t).toContain('VPN is on');
     expect(Array.from(section.querySelectorAll('button')).map((b) => b.textContent)).toContain('Clear');
     noCyrillic(el);

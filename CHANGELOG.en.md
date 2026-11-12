@@ -6,6 +6,14 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+## 0.30.1-beta.5
+
+- [phone] Watch from: a server row stays dark, with the name and address on one line, the status under them, and the menu on the right. The light box is gone
+- [phone] Settings: a section caption sits above its card, with the same inset as the rows. Search uses that inset. Advanced toggles share one card, and the screen does not scroll into empty space
+- [phone] Account: Subscription, Payments, Promo code and Telegram. A zero total is not shown as "= 0". A payment is a date, "Renewal · card" and "10.31 RUB". Renew is full width
+- [phone] Crash report: a tall "What happened?" field, a counter, and Send stays off while empty. The sheet sits above the keyboard
+- [phone] Help: the quick actions are one card of equal rows with a chevron
+- [phone] Phone server: "i" by the name opens the note. Clear does not break mid-word. The network line is the card footer, and the VPN warning is its own notice
 - [tech] The local theme editor became a visual layout editor: flow and absolute placement with dragging, snapping guides, resize handles, and multi-select with alignment and distribution
 - [tech] The editor gained a layers panel with filtering, renaming, hiding, locking, duplicating and pasting clones, plus a style library with presets, style copy and token usage search
 - [tech] The editor compares the current theme with the original via the Before/After button and shows platforms side by side; the Accessibility panel checks contrast, font size and geometry, and geometry warnings must be confirmed before export
