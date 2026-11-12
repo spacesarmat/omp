@@ -1,19 +1,38 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { InteractionTrace } from '../../../design/interaction.ts';
+import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
+import { collectLayoutNodes, layoutRootOf, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
+import { collectGeometrySnapshot, focusProbeVersion, type GeometrySnapshot } from '../../../design/layout-checks.ts';
+import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
+import { SelectionOverlay, type MoveNodeArgs } from './SelectionOverlay';
+import { Rulers } from './Rulers';
+import type { SelectionState } from '../layout/selection';
 import { getEditorViewport } from '../../shared/routes';
+import { DEFAULT_GUIDE_SETTINGS, type GuideSettings } from '../layout/guides';
 
 export interface PreviewPaneProps extends PreviewConfiguration {
   sessionId: string;
   zoom: number;
   tool: CanvasTool;
+  selection: SelectionState;
+  editable?: boolean;
+  guideSettings?: GuideSettings;
+  nodeSource?: { current: ((nodeId: string) => string | null) | null };
   onZoomChange(zoom: number): void;
   onTool(tool: CanvasTool): void;
+  onGuideSettingsChange?(patch: Partial<GuideSettings>): void;
   onSelect(elementId: string): void;
   onNavigate(route: DesktopRouteId): void;
   onTrace(trace: InteractionTrace[]): void;
+  onNodesChange(nodes: LayoutNodeDescriptor[], rects: Record<string, LayoutRect>, directions: Record<string, 'row' | 'column'>): void;
+  onGeometryChange?(snapshot: GeometrySnapshot | null): void;
+  onSelectNode(state: SelectionState): void;
+  onMoveNode(args: MoveNodeArgs): void;
+  onPlaceNode(placement: LayoutPlacement): void;
+  onPlaceNodes(placements: LayoutPlacement[]): void;
 }
 
 const MIN_ZOOM = 0.1;
@@ -52,13 +71,91 @@ export function PreviewPane(props: PreviewPaneProps) {
   const autoFit = useRef(true);
   const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const keyTarget = useRef<Document | null>(null);
+  const observer = useRef<MutationObserver | null>(null);
+  const scrollListener = useRef<{ doc: Document; onScroll: () => void } | null>(null);
+  const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect>; directions: Record<string, 'row' | 'column'> }>({ nodes: [], rects: {}, directions: {} });
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
+  const layoutContext: LayoutContext = { target: props.target, screenId: props.route, format: props.format };
+  const guideSettings = props.guideSettings ?? DEFAULT_GUIDE_SETTINGS;
+
+  const collect = () => {
+    const frame = iframe.current;
+    const doc = frame?.contentDocument;
+    const rootEl = doc ? layoutRootOf(doc) : null;
+    if (!frame || !doc || !rootEl) return;
+    const elements = collectLayoutElements(rootEl);
+    const nodes = collectLayoutNodes(rootEl);
+    // Rects live in iframe coordinates relative to the registered design root. The overlay
+    // shares that space, so the canvas zoom and the frame position on the editor page never
+    // shift or scale hit targets.
+    const rootBox = rootEl.getBoundingClientRect();
+    const rects: Record<string, LayoutRect> = {};
+    for (const node of nodes) {
+      const element = elements.get(node.nodeId);
+      if (!element) continue;
+      const box = element.getBoundingClientRect();
+      rects[node.nodeId] = {
+        x: box.left - rootBox.left,
+        y: box.top - rootBox.top,
+        width: box.width,
+        height: box.height,
+        scrollX: element.scrollLeft || 0,
+        scrollY: element.scrollTop || 0,
+      };
+    }
+    // Flow axis decisions need the real rendered direction: the editor maps alignment and
+    // distribution buttons to the flex main or cross axis through this computed value when the
+    // container record does not pin a direction, and drag insertion picks the index axis and
+    // guide orientation from it. Only true flex containers report a meaningful flex-direction;
+    // anything else keeps the documented column default for insertion. Read through the
+    // element's own window so a preview iframe from another realm reports its own layout.
+    const directions: Record<string, 'row' | 'column'> = {};
+    for (const [nodeId, element] of elements) {
+      if (!element.children.length) continue;
+      const view = element.ownerDocument.defaultView;
+      if (!view) continue;
+      try {
+        const display = view.getComputedStyle(element).display;
+        if (!display.includes('flex')) continue;
+        const value = view.getComputedStyle(element).flexDirection;
+        if (value === 'row' || value === 'column') directions[nodeId] = value;
+      } catch {
+        // A document without a view or layout keeps the documented fallback.
+      }
+    }
+    setCollected({ nodes, rects, directions });
+    props.onNodesChange(nodes, rects, directions);
+    props.onGeometryChange?.(collectGeometrySnapshot(rootEl, {
+      target: props.target,
+      screenId: props.route,
+      format: props.format,
+      viewport,
+    }));
+  };
+  // The observer created on iframe load outlives this render: route, format and viewport change
+  // without a reload, so the callback must always reach the latest collect instead of closing
+  // over the load-render props.
+  const collectRef = useRef<() => void>(() => undefined);
+  collectRef.current = collect;
 
   const send = (command: PreviewCommandInput) => {
     if (!iframe.current) return;
     sendPreviewCommand(iframe.current, { ...command, messageId: newMessageId(), sessionId: props.sessionId }, origin);
   };
+  useEffect(() => {
+    if (!props.nodeSource) return;
+    props.nodeSource.current = (nodeId) => {
+      const doc = iframe.current?.contentDocument;
+      const rootEl = doc ? layoutRootOf(doc) : null;
+      if (!rootEl) return null;
+      const element = collectLayoutElements(rootEl).get(nodeId);
+      return element ? snapshotCloneHtml(element) : null;
+    };
+    return () => {
+      if (props.nodeSource) props.nodeSource.current = null;
+    };
+  }, [props.theme, props.route, props.nodeSource]);
   const sendInit = () => {
     initSent.current = true;
     send({
@@ -90,6 +187,38 @@ export function PreviewPane(props: PreviewPaneProps) {
     autoFit.current = false;
     props.onZoomChange(clampZoom(value));
   };
+  const detachScroll = () => {
+    if (!scrollListener.current) return;
+    scrollListener.current.doc.removeEventListener('scroll', scrollListener.current.onScroll, true);
+    scrollListener.current = null;
+  };
+  const attachObserver = () => {
+    observer.current?.disconnect();
+    observer.current = null;
+    detachScroll();
+    const doc = iframe.current?.contentDocument;
+    const body = doc?.body;
+    if (!doc || !body || typeof MutationObserver === 'undefined') return;
+    // Scroll does not mutate the DOM, so the observer never sees a phone page move under the
+    // hand tool. Capture on the document hears every descendant scroller and refreshes hit targets.
+    const onScroll = () => collectRef.current();
+    doc.addEventListener('scroll', onScroll, true);
+    scrollListener.current = { doc, onScroll };
+    let observedProbeVersion = focusProbeVersion(doc);
+    observer.current = new MutationObserver((mutations) => {
+      const currentVersion = focusProbeVersion(doc);
+      const probeRan = currentVersion !== observedProbeVersion;
+      observedProbeVersion = currentVersion;
+      // Identity stamps never change what a collection reports.
+      if (mutations.every((mutation) => mutation.type === 'attributes' && mutation.attributeName === 'data-layout-node')) return;
+      // A geometry collection bumped the probe version, and that very collection already
+      // re-read the DOM after these mutations queued, so the batch carries nothing new. Genuine
+      // changes keep collecting because no probe ran and the version stays unchanged.
+      if (probeRan) return;
+      collectRef.current();
+    });
+    observer.current.observe(body, { childList: true, subtree: true, attributes: true });
+  };
 
   useEffect(() => {
     loaded.current = false;
@@ -102,6 +231,15 @@ export function PreviewPane(props: PreviewPaneProps) {
   useEffect(() => {
     if (loaded.current) sendInit();
   }, [props.target, props.format, props.language, props.mode, props.serverConnected, props.state, props.theme, props.flow]);
+  useEffect(() => {
+    if (!loaded.current) return;
+    collect();
+  }, [props.target, props.route, props.format, props.language, props.theme, props.zoom]);
+  useEffect(() => () => {
+    observer.current?.disconnect();
+    observer.current = null;
+    detachScroll();
+  }, []);
   useEffect(() => {
     if (loaded.current) send({ type: 'navigate', route: props.route });
   }, [props.route]);
@@ -153,10 +291,16 @@ export function PreviewPane(props: PreviewPaneProps) {
       <CanvasControls
         zoom={props.zoom}
         tool={props.tool}
+        rulers={guideSettings.showRulers}
+        grid={guideSettings.showGrid}
+        snap={guideSettings.snapToGuides}
         onZoomIn={() => setZoom(props.zoom * 1.25)}
         onZoomOut={() => setZoom(props.zoom / 1.25)}
         onFit={fit}
         onTool={props.onTool}
+        onToggleRulers={() => props.onGuideSettingsChange?.({ showRulers: !guideSettings.showRulers })}
+        onToggleGrid={() => props.onGuideSettingsChange?.({ showGrid: !guideSettings.showGrid })}
+        onToggleSnap={() => props.onGuideSettingsChange?.({ snapToGuides: !guideSettings.snapToGuides })}
       />
       <div
         ref={viewportElement}
@@ -184,6 +328,7 @@ export function PreviewPane(props: PreviewPaneProps) {
       >
         <div class="editor-canvas-stage">
           <div class="editor-artboard-size" data-testid="artboard-size" style={{ width: `${viewport.width * props.zoom}px`, height: `${viewport.height * props.zoom}px` }}>
+            {guideSettings.showRulers && <Rulers viewport={viewport} zoom={props.zoom} />}
             <div class="editor-artboard" style={{ width: `${viewport.width}px`, height: `${viewport.height}px`, transform: `scale(${props.zoom})` }}>
               <iframe
                 key={`${props.target}-${props.language}`}
@@ -206,7 +351,40 @@ export function PreviewPane(props: PreviewPaneProps) {
                   keyTarget.current?.removeEventListener('keydown', forwardPreviewKey);
                   keyTarget.current = iframe.current?.contentDocument || null;
                   keyTarget.current?.addEventListener('keydown', forwardPreviewKey);
+                  attachObserver();
+                  collect();
                 }}
+              />
+              <SelectionOverlay
+                active={props.editable !== false && props.mode === 'design' && props.tool === 'select'}
+                viewport={viewport}
+                zoom={props.zoom}
+                context={layoutContext}
+                nodes={collected.nodes}
+                rects={collected.rects}
+                directions={collected.directions}
+                guideSettings={guideSettings}
+                containers={(props.theme.layout?.containers ?? []).filter(
+                  (container) => container.target === layoutContext.target
+                    && container.screenId === layoutContext.screenId
+                    && container.format === layoutContext.format,
+                )}
+                placements={(props.theme.layout?.placements ?? []).filter(
+                  (placement) => placement.target === layoutContext.target
+                    && placement.screenId === layoutContext.screenId
+                    && placement.format === layoutContext.format,
+                )}
+                selectedIds={props.selection.ids}
+                anchorId={props.selection.anchorId}
+                getIframeRect={() => {
+                  const box = iframe.current?.getBoundingClientRect();
+                  return { x: box?.x ?? 0, y: box?.y ?? 0, width: box?.width ?? 0, height: box?.height ?? 0 };
+                }}
+                getPreviewDocument={() => iframe.current?.contentDocument ?? null}
+                onSelect={props.onSelectNode}
+                onMoveNode={props.onMoveNode}
+                onPlaceNode={props.onPlaceNode}
+                onPlaceNodes={props.onPlaceNodes}
               />
             </div>
           </div>

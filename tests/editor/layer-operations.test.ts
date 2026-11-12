@@ -1,0 +1,506 @@
+import { describe, expect, it } from 'vitest';
+import type { LayoutContext, LayoutPlacement } from '../../design/schema';
+import { getLayoutPlacement } from '../../design/layout';
+import { observeLayout } from '../../design/layoutDom';
+import { parseThemeDocument } from '../../design/validation';
+import { createDraftController, type DraftController } from '../../editor/src/drafts';
+import { createDefaultDraft } from '../../editor/shared/draft';
+import { createPlacement, moveNodeTransaction } from '../../editor/src/layout/transactions';
+import {
+  copyNodes,
+  duplicateNode,
+  LAYER_CLIPBOARD_LIMIT,
+  LAYOUT_CLONE_HTML_LIMIT,
+  LAYER_NAME_LIMIT,
+  parseLayoutClipboard,
+  pasteNodes,
+  renameNode,
+  setNodeHidden,
+  setNodeLocked,
+  type LayerNodeArgs,
+} from '../../editor/src/layout/layerOperations';
+
+const BASE = '0000000000000000000000000000000000000000';
+const context: LayoutContext = { target: 'desktop-windows', screenId: 'library', format: 'landscape' };
+const otherContext: LayoutContext = { target: 'desktop-windows', screenId: 'news', format: 'landscape' };
+
+function createController(): DraftController {
+  return createDraftController({
+    draft: createDefaultDraft('draft-layers', BASE),
+    client: {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+    },
+  });
+}
+
+function args(nodeId: string, label: string, base?: LayoutPlacement): LayerNodeArgs {
+  return { context, nodeId, label, base };
+}
+
+function orderOf(controller: DraftController, ctx: LayoutContext, parentId: string): string[] {
+  const container = controller.draft.theme.layout?.containers.find(
+    (entry) => entry.target === ctx.target
+      && entry.screenId === ctx.screenId
+      && entry.format === ctx.format
+      && entry.nodeId === parentId,
+  );
+  return container ? container.order : [];
+}
+
+describe('renameNode', () => {
+  it('renames a node and keeps the change in a single undo step', () => {
+    const controller = createController();
+
+    renameNode(controller, { ...args('card-a', 'Card A'), name: '  Главная карточка  ' });
+
+    const placement = getLayoutPlacement(controller.draft.theme, context, 'card-a');
+    expect(placement).toMatchObject({ label: 'Главная карточка', mode: 'flow' });
+    controller.undo();
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('renames an existing placement in place and preserves its id and geometry', () => {
+    const controller = createController();
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000 });
+    renameNode(controller, { ...args('card-a', 'Card A', base), name: 'Hero' });
+
+    const placement = getLayoutPlacement(controller.draft.theme, context, 'card-a');
+    expect(placement).toMatchObject({ id: base.id, label: 'Hero', mode: 'absolute', x: 2500, y: 1200, width: 5000 });
+    controller.dispose();
+  });
+
+  it('ignores an empty name without touching the draft history', () => {
+    const controller = createController();
+
+    renameNode(controller, { ...args('card-a', 'Card A'), name: '   ' });
+
+    expect(controller.canUndo).toBe(false);
+    expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    controller.dispose();
+  });
+
+  it('truncates names longer than the layer name limit', () => {
+    const controller = createController();
+    const longName = 'а'.repeat(LAYER_NAME_LIMIT + 20);
+
+    renameNode(controller, { ...args('card-a', 'Card A'), name: longName });
+
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.label).toHaveLength(LAYER_NAME_LIMIT);
+    controller.dispose();
+  });
+});
+
+describe('setNodeHidden', () => {
+  it('hides a node and restores it with one undo step', () => {
+    const controller = createController();
+
+    setNodeHidden(controller, args('card-a', 'Card A'), true);
+
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.hidden).toBe(true);
+    controller.undo();
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('unhides a hidden node in place without adding undo steps for repeated values', () => {
+    const controller = createController();
+    setNodeHidden(controller, args('card-a', 'Card A'), true);
+    const base = getLayoutPlacement(controller.draft.theme, context, 'card-a');
+    const undoDepth = controller.canUndo;
+
+    setNodeHidden(controller, args('card-a', 'Card A', base), true);
+    expect(controller.canUndo).toBe(undoDepth);
+
+    setNodeHidden(controller, args('card-a', 'Card A', base), false);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.hidden).toBe(false);
+    expect(base && getLayoutPlacement(controller.draft.theme, context, 'card-a')?.id).toBe(base!.id);
+    controller.dispose();
+  });
+});
+
+describe('setNodeLocked', () => {
+  it('locks a node so edits are blocked until it is unlocked, each in one undo step', () => {
+    const controller = createController();
+
+    setNodeLocked(controller, args('card-a', 'Card A'), true);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.locked).toBe(true);
+
+    setNodeLocked(controller, args('card-a', 'Card A', getLayoutPlacement(controller.draft.theme, context, 'card-a')), false);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.locked).toBe(false);
+
+    controller.undo();
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.locked).toBe(true);
+    controller.undo();
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toBeUndefined();
+    controller.dispose();
+  });
+});
+
+describe('placement ids across contexts', () => {
+  it('keeps placement ids unique when the same node is hidden, locked and renamed in other contexts', () => {
+    const controller = createController();
+    const portrait: LayoutContext = { ...context, format: 'portrait' };
+
+    setNodeHidden(controller, args('card-a', 'Card A'), true);
+    setNodeLocked(controller, { context: portrait, nodeId: 'card-a', label: 'Card A' }, true);
+    renameNode(controller, { context: otherContext, nodeId: 'card-a', label: 'Card A', name: 'Hero' });
+
+    const placements = controller.draft.theme.layout?.placements ?? [];
+    expect(placements).toHaveLength(3);
+    const ids = placements.map((placement) => placement.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe('placement-card-a');
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.hidden).toBe(true);
+    expect(getLayoutPlacement(controller.draft.theme, portrait, 'card-a')?.locked).toBe(true);
+    expect(getLayoutPlacement(controller.draft.theme, otherContext, 'card-a')?.label).toBe('Hero');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+    controller.dispose();
+  });
+
+  it('bounds placement ids to the schema limit for the longest supported node ids', () => {
+    const controller = createController();
+    const longNodeId = 'a'.repeat(64);
+    const portrait: LayoutContext = { ...context, format: 'portrait' };
+
+    setNodeHidden(controller, { context, nodeId: longNodeId, label: 'Long node' }, true);
+    setNodeLocked(controller, { context: portrait, nodeId: longNodeId, label: 'Long node' }, true);
+
+    const placements = controller.draft.theme.layout?.placements ?? [];
+    expect(placements).toHaveLength(2);
+    for (const placement of placements) {
+      expect(placement.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+      expect(placement.nodeId).toBe(longNodeId);
+    }
+    const roundTripped = parseThemeDocument(JSON.parse(JSON.stringify(controller.draft.theme)));
+    expect(roundTripped.layout?.placements.map((placement) => placement.id).sort())
+      .toEqual(placements.map((placement) => placement.id).sort());
+    controller.dispose();
+  });
+});
+
+describe('duplicateNode', () => {
+  it('duplicates a node with a fresh schema-safe id, a copy label and the same geometry', () => {
+    const controller = createController();
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000, hidden: true, locked: true });
+
+    const copyId = duplicateNode(controller, { ...args('card-a', 'Card A', base), parentId: 'card-grid' });
+
+    expect(copyId).not.toBe('card-a');
+    expect(copyId).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    const copy = getLayoutPlacement(controller.draft.theme, context, copyId);
+    expect(copy).toMatchObject({
+      mode: 'absolute',
+      x: 2500,
+      y: 1200,
+      width: 5000,
+      height: 3000,
+      label: 'Card A копия',
+      hidden: false,
+      locked: false,
+    });
+    controller.dispose();
+  });
+
+  it('inserts the copy right after the original in a recorded container order and undoes as one step', () => {
+    const controller = createController();
+    moveNodeTransaction(controller, { context, nodeId: 'card-a', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 1 });
+    const before = orderOf(controller, context, 'card-grid');
+
+    const copyId = duplicateNode(controller, { ...args('card-a', 'Card A', getLayoutPlacement(controller.draft.theme, context, 'card-a')), parentId: 'card-grid' });
+
+    expect(orderOf(controller, context, 'card-grid')).toEqual(['card-a', copyId, 'card-b']);
+    controller.undo();
+    expect(orderOf(controller, context, 'card-grid')).toEqual(before);
+    expect(getLayoutPlacement(controller.draft.theme, context, copyId)).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('does not create a container record for an unrecorded parent', () => {
+    const controller = createController();
+
+    duplicateNode(controller, { ...args('card-a', 'Card A'), parentId: 'card-grid' });
+
+    expect(controller.draft.theme.layout?.containers ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.placements).toHaveLength(1);
+    controller.dispose();
+  });
+
+  it('stores a schema-validated clone record with the sanitized html snapshot next to the copy', () => {
+    const controller = createController();
+    const html = '<div class="m-card" data-design-id="card" data-key="hash-9">Snapshot</div>';
+
+    const copyId = duplicateNode(controller, { ...args('card-a', 'Card A'), parentId: 'card-grid', html });
+
+    const layout = controller.draft.theme.layout!;
+    const clone = layout.clones!.find((entry) => entry.nodeId === copyId)!;
+    expect(clone).toMatchObject({
+      parentId: 'card-grid',
+      label: 'Card A копия',
+      sourceNodeId: 'card-a',
+      target: 'desktop-windows',
+      screenId: 'library',
+      format: 'landscape',
+    });
+    expect(clone.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+    expect(clone.id).not.toBe(copyId);
+    expect(clone.html).toContain('Snapshot');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
+    expect(getLayoutPlacement(controller.draft.theme, context, copyId)).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('keeps the layout-only fallback when no html snapshot is available', () => {
+    const controller = createController();
+
+    duplicateNode(controller, { ...args('card-a', 'Card A'), parentId: 'card-grid', html: null });
+
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.placements).toHaveLength(1);
+    controller.dispose();
+  });
+});
+
+describe('clipboard', () => {
+  it('carries the size basis through copy and paste so a clone keeps its measured size', () => {
+    const controller = createController();
+    const placement = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute', x: 0, y: 0, width: 5000, height: 5000, basisWidth: 400, basisHeight: 400,
+    });
+
+    const clipboard = copyNodes([placement]);
+    expect(clipboard.nodes[0]).toMatchObject({ width: 5000, basisWidth: 400, basisHeight: 400 });
+
+    const [pastedId] = pasteNodes(controller, { context, clipboard });
+    const pasted = controller.draft.theme.layout?.placements.find((entry) => entry.nodeId === pastedId);
+    expect(pasted).toMatchObject({ width: 5000, height: 5000, basisWidth: 400, basisHeight: 400 });
+
+    // Under an 800px parent the pasted clone still renders the saved 200px width instead of
+    // 50% of the new parent.
+    const renderTheme = createDefaultDraft('render', BASE).theme;
+    renderTheme.layout = { containers: [], placements: [{ ...pasted!, nodeId: 'card', id: 'place-card' }] };
+    const root = document.createElement('div');
+    root.innerHTML = '<div data-design-id="pane" style="width: 800px"><div data-design-id="card">A</div></div>';
+    document.body.appendChild(root);
+    const stop = observeLayout(root, renderTheme, context);
+
+    expect(root.querySelector<HTMLElement>('[data-design-id="card"]')!.style.width).toBe('200px');
+
+    stop();
+    root.remove();
+    controller.dispose();
+  });
+
+  it('carries size limits through copy and paste', () => {
+    const controller = createController();
+    const placement = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute',
+      x: 0,
+      y: 0,
+      width: 8000,
+      height: 2000,
+      minWidth: 7500,
+      maxWidth: 9000,
+      minHeight: 1000,
+      maxHeight: 4000,
+    });
+
+    const clipboard = copyNodes([placement]);
+    expect(clipboard.nodes[0]).toMatchObject({ minWidth: 7500, maxWidth: 9000, minHeight: 1000, maxHeight: 4000 });
+
+    const parsed = parseLayoutClipboard(JSON.parse(JSON.stringify(clipboard)));
+    expect(parsed.errors).toEqual([]);
+    const [pastedId] = pasteNodes(controller, { context, clipboard });
+    const pasted = controller.draft.theme.layout?.placements.find((entry) => entry.nodeId === pastedId);
+    expect(pasted).toMatchObject({ minWidth: 7500, maxWidth: 9000, minHeight: 1000, maxHeight: 4000 });
+
+    const broken = JSON.parse(JSON.stringify(clipboard)) as { nodes: Array<Record<string, unknown>> };
+    broken.nodes[0].minWidth = 10001;
+    expect(parseLayoutClipboard(broken).clipboard).toBeNull();
+    controller.dispose();
+  });
+
+  it('copyNodes strips node ids, context and placement ids and keeps layout data', () => {
+    const placement = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000, margin: '8px', zIndex: 3, hidden: true, locked: true,
+    });
+
+    const clipboard = copyNodes([placement]);
+    const node = clipboard.nodes[0];
+
+    expect(clipboard.schemaVersion).toBe(1);
+    expect(node).toMatchObject({ label: 'Card A', mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000, margin: '8px', zIndex: 3, hidden: true, locked: true });
+    expect('nodeId' in node).toBe(false);
+    expect('id' in node).toBe(false);
+    expect('action' in node).toBe(false);
+    expect('target' in node).toBe(false);
+    expect('screenId' in node).toBe(false);
+  });
+
+  it('copyNodes clamps the clipboard to the node limit', () => {
+    const placements = Array.from({ length: LAYER_CLIPBOARD_LIMIT + 25 }, (_, index) =>
+      createPlacement(context, `card-${index}`, `Card ${index}`));
+
+    expect(copyNodes(placements).nodes).toHaveLength(LAYER_CLIPBOARD_LIMIT);
+  });
+
+  it('copyNodes attaches sanitized html snapshots while keeping node ids and actions out', () => {
+    const placement = createPlacement(context, 'card-a', 'Card A');
+
+    const withHtml = copyNodes([placement], () => '<div data-design-id="card">Snap</div>');
+    expect(withHtml.nodes[0].html).toContain('Snap');
+    expect('action' in withHtml.nodes[0]).toBe(false);
+    expect('nodeId' in withHtml.nodes[0]).toBe(false);
+
+    expect(copyNodes([placement]).nodes[0].html).toBeUndefined();
+    expect(copyNodes([placement], () => null).nodes[0].html).toBeUndefined();
+  });
+
+  it('parseLayoutClipboard accepts a clipboard produced by copyNodes', () => {
+    const placement = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 2500, y: 1200 });
+    const parsed = parseLayoutClipboard(JSON.parse(JSON.stringify(copyNodes([placement]))));
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.clipboard?.nodes[0]).toMatchObject({ label: 'Card A', mode: 'absolute', x: 2500, y: 1200 });
+  });
+
+  it('parseLayoutClipboard reports incompatibilities instead of throwing', () => {
+    const valid = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+
+    expect(parseLayoutClipboard(null).clipboard).toBeNull();
+    expect(parseLayoutClipboard({ ...valid, schemaVersion: 2 }).errors[0]).toContain('версия');
+    expect(parseLayoutClipboard({ schemaVersion: 1, nodes: [] }).errors[0]).toContain('узлов');
+    expect(parseLayoutClipboard({ schemaVersion: 1, nodes: Array(LAYER_CLIPBOARD_LIMIT + 1).fill(valid.nodes[0]) }).errors[0]).toContain('100');
+
+    const broken = { ...valid.nodes[0], mode: 'diagonal', anchor: 'center', x: Number.NaN, width: 'wide', hidden: 'yes' };
+    const parsed = parseLayoutClipboard({ schemaVersion: 1, nodes: [broken] });
+    expect(parsed.clipboard).toBeNull();
+    expect(parsed.errors.length).toBeGreaterThanOrEqual(4);
+    expect(parsed.errors[0]).toContain('Узел 1');
+  });
+
+  it('parseLayoutClipboard rejects html with scripts or over the clone html limit', () => {
+    const valid = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+    const scripted = { ...valid.nodes[0], html: '<div><script>alert(1)</script></div>' };
+    const parsedScript = parseLayoutClipboard({ schemaVersion: 1, nodes: [scripted] });
+    expect(parsedScript.clipboard).toBeNull();
+    expect(parsedScript.errors[0]).toContain('html');
+
+    const slash = { ...valid.nodes[0], html: '<script/>alert(1)' };
+    const parsedSlash = parseLayoutClipboard({ schemaVersion: 1, nodes: [slash] });
+    expect(parsedSlash.clipboard).toBeNull();
+    expect(parsedSlash.errors[0]).toContain('html');
+
+    const long = { ...valid.nodes[0], html: `<div>${'a'.repeat(LAYOUT_CLONE_HTML_LIMIT + 1)}</div>` };
+    const parsedLong = parseLayoutClipboard({ schemaVersion: 1, nodes: [long] });
+    expect(parsedLong.clipboard).toBeNull();
+    expect(parsedLong.errors[0]).toContain('html');
+  });
+
+  it('parseLayoutClipboard rejects geometry, sizes and zIndex outside schema bounds and arbitrary margin strings', () => {
+    const valid = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+    const node = valid.nodes[0];
+
+    const rejected = [
+      { ...node, x: -1 },
+      { ...node, y: 1.5 },
+      { ...node, x: 10001 },
+      { ...node, width: -5 },
+      { ...node, height: 100.5 },
+      { ...node, zIndex: 1000 },
+      { ...node, zIndex: -1 },
+      { ...node, zIndex: 2.5 },
+      { ...node, margin: 'auto' },
+      { ...node, margin: '12' },
+      { ...node, margin: '1000px' },
+      { ...node, margin: '1.234px' },
+    ];
+    for (const candidate of rejected) {
+      const parsed = parseLayoutClipboard({ schemaVersion: 1, nodes: [candidate] });
+      expect(parsed.clipboard).toBeNull();
+      expect(parsed.errors[0]).toContain('Узел 1');
+    }
+  });
+
+  it('parseLayoutClipboard accepts boundary values allowed by the schema', () => {
+    const node = {
+      ...copyNodes([createPlacement(context, 'card-a', 'Card A')]).nodes[0],
+      x: 10000,
+      y: 0,
+      width: 10000,
+      height: 'auto',
+      zIndex: 999,
+      margin: '512px',
+    };
+
+    const parsed = parseLayoutClipboard({ schemaVersion: 1, nodes: [node] });
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.clipboard?.nodes[0]).toMatchObject({ x: 10000, width: 10000, zIndex: 999, margin: '512px' });
+  });
+
+  it('pasteNodes pastes into another page with fresh ids and one undo step', () => {
+    const controller = createController();
+    const source = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000 });
+    const clipboard = copyNodes([source]);
+
+    const [pastedId] = pasteNodes(controller, { context: otherContext, clipboard });
+
+    expect(pastedId).not.toBe('card-a');
+    const pasted = getLayoutPlacement(controller.draft.theme, otherContext, pastedId);
+    expect(pasted).toMatchObject({ label: 'Card A', mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000 });
+    expect(pasted?.target).toBe('desktop-windows');
+    expect(pasted?.screenId).toBe('news');
+    expect(getLayoutPlacement(controller.draft.theme, context, pastedId)).toBeUndefined();
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    controller.dispose();
+  });
+
+  it('pasteNodes appends pasted ids to a recorded parent container and keeps ids unique across pastes', () => {
+    const controller = createController();
+    moveNodeTransaction(controller, { context, nodeId: 'card-a', parentId: 'card-grid', index: 0 });
+    const clipboard = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+
+    const first = pasteNodes(controller, { context, clipboard, parentId: 'card-grid' });
+    const second = pasteNodes(controller, { context, clipboard, parentId: 'card-grid' });
+
+    expect(orderOf(controller, context, 'card-grid')).toEqual(['card-a', ...first, ...second]);
+    expect(new Set([...first, ...second]).size).toBe(2);
+    controller.undo();
+    controller.undo();
+    expect(orderOf(controller, context, 'card-grid')).toEqual(['card-a']);
+    controller.dispose();
+  });
+
+  it('pasteNodes materializes clone records with fresh ids and removes everything in one undo step', () => {
+    const controller = createController();
+    const clipboard = copyNodes(
+      [createPlacement(context, 'card-a', 'Card A')],
+      () => '<div data-design-id="card">Snap</div>',
+    );
+
+    const [pastedId] = pasteNodes(controller, { context, clipboard, parentId: 'card-grid' });
+
+    const layout = controller.draft.theme.layout!;
+    const clone = layout.clones!.find((entry) => entry.nodeId === pastedId)!;
+    expect(clone).toMatchObject({ parentId: 'card-grid', label: 'Card A', html: '<div data-design-id="card">Snap</div>' });
+    expect(clone.nodeId).not.toBe('card-a');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+
+    controller.undo();
+    expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
+    expect(controller.draft.theme.layout?.clones ?? []).toHaveLength(0);
+    controller.dispose();
+  });
+});

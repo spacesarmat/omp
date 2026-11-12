@@ -1,6 +1,6 @@
 import { parseEditorDraft, type EditorDraft } from '../shared/draft';
 import { parseFlowDocument, parseThemeDocument } from '../../design/validation';
-import type { ExportResult } from '../export.mjs';
+import type { ExportDiff, ExportResult, ExportScope } from '../export.mjs';
 import type { CommittedDesign, RebaseResult } from '../design.mjs';
 
 export class EditorApiError extends Error {
@@ -56,7 +56,8 @@ export interface EditorClient {
   copyDraft?(draft: EditorDraft, sourceId: string): Promise<EditorDraft>;
   getDesign(): Promise<CommittedDesign | null>;
   rebaseDraft(draft: EditorDraft): Promise<RebaseResult>;
-  exportDraft(draft: EditorDraft): Promise<ExportResult>;
+  exportDraft(draft: EditorDraft, options?: { scope?: ExportScope }): Promise<ExportResult>;
+  exportDiff?(draft: EditorDraft, options?: { scope?: ExportScope }): Promise<ExportDiff>;
 }
 
 export interface EditorClientOptions {
@@ -162,14 +163,23 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
       if (!response.ok) throw await apiError(response);
       return rebaseResult(await response.json());
     },
-    exportDraft: async (draft) => {
+    exportDraft: async (draft, options) => {
       const response = await request('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ draft, scope: options?.scope ?? { kind: 'all' } }),
       });
       if (!response.ok) throw await apiError(response);
       return response.json() as Promise<ExportResult>;
+    },
+    exportDiff: async (draft, options) => {
+      const response = await request('/api/export/diff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ draft, scope: options?.scope ?? { kind: 'all' } }),
+      });
+      if (!response.ok) throw await apiError(response);
+      return response.json() as Promise<ExportDiff>;
     },
   };
 }

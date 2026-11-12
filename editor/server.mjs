@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { parseEditorDraft } from './shared/draft.ts';
-import { exportDraft, inheritExportManifest, withRepositoryLock } from './export.mjs';
+import { createExportDiff, createExportPlan, exportDraft, inheritExportManifest, withRepositoryLock } from './export.mjs';
 import { getCommittedDesign, rebaseDraft } from './design.mjs';
 
 const execute = promisify(execFile);
@@ -60,6 +60,27 @@ async function draftFrom(request) {
   if (contentType !== 'application/json') throw new HttpError(415, 'JSON_REQUIRED');
   try {
     return parseEditorDraft(JSON.parse(await body(request)));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, 'INVALID_DRAFT');
+  }
+}
+
+async function exportRequestFrom(request) {
+  const contentType = String(request.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (contentType !== 'application/json') throw new HttpError(415, 'JSON_REQUIRED');
+  let payload;
+  try {
+    payload = JSON.parse(await body(request));
+  } catch (error) {
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(400, 'INVALID_DRAFT');
+  }
+  try {
+    if (typeof payload === 'object' && payload !== null && !Array.isArray(payload) && 'draft' in payload) {
+      return { draft: parseEditorDraft(payload.draft), scope: payload.scope };
+    }
+    return { draft: parseEditorDraft(payload), scope: undefined };
   } catch (error) {
     if (error instanceof HttpError) throw error;
     throw new HttpError(400, 'INVALID_DRAFT');
@@ -190,8 +211,14 @@ export async function startEditorServer({ root, token = randomBytes(32).toString
         json(response, 200, await rebaseDraft({ root, draft: await draftFrom(request) }));
         return;
       }
+      if (url.pathname === '/api/export/diff' && request.method === 'POST') {
+        const { draft, scope } = await exportRequestFrom(request);
+        json(response, 200, await createExportDiff(root, createExportPlan(draft, scope)));
+        return;
+      }
       if (url.pathname === '/api/export' && request.method === 'POST') {
-        json(response, 200, await exportDraft({ root, draft: await draftFrom(request) }));
+        const { draft, scope } = await exportRequestFrom(request);
+        json(response, 200, await exportDraft({ root, draft, scope }));
         return;
       }
       const copyMatch = url.pathname.match(/^\/api\/drafts\/([^/]+)\/copy$/);

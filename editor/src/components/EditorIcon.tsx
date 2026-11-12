@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 
-export type EditorIconName = 'logo' | 'undo' | 'redo' | 'compare' | 'snapshot' | 'design' | 'logic' | 'play' | 'layers' | 'frame' | 'sidebar' | 'component' | 'button' | 'content' | 'chevron' | 'cursor' | 'hand' | 'minus' | 'plus' | 'fit';
+export type EditorIconName = 'logo' | 'undo' | 'redo' | 'compare' | 'snapshot' | 'design' | 'logic' | 'play' | 'layers' | 'frame' | 'sidebar' | 'component' | 'button' | 'content' | 'chevron' | 'cursor' | 'hand' | 'minus' | 'plus' | 'fit' | 'eye' | 'eye-off' | 'lock' | 'unlock' | 'copy' | 'grid' | 'magnet';
 
 export interface EditorIconProps {
   name: EditorIconName;
@@ -29,6 +29,13 @@ export function EditorIcon({ name, size = 16 }: EditorIconProps) {
     minus: <path d="M5 12h14" />,
     plus: <path d="M5 12h14M12 5v14" />,
     fit: <><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" /><rect x="7" y="7" width="10" height="10" rx="1" /></>,
+    eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></>,
+    'eye-off': <><path d="M4 4l16 16M10.5 5.2A11 11 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3 3.4M6.6 6.6C3.6 8.4 2 12 2 12s4 7 10 7a10 10 0 0 0 4-.8" /></>,
+    lock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
+    unlock: <><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 7.7-1.5" /></>,
+    copy: <><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" /></>,
+    grid: <><path d="M4 4h16v16H4z" /><path d="M4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16" /></>,
+    magnet: <><path d="M7 4v8a5 5 0 0 0 10 0V4" /><path d="M7 4h4v5h-4M13 4h4v5h-4" /><path d="M8 20h8" /></>,
   };
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{paths[name]}</svg>;
 }
