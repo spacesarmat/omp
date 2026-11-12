@@ -829,6 +829,8 @@ describe('Remote for Android TV', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · нет связи');
+    expect(el.querySelector('[data-no-answer]')).toBeTruthy();
+    expect(el.querySelector('[data-power]')).toBeNull();
   });
 
   it('d-pad, OK, Назад, Домой, Сейчас играет and volume', () => {
@@ -1093,6 +1095,16 @@ describe('Remote remembers the saved TVs', () => {
     act(() => {
       tvState.value = 'idle';
     });
+  });
+
+  it('uses the mode chosen on the other TV', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    saveTv({ ip: '192.168.1.191', name: 'Dune HD', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    setActiveTv('192.168.1.191');
+    mount();
+    click(byBtn('Свайпы')!);
+    act(() => setActiveTv('192.168.1.156'));
+    expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Тачпад');
   });
 
   it('remembers buttons or the touchpad', () => {

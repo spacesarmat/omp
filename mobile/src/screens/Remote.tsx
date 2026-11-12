@@ -856,7 +856,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
     void act.warmUp();
   };
   return (
-    <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+    <div class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -869,7 +869,9 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       />
       {mode !== 'touchpad' && (
         <>
-          <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
+          {!(state === 'error' && !tvWaking.value) && (
+            <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
+          )}
           <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />
         </>
       )}
@@ -1004,6 +1006,9 @@ export function Remote() {
     setMode(next);
     storeMode(next);
   };
+  useEffect(() => {
+    setMode(savedMode());
+  }, [tv && tv.ip, tv && tv.kind]);
   const [kbd, setKbd] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [tuning, setTuning] = useState(false);
