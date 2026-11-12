@@ -217,3 +217,19 @@ export function buildView(groups: { id: string; title: string }[], checks: Monit
   const order = new Map(groups.map((g, i) => [g.id, i]));
   return out.sort((a, b) => (a.failed ? 0 : 1) - (b.failed ? 0 : 1) || (order.get(a.id) || 0) - (order.get(b.id) || 0));
 }
+
+function statusWord(ok: boolean | null) {
+  if (ok === true) return 'ок';
+  if (ok === false) return 'ошибка';
+  return 'нет данных';
+}
+
+/** Readable lines plus the raw check, for the monitor detail window. */
+export function monitorDetailText(row: MonitorCheck): string {
+  const lines = [row.name, 'id: ' + row.id, 'статус: ' + statusWord(row.ok), 'результат: ' + (row.detail || '-')];
+  if (row.context) lines.push('контекст: ' + row.context);
+  lines.push('время ответа: ' + (row.ms || 0) + ' мс');
+  if (row.path) lines.push('путь: ' + row.path);
+  if (row.target) lines.push('адрес: ' + row.target);
+  return lines.join('\n') + '\n\n' + JSON.stringify(row, null, 2);
+}

@@ -11,6 +11,9 @@ import { post } from '@/lib/api';
 import type { DeskData, DeskDevice, DeskUser } from '@/lib/desk';
 import { Stamp } from '@/components/stamp';
 import { toast } from '@/components/chrome';
+import { LogDialog } from '@/components/logDialog';
+import { healthReport } from '@/lib/logText';
+import type { HealthRow } from '@/lib/desk';
 
 function Spark({ rows }: { rows?: { t: string | number; v: number }[] }) {
   const data = rows || [];
@@ -93,14 +96,7 @@ export function DeskHome({ data, csrf }: { data?: DeskData; csrf: string }) {
               <Badge variant={h.ok ? 'ok' : h.ok === false ? 'bad' : 'warn'}>{h.ok ? 'ок' : h.ok === false ? 'нет' : '-'}</Badge>
             </div>
           ))}
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void post('/admin/api/sources/check', csrf, {}).then((r) => toast(r.ok ? 'Проверено' : r.flash?.error || 'Не вышло'))
-            }
-          >
-            Проверить источники
-          </Button>
+          <SourceCheck csrf={csrf} label="Проверить источники" />
         </CardContent>
       </Card>
     </div>
@@ -207,7 +203,7 @@ export function SourcesDesk({ data, csrf }: { data?: DeskData; csrf: string }) {
           </CardContent>
         </Card>
       ))}
-      <Button onClick={() => void post('/admin/api/sources/check', csrf, {}).then(() => toast('Проверено'))}>Проверить сейчас</Button>
+      <SourceCheck csrf={csrf} label="Проверить сейчас" />
     </div>
   );
 }
@@ -370,9 +366,35 @@ type NucBox = {
   restart?: boolean;
 };
 
+function SourceCheck({ csrf, label }: { csrf: string; label: string }) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() =>
+          void post('/admin/api/sources/check', csrf, {}).then((r) => {
+            const health = (r as { health?: HealthRow[] }).health;
+            if (!r.ok || !health) {
+              toast(r.ok ? 'Проверено' : r.flash?.error || 'Не вышло');
+              return;
+            }
+            setText(healthReport(health));
+          })
+        }
+      >
+        {label}
+      </Button>
+      {text != null ? <LogDialog title="Проверка источников" text={text} onClose={() => setText(null)} /> : null}
+    </>
+  );
+}
+
+type OpenLog = { name: string; text: string; refreshing: boolean };
+
 export function NucDesk({ csrf }: { csrf: string }) {
   const { paused } = useLive();
-  const [logs, setLogs] = useState('');
+  const [log, setLog] = useState<OpenLog | null>(null);
   const query = useQuery({
     queryKey: ['nuc'],
     refetchInterval: paused ? false : 15000,
@@ -412,14 +434,7 @@ export function NucDesk({ csrf }: { csrf: string }) {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  void fetch('/admin/api/nuc/logs?name=' + encodeURIComponent(c.name), { credentials: 'same-origin' })
-                    .then((r) => r.json())
-                    .then((j) => setLogs(c.name + '\n' + (j.lines || j.error || '')))
-                }
-              >
+              <Button variant="secondary" onClick={() => void openLog(c.name)}>
                 Лог
               </Button>
               {c.restart ? (
@@ -437,9 +452,28 @@ export function NucDesk({ csrf }: { csrf: string }) {
           </CardContent>
         </Card>
       ))}
-      {logs ? <pre className="max-h-80 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs">{logs}</pre> : null}
+      {log ? (
+        <LogDialog
+          title={'Лог ' + log.name}
+          text={log.text}
+          refreshing={log.refreshing}
+          onRefresh={() => void openLog(log.name)}
+          onClose={() => setLog(null)}
+        />
+      ) : null}
     </div>
   );
+
+  async function openLog(name: string) {
+    setLog((cur) => ({ name, text: cur && cur.name === name ? cur.text : '', refreshing: true }));
+    try {
+      const res = await fetch('/admin/api/nuc/logs?name=' + encodeURIComponent(name), { credentials: 'same-origin' });
+      const j = (await res.json()) as { lines?: string; error?: string };
+      setLog({ name, text: j.lines || j.error || '', refreshing: false });
+    } catch {
+      setLog({ name, text: 'логи недоступны', refreshing: false });
+    }
+  }
 }
 
 export function RollbackCard({ rows, csrf }: { rows: { id: string; at: number }[]; csrf: string }) {
