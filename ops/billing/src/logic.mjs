@@ -1361,7 +1361,7 @@ export function settleReferrals(state, now) {
   return { state: { ...state, subscriptions, referralJournal: journal }, granted };
 }
 
-function applyPaymentUnsettled(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw }) {
+function applyPaymentUnsettled(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw, cryptoTestnet }) {
   if (!operationId || seenPayment(input, operationId)) {
     return {
       state: logWebhook(input, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
@@ -1441,7 +1441,10 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
         result: { duplicate: true },
       };
     }
-    if (!cryptoInvoiceMatches(quote, operationId)) {
+    // The webhook passes the mode that signed the body. A settings save in between must not
+    // turn that payment into a permanent bad_label.
+    const signedTestnet = cryptoTestnet === undefined ? state.settings.cryptoTestnet === true : cryptoTestnet === true;
+    if (!cryptoInvoiceMatches(quote, operationId, signedTestnet)) {
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
