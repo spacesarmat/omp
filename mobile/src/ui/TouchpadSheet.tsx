@@ -22,6 +22,12 @@ function TryPad() {
       data-tp-try
       aria-hidden="true"
       onPointerDown={(e) => {
+        const el = e.currentTarget as HTMLElement;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* the test DOM has no capture */
+        }
         last.current = { x: e.clientX, y: e.clientY, t: Date.now() };
       }}
       onPointerMove={(e) => {
@@ -38,6 +44,12 @@ function TryPad() {
         }));
       }}
       onPointerUp={() => {
+        last.current = null;
+      }}
+      onPointerCancel={() => {
+        last.current = null;
+      }}
+      onLostPointerCapture={() => {
         last.current = null;
       }}
     >

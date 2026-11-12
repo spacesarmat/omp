@@ -599,10 +599,30 @@ function HoldButton(p: { class: string; label: string; onFire: () => void; child
   );
 }
 
-function HwVolume(p: { fire: (dir: 'up' | 'down' | 'mute') => void }) {
+function useRemoteKeys() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const node = ref.current;
+    const deck = node && (node.closest('.m-now-deck') as HTMLElement | null);
+    if (!deck) {
+      setOn(!!node);
+      return;
+    }
+    const read = () => setOn(deck.getAttribute('data-pane') === 'remote');
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(deck, { attributes: true, attributeFilter: ['data-pane'] });
+    return () => obs.disconnect();
+  }, []);
+  return { ref, on };
+}
+
+function HwVolume(p: { on: boolean; fire: (dir: 'up' | 'down' | 'mute') => void }) {
   const ref = useRef(p.fire);
   ref.current = p.fire;
   useEffect(() => {
+    if (!p.on) return;
     void native.setHwVolume(true);
     const onKey = (e: KeyboardEvent) => {
       const k = e.key;
@@ -622,7 +642,7 @@ function HwVolume(p: { fire: (dir: 'up' | 'down' | 'mute') => void }) {
       window.removeEventListener('keydown', onKey);
       void native.setHwVolume(false);
     };
-  }, []);
+  }, [p.on]);
   return null;
 }
 
@@ -863,6 +883,7 @@ function BoxRow({ tv }: { tv: SavedTv }) {
  * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
  */
 function AtvRemote({ tv }: { tv: SavedTv }) {
+  const keys = useRemoteKeys();
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
@@ -935,8 +956,9 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
     void act.warmUp();
   };
   return (
-    <div class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+    <div ref={keys.ref} class={screenClass() + (!box && state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
       <HwVolume
+        on={keys.on}
         fire={(dir) => {
           if (box) {
             boxKey(dir === 'up' ? 'VOLUMEUP' : dir === 'down' ? 'VOLUMEDOWN' : 'MUTE');
@@ -1089,6 +1111,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
 }
 
 export function Remote() {
+  const keys = useRemoteKeys();
   const tv = activeTv.value;
   const state = tvState.value;
   const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
@@ -1247,8 +1270,9 @@ export function Remote() {
   );
 
   return (
-    <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
+    <div ref={keys.ref} class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
       <HwVolume
+        on={keys.on}
         fire={(dir) => {
           vibrate();
           if (dir === 'mute') act.pressButton('MUTE').catch(fail);
