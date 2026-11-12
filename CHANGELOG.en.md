@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] A subscription page has edit, pause and delete in the header, a poster, quality chips, notifications, a link to the card and a check count
 - [phone] The subscription sheet keeps Delete and Save above the system bar. A swipe down with unsaved edits asks whether to save them. Releases already found do not notify
 - [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark
 - [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size

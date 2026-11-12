@@ -156,6 +156,10 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
   'tsp.finishSeen', // when this device first saw a shared finish: per device
+  'tsp.subHold', // subscriptions paused by hand on this phone
+  'tsp.subChecks', // times a manual check ran: rebuilt by the next checks
+  'tsp.subHold', // subscriptions paused by hand on this phone
+  'tsp.subChecks', // times «Проверить сейчас» ran: rebuilt by the next checks
   'tsp.historyHide', // phone: shows hidden from continue and history on this device
   'tsp.linkSpeed', // last measured download speed: rebuilt while watching
   'tsp.update', // update-check state
