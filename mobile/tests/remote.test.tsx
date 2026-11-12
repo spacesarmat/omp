@@ -829,6 +829,8 @@ describe('Remote for Android TV', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('.m-remote-state')!.textContent).toBe('Android TV · нет связи');
+    expect(el.querySelector('[data-no-answer]')).toBeTruthy();
+    expect(el.querySelector('[data-power]')).toBeNull();
   });
 
   it('d-pad, OK, Назад, Домой, Сейчас играет and volume', () => {
@@ -873,6 +875,8 @@ describe('Remote for Android TV', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('.m-remote-forgot')!.textContent).toContain(tvForgot());
+    expect(el.querySelector('[data-no-answer]')).toBeNull();
+    expect(el.querySelector('[data-power]')).toBeTruthy();
     click(text('Подключить заново'));
     const d = document.querySelector('[role="dialog"]') as HTMLElement;
     expect(d.textContent).toContain('Гостиная · Android TV');
@@ -1078,6 +1082,9 @@ describe('Remote remembers the saved TVs', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает - включите ТВ');
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('Включить');
+    expect(el.querySelector('[data-power]')).toBeNull();
+    expect(el.querySelector('.m-remote.dim')).toBeTruthy();
     a.warmUp.mockClear();
     click(byBtn('Повторить')!);
     expect(a.warmUp).toHaveBeenCalledTimes(1);
@@ -1085,9 +1092,28 @@ describe('Remote remembers the saved TVs', () => {
       tvState.value = 'connected';
     });
     expect(el.querySelector('[data-no-answer]')).toBeNull();
+    expect(el.querySelector('[data-remote-dot]')).toBeTruthy();
+    expect(el.querySelector('.m-remote.dim')).toBeNull();
     act(() => {
       tvState.value = 'idle';
     });
+  });
+
+  it('uses the mode chosen on the other TV', () => {
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    saveTv({ ip: '192.168.1.191', name: 'Dune HD', kind: 'atv', token: 'a'.repeat(32), ctlPort: 8095 });
+    setActiveTv('192.168.1.191');
+    mount();
+    click(byBtn('Свайпы')!);
+    act(() => setActiveTv('192.168.1.156'));
+    expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Тачпад');
+  });
+
+  it('remembers buttons or the touchpad', () => {
+    localStorage.setItem('tsp.remoteMode', 'touchpad');
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    mount();
+    expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Тачпад');
   });
 
   it('several saved TVs: the name opens a sheet with their state, one tap switches with the saved key', () => {
