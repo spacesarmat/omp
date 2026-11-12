@@ -20,3 +20,11 @@ export class DesignError extends Error {
 
 export function getCommittedDesign(root: string): Promise<CommittedDesign | null>;
 export function rebaseDraft(options: { root: string; draft: EditorDraft }): Promise<RebaseResult>;
+// Exported for merge regression tests; production callers go through rebaseDraft.
+export function mergeValue(
+  base: unknown,
+  local: unknown,
+  incoming: unknown,
+  path: string,
+  issues: Array<{ path: string }>,
+): unknown;

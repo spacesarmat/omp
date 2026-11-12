@@ -112,7 +112,8 @@ function mergeKey(path) {
   return null;
 }
 
-function mergeValue(base, local, incoming, path, issues) {  if (equal(local, base)) return structuredClone(incoming);
+// Exported for merge regression tests; rebaseDraft is the production entry point.
+export function mergeValue(base, local, incoming, path, issues) {  if (equal(local, base)) return structuredClone(incoming);
   if (equal(incoming, base) || equal(local, incoming)) return structuredClone(local);
   if (object(base) && object(local) && object(incoming)) {
     const result = {};
@@ -127,8 +128,16 @@ function mergeValue(base, local, incoming, path, issues) {  if (equal(local, bas
   if (key && (Array.isArray(base) || Array.isArray(local) || Array.isArray(incoming))) {
     // Layout records, style presets, flow rules, variables, steps, graph nodes and edges carry
     // unique record ids, so independent edits to different records merge entry by entry instead
-    // of conflicting as whole arrays. A missing collection means "no records yet": additions on
-    // both sides still merge by id, while an edit on one side rejects against a deletion.
+    // of conflicting as whole arrays. An absent (undefined) collection means "no records yet" or
+    // a deletion: additions on both sides still merge by id, and an edit on one side rejects
+    // against a deletion. A defined non-array value cannot come from a parsed document, so it
+    // rejects instead of being normalized to an empty collection.
+    for (const side of [base, local, incoming]) {
+      if (side !== undefined && !Array.isArray(side)) {
+        issues.push({ path });
+        return structuredClone(local);
+      }
+    }
     const baseEntries = Array.isArray(base) ? base : [];
     const localEntries = Array.isArray(local) ? local : [];
     const incomingEntries = Array.isArray(incoming) ? incoming : [];

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getCommittedDesign, rebaseDraft } from '../../editor/design.mjs';
+import { getCommittedDesign, mergeValue, rebaseDraft } from '../../editor/design.mjs';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import type { LayoutClone, LayoutContainer, LayoutPlacement } from '../../design/schema';
 
@@ -458,8 +458,27 @@ describe('committed editor designs', () => {
     });
   });
 
-  it('stops instead of inventing a base when its commit is unavailable', async () => {
-    const root = await makeRepo();
+  it('rejects a non-array value on a keyed merge collection instead of normalizing it', () => {
+    const issues: Array<{ path: string }> = [];
+    const localVariable = { id: 'v-local', name: 'Local', type: 'boolean' as const, initial: false };
+    // A defined non-array value cannot come from a parsed document; merging it as an empty
+    // collection would silently drop one side of the rebase.
+    const merged = mergeValue([], [localVariable], { unexpected: true }, 'flow.variables', issues);
+    expect(issues).toEqual([{ path: 'flow.variables' }]);
+    expect(merged).toEqual([localVariable]);
+  });
+
+  it('keeps whole-collection deletion semantics on keyed merge paths', () => {
+    const variable = { id: 'v-local', name: 'Local', type: 'boolean' as const, initial: false };
+    // Deletion on one side and no change on the other: deletion wins without a conflict.
+    expect(mergeValue([variable], undefined, [variable], 'flow.variables', [])).toBeUndefined();
+    // Deletion on one side and an edit on the other: competing change, rejected.
+    const issues: Array<{ path: string }> = [];
+    mergeValue([variable], undefined, [{ ...variable, initial: true }], 'flow.variables', issues);
+    expect(issues).toEqual([{ path: 'flow.variables[v-local]' }]);
+  });
+
+  it('stops instead of inventing a base when its commit is unavailable', async () => {    const root = await makeRepo();
     const draft = createDefaultDraft('draft-1', '0000000000000000000000000000000000000000');
     const before = JSON.stringify(draft);
     await expect(rebaseDraft({ root, draft })).rejects.toMatchObject({ code: 'BASE_HISTORY_UNAVAILABLE' });

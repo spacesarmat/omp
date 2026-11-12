@@ -41,22 +41,29 @@ function checkCondition(condition: InteractionCondition, scope: RuleScope, nodeI
     checkCondition(condition.condition, scope, nodeId);
     return;
   }
+  const issue = (code: FlowIssue['code'], message: string) =>
+    scope.issues.push({ code, ruleId: scope.rule.id, ...(nodeId ? { nodeId } : {}), message });
+  // Only documented read-only context paths resolve without a declaration; variable.<id>
+  // paths must reference a declared variable in every leaf, including inside nested groups.
+  let variable: FlowVariable | undefined;
+  if (condition.path.startsWith('variable.')) {
+    variable = scope.variables.get(condition.path.slice('variable.'.length));
+    if (!variable) {
+      issue('UNKNOWN_VARIABLE', `condition references undeclared variable ${condition.path.slice('variable.'.length)}`);
+      return;
+    }
+  }
   if (condition.kind === 'exists') return;
-  const issue = (message: string) =>
-    scope.issues.push({ code: 'WRONG_VALUE_TYPE', ruleId: scope.rule.id, ...(nodeId ? { nodeId } : {}), message });
   if (condition.kind === 'gt' || condition.kind === 'gte' || condition.kind === 'lt' || condition.kind === 'lte') {
-    if (typeof condition.value !== 'number') issue(`condition ${condition.kind} expects a number value`);
+    if (typeof condition.value !== 'number') issue('WRONG_VALUE_TYPE', `condition ${condition.kind} expects a number value`);
     return;
   }
   if (condition.kind === 'contains') {
-    if (typeof condition.value !== 'string') issue('condition contains expects a string value');
+    if (typeof condition.value !== 'string') issue('WRONG_VALUE_TYPE', 'condition contains expects a string value');
     return;
   }
-  if (condition.path.startsWith('variable.')) {
-    const variable = scope.variables.get(condition.path.slice('variable.'.length));
-    if (variable && !variableAccepts(variable, condition.value)) {
-      issue(`condition on variable ${variable.id} expects a ${variable.type} value`);
-    }
+  if (variable && (condition.kind === 'eq' || condition.kind === 'neq') && !variableAccepts(variable, condition.value)) {
+    issue('WRONG_VALUE_TYPE', `condition on variable ${variable.id} expects a ${variable.type} value`);
   }
 }
 
@@ -72,7 +79,9 @@ function checkAction(action: InteractionAction, scope: RuleScope, nodeId?: strin
   }
   if (action.type === 'variable.set') {
     const variable = scope.variables.get(action.variableId);
-    if (variable && !variableAccepts(variable, action.value)) {
+    if (!variable) {
+      issue('UNKNOWN_VARIABLE', `variable.set references undeclared variable ${action.variableId}`);
+    } else if (!variableAccepts(variable, action.value)) {
       issue('WRONG_VALUE_TYPE', `variable ${action.variableId} expects a ${variable.type} value`);
     }
   }
@@ -145,7 +154,18 @@ function validateGraph(scope: RuleScope, graph: FlowGraph): void {
   }
 
   const triggers = graph.nodes.filter((entry) => entry.kind === 'trigger');
-  if (!triggers.length) return;
+  if (!triggers.length) {
+    issues.push({ code: 'NO_TRIGGER', ruleId: rule.id, message: `rule ${rule.id} graph has no trigger node` });
+    return;
+  }
+  if (triggers.length > 1) {
+    issues.push({
+      code: 'MULTIPLE_TRIGGERS',
+      ruleId: rule.id,
+      nodeId: triggers[1].id,
+      message: `rule ${rule.id} graph has ${triggers.length} trigger nodes`,
+    });
+  }
   const reachable = new Set<string>();
   const queue = triggers.map((entry) => entry.id);
   for (const id of queue) reachable.add(id);

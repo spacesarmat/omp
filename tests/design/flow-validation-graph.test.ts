@@ -220,4 +220,92 @@ describe('validateFlowGraph', () => {
       expect.objectContaining({ code: 'WRONG_VALUE_TYPE', ruleId: 'rule-1' }),
     );
   });
+
+  it('rejects a graph without a trigger node', () => {
+    const graph: FlowGraph = {
+      nodes: [node('a-1', 'action', 120, 0, 's-go')],
+      edges: [],
+    };
+    const rule: InteractionRule = {
+      id: 'rule-1',
+      screenId: 'settings',
+      elementId: 'continue-button',
+      event: 'click',
+      action: { type: 'toast', message: 'ignored in graph mode' },
+      steps: [{ id: 's-go', action: { type: 'navigate', screenId: 'library' } }],
+      graph,
+    };
+    expect(validateFlowGraph(flowWith([rule]), ROUTES)).toContainEqual(
+      expect.objectContaining({ code: 'NO_TRIGGER', ruleId: 'rule-1' }),
+    );
+  });
+
+  it('rejects multiple trigger nodes in one graph', () => {
+    const graph: FlowGraph = {
+      nodes: [node('t-1', 'trigger'), node('t-2', 'trigger', 0, 120), node('a-1', 'action', 240, 0, 's-go')],
+      edges: [edge('e-ta', 't-1', 'a-1')],
+    };
+    const rule: InteractionRule = {
+      id: 'rule-1',
+      screenId: 'settings',
+      elementId: 'continue-button',
+      event: 'click',
+      action: { type: 'toast', message: 'ignored in graph mode' },
+      steps: [{ id: 's-go', action: { type: 'navigate', screenId: 'library' } }],
+      graph,
+    };
+    expect(validateFlowGraph(flowWith([rule]), ROUTES)).toContainEqual(
+      expect.objectContaining({ code: 'MULTIPLE_TRIGGERS', ruleId: 'rule-1', nodeId: 't-2' }),
+    );
+  });
+
+  it('rejects conditions and variable.set referencing undeclared variables', () => {
+    const condition: InteractionCondition = {
+      kind: 'all',
+      conditions: [
+        {
+          kind: 'any',
+          conditions: [
+            { kind: 'not', condition: { kind: 'eq', path: 'variable.v-missing', value: true } },
+            { kind: 'exists', path: 'variable.v-other' },
+          ],
+        },
+        { kind: 'eq', path: 'server.connected', value: true },
+      ],
+    };
+    const rule: InteractionRule = {
+      id: 'rule-1',
+      screenId: 'settings',
+      elementId: 'continue-button',
+      event: 'click',
+      condition,
+      action: { type: 'variable.set', variableId: 'v-absent', value: 1 },
+    };
+    const issues = validateFlowGraph(flowWith([rule]), ROUTES);
+    const unknown = issues.filter((entry) => entry.code === 'UNKNOWN_VARIABLE');
+    expect(unknown).toHaveLength(3);
+    expect(unknown.every((entry) => entry.ruleId === 'rule-1')).toBe(true);
+  });
+
+  it('accepts documented context paths and declared variables in conditions', () => {
+    const condition: InteractionCondition = {
+      kind: 'all',
+      conditions: [
+        { kind: 'eq', path: 'server.connected', value: true },
+        { kind: 'exists', path: 'network.online' },
+        { kind: 'neq', path: 'screen.current', value: 'library' },
+        { kind: 'exists', path: 'variable.v-flag' },
+      ],
+    };
+    const rule: InteractionRule = {
+      id: 'rule-1',
+      screenId: 'settings',
+      elementId: 'continue-button',
+      event: 'click',
+      condition,
+      action: { type: 'navigate', screenId: 'library' },
+    };
+    const flow = flowWith([rule], [{ id: 'v-flag', name: 'Flag', type: 'boolean', initial: false }]);
+    expect(validateFlowGraph(flow, ROUTES)).toEqual([]);
+  });
 });

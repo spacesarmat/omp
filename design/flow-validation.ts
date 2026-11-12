@@ -14,7 +14,10 @@ export type FlowIssueCode =
   | 'UNREACHABLE_NODE'
   | 'NO_TERMINAL_PATH'
   | 'DEAD_RULE'
-  | 'EMPTY_MESSAGE';
+  | 'EMPTY_MESSAGE'
+  | 'NO_TRIGGER'
+  | 'MULTIPLE_TRIGGERS'
+  | 'UNKNOWN_VARIABLE';
 
 export interface FlowIssue {
   code: FlowIssueCode;
