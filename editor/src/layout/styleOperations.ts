@@ -1,4 +1,5 @@
 import { buildOverride, overrideId, type OverrideIdentity } from '../../../design/catalog.ts';
+import { LAYOUT_SIZE_PX_LIMIT } from '../../../design/validation.ts';
 import type {
   DesignFormat,
   DesignState,
@@ -68,10 +69,13 @@ export function copyStyle(tokens: TokenMap, allowedTokens: readonly string[]): S
   return { schemaVersion: 1, tokens: picked };
 }
 
+// The document schema caps every size token at LAYOUT_SIZE_PX_LIMIT; the same bound applies
+// here so an oversized clipboard value is rejected with the regular collected error instead
+// of slipping into the draft and throwing during validation.
 function isValidTokenValue(token: string, value: unknown): value is string {
   if (typeof value !== 'string') return false;
   if (token.startsWith('--omp-color-')) return HEX.test(value);
-  return SIZE.test(value);
+  return SIZE.test(value) && Number.parseFloat(value) <= LAYOUT_SIZE_PX_LIMIT;
 }
 
 // Validation errors are collected, not thrown, so the panel can list every incompatibility

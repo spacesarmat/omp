@@ -123,7 +123,9 @@ export function installProductionDesign(root: HTMLElement, options: ProductionDe
   const initialFormat = win ? resolveProductionFormat(readWindowSize(win).width, readWindowSize(win).height) : 'landscape';
   writeContext(root, options.target, desktopScreenIdOf(options.screenOf()), initialFormat);
 
-  const stopLayout = observeProductionLayout(root);
+  // The layout walk receives the registration hook: every refresh, including the ones its own
+  // observer triggers on late-loading markup, stamps component ids before resolving identities.
+  const stopLayout = observeProductionLayout(root, registerIdentities);
   const refreshScreen = (): void => {
     writeContext(root, options.target, desktopScreenIdOf(options.screenOf()), currentFormat());
   };

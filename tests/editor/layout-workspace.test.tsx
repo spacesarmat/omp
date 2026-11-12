@@ -641,6 +641,28 @@ describe('layout workspace', () => {
     });
   });
 
+  it('converts a flow node with margin without double-counting the offset', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, createPlacement(context, 'server-card-2', 'Карточка 2', { margin: '12px' }));
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+
+    select('layout-mode', 'absolute');
+
+    // server-card-2 renders at y 100 of the 400px parent, 12px below its margin-free spot:
+    // the measured border box already includes the margin offset and the preserved margin
+    // re-adds it at render, so the stored coordinates must exclude it (88px -> 2200 units).
+    expect(placementOf('server-card-2')).toMatchObject({
+      mode: 'absolute',
+      x: 0,
+      y: 2200,
+      width: 10000,
+      height: 2500,
+      margin: '12px',
+    });
+  });
+
   it('maps flow alignment buttons to the container axes in a row container', () => {
     buildPreview();
     const context = contextOf();

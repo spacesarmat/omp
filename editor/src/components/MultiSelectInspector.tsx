@@ -10,6 +10,9 @@ export interface MultiSelectInspectorProps {
   // Effective direction of the shared flow container: distribution across the cross axis is not
   // a flex operation, so that button stays disabled instead of writing an unsupported record.
   flowDirection?: 'row' | 'column' | null;
+  // A locked flow child of the shared parent cannot keep its position through a container
+  // align or justify edit, so every group button stays disabled instead of dragging it along.
+  lockedSibling?: boolean;
   onAlign(alignment: SelectionAlignment): void;
   onDistribute(axis: 'x' | 'y'): void;
   onMargin(margin: string | undefined): void;
@@ -29,6 +32,7 @@ const ALIGN_BUTTONS: { alignment: SelectionAlignment; testId: string; label: str
 export function MultiSelectInspector(props: MultiSelectInspectorProps) {
   const readOnly = props.readOnly ?? false;
   const crossAxis = props.flowDirection === 'row' ? 'y' : props.flowDirection === 'column' ? 'x' : null;
+  const groupDisabled = readOnly || (props.lockedSibling ?? false);
   return (
     <div class="editor-multi-inspector" data-testid="multi-select-inspector">
       <h3>Выбрано элементов: {props.count}</h3>
@@ -41,18 +45,18 @@ export function MultiSelectInspector(props: MultiSelectInspectorProps) {
             key={button.alignment}
             data-testid={button.testId}
             title={button.label}
-            disabled={readOnly}
-            onClick={() => { if (!readOnly) props.onAlign(button.alignment); }}
+            disabled={groupDisabled}
+            onClick={() => { if (!groupDisabled) props.onAlign(button.alignment); }}
           >
             {button.label}
           </button>
         ))}
       </div>
       <div class="editor-multi-distribute" role="group" aria-label="Распределение">
-        <button type="button" data-testid="distribute-x" title="Распределить по горизонтали" disabled={readOnly || crossAxis === 'x'} onClick={() => { if (!readOnly) props.onDistribute('x'); }}>
+        <button type="button" data-testid="distribute-x" title="Распределить по горизонтали" disabled={groupDisabled || crossAxis === 'x'} onClick={() => { if (!groupDisabled) props.onDistribute('x'); }}>
           Распределить по X
         </button>
-        <button type="button" data-testid="distribute-y" title="Распределить по вертикали" disabled={readOnly || crossAxis === 'y'} onClick={() => { if (!readOnly) props.onDistribute('y'); }}>
+        <button type="button" data-testid="distribute-y" title="Распределить по вертикали" disabled={groupDisabled || crossAxis === 'y'} onClick={() => { if (!groupDisabled) props.onDistribute('y'); }}>
           Распределить по Y
         </button>
       </div>

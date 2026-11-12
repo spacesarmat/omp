@@ -7,6 +7,7 @@ import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import {
   absolutePlacementFromRect,
+  createPlacement,
   moveNodeTransaction,
   placeNodeTransaction,
   placementToRect,
@@ -361,6 +362,30 @@ describe('multi-select', () => {
 
     controller.undo();
     expect(controller.draft.theme.layout?.containers.find((entry) => entry.nodeId === 'card-grid')?.alignment).toBeUndefined();
+  });
+
+  it('disables flow group actions that would move a locked sibling', () => {
+    buildPreview();
+    const context = contextOf();
+    // A locked flow child of the shared parent cannot keep its position through a container
+    // align or justify edit, so the group action must not run at all.
+    placeNodeTransaction(controller, createPlacement(context, 'settings-continue', 'Продолжить', { locked: true }));
+    moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+    pointer(overlay(), 'pointerdown', 200, 150, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 200, 150, { shiftKey: true });
+
+    const update = vi.spyOn(controller, 'update');
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="align-left"]')!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="distribute-x"]')!.disabled).toBe(true);
+    clickButton('align-left');
+
+    expect(update).not.toHaveBeenCalled();
+    expect(controller.draft.theme.layout?.containers.find((entry) => entry.nodeId === 'card-grid')?.alignment).toBeUndefined();
+    expect(controller.draft.theme.layout?.containers.find((entry) => entry.nodeId === 'card-grid')?.distribution).toBeUndefined();
   });
 
   it('shows the mixed placeholder for different margins and applies one shared margin in one undo step', () => {

@@ -101,6 +101,15 @@ describe('parseStyleClipboard', () => {
     expect(parseStyleClipboard({ schemaVersion: 1, tokens: {} }).errors).toEqual(['В clipboard нет tokens']);
     expect(parseStyleClipboard({ schemaVersion: 1 }).errors).toEqual(['tokens должен быть объектом']);
   });
+
+  it('rejects size values above the document limit instead of throwing on paste', () => {
+    // The schema caps sizes at 512px; a bigger value must be rejected here with the regular
+    // clipboard error, not slip into the draft and throw during validation.
+    const result = parseStyleClipboard({ schemaVersion: 1, tokens: { '--omp-size-space': '600px' } });
+    expect(result.clipboard).toBeNull();
+    expect(result.errors).toEqual(['Некорректное значение: --omp-size-space']);
+    expect(parseStyleClipboard({ schemaVersion: 1, tokens: { '--omp-size-space': '512px' } }).errors).toEqual([]);
+  });
 });
 
 describe('pasteStyle', () => {

@@ -78,6 +78,15 @@ export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRe
   return { x, y, width, height };
 }
 
+// Document margins are single px values. A measured border box already sits one margin away
+// from its margin-free flow position, and the placement margin re-adds that offset at render:
+// converting a measured rect must subtract it, or the node jumps by twice the margin.
+export function marginOffsetPx(margin: string | undefined): number {
+  if (!margin) return 0;
+  const parsed = Number.parseFloat(margin);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function placementRecordId(nodeId: string): string {
   return `${PLACEMENT_ID_PREFIX}${nodeId}`.slice(0, PLACEMENT_ID_LIMIT - PLACEMENT_ID_SUFFIX_ROOM);
 }

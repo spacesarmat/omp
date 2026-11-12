@@ -235,7 +235,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
   // recorded direction wins, a record without one falls back to the computed flex-direction of
   // the live preview container, and only a missing computed value falls back to the row
   // default documented for the runtime.
-  const flowSelectionDirection = (): 'row' | 'column' | null => {
+  const flowSelectionParent = (): { parentId: string; direction: 'row' | 'column' } | null => {
     const items = selectedItems();
     if (items.length < 2) return null;
     const parentIds = new Set(items.map((item) => item.node!.parentId));
@@ -248,10 +248,21 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
         && container.format === layoutContext.format
         && container.nodeId === parentId,
     );
-    if (record?.direction === 'row' || record?.direction === 'column') return record.direction;
+    if (record?.direction === 'row' || record?.direction === 'column') return { parentId, direction: record.direction };
     const computed = layoutDirections[parentId];
-    if (computed === 'row' || computed === 'column') return computed;
-    return 'row';
+    if (computed === 'row' || computed === 'column') return { parentId, direction: computed };
+    return { parentId, direction: 'row' };
+  };
+  const flowSelectionDirection = (): 'row' | 'column' | null => flowSelectionParent()?.direction ?? null;
+  // A container align or justify edit moves every flow child, so a locked sibling of the
+  // shared parent makes the whole group action unsafe: the buttons stay disabled and the
+  // handler refuses to write a record that would drag the locked node along.
+  const flowSelectionHasLockedSibling = (): boolean => {
+    const flow = flowSelectionParent();
+    if (!flow) return false;
+    return layoutNodes.some(
+      (node) => node.parentId === flow.parentId && getLayoutPlacement(draft.theme, layoutContext, node.nodeId)?.locked,
+    );
   };
   const alignSelection = (alignment: SelectionAlignment, axis: 'x' | 'y' | null) => {
     const items = selectedItems();
@@ -259,6 +270,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     const parentIds = new Set(items.map((item) => item.node!.parentId));
     const allFlow = items.every((item) => (item.placement?.mode ?? 'flow') === 'flow');
     if (allFlow && parentIds.size === 1) {
+      if (flowSelectionHasLockedSibling()) return;
       const parentId = String([...parentIds][0]);
       const seed = layoutNodes.filter((node) => node.parentId === parentId).map((node) => node.nodeId);
       const mainAxis = (flowSelectionDirection() ?? 'row') === 'row' ? 'x' : 'y';
@@ -684,6 +696,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
                   margin={margin}
                   readOnly={!previewEditable}
                   flowDirection={flowSelectionDirection()}
+                  lockedSibling={flowSelectionHasLockedSibling()}
                   onAlign={handleAlignSelection}
                   onDistribute={handleDistributeSelection}
                   onMargin={handleSelectionMargin}

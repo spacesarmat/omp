@@ -483,6 +483,7 @@ function createLayoutRuntime(
   root: HTMLElement,
   layoutOf: () => LayoutDocument | undefined,
   contextOf: () => LayoutContext | null,
+  beforeWalk?: () => void,
 ): () => void {
   let applying = false;
   const heldParents = new Set<HTMLElement>();
@@ -509,6 +510,10 @@ function createLayoutRuntime(
     if (applying) return;
     applying = true;
     try {
+      // Identity registration runs before every walk: late-loading or navigated markup must
+      // carry its component ids when node ids resolve, otherwise the first walk stamps a path
+      // id and exported records for buttons, inputs and cards miss the element forever.
+      beforeWalk?.();
       const layout = layoutOf();
       const context = contextOf();
       if (!layout || !context) return;
@@ -622,10 +627,10 @@ function readProductionContext(root: HTMLElement): LayoutContext | null {
 
 const observedProductionRoots = new WeakSet<HTMLElement>();
 
-export function observeProductionLayout(root: HTMLElement): () => void {
+export function observeProductionLayout(root: HTMLElement, beforeWalk?: () => void): () => void {
   if (observedProductionRoots.has(root)) return () => undefined;
   observedProductionRoots.add(root);
-  const stop = createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root));
+  const stop = createLayoutRuntime(root, () => PRODUCTION_LAYOUT, () => readProductionContext(root), beforeWalk);
   return () => {
     observedProductionRoots.delete(root);
     stop();

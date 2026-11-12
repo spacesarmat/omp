@@ -181,6 +181,24 @@ describe('installProductionDesign', () => {
     expect(root.getAttribute('data-design-screen')).toBe('search');
   });
 
+  it('registers late-loading controls before the layout walk claims path ids', async () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div data-design-id="panel"></div>';
+    document.body.appendChild(root);
+    cleanup = installProductionDesign(root, { target: 'android-phone', screenOf: () => 'library' });
+
+    // A control rendered after navigation (late loading) must get its component id before the
+    // layout walk resolves identities: otherwise the first walk stamps a path id and every
+    // exported button/input/card record misses the element.
+    const late = document.createElement('button');
+    late.textContent = 'Go';
+    root.querySelector('[data-design-id="panel"]')!.appendChild(late);
+    await Promise.resolve();
+
+    expect(late.dataset.designComponent).toBe('button');
+    expect(late.dataset.layoutNode).toBe('button');
+  });
+
   it('keeps production a no-op before an explicit export', async () => {
     const root = document.createElement('div');
     root.innerHTML = GRID;
