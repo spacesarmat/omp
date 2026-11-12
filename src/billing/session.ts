@@ -48,6 +48,8 @@ export interface BillingAccount {
   sources?: { jackett: boolean; jacred: boolean; bitmagnet?: boolean };
   /** Invite card from /v1/me. Absent on an older server: the screen stays off. */
   referral?: { enabled: boolean; code: string; friends: number; noticeDays: number };
+  /** Paid donation on this account. Omitted by a server from before donations. */
+  supporter?: boolean;
   /** Price, card fee, auto-renew and recent payments. Absent on an older server. */
   bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
 }
