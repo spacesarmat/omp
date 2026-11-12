@@ -77,7 +77,7 @@ export function sanitizeSubscription(v: unknown): Subscription | null {
     quality,
     sources: Array.isArray(v.sources) ? strings(v.sources) : null,
     notify: v.notify !== false,
-    ...(v.notifyTelegram === true ? { notifyTelegram: true } : {}),
+    notifyTelegram: v.notifyTelegram === true,
     createdAt: createdAt !== null && createdAt > 0 ? createdAt : 0,
   };
   const seeds = finite(v.minSeeds);
