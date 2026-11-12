@@ -14,7 +14,7 @@ import { settings, updateSettings } from '../../../src/store/settings';
 import { allowedBeta, checkForUpdate, latestUpdate, updateCheckDue, updatePrompt, type CheckResult } from '../../../src/store/updates';
 import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
-import { isBetaVersion } from '../../../src/lib/version';
+import { isBetaVersion, manualLatestHint } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
 import { phoneChangelog } from '../lib/phoneChangelog';
 import { openWhatsNew } from '../../../src/store/whatsNew';
@@ -406,7 +406,7 @@ export function Settings() {
   async function check() {
     const r = await phoneFeedUrl().then((url) => runUpdateCheck({ manual: true, url })).catch((): CheckResult => 'error');
     if (r === 'error') showToast(t('updateScreen.checkFailed'));
-    else if (r === 'latest' && isBetaVersion(APP_VERSION) && !settings.value.betaUpdates) showToast(t('updateScreen.betaOffHint'));
+    else if (r === 'latest' && manualLatestHint(APP_VERSION, settings.value.betaUpdates) === 'betaOff') showToast(t('updateScreen.betaOffHint'));
     else if (r === 'latest') showToast(t('updateScreen.latest'));
   }
 

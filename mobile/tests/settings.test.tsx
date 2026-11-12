@@ -13,6 +13,7 @@ import { addServer, setActiveServer, removeServer, servers } from '../../src/sto
 import { ANDROID_UPDATE_URL, ANDROID_BETA_UPDATE_URL, type UpdateInfo } from '../../src/lib/updateInfo';
 import { latestUpdate, updatePrompt, resetBetaGate, setBetaGate } from '../../src/store/updates';
 import { APP_VERSION } from '../../src/version';
+import { manualLatestHint } from '../../src/lib/version';
 import { whatsNew, closeWhatsNew } from '../../src/store/whatsNew';
 import { toast } from '../src/ui/toast';
 import { localServer, localAutostart, setLocalServerDeps, reloadLocalServerSettings } from '../src/server/localServer';
@@ -222,7 +223,9 @@ describe('Settings', () => {
     expect(urls).toEqual([ANDROID_UPDATE_URL]);
     expect(manual).toEqual([true]);
     expect(settings.value.betaUpdates).toBe(false);
-    expect(toast.value).toBe('Бета-обновления выключены, включите в Расширенных');
+    expect(toast.value).toBe(manualLatestHint(APP_VERSION, false) === 'betaOff'
+      ? 'Бета-обновления выключены, включите в Расширенных'
+      : 'У вас последняя версия');
     setUpdateChecker(async () => 'error');
     await clickUpdate(el, 'Проверить обновления');
     expect(toast.value).toBe('Не удалось проверить обновления');
@@ -794,7 +797,9 @@ describe('Settings in English', () => {
     setUpdateChecker(async () => 'latest');
     const el = mount();
     await clickUpdate(el, 'Check for updates');
-    expect(toast.value).toBe('Beta updates are off. Turn them on in Advanced');
+    expect(toast.value).toBe(manualLatestHint(APP_VERSION, false) === 'betaOff'
+      ? 'Beta updates are off. Turn them on in Advanced'
+      : 'You have the latest version');
     setUpdateChecker(async () => 'error');
     await clickUpdate(el, 'Check for updates');
     expect(toast.value).toBe('Could not check for updates');

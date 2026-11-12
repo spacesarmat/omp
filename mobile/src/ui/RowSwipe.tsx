@@ -1,9 +1,11 @@
 // A catalog row that slides sideways to reveal actions underneath. One row open at a time.
+// The gesture math is in rowSwipeGesture.ts. Do not name that file rowSwipe.ts: on a
+// case-insensitive disk it is the same path as this file, and openRowKey never loads.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { signal } from '@preact/signals';
 import { t } from '../../../src/i18n';
-import { beginRowSwipe, endRowSwipe, moveRowSwipe, ROW_REVEAL, rowSwipeVisual, type RowGesture } from './rowSwipe';
+import { beginRowSwipe, endRowSwipe, moveRowSwipe, ROW_REVEAL, rowSwipeVisual, type RowGesture } from './rowSwipeGesture';
 
 /** The row whose actions are open. Empty when every row is shut. */
 export const openRowKey = signal('');
@@ -36,10 +38,15 @@ export function RowSwipe(p: {
     const root = ref.current;
     if (!root || p.disabled) return;
     let state: RowGesture | null = null;
+    const rest = () => {
+      state = null;
+      setDrag(false);
+      setDx(openRowKey.peek() === actions.current.id ? -ROW_REVEAL : 0);
+    };
     const start = (e: TouchEvent) => {
       ignore.current = false;
       if (e.touches.length !== 1) {
-        state = null;
+        rest();
         return;
       }
       const t0 = e.touches[0];
@@ -47,7 +54,11 @@ export function RowSwipe(p: {
       setDrag(false);
     };
     const move = (e: TouchEvent) => {
-      if (!state || e.touches.length !== 1) return;
+      if (!state) return;
+      if (e.touches.length !== 1) {
+        rest();
+        return;
+      }
       const t0 = e.touches[0];
       const next = moveRowSwipe(state, t0.clientX, t0.clientY);
       if (next.phase === 'horizontal' && e.cancelable) e.preventDefault();
@@ -127,11 +138,12 @@ export function RowSwipe(p: {
     };
   }, [p.disabled, p.id]);
 
+  const revealed = open && !p.disabled;
   return (
     <div class={'m-row-swipe' + (p.class ? ' ' + p.class : '')} ref={ref} data-noswipe data-anchor={p.anchor} data-row-swipe={p.id} data-open={open ? '1' : '0'}>
-      <div class="m-row-swipe-actions">
-        <button type="button" class="danger" onClick={p.onRemove}>{t('history.removeItem')}</button>
-        <button type="button" class="ok" onClick={p.onWatched}>{t('history.markWatched')}</button>
+      <div class="m-row-swipe-actions" inert={!revealed} aria-hidden={revealed ? 'false' : 'true'}>
+        <button type="button" class="danger" disabled={!revealed} tabIndex={revealed ? 0 : -1} onClick={p.onRemove}>{t('history.removeItem')}</button>
+        <button type="button" class="ok" disabled={!revealed} tabIndex={revealed ? 0 : -1} onClick={p.onWatched}>{t('history.markWatched')}</button>
       </div>
       <div class={'m-row-swipe-fg' + (drag ? ' drag' : '')} style={dx ? { transform: 'translateX(' + dx + 'px)' } : undefined}>
         {p.children}

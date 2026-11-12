@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { androidVersionCode, compareVersions, isBetaVersion } from '../../src/lib/version';
+import { androidVersionCode, compareVersions, isBetaVersion, manualLatestHint } from '../../src/lib/version';
 
 describe('compareVersions', () => {
   it('compares numerically part by part', () => {
@@ -26,6 +26,12 @@ describe('compareVersions', () => {
   it('tells a beta', () => {
     expect(isBetaVersion('0.16.0-beta.1')).toBe(true);
     expect(isBetaVersion('0.16.0')).toBe(false);
+  });
+  it('a manual latest check names betas that are off, and a stable install stays on the usual message', () => {
+    expect(manualLatestHint('0.30.1-beta.4', false)).toBe('betaOff');
+    expect(manualLatestHint('0.30.1-beta.4', true)).toBe('latest');
+    expect(manualLatestHint('0.30.1', false)).toBe('latest');
+    expect(manualLatestHint('0.30.1', true)).toBe('latest');
   });
 });
 

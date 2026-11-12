@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { beginRowSwipe, endRowSwipe, moveRowSwipe, rowSwipeVisual, ROW_OPEN_AT, ROW_REVEAL } from '../src/ui/rowSwipe';
+import { beginRowSwipe, endRowSwipe, moveRowSwipe, rowSwipeVisual, ROW_OPEN_AT, ROW_REVEAL } from '../src/ui/rowSwipeGesture';
 
 describe('catalog row swipe', () => {
   it('a left swipe past the threshold opens and a short one stays shut', () => {
