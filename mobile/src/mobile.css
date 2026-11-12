@@ -1479,6 +1479,15 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-skip-open { width: 100%; }
 .m-marks-pair { display: flex; gap: 10px; }
 .m-marks-pair .m-field { flex: 1 1 0; min-width: 0; }
+.m-sheet.m-sub-sheet { padding: 16px 16px calc(12px + env(safe-area-inset-bottom)); }
+.m-sheet-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0 -16px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  background: var(--panel);
+}
 .m-marks-actions { display: flex; gap: 10px; margin-top: 4px; }
 .m-marks-actions .m-btn { flex: 1 1 0; }
 
