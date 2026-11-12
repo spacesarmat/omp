@@ -5,6 +5,7 @@
 import { isObject, loadJson, saveJson } from '../store/storage';
 import { MONITOR_FREE_MAX, monitorMax } from '../billing/entitlement';
 import type { SourceResult } from '../sources/types';
+import { forgetBestRelease } from './bestRelease';
 import { BETTER_ID, EPISODES_ID, type BetterInfo, type EpisodesInfo, type Finding, type SubQuality, type Subscription, type SubscriptionInput } from './types';
 
 export const SUBS_KEY = 'tsp.subs';
@@ -372,6 +373,7 @@ export function rememberSeen(subId: string, entries: string[], sources?: string[
 
 /** Forgets what a subscription has seen: its next check is silent again, like the first. */
 export function forgetSeen(subId: string): void {
+  forgetBestRelease(subId);
   const seen = loadSeen();
   if (!seen[subId]) return;
   delete seen[subId];

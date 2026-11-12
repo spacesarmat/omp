@@ -6,6 +6,7 @@ import { searchAll, SOURCE_TIMEOUT_MS, type SearchAllOptions, type SearchHandle 
 import type { Source, SourceContext, SourceResult } from '../sources/types';
 import { filterForSubscription, isSeen, resultKeys, seenEntry, seenIndex } from './match';
 import { qualityRank } from './quality';
+import { forgetBestRelease, rememberBestRelease } from './bestRelease';
 import { addFindings, bestRank, getSubscription, hasBestRank, loadSubs, rememberBestRank, rememberSeen, sameSearch, seenKeys, seenSources } from './subs';
 import type { Finding, Subscription } from './types';
 
@@ -115,6 +116,21 @@ function bestOnly(subId: string, fresh: SourceResult[], known: SourceResult[]): 
   return pick ? [pick] : [];
 }
 
+/** The strongest listed release, even when it is not above the notification floor. */
+function bestListed(list: SourceResult[]): SourceResult | null {
+  let pick: SourceResult | null = null;
+  let rank = -1;
+  for (let i = 0; i < list.length; i++) {
+    const r = list[i];
+    const q = qualityRank(r.Title);
+    if (!pick || q > rank || (q === rank && (r.Seed || 0) > (pick.Seed || 0))) {
+      pick = r;
+      rank = q;
+    }
+  }
+  return pick;
+}
+
 /**
  * Checks one subscription (see the file comment); never rejects. A source answering for the first time is silent too:
  * a result only it lists is remembered, not reported.
@@ -140,7 +156,12 @@ export function checkSubscription(ctx: SourceContext, sub: Subscription, opts?: 
     }
     rememberSeen(sub.id, matched.map(seenEntry), out.answered);
     // the first check (and the first one after the flag was switched on) stores the best rank listed now, silently
-    if (sub.better) rememberBestRank(sub.id, topRank(matched));
+    if (sub.better) {
+      rememberBestRank(sub.id, topRank(matched));
+      const best = bestListed(matched);
+      if (best) rememberBestRelease(sub.id, best);
+      else forgetBestRelease(sub.id);
+    }
     return base;
   });
 }
