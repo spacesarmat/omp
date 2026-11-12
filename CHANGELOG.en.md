@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] Account: a Supporter mark on a linked account that donated, and a thanks list. The list shows only people who opened their name
 - [tech] Bot and admin donations: a separate payment, migration 012, flag and methods off. It does not change a subscription or referral bonuses. Billing was not deployed
+- [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark
 - [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
 - [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
 - [phone] Calendar lists days, Earlier stays folded, and the aired/today plates are gone. Month view marks today with a yellow circle, the selected day in gray, up to three dots plus a count, and a yellow dot for a subscription. A subscription that is any quality and best-only reads "best"
