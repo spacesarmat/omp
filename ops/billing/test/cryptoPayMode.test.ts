@@ -4,6 +4,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySign, cryptoPaySignatureMode } from '../src/cryptoPay.mjs';
+import { applyPayment, openAccount, quotePurchase } from '../src/logic.mjs';
+import { cryptoInvoiceMatches } from '../src/payMethods.mjs';
 import { ENV_SECRETS, secretViews } from '../src/envSecrets.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 import { emptyState } from '../src/state.mjs';
@@ -110,6 +112,58 @@ describe('crypto pay webhook mode', () => {
     const settings = { cryptoTestnet: true, cryptoPayToken: LIVE, cryptoPayTestnetToken: '' };
     expect(cryptoPaySignatureMode(RAW, signed(LIVE), settings)).toBe('inactive');
     expect(cryptoPaySignatureMode(RAW, signed(TESTNET), settings)).toBe('none');
+  });
+});
+
+describe('crypto invoice id across modes', () => {
+  const quote = {
+    method: 'crypto',
+    invoiceId: 'B',
+    cryptoTestnet: true,
+    cryptoLinks: {
+      live: { invoiceId: 'A', payUrl: 'https://pay.crypt.bot/i/A', webUrl: 'https://pay.crypt.bot/i/A' },
+      testnet: { invoiceId: 'B', payUrl: 'https://testnet-pay.crypt.bot/i/B', webUrl: 'https://testnet-pay.crypt.bot/i/B' },
+    },
+  };
+
+  it('matches the invoice stored for the active mode, not the last requested one', () => {
+    expect(cryptoInvoiceMatches(quote, 'crypto:A', false)).toBe(true);
+    expect(cryptoInvoiceMatches(quote, 'crypto:B', false)).toBe(false);
+    expect(cryptoInvoiceMatches(quote, 'crypto:B', true)).toBe(true);
+    expect(cryptoInvoiceMatches(quote, 'crypto:A', true)).toBe(false);
+  });
+
+  it('extends the subscription when the live invoice is paid after a testnet link replaced invoiceId', () => {
+    const state = emptyState();
+    state.settings.priceRub = 150;
+    state.settings.periodDays = 30;
+    state.settings.cryptoEnabled = true;
+    state.settings.cryptoUsdt = 2;
+    state.settings.cryptoTestnet = false;
+    const opened = openAccount(state, { telegramId: '42', email: '', now: 1 });
+    const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now: 1, method: 'crypto', asset: 'USDT' });
+    const row = quoted.state.purchases.find((p: { id: string }) => p.id === quoted.result.id);
+    row.invoiceId = 'B';
+    row.cryptoTestnet = true;
+    row.cryptoLinks = quote.cryptoLinks;
+    const paid = applyPayment(quoted.state, {
+      operationId: 'crypto:A',
+      label: quoted.result.label,
+      amount: '2.00',
+      currency: 'USDT',
+      now: 1,
+    });
+    expect(paid.result.error).toBeUndefined();
+    expect(paid.state.subscriptions).toHaveLength(1);
+    const other = applyPayment(quoted.state, {
+      operationId: 'crypto:B',
+      label: quoted.result.label,
+      amount: '2.00',
+      currency: 'USDT',
+      now: 1,
+    });
+    expect(other.result.error).toBe('bad_label');
+    expect(other.state.subscriptions).toHaveLength(0);
   });
 });
 

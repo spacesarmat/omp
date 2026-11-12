@@ -1396,7 +1396,7 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
         result: { duplicate: true },
       };
     }
-    if (!cryptoInvoiceMatches(quote, operationId)) {
+    if (!cryptoInvoiceMatches(quote, operationId, state.settings.cryptoTestnet === true)) {
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
