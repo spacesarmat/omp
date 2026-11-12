@@ -200,7 +200,7 @@ export function OmpJackettCard() {
 
         {session ? (
           <>
-            <div class="m-bill-status" data-bill-status>
+            <div class="m-bill-status" data-bill-status data-paid-until={day(until)}>
               {on ? <span class="m-bill-dot" data-bill-dot /> : null}
               <span class="m-bill-days" data-bill-days>{on ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
               <button type="button" class="m-bill-info" data-bill-info aria-expanded={info} aria-label={t('sources.billing.about')} onClick={() => setInfo(!info)}>
@@ -208,7 +208,7 @@ export function OmpJackettCard() {
               </button>
             </div>
             {info && (
-              <div class="m-src-row m-note m-muted" data-bill-about data-paid-until={day(until)}>
+              <div class="m-src-row m-note m-muted" data-bill-about>
                 {account && account.inGrace
                   ? t('sources.billing.grace', { date: day(account.paidUntil), until: day(account.accessUntil || 0) || '-' })
                   : t('sources.billing.paidUntil', { date: day(until) || '-' })}
