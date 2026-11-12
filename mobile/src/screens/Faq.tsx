@@ -6,6 +6,7 @@ import { openFromFaq } from '../ui/faqJump';
 import { BILLING_BOT_URL } from '../../../src/billing/config';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
+import { localServer } from '../server/localServer';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { TextField } from '../ui/TextField';
 
@@ -222,9 +223,11 @@ export function Faq(p: { q?: string } = {}) {
             <button type="button" class="m-btn m-btn-secondary" data-faq-action="renew" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
               {t('faq.renew')}
             </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="server" onClick={() => openFromFaq({ name: 'localServer' }, 'server')}>
-              {t('faq.phoneServer')}
-            </button>
+            {localServer.value.supported && (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="server" onClick={() => openFromFaq({ name: 'localServer' }, 'server')}>
+                {t('faq.phoneServer')}
+              </button>
+            )}
             <button type="button" class="m-btn m-btn-secondary" data-faq-action="log" onClick={() => openFromFaq({ name: 'log' }, 'log')}>
               {t('faq.logs')}
             </button>

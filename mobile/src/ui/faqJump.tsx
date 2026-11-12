@@ -1,13 +1,26 @@
-import { signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { t } from '../../../src/i18n';
-import { navigate, type MRoute } from '../nav';
+import { currentRoute, navigate, type MRoute } from '../nav';
 
-/** The screen a help button just opened. Empty when the question was answered. */
+/** The screen a help button just opened. Empty when the question was answered or the screen was left. */
 export const faqMark = signal('');
 
+const MARK_ROUTE: { [mark: string]: string } = {
+  install: 'install',
+  tv: 'tv',
+  account: 'account',
+  server: 'localServer',
+  log: 'log',
+};
+
+effect(() => {
+  const mark = faqMark.value;
+  if (mark && MARK_ROUTE[mark] !== currentRoute.value.name) faqMark.value = '';
+});
+
 export function openFromFaq(route: MRoute, mark: string): void {
-  faqMark.value = mark;
   navigate(route);
+  faqMark.value = mark;
 }
 
 /** «Получилось?» on the screen a help button opened. One tap clears it. */

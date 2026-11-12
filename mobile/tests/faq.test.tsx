@@ -448,7 +448,19 @@ describe('Faq screen', () => {
     act(() => render(<Faq />, el));
     act(() => (el.querySelector('[data-faq-action="tv"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'tv' });
-    faqMark.value = '';
+    resetTo({ name: 'faq' });
+    expect(faqMark.value).toBe('');
+  });
+
+  it('hides phone TorrServer when this phone cannot run it', () => {
+    const prev = localServer.value;
+    localServer.value = { ...prev, supported: false };
+    const el = mount(<Faq />);
+    expect(el.querySelector('[data-faq-action="server"]')).toBeNull();
+    localServer.value = { ...prev, supported: true };
+    act(() => render(<Faq />, el));
+    expect(el.querySelector('[data-faq-action="server"]')).not.toBeNull();
+    localServer.value = prev;
   });
 
   it('the search input is labelled and rows are real buttons', () => {
