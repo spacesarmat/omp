@@ -27,7 +27,7 @@ import { Sheet } from '../ui/Sheet';
 import { billingSession, onBillingChange, seenAccount, type BillingAccount } from '../../../src/billing/session';
 import { billingSignedOut, fetchBillingAccount } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
-import { t, type LanguageSetting } from '../../../src/i18n';
+import { t, tp, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
 import { friendsShare } from '../share/text';
@@ -260,6 +260,18 @@ function localAccountView(): AccountView {
  */
 function AccountRow() {
   const [view, setView] = useState<AccountView>(localAccountView);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', tick);
+    const id = window.setInterval(tick, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      window.clearInterval(id);
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     // only the latest check may paint: an older answer that arrives late (before «Отключить») is dropped
@@ -295,15 +307,19 @@ function AccountRow() {
       off();
     };
   }, []);
-  const until = view.kind === 'in' ? billingDay(view.until) : '';
+  const untilMs = view.kind === 'in' ? view.until : 0;
+  const left = untilMs > now ? Math.ceil((untilMs - now) / 86400000) : 0;
+  const until = untilMs ? billingDay(untilMs) : '';
   const label =
     view.kind === 'checking'
       ? t('settings.accountChecking')
       : view.kind === 'out'
         ? t('common.signIn')
-        : until
-          ? t('settings.subscribedUntil', { date: until })
-          : t('settings.signedIn');
+        : left > 0
+          ? tp('sources.billing.daysLeft', left)
+          : until
+            ? t('settings.subscribedUntil', { date: until })
+            : t('settings.signedIn');
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" data-account={view.kind} aria-busy={view.kind === 'checking' ? 'true' : undefined} onClick={() => navigate({ name: 'account' })}>
       <span class={view.kind === 'checking' ? 'm-muted' : undefined}>{label}</span>
@@ -394,7 +410,10 @@ export function Settings() {
         <div class="m-set-label">{t('history.tv')}</div>
         <div class="m-set-row">
           <div class="m-set-text">
-            <span>{tv ? tv.name : t('settings.notChosen')}</span>
+            <span>
+              {tv && tvState.value === 'connected' ? <span class="m-bill-dot" data-tv-dot /> : null}
+              {tv ? tv.name : t('settings.notChosen')}
+            </span>
           </div>
           <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P11.2" onClick={() => navigate({ name: 'tv' })}>
             {tv ? t('settings.change') : t('settings.choose')}
