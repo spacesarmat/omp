@@ -24,6 +24,8 @@ import {
   pageAudit,
   pageFails,
   pagePayments,
+  phoneBill,
+  setAutoRenew,
   promosCsv,
   subscriptionsCsv,
   usersCsv,
@@ -2637,6 +2639,25 @@ export function createApp(file, fetchImpl, opts) {
         if (!links.length) return json(res, 503, { error: 'down' });
         return json(res, 200, { links });
       }
+      if (req.method === 'POST' && path === '/v1/auto-renew') {
+        if (readOnly) return json(res, 503, { error: 'readonly' });
+        const device = String(req.headers['x-device-id'] || '');
+        const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        const body = await readBody(req);
+        const on = !!(body && (body.on === true || body.on === 'true'));
+        const cur = await store.read();
+        const caller = await deviceCaller(cur, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const own = caller.code ? cur.subscriptions.find((s) => s.id === caller.code.subscriptionId) : null;
+        if (!own) return json(res, 404, { error: 'not_linked' });
+        const out = await store.update((row) => {
+          const next = setAutoRenew(row, own.accountId, on);
+          return { state: next.state, result: next.result };
+        });
+        if (!out || out.error) return json(res, 404, { error: 'not_linked' });
+        return json(res, 200, out);
+      }
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
@@ -2703,6 +2724,7 @@ export function createApp(file, fetchImpl, opts) {
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
           referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),
+          bill: phoneBill(state, account.id, now),
         });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {

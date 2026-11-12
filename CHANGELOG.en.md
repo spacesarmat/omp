@@ -6,6 +6,20 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+## 0.30.1-beta.4
+
+- [phone] Help lists common problems first, device chips on one row, and "For your TV". Buttons open Developer Mode, wake-on-LAN, updates, the player and a promo code. An answer can be marked useful or not
+- [phone] Settings search hides other rows. The subscription row has a green dot, and the TV is one line "name · webOS". Deleting a TV asks first. Watch-from hides the network block unless "by network" is on. The phone server address can be copied and shown as a QR. Advanced shows a 1 GB cache bar
+- [phone] A "best only" subscription still shows the best release on the card when it is below the threshold and no notice is sent
+- [phone] A subscription has its own Telegram switch. The phone remembers it. A check does not send finds to the bot
+- [phone] Account shows the card price, fee and total, cancel auto-renew, and recent payments. An old server does not send these fields
+- [phone] Remote: a larger pad repeats while held, color keys are compact, hardware volume keys work, and touchpad speed is a slider
+- [phone] Help buttons open renew, the phone TorrServer and diagnostics. The opened screen asks "Did it work?"
+- [phone] Settings shows days left on the subscription row and a green dot on the connected TV
+- [phone] When the TV does not answer, the remote shows one plate with Turn on, Retry and a wake hint. Controls dim, the link has a green dot, and button or touchpad mode is remembered
+- [phone] Account status is large, with a green dot and days left, and an info button. Telegram is one line, without the id or the bot line
+- [phone] Now on TV: the empty gap above chapters is gone. A next-episode card and Skip the intro when an intro exists. Tap Chapter N of M for the list. A long press skips, repeats, or always skips Recap and Credits
+- [phone] A subscription page has edit, pause and delete in the header, a poster, quality chips, notifications, a link to the card and a check count
 - [phone] The subscription sheet keeps Delete and Save above the system bar. A swipe down with unsaved edits asks whether to save them. Releases already found do not notify
 - [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark
 - [tech] Billing: a separate Crypto Pay testnet token (`CRYPTO_PAY_TESTNET_TOKEN`). The testnet switch picks the token and the host together. Invoice creation and the `/v1/crypto-pay` signature use only the active mode. With testnet on and no testnet token, crypto stays disabled and the live token is not sent there. A webhook signed by the other mode returns 200, is logged as ignored, and does not extend a subscription. The billing image was not deployed

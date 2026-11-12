@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { showToast } from '../ui/toast';
 import { errorMessage } from '../../../src/api/http';
 import { HB_REPO_URL } from '../../../src/lib/updateInfo';
@@ -114,6 +115,7 @@ function Find() {
 
   return (
     <div class="m-screen m-install" data-route="install">
+      <FaqDone mark="install" />
       <Bar title={t('install.assistant.title')} />
       <p class="m-muted m-note">
         {searching ? t('install.assistant.sameNetSearching') : t('install.assistant.sameNet')}

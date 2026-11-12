@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
+import QRCode from 'qrcode';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
+import { showToast } from '../ui/toast';
 import { resetTo, afterConnectRoute, goBack } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { errorMessage } from '../../../src/api/http';
 import {
   localServer,
@@ -17,6 +20,18 @@ import {
 } from '../server/localServer';
 import { TORRSERVER_VERSION } from '../server/torrserverVersion';
 import type { LocalDownloadProgress, LocalServerInfo } from '../platform/native';
+
+let addrCopy: ((text: string) => Promise<void>) | null = null;
+
+/** Tests replace copying the server address. Null restores the browser clipboard. */
+export function setAddrCopy(fn: ((text: string) => Promise<void>) | null): void {
+  addrCopy = fn;
+}
+
+function clock(d = new Date()): string {
+  const p = (n: number) => (n < 10 ? '0' : '') + n;
+  return p(d.getHours()) + ':' + p(d.getMinutes());
+}
 
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
 const SPIN = 'M12 3a9 9 0 1 0 9 9';
@@ -50,6 +65,8 @@ export function LocalServer() {
   const [askMobile, setAskMobile] = useState(false);
   // size of the download in bytes (for «12 из 31 МБ»); 0 when unknown
   const [total, setTotal] = useState(0);
+  const [qr, setQr] = useState('');
+  const [since, setSince] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -100,6 +117,25 @@ export function LocalServer() {
     };
   }, [attempt, approved]);
 
+  const ipLive = localServer.value.ip;
+  const addrLive = ipLive ? ipLive + ':' + LOCAL_PORT : '';
+  const addrReady = !offer && !checking && !error && step >= SETUP_STEPS && !!addrLive;
+  useEffect(() => {
+    if (!addrReady) {
+      setQr('');
+      return;
+    }
+    setSince((prev) => prev || clock());
+    let alive = true;
+    void QRCode.toDataURL('http://' + addrLive, { margin: 1, width: 160 }).then(
+      (url) => alive && setQr(url),
+      () => alive && setQr(''),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [addrReady, addrLive]);
+
   if (offer) {
     const update = offer.binary === 'outdated';
     const size = downloadSize(offer);
@@ -111,6 +147,7 @@ export function LocalServer() {
     if (askMobile) {
       return (
         <div class="m-screen" data-route="localServer">
+        <FaqDone mark="server" />
           <Header />
           <div class="m-local-card" data-local="mobile">
             <div class="m-local-title">{t('localServer.mobileAsk', { what: size ? size.replace('~', '') : 'TorrServer' })}</div>
@@ -127,6 +164,7 @@ export function LocalServer() {
     }
     return (
       <div class="m-screen" data-route="localServer">
+        <FaqDone mark="server" />
         <Header />
         <div class="m-local-card" data-local="offer">
           <div class="m-local-text">
@@ -164,9 +202,23 @@ export function LocalServer() {
   const done = step >= SETUP_STEPS;
   // the step the error belongs to (an error after the last step stays on the last one)
   const failAt = error ? Math.min(step, labels.length - 1) : -1;
-  const ip = localServer.value.ip;
+  const ip = ipLive;
+  const addr = addrLive;
+
+  async function copyAddr() {
+    if (!addr) return;
+    try {
+      if (addrCopy) await addrCopy(addr);
+      else if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(addr);
+      showToast(t('donate.copied'));
+    } catch {
+      showToast(t('settings.clearFailed'));
+    }
+  }
+
   return (
     <div class="m-screen" data-route="localServer">
+      <FaqDone mark="server" />
       <Header />
       <div class="m-steps">
         {labels.map((label, i) => {
@@ -203,15 +255,20 @@ export function LocalServer() {
       {done && (
         <div class="m-addr-card">
           <div class="m-muted m-small">{t('localServer.addrForTv')}</div>
-          {ip ? (
-            <div class="m-addr">
-              {ip}:{LOCAL_PORT}
+          {addr ? (
+            <div class="m-addr-row">
+              <div class="m-addr">{addr}</div>
+              <button type="button" class="m-icon-btn" data-copy-addr aria-label={t('localServer.copyAddr')} onClick={() => void copyAddr()}>
+                <Icon d="M8 8h11v11H8zM5 16V5h11" size={18} />
+              </button>
+              {qr ? <img class="m-addr-qr" data-qr alt={t('localServer.qrAddr')} src={qr} /> : null}
             </div>
           ) : (
             <div class="m-error">{t('localServer.noWifi')}</div>
           )}
+          {since && addr ? <div class="m-muted m-small" data-local-since>{t('localServer.sinceLine', { time: since, net: addr })}</div> : null}
           {localServer.value.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
-          <div class="m-muted m-note">{t('localServer.tvHint')}</div>
+          <div class="m-muted m-note m-addr-hint">{t('localServer.tvHint')}</div>
         </div>
       )}
       {((downloading && !verify) || error || done) && (

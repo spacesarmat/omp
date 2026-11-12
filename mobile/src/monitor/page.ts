@@ -28,6 +28,7 @@ import { replaceWithResult, type ReplaceClient } from '../../../src/monitor/repl
 import { loadMonitorSettings, saveLastRun, type MonitorActionResult, type MonitorSummary } from '../../../src/monitor/settings';
 import { loadFound, loadSubs, markFindingsSeen, pruneEpisodeFindings, removeFindings } from '../../../src/monitor/subs';
 import { checkedSubs, FREE_SUBS_MAX } from '../../../src/monitor/limit';
+import { withoutHeld } from './subHold';
 import { billingSession } from '../../../src/billing/session';
 import { recheckPremium } from '../../../src/billing/recheck';
 import { BETTER_ID, EPISODES_ID, type Finding, type Subscription } from '../../../src/monitor/types';
@@ -236,7 +237,7 @@ export async function runCheck(deps: PageDeps, deadline: number): Promise<Monito
   // Over the cap, /v1/me is asked even inside the 6 hour window, so a renewal paid in the bot unpauses this run.
   // Otherwise the account is rechecked only when the cached answer is older than that window. A failure keeps it.
   if (billingSession()) await recheckPremium(ctx, 'interval', now(), { force: loadSubs().length > FREE_SUBS_MAX });
-  const subs = checkedSubs(now());
+  const subs = withoutHeld(checkedSubs(now()));
   const answered: { [id: string]: boolean } = {};
   const asked: { [id: string]: boolean } = {};
   let next = 0;

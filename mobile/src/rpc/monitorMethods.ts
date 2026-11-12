@@ -15,6 +15,7 @@ import {
 } from '../../../src/monitor/subs';
 import { reloadSourcePrefs } from '../../../src/sources/store';
 import { FREE_SUBS_MAX, isSubPaused, pausedSubIds, subsLimitReached } from '../../../src/monitor/limit';
+import { isSubHeld } from '../monitor/subHold';
 import { monitorMax } from '../../../src/billing/entitlement';
 import { t } from '../../../src/i18n';
 import { loadLastRun } from '../../../src/monitor/settings';
@@ -120,6 +121,7 @@ export function monitorMethods(kit: { deps: RpcDeps; resolveRow: ResolveRow }): 
       const sub = getSubscription(id);
       if (!sub) throw bad('id');
       if (isSubPaused(id)) throw limitError('monitor.limit.pausedCheck');
+      if (isSubHeld(id)) throw new RpcError('failed', t('monitor.sub.held'));
       const check = deps.checkSubscription;
       if (!check) throw new RpcError('failed');
       if (checking[id]) return { started: true };

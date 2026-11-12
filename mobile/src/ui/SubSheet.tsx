@@ -53,6 +53,7 @@ export function SubSheet(p: {
   const [size, setSize] = useState(base.maxSizeGb ? gbText(base.maxSizeGb) : '');
   const [sources, setSources] = useState<string[] | null>(base.sources === undefined ? null : base.sources);
   const [notify, setNotify] = useState(base.notify !== false);
+  const [notifyTelegram, setNotifyTelegram] = useState(base.notifyTelegram === true);
   const [better, setBetter] = useState(base.better === true);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
@@ -89,6 +90,7 @@ export function SubSheet(p: {
       || seeds !== (base.minSeeds ? String(base.minSeeds) : '')
       || size !== (base.maxSizeGb ? gbText(base.maxSizeGb) : '')
       || notify !== (base.notify !== false)
+      || notifyTelegram !== (base.notifyTelegram === true)
       || better !== (base.better === true)
       || !sameList(sources, origSources);
   };
@@ -101,7 +103,7 @@ export function SubSheet(p: {
     if (maxSizeGb === null) { setError(t('monitor.sub.errSize')); return false; }
     if (sources !== null && !sources.length) { setError(t('monitor.sub.errSources')); return false; }
     setError('');
-    const input: SubscriptionInput = { query: q, quality, sources, notify, minSeeds, maxSizeGb, better };
+    const input: SubscriptionInput = { query: q, quality, sources, notify, notifyTelegram, minSeeds, maxSizeGb, better };
     let saved: Subscription | null;
     if (p.sub) {
       saved = updateSubscription(p.sub.id, input);
@@ -231,6 +233,23 @@ export function SubSheet(p: {
             aria-label={t('monitor.sub.notify')}
             class={'m-switch' + (notify ? ' on' : '')}
             onClick={() => setNotify(!notify)}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
+        <div class="m-skip-row">
+          <span class="m-skip-text">
+            {t('monitor.sub.telegram')}
+            <span class="m-muted m-small">{t('monitor.sub.telegramHint')}</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notifyTelegram}
+            aria-label={t('monitor.sub.telegram')}
+            class={'m-switch' + (notifyTelegram ? ' on' : '')}
+            data-sub-telegram
+            onClick={() => setNotifyTelegram(!notifyTelegram)}
           >
             <span class="m-switch-knob" />
           </button>
