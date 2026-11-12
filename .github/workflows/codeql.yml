@@ -1,0 +1,110 @@
+name: CodeQL
+
+# Separate from CI. Not a required check.
+# Once a week: Monday 09:00 Europe/Moscow (UTC+3, no daylight saving). Also started by hand.
+
+permissions:
+  contents: read
+  security-events: write
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+            timeout: 45
+          # Android sources are Kotlin. build-mode none does not extract Kotlin.
+          # Autobuild runs gradle assemble, and release tasks throw without the release keystore.
+          # assembleDebug is the CI debug task, one ABI, and does not run those release tasks.
+          - language: java-kotlin
+            build-mode: manual
+            timeout: 60
+          - language: rust
+            build-mode: none
+            timeout: 45
+          - language: actions
+            build-mode: none
+            timeout: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Checkout 2160 Player submodule
+        if: matrix.language == 'java-kotlin'
+        run: git submodule update --init --recursive
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: matrix.language == 'java-kotlin'
+        with:
+          node-version: 24
+
+      - name: Install root dependencies
+        if: matrix.language == 'java-kotlin'
+        run: npm ci --no-audit --no-fund
+
+      - name: Prepare the Capacitor Android project
+        if: matrix.language == 'java-kotlin'
+        run: |
+          set -eu
+          mkdir -p dist-mobile
+          printf '%s\n' '<!doctype html><html><head><meta charset="utf-8"><title>OMP</title></head><body></body></html>' > dist-mobile/index.html
+          npx cap sync android
+          node scripts/strip-flatdir.mjs
+
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        if: matrix.language == 'java-kotlin'
+        with:
+          distribution: temurin
+          # 17 for the player-core toolchain, 21 (last = default) for Gradle.
+          java-version: |
+            17
+            21
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        if: matrix.language == 'java-kotlin'
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+
+      - name: Ensure Rust for CodeQL
+        if: matrix.language == 'rust'
+        run: |
+          set -eu
+          if ! command -v rustup >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
+          rustup --version
+          cargo --version
+          rustc --version
+          mkdir -p desktop/dist
+          printf '%s\n' '<!doctype html><title>OMP</title>' > desktop/dist/index.html
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Build Android debug
+        if: matrix.language == 'java-kotlin'
+        working-directory: android
+        run: ./gradlew --no-daemon -PompAbi=arm64-v8a -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleDebug
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

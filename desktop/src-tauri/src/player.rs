@@ -532,7 +532,9 @@ fn extract_mpv_zip(archive: &Path, data_dir: &Path) -> Result<PathBuf, String> {
         let mut entry = zip
             .by_index(index)
             .map_err(|_| "mpv archive open failed".to_string())?;
-        let name = entry.name().to_string();
+        let name = entry
+            .name()
+            .map_err(|_| "mpv archive path rejected".to_string())?;
         if !safe_archive_name(&name) {
             return Err("mpv archive path rejected".to_string());
         }

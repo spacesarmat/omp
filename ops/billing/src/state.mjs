@@ -70,7 +70,7 @@ export function emptyState() {
       starsEnabled: false,
       starsPrice: 0,
       starsExtra: 0,
-      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. The token is CRYPTO_PAY_TOKEN, not stored here. */
+      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. Tokens are env secrets, not stored here. */
       cryptoEnabled: false,
       cryptoTestnet: false,
       /** When true, crypto is offered only when the country code is present and is not RU. */
@@ -85,6 +85,8 @@ export function emptyState() {
       cryptoExtraBtc: 0,
       cryptoRateBtc: 0,
       cryptoPayToken: '',
+      /** CRYPTO_PAY_TESTNET_TOKEN. Empty while cryptoTestnet is on means crypto stays disabled. */
+      cryptoPayTestnetToken: '',
       /** Devices every subscription includes (1-20) unless an admin set an individual limit (limitOverride). */
       baseDevices: BASE_DEVICES_DEFAULT,
       /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */
