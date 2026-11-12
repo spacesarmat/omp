@@ -677,7 +677,9 @@ describe('Remote with a TV', () => {
     expect(sheet.querySelector('[data-tp-try]')).toBeTruthy();
     expect(Array.from(sheet.querySelectorAll('button')).some((b) => (b.textContent || '').includes('Готово'))).toBe(false);
     range.value = '5';
-    act(() => range.dispatchEvent(new Event('input', { bubbles: true })));
+    act(() => {
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     click(sheetLbl('Ускорение'));
     click(sheetLbl('Касание = щелчок'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false });
@@ -695,19 +697,25 @@ describe('Remote with a TV', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED', clientKey: 'k' });
     mount();
     const up = lbl('Вверх');
-    act(() => up.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 })));
+    act(() => {
+      up.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
     expect(a.pressButton).toHaveBeenCalledTimes(1);
     act(() => {
       vi.advanceTimersByTime(380 + 140);
     });
     expect(a.pressButton.mock.calls.length).toBeGreaterThan(1);
     const n = a.pressButton.mock.calls.length;
-    act(() => up.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+    act(() => {
+      up.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    });
     act(() => {
       vi.advanceTimersByTime(400);
     });
     expect(a.pressButton.mock.calls.length).toBe(n);
-    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'AudioVolumeUp', bubbles: true })));
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'AudioVolumeUp', bubbles: true }));
+    });
     expect(a.volume).toHaveBeenCalledWith('up');
     vi.useRealTimers();
   });
