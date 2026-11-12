@@ -599,7 +599,7 @@ function HoldButton(p: { class: string; label: string; onFire: () => void; child
   );
 }
 
-function useRemoteKeys() {
+function useRemoteKeys(shown: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -614,7 +614,7 @@ function useRemoteKeys() {
     const obs = new MutationObserver(read);
     obs.observe(deck, { attributes: true, attributeFilter: ['data-pane'] });
     return () => obs.disconnect();
-  }, []);
+  }, [shown]);
   return { ref, on };
 }
 
@@ -883,7 +883,7 @@ function BoxRow({ tv }: { tv: SavedTv }) {
  * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
  */
 function AtvRemote({ tv }: { tv: SavedTv }) {
-  const keys = useRemoteKeys();
+  const keys = useRemoteKeys(true);
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
@@ -1111,8 +1111,8 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
 }
 
 export function Remote() {
-  const keys = useRemoteKeys();
   const tv = activeTv.value;
+  const keys = useRemoteKeys(!!tv && tv.kind !== 'atv');
   const state = tvState.value;
   const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
   const pickMode = (next: 'buttons' | 'touchpad') => {
