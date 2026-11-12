@@ -159,9 +159,13 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     const active = link;
     setLink(null);
     if (!active || !rule || readOnly) return;
+    // The connection is computed inside update so it always applies to the latest draft:
+    // the flow may have changed between pointerdown and commit.
     try {
-      const result = connectFlowNodes(draft.flow, rule.id, active.fromId, toId, active.branch);
-      commit((flow) => result.flow);
+      controller.update((current) => {
+        const result = connectFlowNodes(current.flow, rule.id, active.fromId, toId, active.branch);
+        current.flow = result.flow;
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     }
@@ -179,8 +183,12 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
       if (event.key === 'Delete' && selectedNodeId && rule && !readOnly) {
         event.preventDefault();
         setError('');
-        commit((flow) => removeFlowNodes(flow, rule.id, [selectedNodeId]));
-        setSelectedNodeId(null);
+        try {
+          commit((flow) => removeFlowNodes(flow, rule.id, [selectedNodeId]));
+          setSelectedNodeId(null);
+        } catch (reason) {
+          setError(reason instanceof Error ? reason.message : String(reason));
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -215,19 +223,21 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
         ref={viewportRef}
         style={{ backgroundSize: `${24 * zoom}px ${24 * zoom}px` }}
         onPointerDown={(event) => {
-          if (event.target === event.currentTarget && !readOnly) {
-            const start = { x: event.clientX, y: event.clientY };
-            const origin = { ...pan };
-            const panMove = (moveEvent: PointerEvent) => {
-              setPan({ x: origin.x + moveEvent.clientX - start.x, y: origin.y + moveEvent.clientY - start.y });
-            };
-            const panUp = () => {
-              window.removeEventListener('pointermove', panMove);
-              window.removeEventListener('pointerup', panUp);
-            };
-            window.addEventListener('pointermove', panMove);
-            window.addEventListener('pointerup', panUp);
-          }
+          // The world layer covers the whole viewport, so a background hit is any pointerdown
+          // that did not land on a node or a port: dragging empty canvas space pans.
+          const target = event.target as HTMLElement;
+          if (target.closest('[data-node-id]') || target.closest('[data-port]')) return;
+          const start = { x: event.clientX, y: event.clientY };
+          const origin = { ...pan };
+          const panMove = (moveEvent: PointerEvent) => {
+            setPan({ x: origin.x + moveEvent.clientX - start.x, y: origin.y + moveEvent.clientY - start.y });
+          };
+          const panUp = () => {
+            window.removeEventListener('pointermove', panMove);
+            window.removeEventListener('pointerup', panUp);
+          };
+          window.addEventListener('pointermove', panMove);
+          window.addEventListener('pointerup', panUp);
         }}
       >
         <div

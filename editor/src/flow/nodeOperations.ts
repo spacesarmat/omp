@@ -13,10 +13,10 @@ import type {
 // without a graph are never touched: the canvas only edits rules that already own a graph
 // or creates a new screen.enter rule, which the legacy click dispatcher never matches.
 export class FlowOperationError extends Error {
-  readonly code: 'SELF_LOOP' | 'TRIGGER_TARGET' | 'RESULT_SOURCE' | 'DUPLICATE_EDGE' | 'CYCLE' | 'BRANCH_MISMATCH' | 'UNKNOWN_NODE' | 'NO_GRAPH_RULE';
+  readonly code: 'SELF_LOOP' | 'TRIGGER_TARGET' | 'RESULT_SOURCE' | 'DUPLICATE_EDGE' | 'CYCLE' | 'BRANCH_MISMATCH' | 'UNKNOWN_NODE' | 'NO_GRAPH_RULE' | 'NO_TRIGGER' | 'MULTIPLE_TRIGGERS' | 'UNREACHABLE_NODE';
 
   constructor(code: FlowOperationError['code'], message: string) {
-    super(message);
+    super(`${code}: ${message}`);
     this.code = code;
   }
 }
@@ -94,6 +94,9 @@ export function addFlowNode(flow: FlowDocument, screenId: string, kind: FlowNode
   const ensured = ensureGraphRule(flow, screenId);
   const rule = ruleOf(ensured.flow, ensured.ruleId);
   const graph = graphOf(rule);
+  if (kind === 'trigger' && graph.nodes.some((node) => node.kind === 'trigger')) {
+    throw new FlowOperationError('MULTIPLE_TRIGGERS', 'rule graph already has a trigger node');
+  }
   const nodeId = uniqueId('node', flowNodeIds(ensured.flow));
   const offset = graph.nodes.length * 36;
   const node: FlowNodeView = {
@@ -181,12 +184,38 @@ export function connectFlowNodes(
   return { flow: withGraph(flow, ruleId, { ...graph, edges: graph.edges.concat(edge) }), edgeId: edge.id };
 }
 
+function reachableFrom(nodes: FlowNodeView[], edges: FlowEdge[], roots: FlowNodeView[]): Set<string> {
+  const reachable = new Set<string>();
+  const queue = roots.map((node) => node.id);
+  while (queue.length) {
+    const id = queue.shift()!;
+    if (reachable.has(id)) continue;
+    reachable.add(id);
+    for (const edge of edges.filter((entry) => entry.from === id)) queue.push(edge.to);
+  }
+  return reachable;
+}
+
 export function removeFlowNodes(flow: FlowDocument, ruleId: string, nodeIds: string[]): FlowDocument {
   const rule = ruleOf(flow, ruleId);
   const graph = graphOf(rule);
   const removed = new Set(nodeIds);
   const nodes = graph.nodes.filter((node) => !removed.has(node.id));
   const edges = graph.edges.filter((edge) => !removed.has(edge.from) && !removed.has(edge.to));
+  // Removing the last trigger strands every remaining node, and dropping a middle node can
+  // orphan nodes that were reachable before. Refuse both instead of writing an invalid graph.
+  if (graph.nodes.some((node) => removed.has(node.id) && node.kind === 'trigger') && nodes.length > 0) {
+    throw new FlowOperationError('NO_TRIGGER', 'rule graph requires its trigger node');
+  }
+  const triggersBefore = graph.nodes.filter((node) => node.kind === 'trigger');
+  if (triggersBefore.length) {
+    const before = reachableFrom(graph.nodes, graph.edges, triggersBefore);
+    const after = reachableFrom(nodes, edges, nodes.filter((node) => node.kind === 'trigger'));
+    const orphaned = nodes.find((node) => before.has(node.id) && !after.has(node.id));
+    if (orphaned) {
+      throw new FlowOperationError('UNREACHABLE_NODE', `removing the node orphans ${orphaned.id}`);
+    }
+  }
   const keptStepIds = new Set(nodes.map((node) => node.stepId).filter((stepId): stepId is string => Boolean(stepId)));
   const steps = (rule.steps ?? []).filter((step) => keptStepIds.has(step.id));
   const nextRule: InteractionRule = { ...rule, graph: { nodes, edges }, steps };

@@ -66,7 +66,7 @@ function keydown(target: Window, key: string): void {
   });
 }
 
-function graphOf(): { nodes: { id: string; kind: string; x: number; y: number }[]; edges: { from: string; to: string; branch: string }[] } {
+function graphOf(): { nodes: { id: string; kind: string; x: number; y: number; label?: string }[]; edges: { from: string; to: string; branch: string }[] } {
   const rule = controller.draft.flow.rules.find((entry) => entry.graph);
   expect(rule).toBeDefined();
   return { nodes: rule!.graph!.nodes as never, edges: rule!.graph!.edges as never };
@@ -212,6 +212,77 @@ describe('flow canvas', () => {
     expect(controller.draft.flow.rules.some((rule) => rule.graph)).toBe(false);
     expect(controller.canUndo).toBe(false);
   });
+
+  it('pans the canvas by dragging the world background', () => {
+    mountCanvas();
+    const world = host.querySelector<HTMLElement>('[data-testid="flow-canvas-world"]')!;
+    pointer(world, 'pointerdown', 200, 200);
+    pointer(document.body, 'pointermove', 240, 230);
+    pointer(document.body, 'pointerup', 240, 230);
+    const moved = host.querySelector<HTMLElement>('[data-testid="flow-canvas-world"]')!;
+    expect(moved.style.transform).toContain('translate(40px, 30px)');
+  });
+
+  it('prevents adding a second trigger and reports MULTIPLE_TRIGGERS', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    click('[data-action="add-trigger"]');
+    expect(graphOf().nodes.filter((node) => node.kind === 'trigger')).toHaveLength(1);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')!.textContent).toContain('MULTIPLE_TRIGGERS');
+  });
+
+  it('prevents deleting the last trigger and reports NO_TRIGGER', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    click('[data-action="add-condition"]');
+    const trigger = graphOf().nodes.find((node) => node.kind === 'trigger')!;
+    click(`[data-node-id="${trigger.id}"]`);
+    keydown(window, 'Delete');
+    expect(graphOf().nodes).toHaveLength(2);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')!.textContent).toContain('NO_TRIGGER');
+  });
+
+  it('prevents removing a middle node that orphans a path and reports UNREACHABLE_NODE', () => {
+    mountCanvas();
+    click('[data-action="add-trigger"]');
+    click('[data-action="add-condition"]');
+    click('[data-action="add-action"]');
+    const nodes = graphOf().nodes;
+    const trigger = nodes.find((node) => node.kind === 'trigger')!;
+    const condition = nodes.find((node) => node.kind === 'condition')!;
+    const action = nodes.find((node) => node.kind === 'action')!;
+    pointer(nodeEl(trigger.id).querySelector('[data-port="out"][data-branch="default"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(condition.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    pointer(nodeEl(condition.id).querySelector('[data-port="out"][data-branch="true"]'), 'pointerdown', 0, 0);
+    pointer(nodeEl(action.id).querySelector('[data-port="in"]'), 'pointerup', 0, 0);
+    click(`[data-node-id="${condition.id}"]`);
+    keydown(window, 'Delete');
+    expect(graphOf().nodes).toHaveLength(3);
+    expect(host.querySelector('[data-testid="flow-canvas-error"]')!.textContent).toContain('UNREACHABLE_NODE');
+  });
+
+  it('computes the connection against the latest draft, not a stale render snapshot', () => {
+    mountCanvas();
+    click('[data-action="add-condition"]');
+    click('[data-action="add-action"]');
+    const nodes = graphOf().nodes;
+    const condition = nodes.find((node) => node.kind === 'condition')!;
+    const action = nodes.find((node) => node.kind === 'action')!;
+    const output = nodeEl(condition.id).querySelector('[data-port="out"][data-branch="true"]');
+    const input = nodeEl(action.id).querySelector('[data-port="in"]');
+    pointer(output, 'pointerdown', 0, 0);
+    act(() => {
+      controller.update((current) => {
+        const rule = current.flow.rules.find((entry) => entry.graph);
+        const target = rule?.graph?.nodes.find((entry) => entry.id === action.id);
+        if (target) target.label = 'renamed-between-events';
+      });
+      input!.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }));
+    });
+    const graph = graphOf();
+    expect(graph.edges).toHaveLength(1);
+    expect(graph.nodes.find((node) => node.id === action.id)!.label).toBe('renamed-between-events');
+  });
 });
 
 describe('flow node inspector', () => {
@@ -271,6 +342,34 @@ describe('flow node inspector', () => {
     const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
     mountInspector(nodeId, rule.id, true);
     expect(host.querySelector<HTMLSelectElement>('[data-testid="inspector-condition-op"]')!.disabled).toBe(true);
+  });
+
+  it('offers variable.set with typed variable id and value fields', () => {
+    mountCanvas();
+    act(() => {
+      controller.update((current) => {
+        current.flow.variables = [{ id: 'var-1', name: 'flag', type: 'boolean', initial: false }];
+      });
+    });
+    click('[data-action="add-action"]');
+    const nodeId = graphOf().nodes[0].id;
+    const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
+    mountInspector(nodeId, rule.id);
+    const typeSelect = host.querySelector<HTMLSelectElement>('[data-testid="inspector-action-type"]')!;
+    expect([...typeSelect.options].some((option) => option.value === 'variable.set')).toBe(true);
+    act(() => {
+      typeSelect.value = 'variable.set';
+      typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    let step = controller.draft.flow.rules.find((entry) => entry.graph)!.steps![0];
+    expect(step.action).toMatchObject({ type: 'variable.set', variableId: 'var-1', value: false });
+    const valueSelect = host.querySelector<HTMLSelectElement>('[data-testid="inspector-action-variable-value"]')!;
+    act(() => {
+      valueSelect.value = 'true';
+      valueSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    step = controller.draft.flow.rules.find((entry) => entry.graph)!.steps![0];
+    expect(step.action).toMatchObject({ type: 'variable.set', variableId: 'var-1', value: true });
   });
 
   it('links the node back to design mode and opens simulation', () => {

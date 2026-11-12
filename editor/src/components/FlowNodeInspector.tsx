@@ -55,9 +55,13 @@ function defaultCondition(): InteractionCondition {
   return { kind: 'eq', path: 'server.connected', value: true };
 }
 
-function defaultAction(type: string): InteractionAction {
+function defaultAction(type: string, variables: { id: string; initial: string | number | boolean }[] = []): InteractionAction {
+  if (type === 'variable.set') {
+    const variable = variables[0];
+    if (variable) return { type: 'variable.set', variableId: variable.id, value: variable.initial };
+  }
   if (type === 'navigate' || type === 'openScreen') return { type: type as 'navigate', screenId: 'library' };
-  if (type === 'toast') return { type: 'toast', message: '' };
+  if (type === 'toast') return { type: 'toast', message: 'Сообщение' };
   if (type === 'dialog') return { type: 'dialog', title: '', message: '' };
   return { type: type as 'back' };
 }
@@ -148,7 +152,44 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
 
   const setActionType = (type: string) => {
     setError('');
-    setAction(defaultAction(type));
+    setAction(defaultAction(type, variables));
+  };
+
+  const actionVariable = action.type === 'variable.set' ? variables.find((variable) => variable.id === action.variableId) : undefined;
+
+  const setActionVariable = (variableId: string) => {
+    const variable = variables.find((entry) => entry.id === variableId);
+    if (!variable) {
+      setError('UNKNOWN_VARIABLE');
+      return;
+    }
+    setAction({ type: 'variable.set', variableId: variable.id, value: variable.initial });
+  };
+
+  const setActionVariableValue = (raw: string) => {
+    if (action.type !== 'variable.set' || !actionVariable) return;
+    if (actionVariable.type === 'boolean') {
+      setAction({ ...action, value: raw === 'true' });
+      return;
+    }
+    if (actionVariable.type === 'number') {
+      const value = Number(raw);
+      if (!Number.isFinite(value)) {
+        setError('NUMBER_REQUIRED');
+        return;
+      }
+      setAction({ ...action, value });
+      return;
+    }
+    if (actionVariable.type === 'enum') {
+      if (!(actionVariable.values ?? []).includes(raw)) {
+        setError('ENUM_VALUE_REQUIRED');
+        return;
+      }
+      setAction({ ...action, value: raw });
+      return;
+    }
+    setAction({ ...action, value: raw });
   };
 
   const setActionMessage = (raw: string) => {
@@ -235,6 +276,40 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
             <label>Заголовок
               <input data-testid="inspector-action-title" value={action.title} disabled={readOnly} onInput={(event) => setAction({ ...action, title: event.currentTarget.value } as InteractionAction)} />
             </label>
+          )}
+          {action.type === 'variable.set' && (
+            <>
+              <label>Переменная
+                <select data-testid="inspector-action-variable" value={action.variableId} disabled={readOnly} onChange={(event) => setActionVariable(event.currentTarget.value)}>
+                  {variables.map((variable) => <option value={variable.id}>{variable.name} ({variable.id})</option>)}
+                </select>
+              </label>
+              {actionVariable?.type === 'boolean' && (
+                <label>Значение
+                  <select data-testid="inspector-action-variable-value" value={String(action.value)} disabled={readOnly} onChange={(event) => setActionVariableValue(event.currentTarget.value)}>
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+              )}
+              {actionVariable?.type === 'number' && (
+                <label>Значение
+                  <input data-testid="inspector-action-variable-value" value={String(action.value)} disabled={readOnly} inputMode="decimal" onInput={(event) => setActionVariableValue(event.currentTarget.value)} />
+                </label>
+              )}
+              {actionVariable?.type === 'enum' && (
+                <label>Значение
+                  <select data-testid="inspector-action-variable-value" value={String(action.value)} disabled={readOnly} onChange={(event) => setActionVariableValue(event.currentTarget.value)}>
+                    {(actionVariable.values ?? []).map((value) => <option value={value}>{value}</option>)}
+                  </select>
+                </label>
+              )}
+              {actionVariable?.type === 'string' && (
+                <label>Значение
+                  <input data-testid="inspector-action-variable-value" value={String(action.value)} disabled={readOnly} onInput={(event) => setActionVariableValue(event.currentTarget.value)} />
+                </label>
+              )}
+            </>
           )}
         </>
       )}
