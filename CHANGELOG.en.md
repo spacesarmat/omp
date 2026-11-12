@@ -8,6 +8,12 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [tech] Donation rates are fetched: USDT, TON and BTC from Crypto Pay (CoinGecko fallback), a star as 0.013 USD times the CBR dollar. The admin can leave auto on, type a manual rate, set a markup and a max age. A zero or too-old rate hides that method. Billing was not deployed
 
+## 0.30.1-beta.6
+
+- [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button
+- [atv] On Android TV the embedded 2160 Player is updated to 0.2.26. The TV screen still uses OMP's own controls
+- [tech] The android/vendor/2160player submodule is updated to v0.2.26 (54ad1a1), player-core coordinate 0.2.26. OMP's host does not call safeDrawingPadding, so the inset is not applied twice
+
 ## 0.30.1-beta.5
 
 - [phone] Watch from: a server row stays dark, with the name and address on one line, the status under them, and the menu on the right. The light box is gone
