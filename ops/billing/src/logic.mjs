@@ -2700,7 +2700,7 @@ function referralCodeMatches(accountId, raw) {
 
 /**
  * Account-screen code that belongs to a referrer. Null when it is not a referral code,
- * so the promo list still runs. A match binds the friend once and adds the friend's bonus days.
+ * so the promo list still runs. A match only saves the invitation. Days wait for a payment.
  */
 export function redeemReferralCode(state, { code, accountId, deviceId, now }) {
   const accounts = state.accounts || [];
@@ -2726,23 +2726,15 @@ export function redeemReferralCode(state, { code, accountId, deviceId, now }) {
   }
   const binds = state.referralBinds || [];
   if (binds.some((row) => row && row.friendId === accountId)) return { state, result: { error: 'already' } };
-  const days = settings.friendDays;
-  let next = state;
-  let paidUntil = 0;
-  if (days > 0) {
-    const existing = anySub(state, accountId);
-    if (existing) {
-      const extended = extendGift(state, existing, days, now);
-      paidUntil = extended.paidUntil;
-      next = { ...state, subscriptions: state.subscriptions.map((s) => (s.id === existing.id ? extended : s)) };
-    }
-  }
+  const entry = { friendId: accountId, referrerId: referrer.id, code: referralCodeFor(referrer.id), boundAt: now || 0 };
+  const journalRow = { id: randomId(), friendId: accountId, referrerId: referrer.id, status: 'waiting', days: 0, reason: 'bind' };
   return {
     state: {
-      ...next,
-      referralBinds: binds.concat([{ friendId: accountId, referrerId: referrer.id, code: referralCodeFor(referrer.id), boundAt: now || 0 }]),
+      ...state,
+      referralBinds: binds.concat([entry]),
+      referralJournal: (state.referralJournal || []).concat([journalRow]),
     },
-    result: { kind: 'referral', days, paidUntil, promoCode: referralCodeFor(referrer.id) },
+    result: { kind: 'referral', days: 0, paidUntil: 0, promoCode: entry.code },
   };
 }
 

@@ -25,8 +25,13 @@ describe('referral admin', () => {
     expect(s.friendDiscount).toBe(true);
     expect(s.retention).toBe(true);
     expect(s.balancePercent).toBe(10);
-    const out = applyReferralPost({ settings: s, cancelId: 'a' }, [{ id: 'a', status: 'granted', days: 7 }]);
+    const out = applyReferralPost(
+      { settings: s, cancelId: 'a' },
+      [{ id: 'a', friendId: 'friend', status: 'granted', days: 7 }],
+      [{ friendId: 'friend', referrerId: 'ref' }],
+    );
     expect(out.journal[0].status).toBe('cancelled');
+    expect(out.binds).toEqual([]);
     expect(out.settings.enabled).toBe(false);
   });
 

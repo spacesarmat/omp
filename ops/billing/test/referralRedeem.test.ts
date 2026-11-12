@@ -18,11 +18,14 @@ function base() {
 }
 
 describe('referral code on the account screen', () => {
-  it('saves the invitation and adds the friend bonus', () => {
-    const out = redeemReferralCode(base(), { code: referralCodeFor('ref'), accountId: 'friend', now });
-    expect(out && out.result.days).toBe(3);
+  it('saves the invitation in the journal and does not add days yet', () => {
+    const src = base();
+    const out = redeemReferralCode(src, { code: referralCodeFor('ref'), accountId: 'friend', now });
+    expect(out && out.result.days).toBe(0);
     expect(out && out.state.referralBinds[0].referrerId).toBe('ref');
-    expect(out && out.state.subscriptions[0].paidUntil).toBeGreaterThan(now);
+    expect(out && out.state.referralJournal[0]).toMatchObject({ friendId: 'friend', referrerId: 'ref', status: 'waiting', days: 0, reason: 'bind' });
+    expect(out && out.state.referralJournal[0].id).toBeTruthy();
+    expect(out && out.state.subscriptions[0].paidUntil).toBe(src.subscriptions[0].paidUntil);
   });
 
   it('accepts the code without the hyphen', () => {

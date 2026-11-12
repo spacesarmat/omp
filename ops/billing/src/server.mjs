@@ -2239,12 +2239,13 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/referral') {
           const current = await store.read();
-          const r = applyReferralPost(body, current.referralJournal || []);
+          const r = applyReferralPost(body, current.referralJournal || [], current.referralBinds || []);
           await store.update((state) => ({
             state: {
               ...state,
               settings: { ...state.settings, referral: r.settings },
               referralJournal: r.journal,
+              referralBinds: r.binds,
             },
           }));
           flashText = 'Реферальная программа сохранена';

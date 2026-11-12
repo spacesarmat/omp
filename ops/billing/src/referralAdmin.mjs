@@ -67,10 +67,16 @@ export function publicReferral(settings, accountId, journal, binds) {
   return { enabled: true, code: referralCodeFor(accountId), friends, noticeDays };
 }
 
-/** POST /admin/referral. Does not talk to Telegram. */
-export function applyReferralPost(body, journal) {
+/** POST /admin/referral. Does not talk to Telegram. Cancelling a row also drops that friend's bind. */
+export function applyReferralPost(body, journal, binds) {
   const src = body && typeof body === 'object' ? body : {};
   const settings = normalizeReferralSettings(src.settings || src);
-  const next = src.cancelId ? cancelReferralRow(journal, String(src.cancelId)) : journal || [];
-  return { settings, journal: next };
+  const list = journal || [];
+  const next = src.cancelId ? cancelReferralRow(list, String(src.cancelId)) : list;
+  let nextBinds = binds || [];
+  if (src.cancelId) {
+    const row = list.find((item) => item && item.id === String(src.cancelId));
+    if (row && row.friendId) nextBinds = nextBinds.filter((item) => !item || item.friendId !== row.friendId);
+  }
+  return { settings, journal: next, binds: nextBinds };
 }
