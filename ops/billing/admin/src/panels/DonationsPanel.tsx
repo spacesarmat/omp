@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, type PostResult } from '@/lib/api';
-import { formFromDonateSettings, keepOrRefreshForm, takeFilterRows, type DonateForm } from '@/lib/donateForm';
+import { formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows, type DonateForm } from '@/lib/donateForm';
 
 type Settings = {
   enabled?: boolean;
@@ -68,6 +68,8 @@ export function DonationsPanel({
   const [status, setStatus] = useState('all');
   const [method, setMethod] = useState('all');
   const requestId = useRef(0);
+  const formRef = useRef(form);
+  formRef.current = form;
   const filterRef = useRef({ status, method });
   filterRef.current = { status, method };
   const rows = filtered ?? report?.rows ?? [];
@@ -145,25 +147,26 @@ export function DonationsPanel({
           </div>
           <Button
             type="button"
-            onClick={() =>
+            onClick={() => {
+              const sent = form;
               void run('/admin/donate', {
-                enabled: form.enabled ? 'true' : 'false',
-                yoomoney: form.yoomoney ? 'true' : 'false',
-                stars: form.stars ? 'true' : 'false',
-                crypto: form.crypto ? 'true' : 'false',
-                notifyAll: form.notifyAll ? 'true' : 'false',
-                showAmounts: form.showAmounts ? 'true' : 'false',
-                amounts: form.amounts,
-                minRub: form.minRub,
-                maxRub: form.maxRub,
-                commentMax: form.commentMax,
-                thanksText: form.thanksText,
-                rubPerStar: form.rubPerStar,
-                notifyMin: form.notifyMin,
+                enabled: sent.enabled ? 'true' : 'false',
+                yoomoney: sent.yoomoney ? 'true' : 'false',
+                stars: sent.stars ? 'true' : 'false',
+                crypto: sent.crypto ? 'true' : 'false',
+                notifyAll: sent.notifyAll ? 'true' : 'false',
+                showAmounts: sent.showAmounts ? 'true' : 'false',
+                amounts: sent.amounts,
+                minRub: sent.minRub,
+                maxRub: sent.maxRub,
+                commentMax: sent.commentMax,
+                thanksText: sent.thanksText,
+                rubPerStar: sent.rubPerStar,
+                notifyMin: sent.notifyMin,
               }).then((res) => {
-                if (res && !res.flash?.error) setDirty(false);
-              })
-            }
+                setDirty(stillDirtyAfterSave(formRef.current, sent, !res || !!res.flash?.error));
+              });
+            }}
           >
             Сохранить
           </Button>

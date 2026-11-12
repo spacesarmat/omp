@@ -54,6 +54,18 @@ export function keepOrRefreshForm(local: DonateForm, incoming: DonateForm, dirty
   return dirty ? local : incoming;
 }
 
+function sameForm(a: DonateForm, b: DonateForm): boolean {
+  const keys = Object.keys(a) as (keyof DonateForm)[];
+  for (let i = 0; i < keys.length; i++) if (a[keys[i]] !== b[keys[i]]) return false;
+  return true;
+}
+
+/** Stay dirty when the save failed or the admin typed more while it was running. */
+export function stillDirtyAfterSave(current: DonateForm, sent: DonateForm, failed: boolean): boolean {
+  if (failed) return true;
+  return !sameForm(current, sent);
+}
+
 /** A late response from an older filter selection is dropped. `null` means show the unfiltered report. */
 export function takeFilterRows<T>(requestId: number, latestId: number, rows: T[] | null): T[] | null | undefined {
   if (requestId !== latestId) return undefined;
