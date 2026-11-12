@@ -16,6 +16,8 @@ describe('monitoring texts', () => {
     expect(line).toContain('2 сезона');
     expect(line).toContain('14 серий');
     expect(line).toContain('Следующая серия выйдет');
+    const today = new Date(2026, 10, 12, 12).getTime();
+    expect(seriesSubLine({ seasons: [{ episodes: 8 }], nextEpisode: { airDate: '2026-11-01' } }, today)).toBe('1 сезон · 8 серий');
     expect(seriesSubLine({ seasons: [] })).toBe('');
   });
 

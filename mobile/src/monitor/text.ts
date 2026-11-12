@@ -1,7 +1,7 @@
 // Texts of the monitoring screens (Russian / English): times, subscription conditions, episode ranges, the last check.
 import { fmtDate, fmtNumber, t, tp } from '../../../src/i18n';
 import { seriesRowLine } from '../../../src/lib/phoneRows';
-import { airDateText } from '../../../src/lib/seriesStatus';
+import { airDateText, isoDay } from '../../../src/lib/seriesStatus';
 import { sourceName } from '../../../src/sources/view';
 import { parseEpisodeRange } from '../../../src/monitor/episodes';
 import type { MonitorSummary } from '../../../src/monitor/settings';
@@ -33,12 +33,15 @@ export function dayWord(ms: number, now: number): string {
 }
 
 /** Seasons, episode count and the next air date of a series card. A film and a card without seasons stay empty. */
-export function seriesSubLine(card: { seasons: { episodes: number }[]; status?: string; nextEpisode?: { airDate: string } | null } | null): string {
+export function seriesSubLine(
+  card: { seasons: { episodes: number }[]; status?: string; nextEpisode?: { airDate: string } | null } | null,
+  now: number = Date.now(),
+): string {
   if (!card) return '';
   const episodes = card.seasons.reduce((n, s) => n + (s.episodes || 0), 0);
   const parts = [seriesRowLine(card.seasons.length, episodes, card.status === 'ended' || card.status === 'canceled')];
   const air = card.nextEpisode && card.nextEpisode.airDate;
-  if (air) parts.push(t('series.nextAir', { date: airDateText(air) }));
+  if (air && air >= isoDay(now)) parts.push(t('series.nextAir', { date: airDateText(air, now) }));
   return parts.filter(Boolean).join(' · ');
 }
 
