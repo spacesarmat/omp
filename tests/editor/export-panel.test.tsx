@@ -142,6 +142,32 @@ describe('ExportPanel', () => {
     await vi.waitFor(() => expect(exportDraft).toHaveBeenCalledOnce(), { timeout: 1000 });
   });
 
+  it('blocks export while the preview does not show the live draft, even with clean shown geometry', async () => {
+    const exportDraft = vi.fn(async (draft: typeof controller.draft) => ({
+      baseCommit: draft.baseCommit,
+      files: ['design/themes/default.json'],
+      releaseIntents: draft.theme.releaseIntents,
+      targets: ['desktop-windows' as const],
+      scope: 'all' as const,
+    }));
+    const client: EditorClient = {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft,
+    };
+    act(() => render(h(ExportPanel, { controller, client, issues: [], geometryConfirmed: false, onGeometryConfirm: vi.fn(), draftChecked: false }), host));
+    const exportButton = host.querySelector<HTMLButtonElement>('[data-action="export"]')!;
+    expect(exportButton.disabled).toBe(true);
+    expect(host.querySelector('[data-testid="draft-unchecked-notice"]')).not.toBeNull();
+    await act(async () => {
+      exportButton.click();
+    });
+    expect(exportDraft).not.toHaveBeenCalled();
+  });
+
   it('keeps export enabled without geometry warnings and hides the confirmation', () => {
     act(() => render(h(ExportPanel, { controller, issues: [], geometryConfirmed: false, onGeometryConfirm: vi.fn() }), host));
     expect(host.querySelector<HTMLButtonElement>('[data-action="export"]')!.disabled).toBe(false);

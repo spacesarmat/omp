@@ -172,6 +172,17 @@ describe('editor app', () => {
     expect(send.mock.calls[send.mock.calls.length - 1][1]).toMatchObject({ type: 'init', props: { theme: controller.draft.theme } });
   });
 
+  it('blocks export while the before theme is shown and re-enables it on the live draft', () => {
+    const exportButton = () => host.querySelector<HTMLButtonElement>('[data-action="export"]')!;
+    expect(exportButton().disabled).toBe(false);
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="before-after"]')!.click());
+    expect(exportButton().disabled).toBe(true);
+    expect(host.querySelector('[data-testid="draft-unchecked-notice"]')).not.toBeNull();
+    act(() => host.querySelector<HTMLButtonElement>('[data-testid="before-after"]')!.click());
+    expect(exportButton().disabled).toBe(false);
+    expect(host.querySelector('[data-testid="draft-unchecked-notice"]')).toBeNull();
+  });
+
   it('exits comparison when the compared snapshot is deleted', () => {
     controller.snapshot('Before blue');
     act(() => host.querySelector<HTMLButtonElement>('[data-action="snapshot"]')!.click());

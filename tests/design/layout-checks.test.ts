@@ -314,6 +314,88 @@ describe('checkLayoutAccessibility', () => {
     expect(issues.filter((issue) => issue.nodeId === 'ghost')).toHaveLength(0);
   });
 
+  it('skips descendants of containers hidden by computed styles', () => {
+    const root = mountDom([
+      '<div data-design-id="screen">',
+      '<div data-design-id="hidden-box" style="display: none;">',
+      '<div data-design-id="hidden-label" style="font-size: 10px; color: #888888; background: #ffffff;">Hidden</div>',
+      '<div data-design-id="fading-box" style="opacity: 0;">',
+      '<div data-design-id="fading-label" style="font-size: 10px; color: #888888; background: #ffffff;">Fading</div>',
+      '</div>',
+      '</div>',
+      '</div>',
+    ].join(''));
+    const issues = checkLayoutAccessibility(collectTv(root), createDefaultTheme(BASE));
+    expect(issues.filter((issue) => ['hidden-label', 'fading-label'].includes(issue.nodeId))).toEqual([]);
+  });
+
+  it('skips descendants of a node hidden by a hidden placement in the theme', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [{
+        id: 'placement-secret-box',
+        target: 'lg-webos',
+        screenId: 'home',
+        format: 'landscape',
+        nodeId: 'secret-box',
+        mode: 'flow',
+        x: 0,
+        y: 0,
+        anchor: 'top-left',
+        width: 'auto',
+        height: 'auto',
+        zIndex: 0,
+        hidden: true,
+        locked: false,
+        label: 'Secret box',
+      }],
+    };
+    const root = mountDom('<div data-design-id="screen"><div data-design-id="secret-box"><div data-design-id="secret-label" style="font-size: 10px; color: #888888; background: #ffffff;">Secret</div></div></div>');
+    const issues = checkLayoutAccessibility(collectTv(root), theme);
+    expect(issues.filter((issue) => issue.nodeId === 'secret-label')).toEqual([]);
+  });
+
+  it('applies the 3:1 large text threshold from 24px regular and about 18.67px bold', () => {
+    const root = mountDom([
+      '<div data-design-id="screen" style="background: #ffffff;">',
+      '<div data-design-id="regular-24" style="font-size: 24px; font-weight: 400; color: #949494; background: #ffffff;">A</div>',
+      '<div data-design-id="bold-1867" style="font-size: 18.67px; font-weight: 700; color: #949494; background: #ffffff;">B</div>',
+      '<div data-design-id="regular-23" style="font-size: 23px; font-weight: 400; color: #949494; background: #ffffff;">C</div>',
+      '<div data-design-id="bold-1866" style="font-size: 18.66px; font-weight: 700; color: #949494; background: #ffffff;">D</div>',
+      '</div>',
+    ].join(''));
+    for (const id of ['regular-24', 'bold-1867', 'regular-23', 'bold-1866']) {
+      stubRect(root.querySelector(`[data-design-id="${id}"]`)!, { x: 10, y: 10, width: 300, height: 60 });
+    }
+    const issues = checkLayoutAccessibility(collectTv(root), createDefaultTheme(BASE));
+    const contrast = issues.filter((issue) => issue.code === 'CONTRAST');
+    expect(contrast.map((issue) => issue.nodeId)).toEqual(['regular-23', 'bold-1866']);
+    expect(contrast[0].message).toContain('4.5');
+  });
+
+  it('reads focus styles by focusing the element during collection and restores the previous focus', () => {
+    document.head.innerHTML = '<style>:focus { outline-style: solid; outline-width: 3px; outline-color: #ffffff; }</style>';
+    const root = mountDom('<div data-design-id="screen"><button data-design-id="btn" style="color: #ffffff; background: #000000; outline: none;">Btn</button></div>');
+    const button = root.querySelector<HTMLElement>('[data-design-id="btn"]')!;
+    stubRect(button, { x: 10, y: 10, width: 120, height: 48 });
+    const prior = document.createElement('input');
+    document.body.appendChild(prior);
+    prior.focus();
+    const focusedDuringCollect: string[] = [];
+    const record = (event: Event) => focusedDuringCollect.push((event.target as HTMLElement).dataset.designId ?? '');
+    document.addEventListener('focusin', record);
+    try {
+      const snapshot = collectTv(root);
+      expect(focusedDuringCollect).toContain('btn');
+      expect(document.activeElement).toBe(prior);
+      expect(snapshot.nodes.find((node) => node.nodeId === 'btn')!.styles.focusOutlineStyle).toBe('solid');
+    } finally {
+      document.removeEventListener('focusin', record);
+      prior.remove();
+    }
+  });
+
   it('returns no issues for a clean snapshot', () => {
     const root = mountDom('<div data-design-id="screen"><button data-design-id="action" style="font-size: 30px; color: #ffffff; background: #000000; outline-style: solid; outline-width: 3px; outline-color: #ffffff;">Action</button></div>');
     stubRect(root, { x: 0, y: 0, ...DESKTOP_VIEWPORT });

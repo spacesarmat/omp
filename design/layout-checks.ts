@@ -12,7 +12,7 @@ export const CONTRAST_MIN_RATIO = 4.5;
 export const CONTRAST_MIN_LARGE_TEXT_RATIO = 3;
 const LARGE_TEXT_MIN_FONT_PX = 24;
 const LARGE_TEXT_MIN_WEIGHT = 700;
-const LARGE_TEXT_BOLD_MIN_FONT_PX = 29;
+const LARGE_TEXT_BOLD_MIN_FONT_PX = 18.67;
 const SUB_PIXEL_EPSILON = 0.5;
 
 export type LayoutIssueCode =
@@ -128,36 +128,70 @@ function fontWeightValue(value: string): number {
   return value === 'bold' ? 700 : 400;
 }
 
-function readStyles(element: HTMLElement, computed: CSSStyleDeclaration, interactive: boolean): GeometryNodeStyle {
-  const base = computed;
-  // jsdom accepts a pseudo-class argument but ignores it and logs a console error, so the focus
-  // styles are read there only from the base styles - a focused element already carries its
-  // :focus rules in them. Real browsers force the :focus state through the pseudo argument.
-  const readFocus = interactive && typeof navigator !== 'undefined' && !/jsdom/i.test(navigator.userAgent);
-  const focused = readFocus ? focusStyles(element) : base;
-  return {
-    fontSize: Number.parseFloat(base.fontSize) || 0,
-    fontWeight: fontWeightValue(base.fontWeight || ''),
-    color: base.color || '',
-    backgroundColor: base.backgroundColor || '',
-    display: base.display || '',
-    visibility: base.visibility || '',
-    opacity: base.opacity || '',
-    outlineStyle: base.outlineStyle || '',
-    outlineWidth: outlineWidthPx(base.outlineWidth || ''),
-    boxShadow: base.boxShadow || '',
-    focusOutlineStyle: focused.outlineStyle || '',
-    focusOutlineWidth: outlineWidthPx(focused.outlineWidth || ''),
-    focusBoxShadow: focused.boxShadow || '',
-  };
+interface PriorFocus {
+  document: Document;
+  // Focused element of the measured document itself.
+  inner: Element | null;
+  // Focused element of the top-level document: focusing an element may move focus across
+  // documents (the measured root can live in an iframe preview), and the user's focus lives in
+  // the outermost document.
+  top: Element | null;
 }
 
-function focusStyles(element: HTMLElement): CSSStyleDeclaration {
-  try {
-    return getComputedStyle(element, ':focus');
-  } catch {
-    return getComputedStyle(element);
+function capturePriorFocus(doc: Document): PriorFocus {
+  let topDoc = doc;
+  for (;;) {
+    const frame = topDoc.defaultView?.frameElement ?? null;
+    if (!frame) break;
+    topDoc = frame.ownerDocument;
   }
+  return { document: doc, inner: doc.activeElement, top: topDoc.activeElement };
+}
+
+function restorePriorFocus(prior: PriorFocus): void {
+  const { document: doc, inner, top } = prior;
+  const innerIsDefault = !inner || inner === doc.body || inner === doc.documentElement;
+  const focusable = (element: Element | null): element is HTMLElement =>
+    element instanceof HTMLElement && typeof element.focus === 'function';
+  // The nested document is settled first and the outermost focus last, otherwise refocusing the
+  // nested document would steal the user's focus back from the outer document.
+  if (!innerIsDefault && focusable(inner)) {
+    inner.focus({ preventScroll: true });
+  } else if (innerIsDefault && focusable(doc.activeElement) && doc.activeElement !== inner) {
+    doc.activeElement.blur();
+  }
+  if (top !== inner && focusable(top)) {
+    top.focus({ preventScroll: true });
+  }
+}
+
+// Browsers do not activate :focus for getComputedStyle(element, ':focus') - it keeps returning
+// the unfocused styles - so interactive elements are measured under a real temporary focus: each
+// of them is focused for its read and the focus captured before the walk is restored after it,
+// without scrolling the page.
+function focusAndRead(element: HTMLElement): CSSStyleDeclaration {
+  element.focus({ preventScroll: true });
+  return getComputedStyle(element);
+}
+
+// Interactive nodes carry their focused styles: their computed styles were captured while the
+// node held a real temporary focus, which is the only way engines expose the :focus rules.
+function readStyles(computed: CSSStyleDeclaration, interactive: boolean): GeometryNodeStyle {
+  return {
+    fontSize: Number.parseFloat(computed.fontSize) || 0,
+    fontWeight: fontWeightValue(computed.fontWeight || ''),
+    color: computed.color || '',
+    backgroundColor: computed.backgroundColor || '',
+    display: computed.display || '',
+    visibility: computed.visibility || '',
+    opacity: computed.opacity || '',
+    outlineStyle: computed.outlineStyle || '',
+    outlineWidth: outlineWidthPx(computed.outlineWidth || ''),
+    boxShadow: computed.boxShadow || '',
+    focusOutlineStyle: interactive ? computed.outlineStyle || '' : '',
+    focusOutlineWidth: interactive ? outlineWidthPx(computed.outlineWidth || '') : 0,
+    focusBoxShadow: interactive ? computed.boxShadow || '' : '',
+  };
 }
 
 function usedOverflow(overflowX: string, overflowY: string): { x: string; y: string } {
@@ -175,6 +209,15 @@ function usedOverflow(overflowX: string, overflowY: string): { x: string; y: str
 // The descriptor walk in collectLayoutNodes pairs with a plain pre-order element walk, so the
 // same pairing here keeps node identity identical to the editor canvas and the layout runtime.
 export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapshotInit): GeometrySnapshot {
+  const priorFocus = capturePriorFocus(root.ownerDocument);
+  try {
+    return collectGeometrySnapshotUnchecked(root, init);
+  } finally {
+    restorePriorFocus(priorFocus);
+  }
+}
+
+function collectGeometrySnapshotUnchecked(root: HTMLElement, init: GeometrySnapshotInit): GeometrySnapshot {
   const rootBox = root.getBoundingClientRect();
   const scale = rootBox.width > 0 ? init.viewport.width / rootBox.width : 1;
   const elements: HTMLElement[] = [];
@@ -184,7 +227,7 @@ export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapsho
     element: HTMLElement,
     inherited: { x: boolean; y: boolean; ancestor: HTMLElement | null },
   ): void => {
-    const computed = getComputedStyle(element);
+    const computed = isInteractive(element) ? focusAndRead(element) : getComputedStyle(element);
     const overflow = usedOverflow(computed.overflowX || '', computed.overflowY || '');
     const clipsX = overflow.x !== 'visible';
     const clipsY = overflow.y !== 'visible';
@@ -223,7 +266,7 @@ export function collectGeometrySnapshot(root: HTMLElement, init: GeometrySnapsho
         width: box.width * scale,
         height: box.height * scale,
       },
-      styles: readStyles(element, computedList[index], interactive),
+      styles: readStyles(computedList[index], interactive),
       clip: {
         x: clip.x,
         y: clip.y,
@@ -372,7 +415,19 @@ export function checkLayoutAccessibility(snapshot: GeometrySnapshot, theme: Them
         && placement.hidden)
       .map((placement) => placement.nodeId),
   );
-  const checked = snapshot.nodes.filter((node) => !isHidden(node) && !hiddenPlacements.has(node.nodeId));
+  const nodeById = new Map(snapshot.nodes.map((entry) => [entry.nodeId, entry]));
+  // A node is skipped when it or any ancestor is hidden, either by computed styles or by a
+  // hidden placement: children of an invisible container are invisible too and must never block
+  // the export with errors the user cannot see.
+  const isSkipped = (node: GeometryNodeSnapshot): boolean => {
+    let current: GeometryNodeSnapshot | undefined = node;
+    while (current) {
+      if (isHidden(current) || hiddenPlacements.has(current.nodeId)) return true;
+      current = current.parentId ? nodeById.get(current.parentId) : undefined;
+    }
+    return false;
+  };
+  const checked = snapshot.nodes.filter((node) => !isSkipped(node));
   const tokens = resolveThemeTokens(theme, {
     target: snapshot.target,
     screenId: snapshot.screenId,
@@ -388,7 +443,7 @@ export function checkLayoutAccessibility(snapshot: GeometrySnapshot, theme: Them
       const background = parseColor(effectiveBackground(snapshot, node, fallbackBackground));
       if (foreground && background) {
         const large = node.styles.fontSize >= LARGE_TEXT_MIN_FONT_PX
-          && (node.styles.fontWeight >= LARGE_TEXT_MIN_WEIGHT || node.styles.fontSize >= LARGE_TEXT_BOLD_MIN_FONT_PX);
+          || (node.styles.fontWeight >= LARGE_TEXT_MIN_WEIGHT && node.styles.fontSize >= LARGE_TEXT_BOLD_MIN_FONT_PX);
         const minimum = large ? CONTRAST_MIN_LARGE_TEXT_RATIO : CONTRAST_MIN_RATIO;
         const ratio = contrastRatio(foreground, background);
         if (ratio < minimum) {

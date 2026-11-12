@@ -672,7 +672,8 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             <ExportPanel
               controller={controller}
               client={workspaceClient}
-              issues={layoutIssues}
+              issues={previewEditable ? layoutIssues : []}
+              draftChecked={previewEditable}
               geometryConfirmed={geometryConfirmed}
               onGeometryConfirm={setGeometryConfirmed}
             />

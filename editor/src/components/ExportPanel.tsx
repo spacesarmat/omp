@@ -14,9 +14,12 @@ export interface ExportPanelProps {
   issues?: LayoutIssue[];
   geometryConfirmed?: boolean;
   onGeometryConfirm?: (confirmed: boolean) => void;
+  // False while the preview shows the base theme or a snapshot comparison instead of the live
+  // draft: geometry from those renders says nothing about the draft, so export stays blocked.
+  draftChecked?: boolean;
 }
 
-export function ExportPanel({ controller, client, issues: accessibilityIssues, geometryConfirmed = false, onGeometryConfirm }: ExportPanelProps) {
+export function ExportPanel({ controller, client, issues: accessibilityIssues, geometryConfirmed = false, onGeometryConfirm, draftChecked = true }: ExportPanelProps) {
   const draft = useDraftController(controller);
   const [version, setVersion] = useState('0.20.12-beta.3');
   const [channel, setChannel] = useState<'beta' | 'stable'>('beta');
@@ -83,6 +86,7 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
   const errorIssues = (accessibilityIssues ?? []).filter((issue) => issue.severity === 'error');
   const errorBlocked = errorIssues.length > 0;
   const componentBlocked = scopeKind === 'component' && !componentId.trim();
+  const draftBlocked = !draftChecked;
   const diffAvailable = Boolean(client?.exportDiff);
   return (
     <section class="editor-export">
@@ -126,6 +130,9 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
           Экспорт заблокирован ошибками доступности: {errorIssues.map((issue) => issue.code).join(', ')}
         </p>
       )}
+      {draftBlocked && (
+        <p class="editor-notice" data-testid="draft-unchecked-notice">Экспорт заблокирован: превью показывает не черновую тему</p>
+      )}
       {diffAvailable && (
         <button type="button" data-action="show-diff" disabled={busy || componentBlocked} onClick={runDiff}>Показать diff</button>
       )}
@@ -145,7 +152,7 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
       <button
         type="button"
         data-action="export"
-        disabled={busy || geometryBlocked || errorBlocked || componentBlocked}
+        disabled={busy || geometryBlocked || errorBlocked || componentBlocked || draftBlocked}
         onClick={runExport}
       >
         {busy ? 'Экспорт...' : 'Экспортировать'}

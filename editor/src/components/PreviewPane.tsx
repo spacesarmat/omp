@@ -110,6 +110,11 @@ export function PreviewPane(props: PreviewPaneProps) {
       viewport,
     }));
   };
+  // The observer created on iframe load outlives this render: route, format and viewport change
+  // without a reload, so the callback must always reach the latest collect instead of closing
+  // over the load-render props.
+  const collectRef = useRef<() => void>(() => undefined);
+  collectRef.current = collect;
 
   const send = (command: PreviewCommandInput) => {
     if (!iframe.current) return;
@@ -166,7 +171,7 @@ export function PreviewPane(props: PreviewPaneProps) {
     if (!body || typeof MutationObserver === 'undefined') return;
     observer.current = new MutationObserver((mutations) => {
       if (mutations.every((mutation) => mutation.type === 'attributes' && mutation.attributeName === 'data-layout-node')) return;
-      collect();
+      collectRef.current();
     });
     observer.current.observe(body, { childList: true, subtree: true, attributes: true });
   };
