@@ -219,13 +219,13 @@ describe('TorrServer update opens a pull request', () => {
   const apply = upd.slice(upd.indexOf('Apply the TorrServer update'), upd.indexOf('Install dependencies'));
   const push = upd.slice(upd.indexOf('Push the branch and open the pull request'));
 
-  it('never pushes to main, tags or releases', () => {
+  it('never pushes to main and ships only through the pull request', () => {
     expect(upd).not.toContain('HEAD:main');
     expect(upd).not.toContain('git tag');
-    expect(upd).not.toContain('release.yml');
     expect(upd).not.toMatch(/^\s+release:/m);
     expect(push).toContain('git push --force origin "HEAD:refs/heads/$BRANCH"');
     expect(push).toContain('gh pr create');
+    expect(push).toContain('bash scripts/upstream-ship.sh');
   });
 
   it('skips when an open pull request for the same TorrServer tag exists, before changing anything', () => {
@@ -234,9 +234,10 @@ describe('TorrServer update opens a pull request', () => {
     expect(apply.indexOf('--state open')).toBeLessThan(apply.indexOf('scripts/torrserver-bump.mjs'));
   });
 
-  it('commits the pin and both changelogs, not the OMP version', () => {
+  it('commits the pin, both changelogs and the OMP beta bump', () => {
     expect(push).toContain('torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md');
-    expect(push).not.toContain('package.json');
+    expect(push).toContain('package.json package-lock.json');
+    expect(apply).toContain('node scripts/omp-release-bump.mjs');
   });
 
   it('starts CI on the branch, since GITHUB_TOKEN pushes trigger no workflows', () => {
