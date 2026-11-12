@@ -272,7 +272,7 @@ button, .m-btn {
 .m-badge-inline { padding: 1px 6px; border-radius: 6px; background: #252A35; color: var(--text, #fff); font-size: 11px; font-weight: 700; }
 .m-clist { gap: 0; }
 /* the list rows: the separator runs under the whole row, the «···» button included */
-.m-clist > .m-row-wrap { border-bottom: 1px solid #252A35; }
+.m-clist > .m-row-swipe { border-bottom: 1px solid #252A35; }
 .m-crow { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; border: none; background: none; text-align: left; color: inherit; min-width: 0; }
 /* two lines: the name on the whole first one (it wraps to two), then the meta, the badge and the size */
 .m-crow-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -2319,7 +2319,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-rel-line > .m-rel-del { color: #FF9EA2; }
 
 
-/* Catalog header: one sticky bar. On scroll the subtitle drops out whole, it is not clipped in half. */
+/* Catalog header: one sticky bar. Its height never changes on scroll, so the bar does not shake. */
 .m-lib-sticky {
   position: sticky;
   top: 0;
@@ -2327,23 +2327,27 @@ html.m-hint-hold .m-hint { display: none; }
   background: var(--bg);
   margin-left: -16px;
   margin-right: -16px;
+  /* cancel the screen padding so the bar already sits at y=0 before the first scroll */
+  margin-top: calc(-1 * (env(safe-area-inset-top) + 10px));
+  padding: calc(env(safe-area-inset-top) + 10px) 16px 8px;
+}
+.m-library[data-scrolled='1'] .m-lib-sticky,
+.m-library[data-scrolled='1'] .m-discover-bar {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.m-discover-bar {
+  position: sticky;
+  top: var(--m-lib-sticky-h, 0px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  margin-left: -16px;
+  margin-right: -16px;
   padding: 0 16px 8px;
 }
-.m-disc-sticky-slot { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.m-library[data-collapsed='1'] .m-disc-head .m-grow { display: none; }
-.m-library[data-collapsed='1'] .m-disc-head h2 { font-size: 16px; }
-.m-library[data-collapsed='1'] .m-lib-sticky { padding-bottom: 4px; }
-/* «Обзор»: title and chips stick under the switch, so a scroll never slices the header in half. */
-.m-discover .m-disc-head,
-.m-discover .m-disc-chips {
-  position: sticky;
-  z-index: 5;
-  background: var(--bg);
-}
-.m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 52px); }
-.m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 104px); }
-.m-library[data-collapsed='1'] .m-discover .m-disc-head { top: calc(env(safe-area-inset-top) + 48px); }
-.m-library[data-collapsed='1'] .m-discover .m-disc-chips { top: calc(env(safe-area-inset-top) + 92px); }
+.m-discover-bar .m-disc-head,
+.m-discover-bar .m-disc-chips { position: static; background: transparent; }
 .m-tv-steps { white-space: pre-line; }
 .m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-ep-fold { align-self: flex-start; }
@@ -2406,8 +2410,7 @@ html.m-hint-hold .m-hint { display: none; }
 
 /* Phone catalog header: the switch row collapses, chips stay on an opaque bar. */
 .m-library { padding-top: calc(env(safe-area-inset-top) + 10px); }
-.m-library .m-lib-head { gap: 8px; max-height: 48px; overflow: hidden; transition: max-height .2s ease, opacity .2s ease; }
-.m-library[data-collapsed='1'] .m-lib-head { max-height: 0; opacity: 0; pointer-events: none; }
+.m-library .m-lib-head { gap: 8px; }
 .m-library .m-lib-head .m-icon-btn,
 .m-library .m-lib-head .m-tvchip {
   width: 40px; height: 40px; min-width: 40px; min-height: 40px; border-radius: 12px; background: transparent;
@@ -2415,7 +2418,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-library .m-lib-head .m-icon-btn.on { background: rgba(255, 255, 255, 0.06); }
 .m-library .m-lib-head .m-tvchip.on { width: 40px; height: 40px; border-radius: 12px; background: rgba(143, 227, 154, 0.18); color: #8FE39A; }
 .m-library .m-lib-head .m-seg-btn.on::before { box-shadow: none; background: #252A35; }
-.m-library .m-tabs { margin-top: 12px; background: var(--bg); position: sticky; top: 0; z-index: 2; }
+.m-library .m-tabs { margin-top: 12px; background: var(--bg); }
 .m-resume { margin-top: 18px; }
 .m-resume-card { flex: 0 0 64%; flex-direction: column; align-items: stretch; width: auto; max-width: none; padding: 0; background: transparent; }
 .m-resume-poster-wrap { position: relative; }
@@ -2446,13 +2449,14 @@ html.m-hint-hold .m-hint { display: none; }
 .m-crow-titleline .m-new-badge { flex-shrink: 0; margin-left: 8px; }
 .m-new-badge.filled { background: var(--accent); color: #1A1400; }
 .m-new-badge.outline { background: transparent; box-shadow: inset 0 0 0 1px var(--accent); }
-.m-row-wrap { position: relative; }
-.m-row-wrap { overflow: visible; }
-.m-swipe-actions { display: none; position: absolute; right: 28px; top: 8px; bottom: 8px; z-index: 2; }
-.m-row-wrap[data-open='1'] .m-swipe-actions { display: flex; }
-.m-swipe-actions button { border: none; background: #252A35; color: #fff; padding: 0 12px; font-weight: 700; }
-.m-swipe-actions button.danger { background: #8E2F2F; }
-.m-swipe-actions button.ok { background: #1E6B3A; }
+.m-row-swipe { position: relative; overflow: hidden; min-width: 0; touch-action: pan-y; }
+.m-row-swipe-actions { position: absolute; top: 0; right: 0; bottom: 0; width: 168px; display: flex; }
+.m-row-swipe-actions button { flex: 1 1 0; height: 100%; min-width: 0; border: none; color: #fff; padding: 0 8px; font-weight: 700; font-size: 13px; line-height: 1.2; }
+.m-row-swipe-actions button.danger { background: #8E2F2F; }
+.m-row-swipe-actions button.ok { background: #1E6B3A; }
+.m-row-swipe-fg { position: relative; z-index: 1; display: flex; align-items: center; width: 100%; min-width: 0; background: var(--bg); transition: transform .18s ease; }
+.m-row-swipe-fg.drag { transition: none; }
+.m-row-swipe-fg > .m-vrow, .m-row-swipe-fg > .m-crow { flex: 1 1 auto; min-width: 0; }
 .m-info-btn { width: 28px; height: 28px; border-radius: 8px; }
 .m-library .m-tabs { padding-bottom: 2px; }
 .m-library .m-tabs.nudge { animation: m-chips-nudge .8s ease; }
@@ -2473,9 +2477,10 @@ html.m-hint-hold .m-hint { display: none; }
 .m-resume-line { width: 100%; padding: 8px 0; border: none; border-bottom: 1px solid #252A35; background: none; color: inherit; text-align: left; }
 .m-poster-box { position: relative; display: block; }
 .m-poster-box .m-poster::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(180deg, transparent, rgba(15, 17, 21, 0.88)); }
-.m-poster-foot { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 1; color: #fff; font-size: 12px; font-weight: 700; }
+.m-poster-stack { position: absolute; left: 8px; right: 8px; bottom: 10px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.m-poster-stack .m-poster-foot { position: static; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 12px; font-weight: 700; }
+.m-poster-stack .m-new-badge { position: static; margin-bottom: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .m-poster-box .m-watch-tag { position: absolute; left: 8px; top: 36px; z-index: 1; max-width: 70%; }
-.m-poster-box .m-new-badge { position: absolute; right: 8px; bottom: 28px; z-index: 1; }
 .m-poster-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; height: 3px; background: rgba(255, 255, 255, 0.28); }
 .m-poster-bar > span { display: block; height: 100%; background: var(--accent); }
 .m-vrow-status { color: var(--muted); font-size: 12px; }

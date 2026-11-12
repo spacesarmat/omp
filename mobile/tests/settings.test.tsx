@@ -221,7 +221,8 @@ describe('Settings', () => {
     await clickUpdate(el, 'Проверить обновления');
     expect(urls).toEqual([ANDROID_UPDATE_URL]);
     expect(manual).toEqual([true]);
-    expect(toast.value).toBe('У вас последняя версия');
+    expect(settings.value.betaUpdates).toBe(false);
+    expect(toast.value).toBe('Бета-обновления выключены, включите в Расширенных');
     setUpdateChecker(async () => 'error');
     await clickUpdate(el, 'Проверить обновления');
     expect(toast.value).toBe('Не удалось проверить обновления');
@@ -793,7 +794,7 @@ describe('Settings in English', () => {
     setUpdateChecker(async () => 'latest');
     const el = mount();
     await clickUpdate(el, 'Check for updates');
-    expect(toast.value).toBe('You have the latest version');
+    expect(toast.value).toBe('Beta updates are off. Turn them on in Advanced');
     setUpdateChecker(async () => 'error');
     await clickUpdate(el, 'Check for updates');
     expect(toast.value).toBe('Could not check for updates');

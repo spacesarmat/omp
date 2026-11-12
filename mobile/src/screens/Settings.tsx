@@ -406,6 +406,7 @@ export function Settings() {
   async function check() {
     const r = await phoneFeedUrl().then((url) => runUpdateCheck({ manual: true, url })).catch((): CheckResult => 'error');
     if (r === 'error') showToast(t('updateScreen.checkFailed'));
+    else if (r === 'latest' && isBetaVersion(APP_VERSION) && !settings.value.betaUpdates) showToast(t('updateScreen.betaOffHint'));
     else if (r === 'latest') showToast(t('updateScreen.latest'));
   }
 

@@ -100,6 +100,14 @@ describe('installTabSwipe', () => {
     expect(go).not.toHaveBeenCalled();
   });
 
+  it('a swipe that starts on a catalog row does not change the tab', () => {
+    const go = setup('library', '<div class="m-row-swipe" data-noswipe id="row">row</div>');
+    swipe(document.getElementById('row')!, [300, 200], [40, 204]);
+    expect(go).not.toHaveBeenCalled();
+    swipe(text(), [300, 300], [40, 304]);
+    expect(go).toHaveBeenCalledWith('add');
+  });
+
   it('no tab past the last one', () => {
     const go = setup('settings');
     swipe(text(), [350, 300], [50, 300]);
