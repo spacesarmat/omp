@@ -6,7 +6,11 @@ import { act } from 'preact/test-utils';
 import { fakeSite, page, type FakeSite } from '../../tests/sources/fakeSite';
 
 let site: FakeSite;
-const me = { telegramId: '', paidUntil: 2e12, active: true };
+const me: { telegramId: string; paidUntil: number; active: boolean; overLimit?: boolean } = {
+  telegramId: '',
+  paidUntil: 2e12,
+  active: true,
+};
 vi.mock('../src/searchContext', () => ({ phoneSourceContext: () => site.ctx }));
 
 import { OmpJackettCard } from '../src/screens/OmpJackettCard';
@@ -26,6 +30,7 @@ beforeEach(async () => {
   me.telegramId = '';
   me.paidUntil = 2e12;
   me.active = true;
+  me.overLimit = false;
   site = fakeSite((c) => {
     if (c.url.indexOf('/v1/activate') > 0) {
       return page(
@@ -119,5 +124,18 @@ describe('OMP subscription card', () => {
     act(() => (el.querySelector('[data-tg-menu]') as HTMLButtonElement).click());
     const actions = Array.from(el.querySelectorAll('[data-tg-actions] button')).map((b) => b.textContent);
     expect(actions).toEqual(['Открыть бота', 'Отвязать']);
+  });
+
+  it('keeps the remaining days when only the extra device slot has ended', async () => {
+    me.paidUntil = Date.now() + 5 * 86400000;
+    me.active = false;
+    me.overLimit = true;
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.querySelector('[data-bill-dot]')).toBeNull();
+    expect(el.querySelector('[data-bill-days]')!.textContent).toContain('5');
+    expect(el.textContent).not.toContain('Подписка закончилась');
+    expect(el.textContent).toContain('Доп. устройство не продлено');
   });
 });

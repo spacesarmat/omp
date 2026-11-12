@@ -167,8 +167,10 @@ export function OmpJackettCard() {
   const linked = !!(account && account.telegramId);
 
   const until = (account && account.paidUntil) || (session && session.paidUntil) || 0;
-  const left = daysLeft(until, Date.now());
-  const on = session ? (account ? !!account.active && !account.inGrace && left > 0 : left > 0) : false;
+  const end = account && account.inGrace && account.accessUntil ? account.accessUntil : until;
+  const left = daysLeft(end, Date.now());
+  const limited = !!(account && (account.overLimit || account.inGrace));
+  const on = !!session && left > 0 && !limited;
   return (
     <section class="m-set-group" data-billing="jackett">
       <div class="m-set-card m-src-card">
@@ -202,7 +204,7 @@ export function OmpJackettCard() {
           <>
             <div class="m-bill-status" data-bill-status data-paid-until={day(until)}>
               {on ? <span class="m-bill-dot" data-bill-dot /> : null}
-              <span class="m-bill-days" data-bill-days>{on ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
+              <span class="m-bill-days" data-bill-days>{left > 0 ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
               <button type="button" class="m-bill-info" data-bill-info aria-expanded={info} aria-label={t('sources.billing.about')} onClick={() => setInfo(!info)}>
                 i
               </button>
