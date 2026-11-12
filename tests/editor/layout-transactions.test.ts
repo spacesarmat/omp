@@ -9,6 +9,7 @@ import {
   absolutePlacementFromRect,
   collectLayoutElements,
   createPlacement,
+  placementToRect,
   moveNodeTransaction,
   nudgePlacement,
   placeNodeTransaction,
@@ -140,6 +141,38 @@ describe('placeNodeTransaction', () => {
     controller.undo();
     expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toBeUndefined();
     controller.dispose();
+  });
+
+  it('subtracts a preserved margin from the measured border box so absolute placement does not jump twice', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { margin: '12px' });
+    const parent = { x: 0, y: 0, width: 400, height: 400 };
+    const border = { x: 40, y: 24, width: 200, height: 120 };
+
+    const placement = absolutePlacementFromRect(border, parent, context, 'card-a', 'Card A', base);
+
+    // The border box already sits 12px from the margin edge. Saved offsets must describe that
+    // margin edge, because the runtime applies left/top and the margin together.
+    expect(placement).toMatchObject({
+      mode: 'absolute',
+      anchor: 'top-left',
+      x: 700,
+      y: 300,
+      margin: '12px',
+    });
+    expect(placementToRect(placement, parent)).toMatchObject(border);
+  });
+
+  it('subtracts the margin from the anchored edges and round-trips the border box', () => {
+    const parent = { x: 10, y: 20, width: 400, height: 400 };
+    const border = { x: 110, y: 280, width: 80, height: 40 };
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'flow', anchor: 'bottom-right', margin: '12px' });
+
+    const placement = absolutePlacementFromRect(border, parent, context, 'card-a', 'Card A', base);
+
+    // Right offset of the border is 400 - (110 - 10) - 80 = 220, then minus the 12px margin.
+    // Bottom offset of the border is 400 - (280 - 20) - 40 = 100, then minus the 12px margin.
+    expect(placement).toMatchObject({ anchor: 'bottom-right', x: 5200, y: 2200, margin: '12px' });
+    expect(placementToRect(placement, parent)).toMatchObject(border);
   });
 
   it('keeps size, zIndex, label and anchor from the base placement while moving', () => {

@@ -4,7 +4,6 @@ import type { LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import {
   absolutePlacementFromRect,
   createPlacement,
-  marginOffsetPx,
   placementSizeConversion,
   placementToRect,
   type LayoutRect,
@@ -119,11 +118,7 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     if (next === 'absolute') {
       if (!rect) return;
       const base = placement ?? createPlacement(props.context, node.nodeId, label);
-      // The measured border box already includes the margin offset and the preserved margin
-      // re-adds it at render, so convert the margin-free coordinates.
-      const margin = marginOffsetPx(base.margin);
-      const contentRect = margin ? { ...rect, x: rect.x - margin, y: rect.y - margin } : rect;
-      props.onPlace(absolutePlacementFromRect(contentRect, parentRect ?? { x: 0, y: 0, width: 0, height: 0 }, props.context, node.nodeId, label, base));
+      props.onPlace(absolutePlacementFromRect(rect, parentRect ?? { x: 0, y: 0, width: 0, height: 0 }, props.context, node.nodeId, label, base));
       return;
     }
     if (!node.parentId) return;

@@ -558,6 +558,35 @@ describe('layout style lifecycle', () => {
     expect(texts()).toEqual(['One', 'Two']);
   });
 
+  it('releases managed styles and document order when the runtime stops for another orientation', () => {
+    const root = mount('<div data-design-id="screen"><div data-design-id="toolbar-a"><button data-design-id="button" style="position: relative; margin: 3px">Go</button></div><div data-design-id="toolbar-b"><span data-design-id="badge">N</span></div></div>');
+    let theme = createDefaultTheme(BASE);
+    theme = upsertLayoutPlacement(theme, placement('button', { mode: 'absolute', x: 1000, y: 1000, hidden: true }));
+    theme.layout!.containers.push({ id: 'flow-b', ...context, nodeId: 'toolbar-b', order: ['badge', 'button'] });
+    theme = parseThemeDocument(theme);
+
+    const stop = observeLayout(root, theme, context);
+    const button = () => root.querySelector('button') as HTMLElement;
+    const texts = (id: string) => [...root.querySelector(`[data-design-id="${id}"]`)!.children].map((child) => child.textContent);
+    expect(button().style.position).toBe('absolute');
+    expect(button().style.display).toBe('none');
+    expect(texts('toolbar-b')).toEqual(['N', 'Go']);
+
+    // The editor drops the runtime and starts a new one when the format changes. The stopped
+    // runtime has to put the previous orientation's styles and order back first, otherwise the
+    // next snapshot treats them as the authored original.
+    stop();
+    cleanup = observeLayout(root, theme, { ...context, format: 'portrait' });
+
+    expect(button().style.position).toBe('relative');
+    expect(button().style.margin).toBe('3px');
+    expect(button().style.display).toBe('');
+    expect(button().dataset.layoutManaged).toBeUndefined();
+    expect(button().dataset.layoutHidden).toBeUndefined();
+    expect(texts('toolbar-a')).toEqual(['Go']);
+    expect(texts('toolbar-b')).toEqual(['N']);
+  });
+
   it('restores flow-mode inline styles when an absolute placement switches back to flow', async () => {
     const root = mount('<div data-design-id="toolbar"><div data-design-id="badge" style="z-index: 4">N</div></div>');
     let theme = createDefaultTheme(BASE);

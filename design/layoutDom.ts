@@ -528,7 +528,10 @@ function createLayoutRuntime(
       beforeWalk?.();
       const layout = layoutOf();
       const context = contextOf();
-      if (!layout || !context) return;
+      if (!layout || !context) {
+        releaseAppliedLayout();
+        return;
+      }
       syncClones(layout, context);
       const matchingContainers = layout.containers.filter((container) => sameContext(container, context));
       let nodes = resolveNodes(root);
@@ -609,6 +612,25 @@ function createLayoutRuntime(
       applying = false;
     }
   };
+  // The editor replaces this runtime when the theme or orientation changes. Stopping has to
+  // undo every managed write first: the next runtime snapshots whatever is currently inline,
+  // and a dirty absolute position or reordered child would become the new original.
+  const releaseAppliedLayout = (): void => {
+    for (const element of managedElements) releaseManagedElement(element);
+    managedElements = new Set();
+    for (const element of managedContainers) restoreContainerOrder(element);
+    managedContainers = new Set();
+    for (const element of [...movedNodes]) {
+      movedNodes.delete(element);
+      const origin = moveOrigins.get(element);
+      moveOrigins.delete(element);
+      if (!origin || !origin.parent.isConnected) continue;
+      if (origin.next && origin.next.parentElement === origin.parent) origin.parent.insertBefore(element, origin.next);
+      else origin.parent.appendChild(element);
+    }
+    for (const stale of [...root.querySelectorAll('[data-layout-clone]')]) stale.remove();
+    releaseContainingBlocks(heldParents, new Set());
+  };
   refresh();
   const observer = new MutationObserver(refresh);
   observer.observe(root, {
@@ -619,7 +641,7 @@ function createLayoutRuntime(
   });
   return () => {
     observer.disconnect();
-    releaseContainingBlocks(heldParents, new Set());
+    releaseAppliedLayout();
   };
 }
 

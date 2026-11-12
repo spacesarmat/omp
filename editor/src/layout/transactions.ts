@@ -69,12 +69,17 @@ export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRe
     : fallback?.height ?? parentRect.height;
   const xUnits = (placement.x / LAYOUT_GEOMETRY_LIMIT) * parentRect.width;
   const yUnits = (placement.y / LAYOUT_GEOMETRY_LIMIT) * parentRect.height;
-  const x = placement.anchor === 'top-right' || placement.anchor === 'bottom-right'
-    ? parentRect.x + parentRect.width - xUnits - width
-    : parentRect.x + xUnits;
-  const y = placement.anchor === 'bottom-left' || placement.anchor === 'bottom-right'
-    ? parentRect.y + parentRect.height - yUnits - height
-    : parentRect.y + yUnits;
+  // Saved offsets describe the margin edge. The runtime then adds the margin, so the border
+  // box shown to the editor sits one margin further out from that edge.
+  const margin = marginOffsetPx(placement.margin);
+  const fromRight = placement.anchor === 'top-right' || placement.anchor === 'bottom-right';
+  const fromBottom = placement.anchor === 'bottom-left' || placement.anchor === 'bottom-right';
+  const x = fromRight
+    ? parentRect.x + parentRect.width - xUnits - width - margin
+    : parentRect.x + xUnits + margin;
+  const y = fromBottom
+    ? parentRect.y + parentRect.height - yUnits - height - margin
+    : parentRect.y + yUnits + margin;
   return { x, y, width, height };
 }
 
@@ -172,12 +177,17 @@ export function absolutePlacementFromRect(
   base?: LayoutPlacement,
 ): LayoutPlacement {
   const anchor = base?.anchor ?? 'top-left';
+  const fromRight = anchor === 'top-right' || anchor === 'bottom-right';
+  const fromBottom = anchor === 'bottom-left' || anchor === 'bottom-right';
   const left = rect.x - parentRect.x;
   const top = rect.y - parentRect.y;
   const right = parentRect.x + parentRect.width - rect.x - rect.width;
   const bottom = parentRect.y + parentRect.height - rect.y - rect.height;
-  const x = anchor === 'top-right' || anchor === 'bottom-right' ? right : left;
-  const y = anchor === 'bottom-left' || anchor === 'bottom-right' ? bottom : top;
+  // rect is a border box. A preserved margin is applied again at render, so the stored offset
+  // is the margin edge: one margin inside the measured border on the anchored sides.
+  const margin = marginOffsetPx(base?.margin);
+  const x = (fromRight ? right : left) - margin;
+  const y = (fromBottom ? bottom : top) - margin;
   // Explicit sizes survive only for an already absolute base node: switching a flow node to
   // absolute freezes the measured box instead of carrying 'auto' over and letting the node
   // shrink around its content. Resize commits override the sizes with fresh units anyway.
