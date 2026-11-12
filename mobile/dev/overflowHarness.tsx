@@ -226,6 +226,7 @@ const SCENES: { [name: string]: () => Scene } = {
   'remote-buttons': () => ({ route: { name: 'remote' }, tab: true }),
   'remote-touchpad': () => ({ route: { name: 'remote' }, tab: true, then: clickTab(1) }),
   settings: () => ({ route: { name: 'settings' }, tab: true }),
+  watchFrom: () => ({ route: { name: 'watchFrom' } }),
   sources: () => ({ route: { name: 'sources' } }),
   sourceSite: () => ({ route: { name: 'sourceSite', id: 'nnmclub' } }),
   flaresolverr: () => ({ route: { name: 'flaresolverr' } }),

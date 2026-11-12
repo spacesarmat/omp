@@ -208,7 +208,7 @@ describe('WatchFrom', () => {
     await declineConfirm();
     expect(servers.value.some((s) => s.id === a.id)).toBe(true);
     await click(el, '[data-check="' + a.id + '"]');
-    expect(el.querySelector('[data-check-line="' + a.id + '"]')!.textContent).toContain('не отвечает');
+    expect(el.querySelector('[data-check-line="' + a.id + '"]')!.textContent).toContain('Не отвечает');
     await click(el, '[data-remove="' + a.id + '"]');
     await acceptConfirm();
     expect(servers.value.some((s) => s.id === a.id)).toBe(false);
@@ -414,6 +414,35 @@ describe('WatchFrom', () => {
     await click(el, '[data-mode="always"]');
     expect(el.textContent).toContain('Сеть не переключает сервер');
     expect(el.textContent).not.toContain('Сохраненная сеть ведет на свой сервер');
+  });
+
+  it('a server row is one dark line: the name truncates, the status sits under it, the menu stays on the right', () => {
+    const a = addServer({ url: 'http://127.0.0.1:8090', name: 'Этот телефон' });
+    setActiveServer(a.id);
+    const el = mount();
+    const row = el.querySelector('[data-server="' + a.id + '"]') as HTMLElement;
+    const pick = row.querySelector('.m-watch-pick') as HTMLElement;
+    const name = row.querySelector('.m-watch-name')!;
+    expect(name.textContent).toContain('Этот телефон');
+    expect(name.textContent).toContain('127.0.0.1:8090');
+    expect(pick.querySelector('.m-status-dot')).toBeTruthy();
+    expect(pick.querySelector('[data-check-line]')).toBeNull();
+    const summary = row.querySelector('summary')!;
+    expect(summary.classList.contains('m-icon-btn')).toBe(true);
+    expect(pick.contains(summary)).toBe(false);
+    expect(pick.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const css = (readFileSync('mobile/src/mobile.css', 'utf8') as string).replace(/\r\n/g, '\n');
+    const rule = (sel: string) => {
+      const i = css.indexOf('\n' + sel + ' {');
+      return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+    };
+    expect(rule('.m-set-row.m-watch-server')).toMatch(/flex-direction:\s*row/);
+    expect(rule('.m-watch-pick')).toMatch(/background:\s*transparent/);
+    expect(rule('.m-watch-name, .m-watch-lines .m-small')).toMatch(/text-overflow:\s*ellipsis/);
+    expect(rule('.m-watch-name, .m-watch-lines .m-small')).toMatch(/white-space:\s*nowrap/);
+    expect(rule('.m-status-dot')).toMatch(/#5A6070/);
+    expect(rule('.m-crow-sub .m-status-dot')).toMatch(/#8FE39A/);
+    expect(css).not.toContain('\n.m-watch-server { flex-direction: column');
   });
 
   it('does not write the TV link and does not scan for a network list', () => {

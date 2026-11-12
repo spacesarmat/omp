@@ -26,6 +26,7 @@ import {
 import { phoneSourceContext } from '../searchContext';
 import { TextField } from '../ui/TextField';
 import { askConfirm } from '../ui/confirm';
+import { billShown, formatPayAmount, paymentDate, paymentKind } from '../../../src/lib/accountBill';
 
 function daysLeft(until: number, now: number): number {
   if (!until || until <= now) return 0;
@@ -167,6 +168,13 @@ export function OmpJackettCard() {
     }
   }
 
+  async function disconnect() {
+    if (!(await askConfirm(t('sources.billing.disconnectAsk'), t('sources.billing.disconnect')))) return;
+    signOutBilling(phoneSourceContext());
+    setSession(null);
+    setAccount(null);
+  }
+
   async function cancelRenew() {
     if (!(await askConfirm(t('sources.billing.cancelRenewAsk'), t('sources.billing.cancelRenew')))) return;
     try {
@@ -195,32 +203,34 @@ export function OmpJackettCard() {
       <div class="m-set-card m-src-card">
         <div class="m-src-row m-note m-muted">{t('sources.billing.text')}</div>
 
-        <div class="m-src-row" data-row="billing-telegram">
-          <span>{t('sources.billing.telegramTitle')}</span>
-          <span class="m-grow" />
+        <div class="m-set-label">{t('sources.billing.telegramTitle')}</div>
+        <div class="m-acct-card" data-row="billing-telegram">
           {linked ? (
-            <button type="button" class="m-btn m-btn-secondary" data-tg-menu aria-expanded={tgMenu} onClick={() => setTgMenu(!tgMenu)}>
-              {t('sources.billing.tgMenu')}
+            <button type="button" class="m-set-row m-set-pick" data-tg-menu aria-expanded={tgMenu} onClick={() => setTgMenu(!tgMenu)}>
+              <span>{t('sources.billing.telegramTitle')}</span>
+              <span class="m-muted">{tgMenu ? t('sources.billing.unlinkTelegram') : t('sources.billing.openBot')}</span>
             </button>
           ) : (
-            <button type="button" class="m-btn m-btn-primary" disabled={linkBusy} onClick={() => void linkTelegram()}>
+            <button type="button" class="m-btn m-btn-primary m-acct-wide" disabled={linkBusy} onClick={() => void linkTelegram()}>
               {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
             </button>
           )}
+          {linked && tgMenu && (
+            <div class="m-acct-links" data-tg-actions>
+              <button type="button" class="m-btn-text" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+                {t('sources.billing.openBot')}
+              </button>
+              <button type="button" class="m-btn-text" disabled={linkBusy} onClick={() => void unlinkTelegram()}>
+                {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
+              </button>
+            </div>
+          )}
         </div>
-        {linked && tgMenu && (
-          <div class="m-src-row" data-tg-actions>
-            <button type="button" class="m-btn m-btn-secondary" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
-              {t('sources.billing.openBot')}
-            </button>
-            <button type="button" class="m-btn m-btn-secondary" disabled={linkBusy} onClick={() => void unlinkTelegram()}>
-              {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
-            </button>
-          </div>
-        )}
 
         {session ? (
           <>
+            <div class="m-set-label">{t('sources.billing.subHead')}</div>
+            <div class="m-acct-card">
             <div class="m-bill-status" data-bill-status data-paid-until={day(until)}>
               {on ? <span class="m-bill-dot" data-bill-dot /> : null}
               <span class="m-bill-days" data-bill-days>{left > 0 ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
@@ -228,25 +238,15 @@ export function OmpJackettCard() {
                 i
               </button>
             </div>
-            {account && account.bill && account.bill.priceRub > 0 && (
+            {account && account.bill && billShown(account.bill.priceRub, account.bill.feeRub, account.bill.totalRub).mode !== 'hide' && (
               <p class="m-small" data-bill-price>
-                {t('sources.billing.priceLine', { price: account.bill.priceRub, fee: account.bill.feeRub, total: account.bill.totalRub })}
+                {(() => {
+                  const shown = billShown(account.bill!.priceRub, account.bill!.feeRub, account.bill!.totalRub);
+                  return shown.mode === 'full'
+                    ? t('sources.billing.priceLine', { price: shown.price, fee: shown.fee, total: shown.total })
+                    : t('sources.billing.priceOnly', { price: shown.price });
+                })()}
               </p>
-            )}
-            {account && account.bill && account.bill.autoRenew && (
-              <button type="button" class="m-bill-cancel" data-bill-cancel onClick={() => void cancelRenew()}>
-                {t('sources.billing.cancelRenew')}
-              </button>
-            )}
-            {account && account.bill && account.bill.payments.length > 0 && (
-              <div data-bill-payments>
-                <div class="m-small m-muted">{t('sources.billing.payments')}</div>
-                <ul class="m-sub-log">
-                  {account.bill.payments.map((p) => (
-                    <li key={p.at + ':' + p.amount}>{(p.title ? p.title + ' ' : '') + p.amount + (p.currency ? ' ' + p.currency : '')}</li>
-                  ))}
-                </ul>
-              </div>
             )}
             {info && (
               <div class="m-src-row m-note m-muted" data-bill-about>
@@ -276,17 +276,15 @@ export function OmpJackettCard() {
                 ))}
               </div>
             ) : null}
-            <div class="m-src-row">
-              <button
-                type="button"
-                class="m-btn m-btn-primary"
-                data-action="renew"
-                aria-expanded={payOpen}
-                onClick={() => setPayOpen(!payOpen)}
-              >
-                {t('sources.billing.renew')}
-              </button>
-            </div>
+            <button
+              type="button"
+              class="m-btn m-btn-primary m-acct-wide"
+              data-action="renew"
+              aria-expanded={payOpen}
+              onClick={() => setPayOpen(!payOpen)}
+            >
+              {t('sources.billing.renew')}
+            </button>
             {payOpen && (
               <div class="m-src-row" data-pay-methods>
                 <button type="button" class="m-btn m-btn-secondary" data-pay="card" onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}>
@@ -320,19 +318,39 @@ export function OmpJackettCard() {
                 </button>
               </div>
             )}
-            <div class="m-src-row">
-              <button
-                type="button"
-                class="m-btn m-btn-secondary"
-                onClick={() => {
-                  signOutBilling(phoneSourceContext());
-                  setSession(null);
-                  setAccount(null);
-                }}
-              >
-                {t('sources.billing.disconnect')}
+            {account && account.bill && account.bill.autoRenew && (
+              <button type="button" class="m-btn-text" data-bill-cancel onClick={() => void cancelRenew()}>
+                {t('sources.billing.cancelRenew')}
               </button>
+            )}
+            <button type="button" class="m-btn-text" data-action="disconnect" onClick={() => void disconnect()}>
+              {t('sources.billing.disconnect')}
+            </button>
             </div>
+            {account && account.bill && account.bill.payments.length > 0 && (
+              <>
+                <div class="m-set-label">{t('sources.billing.payments')}</div>
+                <div class="m-acct-card" data-bill-payments>
+                  {account.bill.payments.map((p) => {
+                    const kind = paymentKind(p.title);
+                    const label = kind === 'card' ? t('sources.billing.payLineCard')
+                      : kind === 'stars' ? t('sources.billing.payLineStars')
+                      : kind === 'crypto' ? t('sources.billing.payLineCrypto')
+                      : kind === 'promo' ? t('sources.billing.payLinePromo')
+                      : p.title;
+                    return (
+                      <div class="m-set-row" key={p.at + ':' + p.amount} data-payment>
+                        <span class="m-set-text">
+                          <span>{label}</span>
+                          {p.at ? <span class="m-muted m-small">{paymentDate(p.at)}</span> : null}
+                        </span>
+                        <span>{formatPayAmount(p.amount, p.currency)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <div class="m-field">

@@ -158,7 +158,28 @@ describe('OMP subscription card', () => {
     await act(async () => render(<OmpJackettCard />, el));
     await flush();
     expect(el.querySelector('[data-bill-price]')!.textContent).toBe('200 ₽ + комиссия 6 ₽ = 206 ₽');
-    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('sub 200 RUB');
+    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('sub');
+    expect(el.querySelector('[data-bill-payments]')!.textContent).toContain('200 ₽');
+    expect(el.querySelector('[data-bill-payments]')!.textContent).not.toContain('RUB');
     expect(el.querySelector('[data-bill-cancel]')).toBeTruthy();
+  });
+
+  it('hides a zero total and does not show a raw purchase id', async () => {
+    me.bill = {
+      priceRub: 200,
+      feeRub: 0,
+      totalRub: 0,
+      autoRenew: false,
+      payments: [{ at: Date.UTC(2026, 9, 31), amount: '10.31', currency: 'RUB', title: 'buy:f9b7b96aaf3c802e' }],
+    };
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    expect(el.querySelector('[data-bill-price]')!.textContent).toBe('200 ₽');
+    const row = el.querySelector('[data-payment]')!.textContent || '';
+    expect(row).toContain('Продление · карта');
+    expect(row).toContain('10,31 ₽');
+    expect(row).toContain('31.10.2026');
+    expect(row).not.toContain('buy:');
   });
 });

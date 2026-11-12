@@ -79,12 +79,10 @@ function PromoEntry() {
   const [code, setCode] = useState('');
   const [note, setNote] = useState('');
   return (
-    <section class="m-set-group">
-      <div class="m-add-row m-promo-row">
-        <label class="m-grow">
-          <span class="m-small m-muted">{t('settings.promoTitle')}</span>
-          <input class="m-input" value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
-        </label>
+    <section class="m-set-group" data-section="promo">
+      <div class="m-set-label">{t('settings.promoTitle')}</div>
+      <div class="m-acct-card m-promo-row">
+        <input class="m-input" placeholder={t('settings.promoTitle')} value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} />
         <button
           type="button"
           class="m-btn m-btn-primary m-promo-apply"
