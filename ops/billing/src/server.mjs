@@ -2575,7 +2575,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = (await store.read());
+        let state = (await store.read());
         const now = Date.now();
         let account = null;
         let paidUntil = 0;
@@ -2598,7 +2598,7 @@ export function createApp(file, fetchImpl, opts) {
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
         // Optional. A read-only cutover must still answer /v1/me.
         const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
-        if (settleReferrals(state, now).state !== state || countryDirty) {
+        if (!readOnly && (settleReferrals(state, now).state !== state || countryDirty)) {
           const accountId = account.id;
           const next = await store.update((cur) => {
             let merged = settleReferrals(cur, now).state;

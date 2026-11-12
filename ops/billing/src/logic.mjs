@@ -1218,13 +1218,13 @@ function friendPaidAt(state, friendId, boundAt) {
     const row = rows[i];
     if (!row || row.accountId !== friendId || row.pending || row.error) continue;
     const t = Number(row.at) || 0;
-    if (t >= from && t >= at) at = t;
+    if (t >= from && (at === 0 || t < at)) at = t;
   }
   return at;
 }
 
 function referralRowSame(a, b) {
-  return !!a && !!b && a.status === b.status && a.days === b.days && a.reason === b.reason && a.at === b.at && !!a.friendGranted === !!b.friendGranted;
+  return !!a && !!b && a.status === b.status && a.days === b.days && a.reason === b.reason && a.at === b.at && a.grantedAt === b.grantedAt && !!a.friendGranted === !!b.friendGranted;
 }
 
 /**
@@ -1264,18 +1264,22 @@ export function settleReferrals(state, now) {
       reason = 'delay';
     } else {
       const yearAgo = when - 365 * DAY;
-      let count = 0;
+      let used = 0;
       for (let j = 0; j < journal.length; j++) {
         const row = journal[j];
-        if (row && row.referrerId === bind.referrerId && row.status === 'granted' && (Number(row.at) || 0) >= yearAgo) count++;
+        if (!row || row.referrerId !== bind.referrerId || row.status !== 'granted') continue;
+        const grantAt = Number(row.grantedAt) || 0;
+        if (grantAt >= yearAgo) used += Math.max(0, Math.floor(Number(row.days) || 0));
       }
-      if (settings.yearlyCap > 0 && count >= settings.yearlyCap) {
+      const offer = Math.min(REFERRAL_BONUS_MAX, settings.referrerDays);
+      const capDays = settings.yearlyCap > 0 ? settings.yearlyCap * 30 : 0;
+      if (capDays > 0 && used + offer > capDays) {
         status = 'waiting';
         reason = 'year';
       } else {
         status = 'granted';
         reason = 'paid';
-        days = Math.min(REFERRAL_BONUS_MAX, settings.referrerDays);
+        days = offer;
       }
     }
     const nextRow = {
@@ -1285,7 +1289,9 @@ export function settleReferrals(state, now) {
       status,
       days,
       reason,
+      paidAt,
       at: paidAt,
+      grantedAt: status === 'granted' ? when : 0,
       friendGranted: !!(prev && prev.friendGranted),
     };
     if (status === 'granted' && settings.friendDays > 0 && !nextRow.friendGranted) {
