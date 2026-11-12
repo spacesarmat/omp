@@ -23,10 +23,9 @@ import { tvSourceContext } from './sources/tvContext';
 import { expectBetaGate } from './store/updates';
 import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
 import { installProductionDesign } from '../design/production.ts';
-import { createProductionDispatcher, installProductionFlow } from '../design/production-flow.ts';
-import { currentRoute, goBack, navigate, routeStack, type Route } from './ui/nav';
-import { toast } from './ui/toast';
-import { BILLING_BOT_URL } from './billing/config';
+import { installProductionFlow } from '../design/production-flow.ts';
+import { createTvFlowDispatcher } from './productionFlowDispatcher';
+import { currentRoute, routeStack } from './ui/nav';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -111,33 +110,7 @@ function start(): void {
       },
       subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
     },
-    dispatcher: createProductionDispatcher({
-      navigate: (screenId) => {
-        navigate({ name: screenId } as Route);
-        return { ok: true };
-      },
-      openScreen: (screenId) => {
-        navigate({ name: screenId } as Route);
-        return { ok: true };
-      },
-      back: () => ({ ok: goBack() }),
-      toast: (message) => {
-        toast(message);
-        return { ok: true };
-      },
-      dialog: (title, message) => {
-        void confirmWithBody(title, message, 'OK');
-        return { ok: true };
-      },
-      linkOpen: (url) => {
-        window.open(url, '_blank', 'noopener');
-        return { ok: true };
-      },
-      telegramOpen: (target) => {
-        window.open(target === 'billing-bot' ? BILLING_BOT_URL : 'https://t.me/ompplyaer', '_blank', 'noopener');
-        return { ok: true };
-      },
-    }),
+    dispatcher: createTvFlowDispatcher(),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });
 

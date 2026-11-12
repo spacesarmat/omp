@@ -31,11 +31,9 @@ import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
 import { expectBetaGate } from '../../src/store/updates';
 import { installProductionDesign } from '../../design/production.ts';
-import { createProductionDispatcher, installProductionFlow } from '../../design/production-flow.ts';
-import { BILLING_BOT_URL } from '../../src/billing/config';
-import { currentRoute, goBack, navigate, routeStack } from './nav';
-import { showToast } from './ui/toast';
-import { askConfirm } from './ui/confirm';
+import { installProductionFlow } from '../../design/production-flow.ts';
+import { createPhoneFlowDispatcher } from './productionFlowDispatcher';
+import { currentRoute, routeStack } from './nav';
 
 installCleartextSync(
   (hosts) => native.setCleartextHosts(hosts),
@@ -172,33 +170,7 @@ if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
       },
       subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
     },
-    dispatcher: createProductionDispatcher({
-      navigate: (screenId) => {
-        navigate({ name: screenId } as MRoute);
-        return { ok: true };
-      },
-      openScreen: (screenId) => {
-        navigate({ name: screenId } as MRoute);
-        return { ok: true };
-      },
-      back: () => ({ ok: goBack() }),
-      toast: (message) => {
-        showToast(message);
-        return { ok: true };
-      },
-      dialog: (title, message) => {
-        void askConfirm(title ? `${title}. ${message}` : message, 'OK');
-        return { ok: true };
-      },
-      linkOpen: (url) => {
-        window.open(url, '_system');
-        return { ok: true };
-      },
-      telegramOpen: (target) => {
-        window.open(target === 'billing-bot' ? BILLING_BOT_URL : 'https://t.me/ompplyaer', '_system');
-        return { ok: true };
-      },
-    }),
+    dispatcher: createPhoneFlowDispatcher({ openUrl: (url) => window.open(url, '_system') }),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });
 }

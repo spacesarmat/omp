@@ -8,6 +8,8 @@ import {
   type FlowDispatchOutcome,
 } from './flow-graph.ts';
 import { FLOW_MODULE_OUTPUT, generateFlowModule } from './flow-module.ts';
+
+export type { FlowDispatcher, FlowDispatchOutcome } from './flow-graph.ts';
 import type {
   DesignTarget,
   FlowDocument,
@@ -93,6 +95,12 @@ export function createProductionDispatcher(partial: Partial<FlowDispatcher>): Fl
     telegramOpen: unsupported('telegram.open'),
     ...partial,
   };
+}
+
+// A documented platform validation error for actions the platform cannot perform: the
+// dispatcher stays synchronous and explicit instead of silently succeeding.
+export function unavailableProductionAction(action: string, platform: string, reason: string): FlowDispatchOutcome {
+  return { ok: false, error: `${action} is unavailable on ${platform}: ${reason}` };
 }
 
 const flowTimers = new Set<ReturnType<typeof setInterval>>();

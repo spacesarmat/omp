@@ -1,13 +1,11 @@
 import { phoneSourceContext } from '../../mobile/src/searchContext';
-import { currentRoute, goBack, navigate, routeStack, type MRoute } from '../../mobile/src/nav';
-import { showToast } from '../../mobile/src/ui/toast';
-import { askConfirm } from '../../mobile/src/ui/confirm';
+import { currentRoute, routeStack } from '../../mobile/src/nav';
 import { createBridge } from './platform/bridge';
 import { flushCrashes, queueCrash } from '../../src/report/crash';
 import { setDesktopUpdatePlatform } from '../../src/lib/updateInfo';
 import { desktopTargetForPlatform, installProductionDesign } from '../../design/production.ts';
-import { createProductionDispatcher, installProductionFlow } from '../../design/production-flow.ts';
-import { BILLING_BOT_URL } from '../../src/billing/config';
+import { installProductionFlow } from '../../design/production-flow.ts';
+import { createDesktopFlowDispatcher } from './productionFlowDispatcher';
 
 async function boot(): Promise<void> {
   let platform = '';
@@ -43,33 +41,7 @@ async function boot(): Promise<void> {
         };
       },
     },
-    dispatcher: createProductionDispatcher({
-      navigate: (screenId) => {
-        navigate({ name: screenId } as MRoute);
-        return { ok: true };
-      },
-      openScreen: (screenId) => {
-        navigate({ name: screenId } as MRoute);
-        return { ok: true };
-      },
-      back: () => ({ ok: goBack() }),
-      toast: (message) => {
-        showToast(message);
-        return { ok: true };
-      },
-      dialog: (title, message) => {
-        void askConfirm(title ? `${title}. ${message}` : message, 'OK');
-        return { ok: true };
-      },
-      linkOpen: (url) => {
-        window.open(url, '_blank', 'noopener');
-        return { ok: true };
-      },
-      telegramOpen: (target) => {
-        window.open(target === 'billing-bot' ? BILLING_BOT_URL : 'https://t.me/ompplyaer', '_blank', 'noopener');
-        return { ok: true };
-      },
-    }),
+    dispatcher: createDesktopFlowDispatcher(),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });
   try {
