@@ -10,6 +10,7 @@ export function Sheet({
   onBack,
   label,
   testId,
+  className,
   children,
 }: {
   onClose: () => void;
@@ -17,6 +18,7 @@ export function Sheet({
   label: string;
   /** Stable sheet code (PD01). Omitted on sheets that are not in the registry. */
   testId?: string;
+  className?: string;
   children: ComponentChildren;
 }) {
   useBackHandler(() => (onBack ?? onClose)());
@@ -79,7 +81,7 @@ export function Sheet({
   return (
     <div class="m-sheet-host">
       <button type="button" class="m-sheet-backdrop" aria-label={t('common.close')} onClick={onClose} />
-      <div ref={sheetRef} class="m-sheet" role="dialog" aria-label={label} data-code={testId}>
+      <div ref={sheetRef} class={'m-sheet' + (className ? ' ' + className : '')} role="dialog" aria-label={label} data-code={testId}>
         <button
           type="button"
           class="m-sheet-grip"
