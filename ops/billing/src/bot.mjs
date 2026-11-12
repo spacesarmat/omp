@@ -1,4 +1,5 @@
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
+import { capReferralOff } from './referralAdmin.mjs';
 import { donateMenu, donateOnCallback, donateOnText } from './donate.mjs';
 import { cryptoOffered, labelSettled, starBlurb, starInvoiceBody, starsOffered } from './payMethods.mjs';
 import { payUrl } from './yoomoney.mjs';
@@ -408,22 +409,23 @@ function statusText(state, sub, account, opts) {
  */
 export function renewalText(state, subRow, sub, now, opts) {
   const quote = renewalPrice(state, subRow, now, opts);
-  const off = referralDiscountOf(state, subRow && subRow.accountId, quote.base, now);
+  const priced = capReferralOff(quote.total, referralDiscountOf(state, subRow && subRow.accountId, quote.base, now));
+  const off = priced.off;
   const from = sub.active ? sub.paidUntil : now;
   const lines = ['Продление на ' + daysText(quote.days) + ', до ' + mskDateTime(from + quote.days * 86400000) + ':'];
   lines.push('• подписка - ' + rub(quote.base));
   if (off > 0) lines.push('• скидка по приглашению - ' + rub(off));
   if (quote.extras > 0) lines.push('• доп. устройство × ' + quote.extras + ' - ' + rub(quote.extraSum));
   if (quote.credit > 0) lines.push('• зачёт - −' + rub(quote.credit));
-  if (quote.extras > 0 || quote.credit > 0 || off > 0) lines.push('Итого: ' + rub(Math.max(0, quote.total - off)));
+  if (quote.extras > 0 || quote.credit > 0 || off > 0) lines.push('Итого: ' + rub(priced.due));
   return { text: lines.join('\n'), quote };
 }
 
 function withInviteOff(state, subRow, quote, now) {
   if (!quote) return quote;
-  const off = referralDiscountOf(state, subRow && subRow.accountId, quote.base, now);
-  if (!(off > 0)) return quote;
-  return { ...quote, total: Math.max(0, quote.total - off), referralOff: off };
+  const priced = capReferralOff(quote.total, referralDiscountOf(state, subRow && subRow.accountId, quote.base, now));
+  if (!(priced.off > 0)) return quote;
+  return { ...quote, total: priced.due, referralOff: priced.off };
 }
 
 function renewalPriceLine(quote) {

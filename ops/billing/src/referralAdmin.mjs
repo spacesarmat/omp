@@ -38,7 +38,7 @@ function tierListOf(src) {
   out.sort((a, b) => a.friends - b.friends);
   const uniq = [];
   for (let i = 0; i < out.length; i++) {
-    if (uniq.length && uniq[uniq.length - 1].friends === out[i].friends) uniq[uniq.length - 1] = out[i];
+    if (uniq.length && uniq[uniq.length - 1].friends === out[i].friends) continue;
     else uniq.push(out[i]);
   }
   return uniq;
@@ -119,19 +119,35 @@ export function referralDiscountRub(settings, opts) {
   return Math.max(0, Math.min(off, base - 1));
 }
 
-/** Payments at least 27 and at most 45 days apart count as consecutive months. */
-export function retentionStreak(times, boundAt) {
+/** Leave at least 1 ruble to pay. The same cap is used for the order and for the price on screen. */
+export function capReferralOff(due, off) {
+  const amount = Number(due);
+  const want = Math.max(0, Math.floor(Number(off) || 0));
+  if (!Number.isFinite(amount) || !(amount > 1) || !want) return { due: Math.max(0, Number.isFinite(amount) ? amount : 0), off: 0 };
+  const take = Math.min(want, amount - 1);
+  return { due: amount - take, off: take };
+}
+
+/**
+ * Payments at least 27 and at most 45 days apart count as consecutive months.
+ * `at` is the payment that first reached `months`, and it stays put while later renewals continue the streak.
+ */
+export function retentionStreak(times, boundAt, months) {
+  const need = Math.max(1, Math.floor(Number(months) || 1));
   const from = Number(boundAt) || 0;
   const list = (times || []).map((t) => Number(t) || 0).filter((t) => t >= from).sort((a, b) => a - b);
   let streak = 0;
   let prev = 0;
   let at = 0;
+  const mark = (t) => {
+    if (streak >= need && !at) at = t;
+  };
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
     if (!prev) {
       streak = 1;
       prev = t;
-      at = t;
+      mark(t);
       continue;
     }
     const gap = t - prev;
@@ -139,12 +155,13 @@ export function retentionStreak(times, boundAt) {
     if (gap > MONTH_MAX) {
       streak = 1;
       prev = t;
-      at = t;
+      at = 0;
+      mark(t);
       continue;
     }
     streak += 1;
     prev = t;
-    at = t;
+    mark(t);
   }
   return { count: streak, at };
 }
@@ -213,7 +230,9 @@ export function reverseReferralRow(state, id, now, actor) {
       for (let i = 0; i < list.length; i++) {
         const other = list[i];
         if (!other || other.id === row.id || other.friendId !== row.friendId || other.referrerId !== row.referrerId) continue;
-        if (other.status === 'waiting' || other.status === 'rejected') list[i] = { ...other, status: 'cancelled', reason: 'manual' };
+        if (other.status === 'waiting' || other.status === 'rejected') {
+          list[i] = { ...other, status: 'cancelled', reason: 'manual', noticePending: false, friendNoticePending: false };
+        }
       }
     }
   } else {
@@ -232,7 +251,11 @@ export function reverseReferralRow(state, id, now, actor) {
       if (out.short > 0) missing.push(out.short + ' дн. (уже использованы)');
     };
     takeDays(row.referrerId, row.days);
-    if (row.friendGranted) takeDays(row.friendId, row.friendDays);
+    if (row.friendGranted) {
+      const known = Object.prototype.hasOwnProperty.call(row, 'friendDays') && Number(row.friendDays) > 0;
+      if (!known) missing.push('дни друга не записаны');
+      else takeDays(row.friendId, row.friendDays);
+    }
     const credit = Math.max(0, Math.floor(Number(row.credit) || 0));
     if (credit > 0) {
       const sub = subscriptions.find((item) => item && item.accountId === row.referrerId && item.product === 'jackett');
@@ -252,7 +275,7 @@ export function reverseReferralRow(state, id, now, actor) {
   if (shortfall) bits.push('Не снято: ' + shortfall + '.');
   bits.push(referralMsk(when));
   const note = bits.join(' ');
-  list[idx] = { ...row, status: 'cancelled', reason: 'manual', reversedAt: when, shortfall };
+  list[idx] = { ...row, status: 'cancelled', reason: 'manual', reversedAt: when, shortfall, noticePending: false, friendNoticePending: false };
   const who = actor && actor.kind ? actor : { kind: 'admin', id: '', label: 'панель' };
   const next = pushAudit(
     { ...state, referralJournal: list, referralBinds: binds, subscriptions },
@@ -310,6 +333,7 @@ export function claimReferralNotices(state) {
   const byRef = new Map();
   const journal = rows.map((row) => {
     if (!row || (!row.noticePending && !row.friendNoticePending)) return row;
+    if (row.status === 'cancelled' || row.status === 'rejected') return { ...row, noticePending: false, friendNoticePending: false };
     const next = {
       ...row,
       noticePending: false,
@@ -344,7 +368,7 @@ export function claimReferralNotices(state) {
   }
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || !row.friendNoticePending || !(row.friendDays > 0)) continue;
+    if (!row || row.status === 'cancelled' || row.status === 'rejected' || !row.friendNoticePending || !(row.friendDays > 0)) continue;
     const chatId = chatOf(row.friendId);
     if (chatId) {
       messages.push({
@@ -375,7 +399,7 @@ export function restoreReferralNotices(state, restore) {
   let changed = false;
   const journal = (state.referralJournal || []).map((row) => {
     const item = row && back.get(row.id);
-    if (!item || (Number(row.noticeTries) || 0) >= 3) return row;
+    if (!item || row.status === 'cancelled' || row.status === 'rejected' || (Number(row.noticeTries) || 0) >= 3) return row;
     changed = true;
     return { ...row, noticePending: !!item.noticePending, friendNoticePending: !!item.friendNoticePending };
   });

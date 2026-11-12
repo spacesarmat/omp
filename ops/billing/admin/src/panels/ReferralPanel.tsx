@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { post, type PostResult } from '@/lib/api';
+import { nextTierFriends } from '@/lib/nextTierFriends';
 
 type Tier = { friends: number; days: number; percent: number };
 
@@ -164,7 +165,7 @@ export function ReferralPanel({
                 <Button type="button" variant="secondary" disabled={busy} onClick={() => saveTiers(tiers.filter((_, i) => i !== index))}>Убрать</Button>
               </div>
             ))}
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => saveTiers(tiers.concat([{ friends: Math.max(1, tiers.length + 1), days: 14, percent: 0 }]))}>
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => saveTiers(tiers.concat([{ friends: nextTierFriends(tiers.map((tier) => tier.friends)), days: 14, percent: 0 }]))}>
               Добавить уровень
             </Button>
           </div>

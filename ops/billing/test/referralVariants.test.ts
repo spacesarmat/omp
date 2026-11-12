@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyPayment, phoneBill, quotePurchase, redeemReferralCode, settleReferrals } from '../src/logic.mjs';
 import { renewalText } from '../src/bot.mjs';
+import { nextTierFriends } from '../admin/src/lib/nextTierFriends';
 import { applyReferralPost, claimReferralNotices, normalizeReferralSettings, referralCodeFor, restoreReferralNotices } from '../src/referralAdmin.mjs';
 import { grossUp } from '../src/yoomoney.mjs';
 
@@ -59,6 +60,9 @@ describe('referral variants', () => {
     expect(fresh.retention).toBe(false);
     expect(fresh.balancePercent).toBe(0);
     expect(fresh.tierList).toEqual([]);
+    expect(normalizeReferralSettings({ tierList: [{ friends: 3, days: 14, percent: 10 }, { friends: 3, days: 7, percent: 0 }] }).tierList).toEqual([{ friends: 3, days: 14, percent: 10 }]);
+    expect(nextTierFriends([3, 5])).toBe(1);
+    expect(nextTierFriends([1, 2, 3])).toBe(4);
     expect(fresh.delayDays).toBe(7);
     expect(fresh.yearlyCap).toBe(12);
     expect(normalizeReferralSettings({ delayDays: 400, yearlyCap: -3, referrerDays: 40 }).delayDays).toBe(365);
@@ -300,5 +304,105 @@ describe('referral variants', () => {
       accounts: bound!.state.accounts.concat([{ id: 'next', telegramId: '4' }]),
     };
     expect(redeemReferralCode(device, { code: referralCodeFor('ref'), accountId: 'next', deviceId: 'dev-1', now: NOW })!.result.error).toBe('bad_promo');
+  });
+
+  it('scales stars and crypto by the referral discount and keeps the ruble reference', () => {
+    const state = world({ friendDiscount: true, friendDiscountPercent: 10 });
+    state.settings.starsEnabled = true;
+    state.settings.starsPrice = 100;
+    state.settings.cryptoUsdt = 2;
+    const stars = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'stars' });
+    expect(stars.result.price).toBe(180);
+    expect(stars.result.payAmount).toBe('90');
+    const crypto = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'crypto', asset: 'USDT' });
+    expect(crypto.result.payAmount).toBe('1.80');
+  });
+
+  it('anchors retention on the payment that first reached the month count', () => {
+    const settings = { retention: true, retentionMonths: 3, retentionDays: 7, referrerDays: 0, delayDays: 31 };
+    const ready = world(settings);
+    ready.referralBinds[0].boundAt = NOW - 200 * DAY;
+    const third = NOW - 30 * DAY;
+    ready.payments = [NOW - 90 * DAY, NOW - 60 * DAY, third, NOW].map((at) => ({ accountId: 'friend', at, amount: '200.00', label: 'sub:s-friend' }));
+    const granted = settleReferrals(ready, third + 31 * DAY);
+    expect(row(granted.state, 'retention')).toMatchObject({ status: 'granted', days: 7 });
+  });
+
+  it('does not count a device purchase as a paid month or as the first subscription', () => {
+    const settings = { retention: true, retentionMonths: 2, retentionDays: 7, referrerDays: 0, friendDiscount: true, friendDiscountPercent: 10 };
+    const slots = world(settings);
+    slots.referralBinds[0].boundAt = NOW - 100 * DAY;
+    slots.purchases = [{ id: 'dev1', kind: 'dev', price: 50 }];
+    slots.payments = [NOW - 60 * DAY, NOW - 30 * DAY].map((at, i) => ({ accountId: 'friend', at, amount: '50.00', label: 'buy:dev1', id: 'd' + i }));
+    expect(row(settleReferrals(slots, NOW).state, 'retention')).toBeUndefined();
+    const quote = quotePurchase(slots, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW });
+    expect(quote.result.price).toBe(180);
+
+    const prior = world({ friendDiscount: true, friendDiscountPercent: 10 });
+    prior.payments = [{ accountId: 'friend', at: NOW - 40 * DAY, amount: '200.00', label: 'sub:s-friend' }];
+    expect(quotePurchase(prior, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW }).result.price).toBe(200);
+  });
+
+  it('credits each later subscription payment once and stops a second discounted order', () => {
+    const first = settleReferrals(pay(world({ balance: true, balancePercent: 10, balanceMonthlyCap: 100 })), NOW);
+    const again = {
+      ...first.state,
+      payments: first.state.payments.concat([{ id: 'p2', accountId: 'friend', at: NOW + 40 * DAY, amount: '200.00', label: 'sub:s-friend' }]),
+    };
+    const second = settleReferrals(again, NOW + 41 * DAY);
+    expect(second.state.referralJournal.filter((item) => item.variant === 'balance' && item.status === 'granted')).toHaveLength(2);
+    expect(sub(second.state, 's-ref').creditRub).toBe(40);
+    expect(sub(settleReferrals(second.state, NOW + 42 * DAY).state, 's-ref').creditRub).toBe(40);
+
+    const priced = world({ friendDiscount: true, friendDiscountPercent: 10 });
+    const card = quotePurchase(priced, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'AC' });
+    const wallet = quotePurchase(card.state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'PC' });
+    expect(card.result.referralOff).toBeGreaterThan(0);
+    expect(wallet.result.referralOff).toBeGreaterThan(0);
+    const up = grossUp(card.result.price, 'AC')!;
+    const paid = applyPayment(wallet.state, {
+      operationId: 'op-card',
+      label: card.result.label,
+      amount: up.net,
+      currency: '643',
+      withdrawAmount: up.gross,
+      notificationType: 'card-incoming',
+      requireWithdraw: true,
+      now: NOW,
+    });
+    expect(paid.result.error).toBeUndefined();
+    const other = grossUp(wallet.result.price, 'PC')!;
+    const secondPay = applyPayment(paid.state, {
+      operationId: 'op-wallet',
+      label: wallet.result.label,
+      amount: other.net,
+      currency: '643',
+      withdrawAmount: other.gross,
+      notificationType: 'p2p-incoming',
+      requireWithdraw: true,
+      now: NOW + 1,
+    });
+    expect(secondPay.result.error).toBe('amount');
+  });
+
+  it('shows the same capped discount as checkout and does not announce a cancelled gift', () => {
+    const state = world({ friendDiscount: true, friendDiscountRub: 20 });
+    state.subscriptions[1].creditRub = 190;
+    expect(phoneBill(state, 'friend', NOW).priceRub).toBe(1);
+    expect(quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW }).result.price).toBe(1);
+    expect(renewalText(state, state.subscriptions[1], { active: true, paidUntil: NOW + 10 * DAY }, NOW).text).toContain('1');
+
+    const gifted = world({ friendDays: 0, referrerDays: 7 });
+    gifted.referralJournal = [{ id: 'old', friendId: 'friend', referrerId: 'ref', status: 'granted', days: 7, friendGranted: true, variant: 'days', reason: 'paid' }];
+    const undone = applyReferralPost({ cancelId: 'old', settings: gifted.settings.referral }, gifted, { now: NOW, actor: { kind: 'admin', id: '9', label: '9' } });
+    expect(undone.note).toContain('дни друга не записаны');
+    expect(sub(undone.state, 's-friend').paidUntil).toBe(NOW + 10 * DAY);
+
+    const granted = settleReferrals(pay(world({ referrerDays: 7, friendDays: 0 })), NOW);
+    const claimed = claimReferralNotices(granted.state);
+    const back = restoreReferralNotices(claimed.state, claimed.messages.flatMap((item) => item.restore || []));
+    const daysId = String(row(back, 'days')!.id);
+    const cancelled = applyReferralPost({ cancelId: daysId, settings: back.settings.referral }, back, { now: NOW, actor: { kind: 'admin', id: '9', label: '9' } });
+    expect(claimReferralNotices(cancelled.state).messages).toEqual([]);
   });
 });

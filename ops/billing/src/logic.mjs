@@ -1,5 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
-import { normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX, mskMonthStart } from './referralAdmin.mjs';
+import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, labelSettled, rubOfPayment, starDue } from './payMethods.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
@@ -1145,7 +1145,8 @@ export function phoneBill(state, accountId, now) {
   const prices = priceText(state.settings || {});
   const quote = sub ? renewalPrice(state, sub, nowMs) : { total: prices.price, days: prices.days, base: prices.price };
   const off = referralDiscountOf(state, accountId, Number(quote.base) > 0 ? quote.base : prices.price, nowMs);
-  const price = Math.max(0, Math.round(((Number(quote.total) || 0) - off) * 100) / 100);
+  const priced = capReferralOff(Number(quote.total) || 0, off);
+  const price = Math.max(0, Math.round(priced.due * 100) / 100);
   const up = grossUp(price, 'AC');
   const fee = up ? up.fee : 0;
   const total = up ? up.gross : price;
@@ -1270,8 +1271,31 @@ function referralRowSame(a, b) {
     (Number(a.credit) || 0) === (Number(b.credit) || 0) &&
     (Number(a.friendDays) || 0) === (Number(b.friendDays) || 0) &&
     !!a.noticePending === !!b.noticePending &&
-    !!a.friendNoticePending === !!b.friendNoticePending
+    !!a.friendNoticePending === !!b.friendNoticePending &&
+    (a.paymentId || '') === (b.paymentId || '')
   );
+}
+
+function isDevicePay(state, row) {
+  const label = String((row && row.label) || '');
+  if (label.indexOf('dev:') === 0) return true;
+  if (label.indexOf('buy:') === 0) {
+    const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
+    return !!(quote && quote.kind === 'dev');
+  }
+  return false;
+}
+
+function subscriptionPaidBefore(state, accountId, operationId) {
+  const rows = state.payments || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.accountId !== accountId || row.pending || row.error) continue;
+    if (operationId && row.operationId === operationId) continue;
+    if (isDevicePay(state, row)) continue;
+    return true;
+  }
+  return false;
 }
 
 function referralIndex(journal, friendId, referrerId, variant) {
@@ -1334,7 +1358,7 @@ export function referralDiscountOf(state, accountId, baseRub, now) {
   if (!bind) return 0;
   const referrerSub = anySub(state, bind.referrerId);
   const active = !!(referrerSub && subAccess(state, referrerSub, now || Date.now()).access);
-  const alreadyPaid = friendPayments(state, accountId, bind.boundAt).length > 0;
+  const alreadyPaid = subscriptionPaidBefore(state, accountId, '');
   return referralDiscountRub(settings, { referrerActive: active, alreadyPaid, boundAt: bind.boundAt, baseRub, now });
 }
 
@@ -1448,14 +1472,19 @@ export function settleReferrals(state, now) {
     }
 
     const percent = offerPercent(settings, friendsPaid);
-    const paymentRub = rubOfPayment(payments[0]);
-    const rawCredit = percent > 0 ? Math.floor((paymentRub * percent) / 100) : 0;
-    if (rawCredit > 0 || (percent > 0 && settings.balanceMonthlyCap > 0)) {
-      const balIdx = referralIndex(journal, bind.friendId, bind.referrerId, 'balance');
-      const balPrev = balIdx >= 0 ? journal[balIdx] : null;
-      const balFrozen = balPrev && (balPrev.status === 'granted' || balPrev.status === 'cancelled' || balPrev.status === 'rejected');
-      if (!balFrozen && rawCredit > 0) {
-        const waited = Math.floor((when - paidAt) / DAY);
+    if (percent > 0) {
+      for (let p = 0; p < payments.length; p++) {
+        const pay = payments[p];
+        if (isDevicePay(state, pay)) continue;
+        const paymentId = pay.id ? String(pay.id) : pay.operationId ? String(pay.operationId) : 't' + (Number(pay.at) || 0);
+        const rawCredit = Math.floor((rubOfPayment(pay) * percent) / 100);
+        if (!(rawCredit > 0)) continue;
+        const balIdx = journal.findIndex((row) => row && row.variant === 'balance' && row.friendId === bind.friendId && row.referrerId === bind.referrerId && row.paymentId === paymentId);
+        const balPrev = balIdx >= 0 ? journal[balIdx] : null;
+        const balFrozen = balPrev && (balPrev.status === 'granted' || balPrev.status === 'cancelled' || balPrev.status === 'rejected');
+        if (balFrozen) continue;
+        const payAt = Number(pay.at) || 0;
+        const waited = Math.floor((when - payAt) / DAY);
         let status = 'waiting';
         let credit = 0;
         let reason = 'delay';
@@ -1483,12 +1512,13 @@ export function settleReferrals(state, now) {
           friendId: bind.friendId,
           referrerId: bind.referrerId,
           variant: 'balance',
+          paymentId,
           status,
           days: 0,
           credit,
           reason,
-          paidAt,
-          at: paidAt,
+          paidAt: payAt,
+          at: payAt,
           grantedAt: status === 'granted' ? when : 0,
           noticePending: status === 'granted' && credit > 0,
         };
@@ -1498,7 +1528,9 @@ export function settleReferrals(state, now) {
     }
 
     if (settings.retention && settings.retentionDays > 0 && settings.retentionMonths > 0) {
-      const streak = retentionStreak(payments.map((p) => p.at), bind.boundAt);
+      const subPays = [];
+      for (let p = 0; p < payments.length; p++) if (!isDevicePay(state, payments[p])) subPays.push(payments[p].at);
+      const streak = retentionStreak(subPays, bind.boundAt, settings.retentionMonths);
       if (streak.count >= settings.retentionMonths && streak.at) {
         const retIdx = referralIndex(journal, bind.friendId, bind.referrerId, 'retention');
         const retPrev = retIdx >= 0 ? journal[retIdx] : null;
@@ -1653,6 +1685,10 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
     return transferCovers(amount, currency, need, resolved);
   };
   const covers = (kindMark) => coversNeed(quoted !== null ? quoted : priceOf(state, kindMark));
+  if (quote && Number(quote.referralOff) > 0) {
+    const payer = quote.accountId || (act.indexOf('new:') === 0 ? act.slice(4) : ((state.subscriptions || []).find((s) => s.id === act.slice(4)) || {}).accountId);
+    if (payer && subscriptionPaidBefore(state, payer, operationId)) return rejectAmount(state, row);
+  }
 
   if (act.indexOf('sub:') === 0) {
     const id = act.slice(4);
@@ -2848,13 +2884,9 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
   let referralOff = 0;
   if (kind === 'new' || kind === 'sub') {
     const payer = accountId || (sub && sub.accountId) || '';
-    referralOff = referralDiscountOf(state, payer, prices.price, at);
-    if (referralOff > 0) {
-      const room = Math.max(0, price - 1);
-      referralOff = Math.min(referralOff, room);
-      price -= referralOff;
-      rubGross = Math.max(0, rubGross - referralOff);
-    }
+    const capped = capReferralOff(price, referralDiscountOf(state, payer, prices.price, at));
+    referralOff = capped.off;
+    price = capped.due;
   }
   // No method: a legacy quote. The payer is asked for `price` and the old net check applies.
   // PC or AC: freeze the documented gross-up. The caller cannot supply the fee.
