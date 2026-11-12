@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
+import { applyReferralPost, publicReferral } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -62,6 +63,7 @@ import {
   unlinkDeviceTelegram,
   findAccount,
   accountByTelegram,
+  settleReferrals,
 } from './logic.mjs';
 import {
   adminBroadcast,
@@ -2236,6 +2238,22 @@ export function createApp(file, fetchImpl, opts) {
           }
           redirectTo = '/admin/?tab=ads';
         }
+        if (path === '/admin/referral') {
+          await store.update((state) => {
+            const r = applyReferralPost(body, state.referralJournal || [], state.referralBinds || []);
+            return {
+              state: {
+                ...state,
+                settings: { ...state.settings, referral: r.settings },
+                referralJournal: r.journal,
+                referralBinds: r.binds,
+              },
+              result: { ok: true },
+            };
+          });
+          flashText = 'Реферальная программа сохранена';
+          redirectTo = '/admin/?tab=referral';
+        }
         if (path === '/admin/ads/banner') {
           const r = await store.update((state) => {
             const out = saveBanner(state.settings, body.banner || body);
@@ -2557,7 +2575,7 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'GET' && path === '/v1/me') {
         const device = String(req.headers['x-device-id'] || url.searchParams.get('deviceId') || '');
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-        const state = (await store.read());
+        let state = (await store.read());
         const now = Date.now();
         let account = null;
         let paidUntil = 0;
@@ -2579,9 +2597,15 @@ export function createApp(file, fetchImpl, opts) {
         if (!account) return json(res, 404, { error: 'not_linked' });
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
         // Optional. A read-only cutover must still answer /v1/me.
-        if (!readOnly && seenCountry && account.country !== seenCountry) {
+        const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
+        if (!readOnly && (settleReferrals(state, now).state !== state || countryDirty)) {
           const accountId = account.id;
-          await store.update((cur) => ({ state: rememberCountry(cur, accountId, seenCountry) }));
+          const next = await store.update((cur) => {
+            let merged = settleReferrals(cur, now).state;
+            if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
+            return { state: merged, result: merged };
+          });
+          if (next && next.accounts) state = next;
         }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
@@ -2613,6 +2637,7 @@ export function createApp(file, fetchImpl, opts) {
           monitorMax: monitorMaxFor(isActive),
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
+          referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),
         });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v1/progress') {

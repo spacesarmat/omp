@@ -10,6 +10,10 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The editor gained a layers panel with filtering, renaming, hiding, locking, duplicating and pasting clones, plus a style library with presets, style copy and token usage search
 - [tech] The editor compares the current theme with the original via the Before/After button and shows platforms side by side; the Accessibility panel checks contrast, font size and geometry, and geometry warnings must be confirmed before export
 - [tech] Editor export became scoped: everything, one page or one component by node id, with a diff preview and a list of affected platforms. Production applies the reviewed layout through the generated module design/generated/layout.ts only on explicit export
+- [phone] Now on TV: the empty gap above chapters is gone. A next-episode card and Skip the intro when an intro exists. Tap Chapter N of M for the list. A long press skips, repeats, or always skips Recap and Credits
+- [phone] A subscription page has edit, pause and delete in the header, a poster, quality chips, notifications, a link to the card and a check count
+- [phone] The subscription sheet keeps Delete and Save above the system bar. A swipe down with unsaved edits asks whether to save them. Releases already found do not notify
+- [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark
 - [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
 - [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
 - [phone] Calendar lists days, Earlier stays folded, and the aired/today plates are gone. Month view marks today with a yellow circle, the selected day in gray, up to three dots plus a count, and a yellow dot for a subscription. A subscription that is any quality and best-only reads "best"
@@ -17,6 +21,10 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Account: Renew opens card, stars and crypto. There is no separate Crypto button. The promo field and Activate sit on one row, and an empty button stays dark
 - [phone] Settings: each video player option has a subtitle, Built-in is marked recommended, and the yellow outline is gone. The TV list hides the IP and the active TV has a thin yellow frame. Watch-from shows only the selected rule. The bug report opens as a sheet. Stop server is a link
 - [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
+- [phone] Search remembers recent queries and offers a magnet that is already on the clipboard
+- [phone] A subscription edit has a seed stepper. Check now is the yellow button. A future calendar episode says Remind me, and "forever" reads as the season finale
+- [phone] Tell friends shows the link, code, QR and Share while the program is on. The link opens a page with the code. While the program is off, the screen says so
+- [tech] Referral admin: six switches, bonus days at most 14, a 7 day delay, a yearly cap of 12 months, a journal and manual cancel. App and bot notice text. Billing was not deployed
 
 ## 0.30.1-beta.3
 

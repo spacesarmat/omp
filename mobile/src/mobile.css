@@ -1179,8 +1179,8 @@ button, .m-btn {
 /* first screen: the poster takes what the controls leave, the controls end above the «Серии» chip and the system bar */
 .m-now-fold { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; }
 .m-now-fold-fit { min-height: 0; }
-.m-now-fold-fit .m-now-hero { flex: 0 1 auto; min-height: 0; }
 .m-now-fold .m-now-hero { flex: 1 1 0; min-height: 200px; }
+.m-now-fold-fit .m-now-hero { flex: 0 0 auto; min-height: 220px; height: 38vh; }
 .m-now-body {
   position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
   margin-top: -72px;
@@ -1302,6 +1302,11 @@ button, .m-btn {
 .m-now-chbtn { flex-shrink: 0; width: 48px; height: 48px; border: none; border-radius: 12px; background: var(--panel-2); display: flex; align-items: center; justify-content: center; padding: 0; }
 .m-now-chbtn:disabled, .m-now-chitem:disabled { opacity: 0.4; }
 .m-now-chtext { flex: 1 1 0; min-width: 0; text-align: center; font-size: 14px; overflow-wrap: anywhere; }
+button.m-now-chtext { border: none; background: none; color: inherit; display: flex; flex-direction: column; align-items: center; }
+.m-now-next { display: flex; align-items: center; padding: 8px; border-radius: 14px; background: var(--panel); }
+.m-now-next img, .m-now-next-frame { width: 54px; height: 80px; border-radius: 8px; background: #1C212B; object-fit: cover; flex-shrink: 0; }
+.m-now-next-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 0 10px; text-align: left; }
+.m-now-next-text > span { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-now-chnum { display: block; color: var(--muted); font-size: 12px; }
 .m-now-chlist { display: flex; flex-direction: column; gap: 4px; }
 .m-now-chhead { font-size: 16px; font-weight: 700; margin: 4px 0; }
@@ -1479,6 +1484,15 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-skip-open { width: 100%; }
 .m-marks-pair { display: flex; gap: 10px; }
 .m-marks-pair .m-field { flex: 1 1 0; min-width: 0; }
+.m-sheet.m-sub-sheet { padding: 16px 16px calc(12px + env(safe-area-inset-bottom)); }
+.m-sheet-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: 0 -16px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  background: var(--panel);
+}
 .m-marks-actions { display: flex; gap: 10px; margin-top: 4px; }
 .m-marks-actions .m-btn { flex: 1 1 0; }
 
@@ -1648,6 +1662,12 @@ html.m-kb-open .m-sheet-host:has(.m-code) { bottom: var(--kb-inset, 0px); }
 .m-sub-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
 .m-sub-q { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .m-sub-page-title { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.m-sub-tool { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+.m-sub-hero { width: 72px; height: 108px; border-radius: 8px; object-fit: cover; background: #1C212B; }
+.m-sub-log { margin: 4px 0 0; padding: 0 0 0 18px; }
+.m-sub-log li { margin: 0 0 2px; }
+.m-sub-chips { display: flex; flex-wrap: wrap; }
+.m-sub-chips .m-chip { margin: 0 8px 8px 0; }
 .m-wifi { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel); }
 .m-wifi-hint, .m-wifi-manual { display: flex; flex-direction: column; gap: 4px; }
 .m-wifi-profile { display: flex; align-items: center; gap: 8px; }
@@ -1981,6 +2001,8 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-promo-apply:disabled { background: #252A35; color: var(--muted); opacity: 1; }
 .m-sub-quality { display: flex; }
 .m-sub-quality .m-seg-btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; }
+.m-seed-step { display: flex; margin-top: 8px; }
+.m-seed-step button { width: 40px; height: 40px; margin-right: 8px; border: none; border-radius: 10px; background: #252A35; color: var(--text); font-size: 18px; }
 .m-cal-picked { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .m-similar { margin-top: 12px; }
 .m-similar-sum {

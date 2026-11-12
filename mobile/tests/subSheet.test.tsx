@@ -14,10 +14,13 @@ import { TorrServerClient } from '../../src/api/torrserver';
 import { reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, seenKeys, unseenCount } from '../../src/monitor/subs';
+import { rememberCheck } from '../src/monitor/subHold';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
+import type { CatalogCard } from '../../src/catalog/tmdb';
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
-import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { acceptConfirm, confirmText, declineConfirm, dismissConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 
 let el: HTMLElement;
 let mon: FakeMonitor;
@@ -76,6 +79,8 @@ afterEach(() => {
   mon.restore();
   vi.restoreAllMocks();
   setWatchActions(null);
+  setCatalogClientForTests(null);
+  vi.useRealTimers();
 });
 
 describe('parsers', () => {
@@ -150,12 +155,52 @@ describe('SubSheet', () => {
     rememberSeen(s.id, ['h:' + HASH]);
     sheet({ sub: s });
     expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Дюна');
-    expect(el.textContent).toContain('следующая проверка только запомнит');
+    expect(el.textContent).toContain('не пришлют уведомление');
     click(byText('1080p+'));
     click(byText('Сохранить'));
     expect(getSubscription(s.id)!.quality).toBe('1080');
     expect(seenKeys(s.id)).toBeNull();
     expect(toast.value).toBe('Подписка сохранена');
+  });
+
+  it('closing with unsaved changes asks to save, and the actions stay docked', async () => {
+    const s = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    const close = vi.fn();
+    sheet({ sub: s, onClose: close });
+    expect(el.querySelector('.m-sheet > .m-sheet-dock')).toBeTruthy();
+    click(el.querySelector('.m-sheet-backdrop'));
+    expect(confirmText()).toBe('');
+    expect(close).toHaveBeenCalledTimes(1);
+    close.mockClear();
+    sheet({ sub: s, onClose: close });
+    type('m-sub-query', 'Дюна 2');
+    click(el.querySelector('.m-sheet-backdrop'));
+    expect(confirmText()).toContain('Сохранить изменения');
+    await dismissConfirm();
+    expect(confirmText()).toBe('');
+    expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Дюна 2');
+    expect(getSubscription(s.id)!.query).toBe('Дюна');
+    expect(close).not.toHaveBeenCalled();
+    click(el.querySelector('.m-sheet-backdrop'));
+    await declineConfirm();
+    expect(getSubscription(s.id)!.query).toBe('Дюна');
+    expect(close).toHaveBeenCalledTimes(1);
+    close.mockClear();
+    sheet({ sub: s, onClose: close });
+    type('m-sub-query', 'Дюна 2');
+    click(el.querySelector('.m-sheet-backdrop'));
+    await acceptConfirm();
+    expect(getSubscription(s.id)!.query).toBe('Дюна 2');
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('the seed stepper changes the minimum', () => {
+    sheet();
+    click(el.querySelector('[aria-label="Больше сидов"]')!);
+    click(el.querySelector('[aria-label="Больше сидов"]')!);
+    expect((el.querySelector('#m-sub-seeds') as HTMLInputElement).value).toBe('2');
+    click(el.querySelector('[aria-label="Меньше сидов"]')!);
+    expect((el.querySelector('#m-sub-seeds') as HTMLInputElement).value).toBe('1');
   });
 
   it('«Только лучшее качество»: off for a new subscription, saved when on, cleared when switched off', async () => {
@@ -235,7 +280,7 @@ describe('SubFindings', () => {
     navigate({ name: 'subFindings', id: s.id });
     mount({ id: s.id });
     expect(el.textContent).toContain('Подписка ещё не проверялась');
-    click(byText('Изменить'));
+    click(el.querySelector('[aria-label="Изменить"]'));
     click(byText('Удалить'));
     expect(confirmText()).toBe('Удалить подписку «Дюна»?');
     await acceptConfirm();
@@ -258,6 +303,57 @@ describe('SubFindings', () => {
     click(el.querySelector('[aria-label^="Добавить и смотреть на ТВ:"]'));
     await flush();
     expect(launch).toHaveBeenCalled();
+  });
+
+  it('chips, pause, the poster, the card and the check log', () => {
+    const s = addSubscription({
+      query: 'Дюна',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'movie', id: 7, title: 'Дюна', year: 2021, poster: 'https://img.test/dune.jpg' },
+    })!;
+    mount({ id: s.id });
+    expect(el.querySelectorAll('.m-sub-tool')).toHaveLength(3);
+    expect(el.querySelector('[data-sub-poster]')!.getAttribute('src')).toBe('https://img.test/dune.jpg');
+    click(byText('2160p+'));
+    expect(getSubscription(s.id)!.quality).toBe('2160');
+    click(el.querySelector('[data-sub-notify]'));
+    expect(getSubscription(s.id)!.notify).toBe(false);
+    click(el.querySelector('[data-sub-pause]'));
+    expect(el.querySelector('[data-sub-hold]')!.textContent).toContain('на паузе');
+    expect(el.querySelector('[data-check-sub]')).toBeNull();
+    click(el.querySelector('[data-sub-card]'));
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'movie', id: 7 });
+    rememberCheck(s.id, 5);
+    mount({ id: s.id });
+    expect(el.querySelector('[data-sub-checks]')!.textContent).toContain('1');
+    expect(el.querySelectorAll('[data-sub-log] li')).toHaveLength(1);
+  });
+
+  it('a series subscription shows seasons and the next air date', async () => {
+    const show = {
+      kind: 'tv', id: 21, title: 'Ледяной перевал', original: 'Frost Pass', year: 2024,
+      poster: '', rating: 8, backdrop: '', genres: [], runtime: 50, overview: '', cast: [],
+      seasons: [{ number: 1, episodes: 8, year: 2024, aired: 8 }],
+      airing: true,
+      nextEpisode: { season: 1, episode: 9, airDate: '2026-11-20' },
+    } as CatalogCard;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+    const empty = () => Promise.resolve({ items: [], pages: 0 });
+    setCatalogClientForTests({ novelties: empty, discover: empty, search: empty, card: () => Promise.resolve(show) });
+    const s = addSubscription({
+      query: 'Ледяной перевал',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'tv', id: 21, title: 'Ледяной перевал', year: 2024, poster: '' },
+    })!;
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('[data-sub-series]')!.textContent).toContain('1 сезон');
+    expect(el.querySelector('[data-sub-series]')!.textContent).toContain('Следующая серия выйдет');
   });
 
   it('a subscription that is gone says so', () => {
@@ -329,7 +425,7 @@ describe('SubFindings in English', () => {
     mount({ id: s.id });
     await flush();
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();
-    expect(byText('Edit')).toBeTruthy();
+    expect(el.querySelector('[aria-label="Edit"]')).toBeTruthy();
     expect(el.textContent).toContain('The subscription has not been checked yet. The first check only remembers what is already there - OMP will report new releases after it.');
     rememberSeen(s.id, []);
     addFindings([{ subId: s.id, key: 'new', at: 5, result: row({ Title: 'Dune Part Three', Size: '41 GB' }) }]);

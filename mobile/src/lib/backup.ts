@@ -146,6 +146,7 @@ export const BACKUP_KEYS: BackupKey[] = [
 /** Known keys that a copy deliberately leaves out (documentation + tested: none of them is in BACKUP_KEYS). */
 export const NOT_BACKED_UP: string[] = [
   'tsp.calView', // «Календарь»: list or month, per device
+  'tsp.recentQueries', // last source searches: per device
   'tsp.wifiServers', // which TorrServer this phone uses on a Wi-Fi: per device, not the TV
   'tsp.log', // error log: personal, per device
   'tsp.addressInput', // keypad or system keyboard for the server address: per device
@@ -154,6 +155,10 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.torrentsAt',
   'tsp.posterTried',
   'tsp.progress', // viewing progress: lives on TorrServer
+  'tsp.finishSeen', // when this device first saw a shared finish: per device
+  'tsp.subHold', // subscriptions paused by hand on this phone
+  'tsp.subChecks', // times a manual check ran: rebuilt by the next checks
+  'tsp.nowSkipMarks', // always skip recap and credits from the phone remote
   'tsp.historyHide', // phone: shows hidden from continue and history on this device
   'tsp.linkSpeed', // last measured download speed: rebuilt while watching
   'tsp.update', // update-check state
