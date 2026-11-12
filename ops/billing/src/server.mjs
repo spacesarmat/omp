@@ -170,6 +170,7 @@ import {
   applyDonateSettings,
   applyDonation,
   confirmDonateHold,
+  cryptoAllowed,
   donateCryptoLinkLive,
   donateCsv,
   donateNoticeText,
@@ -1035,6 +1036,8 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
   const quote = (state.donations || []).find((p) => p && p.id === donationId);
   if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
   if (!state.settings.donate || state.settings.donate.crypto !== true) return { error: 'disabled' };
+  const payer = (state.accounts || []).find((a) => a && a.id === quote.accountId) || null;
+  if (!cryptoAllowed(state.settings, payer, quote.asset)) return { error: 'disabled' };
   const creds = cryptoPayCredentials(state.settings);
   if (!creds.ready) return { error: 'disabled' };
   const issuedAt = Date.now();
@@ -1055,6 +1058,8 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
     if (!fresh.ready || fresh.testnet !== creds.testnet) return { state: cur, result: { error: 'disabled' } };
     const row = (cur.donations || []).find((p) => p && p.id === donationId);
     if (!row) return { state: cur, result: { error: 'bad_order' } };
+    const payerNow = (cur.accounts || []).find((a) => a && a.id === row.accountId) || null;
+    if (!cryptoAllowed(cur.settings, payerNow, row.asset)) return { state: cur, result: { error: 'disabled' } };
     if (donateCryptoLinkLive(row, issuedAt, fresh.testnet)) {
       return {
         state: cur,

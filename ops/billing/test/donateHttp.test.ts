@@ -4,7 +4,7 @@ import { activate, createSubscription, ensureTelegramAccount, issueCliAdminLogin
 import { createApp, handleCallback } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { grossUp, notificationSign } from '../src/yoomoney.mjs';
-import { readState, testStore, writeState } from './pg';
+import { readState, testStore, writeState, type Store } from './pg';
 
 const SECRET = 'test-notify-secret';
 const DEV = 'd'.repeat(32);
@@ -450,5 +450,55 @@ describe('donate crypto pay mode', () => {
     const saved = (await readState(b.store)).donations[0];
     expect(saved.cryptoTestnet).toBe(true);
     expect(saved.invoiceIds).toContain('1');
+  });
+
+  async function country(store: Store, accountId: string, code: string) {
+    const state = await readState(store);
+    state.accounts = state.accounts.map((a: { id: string }) => (a.id === accountId ? { ...a, country: code } : a));
+    await writeState(store, state);
+  }
+
+  it('does not resend or reissue a crypto donation when the country is excluded', async () => {
+    const b = await ready({ cryptoTestnet: false, cryptoNonRu: true }, {
+      method: 'crypto',
+      asset: 'USDT',
+      payAmount: '3.00',
+      gross: '',
+      fee: '',
+      status: 'pending',
+      step: '',
+      invoiceId: '1',
+      payUrl: 'https://pay.crypt.bot/i/1',
+      webUrl: 'https://pay.crypt.bot/i/1',
+      invoiceExpiresAt: Date.now() - 1000,
+    });
+    await country(b.store, b.accountId, 'RU');
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    expect(http.calls.some((c) => c.url.indexOf('/api/createInvoice') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).not.toContain('https://pay.crypt.bot/i/1');
+    expect(JSON.stringify(http.calls)).toContain('Крипта недоступна');
+  });
+
+  it('still reissues a crypto donation for an allowed country', async () => {
+    const b = await ready({ cryptoTestnet: false, cryptoNonRu: true }, {
+      method: 'crypto',
+      asset: 'USDT',
+      payAmount: '3.00',
+      gross: '',
+      fee: '',
+      status: 'pending',
+      step: '',
+      invoiceId: '1',
+      payUrl: 'https://pay.crypt.bot/i/1',
+      webUrl: 'https://pay.crypt.bot/i/1',
+      invoiceExpiresAt: Date.now() - 1000,
+    });
+    await country(b.store, b.accountId, 'DE');
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    const invoice = http.calls.find((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoice && invoice.url).toBe('https://pay.crypt.bot/api/createInvoice');
+    expect(invoice && invoice.token).toBe(LIVE);
   });
 });

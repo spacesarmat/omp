@@ -226,7 +226,7 @@ function nameScreen(id) {
   };
 }
 
-function cryptoAllowed(settings, account, asset) {
+export function cryptoAllowed(settings, account, asset) {
   const cfg = normalizeDonateSettings(settings && settings.donate);
   if (!cfg.crypto) return false;
   if (settings && settings.cryptoNonRu === true) {
@@ -410,6 +410,9 @@ export function donateOnCallback(state, account, data, now) {
   if (bits[1] === 'p') {
     const pending = pendingById(state, account, id);
     if (pending) {
+      if (pending.method === 'crypto' && !cryptoAllowed(state.settings, account, pending.asset)) {
+        return { state, answer: 'Крипта недоступна' };
+      }
       const again = resendCheckout(state, pending);
       if (again.error) return { state, answer: again.error };
       return { state, text: again.text, inline: again.inline, invoice: again.invoice, cryptoIssue: again.cryptoIssue, answer: '' };
