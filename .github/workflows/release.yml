@@ -79,6 +79,12 @@ jobs:
         run: |
           set -eu
           sha=$(git rev-parse HEAD)
+          # The job checks out the tag. An older tag does not contain this helper.
+          if [ ! -f scripts/release-ci-skip.mjs ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "helper is not in this checkout, tests will run"
+            exit 0
+          fi
           json=$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$sha" --workflow ci.yml --json conclusion,event,headSha)
           result=$(printf '%s' "$json" | node scripts/release-ci-skip.mjs "$sha")
           printf '%s\n' "$result" >> "$GITHUB_OUTPUT"
@@ -189,6 +195,7 @@ jobs:
           # One assembleRelease. --build-cache and --parallel match ci.yml. Every ABI stays: universal, arm64 and armv7.
           (cd android && ./gradlew --build-cache --parallel -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleRelease --stacktrace) || { df -h /; exit 1; }
           OUT=android/app/build/outputs/apk/release
+          mkdir -p build
           cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
           cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
           cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"

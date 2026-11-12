@@ -139,7 +139,10 @@ describe('release jobs run side by side', () => {
     expect(android).not.toContain('gh release create');
     expect(android).not.toContain('telegram-post');
     expect(test).toContain('scripts/release-ci-skip.mjs');
+    expect(test).toContain('if [ ! -f scripts/release-ci-skip.mjs ]');
     expect(test).toContain("if: steps.ci.outputs.skip != 'true'");
+    expect(android.indexOf('mkdir -p build')).toBeGreaterThan(-1);
+    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/app-universal-release.apk"'));
     expect(publish).toContain('publish is off');
   });
 });
