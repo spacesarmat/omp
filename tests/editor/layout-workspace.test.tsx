@@ -683,6 +683,56 @@ describe('layout workspace', () => {
     });
   });
 
+  it('advances the size basis when typed geometry exceeds the captured basis after the parent grew', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, createPlacement(context, 'server-card-2', 'Карточка 2', {
+      mode: 'absolute', x: 0, y: 100, width: 2500, height: 2500, basisWidth: 200, basisHeight: 200,
+    }));
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+
+    // The parent outgrew the 200px capture and now measures 400px; entering 300px must stay
+    // reachable instead of clamping to the stale basis.
+    const width = host.querySelector<HTMLInputElement>('[data-testid="layout-width"]')!;
+    expect(width.value).toBe('50');
+    act(() => {
+      width.value = '300';
+      width.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(placementOf('server-card-2')).toMatchObject({
+      width: 7500,
+      basisWidth: 400,
+      height: 2500,
+      basisHeight: 200,
+    });
+  });
+
+  it('advances the size basis when a drag handle grows the node beyond the captured basis', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, createPlacement(context, 'server-card-2', 'Карточка 2', {
+      mode: 'absolute', x: 0, y: 100, width: 2500, height: 2500, basisWidth: 200, basisHeight: 200,
+    }));
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+
+    // Drag the se handle 250px to the right: 300px exceeds the 200px basis while the parent
+    // already measures 400px, so the basis moves forward and the size lands at 300px.
+    const handle = host.querySelector<HTMLElement>('[data-testid="resize-handle"][data-handle="se"]')!;
+    pointer(handle, 'pointerdown', 50, 54);
+    pointer(overlay(), 'pointermove', 300, 54);
+    pointer(overlay(), 'pointerup', 300, 54);
+
+    expect(placementOf('server-card-2')).toMatchObject({
+      width: 7500,
+      basisWidth: 400,
+      height: 2500,
+      basisHeight: 200,
+    });
+  });
+
   it('maps flow alignment buttons to the container axes in a row container', () => {
     buildPreview();
     const context = contextOf();

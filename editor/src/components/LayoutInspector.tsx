@@ -5,9 +5,8 @@ import {
   absolutePlacementFromRect,
   createPlacement,
   marginOffsetPx,
-  placementSizeBasis,
+  placementSizeConversion,
   placementToRect,
-  rectSizeToUnits,
   type LayoutRect,
 } from '../layout/transactions.ts';
 import type { MoveNodeArgs } from './SelectionOverlay.tsx';
@@ -144,8 +143,16 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     const base = placement ?? createPlacement(props.context, node.nodeId, label);
     const placed = absolutePlacementFromRect(next, parentRect, props.context, node.nodeId, label, base);
     const override: Partial<LayoutPlacement> = {};
-    if (patch.width !== undefined) override.width = rectSizeToUnits(next.width, placementSizeBasis(base, parentRect.width, 'width'));
-    if (patch.height !== undefined) override.height = rectSizeToUnits(next.height, placementSizeBasis(base, parentRect.height, 'height'));
+    if (patch.width !== undefined) {
+      const width = placementSizeConversion(next.width, base, parentRect.width, 'width');
+      override.width = width.units;
+      if (width.advancedBasis !== undefined) override.basisWidth = Math.round(width.advancedBasis);
+    }
+    if (patch.height !== undefined) {
+      const height = placementSizeConversion(next.height, base, parentRect.height, 'height');
+      override.height = height.units;
+      if (height.advancedBasis !== undefined) override.basisHeight = Math.round(height.advancedBasis);
+    }
     props.onPlace({ ...placed, ...override });
   };
 

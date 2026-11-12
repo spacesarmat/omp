@@ -13,9 +13,8 @@ import {
   createPlacement,
   DRAG_THRESHOLD_PX,
   LAYOUT_GEOMETRY_LIMIT,
-  placementSizeBasis,
+  placementSizeConversion,
   placementToRect,
-  rectSizeToUnits,
   screenToArtboard,
   type ClientPoint,
   type ClientRectLike,
@@ -397,10 +396,14 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     const parentRect = nodeParentRect(node);
     const base = existingPlacement(node.nodeId);
     const placement = absolutePlacementFromRect(rect, parentRect, props.context, node.nodeId, node.label, base);
+    const width = placementSizeConversion(rect.width, base, parentRect.width, 'width');
+    const height = placementSizeConversion(rect.height, base, parentRect.height, 'height');
     props.onPlaceNode({
       ...placement,
-      width: rectSizeToUnits(rect.width, placementSizeBasis(base, parentRect.width, 'width')),
-      height: rectSizeToUnits(rect.height, placementSizeBasis(base, parentRect.height, 'height')),
+      width: width.units,
+      height: height.units,
+      ...(width.advancedBasis !== undefined ? { basisWidth: Math.round(width.advancedBasis) } : {}),
+      ...(height.advancedBasis !== undefined ? { basisHeight: Math.round(height.advancedBasis) } : {}),
     });
   };
 

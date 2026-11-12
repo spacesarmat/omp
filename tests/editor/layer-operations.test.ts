@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutContext, LayoutPlacement } from '../../design/schema';
 import { getLayoutPlacement } from '../../design/layout';
+import { observeLayout } from '../../design/layoutDom';
 import { parseThemeDocument } from '../../design/validation';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { createDefaultDraft } from '../../editor/shared/draft';
@@ -270,6 +271,35 @@ describe('duplicateNode', () => {
 });
 
 describe('clipboard', () => {
+  it('carries the size basis through copy and paste so a clone keeps its measured size', () => {
+    const controller = createController();
+    const placement = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute', x: 0, y: 0, width: 5000, height: 5000, basisWidth: 400, basisHeight: 400,
+    });
+
+    const clipboard = copyNodes([placement]);
+    expect(clipboard.nodes[0]).toMatchObject({ width: 5000, basisWidth: 400, basisHeight: 400 });
+
+    const [pastedId] = pasteNodes(controller, { context, clipboard });
+    const pasted = controller.draft.theme.layout?.placements.find((entry) => entry.nodeId === pastedId);
+    expect(pasted).toMatchObject({ width: 5000, height: 5000, basisWidth: 400, basisHeight: 400 });
+
+    // Under an 800px parent the pasted clone still renders the saved 200px width instead of
+    // 50% of the new parent.
+    const renderTheme = createDefaultDraft('render', BASE).theme;
+    renderTheme.layout = { containers: [], placements: [{ ...pasted!, nodeId: 'card', id: 'place-card' }] };
+    const root = document.createElement('div');
+    root.innerHTML = '<div data-design-id="pane" style="width: 800px"><div data-design-id="card">A</div></div>';
+    document.body.appendChild(root);
+    const stop = observeLayout(root, renderTheme, context);
+
+    expect(root.querySelector<HTMLElement>('[data-design-id="card"]')!.style.width).toBe('200px');
+
+    stop();
+    root.remove();
+    controller.dispose();
+  });
+
   it('copyNodes strips node ids, context and placement ids and keeps layout data', () => {
     const placement = createPlacement(context, 'card-a', 'Card A', {
       mode: 'absolute', x: 2500, y: 1200, width: 5000, height: 3000, margin: '8px', zIndex: 3, hidden: true, locked: true,

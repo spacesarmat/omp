@@ -94,6 +94,24 @@ export function placementSizeBasis(placement: LayoutPlacement | undefined, paren
   return typeof basis === 'number' && basis > 0 ? basis : parentSize;
 }
 
+// Converts a pixel size to fixed-point units exactly like rectSizeToUnits, and advances a
+// stale basis when the requested size exceeds it while the current parent could hold it:
+// after the parent grows from 200 to 400, entering 300px must stay reachable instead of
+// clamping to the 200px capture. The basis only ever moves to the edit-time parent size, so
+// a later shrink below that size still cannot collapse the node.
+export function placementSizeConversion(
+  px: number,
+  placement: LayoutPlacement | undefined,
+  parentSize: number,
+  axis: 'width' | 'height',
+): { units: number; advancedBasis?: number } {
+  const basis = placementSizeBasis(placement, parentSize, axis);
+  if (px > basis && parentSize > basis) {
+    return { units: rectSizeToUnits(px, parentSize), advancedBasis: parentSize };
+  }
+  return { units: rectSizeToUnits(px, basis) };
+}
+
 function placementRecordId(nodeId: string): string {
   return `${PLACEMENT_ID_PREFIX}${nodeId}`.slice(0, PLACEMENT_ID_LIMIT - PLACEMENT_ID_SUFFIX_ROOM);
 }

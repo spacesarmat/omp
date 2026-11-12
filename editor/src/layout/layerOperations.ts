@@ -131,6 +131,10 @@ export interface LayoutClipboardNode {
   anchor: LayoutAnchor;
   width: number | 'auto';
   height: number | 'auto';
+  // The captured size basis travels with the node: a pasted clone keeps resolving its percent
+  // sizes against the original parent instead of whatever parent receives it.
+  basisWidth?: number;
+  basisHeight?: number;
   margin?: string;
   zIndex: number;
   hidden: boolean;
@@ -156,6 +160,8 @@ export function copyNodes(placements: LayoutPlacement[], resolveHtml?: (nodeId: 
         anchor: placement.anchor,
         width: placement.width,
         height: placement.height,
+        ...(placement.basisWidth !== undefined ? { basisWidth: placement.basisWidth } : {}),
+        ...(placement.basisHeight !== undefined ? { basisHeight: placement.basisHeight } : {}),
         ...(placement.margin !== undefined ? { margin: placement.margin } : {}),
         zIndex: placement.zIndex,
         hidden: placement.hidden,
@@ -185,6 +191,9 @@ function validateClipboardNode(raw: unknown, index: number, errors: string[]): v
   if (!isLayoutZIndexValue(node.zIndex)) errors.push(`${prefix}: zIndex должен быть целым от 0 до ${LAYOUT_ZINDEX_LIMIT}`);
   for (const key of ['width', 'height'] as const) {
     if (!isLayoutSizeValue(node[key])) errors.push(`${prefix}: размер должен быть целым от 0 до ${LAYOUT_GEOMETRY_LIMIT} или auto`);
+  }
+  for (const key of ['basisWidth', 'basisHeight'] as const) {
+    if (node[key] !== undefined && !isLayoutGeometryValue(node[key])) errors.push(`${prefix}: basis должен быть целым от 0 до ${LAYOUT_GEOMETRY_LIMIT}`);
   }
   for (const key of ['hidden', 'locked'] as const) {
     if (typeof node[key] !== 'boolean') errors.push(`${prefix}: флаг ${key} должен быть булевым`);
