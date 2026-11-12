@@ -72,7 +72,7 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
               </button>
             </>
           ) : (
-            <button type="button" class="m-btn m-btn-secondary m-btn-sm m-sub-check" data-check-sub disabled={busy} onClick={() => void checkSubNow(id)}>
+            <button type="button" class="m-btn m-btn-primary m-btn-sm m-sub-check" data-check-sub disabled={busy} onClick={() => void checkSubNow(id)}>
               {busy ? t('news.checking') : t('news.checkNow')}
             </button>
           )}

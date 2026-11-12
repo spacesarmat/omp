@@ -158,6 +158,15 @@ describe('SubSheet', () => {
     expect(toast.value).toBe('Подписка сохранена');
   });
 
+  it('the seed stepper changes the minimum', () => {
+    sheet();
+    click(el.querySelector('[aria-label="Больше сидов"]')!);
+    click(el.querySelector('[aria-label="Больше сидов"]')!);
+    expect((el.querySelector('#m-sub-seeds') as HTMLInputElement).value).toBe('2');
+    click(el.querySelector('[aria-label="Меньше сидов"]')!);
+    expect((el.querySelector('#m-sub-seeds') as HTMLInputElement).value).toBe('1');
+  });
+
   it('«Только лучшее качество»: off for a new subscription, saved when on, cleared when switched off', async () => {
     const better = () => el.querySelector('[role=switch][aria-label="Только лучшее качество"]') as HTMLElement;
     sheet();

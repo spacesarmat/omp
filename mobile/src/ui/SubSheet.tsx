@@ -172,6 +172,10 @@ export function SubSheet(p: {
           <div class="m-field">
             <label for="m-sub-seeds">{t('monitor.sub.seeds')}</label>
             <TextField id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" placeholder={t('monitor.sub.anySeeds')} value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
+            <span class="m-seed-step">
+              <button type="button" aria-label={t('monitor.sub.seedsLess')} onClick={() => setSeeds((v) => { const n = parseInt(v || '0', 10) || 0; return n <= 1 ? '' : String(n - 1); })}>-</button>
+              <button type="button" aria-label={t('monitor.sub.seedsMore')} onClick={() => setSeeds((v) => String((parseInt(v || '0', 10) || 0) + 1))}>+</button>
+            </span>
           </div>
           <div class="m-field">
             <label for="m-sub-size">{t('monitor.sub.size')}</label>
