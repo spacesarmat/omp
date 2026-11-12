@@ -80,6 +80,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   setWatchActions(null);
   setCatalogClientForTests(null);
+  vi.useRealTimers();
 });
 
 describe('parsers', () => {
@@ -338,6 +339,8 @@ describe('SubFindings', () => {
       airing: true,
       nextEpisode: { season: 1, episode: 9, airDate: '2026-11-20' },
     } as CatalogCard;
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
     const empty = () => Promise.resolve({ items: [], pages: 0 });
     setCatalogClientForTests({ novelties: empty, discover: empty, search: empty, card: () => Promise.resolve(show) });
     const s = addSubscription({
