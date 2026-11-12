@@ -201,6 +201,29 @@ function layoutEntryInScope(entry, scope) {
   return entry.parentId === scope.nodeId;
 }
 
+// Style overrides name what they style: a page scope owns every override carrying that
+// screenId, a component scope owns the overrides whose elementId is one of the layout node ids
+// covered by the scope (the node itself, its containers and their order members). Overrides
+// outside the scope always stay with the base theme.
+function overrideInScope(override, scope, scopedNodeIds) {
+  if (scope.kind === 'page') return override.screenId === scope.screenId;
+  if (scope.kind === 'component') return override.elementId != null && scopedNodeIds.has(override.elementId);
+  return false;
+}
+
+function scopedNodeIds(layout, scope) {
+  const ids = new Set();
+  if (scope.kind !== 'component') return ids;
+  const source = layout ?? emptyLayout();
+  const inScope = (entry) => layoutEntryInScope(entry, scope);
+  for (const entry of [...source.containers, ...source.placements, ...(source.clones ?? [])]) {
+    if (!inScope(entry)) continue;
+    ids.add(entry.nodeId);
+    if (Array.isArray(entry.order)) for (const id of entry.order) ids.add(id);
+  }
+  return ids;
+}
+
 function emptyLayout() {
   return { containers: [], placements: [] };
 }
@@ -249,13 +272,22 @@ export function createExportPlan(input, scopeInput) {
     const designIssues = checkTheme(draft.theme, contexts());
     if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
   }
+  const targets = targetsForScope(scope, theme);
   const files = scope.kind === 'all'
     ? outputFiles({ ...draft, theme })
     : [
+        // A scoped export ships the selected style edits too: the theme file merges the
+        // in-scope overrides with the base theme and the generated CSS for the scope targets
+        // is rewritten from the merged theme, so the exported page/component renders with
+        // its actual colors.
         { path: safePath('design/generated/layout.ts'), content: generateLayoutModule(theme.layout) },
         { path: safePath(`design/themes/${draft.theme.id}.json`), content: json(theme) },
-      ];
-  return { scope, targets: targetsForScope(scope, theme), draft, theme, files };
+        ...targets.map((target) => ({
+          path: safePath(`design/generated/${target}.css`),
+          content: generateThemeCss(theme, target),
+        })),
+      ].sort((a, b) => a.path.localeCompare(b.path));
+  return { scope, targets, draft, theme, files };
 }
 
 async function exportContents(root, plan) {
@@ -266,6 +298,7 @@ async function exportContents(root, plan) {
   }
   const themeFile = plan.files.find((file) => file.path.startsWith('design/themes/'));
   const layoutFile = plan.files.find((file) => file.path === 'design/generated/layout.ts');
+  const cssFiles = plan.files.filter((file) => file.path.startsWith('design/generated/') && file.path.endsWith('.css'));
   let baseTheme = null;
   try {
     baseTheme = parseThemeDocument(JSON.parse(await readFile(join(root, themeFile.path), 'utf8')));
@@ -296,11 +329,17 @@ async function exportContents(root, plan) {
       ? { containers: scopedLayout.containers, placements: scopedLayout.placements, clones: scopedLayout.clones }
       : { containers: scopedLayout.containers, placements: scopedLayout.placements };
   }
+  const nodeIds = scopedNodeIds(plan.draft.theme.layout, plan.scope);
+  const inScopeOverride = (override) => overrideInScope(override, plan.scope, nodeIds);
+  const scopedOverrides = plan.theme.overrides.filter(inScopeOverride);
+  const mergedOverrides = baseTheme
+    ? [...baseTheme.overrides.filter((entry) => !inScopeOverride(entry)), ...scopedOverrides]
+    : scopedOverrides;
   let mergedTheme;
   try {
     mergedTheme = parseThemeDocument(baseTheme
-      ? { ...baseTheme, baseCommit: plan.draft.baseCommit, layout: mergedLayout }
-      : { ...plan.theme, layout: mergedLayout });
+      ? { ...baseTheme, baseCommit: plan.draft.baseCommit, layout: mergedLayout, overrides: mergedOverrides }
+      : { ...plan.theme, layout: mergedLayout, overrides: mergedOverrides });
   } catch {
     throw new ExportError('INVALID_EXPORT_BASE', 409);
   }
@@ -308,6 +347,10 @@ async function exportContents(root, plan) {
   if (designIssues.length) throw new ExportError('DESIGN_ISSUES', 422, designIssues);
   contents.set(themeFile.path, json(mergedTheme));
   contents.set(layoutFile.path, generateLayoutModule(mergedTheme.layout));
+  for (const file of cssFiles) {
+    const target = file.path.slice('design/generated/'.length, -'.css'.length);
+    contents.set(file.path, generateThemeCss(mergedTheme, target));
+  }
   return contents;
 }
 

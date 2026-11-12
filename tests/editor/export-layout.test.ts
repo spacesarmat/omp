@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ExportError, createExportDiff, createExportPlan, exportDraft } from '../../editor/export.mjs';
 import { createDefaultDraft } from '../../editor/shared/draft';
+import { buildOverride, type OverrideIdentity } from '../../design/catalog';
 import { checkGeneratedThemes } from '../../design/generate';
 import {
   DESIGN_TARGETS,
@@ -63,6 +64,31 @@ function clone(nodeId: string, screenId: string, html: string, parentId = 'panel
   return { id: `clone-${nodeId}`, target, screenId, format: 'landscape', nodeId, parentId, label: nodeId, html };
 }
 
+function styleIdentity(patch: Partial<OverrideIdentity> = {}): OverrideIdentity {
+  return {
+    scope: 'element',
+    target: 'desktop-windows',
+    screenId: 'settings',
+    elementId: 'sidebar',
+    format: 'landscape',
+    state: 'default',
+    ...patch,
+  };
+}
+
+const SETTINGS_FILES = [
+  'design/generated/android-phone.css',
+  'design/generated/android-tv.css',
+  'design/generated/desktop-linux.css',
+  'design/generated/desktop-macos.css',
+  'design/generated/desktop-windows.css',
+  'design/generated/layout.ts',
+  'design/generated/lg-webos.css',
+  'design/themes/default.json',
+];
+
+const GENERATED_SETTINGS_FILES = SETTINGS_FILES.filter((path) => path.startsWith('design/generated/'));
+
 async function readProductionLayout(root: string): Promise<LayoutDocument> {
   const source = await readFile(join(root, 'design', 'generated', 'layout.ts'), 'utf8');
   const match = source.match(/= (\{[\s\S]*\});\n?$/);
@@ -115,9 +141,19 @@ describe('scoped layout export', () => {
 
     const plan = createExportPlan(second, { kind: 'page', screenId: 'settings' });
     expect(plan.targets).toEqual([...DESIGN_TARGETS]);
-    expect(plan.files.map((file) => file.path)).toEqual(['design/generated/layout.ts', 'design/themes/default.json']);
+    expect(plan.files.map((file) => file.path)).toEqual(SETTINGS_FILES);
     const diff = await createExportDiff(root, plan);
-    expect(diff.files.map((file) => file.action)).toEqual(['update', 'update']);
+    // The layout and theme carry the page edit; css without style changes stays untouched.
+    expect(diff.files.map((file) => file.action)).toEqual([
+      'unchanged',
+      'unchanged',
+      'unchanged',
+      'unchanged',
+      'unchanged',
+      'update',
+      'unchanged',
+      'update',
+    ]);
 
     await exportDraft({ root, draft: second, scope: { kind: 'page', screenId: 'settings' } });
     const shipped = await readProductionLayout(root);
@@ -149,8 +185,13 @@ describe('scoped layout export', () => {
     };
     const plan = createExportPlan(second, { kind: 'component', nodeId: 'card-a' });
     expect(plan.targets).toEqual(['android-phone']);
+    expect(plan.files.map((file) => file.path)).toEqual([
+      'design/generated/android-phone.css',
+      'design/generated/layout.ts',
+      'design/themes/default.json',
+    ]);
     const diff = await createExportDiff(root, plan);
-    expect(diff.files.map((file) => file.action)).toEqual(['update', 'update']);
+    expect(diff.files.map((file) => file.action)).toEqual(['unchanged', 'update', 'update']);
 
     await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
     const shipped = await readProductionLayout(root);
@@ -221,7 +262,7 @@ describe('scoped layout export', () => {
     await exportDraft({ root, draft: second, scope: { kind: 'page', screenId: 'settings' } });
     const repeat = createExportPlan(second, { kind: 'page', screenId: 'settings' });
     const repeatDiff = await createExportDiff(root, repeat);
-    expect(repeatDiff.files.map((file) => file.action)).toEqual(['unchanged', 'unchanged']);
+    expect(repeatDiff.files.map((file) => file.action)).toEqual(SETTINGS_FILES.map(() => 'unchanged'));
 
     await exportDraft({ root, draft: second, scope: { kind: 'page', screenId: 'settings' } });
     const full = await exportDraft({ root, draft: second });
@@ -283,7 +324,7 @@ describe('scoped layout export', () => {
     expect(shipped).toEqual({ containers: [], placements: [placement('card-a', 'settings', { x: 40 })] });
     const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
     expect(theme.layout.placements).toEqual([placement('card-a', 'settings', { x: 40 })]);
-    expect(await readdir(join(root, 'design', 'generated'))).toEqual(['layout.ts']);
+    expect([...(await readdir(join(root, 'design', 'generated')))].sort()).toEqual(GENERATED_SETTINGS_FILES.map((path) => path.slice('design/generated/'.length)));
     await expect(readFile(join(root, 'design', 'flows', 'desktop-default.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
@@ -309,5 +350,97 @@ describe('scoped layout export', () => {
     const plan = createExportPlan(draft, { kind: 'all' });
     await expect(createExportDiff(root, plan)).resolves.toBeTruthy();
     await expect(exportDraft({ root, draft, scope: { kind: 'component', nodeId: 'Bad Id' } })).rejects.toMatchObject({ code: 'INVALID_EXPORT_SCOPE' });
+  });
+});
+
+
+describe('scoped style export', () => {
+  it('ships the selected page style edits, regenerates its css and preserves unrelated overrides', async () => {
+    const { root, head } = await makeRepo();
+    const newsIdentity = styleIdentity({ screenId: 'news', elementId: 'card' });
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = { containers: [], placements: [placement('card-a', 'settings')] };
+    first.theme.overrides = [buildOverride(newsIdentity, { '--omp-color-panel': '#2A2F3A' })];
+    await exportDraft({ root, draft: first });
+
+    const foreign = join(root, 'design', 'themes', 'foreign.json');
+    await writeFile(foreign, '{"foreign":true}\n');
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = { containers: [], placements: [placement('card-a', 'settings')] };
+    second.theme.overrides = [
+      buildOverride(newsIdentity, { '--omp-color-panel': '#2A2F3A' }),
+      buildOverride(styleIdentity(), { '--omp-color-panel': '#242A38' }),
+    ];
+    const result = await exportDraft({ root, draft: second, scope: { kind: 'page', screenId: 'settings' } });
+    expect(result.targets).toEqual([...DESIGN_TARGETS]);
+
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    const byScreen = new Map((theme.overrides as Array<{ screenId?: string; tokens: Record<string, string> }>).map((entry) => [entry.screenId, entry]));
+    expect(byScreen.get('settings')?.tokens['--omp-color-panel']).toBe('#242A38');
+    expect(byScreen.get('news')?.tokens['--omp-color-panel']).toBe('#2A2F3A');
+
+    const css = await readFile(join(root, 'design', 'generated', 'desktop-windows.css'), 'utf8');
+    expect(css).toContain('#242A38');
+    expect(css).toContain('#2A2F3A');
+    expect(await readFile(foreign, 'utf8')).toBe('{"foreign":true}\n');
+    await rm(foreign);
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+    const manifest = JSON.parse(await readFile(join(root, '.omp-editor', 'exports', 'draft-1.json'), 'utf8'));
+    expect(manifest.files.map((file: { path: string }) => file.path)).toEqual(ALL_FILES);
+  });
+
+  it('ships the selected component style edits and keeps overrides outside the component', async () => {
+    const { root, head } = await makeRepo();
+    const phone = 'android-phone' as DesignTarget;
+    const layout = {
+      containers: [container('list', 'settings', ['card-a', 'card-b'], phone)],
+      placements: [
+        placement('card-a', 'settings', { x: 5 }, phone),
+        placement('card-b', 'settings', { x: 6 }, phone),
+        placement('card-c', 'news', { x: 7 }),
+      ],
+    };
+    const cardA = styleIdentity({ target: phone, elementId: 'card-a' });
+    const cardC = styleIdentity({ target: phone, screenId: 'news', elementId: 'card-c' });
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = layout;
+    first.theme.overrides = [
+      buildOverride(cardC, { '--omp-color-accent': '#2A2F3A' }),
+      buildOverride(cardA, { '--omp-color-accent': '#FFD34D' }),
+    ];
+    await exportDraft({ root, draft: first });
+
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = layout;
+    second.theme.overrides = [
+      ...first.theme.overrides,
+      buildOverride(styleIdentity({ target: phone, elementId: 'card-b' }), { '--omp-color-accent': '#FFC42E' }),
+    ];
+    await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
+
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    const byElement = new Map((theme.overrides as Array<{ elementId?: string; tokens: Record<string, string> }>).map((entry) => [entry.elementId, entry]));
+    expect(byElement.get('card-a')?.tokens['--omp-color-accent']).toBe('#FFD34D');
+    expect(byElement.get('card-b')?.tokens['--omp-color-accent']).toBe('#FFC42E');
+    expect(byElement.get('card-c')?.tokens['--omp-color-accent']).toBe('#2A2F3A');
+    const css = await readFile(join(root, 'design', 'generated', 'android-phone.css'), 'utf8');
+    expect(css).toContain('#FFD34D');
+    expect(css).toContain('#FFC42E');
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+  });
+
+  it('drops a deleted in-scope override on a repeated page export', async () => {
+    const { root, head } = await makeRepo();
+    const first = createDefaultDraft('draft-1', head);
+    first.theme.layout = { containers: [], placements: [placement('card-a', 'settings')] };
+    first.theme.overrides = [buildOverride(styleIdentity(), { '--omp-color-panel': '#242A38' })];
+    await exportDraft({ root, draft: first });
+
+    const second = createDefaultDraft('draft-1', head);
+    second.theme.layout = { containers: [], placements: [placement('card-a', 'settings')] };
+    second.theme.overrides = [];
+    await exportDraft({ root, draft: second, scope: { kind: 'page', screenId: 'settings' } });
+    const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
+    expect(theme.overrides).toEqual([]);
   });
 });

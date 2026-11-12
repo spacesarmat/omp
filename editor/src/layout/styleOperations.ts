@@ -177,14 +177,17 @@ export function deleteStylePreset(controller: DraftController, id: string): bool
   return true;
 }
 
-// Overrides never record which preset produced them, so an explicit "update usages" rewrites
-// every override that currently holds any of the preset tokens, in a single undo step.
-export function applyPresetToUsages(controller: DraftController, preset: StylePreset): number {
+// Overrides never record which preset produced them, so updating usages is always an explicit
+// choice: the caller passes the exact override ids to rewrite and one update is one undo step.
+// Overrides outside the selection keep their values even when they hold the same token names.
+export function applyPresetToUsages(controller: DraftController, preset: StylePreset, overrideIds: readonly string[]): number {
   const keys = Object.keys(preset.tokens);
-  if (!keys.length) return 0;
+  if (!keys.length || !overrideIds.length) return 0;
+  const selected = new Set(overrideIds);
   let updated = 0;
   controller.update((draft) => {
     draft.theme.overrides = draft.theme.overrides.map((entry) => {
+      if (!selected.has(entry.id)) return entry;
       const patch = keys.filter((token) => token in entry.tokens);
       if (!patch.length) return entry;
       updated += 1;

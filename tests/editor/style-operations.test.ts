@@ -228,11 +228,37 @@ describe('style presets', () => {
     saveStylePreset(controller, updated);
     // Editing the preset must not rewrite applied overrides retroactively.
     expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(identity))?.tokens).toEqual({ '--omp-color-accent': '#111111', '--omp-size-radius': '8px' });
-    const count = applyPresetToUsages(controller, updated);
+    const count = applyPresetToUsages(controller, updated, [overrideId(identity)]);
     expect(count).toBe(1);
     expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(identity))?.tokens).toEqual({ '--omp-color-accent': '#222222', '--omp-size-radius': '12px' });
     expect(controller.undo()).toBe(true);
     expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(identity))?.tokens).toEqual({ '--omp-color-accent': '#111111', '--omp-size-radius': '8px' });
+  });
+
+  it('rewrites only explicitly selected usages and leaves unrelated accent overrides unchanged in one undo step', () => {
+    controller = makeController();
+    const chosen = makeIdentity({ elementId: 'button', target: 'android-phone' });
+    const unrelated = makeIdentity({ elementId: 'content' });
+    controller.upsertOverride(buildOverride(chosen, { '--omp-color-accent': '#111111' }));
+    controller.upsertOverride(buildOverride(unrelated, { '--omp-color-accent': '#3A3F4A' }));
+    const count = applyPresetToUsages(controller, preset({ tokens: { '--omp-color-accent': '#222222' } }), [overrideId(chosen)]);
+    expect(count).toBe(1);
+    expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(chosen))?.tokens['--omp-color-accent']).toBe('#222222');
+    expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(unrelated))?.tokens['--omp-color-accent']).toBe('#3A3F4A');
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(chosen))?.tokens['--omp-color-accent']).toBe('#111111');
+    expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(unrelated))?.tokens['--omp-color-accent']).toBe('#3A3F4A');
+  });
+
+  it('is a no-op until at least one usage is selected', () => {
+    controller = makeController();
+    const identity = makeIdentity();
+    controller.upsertOverride(buildOverride(identity, { '--omp-color-accent': '#111111' }));
+    expect(applyPresetToUsages(controller, preset(), [])).toBe(0);
+    expect(controller.draft.theme.overrides.find((entry) => entry.id === overrideId(identity))?.tokens['--omp-color-accent']).toBe('#111111');
+    // The empty selection adds no undo step: one undo still removes the setup override.
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.theme.overrides).toEqual([]);
   });
 
   it('saves and upserts presets in theme.stylePresets with one undo step', () => {

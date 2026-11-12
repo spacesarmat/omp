@@ -14,6 +14,7 @@ import {
   pasteStyle,
   resetStyleProperty,
   saveStylePreset,
+  type TokenUsage,
 } from '../layout/styleOperations';
 
 export interface TokenLibraryProps {
@@ -40,11 +41,33 @@ export function TokenLibrary({ controller, identity, fields, values }: TokenLibr
   const [syncNote, setSyncNote] = useState('');
   const [presetName, setPresetName] = useState('');
   const [usageQuery, setUsageQuery] = useState('');
+  const [syncPresetId, setSyncPresetId] = useState<string | null>(null);
+  const [syncSelection, setSyncSelection] = useState<ReadonlySet<string>>(new Set());
   const allowedTokens = fields.map((field) => field.token);
   const currentOverride = controller.draft.theme.overrides.find((entry) => entry.id === overrideId(identity));
   const presets = controller.draft.theme.stylePresets ?? [];
   const trimmedQuery = usageQuery.trim();
   const usages = trimmedQuery ? findTokenUsages(controller.draft.theme, trimmedQuery) : [];
+  // Preset usages are chosen explicitly: candidates are the overrides that hold any preset
+  // token, nothing is preselected and the apply button stays disabled until the user picks
+  // at least one, so an unrelated override holding the same token name is never rewritten.
+  const syncPreset = presets.find((entry) => entry.id === syncPresetId) ?? null;
+  const syncTokens = syncPreset ? Object.keys(syncPreset.tokens) : [];
+  const syncCandidates: TokenUsage[] = syncPreset
+    ? controller.draft.theme.overrides
+        .filter((entry) => syncTokens.some((token) => token in entry.tokens))
+        .map((entry) => ({
+          kind: 'override',
+          id: entry.id,
+          scope: entry.scope,
+          target: entry.target,
+          screenId: entry.screenId,
+          elementId: entry.elementId,
+          format: entry.format,
+          state: entry.state,
+          value: entry.tokens[syncTokens.find((token) => token in entry.tokens) ?? ''] ?? '',
+        }))
+    : [];
 
   const handleCopy = () => {
     try {
@@ -98,8 +121,29 @@ export function TokenLibrary({ controller, identity, fields, values }: TokenLibr
   };
 
   const handleSyncPreset = (preset: StylePreset) => {
-    const updated = applyPresetToUsages(controller, preset);
+    setSyncPresetId(preset.id);
+    setSyncSelection(new Set());
+    setSyncNote('');
+  };
+
+  const handleSyncToggle = (id: string, checked: boolean) => {
+    const next = new Set(syncSelection);
+    if (checked) next.add(id);
+    else next.delete(id);
+    setSyncSelection(next);
+  };
+
+  const handleSyncApply = () => {
+    if (!syncPreset) return;
+    const updated = applyPresetToUsages(controller, syncPreset, [...syncSelection]);
     setSyncNote(`Обновлено overrides: ${updated}`);
+    setSyncPresetId(null);
+    setSyncSelection(new Set());
+  };
+
+  const handleSyncCancel = () => {
+    setSyncPresetId(null);
+    setSyncSelection(new Set());
   };
 
   return (
@@ -143,6 +187,23 @@ export function TokenLibrary({ controller, identity, fields, values }: TokenLibr
             <button type="button" aria-label={`Применить ${preset.name}`} onClick={() => handleApplyPreset(preset)}>Применить</button>
             <button type="button" aria-label={`Обновить использования ${preset.name}`} onClick={() => handleSyncPreset(preset)}>Обновить использования</button>
             <button type="button" aria-label={`Удалить ${preset.name}`} onClick={() => deleteStylePreset(controller, preset.id)}>Удалить</button>
+            {syncPresetId === preset.id && (
+              <div class="editor-preset-sync" data-testid="preset-sync">
+                {!syncCandidates.length && <p class="editor-muted">Использований нет</p>}
+                {syncCandidates.map((candidate) => (
+                  <label key={candidate.id} data-testid={`usage-candidate-${candidate.id}`}>
+                    <input
+                      type="checkbox"
+                      checked={syncSelection.has(candidate.id)}
+                      onChange={(event) => handleSyncToggle(candidate.id, event.currentTarget.checked)}
+                    />
+                    {usageLabel(candidate)}: {candidate.value}
+                  </label>
+                ))}
+                <button type="button" data-testid="preset-sync-apply" disabled={!syncSelection.size} onClick={handleSyncApply}>Обновить выбранные</button>
+                <button type="button" data-testid="preset-sync-cancel" onClick={handleSyncCancel}>Отмена</button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

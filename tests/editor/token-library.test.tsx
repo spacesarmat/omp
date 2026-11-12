@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { ThemeInspector } from '../../editor/src/components/ThemeInspector';
-import { buildOverride, type OverrideIdentity } from '../../design/catalog';
+import { buildOverride, overrideId, type OverrideIdentity } from '../../design/catalog';
 import { STYLE_CLIPBOARD_KEY } from '../../editor/src/layout/styleOperations';
 import { LAYOUT_CLIPBOARD_KEY } from '../../editor/src/App';
 import type { EditorClient } from '../../editor/src/client';
@@ -170,9 +170,46 @@ describe('TokenLibrary', () => {
     act(() => {
       host.querySelector<HTMLButtonElement>('[aria-label="Обновить использования Тёмный"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    const candidate = host.querySelector<HTMLInputElement>(`[data-testid="usage-candidate-${overrideId(identity)}"] input`)!;
+    expect(candidate.checked).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="preset-sync-apply"]')!.disabled).toBe(true);
+    act(() => {
+      candidate.checked = true;
+      candidate.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    click('[data-testid="preset-sync-apply"]');
     expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'button')?.tokens['--omp-color-accent']).toBe('#333333');
+    expect(host.querySelector('[data-testid="preset-sync-note"]')!.textContent).toContain('Обновлено overrides: 1');
     expect(controller.undo()).toBe(true);
     expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'button')?.tokens['--omp-color-accent']).toBe('#222222');
+  });
+
+  it('updates only the usages selected in the sync dialog and keeps the rest in one undo step', () => {
+    controller = createController();
+    const chosen: OverrideIdentity = { scope: 'element', target: 'android-phone', screenId: 'settings', elementId: 'button', format: 'landscape', state: 'default' };
+    const unrelated: OverrideIdentity = { scope: 'element', target: 'android-phone', screenId: 'settings', elementId: 'content', format: 'landscape', state: 'default' };
+    controller.upsertOverride(buildOverride(chosen, { '--omp-color-accent': '#111111' }));
+    controller.upsertOverride(buildOverride(unrelated, { '--omp-color-accent': '#3A3F4A' }));
+    controller.update((draft) => {
+      draft.theme.stylePresets = [{ id: 'preset-1', name: 'Тёмный', tokens: { '--omp-color-accent': '#333333' } }];
+      return draft;
+    });
+    mount(h(ThemeInspector, { controller, target: 'android-phone', screenId: 'settings', elementId: 'button', format: 'landscape' }));
+    change('[data-testid="scope"]', 'element');
+    act(() => {
+      host.querySelector<HTMLButtonElement>('[aria-label="Обновить использования Тёмный"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const candidate = host.querySelector<HTMLInputElement>(`[data-testid="usage-candidate-${overrideId(chosen)}"] input`)!;
+    act(() => {
+      candidate.checked = true;
+      candidate.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    click('[data-testid="preset-sync-apply"]');
+    expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'button')?.tokens['--omp-color-accent']).toBe('#333333');
+    expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'content')?.tokens['--omp-color-accent']).toBe('#3A3F4A');
+    expect(controller.undo()).toBe(true);
+    expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'button')?.tokens['--omp-color-accent']).toBe('#111111');
+    expect(controller.draft.theme.overrides.find((entry) => entry.elementId === 'content')?.tokens['--omp-color-accent']).toBe('#3A3F4A');
   });
 
   it('deletes a preset without touching overrides', () => {
