@@ -9,6 +9,10 @@ on:
         description: Release tag (vX.Y.Z) to build
         type: string
         required: true
+      publish:
+        description: Create the GitHub release, update feed and Telegram post
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       tag:
@@ -29,11 +33,14 @@ on:
       TMDB_API_KEY:
         required: true
 
+# Publish overrides contents to write. actions: read lets the test job see CI runs.
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
-  release:
+  # npm test no longer sits in front of the APK build. A commit that already passed CI on main skips it.
+  test:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -49,16 +56,12 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    # TAG is read by later steps. TMDB_API_KEY is not job-wide: npm test must not see it,
-    # or Vite bakes the secret into the built-in key and tests call live TMDB.
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ inputs.tag || github.ref }}
-          # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
-          submodules: recursive
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
@@ -69,10 +72,37 @@ jobs:
       - run: npm ci --prefix desktop
       - name: Tag must match package.json version
         run: test "${TAG}" = "v$(node -p "require('./package.json').version")"
+      - name: CI already passed for this commit
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          sha=$(git rev-parse HEAD)
+          json=$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$sha" --workflow ci.yml --json conclusion,event,headSha)
+          result=$(printf '%s' "$json" | node scripts/release-ci-skip.mjs "$sha")
+          printf '%s\n' "$result" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$result"
       - run: npm test
+        if: steps.ci.outputs.skip != 'true'
         env:
           BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test
           BILLING_TEST_REQUIRE_PG: '1'
+
+  # webOS ipk. Independent of the Android build.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # tsc in npm run build typechecks desktop/src
+      - run: npm ci --prefix desktop
       - name: Require the TMDB API key
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
@@ -87,18 +117,51 @@ jobs:
         run: npm run build
       - run: node scripts/package.mjs
       - run: npm run check:boot
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-ipk
+          path: build/com.spacesarmat.torrplayer_*_all.ipk
+          retention-days: 1
+          if-no-files-found: error
+
+  # Signed universal, arm64 and armv7 APKs. Same outputs as before. Runs beside tests and the webOS pack.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          # android/vendor/2160player (2160 Player's player-core, included build in android/settings.gradle)
+          submodules: recursive
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # tsc inside android:sync typechecks desktop/src
+      - run: npm ci --prefix desktop
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
-          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle
+          # 17 for the player-core toolchain (jvmToolchain(17) in the submodule), 21 (last = default) for Gradle.
+          # Gradle User Home is cached by setup-gradle below, not here (the two caches conflict).
           java-version: |
             17
             21
-          # same as ci.yml - avoid cold Gradle downloads on every tag release
-          cache: gradle
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
         with:
           packages: 'platform-tools platforms;android-37.0 build-tools;36.0.0'
+      # Same Gradle User Home cache as the android CI job (dependencies, wrapper, build cache).
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: false
+      - name: Cache Gradle configuration
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            android/.gradle/configuration-cache
+            android/vendor/2160player/.gradle/configuration-cache
+          key: ${{ runner.os }}-gradle-config-release-v1-${{ hashFiles('android/**/*.gradle', 'android/**/*.gradle.kts', 'android/**/*.properties', 'android/**/*.toml', 'android/gradle/wrapper/gradle-wrapper.properties') }}
       # newer runner images leave less free disk; packaging three APKs with libvlc needs a few GB
       - name: Free disk space
         run: |
@@ -123,7 +186,8 @@ jobs:
           export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/omp.jks"
           VERSION=$(node -p "require('./package.json').version")
           npm run android:sync
-          (cd android && ./gradlew -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleRelease --stacktrace) || { df -h /; exit 1; }
+          # One assembleRelease. --build-cache and --parallel match ci.yml. Every ABI stays: universal, arm64 and armv7.
+          (cd android && ./gradlew --build-cache --parallel -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleRelease --stacktrace) || { df -h /; exit 1; }
           OUT=android/app/build/outputs/apk/release
           cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
           cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
@@ -131,6 +195,47 @@ jobs:
           rm -f "$RUNNER_TEMP/omp.jks"
           echo "APK sizes (bytes):"
           ls -l "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk" "build/OMP-${VERSION}.apk"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-apk
+          path: build/OMP-*.apk
+          retention-days: 1
+          if-no-files-found: error
+
+  # Tag pushes and workflow_call always publish. workflow_dispatch publishes only when publish is true.
+  publish:
+    needs: [test, web, android]
+    if: needs.test.result == 'success' && needs.web.result == 'success' && needs.android.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.publish)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-ipk
+          path: build
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-apk
+          path: build
+      - name: Refuse a dispatch that asked not to publish
+        env:
+          PUBLISH: ${{ github.event_name != 'workflow_dispatch' || inputs.publish }}
+        run: |
+          if [ "$PUBLISH" != "true" ]; then
+            echo "::error::publish is off"
+            exit 1
+          fi
       - name: Homebrew Channel files
         run: |
           VERSION=$(node -p "require('./package.json').version")

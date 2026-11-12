@@ -221,8 +221,8 @@ jobs:
           # Pull requests pass -PompAbi=arm64-v8a: one debug split, no universal APK.
           # Push and workflow_dispatch omit it and keep every ABI. assembleDebug is the real task (splits are not flavors).
           # --build-cache (org.gradle.caching) and --parallel (org.gradle.parallel) apply to this invocation,
-          # including the player-core build. They are not in gradle.properties: the release job packages three
-          # APKs and does not restore a build cache, so writing one there only costs disk and heap.
+          # including the player-core build. They stay off gradle.properties so a local universal package
+          # does not fill the disk. release.yml passes the same flags and caches Gradle User Home.
           # Configuration cache is org.gradle.configuration-cache in android/gradle.properties.
           # Unit-test failures only name the exception unless the Test task prints the full comparison.
           cat > "$RUNNER_TEMP/test-log.init.gradle" << 'EOF'
