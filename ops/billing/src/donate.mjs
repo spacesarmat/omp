@@ -465,7 +465,11 @@ function coversDonation(row, notice) {
     return altCovers(notice.amount, notice.currency, { method: 'stars', asset: 'XTR', payAmount: row.payAmount });
   }
   if (row.method === 'crypto') {
-    if (row.invoiceId && String(notice.operationId || '') !== 'crypto:' + row.invoiceId) return false;
+    const known = [];
+    const prior = Array.isArray(row.invoiceIds) ? row.invoiceIds : [];
+    for (let i = 0; i < prior.length; i++) if (prior[i]) known.push('crypto:' + prior[i]);
+    if (row.invoiceId) known.push('crypto:' + row.invoiceId);
+    if (known.length && known.indexOf(String(notice.operationId || '')) < 0) return false;
     return altCovers(notice.amount, notice.currency, { method: 'crypto', asset: row.asset, payAmount: row.payAmount });
   }
   return false;
@@ -735,9 +739,16 @@ export function rememberDonateInvoice(state, id, invoice, now) {
   if (!row || !invoice) return state;
   const at = now || Date.now();
   if (donateCryptoLinkLive(row, at)) return state;
+  const invoiceIds = [];
+  const prior = Array.isArray(row.invoiceIds) ? row.invoiceIds : [];
+  for (let i = 0; i < prior.length; i++) if (prior[i] && invoiceIds.indexOf(String(prior[i])) < 0) invoiceIds.push(String(prior[i]));
+  if (row.invoiceId && invoiceIds.indexOf(String(row.invoiceId)) < 0) invoiceIds.push(String(row.invoiceId));
+  const nextId = String(invoice.invoiceId || '');
+  if (nextId && invoiceIds.indexOf(nextId) < 0) invoiceIds.push(nextId);
   return putDonation(state, {
     ...row,
-    invoiceId: String(invoice.invoiceId || ''),
+    invoiceId: nextId,
+    invoiceIds,
     payUrl: invoice.botUrl || '',
     webUrl: invoice.webUrl || '',
     invoiceExpiresAt: at + CRYPTO_INVOICE_MS,

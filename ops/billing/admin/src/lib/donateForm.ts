@@ -60,6 +60,12 @@ function sameForm(a: DonateForm, b: DonateForm): boolean {
   return true;
 }
 
+/** A save that did not succeed must not clear the form, even without flash.error. */
+export function donateSaveFailed(res: { ok?: boolean; flash?: { error?: string } } | null | undefined): boolean {
+  if (!res || res.ok !== true) return true;
+  return !!(res.flash && res.flash.error);
+}
+
 /** Stay dirty when the save failed or the admin typed more while it was running. */
 export function stillDirtyAfterSave(current: DonateForm, sent: DonateForm, failed: boolean): boolean {
   if (failed) return true;

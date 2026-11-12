@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows } from '../admin/src/lib/donateForm.ts';
+import { donateSaveFailed, formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows } from '../admin/src/lib/donateForm.ts';
 
 describe('donate admin form', () => {
   it('keeps unsaved edits and takes a normalized server copy once the form is clean', () => {
@@ -17,6 +17,10 @@ describe('donate admin form', () => {
     expect(stillDirtyAfterSave(typed, sent, false)).toBe(true);
     expect(stillDirtyAfterSave(sent, sent, false)).toBe(false);
     expect(stillDirtyAfterSave(sent, sent, true)).toBe(true);
+    expect(donateSaveFailed(undefined)).toBe(true);
+    expect(donateSaveFailed({ ok: false })).toBe(true);
+    expect(donateSaveFailed({ ok: true, flash: { error: 'нет' } })).toBe(true);
+    expect(donateSaveFailed({ ok: true })).toBe(false);
   });
 
   it('drops a filter response that belongs to an older selection', () => {

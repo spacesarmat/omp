@@ -311,6 +311,27 @@ describe('donate crypto invoice', () => {
     expect(next.donations[0].invoiceId).toBe('2');
     expect(next.donations[0].payUrl).toBe('https://new');
     expect(next.donations[0].invoiceExpiresAt).toBe(NOW + 1000 + 24 * 60 * 60 * 1000);
+    expect(next.donations[0].invoiceIds).toContain('1');
+    expect(next.donations[0].invoiceIds).toContain('2');
+    const pending = {
+      ...next.donations[0],
+      status: 'pending',
+      method: 'crypto',
+      asset: 'USDT',
+      payAmount: '3.00',
+      amountRub: 300,
+      accountId: 'acc',
+    };
+    const paid = applyDonation({ donations: [pending], payments: [], subscriptions: [] }, {
+      operationId: 'crypto:1',
+      label: 'don:d1',
+      amount: '3.00',
+      currency: 'USDT',
+      now: NOW + 2000,
+    });
+    expect(paid.result.kind).toBe('donate');
+    expect(paid.result.error).toBeUndefined();
+    expect(paid.state.donations[0].status).toBe('paid');
   });
 });
 

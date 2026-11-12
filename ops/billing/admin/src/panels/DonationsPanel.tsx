@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, type PostResult } from '@/lib/api';
-import { formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows, type DonateForm } from '@/lib/donateForm';
+import { donateSaveFailed, formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows, type DonateForm } from '@/lib/donateForm';
 
 type Settings = {
   enabled?: boolean;
@@ -164,7 +164,7 @@ export function DonationsPanel({
                 rubPerStar: sent.rubPerStar,
                 notifyMin: sent.notifyMin,
               }).then((res) => {
-                setDirty(stillDirtyAfterSave(formRef.current, sent, !res || !!res.flash?.error));
+                setDirty(stillDirtyAfterSave(formRef.current, sent, donateSaveFailed(res)));
               });
             }}
           >
