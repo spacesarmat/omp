@@ -195,7 +195,7 @@ describe('NativeSession', () => {
     await s.start(opts);
     f.emit('nativePlayerState', state({ time: 950 }));
     f.emit('nativePlayerState', state({ index: 1, time: 2, duration: 900 }));
-    expect(setViewed).toHaveBeenCalledWith(H1, 1, 0);
+    expect(setViewed).toHaveBeenCalledWith(H1, 1, 1);
     expect(getLocalProgress(H1, 1)!.time).toBe(950);
     expect(s.state!.index).toBe(1);
     s.dispose();

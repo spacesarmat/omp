@@ -13,10 +13,18 @@ const FILM: Torrent = { hash: 'film', title: 'Star Trek: Strange New Worlds 2160
 const EXTRAS = tv('ext', 'Star Trek: Strange New Worlds Extras', ['Making of.mkv']);
 const LIST = [UHD, HD, EN, OTHER, FILM, EXTRAS];
 
-function reader(local: { [k: string]: StoredProgress }, server: { [k: string]: number | undefined } = {}): ProgressReader {
+function reader(
+  local: { [k: string]: StoredProgress },
+  server: { [k: string]: number | undefined | { timecode?: number; updated?: number } } = {},
+): ProgressReader {
   return {
     local: (h, i) => local[h + ':' + i] || null,
-    server: (h, i) => (Object.prototype.hasOwnProperty.call(server, h + ':' + i) ? { timecode: server[h + ':' + i] } : null),
+    server: (h, i) => {
+      if (!Object.prototype.hasOwnProperty.call(server, h + ':' + i)) return null;
+      const v = server[h + ':' + i];
+      if (v && typeof v === 'object') return v;
+      return { timecode: v };
+    },
   };
 }
 
@@ -39,8 +47,44 @@ describe('episodeProgress', () => {
     expect(p.duration).toBe(3600);
   });
 
-  it('a server viewed mark of a copy counts too', () => {
-    expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': undefined })).watched).toBe(true);
+  it('a server mark with no play time is a probe or a preload, not a watch', () => {
+    // TorrServer Stream calls SetViewed as soon as the file is opened: ffprobe and the MKV tail.
+    const probed = reader({}, { 'uhd:1': 0, 'uhd:2': undefined });
+    expect(episodeProgress(LIST, 'uhd', 1, probed)).toMatchObject({ watched: false, position: 0, ratio: 0 });
+    expect(episodeProgress(LIST, 'uhd', 2, probed)).toMatchObject({ watched: false, position: 0, ratio: 0 });
+    // a sibling's empty mark must not paint this episode either
+    expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 0 })).watched).toBe(false);
+    expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 1 })).watched).toBe(true);
+  });
+
+  it('a later replay or restart beats an old shared finish, an older pause does not', () => {
+    const older = reader(
+      { 'uhd:1': { time: 1200, duration: 3600, updated: 5 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
+    expect(episodeProgress(LIST, 'uhd', 1, older).watched).toBe(true);
+    const replay = reader(
+      { 'uhd:1': { time: 1200, duration: 3600, updated: 12 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
+    expect(episodeProgress(LIST, 'uhd', 1, replay)).toMatchObject({ watched: false, position: 1200 });
+    const restart = reader(
+      { 'uhd:1': { time: 0, duration: 1, updated: 12 } },
+      { 'hd:2': { timecode: 1, updated: 9 } },
+    );
+    expect(episodeProgress(LIST, 'uhd', 1, restart)).toMatchObject({ watched: false, position: 0 });
+  });
+
+  it('a real watch and a manual mark still count, a stored position stays a resume', () => {
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 3500, duration: 3600, updated: 5 } })).watched).toBe(true);
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 1, duration: 1, updated: 5 } })).watched).toBe(true);
+    const mid = episodeProgress(LIST, 'uhd', 1, reader({}, { 'uhd:1': 600 }));
+    expect(mid.watched).toBe(false);
+    expect(mid.position).toBe(600);
+  });
+
+  it('a server position of a copy is offered here, an empty mark is not a watch', () => {
+    expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': undefined })).watched).toBe(false);
     expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 600 })).position).toBe(600);
   });
 
@@ -60,10 +104,9 @@ describe('episodeProgress', () => {
   });
 
   it('a watched mark wins over a position unless the position is strictly newer than a known watched time', () => {
-    // the file's own server mark (no time) beats an older local position of a sibling
-    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'hd:2': { time: 1200, duration: 3600, updated: 5 } }, { 'uhd:1': undefined }))).toMatchObject({ watched: true, position: 0 });
-    // a sibling's server mark beats a local position too: it has no time to compare
-    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 1200, duration: 3600, updated: 5 } }, { 'hd:2': undefined })).watched).toBe(true);
+    // an empty server mark (a probe) does not beat a real position, on this file or on a sibling
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'hd:2': { time: 1200, duration: 3600, updated: 5 } }, { 'uhd:1': undefined }))).toMatchObject({ watched: false, position: 1200 });
+    expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 1200, duration: 3600, updated: 5 } }, { 'hd:2': undefined })).watched).toBe(false);
     // a known watched time: a strictly newer position wins, an older or equal one does not
     const newer = reader({ 'hd:2': { time: 3500, duration: 3600, updated: 5 }, 'uhd:1': { time: 1200, duration: 3600, updated: 6 } });
     expect(episodeProgress(LIST, 'hd', 2, newer)).toMatchObject({ watched: false, position: 1200 });

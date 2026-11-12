@@ -35,6 +35,15 @@ export async function acceptConfirm(): Promise<void> {
   });
 }
 
+export async function dismissConfirm(): Promise<void> {
+  const b = document.querySelector('.m-confirm-host .m-sheet-backdrop') as HTMLButtonElement | null;
+  if (!b) throw new Error('confirm dialog is not open');
+  await act(async () => {
+    b.click();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+  });
+}
+
 export async function declineConfirm(): Promise<void> {
   const b = document.querySelector('[data-confirm-cancel]') as HTMLButtonElement | null;
   if (!b) throw new Error('confirm dialog is not open');

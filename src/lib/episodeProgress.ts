@@ -23,7 +23,7 @@ export interface StoredProgress {
 /** Where the progress of one file comes from: the local record, else the server's viewed mark. */
 export interface ProgressReader {
   local(hash: string, idx: number): StoredProgress | null;
-  server(hash: string, idx: number): { timecode?: number } | null;
+  server(hash: string, idx: number): { timecode?: number; updated?: number } | null;
 }
 
 export interface EpisodeProgress {
@@ -173,26 +173,33 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
   }
   const s = r.server(c.hash, c.fileIndex);
   if (!s) return null;
-  const at = s.timecode && s.timecode >= MIN_RESUME ? s.timecode : 0;
-  return { watched: !at, position: at, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  // 0: TorrServer writes this when a file is only opened (ffprobe, MKV tail). Not a watch.
+  // 1..MIN_RESUME-1: a finish this app recorded on purpose, so another device can tell it from a probe.
+  const tc = typeof s.timecode === 'number' ? s.timecode : 0;
+  if (tc >= 1 && tc < MIN_RESUME) {
+    const updated = typeof s.updated === 'number' && isFinite(s.updated) ? s.updated : 0;
+    return { watched: true, position: 0, ratio: 1, updated: updated, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  }
+  if (tc >= MIN_RESUME) {
+    return { watched: false, position: tc, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  }
+  return null;
 }
 
 /**
  * The progress of a file counting the copies of its episode in the other releases of the series.
- * A watched record (local or a server mark) wins over a position unless that position is strictly newer than a known
- * watched time; a server mark has no time, so it always wins. Among positions the most recently updated wins (the
+ * A watched record (a real local watch or a manual mark) wins over a position unless that position is strictly newer
+ * than the watched time. A server row with no play time is ignored. Among positions the most recently updated wins (the
  * file's own on a tie). A position from another copy is kept only below the file's own known duration.
  * Nothing recorded anywhere: not watched, no position.
  */
 export function episodeProgress(list: Torrent[], hash: string, idx: number, reader: ProgressReader): EpisodeProgress {
   let watched: EpisodeProgress | null = null;
-  let untimed = false;
   let partial: EpisodeProgress | null = null;
   episodeCopies(list, hash, idx).forEach(function (c) {
     const p = own(c, reader);
     if (!p) return;
     if (p.watched) {
-      if (!p.updated) untimed = true;
       if (!watched || p.updated > watched.updated) watched = p;
     } else if (!partial || p.updated > partial.updated) {
       partial = p;
@@ -200,7 +207,8 @@ export function episodeProgress(list: Torrent[], hash: string, idx: number, read
   });
   const w = watched as EpisodeProgress | null;
   const pp = partial as EpisodeProgress | null;
-  const b = w && (untimed || !pp || pp.updated <= w.updated) ? w : pp;
+  // A shared finish has no timestamp. A later local replay or restart wins over it.
+  const b = w && (!pp || pp.updated <= w.updated) ? w : pp;
   if (!b) return { watched: false, position: 0, ratio: 0, updated: 0, duration: 0, hash: hash, fileIndex: idx };
   if (b.hash === hash && b.fileIndex === idx) return b;
   const mine = reader.local(hash, idx);

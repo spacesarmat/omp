@@ -21,8 +21,8 @@ export function saveItemProgress(
   if (!(duration > 0) || !(time >= 1)) return;
   saveProgress(hash, idx, time, duration, open);
   if (remote && c && time >= MIN_RESUME) {
-    // server: timecode < MIN_RESUME means watched, so send 0 once the file is (nearly) finished
-    const tc = !open && time / duration >= WATCHED_RATIO ? 0 : Math.floor(time);
+    // 1 marks a finish. 0 is what TorrServer writes when a file is only opened, so it cannot mean watched.
+    const tc = !open && time / duration >= WATCHED_RATIO ? 1 : Math.floor(time);
     c.setViewed(hash, idx, tc).catch(() => undefined);
   }
   if (remote) {

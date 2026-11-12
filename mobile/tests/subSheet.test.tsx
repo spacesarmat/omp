@@ -17,7 +17,7 @@ import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, 
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
-import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
+import { acceptConfirm, confirmText, declineConfirm, dismissConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 
 let el: HTMLElement;
 let mon: FakeMonitor;
@@ -150,12 +150,43 @@ describe('SubSheet', () => {
     rememberSeen(s.id, ['h:' + HASH]);
     sheet({ sub: s });
     expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Дюна');
-    expect(el.textContent).toContain('следующая проверка только запомнит');
+    expect(el.textContent).toContain('не пришлют уведомление');
     click(byText('1080p+'));
     click(byText('Сохранить'));
     expect(getSubscription(s.id)!.quality).toBe('1080');
     expect(seenKeys(s.id)).toBeNull();
     expect(toast.value).toBe('Подписка сохранена');
+  });
+
+  it('closing with unsaved changes asks to save, and the actions stay docked', async () => {
+    const s = addSubscription({ query: 'Дюна', quality: '', sources: null, notify: true })!;
+    const close = vi.fn();
+    sheet({ sub: s, onClose: close });
+    expect(el.querySelector('.m-sheet > .m-sheet-dock')).toBeTruthy();
+    click(el.querySelector('.m-sheet-backdrop'));
+    expect(confirmText()).toBe('');
+    expect(close).toHaveBeenCalledTimes(1);
+    close.mockClear();
+    sheet({ sub: s, onClose: close });
+    type('m-sub-query', 'Дюна 2');
+    click(el.querySelector('.m-sheet-backdrop'));
+    expect(confirmText()).toContain('Сохранить изменения');
+    await dismissConfirm();
+    expect(confirmText()).toBe('');
+    expect((el.querySelector('#m-sub-query') as HTMLInputElement).value).toBe('Дюна 2');
+    expect(getSubscription(s.id)!.query).toBe('Дюна');
+    expect(close).not.toHaveBeenCalled();
+    click(el.querySelector('.m-sheet-backdrop'));
+    await declineConfirm();
+    expect(getSubscription(s.id)!.query).toBe('Дюна');
+    expect(close).toHaveBeenCalledTimes(1);
+    close.mockClear();
+    sheet({ sub: s, onClose: close });
+    type('m-sub-query', 'Дюна 2');
+    click(el.querySelector('.m-sheet-backdrop'));
+    await acceptConfirm();
+    expect(getSubscription(s.id)!.query).toBe('Дюна 2');
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('the seed stepper changes the minimum', () => {
