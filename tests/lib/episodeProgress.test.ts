@@ -46,6 +46,7 @@ describe('episodeProgress', () => {
     expect(episodeProgress(LIST, 'uhd', 2, probed)).toMatchObject({ watched: false, position: 0, ratio: 0 });
     // a sibling's empty mark must not paint this episode either
     expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 0 })).watched).toBe(false);
+    expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 1 })).watched).toBe(true);
   });
 
   it('a real watch and a manual mark still count, a stored position stays a resume', () => {

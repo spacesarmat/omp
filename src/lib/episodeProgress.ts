@@ -173,11 +173,16 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
   }
   const s = r.server(c.hash, c.fileIndex);
   if (!s) return null;
-  // TorrServer writes a viewed row with no play time as soon as a file is opened
-  // (ffprobe, the MKV tail preload). That is not a watch. Only a stored position counts.
-  const at = typeof s.timecode === 'number' && s.timecode >= MIN_RESUME ? s.timecode : 0;
-  if (!at) return null;
-  return { watched: false, position: at, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  // 0: TorrServer writes this when a file is only opened (ffprobe, MKV tail). Not a watch.
+  // 1..MIN_RESUME-1: a finish this app recorded on purpose, so another device can tell it from a probe.
+  const tc = typeof s.timecode === 'number' ? s.timecode : 0;
+  if (tc >= 1 && tc < MIN_RESUME) {
+    return { watched: true, position: 0, ratio: 1, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  }
+  if (tc >= MIN_RESUME) {
+    return { watched: false, position: tc, ratio: 0, updated: 0, duration: 0, hash: c.hash, fileIndex: c.fileIndex };
+  }
+  return null;
 }
 
 /**

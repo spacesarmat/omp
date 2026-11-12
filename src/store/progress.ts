@@ -86,8 +86,10 @@ export function isWatched(hash: string, idx: number): boolean {
   const p = getLocalProgress(hash, idx);
   if (p && p.open) return false;
   if (p && p.duration > 0) return ratio(p) >= WATCHED_RATIO;
-  // A server row with no play time is written when the file is only opened. It is not a watch.
-  return false;
+  const s = serverEntry(hash, idx);
+  const tc = s && typeof s.timecode === 'number' ? s.timecode : 0;
+  // 0 is a file that was only opened. 1..MIN_RESUME-1 is a finish recorded on purpose.
+  return tc >= 1 && tc < MIN_RESUME;
 }
 
 export function resumePosition(hash: string, idx: number): number {

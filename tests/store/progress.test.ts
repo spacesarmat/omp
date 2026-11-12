@@ -32,11 +32,13 @@ describe('progress store', () => {
     expect(isWatched(H, 1)).toBe(true);
   });
   it('uses server viewed when no local data', () => {
-    serverViewed.value = [{ hash: H, file_index: 2, timecode: 0 }, { hash: H, file_index: 3, timecode: 300 }];
+    serverViewed.value = [{ hash: H, file_index: 2, timecode: 0 }, { hash: H, file_index: 3, timecode: 300 }, { hash: H, file_index: 4, timecode: 1 }];
     expect(isWatched(H, 2)).toBe(false);
     expect(isWatched(H, 3)).toBe(false);
     expect(resumePosition(H, 3)).toBe(300);
-    expect(isWatched(H, 4)).toBe(false);
+    expect(isWatched(H, 4)).toBe(true);
+    expect(resumePosition(H, 4)).toBe(0);
+    expect(isWatched(H, 5)).toBe(false);
   });
   it('marks and clears', () => {
     markWatched(H, 1);
