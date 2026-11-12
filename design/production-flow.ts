@@ -2,6 +2,7 @@ import { PRODUCTION_FLOW } from './generated/flow.ts';
 import {
   beginFlowSession,
   executeFlow,
+  executeGraphRule,
   resetFlowSession,
   updateFlowEnvironment,
   type FlowDispatcher,
@@ -43,12 +44,24 @@ export interface ProductionFlowEnvironment {
 
 // Typed event sources: each subscription reports through an existing app API (signals,
 // window events) and the runtime maps the new state to the documented flow events.
+// Playback and download carry the event explicitly: a finished playback is a stopped
+// state but a distinct event.
 export interface ProductionFlowPublishers {
   subscribeServer?(notify: (connected: boolean) => void): () => void;
   subscribeNetwork?(notify: (online: boolean) => void): () => void;
   subscribeAccount?(notify: (signedIn: boolean) => void): () => void;
-  subscribePlayback?(notify: (state: FlowPlaybackState) => void): () => void;
-  subscribeDownload?(notify: (state: FlowDownloadState) => void): () => void;
+  subscribePlayback?(notify: (update: PlaybackFlowUpdate) => void): () => void;
+  subscribeDownload?(notify: (update: DownloadFlowUpdate) => void): () => void;
+}
+
+export interface PlaybackFlowUpdate {
+  state: FlowPlaybackState;
+  event: 'playback.started' | 'playback.paused' | 'playback.stopped' | 'playback.finished' | null;
+}
+
+export interface DownloadFlowUpdate {
+  state: FlowDownloadState;
+  event: 'download.started' | 'download.completed' | 'download.failed' | null;
 }
 
 export interface ProductionFlowOptions {
@@ -118,15 +131,18 @@ function environmentOf(options: ProductionFlowOptions) {
 // so production behavior matches the editor preview and debugger for the same document.
 // DOM-less events (screen/server/network/account/playback/download) are dispatched per rule:
 // the event carries the rule elementId exactly like the editor debugger builds its events.
+// Each matching rule executes exactly once - one published event never runs the first
+// matching rule twice - and rules without steps or a graph never run for non-click events.
 function dispatchForRules(flow: FlowDocument, options: ProductionFlowOptions, type: FlowEventType, screenId: string): void {
   for (const rule of flow.rules) {
     if (rule.event !== type) continue;
     if (rule.screenId !== '*' && rule.screenId !== screenId) continue;
-    executeFlow(flow, {
+    if (!(rule.graph || (rule.steps && rule.steps.length))) continue;
+    executeGraphRule(rule, {
       type,
       screenId,
       elementId: rule.elementId === '*' ? WILDCARD_EVENT_ELEMENT : rule.elementId,
-    }, options.dispatcher);
+    }, options.dispatcher, flow.variables ?? []);
   }
 }
 
@@ -192,21 +208,24 @@ export function activateProductionFlow(root: HTMLElement, flow: FlowDocument, op
     });
   };
 
+  const watchUpdates = <S extends FlowPlaybackState | FlowDownloadState>(
+    subscribe: ((notify: (update: { state: S; event: FlowEventType | null }) => void) => () => void) | undefined,
+    key: 'playbackState' | 'downloadState',
+  ): (() => void) | undefined => {
+    if (!subscribe) return undefined;
+    return subscribe((update) => {
+      published = { ...published, [key]: update.state };
+      updateFlowEnvironment(sessionEnvironmentNow());
+      if (update.event) dispatchForRules(flow, options, update.event, screen);
+    });
+  };
+
   const unsubscribers = [
     watch(options.publishers?.subscribeServer, 'serverConnected', [['server.connected', true], ['server.disconnected', false]]),
     watch(options.publishers?.subscribeNetwork, 'networkOnline', [['network.online', true], ['network.offline', false]]),
     watch(options.publishers?.subscribeAccount, 'accountSignedIn', [['account.signed-in', true], ['account.signed-out', false]]),
-    watch(options.publishers?.subscribePlayback, 'playbackState', [
-      ['playback.started', 'playing'],
-      ['playback.paused', 'paused'],
-      ['playback.stopped', 'stopped'],
-      ['playback.finished', 'stopped'],
-    ]),
-    watch(options.publishers?.subscribeDownload, 'downloadState', [
-      ['download.started', 'active'],
-      ['download.completed', 'completed'],
-      ['download.failed', 'failed'],
-    ]),
+    watchUpdates(options.publishers?.subscribePlayback, 'playbackState'),
+    watchUpdates(options.publishers?.subscribeDownload, 'downloadState'),
   ];
 
   for (const rule of flow.rules) {

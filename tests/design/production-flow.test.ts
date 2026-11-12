@@ -375,6 +375,27 @@ describe('installProductionFlow', () => {
     expect(nativeCalls).toEqual(['plain']);
   });
 
+  it('executes duplicate-trigger graph rules once each (single-event policy)', () => {
+    generated.flow.rules = [
+      eventRule('dup-first', 'status', 'server.connected', 'first ran'),
+      eventRule('dup-second', 'status', 'server.connected', 'second ran'),
+    ];
+    const spy = dispatcherSpy();
+    let notifyServer: ((connected: boolean) => void) | undefined;
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    installProductionFlow(root, optionsFor(spy, {
+      publishers: {
+        subscribeServer: (notify) => {
+          notifyServer = notify;
+          return () => undefined;
+        },
+      },
+    }));
+    notifyServer?.(true);
+    expect(spy.calls).toEqual(['toast:first ran', 'toast:second ran']);
+  });
+
   it('activateProductionFlow drives the same runtime for preview harnesses', () => {
     const document_ = flowDoc([rule({ id: 'go', elementId: 'settings-continue' })]);
     const spy = dispatcherSpy();

@@ -25,6 +25,7 @@ import { setWatchContext, setWatchDeviceClass } from './viewer/watchReport';
 import { installProductionDesign } from '../design/production.ts';
 import { installProductionFlow } from '../design/production-flow.ts';
 import { createTvFlowDispatcher } from './productionFlowDispatcher';
+import { createTvFlowPublishers } from './productionFlowPublishers';
 import { currentRoute, routeStack } from './ui/nav';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
@@ -98,18 +99,7 @@ function start(): void {
     screenOf: () => currentRoute.value.name,
     subscribeScreen: (notify) => routeStack.subscribe(notify),
     environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
-    publishers: {
-      subscribeNetwork: (notify) => {
-        const update = () => notify(navigator.onLine);
-        window.addEventListener('online', update);
-        window.addEventListener('offline', update);
-        return () => {
-          window.removeEventListener('online', update);
-          window.removeEventListener('offline', update);
-        };
-      },
-      subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
-    },
+    publishers: createTvFlowPublishers(),
     dispatcher: createTvFlowDispatcher(),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });

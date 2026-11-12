@@ -101,6 +101,7 @@ export function saveBillingAccess(acc: AccessInput | null): void {
   const session = billingSession();
   if (!acc || !session) {
     saveJson(ACCESS_KEY, null);
+    notifyAccessListeners();
     return;
   }
   const row: AccessRecord = {
@@ -115,6 +116,26 @@ export function saveBillingAccess(acc: AccessInput | null): void {
   if (acc.cacheNodes === true || acc.cacheNodes === false) row.cacheNodes = acc.cacheNodes;
   if (typeof acc.monitorMax === 'number' && isFinite(acc.monitorMax) && acc.monitorMax >= 0) row.monitorMax = Math.floor(acc.monitorMax);
   saveJson(ACCESS_KEY, row);
+  notifyAccessListeners();
+}
+
+// The app's own write boundary for the /v1/me answer. Production flow publishers listen
+// here instead of polling storage; saves from another page (monitor, rpc) arrive through
+// the window 'storage' event on top.
+const accessListeners = new Set<() => void>();
+
+export function onBillingAccessChange(listener: () => void): () => void {
+  accessListeners.add(listener);
+  return () => accessListeners.delete(listener);
+}
+
+function notifyAccessListeners(): void {
+  for (const listener of accessListeners) listener();
+}
+
+/** True when the current session has a remembered /v1/me answer (the account is signed in). */
+export function billingSignedIn(): boolean {
+  return accessForSession() !== null;
 }
 
 /**

@@ -25,7 +25,7 @@
     "check:torrserver": "node scripts/torrserver-pin.mjs",
     "editor:generate": "node scripts/design-generate.mjs",
     "editor": "node editor/server.mjs",
-    "test:editor": "vitest run tests/design tests/editor tests/production-flow-dispatchers.test.ts desktop/tests/shell.test.tsx",
+    "test:editor": "vitest run tests/design tests/editor tests/production-flow-dispatchers.test.ts tests/production-flow-publishers.test.ts desktop/tests/shell.test.tsx",
     "android:sync": "npm run check:torrserver && npm run build:mobile && npx cap sync android && node scripts/strip-flatdir.mjs",
     "android:debug": "npm run android:sync && node scripts/gradle.mjs assembleDebug"
   },

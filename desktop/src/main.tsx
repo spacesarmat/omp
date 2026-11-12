@@ -6,6 +6,7 @@ import { setDesktopUpdatePlatform } from '../../src/lib/updateInfo';
 import { desktopTargetForPlatform, installProductionDesign } from '../../design/production.ts';
 import { installProductionFlow } from '../../design/production-flow.ts';
 import { createDesktopFlowDispatcher } from './productionFlowDispatcher';
+import { createPhoneFlowPublishers } from '../../mobile/src/productionFlowPublishers';
 
 async function boot(): Promise<void> {
   let platform = '';
@@ -30,17 +31,7 @@ async function boot(): Promise<void> {
     screenOf: () => currentRoute.value.name,
     subscribeScreen: (notify) => routeStack.subscribe(notify),
     environment: () => ({ networkOnline: navigator.onLine }),
-    publishers: {
-      subscribeNetwork: (notify) => {
-        const update = () => notify(navigator.onLine);
-        window.addEventListener('online', update);
-        window.addEventListener('offline', update);
-        return () => {
-          window.removeEventListener('online', update);
-          window.removeEventListener('offline', update);
-        };
-      },
-    },
+    publishers: createPhoneFlowPublishers(),
     dispatcher: createDesktopFlowDispatcher(),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });

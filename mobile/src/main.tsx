@@ -33,6 +33,7 @@ import { expectBetaGate } from '../../src/store/updates';
 import { installProductionDesign } from '../../design/production.ts';
 import { installProductionFlow } from '../../design/production-flow.ts';
 import { createPhoneFlowDispatcher } from './productionFlowDispatcher';
+import { createPhoneFlowPublishers } from './productionFlowPublishers';
 import { currentRoute, routeStack } from './nav';
 
 installCleartextSync(
@@ -158,18 +159,7 @@ if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
     screenOf: () => currentRoute.value.name,
     subscribeScreen: (notify) => routeStack.subscribe(notify),
     environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
-    publishers: {
-      subscribeNetwork: (notify) => {
-        const update = () => notify(navigator.onLine);
-        window.addEventListener('online', update);
-        window.addEventListener('offline', update);
-        return () => {
-          window.removeEventListener('online', update);
-          window.removeEventListener('offline', update);
-        };
-      },
-      subscribeServer: (notify) => activeServer.subscribe(() => notify(Boolean(activeServer.value))),
-    },
+    publishers: createPhoneFlowPublishers(),
     dispatcher: createPhoneFlowDispatcher({ openUrl: (url) => window.open(url, '_system') }),
   });
   window.addEventListener('pagehide', stopProductionFlow, { once: true });

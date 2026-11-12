@@ -2,14 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectServerMock = vi.hoisted(() => vi.fn(async () => ({ ok: true as const, server: { id: 's1' }, version: '1' })));
 const sendCmdMock = vi.hoisted(() => vi.fn());
+const watchOnPhoneMock = vi.hoisted(() => vi.fn(async (_c: unknown, _t: unknown, _w: unknown) => ({})));
+const searchAllMock = vi.hoisted(() => vi.fn((_query: string, _options: unknown) => ({ results: () => [], pending: () => [] })));
+const buildTorrentQueueMock = vi.hoisted(() => vi.fn((_c: unknown, _t: unknown, _files: unknown) => [{ url: 'u', title: 't', hash: 'h', fileIndex: 0 }]));
 
 vi.mock('../mobile/src/connect/connectServer', () => ({ connectServer: connectServerMock }));
 vi.mock('../mobile/src/tv/playerLink', async () => {
   const { signal } = await import('@preact/signals');
   return { nowPlaying: signal(null as import('../src/phone/protocol').PlayerState | null), sendCmd: sendCmdMock };
 });
+vi.mock('../mobile/src/watch', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../mobile/src/watch')>();
+  return { ...actual, watchOnPhone: watchOnPhoneMock };
+});
+vi.mock('../src/sources/search', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/sources/search')>();
+  return { ...actual, searchAll: searchAllMock };
+});
+vi.mock('../src/player/queue', () => ({ buildTorrentQueue: buildTorrentQueueMock }));
 
 import { nowPlaying } from '../mobile/src/tv/playerLink';
+import { torrents } from '../src/store/library';
+import type { Torrent } from '../src/api/types';
 
 import { createTvFlowDispatcher } from '../src/productionFlowDispatcher';
 import { createPhoneFlowDispatcher } from '../mobile/src/productionFlowDispatcher';
@@ -40,8 +54,12 @@ beforeEach(() => {
   servers.value = [];
   activeServerId.value = null;
   nowPlaying.value = null;
+  torrents.value = [];
   connectServerMock.mockClear();
   sendCmdMock.mockClear();
+  watchOnPhoneMock.mockClear();
+  searchAllMock.mockClear();
+  buildTorrentQueueMock.mockClear();
   tvStack.value = [{ name: 'connect' }];
   phoneStack.value = [{ name: 'connect' }];
   vi.restoreAllMocks();
@@ -81,22 +99,50 @@ describe('tv flow dispatcher', () => {
     expect(connectServerMock).toHaveBeenCalledWith({ url: server.url });
   });
 
-  it('reports documented errors for player-owned and context-free actions', () => {
+  it('reports documented errors for player-owned and append-only actions', () => {
     const dispatcher = createTvFlowDispatcher();
     for (const call of [
       () => dispatcher.playbackPlayPause(),
-      () => dispatcher.playbackStop(),
       () => dispatcher.playbackNextEpisode(),
       () => dispatcher.queueAdd(),
-      () => dispatcher.queueReplace(),
-      () => dispatcher.sourceRetry(),
-      () => dispatcher.sourceNext(),
     ]) {
       const outcome = call();
       expect(outcome.ok).toBe(false);
       expect(outcome.error).toContain('tv');
     }
     expect(sendCmdMock).not.toHaveBeenCalled();
+  });
+
+  it('stops playback by leaving the player route', () => {
+    const dispatcher = createTvFlowDispatcher();
+    expect(dispatcher.playbackStop()).toMatchObject({ ok: false, error: expect.stringContaining('player screen') });
+    tvStack.value = [{ name: 'library' }, { name: 'player', queue: [], index: 0 }];
+    expect(dispatcher.playbackStop()).toEqual({ ok: true });
+    expect(tvRoute.value.name).toBe('library');
+  });
+
+  it('replaces the queue from the active torrent screen', () => {
+    const dispatcher = createTvFlowDispatcher();
+    expect(dispatcher.queueReplace()).toMatchObject({ ok: false, error: expect.stringContaining('torrent screen') });
+    torrents.value = [{ hash: 'abc', title: 'T', stat: 5, stat_string: 'Done', torrent_size: 10, loaded_size: 10, file_stats: [{ id: 1, path: '/T.mkv', length: 5 }] }];
+    tvStack.value = [{ name: 'library' }, { name: 'torrent', hash: 'abc' }];
+    addServer({ url: 'http://192.168.1.9:8090' });
+    activeServerId.value = servers.value[0].id;
+    expect(dispatcher.queueReplace()).toEqual({ ok: true });
+    expect(buildTorrentQueueMock).toHaveBeenCalledOnce();
+    expect(tvRoute.value.name).toBe('player');
+  });
+
+  it('retries the search and rotates to the next enabled source', () => {
+    const dispatcher = createTvFlowDispatcher({ sourceContext: () => ({}) as never });
+    expect(dispatcher.sourceRetry()).toMatchObject({ ok: false, error: expect.stringContaining('query') });
+    tvStack.value = [{ name: 'library' }, { name: 'add', query: 'terminator' }];
+    expect(dispatcher.sourceRetry()).toEqual({ ok: true });
+    expect(searchAllMock).toHaveBeenLastCalledWith('terminator', expect.objectContaining({ ctx: expect.anything() }));
+    const first = searchAllMock.mock.calls.length;
+    expect(dispatcher.sourceNext()).toEqual({ ok: true });
+    expect(searchAllMock).toHaveBeenCalledTimes(first + 1);
+    expect(searchAllMock.mock.calls[first][1]).toHaveProperty('sources');
   });
 });
 
@@ -139,14 +185,47 @@ describe('phone flow dispatcher', () => {
     expect(sendCmdMock).toHaveBeenLastCalledWith({ type: 'next' });
   });
 
+  it('ends playback with the player end-of-item semantics (pause, seek to end)', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    expect(dispatcher.playbackStop()).toMatchObject({ ok: false, error: expect.stringContaining('no active playback') });
+    nowPlaying.value = playing({ duration: 100, time: 10 });
+    expect(dispatcher.playbackStop()).toEqual({ ok: true });
+    expect(sendCmdMock).toHaveBeenCalledWith({ type: 'pause' });
+    expect(sendCmdMock).toHaveBeenCalledWith({ type: 'seek', t: 100 });
+  });
+
+  it('replaces the queue with the first unwatched file of the active torrent', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    expect(dispatcher.queueReplace()).toMatchObject({ ok: false, error: expect.stringContaining('torrent screen') });
+    torrents.value = [{ hash: 'abc', title: 'T', stat: 0, torrent_size: 100, loaded_size: 10, file_stats: [{ id: 1, path: '/T/E01.mkv', length: 5 }, { id: 2, path: '/T/E02.mkv', length: 5 }] }];
+    phoneStack.value = [{ name: 'library' }, { name: 'torrent', hash: 'abc' }];
+    addServer({ url: 'http://192.168.1.7:8090' });
+    activeServerId.value = servers.value[0].id;
+    expect(dispatcher.queueReplace()).toEqual({ ok: true });
+    expect(watchOnPhoneMock).toHaveBeenCalledOnce();
+    const [, torrent, watch] = watchOnPhoneMock.mock.calls[0] as [unknown, { hash: string }, { hash: string; file: { id: number }; title: string }];
+    expect(torrent.hash).toBe('abc');
+    expect(watch.hash).toBe('abc');
+    expect(watch.file.id).toBe(1);
+    expect(watch.title).toBe('E01.mkv');
+  });
+
+  it('retries the search query and rotates to the next enabled source', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn(), sourceContext: () => ({}) as never });
+    expect(dispatcher.sourceRetry()).toMatchObject({ ok: false, error: expect.stringContaining('query') });
+    phoneStack.value = [{ name: 'library' }, { name: 'add', query: 'matrix' }];
+    expect(dispatcher.sourceRetry()).toEqual({ ok: true });
+    expect(searchAllMock).toHaveBeenLastCalledWith('matrix', expect.objectContaining({ ctx: expect.anything() }));
+    const first = searchAllMock.mock.calls.length;
+    expect(dispatcher.sourceNext()).toEqual({ ok: true });
+    expect(searchAllMock).toHaveBeenCalledTimes(first + 1);
+    expect(searchAllMock.mock.calls[first][1]).toHaveProperty('sources');
+  });
+
   it('reports documented errors for actions the phone cannot perform', () => {
     const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
     for (const call of [
-      () => dispatcher.playbackStop(),
       () => dispatcher.queueAdd(),
-      () => dispatcher.queueReplace(),
-      () => dispatcher.sourceRetry(),
-      () => dispatcher.sourceNext(),
     ]) {
       const outcome = call();
       expect(outcome.ok).toBe(false);
