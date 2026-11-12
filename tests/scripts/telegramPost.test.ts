@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // @ts-ignore
 import { spawnSync } from 'node:child_process';
-import { postRelease, replacePhoto, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
+import { postNotice, postRelease, replacePhoto, ALBUM_MAX, BUTTONS_TEXT } from '../../scripts/telegram-post.mjs';
 
 const TOKEN = '123:SECRET-TOKEN';
 
@@ -49,6 +49,25 @@ function fakeFetch(calls: Call[], fail: (method: string, form: FormData) => Resp
   };
 }
 const names = (calls: Call[]) => calls.map((c) => c.method + (c.method === 'sendDocument' ? ':' + (c.form.get('document') as File).name : ''));
+
+describe('postNotice', () => {
+  it('sends one short message and does not pin', async () => {
+    const calls: Call[] = [];
+    await postNotice({
+      text: 'Обновлен TorrServer до MatriX.9',
+      tag: 'v0.30.1-beta.6',
+      token: TOKEN,
+      chat: '@c',
+      fetch: fakeFetch(calls) as any,
+      log: () => {},
+    });
+    expect(calls.map((c) => c.method)).toEqual(['sendMessage']);
+    const text = String(calls[0].form.get('text'));
+    expect(text).toContain('Обновлен TorrServer до MatriX.9');
+    expect(text).toContain('OMP 0.30.1-beta.6');
+    expect(text).toContain('https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.6');
+  });
+});
 
 describe('postRelease', () => {
   it('posts only the photo with the caption and the buttons: no files, no links text, even with builds in build/', async () => {
