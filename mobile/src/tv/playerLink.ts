@@ -4,6 +4,8 @@ import { native } from '../platform/native';
 import { sessionIp, tvState, foregroundAppId, launchOnTv, attachOnTv, tvKind } from './tvClient';
 import type { TvKind } from './tvStore';
 import { sanitizeMessage, STALE_MS, GONE_MS, type PlayerState, type Cmd } from '../../../src/phone/protocol';
+import { titleMarkKind } from '../../../src/player/chapters';
+import { loadJson } from '../../../src/store/storage';
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -130,9 +132,11 @@ function onBody(body: string): void {
   lastSeen.value = deps.now();
   tick.value++;
   syncTicker();
+  applyAutoSkip();
 }
 
 function clearLink(): void {
+  skippedMark = '';
   nowPlaying.value = null;
   lastSeen.value = 0;
   launchedAt.value = 0;
@@ -218,6 +222,29 @@ function optimisticFields(s: PlayerState, c: DistributiveOmit<Cmd, 'id'>): { pau
     default:
       return null;
   }
+}
+
+const SKIP_KEY = 'tsp.nowSkipMarks';
+let skippedMark = '';
+
+/** Skips a recap or credits chapter while the saved switch is on. Runs from the link, not only the open screen. */
+export function applyAutoSkip(): void {
+  const s = nowPlaying.value;
+  if (!s || loadJson<unknown>(SKIP_KEY, false, (v) => v === true) !== true) return;
+  if (statusAt(deps.now()) !== 'live') return;
+  if (!s.chapters || s.chapter === undefined || s.chapter < 0) return;
+  const ch = s.chapters[s.chapter];
+  const kind = ch ? titleMarkKind(ch.title) : '';
+  if (kind !== 'recap' && kind !== 'credits') {
+    skippedMark = '';
+    return;
+  }
+  const token = s.hash + ':' + s.file + ':' + s.chapter;
+  if (skippedMark === token) return;
+  skippedMark = token;
+  if (s.chapter + 1 < s.chapters.length) sendCmd({ type: 'chapter', i: s.chapter + 1 });
+  else if (s.next) sendCmd({ type: 'next' });
+  else if (s.duration > 0) sendCmd({ type: 'seek', t: s.duration });
 }
 
 /** Queues a command for the TV; does nothing unless the link is live. */

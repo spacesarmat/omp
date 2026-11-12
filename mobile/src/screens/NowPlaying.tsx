@@ -4,10 +4,10 @@ import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
 import { goBack, navigate, switchTab } from '../nav';
 import { activeTv } from '../tv/tvStore';
-import { nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
+import { applyAutoSkip, nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
-import { chapterIndexAt, chapterStepIndex, namedChapterTitle, type Chapter } from '../../../src/player/chapters';
+import { chapterIndexAt, chapterStepIndex, namedChapterTitle, titleMarkKind, type Chapter } from '../../../src/player/chapters';
 import { NowPoster } from '../ui/NowPoster';
 import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
@@ -21,16 +21,8 @@ const HOLD_NEAR_S = 3;
 const SKIP_KEY = 'tsp.nowSkipMarks';
 const CHEVRON = 'M9 6l6 6-6 6';
 
-function markKind(title: string): 'intro' | 'recap' | 'credits' | '' {
-  const s = (title || '').toLowerCase();
-  if (/заставк|intro|opening|опенинг|вступлен/.test(s)) return 'intro';
-  if (/recap|рекап|ранее в|previously/.test(s)) return 'recap';
-  if (/credits|титры|эндинг|outro|ending/.test(s)) return 'credits';
-  return '';
-}
-
 function episodeLine(subtitle: string): boolean {
-  return /s\d+\s*e\d+/i.test(subtitle) || /сери/i.test(subtitle) || /episode/i.test(subtitle);
+  return /s\d+\s*e\d+/i.test(subtitle) || /(?:^|[^a-z0-9])e\d+/i.test(subtitle) || /сери/i.test(subtitle) || /episode/i.test(subtitle);
 }
 
 function skipMarksOn(): boolean {
@@ -84,13 +76,6 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     const t = setTimeout(() => setHeld(null), HOLD_MS);
     return () => clearTimeout(t);
   }, [held]);
-  useEffect(() => {
-    if (!skipAlways || !s || !s.chapters || s.chapter === undefined || s.chapter < 0) return;
-    const ch = s.chapters[s.chapter];
-    const kind = ch ? markKind(ch.title) : '';
-    if (kind !== 'recap' && kind !== 'credits') return;
-    if (s.chapter + 1 < s.chapters.length) sendCmd({ type: 'chapter', i: s.chapter + 1 });
-  }, [skipAlways, s && s.hash, s && s.chapter]);
   const tv = activeTv.value;
   const vol = (dir: 'up' | 'down') => void Promise.resolve(volume(dir)).catch(() => {});
 
@@ -152,7 +137,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const chapterName = (i: number) => namedChapterTitle(list[i].title) || t('player.chapterN', { n: i + 1 });
   let introEnd = -1;
   for (let i = 0; i < list.length; i++) {
-    if (markKind(list[i].title) !== 'intro') continue;
+    if (titleMarkKind(list[i].title) !== 'intro') continue;
     introEnd = i + 1 < list.length ? list[i + 1].start : s.duration;
     break;
   }
@@ -243,6 +228,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                     data-now-chapters
                     aria-label={t('player.chapters')}
                     onPointerDown={() => {
+                      skipClick.current = false;
                       holdTimer.current = window.setTimeout(() => {
                         skipClick.current = true;
                         setPanel('menu');
@@ -392,6 +378,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
               const next = !skipAlways;
               setSkipAlways(next);
               saveJson(SKIP_KEY, next);
+              if (next) applyAutoSkip();
             }}
           >
             {t('now.skipAlways')}

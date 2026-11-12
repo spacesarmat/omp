@@ -10,7 +10,7 @@ import { NowPlaying } from '../src/screens/NowPlaying';
 import { MiniPlayer } from '../src/ui/MiniPlayer';
 import { App } from '../src/app';
 import { currentRoute, resetTo, navigate, switchTab } from '../src/nav';
-import { nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
+import { applyAutoSkip, nowPlaying, lastSeen, launchedAt, setPlayerLinkDeps } from '../src/tv/playerLink';
 import { tvState, cancelWarmUp } from '../src/tv/tvClient';
 import { reloadTvs, saveTv } from '../src/tv/tvStore';
 import type { PlayerState } from '../../src/phone/protocol';
@@ -246,6 +246,14 @@ describe('NowPlaying', () => {
       expect(el.textContent).toContain('Пропускать Recap и Credits всегда');
       click(el.querySelector('[data-now-skip-always]')!);
       expect(localStorage.getItem('tsp.nowSkipMarks')).toBe('true');
+      setState(state({ subtitle: 'Show · E03', next: { title: 'E04' }, chapters: [{ t: 0, title: 'OP' }, { t: 20, title: 'Scene' }], chapter: 0, time: 5 }));
+      mount(<NowPlaying volume={volume} />);
+      expect(el.querySelector('[data-now-next]')).not.toBeNull();
+      expect(el.querySelector('[data-now-skip-intro]')).not.toBeNull();
+      setState(state({ chapters: [{ t: 0, title: 'A' }, { t: 10, title: 'Credits' }], chapter: 1, time: 20, duration: 40, next: { title: 'E04' } }));
+      queue.mockClear();
+      applyAutoSkip();
+      expect(sent()[0]).toEqual(expect.objectContaining({ type: 'next' }));
     });
     it('before the first chapter: previous seeks to the start', () => {
       setState(state({ chapters: [{ t: 30, title: 'A' }, { t: 90, title: 'B' }], chapter: -1, time: 10 }));
