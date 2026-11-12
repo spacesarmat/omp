@@ -6,7 +6,7 @@ import { lang, t, tp } from '../../../src/i18n';
 import { torrentQuery } from '../../../src/catalog/tmdb';
 import { isoDay } from '../../../src/lib/seriesStatus';
 import { torrents } from '../../../src/store/library';
-import { loadFound, loadSubs } from '../../../src/monitor/subs';
+import { loadFound, loadSubs, getSubscription } from '../../../src/monitor/subs';
 import { EPISODES_ID, type Finding } from '../../../src/monitor/types';
 import { navigate } from '../nav';
 import { monitorVersion } from '../monitor/ui';
@@ -336,7 +336,17 @@ export function Calendar() {
         {body}
       </PullArea>
       {ask && <Ask e={ask} onClose={() => setAsk(null)} />}
-      {remind && <SubSheet initial={{ query: remind.show.card.title, notify: true }} onClose={() => setRemind(null)} />}
+      {remind && (
+        <SubSheet
+          sub={remind.show.subIds.length ? getSubscription(remind.show.subIds[0]) || undefined : undefined}
+          initial={remind.show.subIds.length ? undefined : { query: remind.show.card.title, notify: true }}
+          onClose={() => setRemind(null)}
+          onSaved={() => {
+            setRemind(null);
+            void reload(true);
+          }}
+        />
+      )}
     </div>
   );
 }
