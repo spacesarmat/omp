@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The local editor became a visual logic editor: a node canvas with triggers, conditions, actions and variables, output-input links, multi-select with a clipboard, five flow templates and a step-by-step debugger with mocks and trace comparison. Node editing is available on the desktop target and the settings page only
+- [tech] Logic flows pass validation (cycles, unreachable nodes, value types) and export together with the layout: the scoped diff shows changed rules, nodes, edges and variables. Production apps apply logic only after an explicit export through the generated module design/generated/flow.ts; autosave and preview do not change production
+
 ## 0.30.1-beta.6
 
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button
