@@ -171,7 +171,7 @@ export function OmpJackettCard() {
     if (!(await askConfirm(t('sources.billing.cancelRenewAsk'), t('sources.billing.cancelRenew')))) return;
     try {
       await withDeviceToken(phoneSourceContext(), (headers) =>
-        billingPost(phoneSourceContext(), '/v1/auto-renew', { on: false }, { headers, timeoutMs: 12000 }),
+        billingPost(phoneSourceContext(), '/v1/auto-renew', { on: 'false' }, { headers, timeoutMs: 12000 }),
       );
       await refreshAccount();
     } catch (e) {

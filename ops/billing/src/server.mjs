@@ -2580,7 +2580,7 @@ export function createApp(file, fetchImpl, opts) {
         const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
         if (!token) return json(res, 401, { error: 'bad_token' });
         const body = await readBody(req);
-        const on = !!(body && body.on === true);
+        const on = !!(body && (body.on === true || body.on === 'true'));
         const cur = await store.read();
         const caller = await deviceCaller(cur, token, device, Date.now());
         if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
