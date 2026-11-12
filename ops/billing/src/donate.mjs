@@ -727,30 +727,41 @@ export function hideDonateField(state, { id, field }) {
   return state;
 }
 
-/** A saved Crypto Pay link is usable only until the 24 hour invoice expiry. A link with no expiry is not reused. */
-export function donateCryptoLinkLive(row, now) {
+/**
+ * A saved Crypto Pay link is usable only until the 24 hour invoice expiry.
+ * A link with no expiry is not reused.
+ * When testnet is passed, a link from the other mode is not reused.
+ * A link saved before modes counts as the live mode.
+ */
+export function donateCryptoLinkLive(row, now, testnet) {
   if (!row || !(row.payUrl || row.webUrl)) return false;
   const exp = Number(row.invoiceExpiresAt) || 0;
-  return exp > (now || Date.now());
+  if (!(exp > (now || Date.now()))) return false;
+  if (typeof testnet !== 'boolean') return true;
+  if (row.cryptoTestnet == null) return testnet === false;
+  return row.cryptoTestnet === testnet;
 }
 
-export function rememberDonateInvoice(state, id, invoice, now) {
+export function rememberDonateInvoice(state, id, invoice, now, testnet) {
   const row = (state.donations || []).find((d) => d && d.id === id);
   if (!row || !invoice) return state;
   const at = now || Date.now();
-  if (donateCryptoLinkLive(row, at)) return state;
+  const mode = typeof testnet === 'boolean' ? testnet : undefined;
+  if (donateCryptoLinkLive(row, at, mode)) return state;
   const invoiceIds = [];
   const prior = Array.isArray(row.invoiceIds) ? row.invoiceIds : [];
   for (let i = 0; i < prior.length; i++) if (prior[i] && invoiceIds.indexOf(String(prior[i])) < 0) invoiceIds.push(String(prior[i]));
   if (row.invoiceId && invoiceIds.indexOf(String(row.invoiceId)) < 0) invoiceIds.push(String(row.invoiceId));
   const nextId = String(invoice.invoiceId || '');
   if (nextId && invoiceIds.indexOf(nextId) < 0) invoiceIds.push(nextId);
-  return putDonation(state, {
+  const saved = {
     ...row,
     invoiceId: nextId,
     invoiceIds,
     payUrl: invoice.botUrl || '',
     webUrl: invoice.webUrl || '',
     invoiceExpiresAt: at + CRYPTO_INVOICE_MS,
-  });
+  };
+  if (typeof testnet === 'boolean') saved.cryptoTestnet = testnet;
+  return putDonation(state, saved);
 }

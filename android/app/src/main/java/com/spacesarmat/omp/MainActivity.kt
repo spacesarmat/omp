@@ -104,7 +104,15 @@ class MainActivity : BridgeActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (!tvMode) return super.dispatchKeyEvent(event)
+        if (!tvMode) {
+            val name = PhoneVolume.webKey(event.keyCode)
+            val web = bridge?.webView
+            if (name != null && PhoneVolume.capture && web != null) {
+                if (event.action == KeyEvent.ACTION_DOWN) web.evaluateJavascript(PhoneVolume.js(name), null)
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
         val code = TvKeys.webCode(event.keyCode) ?: return super.dispatchKeyEvent(event)
         val web = bridge?.webView ?: return super.dispatchKeyEvent(event)
         if (event.action == KeyEvent.ACTION_DOWN) web.evaluateJavascript(jsKey(code), null)

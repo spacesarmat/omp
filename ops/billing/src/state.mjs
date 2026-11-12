@@ -70,7 +70,7 @@ export function emptyState() {
       starsEnabled: false,
       starsPrice: 0,
       starsExtra: 0,
-      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. The token is CRYPTO_PAY_TOKEN, not stored here. */
+      /** Crypto Pay (@CryptoBot). Off until an admin turns it on. Tokens are env secrets, not stored here. */
       cryptoEnabled: false,
       cryptoTestnet: false,
       /** When true, crypto is offered only when the country code is present and is not RU. */
@@ -85,6 +85,8 @@ export function emptyState() {
       cryptoExtraBtc: 0,
       cryptoRateBtc: 0,
       cryptoPayToken: '',
+      /** CRYPTO_PAY_TESTNET_TOKEN. Empty while cryptoTestnet is on means crypto stays disabled. */
+      cryptoPayTestnetToken: '',
       /**
        * Donations. Off until an admin turns the flag on. A donation does not extend a subscription.
        * Method switches are separate from the subscription switches and also start off.

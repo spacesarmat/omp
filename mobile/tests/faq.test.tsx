@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Faq, highlightFaq, normalizeFaq, searchFaq } from '../src/screens/Faq';
+import { Account } from '../src/screens/Account';
+import { faqMark } from '../src/ui/faqJump';
 import { Settings } from '../src/screens/Settings';
 import { DEVICES, FAQ, OLD_Q_LINKS, SECTIONS, itemFor, resolveFaqLink, type FaqLine } from '../../src/faq/faq';
 import { currentRoute, resetTo, routeStack } from '../src/nav';
@@ -316,6 +318,7 @@ describe('Faq screen', () => {
     expect(el.querySelector('.m-faq-hint')).toBeNull();
     expect(el.querySelector('h1')!.textContent).toBe('Вопросы и ответы');
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((x) => x.textContent);
+    expect(labels[0]).toBe('Частые проблемы');
     expect(labels).toContain('Установка');
     const buttons = el.querySelectorAll('.m-faq-q');
     expect(buttons.length).toBe(FAQ.filter((i) => i.devices.includes('phone')).length);
@@ -346,7 +349,7 @@ describe('Faq screen', () => {
     setActiveTv('192.168.1.20');
     let el = mount(<Faq />);
     expect(on(el)).toBe('Android TV');
-    expect(el.querySelector('.m-faq-hint')!.textContent).toBe('Выбрано по подключённому телевизору · Гостиная');
+    expect(el.querySelector('.m-faq-hint')!.textContent).toBe('Для вашего Гостиная');
     await act(async () => chip(el, 'Телефон').click());
     expect(el.querySelector('.m-faq-hint')).toBeNull();
 
@@ -411,7 +414,7 @@ describe('Faq screen', () => {
     expect(el.querySelector('.m-chip')).toBeNull();
     const first = q(el, 'Нет звука');
     expect(first.querySelector('.m-faq-badge')!.textContent).toBe('Телефон');
-    expect(first.querySelector('.m-faq-sec')!.textContent).toBe('Если что-то не работает');
+    expect(first.querySelector('.m-faq-sec')!.textContent).toBe('Частые проблемы');
     expect(first.querySelector('mark')!.textContent).toBe('звук');
     await act(async () => first.click());
     expect(el.textContent).toContain('AC3 и DTS');
@@ -434,10 +437,64 @@ describe('Faq screen', () => {
     const el = mount(<Faq />);
     act(() => (el.querySelector('[data-faq-action="install"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'install' });
+    expect(faqMark.value).toBe('install');
+    act(() => (el.querySelector('[data-faq-action="renew"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'account' });
+    act(() => render(<Account />, el));
+    const done = el.querySelector('[data-faq-done="account"]') as HTMLButtonElement;
+    expect(done.textContent).toBe('Получилось?');
+    act(() => done.click());
+    expect(el.querySelector('[data-faq-done]')).toBeNull();
     resetTo({ name: 'faq' });
     act(() => render(<Faq />, el));
     act(() => (el.querySelector('[data-faq-action="tv"]') as HTMLButtonElement).click());
     expect(currentRoute.value).toEqual({ name: 'tv' });
+    resetTo({ name: 'faq' });
+    expect(faqMark.value).toBe('');
+  });
+
+  it('hides phone TorrServer when this phone cannot run it', () => {
+    const prev = localServer.value;
+    localServer.value = { ...prev, supported: false };
+    const el = mount(<Faq />);
+    expect(el.querySelector('[data-faq-action="server"]')).toBeNull();
+    localServer.value = { ...prev, supported: true };
+    act(() => render(<Faq />, el));
+    expect(el.querySelector('[data-faq-action="server"]')).not.toBeNull();
+    localServer.value = prev;
+  });
+
+  it('dev mode, wake, updates, player and promo open the matching screen', () => {
+    const el = mount(<Faq />);
+    act(() => (el.querySelector('[data-faq-action="dev"]') as HTMLButtonElement).click());
+    expect(el.querySelector('.m-faq-item.open')!.textContent).toContain('1000 часов');
+    act(() => (el.querySelector('[data-faq-action="wake"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'remote' });
+    resetTo({ name: 'faq' });
+    act(() => render(<Faq />, el));
+    act(() => (el.querySelector('[data-faq-action="updates"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'settings' });
+    resetTo({ name: 'faq' });
+    act(() => render(<Faq />, el));
+    act(() => (el.querySelector('[data-faq-action="player"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'videoPlayer' });
+    resetTo({ name: 'faq' });
+    act(() => render(<Faq />, el));
+    act(() => (el.querySelector('[data-faq-action="promo"]') as HTMLButtonElement).click());
+    expect(currentRoute.value).toEqual({ name: 'account' });
+  });
+
+  it('a useful mark is remembered and a second tap clears it', async () => {
+    const el = mount(<Faq />);
+    await act(async () => el.querySelector<HTMLButtonElement>('.m-faq-q')!.click());
+    const up = el.querySelector<HTMLButtonElement>('[data-faq-vote="up"]')!;
+    expect(up.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => up.click());
+    expect(el.querySelector('[data-faq-vote="up"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector('[data-faq-vote="up"]')!.className).toContain('on');
+    expect(localStorage.getItem('tsp.faqVotes')).toContain('up');
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-faq-vote="up"]')!.click());
+    expect(el.querySelector('[data-faq-vote="up"]')!.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('the search input is labelled and rows are real buttons', () => {
@@ -506,6 +563,6 @@ describe('FAQ screen chrome in English', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     setActiveTv('192.168.1.5');
     const el2 = mount(<Faq />);
-    expect(el2.querySelector('.m-faq-hint')!.textContent).toBe('Chosen by the connected TV · LG OLED');
+    expect(el2.querySelector('.m-faq-hint')!.textContent).toBe('For your LG OLED');
   });
 });

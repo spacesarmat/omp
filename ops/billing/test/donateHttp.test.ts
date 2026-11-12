@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cryptoPaySign } from '../src/cryptoPay.mjs';
 import { activate, createSubscription, ensureTelegramAccount, issueCliAdminLogin } from '../src/logic.mjs';
-import { createApp } from '../src/server.mjs';
+import { createApp, handleCallback } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { grossUp, notificationSign } from '../src/yoomoney.mjs';
 import { readState, testStore, writeState } from './pg';
@@ -305,5 +305,124 @@ describe('donate admin', () => {
     expect(after.donations[0].status).toBe('paid');
     expect(after.payments).toEqual([]);
     expect(after.subscriptions[0].paidUntil).toBe(b.until);
+  });
+});
+
+describe('donate crypto pay mode', () => {
+  const LIVE = 'crypto-pay-live-LLLL';
+  const TESTNET = 'crypto-pay-testnet-TTTT';
+
+  function net() {
+    const calls: { url: string; token: string; body: string }[] = [];
+    const fetchImpl = async (url: string, init?: { headers?: Record<string, string>; body?: string }) => {
+      calls.push({
+        url: String(url),
+        token: init && init.headers ? String(init.headers['Crypto-Pay-API-Token'] || '') : '',
+        body: init && init.body ? String(init.body) : '',
+      });
+      if (String(url).indexOf('/api/createInvoice') >= 0) {
+        const host = String(url).indexOf('testnet-pay.crypt.bot') >= 0 ? 'testnet-pay.crypt.bot' : 'pay.crypt.bot';
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            result: {
+              invoice_id: 9,
+              bot_invoice_url: 'https://t.me/CryptoBot?start=inv9',
+              pay_url: 'https://' + host + '/i/9',
+              web_app_invoice_url: 'https://' + host + '/i/9',
+              asset: 'USDT',
+              amount: '3.00',
+            },
+          }),
+          text: async () => '',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
+    };
+    return { calls, fetchImpl };
+  }
+
+  function press() {
+    return {
+      id: 'cb-don',
+      data: 'dn:p:aabbccddeeff0011:USDT',
+      from: { id: 42 },
+      message: { message_id: 70, chat: { id: 42, type: 'private' } },
+    };
+  }
+
+  async function ready(patch: Record<string, unknown>, donation: Record<string, unknown>) {
+    const b = await boot();
+    const state = await readState(b.store);
+    Object.assign(state.settings, { cryptoPayToken: LIVE, cryptoPayTestnetToken: TESTNET, cryptoRateUsdt: 100, ...patch });
+    state.donations[0] = { ...state.donations[0], ...donation };
+    await writeState(b.store, state);
+    return b;
+  }
+
+  it('creates a donation invoice on the testnet host with the testnet token', async () => {
+    const b = await ready({ cryptoTestnet: true }, { method: '', asset: '', payAmount: '', gross: '', fee: '', status: 'draft', step: 'method' });
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    const invoice = http.calls.find((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoice && invoice.url).toBe('https://testnet-pay.crypt.bot/api/createInvoice');
+    expect(invoice && invoice.token).toBe(TESTNET);
+    expect(JSON.stringify(http.calls)).not.toContain(LIVE);
+    const saved = (await readState(b.store)).donations[0];
+    expect(saved.cryptoTestnet).toBe(true);
+    expect(saved.webUrl).toContain('testnet-pay.crypt.bot');
+  });
+
+  it('creates a donation invoice on the live host with the live token', async () => {
+    const b = await ready({ cryptoTestnet: false }, { method: '', asset: '', payAmount: '', gross: '', fee: '', status: 'draft', step: 'method' });
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    const invoice = http.calls.find((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoice && invoice.url).toBe('https://pay.crypt.bot/api/createInvoice');
+    expect(invoice && invoice.token).toBe(LIVE);
+    expect(JSON.stringify(http.calls)).not.toContain(TESTNET);
+  });
+
+  it('does not call Crypto Pay for a donation when testnet is on without a testnet token', async () => {
+    const b = await ready({ cryptoTestnet: true, cryptoPayTestnetToken: '' }, { method: '', asset: '', payAmount: '', gross: '', fee: '', status: 'draft', step: 'method' });
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    expect(http.calls.some((c) => c.url.indexOf('crypt.bot') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).not.toContain(LIVE);
+  });
+
+  it('reuses a live donation link and replaces it when the mode changes', async () => {
+    const soon = Date.now() + 60 * 60 * 1000;
+    const b = await ready({ cryptoTestnet: false }, {
+      method: 'crypto',
+      asset: 'USDT',
+      payAmount: '3.00',
+      gross: '',
+      fee: '',
+      status: 'pending',
+      step: '',
+      invoiceId: '1',
+      payUrl: 'https://pay.crypt.bot/i/1',
+      webUrl: 'https://pay.crypt.bot/i/1',
+      invoiceExpiresAt: soon,
+    });
+    const kept = net();
+    await handleCallback(b.store, '123:fake', press(), kept.fetchImpl, 5000);
+    expect(kept.calls.some((c) => c.url.indexOf('/api/createInvoice') >= 0)).toBe(false);
+    expect(JSON.stringify(kept.calls)).toContain('https://pay.crypt.bot/i/1');
+    const switched = await readState(b.store);
+    switched.settings.cryptoTestnet = true;
+    await writeState(b.store, switched);
+    const http = net();
+    await handleCallback(b.store, '123:fake', press(), http.fetchImpl, 5000);
+    const invoice = http.calls.find((c) => c.url.indexOf('/api/createInvoice') >= 0);
+    expect(invoice && invoice.url).toBe('https://testnet-pay.crypt.bot/api/createInvoice');
+    expect(invoice && invoice.token).toBe(TESTNET);
+    expect(JSON.stringify(http.calls)).not.toContain(LIVE);
+    const saved = (await readState(b.store)).donations[0];
+    expect(saved.cryptoTestnet).toBe(true);
+    expect(saved.invoiceIds).toContain('1');
   });
 });

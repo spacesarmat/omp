@@ -6,6 +6,7 @@ import { Tv, setTvDiscoverer } from '../src/screens/Tv';
 import { setTransport, tvState, tvError, type TvTransport } from '../src/tv/tvClient';
 import { tvs, saveTv, reloadTvs, activeTvIp, renameTv } from '../src/tv/tvStore';
 import { currentRoute, resetTo, navigate } from '../src/nav';
+import { confirmAsk } from '../src/ui/confirm';
 import { native } from '../src/platform/native';
 
 async function flush() {
@@ -91,6 +92,9 @@ describe('Tv screen', () => {
     expect(cards[0].textContent).toContain('LG в спальне');
     expect(cards[0].textContent).toContain('сохранён');
     await act(async () => btn(cards[0], 'Забыть').click());
+    expect(tvs.value).toHaveLength(1);
+    expect(confirmAsk.value && confirmAsk.value.message).toContain('LG в спальне');
+    await act(async () => confirmAsk.value!.resolve(true));
     expect(tvs.value).toHaveLength(0);
   });
 
@@ -240,6 +244,8 @@ describe('Tv screen', () => {
     });
     expect(el.textContent).toContain('Подключён');
     await act(async () => (el.querySelector('[aria-label="Забыть LG OLED в гостиной"]') as HTMLButtonElement).click());
+    expect(tvs.value).toHaveLength(1);
+    await act(async () => confirmAsk.value!.resolve(true));
     await flush();
     expect(fake.disconnects).toBeGreaterThan(0);
     expect(el.textContent).not.toContain('Подключён');
@@ -270,7 +276,9 @@ describe('Tv screen in English', () => {
     expect(btn(el, 'No OMP on the TV? Install assistant')).toBeTruthy();
     await flush();
     expect(el.textContent).toContain('webOS · saved');
-    expect(el.textContent).toContain('192.168.1.42 · webOS 6');
+    const foundCard = el.querySelector('[data-ip="192.168.1.42"]')!;
+    expect(foundCard.textContent).toContain('webOS 6');
+    expect(foundCard.textContent).not.toContain('192.168.1.42');
     expect(el.querySelector('[aria-label="Rename Bedroom"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Forget Bedroom"]')).toBeTruthy();
     expect(el.querySelector('[aria-label="Back"]')).toBeTruthy();

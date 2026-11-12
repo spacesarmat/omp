@@ -50,6 +50,8 @@ export interface BillingAccount {
   referral?: { enabled: boolean; code: string; friends: number; noticeDays: number };
   /** Paid donation on this account. Omitted by a server from before donations. */
   supporter?: boolean;
+  /** Price, card fee, auto-renew and recent payments. Absent on an older server. */
+  bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
 }
 
 function hex(bytes: Uint8Array): string {

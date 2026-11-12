@@ -26,6 +26,14 @@ import { activeServer, addServer, servers } from '../../../src/store/servers';
 import { settings, updateSettings } from '../../../src/store/settings';
 import { fmtSize, t } from '../../../src/i18n';
 
+/** The same 1 GB the cache line names ("of 1 GB"). A non-empty cache still shows a sliver. */
+export const CACHE_CAP_BYTES = 1024 * 1024 * 1024;
+
+export function storageBarPct(bytes: number | null): number {
+  if (bytes == null || bytes <= 0) return 0;
+  return Math.max(8, Math.min(100, Math.round((bytes / CACHE_CAP_BYTES) * 100)));
+}
+
 const PROJECT_URL = 'https://github.com/spacesarmat/omp';
 const TORRSERVER_SOURCE_URL = 'https://github.com/YouROK/TorrServer/tree/' + TORRSERVER_VERSION;
 const BACK = 'M15 5l-7 7 7 7';
@@ -53,6 +61,7 @@ function LocalServerSection() {
   const [bytes, setBytes] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [about, setAbout] = useState(false);
 
   useEffect(() => {
     void refreshLocalServer();
@@ -159,17 +168,25 @@ function LocalServerSection() {
             <span>{t('settings.cacheTitle')}</span>
             <span class="m-muted m-small">{t('settings.cacheHint')}</span>
             <span class="m-muted m-small">{bytes === null ? t('settings.counting') : t('settings.cacheUsed', { used: fmtSize(bytes) })}</span>
+            <span class="m-storage" data-storage-bar>
+              <span style={{ width: storageBarPct(bytes) + '%' }} />
+            </span>
           </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" disabled={busy} onClick={() => void clear()}>
+          <button type="button" class="m-link" data-cache-clear disabled={busy} onClick={() => void clear()}>
             {t('tvSettings.clear')}
           </button>
         </div>
       </div>
-      <div class="m-hint-ok">
-        <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
-        <span>{t('settings.serverNote')}</span>
+      <button type="button" class="m-icon-btn" data-server-about aria-expanded={about} aria-label={t('settings.serverAbout')} onClick={() => setAbout((v) => !v)}>
+        i
+      </button>
+      <div hidden={!about}>
+        <div class="m-hint-ok">
+          <Icon d="M12 8v.01M11 12h1v5h1M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18" size={18} />
+          <span>{t('settings.serverNote')}</span>
+        </div>
+        <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
       </div>
-      <p class="m-muted m-small" data-row="lan-warn">{t('settings.lanWarn')}</p>
       {st.vpn && <div class="m-hint-warn" role="alert">{t('localServer.vpn')}</div>}
     </section>
   );
@@ -202,6 +219,7 @@ function ServerSettingsRow() {
 /** Technical settings: the phone server, server options, betas, backup, log and credits. */
 export function Advanced() {
   const on = settings.value.updateCheck;
+  const [whatSent, setWhatSent] = useState(false);
   return (
     <div class="m-screen" data-route="advanced">
       <div class="m-bar">
@@ -233,7 +251,10 @@ export function Advanced() {
         <div class="m-set-row tm" data-row="diagnostics">
           <div class="m-set-text">
             <span>{t('settings.diagnosticsTitle')}</span>
-            <span class="m-small m-muted">{t('settings.diagnosticsHint')}</span>
+            <button type="button" class="m-link" data-what-sent onClick={() => setWhatSent((v) => !v)}>
+              {t('settings.whatSent')}
+            </button>
+            {whatSent && <span class="m-small m-muted">{t('settings.diagnosticsHint')}</span>}
           </div>
           <Switch
             on={settings.value.diagnostics}
@@ -265,7 +286,7 @@ export function Advanced() {
   );
 }
 
-function ReportRow() {
+export function ReportRow() {
   const [open, setOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [note, setNote] = useState('');

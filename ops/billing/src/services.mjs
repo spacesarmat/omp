@@ -126,6 +126,7 @@ export function publicAdminSettings(settings, env) {
     cryptoExtraBtc: Number(s.cryptoExtraBtc) || 0,
     cryptoRateBtc: Number(s.cryptoRateBtc) || 0,
     cryptoPayToken: secretText(s.cryptoPayToken),
+    cryptoPayTestnetToken: secretText(s.cryptoPayTestnetToken),
     baseDevices: baseDevices(s),
     graceDays: graceDays(s),
     publicPromo: s.publicPromo || '',
@@ -222,6 +223,7 @@ export function mergeSettings(prev, body) {
     cryptoExtraBtc: rateField(b.cryptoExtraBtc, cur.cryptoExtraBtc),
     cryptoRateBtc: rateField(b.cryptoRateBtc, cur.cryptoRateBtc),
     cryptoPayToken: String(cur.cryptoPayToken || ''),
+    cryptoPayTestnetToken: String(cur.cryptoPayTestnetToken || ''),
     // 1-20; an empty or bad value keeps the current one
     baseDevices: baseDevices({ baseDevices: b.baseDevices !== undefined && b.baseDevices !== '' && validBase(b.baseDevices) ? b.baseDevices : cur.baseDevices }),
     graceDays: graceDays({ graceDays: b.graceDays !== undefined && b.graceDays !== '' ? b.graceDays : cur.graceDays }),

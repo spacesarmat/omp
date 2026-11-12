@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { applyLanguageSetting } from '../../src/i18n';
+import { applyLanguageSetting, tp } from '../../src/i18n';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
-import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate } from '../src/screens/Settings';
+import { Settings, setAccountFetcher, setUpdateChecker, runBackgroundPhoneUpdate, settingsHit } from '../src/screens/Settings';
 import { saveBillingSession, saveSeenAccount, seenAccount } from '../../src/billing/session';
 import { dropDeviceTokens } from '../../src/billing/tokens';
-import { Advanced } from '../src/screens/Advanced';
+import { Advanced, storageBarPct } from '../src/screens/Advanced';
 import { VideoPlayer } from '../src/screens/VideoPlayer';
 import { currentRoute, resetTo } from '../src/nav';
 import { settings, updateSettings, sanitizeSettings, DEFAULT_SETTINGS } from '../../src/store/settings';
@@ -69,6 +69,55 @@ afterEach(() => {
   reloadTvs();
 });
 
+describe('settings search', () => {
+  it('matches a word and ignores an empty query', () => {
+    expect(settingsHit('', 'Плеер')).toBe(true);
+    expect(settingsHit('плеер', 'Плеер для видео')).toBe(true);
+    expect(settingsHit('неттакого', 'Плеер для видео')).toBe(false);
+  });
+
+  it('hides rows that do not match and shows an empty note', () => {
+    const el = mount();
+    const input = el.querySelector<HTMLInputElement>('[data-settings-search]')!;
+    expect(el.querySelector('[data-row="account"]')).toBeTruthy();
+    input.value = 'плеер';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-row="video-player"]')).toBeTruthy();
+    expect(el.querySelector('[data-row="account"]')).toBeNull();
+    expect(el.querySelector('[data-row="language"]')).toBeNull();
+    expect(el.querySelector('[data-row="shared-history"]')).toBeNull();
+    input.value = 'неттакого';
+    act(() => {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(el.querySelector('[data-settings-empty]')!.textContent).toBe('Ничего не найдено');
+    expect(el.querySelector('[data-row="video-player"]')).toBeNull();
+  });
+
+  it('the TV row is one line with the platform and a dot while connected', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED55C9PLA' });
+    tvState.value = 'connected';
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '1', latest: '1' });
+    const el = mount();
+    const row = el.querySelector('[data-row="tv"]')!;
+    expect(row.textContent).toContain('LG OLED55C9PLA · webOS');
+    expect(row.querySelector('[data-tv-dot]')).toBeTruthy();
+    act(() => (row as HTMLButtonElement).click());
+    expect(currentRoute.value.name).toBe('tv');
+  });
+
+  it('cache bar stays inside 0..100', () => {
+    expect(storageBarPct(null)).toBe(0);
+    expect(storageBarPct(0)).toBe(0);
+    expect(storageBarPct(1)).toBe(8);
+    expect(storageBarPct(512 * 1024 * 1024)).toBe(50);
+    expect(storageBarPct(1024 * 1024 * 1024)).toBe(100);
+    expect(storageBarPct(2 * 1024 * 1024 * 1024)).toBe(100);
+  });
+});
+
 describe('Settings', () => {
   it('the TV search row switches the phone search server off', async () => {
     const set = vi.spyOn(native, 'rpcSetEnabled').mockResolvedValue(null);
@@ -125,7 +174,7 @@ describe('Settings', () => {
     await act(async () => el.querySelector<HTMLButtonElement>('[data-row="watch-from"]')!.click());
     expect(currentRoute.value.name).toBe('watchFrom');
     resetTo({ name: 'settings' });
-    await act(async () => btn(el, 'Выбрать').click());
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-row="tv"]')!.click());
     expect(currentRoute.value.name).toBe('tv');
   });
 
@@ -580,6 +629,11 @@ describe('Advanced: TMDB attribution', () => {
 });
 
 describe('Settings: the OMP account row', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+  });
+  afterEach(() => vi.useRealTimers());
   const row = (el: HTMLElement) => el.querySelector('[data-row="account"]') as HTMLElement;
   const flush = () =>
     act(async () => {
@@ -598,15 +652,35 @@ describe('Settings: the OMP account row', () => {
     setAccountFetcher(fetcher);
     saveBillingSession({ token: '', access: 'a1.x', accessExp: Date.now() + 3600e3, paidUntil: paid, id: 'r1' });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    const left = Math.ceil((paid - Date.now()) / 86400000);
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
+    expect(row(el).querySelector('[data-account-dot]')).toBeTruthy();
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', left));
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('uses one day and two days, and refreshes after a minute', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 12, 12));
+    saveBillingSession({ token: 'old', paidUntil: Date.now() + 20 * 3600 * 1000 });
+    expect(row(mount()).textContent).toBe(tp('sources.billing.daysLeft', 1));
+    saveBillingSession({ token: 'old', paidUntil: Date.now() + 2 * 86400000 });
+    expect(row(mount()).textContent).toBe(tp('sources.billing.daysLeft', 2));
+    const until = new Date(2026, 10, 13, 12).getTime();
+    saveBillingSession({ token: 'old', paidUntil: until });
+    const el = mount();
+    expect(row(el).textContent).toBe(tp('sources.billing.daysLeft', 1));
+    vi.setSystemTime(new Date(2026, 10, 13, 12, 30));
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(row(el).textContent).toBe('Подписка до ' + day(until));
   });
 
   it('a legacy token still shows the subscription', () => {
     saveBillingSession({ token: 'old', paidUntil: paid });
-    expect(row(mount()).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(mount()).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('without a session: «Проверяю вход…» while /v1/me answers, then the account linked by Telegram', async () => {
@@ -618,13 +692,14 @@ describe('Settings: the OMP account row', () => {
     expect(row(el).textContent).not.toContain('Войти');
     await act(async () => answer({ telegramId: '1', paidUntil: paid, active: true, deviceLimit: 2 }));
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('without a session and no account: «Войти» after the check', async () => {
     const el = mount();
     await flush();
     expect(row(el).textContent).toBe('Войти');
+    expect(row(el).querySelector('[data-account-dot]')).toBeNull();
     expect(row(el).getAttribute('data-account')).toBe('out');
   });
 
@@ -634,9 +709,9 @@ describe('Settings: the OMP account row', () => {
       throw new Error('down');
     });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     await flush();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
   });
 
   it('a revoked binding forgets the last known account, so the server being down then shows «Войти»', async () => {
@@ -646,7 +721,7 @@ describe('Settings: the OMP account row', () => {
       throw new Error('down');
     });
     const el = mount();
-    expect(row(el).textContent).toBe('Подписка до ' + day(paid));
+    expect(row(el).textContent).toContain(String(Math.ceil((paid - Date.now()) / 86400000)));
     await act(async () => dropDeviceTokens(null, 'revoked'));
     await flush();
     expect(seenAccount()).toBeNull();
@@ -697,7 +772,7 @@ describe('Settings in English', () => {
     const labels = Array.from(el.querySelectorAll('.m-set-label')).map((n) => n.textContent);
     expect(labels).toEqual(['OMP account', 'TV', 'Viewing', 'Search', 'App']);
     const text = el.textContent!;
-    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'by network', 'Choose', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
+    for (const w of ['Version', 'What’s new', 'Check for updates', 'Not chosen', 'by network', 'Where to look for films', 'Follow new releases', 'Install OMP on the TV', 'Help', 'Where to watch', 'Advanced']) {
       expect(text, w).toContain(w);
     }
     expect(text).not.toContain('Server settings');
@@ -908,5 +983,16 @@ describe('Settings: «Плеер для видео»', () => {
     } finally {
       applyLanguageSetting('ru');
     }
+  });
+});
+
+describe('Settings: the TV row', () => {
+  it('shows a green dot when the chosen TV is connected', () => {
+    saveTv({ ip: '10.0.0.2', name: 'LG' });
+    tvState.value = 'connected';
+    vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '1', latest: '1' });
+    const el = mount();
+    expect(el.querySelector('[data-tv-dot]')).toBeTruthy();
+    expect(el.textContent).toContain('LG');
   });
 });

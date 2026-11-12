@@ -6,16 +6,44 @@ import { SubSheet } from '../ui/SubSheet';
 import { useResultRows } from '../ui/useResultRows';
 import { goBack, navigate } from '../nav';
 import { monitorVersion, reloadMonitor } from '../monitor/ui';
-import { subRule } from '../monitor/text';
 import { checkSubNow, checkingSubs, loadSubsSort, sortFindings } from '../monitor/subsView';
 import { WatchPrompt } from './News';
 import { shortTitle } from '../../../src/lib/libraryView';
+import { bestRelease } from '../../../src/monitor/bestRelease';
+import { resultKeys } from '../../../src/monitor/match';
 import { findingsOf, getSubscription, markFindingsSeen, removeSubscription, seenKeys, updateSubscription } from '../../../src/monitor/subs';
 import { FREE_SUBS_MAX, isSubPaused } from '../../../src/monitor/limit';
-import { qualityLabels } from '../monitor/text';
-import { checkCount, isSubHeld, setSubHeld } from '../monitor/subHold';
+import { qualityLabels, seriesSubLine, subRule, whenText } from '../monitor/text';
+import { checkCount, checkTimes, isSubHeld, setSubHeld } from '../monitor/subHold';
+import { phoneCatalog } from '../catalog/phoneCatalog';
 import { askConfirm } from '../ui/confirm';
 import { ICONS } from '../ui/Icon';
+
+function SeriesNote({ kind, id }: { kind: 'movie' | 'tv'; id: number }) {
+  const [line, setLine] = useState('');
+  useEffect(() => {
+    if (kind !== 'tv') {
+      setLine('');
+      return;
+    }
+    let live = true;
+    phoneCatalog()
+      .then((c) => c.card('tv', id))
+      .then(
+        (card) => {
+          if (live) setLine(seriesSubLine(card));
+        },
+        () => {
+          if (live) setLine('');
+        },
+      );
+    return () => {
+      live = false;
+    };
+  }, [kind, id]);
+  if (!line) return null;
+  return <p class="m-small m-muted" data-sub-series>{line}</p>;
+}
 
 const BACK = 'M15 5l-7 7 7 7';
 const PEN = 'M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5zM13.8 6.7l3.5 3.5';
@@ -130,6 +158,26 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
               <span class="m-switch-knob" />
             </button>
           </div>
+          <div class="m-skip-row">
+            <span class="m-skip-text">
+              {t('monitor.sub.telegram')}
+              <span class="m-muted m-small">{t('monitor.sub.telegramHint')}</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sub.notifyTelegram === true}
+              aria-label={t('monitor.sub.telegram')}
+              class={'m-switch' + (sub.notifyTelegram ? ' on' : '')}
+              data-sub-telegram
+              onClick={() => {
+                updateSubscription(id, { notifyTelegram: sub.notifyTelegram !== true });
+                reloadMonitor();
+              }}
+            >
+              <span class="m-switch-knob" />
+            </button>
+          </div>
           {sub.catalog && (
             <button
               type="button"
@@ -140,7 +188,15 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
               {t('monitor.sub.openCard')}
             </button>
           )}
+          {sub.catalog && <SeriesNote kind={sub.catalog.kind} id={sub.catalog.id} />}
           {checks > 0 && <p class="m-small m-muted" data-sub-checks>{t('monitor.sub.checks', { n: checks })}</p>}
+          {checkTimes(id).length > 0 && (
+            <ul class="m-sub-log" data-sub-log>
+              {checkTimes(id).map((at, i) => (
+                <li key={at + ':' + i}>{whenText(at, Date.now())}</li>
+              ))}
+            </ul>
+          )}
           {held ? (
             <div class="m-small m-sub-paused-note" data-sub-hold>
               {t('monitor.sub.held')}
@@ -163,6 +219,17 @@ export function SubFindings({ id, finding, watch }: { id: string; finding?: stri
             <WatchPrompt title={shortTitle(target.result.Title)} onDismiss={() => setPrompt(false)} onWatch={() => void rows.add(target.result, true)} />
           )}
           {rows.error && <LaunchError message={rows.error} />}
+          {(() => {
+            const best = bestRelease(id);
+            const key = best ? resultKeys(best)[0] : '';
+            if (!best || list.some((f) => f.key === key)) return null;
+            return (
+              <div data-sub-best>
+                <p class="m-small m-muted">{t('monitor.sub.bestBelow')}</p>
+                {rows.card(best)}
+              </div>
+            );
+          })()}
           {list.length === 0 && (
             <div class="m-muted">
               {seenKeys(id) === null

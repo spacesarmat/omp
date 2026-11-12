@@ -95,6 +95,7 @@ const PROBLEM_KIND: Record<string, string> = {
   duplicate: 'повтор уведомления',
   amount: 'неверная сумма',
   bad_signature: 'неверная подпись',
+  ignored: 'игнорирован',
   webhook: 'уведомление',
   no_account: 'нет аккаунта',
   no_subscription: 'нет подписки',

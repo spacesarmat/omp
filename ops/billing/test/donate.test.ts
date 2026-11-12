@@ -313,6 +313,15 @@ describe('donate crypto invoice', () => {
     expect(next.donations[0].invoiceExpiresAt).toBe(NOW + 1000 + 24 * 60 * 60 * 1000);
     expect(next.donations[0].invoiceIds).toContain('1');
     expect(next.donations[0].invoiceIds).toContain('2');
+    const live = { id: 'd2', payUrl: 'https://pay.crypt.bot/i/1', webUrl: 'https://pay.crypt.bot/i/1', invoiceId: '1', invoiceExpiresAt: NOW + 1000 };
+    expect(donateCryptoLinkLive(live, NOW, false)).toBe(true);
+    expect(donateCryptoLinkLive(live, NOW, true)).toBe(false);
+    const switched = rememberDonateInvoice({ donations: [live] }, 'd2', { invoiceId: '9', botUrl: 'https://t.me/CryptoTestnetBot?start=inv9', webUrl: 'https://testnet-pay.crypt.bot/i/9' }, NOW, true);
+    expect(switched.donations[0].cryptoTestnet).toBe(true);
+    expect(switched.donations[0].invoiceId).toBe('9');
+    expect(switched.donations[0].invoiceIds).toContain('1');
+    expect(donateCryptoLinkLive(switched.donations[0], NOW, true)).toBe(true);
+    expect(donateCryptoLinkLive(switched.donations[0], NOW, false)).toBe(false);
     const pending = {
       ...next.donations[0],
       status: 'pending',

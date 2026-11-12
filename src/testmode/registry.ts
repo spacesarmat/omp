@@ -478,7 +478,7 @@ const helpSections: RegItem[] = [
   item('S11.2', ['faq-sec-install'], 'Установка', 'Installation'),
   item('S11.3', ['faq-sec-connect'], 'Подключение', 'Connecting'),
   item('S11.4', ['faq-sec-player'], 'Плеер', 'Player'),
-  item('S11.5', ['faq-sec-trouble'], 'Если что-то не работает', 'If something does not work'),
+  item('S11.5', ['faq-sec-trouble'], 'Частые проблемы', 'Common problems'),
   item('S11.6', ['faq-sec-setup'], 'Поиск и настройка', 'Search and setup'),
   item('S11.7', ['faq-sec-about'], 'О проекте', 'About the project'),
   item('S11.8', ['faq-sec-log'], 'Журнал и резервная копия', 'Log and backup'),
