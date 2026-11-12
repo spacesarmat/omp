@@ -22,6 +22,8 @@ function slim(r: SourceResult): SourceResult {
   };
   if (r.detailUrl) out.detailUrl = r.detailUrl;
   if (r.torrentUrl) out.torrentUrl = r.torrentUrl;
+  if (r.hash) out.hash = r.hash;
+  if (typeof r.sizeBytes === 'number' && isFinite(r.sizeBytes)) out.sizeBytes = r.sizeBytes;
   return out;
 }
 
