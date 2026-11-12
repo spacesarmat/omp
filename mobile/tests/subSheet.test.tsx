@@ -320,6 +320,9 @@ describe('SubFindings', () => {
     expect(getSubscription(s.id)!.quality).toBe('2160');
     click(el.querySelector('[data-sub-notify]'));
     expect(getSubscription(s.id)!.notify).toBe(false);
+    click(el.querySelector('[data-sub-telegram]'));
+    expect(getSubscription(s.id)!.notifyTelegram).toBe(true);
+    expect(getSubscription(s.id)!.notify).toBe(false);
     click(el.querySelector('[data-sub-pause]'));
     expect(el.querySelector('[data-sub-hold]')!.textContent).toContain('на паузе');
     expect(el.querySelector('[data-check-sub]')).toBeNull();
@@ -362,6 +365,28 @@ describe('SubFindings', () => {
     expect(el.textContent).toContain('Подписка удалена');
   });
 });
+
+  it('the form saves Telegram on and off without changing the phone notification', async () => {
+    sheet();
+    type('m-sub-query', 'Дюна');
+    const tg = () => el.querySelector('[data-sub-telegram]') as HTMLButtonElement;
+    expect(tg().getAttribute('aria-checked')).toBe('false');
+    click(tg());
+    click(byText('Сохранить'));
+    const id = loadSubs()[0].id;
+    expect(getSubscription(id)!.notify).toBe(true);
+    expect(getSubscription(id)!.notifyTelegram).toBe(true);
+    const close = vi.fn();
+    sheet({ sub: getSubscription(id)!, onClose: close });
+    expect(tg().getAttribute('aria-checked')).toBe('true');
+    click(tg());
+    click(el.querySelector('.m-sheet-backdrop')!);
+    expect(confirmText()).toContain('Сохранить изменения');
+    await acceptConfirm();
+    expect(getSubscription(id)!.notifyTelegram).toBe(false);
+    expect(getSubscription(id)!.notify).toBe(true);
+    expect(close).toHaveBeenCalled();
+  });
 
 describe('SubSheet in English', () => {
   afterEach(() => applyLanguageSetting('ru'));
