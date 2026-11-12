@@ -281,7 +281,7 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | S11.2 | Помощь | Help | Установка | Installation |
 | S11.3 | Помощь | Help | Подключение | Connecting |
 | S11.4 | Помощь | Help | Плеер | Player |
-| S11.5 | Помощь | Help | Если что-то не работает | If something does not work |
+| S11.5 | Помощь | Help | Частые проблемы | Common problems |
 | S11.6 | Помощь | Help | Поиск и настройка | Search and setup |
 | S11.7 | Помощь | Help | О проекте | About the project |
 | S11.8 | Помощь | Help | Журнал и резервная копия | Log and backup |
@@ -886,6 +886,9 @@ Label size is a slider «Размер меток» / "Label size" next to the sw
 | P35.5 | Откуда смотреть | Where to watch | Запомнить имя | Remember the name |
 | P35.6 | Откуда смотреть | Where to watch | Добавить сервер | Add a server |
 | P35.7 | Откуда смотреть | Where to watch | Найти в сети | Find on the network |
+| P36 | Рассказать друзьям | Tell friends |  |  |
+| P36.1 | Рассказать друзьям | Tell friends | Назад | Back |
+| P36.2 | Рассказать друзьям | Tell friends | Поделиться | Share |
 | PD01 | Язык | Language |  |  |
 | PD01.1 | Язык | Language | Как в системе | Follow the system |
 | PD01.2 | Язык | Language | Русский | Russian |

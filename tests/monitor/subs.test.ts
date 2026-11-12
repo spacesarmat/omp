@@ -78,6 +78,7 @@ describe('subscriptions', () => {
       quality: '',
       sources: ['a'],
       notify: true,
+      notifyTelegram: false,
       createdAt: 5,
     });
     expect(sanitizeSubscription({ id: 'x', query: 'q', quality: '720', sources: 'all', notify: false, createdAt: 'z', minSeeds: 2.7, maxSizeGb: 1.5 })).toEqual({
@@ -86,6 +87,7 @@ describe('subscriptions', () => {
       quality: '720',
       sources: null,
       notify: false,
+      notifyTelegram: false,
       createdAt: 0,
       minSeeds: 2,
       maxSizeGb: 1.5,

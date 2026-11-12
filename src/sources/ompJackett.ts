@@ -46,10 +46,54 @@ interface MeBody {
   monitorMax?: number;
   /** Popular-release cache. Omitted or false: the player keeps the local TorrServer. */
   cache?: { enabled?: boolean };
+  /** Omitted by a server from before the referral screen. Missing means the program is off. */
+  referral?: { enabled?: boolean; code?: string; friends?: number; noticeDays?: number };
+  bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
 }
 
 interface ErrorBody {
   error?: string;
+}
+
+function whole(n: unknown): number {
+  return typeof n === 'number' && isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
+function money(n: unknown): number {
+  return typeof n === 'number' && isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+}
+
+function billOf(body: MeBody): BillingAccount['bill'] {
+  const row = body.bill;
+  if (!row || typeof row !== 'object') return undefined;
+  const payments = Array.isArray(row.payments)
+    ? row.payments.slice(0, 8).map((p) => ({
+        at: whole(p && p.at),
+        amount: p && typeof p.amount === 'string' ? p.amount : '',
+        currency: p && typeof p.currency === 'string' ? p.currency : '',
+        title: p && typeof p.title === 'string' ? p.title : '',
+      }))
+    : [];
+  return {
+    priceRub: money(row.priceRub),
+    feeRub: money(row.feeRub),
+    totalRub: money(row.totalRub),
+    autoRenew: row.autoRenew === true,
+    payments,
+  };
+}
+
+function referralOf(body: MeBody): BillingAccount['referral'] {
+  const row = body.referral;
+  if (!row || typeof row !== 'object') return undefined;
+  const friends = typeof row.friends === 'number' && isFinite(row.friends) ? Math.max(0, Math.floor(row.friends)) : 0;
+  const noticeDays = typeof row.noticeDays === 'number' && isFinite(row.noticeDays) ? Math.max(0, Math.floor(row.noticeDays)) : 0;
+  return {
+    enabled: row.enabled === true,
+    code: typeof row.code === 'string' ? row.code : '',
+    friends,
+    noticeDays,
+  };
 }
 
 function parseBody<T extends object>(text: string): T {
@@ -357,6 +401,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           sources: body.sources
             ? { jackett: !!body.sources.jackett, jacred: !!body.sources.jacred, bitmagnet: body.sources.bitmagnet === true }
             : { jackett: !!body.active, jacred: !!body.active, bitmagnet: false },
+          referral: referralOf(body),
+          bill: billOf(body),
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
@@ -399,6 +445,8 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         overLimit: !!body.overLimit,
         deviceLimit: body.deviceLimit || 0,
         sources: flags,
+        referral: referralOf(body),
+        bill: billOf(body),
       };
     },
     (e) => {

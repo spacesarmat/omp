@@ -6,6 +6,22 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+## 0.30.1-beta.4
+
+- [phone] Help lists common problems first, device chips on one row, and "For your TV". Buttons open Developer Mode, wake-on-LAN, updates, the player and a promo code. An answer can be marked useful or not
+- [phone] Settings search hides other rows. The subscription row has a green dot, and the TV is one line "name · webOS". Deleting a TV asks first. Watch-from hides the network block unless "by network" is on. The phone server address can be copied and shown as a QR. Advanced shows a 1 GB cache bar
+- [phone] A "best only" subscription still shows the best release on the card when it is below the threshold and no notice is sent
+- [phone] A subscription has its own Telegram switch. The phone remembers it. A check does not send finds to the bot
+- [phone] Account shows the card price, fee and total, cancel auto-renew, and recent payments. An old server does not send these fields
+- [phone] Remote: a larger pad repeats while held, color keys are compact, hardware volume keys work, and touchpad speed is a slider
+- [phone] Help buttons open renew, the phone TorrServer and diagnostics. The opened screen asks "Did it work?"
+- [phone] Settings shows days left on the subscription row and a green dot on the connected TV
+- [phone] When the TV does not answer, the remote shows one plate with Turn on, Retry and a wake hint. Controls dim, the link has a green dot, and button or touchpad mode is remembered
+- [phone] Account status is large, with a green dot and days left, and an info button. Telegram is one line, without the id or the bot line
+- [phone] Now on TV: the empty gap above chapters is gone. A next-episode card and Skip the intro when an intro exists. Tap Chapter N of M for the list. A long press skips, repeats, or always skips Recap and Credits
+- [phone] A subscription page has edit, pause and delete in the header, a poster, quality chips, notifications, a link to the card and a check count
+- [phone] The subscription sheet keeps Delete and Save above the system bar. A swipe down with unsaved edits asks whether to save them. Releases already found do not notify
+- [phone] An episode is no longer marked watched because the file was only preloaded or probed. The mark needs a real watch or a manual mark
 - [phone] Catalog: one, two or three cards a row, list and compact. The poster keeps quality on the left and the season line at the bottom, plus watching and a progress bar. The list has a status line and no size
 - [phone] Search: plus opens magnet paste and a .torrent file, and a pasted magnet on any tab opens add. An http(s) .torrent link from another app is added the same way. A file error is visible at once. The feed line drops the tracker phrase, and 0-1 seeds are marked. The sources hint is one line with a close button
 - [phone] Calendar lists days, Earlier stays folded, and the aired/today plates are gone. Month view marks today with a yellow circle, the selected day in gray, up to three dots plus a count, and a yellow dot for a subscription. A subscription that is any quality and best-only reads "best"
@@ -13,6 +29,10 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Account: Renew opens card, stars and crypto. There is no separate Crypto button. The promo field and Activate sit on one row, and an empty button stays dark
 - [phone] Settings: each video player option has a subtitle, Built-in is marked recommended, and the yellow outline is gone. The TV list hides the IP and the active TV has a thin yellow frame. Watch-from shows only the selected rule. The bug report opens as a sheet. Stop server is a link
 - [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
+- [phone] Search remembers recent queries and offers a magnet that is already on the clipboard
+- [phone] A subscription edit has a seed stepper. Check now is the yellow button. A future calendar episode says Remind me, and "forever" reads as the season finale
+- [phone] Tell friends shows the link, code, QR and Share while the program is on. The link opens a page with the code. While the program is off, the screen says so
+- [tech] Referral admin: six switches, bonus days at most 14, a 7 day delay, a yearly cap of 12 months, a journal and manual cancel. App and bot notice text. Billing was not deployed
 
 ## 0.30.1-beta.3
 

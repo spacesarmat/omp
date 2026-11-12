@@ -210,17 +210,17 @@ describe('carryWatch', () => {
 
   it('a watched mark replaces a resume position of the one that stays, never the other way round', async () => {
     serverViewed.value = [
-      { hash: 'gone', file_index: 1 },
+      { hash: 'gone', file_index: 1, timecode: 1 },
       { hash: 'keep', file_index: 1, timecode: 300 },
       { hash: 'gone', file_index: 2, timecode: 200 },
-      { hash: 'keep', file_index: 2 },
+      { hash: 'keep', file_index: 2, timecode: 1 },
     ];
     const { c, viewed } = fakeClient([tor('gone', S1), tor('keep', S1_1080)]);
     expect((await carryWatch(c, tor('gone', S1), tor('keep', S1_1080), 1)).ok).toBe(true);
-    expect(viewed).toEqual([['keep', 1, 0]]);
+    expect(viewed).toEqual([['keep', 1, 1]]);
     const k1 = serverViewed.value.filter((e) => e.hash === 'keep' && e.file_index === 1);
     expect(k1.length).toBe(1);
-    expect(k1[0].timecode || 0).toBe(0);
+    expect(k1[0].timecode || 0).toBe(1);
   });
 
   it('a server mark that can not be written fails: the release must stay', async () => {

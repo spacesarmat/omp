@@ -27,14 +27,31 @@ import { Sheet } from '../ui/Sheet';
 import { billingSession, onBillingChange, seenAccount, type BillingAccount } from '../../../src/billing/session';
 import { billingSignedOut, fetchBillingAccount } from '../../../src/sources/ompJackett';
 import { phoneSourceContext } from '../searchContext';
-import { t, type LanguageSetting } from '../../../src/i18n';
+import { t, tp, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { FaqDone } from '../ui/faqJump';
 import { friendsShare } from '../share/text';
 import { sendShare } from '../share/send';
 import { phonePlayerName } from './videoPlayerSettings';
 import { localServer, canRun } from '../server/localServer';
 import { loadWifiPrefs, wifiPrefsVersion } from '../servers/wifiRun';
+import { ReportRow } from './Advanced';
+
+const YO = '\u0451';
+const YE = '\u0435';
+
+function foldSearch(s: string): string {
+  return s.toLowerCase().replace(new RegExp(YO, 'g'), YE);
+}
+
+/** True when the settings search is empty or `text` contains every typed word. */
+export function settingsHit(query: string, text: string): boolean {
+  const words = foldSearch(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = foldSearch(text);
+  return words.every((w) => hay.includes(w));
+}
 
 function testLabelPhone(): number {
   return clampLabelPx(settings.value.testLabelPhonePx, PHONE_LABEL_PX);
@@ -152,7 +169,8 @@ function VideoPlayerRow() {
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.6" data-row="video-player" onClick={() => navigate({ name: 'videoPlayer' })}>
       <span>{t('player.videoPlayer')}</span>
-      <span class="m-muted">{phonePlayerName(settings.value.phonePlayer)} ›</span>
+      <span class="m-muted">{settings.value.phonePlayer === 'chooser' ? t('player.askShort') : phonePlayerName(settings.value.phonePlayer)}</span>
+      <Icon d={CHEVRON} size={20} />
     </button>
   );
 }
@@ -260,6 +278,18 @@ function localAccountView(): AccountView {
  */
 function AccountRow() {
   const [view, setView] = useState<AccountView>(localAccountView);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') setNow(Date.now());
+    };
+    document.addEventListener('visibilitychange', tick);
+    const id = window.setInterval(tick, 60_000);
+    return () => {
+      document.removeEventListener('visibilitychange', tick);
+      window.clearInterval(id);
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     // only the latest check may paint: an older answer that arrives late (before «Отключить») is dropped
@@ -295,18 +325,25 @@ function AccountRow() {
       off();
     };
   }, []);
-  const until = view.kind === 'in' ? billingDay(view.until) : '';
+  const untilMs = view.kind === 'in' ? view.until : 0;
+  const left = untilMs > now ? Math.ceil((untilMs - now) / 86400000) : 0;
+  const until = untilMs ? billingDay(untilMs) : '';
   const label =
     view.kind === 'checking'
       ? t('settings.accountChecking')
       : view.kind === 'out'
         ? t('common.signIn')
-        : until
-          ? t('settings.subscribedUntil', { date: until })
-          : t('settings.signedIn');
+        : left > 0
+          ? tp('sources.billing.daysLeft', left)
+          : until
+            ? t('settings.subscribedUntil', { date: until })
+            : t('settings.signedIn');
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.1" data-row="account" data-account={view.kind} aria-busy={view.kind === 'checking' ? 'true' : undefined} onClick={() => navigate({ name: 'account' })}>
-      <span class={view.kind === 'checking' ? 'm-muted' : undefined}>{label}</span>
+      <span class={view.kind === 'checking' ? 'm-muted' : undefined}>
+        {left > 0 ? <span class="m-bill-dot" data-account-dot /> : null}
+        {label}
+      </span>
       <Icon d={CHEVRON} size={20} />
     </button>
   );
@@ -356,6 +393,7 @@ function PhoneServerRow() {
 }
 
 export function Settings() {
+  const [query, setQuery] = useState('');
   const server = activeServer.value;
   const tv = activeTv.value;
   const monitor = loadMonitorSettings();
@@ -376,50 +414,113 @@ export function Settings() {
   void wifiPrefsVersion.value;
   const mode = wifi.enabled && !wifi.overrideId ? t('settings.watchFromModeAuto') : t('settings.watchFromModeAlways');
   const whereLine = (server ? where + ' · ' + reachText(reach) : where) + ' · ' + mode;
+  const tvPlatform = tv ? (tv.kind === 'atv' ? 'Android TV' : 'webOS') : '';
+  const tvLine = tv ? tv.name + ' · ' + tvPlatform : t('settings.notChosen');
+  const rowOn = (text: string) => settingsHit(query, text);
+  const rows = {
+    account: rowOn([t('settings.account'), t('common.signIn'), t('settings.signedIn'), t('settings.accountChecking'), t('settings.subscribedUntil', { date: '' })].join(' ')),
+    invite: rowOn(t('invite.title')),
+    tv: rowOn([t('history.tv'), tvLine].join(' ')),
+    tvSearch: rowOn([t('settings.tvSearch'), t('settings.tvSearchHint'), t('settings.tvSearchOff')].join(' ')),
+    install: rowOn(t('install.assistant.title')),
+    watchFrom: rowOn([t('settings.watchFrom'), whereLine].join(' ')),
+    phone: rowOn([t('settings.phoneServer'), t('sources.flare.works'), t('settings.localNotDownloaded'), t('settings.localStopped')].join(' ')),
+    player: rowOn([t('player.videoPlayer'), t('player.askShort'), t('player.embeddedPlayerPhone'), t('player.p2160AppPhone'), t('player.builtinPlayerPhone')].join(' ')),
+    language: rowOn([t('settings.language.title'), languageName('system'), languageName('ru'), languageName('en')].join(' ')),
+    history: rowOn([t('settings.sharedHistory'), t('settings.sharedHistoryOn'), t('settings.sharedHistoryOff')].join(' ')),
+    prebuffer: rowOn([t('settings.prebufferMetered'), t('settings.prebufferMeteredHint')].join(' ')),
+    audiobooks: rowOn(t('audiobooks.title')),
+    sources: rowOn(t('settings.whereSearch')),
+    seeds: rowOn([t('settings.liveSeeds'), t('settings.liveSeedsHint')].join(' ')),
+    rank: rowOn([t('settings.helpRank'), t('settings.helpRankHint')].join(' ')),
+    monitor: rowOn([t('settings.followNew'), t('sources.state.off')].join(' ')),
+    testMode: rowOn([t('settings.testModeTitle'), t('settings.testModeHint')].join(' ')),
+    testSize: rowOn(t('settings.testLabelSize')),
+    version: rowOn([t('settings.version'), APP_VERSION, t('whatsNew.title'), betaBadge()].join(' ')),
+    check: rowOn([t('updateScreen.check'), t('updateScreen.latest')].join(' ')),
+    report: rowOn([t('settings.reportTitle'), t('settings.reportSend')].join(' ')),
+    help: rowOn(t('settings.help')),
+    friends: rowOn(t('settings.tellFriends')),
+    onboarding: rowOn(t('settings.showOnboarding')),
+    hints: rowOn([t('settings.resetHints'), t('settings.hintsAgain')].join(' ')),
+    support: rowOn(t('settings.support')),
+    advanced: rowOn(t('settings.advanced')),
+  };
+  const any = Object.keys(rows).some((k) => rows[k as keyof typeof rows]);
 
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
+      <FaqDone mark="updates" />
+      <label class="m-faq-search">
+        <input
+          class="m-input"
+          type="search"
+          data-settings-search=""
+          aria-label={t('settings.find')}
+          placeholder={t('settings.find')}
+          value={query}
+          onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        />
+      </label>
+      {query.trim() && !any && (
+        <p class="m-muted" data-settings-empty>
+          {t('settings.findEmpty')}
+        </p>
+      )}
 
+      {(rows.account || rows.invite) && (
       <section class="m-set-group" data-section="account">
         <div class="m-set-label">{t('settings.account')}</div>
-        <AccountRow />
+        {rows.account && <AccountRow />}
+        {rows.invite && (
+          <button type="button" class="m-set-row m-set-pick" data-row="invite" onClick={() => navigate({ name: 'invite' })}>
+            <span>{t('invite.title')}</span>
+            <Icon d={CHEVRON} size={20} />
+          </button>
+        )}
       </section>
+      )}
 
+      {(rows.tv || rows.tvSearch || rows.install) && (
       <section class="m-set-group" data-section="tv">
         <div class="m-set-label">{t('history.tv')}</div>
-        <div class="m-set-row">
-          <div class="m-set-text">
-            <span>{tv ? tv.name : t('settings.notChosen')}</span>
-          </div>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P11.2" onClick={() => navigate({ name: 'tv' })}>
-            {tv ? t('settings.change') : t('settings.choose')}
-          </button>
-        </div>
-        {!tv && <FoundTvs />}
-        <TvOmpRow v={omp.v} />
-        <TvSearchRow />
-        {showWizard && (
+        {rows.tv && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.2" data-row="tv" onClick={() => navigate({ name: 'tv' })}>
+          <i class="m-set-ico" aria-hidden="true">
+            <Icon d="M3 5h18v11H3zM8 20h8" size={18} />
+          </i>
+          <span>
+            {tv && connected ? <span class="m-bill-dot" data-tv-dot /> : null}
+            {tvLine}
+          </span>
+          <Icon d={CHEVRON} size={20} />
+        </button>}
+        {rows.tv && !tv && <FoundTvs />}
+        {rows.tv && <TvOmpRow v={omp.v} />}
+        {rows.tvSearch && <TvSearchRow />}
+        {showWizard && rows.install && (
           <button type="button" class="m-set-row m-set-pick tm" data-code="P11.3" data-row="install" onClick={() => navigate({ name: 'install' })}>
             <span>{t('install.assistant.title')}</span>
             <Icon d={CHEVRON} size={20} />
           </button>
         )}
       </section>
+      )}
 
+      {(rows.watchFrom || rows.phone || rows.player || rows.language || rows.history || rows.prebuffer) && (
       <section class="m-set-group" data-section="watch">
         <div class="m-set-label">{t('settings.watch')}</div>
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.5" data-row="watch-from" onClick={() => navigate({ name: 'watchFrom' })}>
+        {rows.watchFrom && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.5" data-row="watch-from" onClick={() => navigate({ name: 'watchFrom' })}>
           <div class="m-set-text" style="flex-grow: 1">
             <span>{t('settings.watchFrom')}</span>
             <span class="m-muted m-small">{whereLine}</span>
           </div>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        <PhoneServerRow />
-        <VideoPlayerRow />
-        <LanguageRow />
-        <div class="m-set-row" data-row="shared-history">
+        </button>}
+        {rows.phone && <PhoneServerRow />}
+        {rows.player && <VideoPlayerRow />}
+        {rows.language && <LanguageRow />}
+        {rows.history && <div class="m-set-row" data-row="shared-history">
           <div class="m-set-text">
             <span>{t('settings.sharedHistory')}</span>
             <span class="m-muted m-small">{settings.value.sharedHistory ? t('settings.sharedHistoryOn') : t('settings.sharedHistoryOff')}</span>
@@ -434,8 +535,8 @@ export function Settings() {
           >
             <span class="m-switch-knob" />
           </button>
-        </div>
-        <div class="m-set-row" data-row="prebuffer">
+        </div>}
+        {rows.prebuffer && <div class="m-set-row" data-row="prebuffer">
           <div class="m-set-text">
             <span>{t('settings.prebufferMetered')}</span>
             <span class="m-muted m-small">{t('settings.prebufferMeteredHint')}</span>
@@ -450,20 +551,22 @@ export function Settings() {
           >
             <span class="m-switch-knob" />
           </button>
-        </div>
+        </div>}
       </section>
+      )}
 
+      {(rows.audiobooks || rows.sources || rows.seeds || rows.rank || rows.monitor) && (
       <section class="m-set-group" data-section="search">
         <div class="m-set-label">{t('settings.search')}</div>
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.8" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
+        {rows.audiobooks && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.8" data-row="audiobooks" onClick={() => navigate({ name: 'audiobooks' })}>
           <span>{t('audiobooks.title')}</span>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.9" onClick={() => navigate({ name: 'sources' })}>
+        </button>}
+        {rows.sources && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.9" onClick={() => navigate({ name: 'sources' })}>
           <span>{t('settings.whereSearch')}</span>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        <div class="m-set-row tm" data-code="P11.10" data-row="live-seeds">
+        </button>}
+        {rows.seeds && <div class="m-set-row tm" data-code="P11.10" data-row="live-seeds">
           <div class="m-set-text">
             <span>{t('settings.liveSeeds')}</span>
             <span class="m-muted m-small">{t('settings.liveSeedsHint')}</span>
@@ -478,8 +581,8 @@ export function Settings() {
           >
             <span class="m-switch-knob" />
           </button>
-        </div>
-        <div class="m-set-row tm" data-row="help-rank">
+        </div>}
+        {rows.rank && <div class="m-set-row tm" data-row="help-rank">
           <div class="m-set-text">
             <span>{t('settings.helpRank')}</span>
             <span class="m-muted m-small">{t('settings.helpRankHint')}</span>
@@ -494,16 +597,18 @@ export function Settings() {
           >
             <span class="m-switch-knob" />
           </button>
-        </div>
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.11" onClick={() => navigate({ name: 'monitor' })}>
+        </div>}
+        {rows.monitor && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.11" onClick={() => navigate({ name: 'monitor' })}>
           <span>{t('settings.followNew')}</span>
           <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
-        </button>
+        </button>}
       </section>
+      )}
 
+      {(rows.testMode || rows.testSize || rows.version || rows.check || rows.report || rows.help || rows.friends || rows.onboarding || rows.hints || rows.support) && (
       <section class="m-set-group" data-section="app">
         <div class="m-set-label">{t('settings.app')}</div>
-        {isBetaBuild() && (
+        {isBetaBuild() && rows.testMode && (
           <div class="m-set-row tm" data-code="P11.19">
             <div class="m-set-text" style="flex-grow: 1">
               <span>{t('settings.testModeTitle')}</span>
@@ -523,7 +628,7 @@ export function Settings() {
           </div>
         )}
         {/* the size of labels that are not shown is not a setting: the slider comes with the switch on */}
-        {isBetaBuild() && settings.value.testMode && (
+        {isBetaBuild() && settings.value.testMode && rows.testSize && (
           <div class="m-set-row m-test-size tm" data-code="P11.20">
             <span>{t('settings.testLabelSize')}</span>
             <span class="m-muted m-test-size-value">{testLabelPhone()} px</span>
@@ -539,14 +644,14 @@ export function Settings() {
             />
           </div>
         )}
-        <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
+        {rows.version && <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
           <span>{t('settings.version')}</span>
           <span class="m-muted">
             {APP_VERSION}
             {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
           </span>
-        </button>
-        {latestUpdate.value ? (
+        </button>}
+        {rows.check && (latestUpdate.value ? (
           <button type="button" class="m-btn m-btn-primary tm" data-code="P11.13" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
             {updateTitle(latestUpdate.value.version, APP_VERSION)}
           </button>
@@ -554,19 +659,20 @@ export function Settings() {
           <button type="button" class="m-btn m-btn-secondary tm" data-code="P11.13" onClick={() => void check()}>
             {t('updateScreen.check')}
           </button>
-        )}
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.14" onClick={() => navigate({ name: 'faq' })}>
+        ))}
+        {rows.report && <ReportRow />}
+        {rows.help && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.14" onClick={() => navigate({ name: 'faq' })}>
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
+        </button>}
+        {rows.friends && <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
           <span>{t('settings.tellFriends')}</span>
-        </button>
-        <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>
+        </button>}
+        {rows.onboarding && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>
           <span>{t('settings.showOnboarding')}</span>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        <button
+        </button>}
+        {rows.hints && <button
           type="button"
           class="m-set-row m-set-pick tm"
           data-code="P11.16"
@@ -578,21 +684,24 @@ export function Settings() {
         >
           <span>{t('settings.resetHints')}</span>
           <Icon d={CHEVRON} size={20} />
-        </button>
-        {activeMethods().length > 0 && (
+        </button>}
+        {rows.support && activeMethods().length > 0 && (
           <button type="button" class="m-set-row m-set-pick tm" data-code="P11.17" onClick={openDonate}>
             <span>{t('settings.support')}</span>
             <Icon d={CHEVRON} size={20} />
           </button>
         )}
       </section>
+      )}
 
+      {rows.advanced && (
       <section class="m-set-group" data-section="advanced">
         <button type="button" class="m-set-row m-set-pick tm" data-code="P11.18" data-row="advanced" onClick={() => navigate({ name: 'advanced' })}>
           <span>{t('settings.advanced')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
       </section>
+      )}
     </div>
   );
 }

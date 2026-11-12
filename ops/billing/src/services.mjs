@@ -112,6 +112,7 @@ export function publicAdminSettings(settings, env) {
     starsExtra: Number(s.starsExtra) || 0,
     cryptoEnabled: s.cryptoEnabled === true,
     cryptoTestnet: s.cryptoTestnet === true,
+    referral: s.referral || { enabled: false, referrerDays: 0, friendDays: 0, balancePercent: 0, tiers: false, friendDiscount: false, retention: false, delayDays: 7, yearlyCap: 12 },
     cryptoNonRu: s.cryptoNonRu === true,
     cryptoUsdt: Number(s.cryptoUsdt) || 0,
     cryptoExtraUsdt: Number(s.cryptoExtraUsdt) || 0,

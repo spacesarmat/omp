@@ -5,6 +5,7 @@ import { parseBillingDeepLink } from '../../src/billing/deepLink';
 import { flushTitleLink, queueTitleLink } from './share/open';
 import { applyPairUrl, isPairUrl } from './share/pairOpen';
 import { setPendingBillingCode } from '../../src/billing/session';
+import { loadPhoneReferral } from './lib/referralLoad';
 import { currentRoute, goBack, navigate, switchTab, setPendingLink, type MRoute } from './nav';
 import { activeServer, client } from '../../src/store/servers';
 import { refreshTorrents } from '../../src/store/library';
@@ -83,6 +84,7 @@ const LocalServer = lazyScreen(() => import('./screens/LocalServer'), 'LocalServ
 const Remote = lazyScreen(() => import('./screens/Remote'), 'Remote');
 const NowPlaying = lazyScreen(() => import('./screens/NowPlaying'), 'NowPlaying');
 const Account = lazyScreen(() => import('./screens/Account'), 'Account');
+const Invite = lazyScreen(() => import('./screens/Invite'), 'Invite');
 const Advanced = lazyScreen(() => import('./screens/Advanced'), 'Advanced');
 const VideoPlayer = lazyScreen(() => import('./screens/VideoPlayer'), 'VideoPlayer');
 const WatchFrom = lazyScreen(() => import('./screens/WatchFrom'), 'WatchFrom');
@@ -509,6 +511,8 @@ export function App() {
         <WatchFrom />
       ) : route.name === 'account' ? (
         <Account />
+      ) : route.name === 'invite' ? (
+        <Invite load={loadPhoneReferral} />
       ) : route.name === 'advanced' ? (
         <Advanced />
       ) : route.name === 'remote' ? (

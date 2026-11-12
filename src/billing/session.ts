@@ -46,6 +46,10 @@ export interface BillingAccount {
   overLimit?: boolean;
   /** Which paid indexers the server currently exposes for this subscription. */
   sources?: { jackett: boolean; jacred: boolean; bitmagnet?: boolean };
+  /** Invite card from /v1/me. Absent on an older server: the screen stays off. */
+  referral?: { enabled: boolean; code: string; friends: number; noticeDays: number };
+  /** Price, card fee, auto-renew and recent payments. Absent on an older server. */
+  bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
 }
 
 function hex(bytes: Uint8Array): string {

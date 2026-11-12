@@ -5,7 +5,7 @@ import { showToast } from './toast';
 import { qualityLabels, gbText } from '../monitor/text';
 import { t, tp } from '../../../src/i18n';
 import { askNotifyOnce, reloadMonitor } from '../monitor/ui';
-import { askConfirm } from './confirm';
+import { askConfirm, askSaveChoice } from './confirm';
 import { addSubscription, loadSubs, removeSubscription, updateSubscription } from '../../../src/monitor/subs';
 import type { SubQuality, Subscription, SubscriptionInput } from '../../../src/monitor/types';
 import { allSources } from '../../../src/sources/registry';
@@ -53,6 +53,7 @@ export function SubSheet(p: {
   const [size, setSize] = useState(base.maxSizeGb ? gbText(base.maxSizeGb) : '');
   const [sources, setSources] = useState<string[] | null>(base.sources === undefined ? null : base.sources);
   const [notify, setNotify] = useState(base.notify !== false);
+  const [notifyTelegram, setNotifyTelegram] = useState(base.notifyTelegram === true);
   const [better, setBetter] = useState(base.better === true);
   const [picking, setPicking] = useState(false);
   const [error, setError] = useState('');
@@ -75,30 +76,56 @@ export function SubSheet(p: {
     setSources(all.map((s) => s.id).filter((x) => next.indexOf(x) >= 0));
   };
 
+  const sameList = (a: string[] | null, b: string[] | null) => {
+    if (a === null || b === null) return a === b;
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  };
+  const dirty = () => {
+    const q = query.replace(/\s+/g, ' ').trim();
+    const origSources = base.sources === undefined ? null : base.sources;
+    return q !== (base.query || '').replace(/\s+/g, ' ').trim()
+      || quality !== (base.quality || '')
+      || seeds !== (base.minSeeds ? String(base.minSeeds) : '')
+      || size !== (base.maxSizeGb ? gbText(base.maxSizeGb) : '')
+      || notify !== (base.notify !== false)
+      || notifyTelegram !== (base.notifyTelegram === true)
+      || better !== (base.better === true)
+      || !sameList(sources, origSources);
+  };
   const save = () => {
     const q = query.replace(/\s+/g, ' ').trim();
-    if (!q) return setError(t('monitor.sub.errQuery'));
+    if (!q) { setError(t('monitor.sub.errQuery')); return false; }
     const minSeeds = parseSeeds(seeds);
-    if (minSeeds === null) return setError(t('monitor.sub.errSeeds'));
+    if (minSeeds === null) { setError(t('monitor.sub.errSeeds')); return false; }
     const maxSizeGb = parseGb(size);
-    if (maxSizeGb === null) return setError(t('monitor.sub.errSize'));
-    if (sources !== null && !sources.length) return setError(t('monitor.sub.errSources'));
+    if (maxSizeGb === null) { setError(t('monitor.sub.errSize')); return false; }
+    if (sources !== null && !sources.length) { setError(t('monitor.sub.errSources')); return false; }
     setError('');
-    const input: SubscriptionInput = { query: q, quality, sources, notify, minSeeds, maxSizeGb, better };
+    const input: SubscriptionInput = { query: q, quality, sources, notify, notifyTelegram, minSeeds, maxSizeGb, better };
     let saved: Subscription | null;
     if (p.sub) {
       saved = updateSubscription(p.sub.id, input);
     } else {
       const first = loadSubs().length === 0;
-      if (subsLimitReached()) return setLimited(true);
+      if (subsLimitReached()) { setLimited(true); return false; }
       saved = addSubscription(input);
       if (saved && first) void askNotifyOnce().catch(() => {});
     }
-    if (!saved) return setError(t('monitor.sub.errSave'));
+    if (!saved) { setError(t('monitor.sub.errSave')); return false; }
     reloadMonitor();
     showToast(p.sub ? t('monitor.sub.saved') : t('monitor.sub.created'));
     p.onSaved?.(saved);
     p.onClose();
+    return true;
+  };
+  const close = () => {
+    if (!dirty()) { p.onClose(); return; }
+    void askSaveChoice(t('monitor.sub.saveAsk'), t('common.save'), t('monitor.sub.discard')).then((answer) => {
+      if (answer === 'save') save();
+      else if (answer === 'discard') p.onClose();
+    });
   };
 
   const remove = async () => {
@@ -147,7 +174,7 @@ export function SubSheet(p: {
   }
 
   return (
-    <Sheet label={t('monitor.sub.title')} testId="PD04" onClose={p.onClose}>
+    <Sheet label={t('monitor.sub.title')} testId="PD04" className="m-sub-sheet" onClose={close}>
       <div class="m-sheet-title">{t('monitor.sub.title')}</div>
       <div class="m-sheet-scroll m-sub-form">
         <div class="m-field">
@@ -172,6 +199,10 @@ export function SubSheet(p: {
           <div class="m-field">
             <label for="m-sub-seeds">{t('monitor.sub.seeds')}</label>
             <TextField id="m-sub-seeds" class="m-input" type="text" inputMode="numeric" placeholder={t('monitor.sub.anySeeds')} value={seeds} onInput={(e) => setSeeds((e.target as HTMLInputElement).value)} />
+            <span class="m-seed-step">
+              <button type="button" aria-label={t('monitor.sub.seedsLess')} onClick={() => setSeeds((v) => { const n = parseInt(v || '0', 10) || 0; return n <= 1 ? '' : String(n - 1); })}>-</button>
+              <button type="button" aria-label={t('monitor.sub.seedsMore')} onClick={() => setSeeds((v) => String((parseInt(v || '0', 10) || 0) + 1))}>+</button>
+            </span>
           </div>
           <div class="m-field">
             <label for="m-sub-size">{t('monitor.sub.size')}</label>
@@ -208,6 +239,23 @@ export function SubSheet(p: {
         </div>
         <div class="m-skip-row">
           <span class="m-skip-text">
+            {t('monitor.sub.telegram')}
+            <span class="m-muted m-small">{t('monitor.sub.telegramHint')}</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notifyTelegram}
+            aria-label={t('monitor.sub.telegram')}
+            class={'m-switch' + (notifyTelegram ? ' on' : '')}
+            data-sub-telegram
+            onClick={() => setNotifyTelegram(!notifyTelegram)}
+          >
+            <span class="m-switch-knob" />
+          </button>
+        </div>
+        <div class="m-skip-row">
+          <span class="m-skip-text">
             {t('monitor.sub.better')}
             <span class="m-muted m-small">{t('monitor.sub.betterHint')}</span>
           </span>
@@ -229,7 +277,7 @@ export function SubSheet(p: {
           {error}
         </div>
       )}
-      <div class="m-marks-actions">
+      <div class="m-marks-actions m-sheet-dock">
         {p.sub ? (
           <button type="button" class="m-btn m-btn-secondary m-danger-text" onClick={() => void remove()}>
             {t('common.delete')}

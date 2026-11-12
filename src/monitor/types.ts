@@ -25,8 +25,10 @@ export interface Subscription {
   maxSizeGb?: number;
   /** Source ids to search; null = every switched-on source. */
   sources: string[] | null;
-  /** «Уведомлять». */
+  /** «Уведомлять» on the phone. */
   notify: boolean;
+  /** Separate Telegram choice. The phone stores it. Findings are not sent to the bot from here. */
+  notifyTelegram?: boolean;
   /** «Только лучшее качество»: of the new results only the best is reported, and only above every rank reported before. */
   better?: boolean;
   /** Unix ms. 0 only before backfill; a saved subscription always has a positive stamp. */
@@ -49,7 +51,7 @@ export interface Subscription {
 
 /** The fields a new subscription is created from. */
 export type SubscriptionInput = Pick<Subscription, 'query' | 'quality' | 'sources' | 'notify'> &
-  Partial<Pick<Subscription, 'minSeeds' | 'maxSizeGb' | 'better' | 'catalog'>>;
+  Partial<Pick<Subscription, 'minSeeds' | 'maxSizeGb' | 'better' | 'catalog' | 'notifyTelegram'>>;
 
 /** subId of the findings of new episodes (not a subscription). */
 export const EPISODES_ID = 'episodes';

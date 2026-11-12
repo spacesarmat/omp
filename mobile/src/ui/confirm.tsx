@@ -12,7 +12,9 @@ export interface ConfirmAsk {
   testId?: string;
   /** Line breaks of [message] are kept (a certificate fingerprint). */
   multiline?: boolean;
-  resolve: (ok: boolean) => void;
+  /** Backdrop and Back leave the question without choosing. The cancel button still answers no. */
+  splitDismiss?: boolean;
+  resolve: (ok: boolean | 'dismiss') => void;
 }
 
 /** The confirm on screen, or null. One at a time: a new question cancels the previous one. */
@@ -29,11 +31,11 @@ export function resetConfirm(): void {
  * In-app confirm instead of window.confirm (the Android WebView shows that as a native
  * AlertDialog with English CANCEL / OK). Resolves false on «Отмена», the backdrop, or «Назад».
  */
-export function askConfirm(
+function openConfirm(
   message: string,
   confirmLabel: string,
-  opts?: { destructive?: boolean; cancelLabel?: string; testId?: string; multiline?: boolean },
-): Promise<boolean> {
+  opts?: { destructive?: boolean; cancelLabel?: string; testId?: string; multiline?: boolean; splitDismiss?: boolean },
+): Promise<boolean | 'dismiss'> {
   const prev = confirmAsk.peek();
   if (prev) {
     confirmAsk.value = null;
@@ -47,8 +49,26 @@ export function askConfirm(
       destructive: !!opts?.destructive,
       testId: opts && opts.testId,
       multiline: !!opts?.multiline,
+      splitDismiss: !!opts?.splitDismiss,
       resolve,
     };
+  });
+}
+
+export function askConfirm(
+  message: string,
+  confirmLabel: string,
+  opts?: { destructive?: boolean; cancelLabel?: string; testId?: string; multiline?: boolean },
+): Promise<boolean> {
+  return openConfirm(message, confirmLabel, opts).then((answer) => answer === true);
+}
+
+/** Save / discard / leave the question open. Backdrop and Back are 'dismiss', not discard. */
+export function askSaveChoice(message: string, saveLabel: string, discardLabel: string): Promise<'save' | 'discard' | 'dismiss'> {
+  return openConfirm(message, saveLabel, { cancelLabel: discardLabel, splitDismiss: true }).then((answer) => {
+    if (answer === true) return 'save';
+    if (answer === 'dismiss') return 'dismiss';
+    return 'discard';
   });
 }
 
@@ -59,18 +79,19 @@ export function ConfirmHost() {
     const cur = confirmAsk.peek();
     if (!cur) return;
     confirmAsk.value = null;
-    cur.resolve(false);
+    cur.resolve(cur.splitDismiss ? 'dismiss' : false);
   }, !!ask);
   useEffect(() => () => resetConfirm(), []);
   if (!ask) return null;
-  const close = (ok: boolean) => {
+  const close = (ok: boolean | 'dismiss') => {
     if (confirmAsk.peek() !== ask) return;
     confirmAsk.value = null;
     ask.resolve(ok);
   };
+  const dismiss = () => close(ask.splitDismiss ? 'dismiss' : false);
   return (
     <div class="m-sheet-host m-dialog-host m-confirm-host" data-confirm-host="">
-      <button type="button" class="m-sheet-backdrop" aria-label={ask.cancelLabel} onClick={() => close(false)} />
+      <button type="button" class="m-sheet-backdrop" aria-label={ask.cancelLabel} onClick={dismiss} />
       <div class="m-dialog" role="dialog" aria-modal="true" aria-labelledby="m-confirm-msg" data-code={ask.testId}>
         <div class={'m-dialog-text' + (ask.multiline ? ' m-pre' : '')} id="m-confirm-msg">{ask.message}</div>
         <button

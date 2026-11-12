@@ -34,8 +34,11 @@ describe.each(FILES)('$file landing routes', ({ file, apex, www }) => {
     expect(site).toContain('rewrite @title /t/index.html');
     expect(site).toContain('@pair path /pair /pair/');
     expect(site).toContain('rewrite @pair /pair/index.html');
+    expect(site).toContain('@referral path_regexp invite ^/r/OMP-[A-Za-z0-9]+/?$');
+    expect(site).toContain('rewrite @referral /r/index.html');
     expect(site.indexOf('rewrite @title')).toBeLessThan(site.indexOf('file_server'));
     expect(site.indexOf('rewrite @pair')).toBeLessThan(site.indexOf('file_server'));
+    expect(site.indexOf('rewrite @referral')).toBeLessThan(site.indexOf('file_server'));
   });
 
   it('has no SPA fallback, so unknown paths are a real 404 with site/404.html', () => {
@@ -47,6 +50,20 @@ describe.each(FILES)('$file landing routes', ({ file, apex, www }) => {
     expect(errors).toMatch(/import security_headers_common$/m);
     expect(errors).toMatch(/import landing_csp$/m);
     expect(site.slice(0, site.indexOf('handle_errors {'))).toMatch(/import landing_csp$/m);
+  });
+});
+
+describe('site/r invite page', () => {
+  const html = readFileSync('ops/vps/site/r/index.html', 'utf8');
+  const js = readFileSync('ops/vps/site/r/referral.js', 'utf8');
+
+  it('is a noindex page that shows a code and does not load the home language redirect', () => {
+    expect(html).toContain('<html lang="ru">');
+    expect(html).toContain('noindex');
+    expect(html).toContain('/r/referral.js');
+    expect(html).not.toContain('app.js');
+    expect(js).toContain('/^OMP-[A-Z0-9]+$/');
+    expect(js).toContain('ref-code');
   });
 });
 

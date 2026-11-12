@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack, navigate } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { native, type FoundTv, type FoundOmpTv } from '../platform/native';
 import {
   connectTv,
@@ -25,6 +26,7 @@ import { MacForm } from '../ui/MacForm';
 import { addManual } from '../tv/power/manual';
 import { saveNet, netId, type NetKind } from '../tv/power/netStore';
 import { showToast } from '../ui/toast';
+import { askConfirm } from '../ui/confirm';
 
 type Discoverer = (timeoutMs: number) => Promise<FoundTv[]>;
 type AtvDiscoverer = (timeoutMs: number) => Promise<FoundOmpTv[]>;
@@ -143,7 +145,6 @@ export function Tv() {
   }, [noWifi]);
 
   const savedList = tvs.value;
-  const ompMeta = (ip: string, version?: string) => ip + (version ? ' · OMP ' + version : '');
   const rows: Row[] = savedList.map((sv) => {
     const kind: TvKind = sv.kind === 'atv' ? 'atv' : 'lg';
     const atv = kind === 'atv' ? foundAtv.find((f) => f.ip === sv.ip) : undefined;
@@ -156,11 +157,11 @@ export function Tv() {
   });
   for (const f of foundAtv) {
     if (rows.some((r) => r.ip === f.ip)) continue;
-    rows.push({ ip: f.ip, name: f.name, meta: ompMeta(f.ip, f.version), kind: 'atv', atv: f });
+    rows.push({ ip: f.ip, name: f.name, meta: 'Android TV' + (f.version ? ' · OMP ' + f.version : ''), kind: 'atv', atv: f });
   }
   for (const f of found) {
     if (rows.some((r) => r.ip === f.ip)) continue;
-    rows.push({ ip: f.ip, name: f.name, meta: f.ip + (f.model ? ' · ' + f.model : ''), kind: 'lg' });
+    rows.push({ ip: f.ip, name: f.name, meta: f.model || 'webOS', kind: 'lg' });
   }
 
   const state = tvState.value;
@@ -168,7 +169,9 @@ export function Tv() {
     rows.push({ ip: target, name: t('tvScreen.unnamed', { ip: target }), meta: target, kind: 'lg' });
   }
 
-  async function forget(ip: string) {
+  async function forget(ip: string, name: string) {
+    const ok = await askConfirm(t('tvScreen.forgetAsk', { name }), t('tvScreen.forgetAria', { name }), { destructive: true });
+    if (!ok) return;
     if (sessionIp.value === ip) await disconnectTv();
     forgetTv(ip);
   }
@@ -222,18 +225,13 @@ export function Tv() {
 
   return (
     <div class="m-screen m-tvscreen">
+      <FaqDone mark="tv" />
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P10.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d="M15 5l-7 7 7 7" />
         </button>
         <h1 class="m-bar-title">{t('history.tv')}</h1>
       </div>
-      <p class="m-muted m-note m-tv-steps">
-        {t('tvScreen.note')}
-      </p>
-      <button type="button" class="m-link m-tv-install" onClick={() => navigate({ name: 'install' })}>
-        {t('tvScreen.installLink')}
-      </button>
       {noWifi && (
         <p class="m-hint-warn" role="status" data-tv-nowifi>
           {t('tvScreen.noWifi')}
@@ -268,7 +266,10 @@ export function Tv() {
                     <Icon d="M3 5h18v11H3zM8 20h8" size={26} />
                   </span>
                   <span class="m-tv-text">
-                    <span class="m-server-name">{r.name}</span>
+                    <span class="m-server-name">
+                      {connected ? <span class="m-bill-dot" data-tv-dot /> : null}
+                      {r.name}
+                    </span>
                     <span class="m-muted m-small">
                       {r.meta}
                       {connecting || pairing ? t('tvScreen.connectingSuffix') : ''}
@@ -283,14 +284,17 @@ export function Tv() {
                   </span>
                 </button>
                 {r.saved && (
-                  <button type="button" class="m-icon-btn" aria-label={t('connect.rename', { name: r.name })} onClick={() => setRenaming(r.saved!)}>
-                    <Icon d={PENCIL} size={20} />
-                  </button>
-                )}
-                {r.saved && (
-                  <button type="button" class="m-icon-btn" aria-label={t('tvScreen.forgetAria', { name: r.name })} onClick={() => void forget(r.ip)}>
-                    <Icon d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" size={20} />
-                  </button>
+                  <details class="m-inline-menu">
+                    <summary class="m-icon-btn" aria-label={t('tvScreen.menu', { name: r.name })}>
+                      ⋯
+                    </summary>
+                    <button type="button" class="m-icon-btn" aria-label={t('connect.rename', { name: r.name })} onClick={() => setRenaming(r.saved!)}>
+                      <Icon d={PENCIL} size={20} />
+                    </button>
+                    <button type="button" class="m-icon-btn" aria-label={t('tvScreen.forgetAria', { name: r.name })} onClick={() => void forget(r.ip, r.name)}>
+                      <Icon d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" size={20} />
+                    </button>
+                  </details>
                 )}
               </div>
               {pairing && <div class="m-hint-warn">{t('install.assistant.confirmOnTv')}</div>}
@@ -311,6 +315,8 @@ export function Tv() {
           );
         })}
       </div>
+      <details class="m-add-tv" open={savedList.length === 0}>
+        <summary class="m-btn m-btn-secondary">{t('tvScreen.add')}</summary>
       {manual ? (
         <form class="m-field" onSubmit={connectManual}>
           <label for="tv-ip">{t('install.assistant.ipLabel')}</label>
@@ -337,6 +343,20 @@ export function Tv() {
           {t('tvScreen.manualIp')}
         </button>
       )}
+      </details>
+      <button type="button" class="m-link m-link-card m-tv-install" onClick={() => navigate({ name: 'install' })}>
+        {t('tvScreen.installLink')}
+      </button>
+      {savedList.length === 0 ? (
+        <p class="m-muted m-note m-tv-steps">{t('tvScreen.note')}</p>
+      ) : (
+        <details class="m-tv-steps">
+          <summary>{t('tvScreen.how')}</summary>
+          <p class="m-muted m-note">{t('tvScreen.note')}</p>
+        </details>
+      )}
+      <details class="m-tv-wol">
+        <summary>{t('tvScreen.wol')}</summary>
       <MacForm
         onAdd={(d) => {
           addManual(d);
@@ -366,6 +386,7 @@ export function Tv() {
       <p class="m-muted m-note m-tv-tip m-tv-steps">
         {t('tvScreen.tip')}
       </p>
+      </details>
       {coding && (
         <CodeSheet tvName={coding.name} version={coding.version} onSubmit={(code) => pair(coding, code)} onCancel={() => setCoding(null)} />
       )}
