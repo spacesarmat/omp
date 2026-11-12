@@ -20,6 +20,7 @@ import {
 } from '../lib/calendar';
 import { usePullRefresh, PullArea } from '../ui/PullRefresh';
 import { Sheet } from '../ui/Sheet';
+import { SubSheet } from '../ui/SubSheet';
 
 const CHEV_L = 'M15 6l-6 6 6 6';
 const CHEV_R = 'M9 6l6 6-6 6';
@@ -34,7 +35,7 @@ function goEpisode(action: CalGo): void {
   else navigate(action);
 }
 
-function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: (e: CalRow) => void }) {
+function Row({ e, findings, onOpen, onRemind }: { e: CalRow; findings: Finding[]; onOpen: (e: CalRow) => void; onRemind: (e: CalRow) => void }) {
   const card = e.show.card;
   const found = rowFinding(e, findings);
   const multi = card.seasons.length > 1;
@@ -66,8 +67,11 @@ function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: 
           <button
             type="button"
             class="m-btn m-btn-secondary m-btn-sm"
-            aria-label={t('news.calFindAria', { title: card.title + ' ' + code })}
-            onClick={() => navigate({ name: 'add', query: torrentQuery(card, e.season), run: true })}
+            aria-label={e.status === 'future' ? t('news.calBell') : t('news.calFindAria', { title: card.title + ' ' + code })}
+            onClick={() => {
+              if (e.status === 'future') onRemind(e);
+              else navigate({ name: 'add', query: torrentQuery(card, e.season), run: true });
+            }}
           >
             {e.status === 'future' ? t('news.calBell') : t('news.calFind')}
           </button>
@@ -100,7 +104,7 @@ function Tools(p: { view: CalView; subsOnly: boolean; onView: (v: CalView) => vo
   );
 }
 
-function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpen: (e: CalRow) => void }) {
+function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpen: (e: CalRow) => void; onRemind: (e: CalRow) => void }) {
   void monthRev.value;
   const now = new Date();
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() });
@@ -190,7 +194,7 @@ function Month(p: { subsOnly: boolean; findings: Finding[]; stamp: number; onOpe
       <div class="m-cal-picked" data-cal-picked={picked}>
         {picked && <div class="m-cal-dayhead">{dayHeader(picked) + (dayEntries.length ? ' · ' + tp('news.calReleases', dayEntries.length) : '')}</div>}
         {rows.length ? rows.map((r) => (
-          <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} onOpen={p.onOpen} />
+          <Row key={r.show.card.id + ':' + r.season + ':' + r.episodes.join(',')} e={r} findings={p.findings} onOpen={p.onOpen} onRemind={p.onRemind} />
         )) : picked ? <div class="m-muted m-small">{t('news.calDayEmpty')}</div> : null}
       </div>
     </div>
@@ -266,6 +270,7 @@ export function Calendar() {
   const [view, setView] = useState<CalView>(loadCalView);
   const [subsOnly, setSubsOnly] = useState(false);
   const [ask, setAsk] = useState<CalRow | null>(null);
+  const [remind, setRemind] = useState<CalRow | null>(null);
   const [earlierOpen, setEarlierOpen] = useState(false);
   const reload = (fresh?: boolean) => loadCalendar(torrents.peek(), loadSubs(), fresh);
   useEffect(() => {
@@ -295,7 +300,7 @@ export function Calendar() {
   else if (view === 'month') {
     body = (
       <>
-        {filteredOut ? empty : <Month subsOnly={subsOnly} findings={findings} stamp={state.at} onOpen={setAsk} />}
+        {filteredOut ? empty : <Month subsOnly={subsOnly} findings={findings} stamp={state.at} onOpen={setAsk} onRemind={setRemind} />}
         {state.loading && <div class="m-muted m-small">{t('news.calLoading')}</div>}
       </>
     );
@@ -315,7 +320,7 @@ export function Calendar() {
                 <div class="m-set-label m-cal-dayhead">{g.label}</div>
               )}
               {closed ? null : g.rows.map((r) => (
-                <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} onOpen={setAsk} />
+                <Row key={r.show.card.id + ':' + r.season + ':' + r.airDate + ':' + r.episodes.join(',')} e={r} findings={findings} onOpen={setAsk} onRemind={setRemind} />
               ))}
             </section>
           );
@@ -331,6 +336,7 @@ export function Calendar() {
         {body}
       </PullArea>
       {ask && <Ask e={ask} onClose={() => setAsk(null)} />}
+      {remind && <SubSheet initial={{ query: remind.show.card.title, notify: true }} onClose={() => setRemind(null)} />}
     </div>
   );
 }

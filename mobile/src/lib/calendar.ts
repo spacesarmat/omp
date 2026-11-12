@@ -256,7 +256,7 @@ export function humanEpisodes(season: number, episodes: number[], withSeason = f
 
 /** «Навсегда» and similar titles are the season finale, not the episode name. */
 export function displayEpisodeName(name: string): string {
-  if (/навсегда|finale/i.test(name)) return t('news.calFinale');
+  if (/^(навсегда|finale)$/i.test(name.trim())) return t('news.calFinale');
   return name;
 }
 

@@ -1981,6 +1981,8 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-promo-apply:disabled { background: #252A35; color: var(--muted); opacity: 1; }
 .m-sub-quality { display: flex; }
 .m-sub-quality .m-seg-btn { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; }
+.m-seed-step { display: flex; margin-top: 8px; }
+.m-seed-step button { width: 40px; height: 40px; margin-right: 8px; border: none; border-radius: 10px; background: #252A35; color: var(--text); font-size: 18px; }
 .m-cal-picked { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .m-similar { margin-top: 12px; }
 .m-similar-sum {

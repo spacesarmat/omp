@@ -191,6 +191,8 @@ describe('calendar data', () => {
     };
     expect(rowLine(row, true)).toContain('финал сезона');
     expect(rowLine(row, true)).not.toContain('Навсегда');
+    const ordinary = { ...row, name: 'Не навсегда' };
+    expect(rowLine(ordinary, true)).toContain('Не навсегда');
   });
 
   it('grouped by day in order, headed «Сегодня», «Завтра», «Ср 8 окт.»; within a day by title', () => {
