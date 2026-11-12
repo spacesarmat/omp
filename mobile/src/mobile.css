@@ -196,7 +196,8 @@ button, .m-btn {
   border-radius: 12px;
   background: var(--panel-2);
 }
-.m-tv-ok { display: flex; margin-top: 2px; align-items: center; gap: 4px; color: #3FB950; font-size: 13px; font-weight: 700; }
+.m-tv-ok { display: flex; margin-top: 2px; align-items: center; color: var(--accent); font-size: 13px; font-weight: 700; }
+.m-tv-ok svg { margin-right: 4px; }
 .m-hint-links { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
 .m-hint-warn { padding: 12px 14px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 14px; line-height: 1.45; }
 .m-dead { margin: 8px 16px 12px; }
@@ -1079,6 +1080,7 @@ button, .m-btn {
 /* «Источники поиска»: the sections spaced like «Настройки», a label never right under the card above it */
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
+.m-set-group[hidden] { display: none; }
 .m-set-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
 .m-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
@@ -1413,7 +1415,23 @@ button.m-now-chtext { border: none; background: none; color: inherit; display: f
 
 .m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; font: inherit; }
 .m-set-pick > span:first-child, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
-.m-set-pick > .m-muted { flex: 0 0 auto; white-space: nowrap; }
+.m-set-pick > .m-muted { flex: 0 1 auto; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-set-ico { flex: 0 0 auto; display: flex; margin-right: 10px; color: var(--muted); }
+.m-screen[data-route='settings'] .m-set-group { margin: 0 0 14px; padding: 4px 0 8px; border-radius: 16px; background: var(--panel); }
+.m-screen[data-route='settings'] .m-set-group .m-set-row { background: transparent; border-radius: 0; }
+.m-screen[data-route='settings'] .m-set-group .m-set-row + .m-set-row,
+.m-screen[data-route='settings'] .m-set-group .m-set-pick + .m-set-row,
+.m-screen[data-route='settings'] .m-set-group button.m-set-pick + button.m-set-pick { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.m-storage { display: block; height: 6px; margin-top: 8px; border-radius: 6px; background: #2A3140; overflow: hidden; }
+.m-storage > span { display: block; height: 6px; background: var(--accent); }
+.m-addr-row { display: flex; align-items: center; }
+.m-addr-row .m-addr { flex: 1 1 auto; min-width: 0; }
+.m-addr-qr { width: 96px; height: 96px; margin-top: 8px; border-radius: 8px; background: #fff; }
+.m-addr-hint { white-space: pre-line; }
+.m-inline-menu > summary { list-style: none; cursor: pointer; }
+.m-inline-menu > summary::-webkit-details-marker { display: none; }
+.m-now-card { flex-direction: row; align-items: center; }
+.m-link-card { display: block; margin: 12px 0; padding: 12px 14px; border-radius: 12px; background: var(--panel); }
 .m-sheet [role="radio"][aria-checked="true"] { justify-content: space-between; }
 /* subtitle under the title, in the same column; the back button stays on the title row */
 .m-screen[data-route='serverSettings'] > .m-bar { align-items: flex-start; }

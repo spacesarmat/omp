@@ -94,7 +94,8 @@ describe('Tv screen with Android TV', () => {
     await flush();
     expect(el.querySelectorAll('.m-tv')).toHaveLength(2);
     const atv = card(el, 'Гостиная');
-    expect(atv.textContent).toContain('192.168.1.40 · OMP 0.10.0');
+    expect(atv.textContent).toContain('Android TV · OMP 0.10.0');
+    expect(atv.textContent).not.toContain('192.168.1.40');
     expect(atv.querySelector('.m-tv-kind')?.textContent).toBe('Android TV');
     expect(card(el, 'Спальня').querySelector('.m-tv-kind')?.textContent).toBe('LG webOS');
   });

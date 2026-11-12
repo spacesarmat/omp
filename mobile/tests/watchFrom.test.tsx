@@ -248,8 +248,10 @@ describe('WatchFrom', () => {
     await click(el, '[data-primary="' + b.id + '"]');
     expect(loadWifiPrefs().primaryId).toBe(b.id);
     expect(activeServerId.value).toBe(a.id);
+    expect(el.querySelector('[data-section="network"]')!.hasAttribute('hidden')).toBe(false);
     await click(el, '[data-mode="always"]');
     expect(loadWifiPrefs().overrideId).toBe(a.id);
+    expect(el.querySelector('[data-section="network"]')!.hasAttribute('hidden')).toBe(true);
     setCurrentNetworkReader(async () => ({ kind: 'ok', ssid: 'cafe' }));
     await click(el, '[data-action="current"]');
     expect(loadWifiPrefs().manualSsid).toBe('cafe');
