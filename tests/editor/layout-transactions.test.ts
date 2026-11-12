@@ -143,6 +143,18 @@ describe('placeNodeTransaction', () => {
     controller.dispose();
   });
 
+  it('stores the content offset when the measured parent is scrolled and shows the visible rect again', () => {
+    const parent = { x: 10, y: 20, width: 400, height: 200, scrollX: 40, scrollY: 100 };
+    const visual = { x: 10, y: 40, width: 80, height: 40 };
+
+    const placement = absolutePlacementFromRect(visual, parent, context, 'card-a', 'Card A');
+
+    // The visible box is already 40px left and 100px above the content position. Saving the
+    // visible delta would make absolute top apply that scroll a second time.
+    expect(placement).toMatchObject({ x: 1000, y: 6000 });
+    expect(placementToRect(placement, parent)).toMatchObject(visual);
+  });
+
   it('subtracts a preserved margin from the measured border box so absolute placement does not jump twice', () => {
     const base = createPlacement(context, 'card-a', 'Card A', { margin: '12px' });
     const parent = { x: 0, y: 0, width: 400, height: 400 };

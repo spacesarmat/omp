@@ -439,6 +439,32 @@ describe('layout dom runtime', () => {
     expect(root.querySelector('iframe')).toBeNull();
   });
 
+  it('strips a javascript url that hides a tab inside the scheme', () => {
+    const root = mount('<div data-design-id="card-grid"></div>');
+    let theme = createDefaultTheme(BASE);
+    theme.layout = {
+      containers: [],
+      placements: [],
+      clones: [{
+        id: 'clone-js-tab',
+        target: context.target,
+        screenId: context.screenId,
+        format: context.format,
+        nodeId: 'copy-js-tab',
+        parentId: 'card-grid',
+        label: 'Link',
+        html: '<div data-design-id="card"><a href="java&#x09;script:alert(1)">Go</a></div>',
+      }],
+    };
+
+    cleanup = observeLayout(root, theme, context);
+
+    const link = root.querySelector('a');
+    expect(link).not.toBeNull();
+    expect(link!.getAttribute('href')).toBeNull();
+    expect(link!.textContent).toBe('Go');
+  });
+
   it('rejects crafted clone html with blocked root tags or slash script variants in validation', () => {
     let theme = createDefaultTheme(BASE);
     const baseClone = {

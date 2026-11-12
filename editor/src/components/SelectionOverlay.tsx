@@ -166,7 +166,27 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
     element.dispatchEvent(new MouseEvent('click', init));
   };
 
+  const hitFromPreview = (point: ClientPoint): LayoutNodeDescriptor | null => {
+    const doc = props.getPreviewDocument?.() ?? null;
+    if (!doc || typeof doc.elementFromPoint !== 'function') return null;
+    const hit = doc.elementFromPoint(point.x, point.y);
+    if (!hit || hit.ownerDocument !== doc) return null;
+    let current: Element | null = hit;
+    while (current) {
+      const element = current as HTMLElement;
+      const nodeId = element.dataset?.layoutNode;
+      if (nodeId) {
+        const node = props.nodes.find((entry) => entry.nodeId === nodeId);
+        if (node && node.parentId !== null) return node;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  };
+
   const hitTest = (point: ClientPoint): LayoutNodeDescriptor | null => {
+    const painted = hitFromPreview(point);
+    if (painted) return painted;
     for (let index = props.nodes.length - 1; index >= 0; index -= 1) {
       const node = props.nodes[index];
       if (node.parentId === null) continue;

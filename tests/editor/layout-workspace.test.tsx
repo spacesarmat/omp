@@ -630,6 +630,20 @@ describe('layout workspace', () => {
     expect(parseSpacingField('1200')).toBeNull();
   });
 
+  it('selects the preview element under the pointer when a later layer covers the same box', () => {
+    buildPreview();
+    const doc = host.querySelector('iframe')!.contentDocument!;
+    const cards = [...doc.querySelectorAll<HTMLElement>('[data-design-id="server-card"]')];
+    // The pointer sits on the first card's rectangle. The preview stack says the second card
+    // is painted on top, which rectangle order cannot see.
+    doc.elementFromPoint = () => cards[1];
+
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+
+    expect(host.querySelector('[data-testid="layout-row-server-card-2"]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('lets a plain click focus and type into a preview text control without selecting it', () => {
     const { input, settings } = buildPreview();
     const doc = input.ownerDocument;

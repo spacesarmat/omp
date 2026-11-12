@@ -28,6 +28,10 @@ export interface LayoutRect {
   y: number;
   width: number;
   height: number;
+  // Scroll of this element itself. A child's visible box is already shifted by the parent
+  // scroll, while absolute top and left are measured from the unscrolled padding edge.
+  scrollX?: number;
+  scrollY?: number;
 }
 
 // Geometry is stored in fixed-point percent units: 10000 units cover the container, the runtime
@@ -74,12 +78,14 @@ export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRe
   const margin = marginOffsetPx(placement.margin);
   const fromRight = placement.anchor === 'top-right' || placement.anchor === 'bottom-right';
   const fromBottom = placement.anchor === 'bottom-left' || placement.anchor === 'bottom-right';
-  const x = fromRight
+  const scrollX = parentRect.scrollX ?? 0;
+  const scrollY = parentRect.scrollY ?? 0;
+  const x = (fromRight
     ? parentRect.x + parentRect.width - xUnits - width - margin
-    : parentRect.x + xUnits + margin;
-  const y = fromBottom
+    : parentRect.x + xUnits + margin) - scrollX;
+  const y = (fromBottom
     ? parentRect.y + parentRect.height - yUnits - height - margin
-    : parentRect.y + yUnits + margin;
+    : parentRect.y + yUnits + margin) - scrollY;
   return { x, y, width, height };
 }
 
@@ -199,10 +205,14 @@ export function absolutePlacementFromRect(
   const anchor = base?.anchor ?? 'top-left';
   const fromRight = anchor === 'top-right' || anchor === 'bottom-right';
   const fromBottom = anchor === 'bottom-left' || anchor === 'bottom-right';
-  const left = rect.x - parentRect.x;
-  const top = rect.y - parentRect.y;
-  const right = parentRect.x + parentRect.width - rect.x - rect.width;
-  const bottom = parentRect.y + parentRect.height - rect.y - rect.height;
+  const scrollX = parentRect.scrollX ?? 0;
+  const scrollY = parentRect.scrollY ?? 0;
+  // The measured box is the visible position. Absolute offsets are from the padding edge, so
+  // the parent scroll has to be added back or the browser subtracts it a second time.
+  const left = rect.x - parentRect.x + scrollX;
+  const top = rect.y - parentRect.y + scrollY;
+  const right = parentRect.x + parentRect.width - rect.x - rect.width - scrollX;
+  const bottom = parentRect.y + parentRect.height - rect.y - rect.height - scrollY;
   // rect is a border box. A preserved margin is applied again at render, so the stored offset
   // is the margin edge: one margin inside the measured border on the anchored sides.
   const margin = marginOffsetPx(base?.margin);

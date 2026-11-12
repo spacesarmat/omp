@@ -100,6 +100,8 @@ export function PreviewPane(props: PreviewPaneProps) {
         y: box.top - rootBox.top,
         width: box.width,
         height: box.height,
+        scrollX: element.scrollLeft || 0,
+        scrollY: element.scrollTop || 0,
       };
     }
     // Flow axis decisions need the real rendered direction: the editor maps alignment and

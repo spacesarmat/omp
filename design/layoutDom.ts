@@ -259,6 +259,12 @@ const CLONE_STRIP_ATTRIBUTES = ['data-key', 'data-anchor', 'data-layout-id', 'da
 // javascript: URLs, per-node layout identity, item anchors and baked placement styles never
 // travel with a clone (a copied anchor would read as a duplicate of the original item).
 // The root itself must be a renderable tag as well, never a live script or embedded document.
+// Browsers drop ASCII controls and spaces inside a URL scheme, so a tab between "java" and
+// "script" is still a script URL after HTML parsing turns a character reference into that tab.
+function isScriptUrl(value: string): boolean {
+  return /^javascript:/i.test(value.replace(/[\u0000-\u0020]+/g, ''));
+}
+
 function sanitizeCloneElement(element: HTMLElement): HTMLElement | null {
   if (CLONE_BLOCKED_TAGS.has(element.tagName)) return null;
   const walk = (current: HTMLElement): void => {
@@ -274,7 +280,7 @@ function sanitizeCloneElement(element: HTMLElement): HTMLElement | null {
       const lower = name.toLowerCase();
       const value = current.getAttribute(name) ?? '';
       if (lower.startsWith('on')
-        || ((lower === 'href' || lower === 'src' || lower === 'xlink:href') && /^\s*javascript:/i.test(value))
+        || ((lower === 'href' || lower === 'src' || lower === 'xlink:href') && isScriptUrl(value))
         || CLONE_STRIP_ATTRIBUTES.includes(lower)
         || lower === 'style') {
         current.removeAttribute(name);
