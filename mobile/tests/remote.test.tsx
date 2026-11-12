@@ -672,17 +672,52 @@ describe('Remote with a TV', () => {
     // Sheet is portaled to document.body (outside #app / NowDeck transforms).
     expect(sheet.closest('#app')).toBeNull();
     const sheetLbl = (l: string) => sheet.querySelector(`[aria-label="${l}"]`) as HTMLElement;
-    click(sheetLbl('Скорость 5'));
+    const range = sheet.querySelector('input[type="range"]') as HTMLInputElement;
+    expect(range).toBeTruthy();
+    expect(sheet.querySelector('[data-tp-try]')).toBeTruthy();
+    expect(Array.from(sheet.querySelectorAll('button')).some((b) => (b.textContent || '').includes('Готово'))).toBe(false);
+    range.value = '5';
+    act(() => {
+      range.dispatchEvent(new Event('input', { bubbles: true }));
+    });
     click(sheetLbl('Ускорение'));
     click(sheetLbl('Касание = щелчок'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!)).toEqual({ speed: 5, accel: false, tapClick: false, invertScroll: false });
     click(sheetLbl('Обратная прокрутка'));
     expect(JSON.parse(localStorage.getItem('tsp.touchpad')!).invertScroll).toBe(true);
     expect(sheet.textContent).toContain('5 из 5');
-    click(Array.from(sheet.querySelectorAll('button')).find((b) => (b.textContent || '').includes('Готово'))!);
+    click(sheet.querySelector('.m-sheet-backdrop')!);
     expect(document.querySelector('.m-sheet-host')).toBeNull();
     reloadTouchpad();
     expect(touchpad.value.speed).toBe(5);
+  });
+
+  it('holding the d-pad repeats the key, and a volume key is hardware', () => {
+    vi.useFakeTimers();
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED', clientKey: 'k' });
+    mount();
+    const up = lbl('Вверх');
+    act(() => {
+      up.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+    expect(a.pressButton).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(380 + 140);
+    });
+    expect(a.pressButton.mock.calls.length).toBeGreaterThan(1);
+    const n = a.pressButton.mock.calls.length;
+    act(() => {
+      up.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    });
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+    expect(a.pressButton.mock.calls.length).toBe(n);
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'AudioVolumeUp', bubbles: true }));
+    });
+    expect(a.volume).toHaveBeenCalledWith('up');
+    vi.useRealTimers();
   });
 
   it('touchpad ignores a second pointer', () => {
@@ -1005,7 +1040,7 @@ describe('Remote in English', () => {
     });
     click(text('Touchpad'));
     expect(el.querySelector('.m-touchpad')!.getAttribute('aria-label')).toBe('Touchpad');
-    expect(el.querySelector('.m-touchpad .m-muted')!.textContent).toBe('Swipe with a finger · two fingers scroll');
+    expect(el.querySelector('.m-pad-hint')!.textContent).toBe('Swipe with a finger · two fingers scroll');
     click(lbl('Keyboard'));
     expect(document.querySelector('input.m-remote-type')!.getAttribute('aria-label')).toBe('Typing on the TV');
     expect(document.querySelector('input.m-remote-type')!.getAttribute('placeholder')).toBe('Type - the text goes to the TV');
