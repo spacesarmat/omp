@@ -14,6 +14,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Settings: each video player option has a subtitle, Built-in is marked recommended, and the yellow outline is gone. The TV list hides the IP and the active TV has a thin yellow frame. Watch-from shows only the selected rule. The bug report opens as a sheet. Stop server is a link
 - [phone] Help: an empty search offers Ask in Telegram. Buttons open the TV install and the TV list. The selected device chip has no yellow outline
 - [phone] Search remembers recent queries and offers a magnet that is already on the clipboard
+- [phone] A subscription edit has a seed stepper. Check now is the yellow button. A future calendar episode says Remind me, and "forever" reads as the season finale
 
 ## 0.30.1-beta.3
 

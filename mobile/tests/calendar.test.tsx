@@ -179,6 +179,20 @@ describe('calendar data', () => {
     expect(calendarEntries(show(HARBOR), [HARBOR_S1], NOW).map((x) => [x.episode, x.status])).toEqual([[1, 'today'], [2, 'future']]);
   });
 
+  it('«Навсегда» reads as the season finale', () => {
+    const row = {
+      show: show(FROST),
+      season: 3,
+      episodes: [8],
+      name: 'Навсегда',
+      airDate: '2026-10-04',
+      status: 'aired' as const,
+      entries: [],
+    };
+    expect(rowLine(row, true)).toContain('финал сезона');
+    expect(rowLine(row, true)).not.toContain('Навсегда');
+  });
+
   it('grouped by day in order, headed «Сегодня», «Завтра», «Ср 8 окт.»; within a day by title', () => {
     const entries = calendarEntries(show(FROST), [FROST_S3], NOW).concat(calendarEntries(show(HARBOR), [HARBOR_S1], NOW));
     const twin = { ...calendarEntries(show({ ...HARBOR, id: 32, title: 'Альфа' }), [season(1, ['', '', '', '', '', '', '2026-10-08'])], NOW)[0] };
@@ -463,7 +477,7 @@ describe('the «Календарь» tab', () => {
     expect(first.querySelector('.m-cal-chip')).toBeNull();
     const future = groups[2].querySelector('.m-cal-row')!;
     expect(future.querySelector('.m-cal-chip')).toBeNull();
-    expect(future.querySelector('button.m-btn')!.textContent).toBe('Найти');
+    expect(future.querySelector('button.m-btn')!.textContent).toBe('Напомнить');
     expect(future.querySelector('.m-cal-when')).toBeNull();
 
     act(() => button('Смотреть', first)!.click());
@@ -517,7 +531,7 @@ describe('the «Календарь» tab', () => {
     expect(labels).toContain('Thu, Oct 8');
     expect(el.querySelector('.m-cal-chip')).toBeNull();
     expect(el.querySelector('.m-cal-when')).toBeNull();
-    expect(button('Find')).toBeTruthy();
+    expect(button('Remind me')).toBeTruthy();
   });
 
   it('month grid: today is selected, a day opens its rows, arrows change the month, the view is kept', async () => {

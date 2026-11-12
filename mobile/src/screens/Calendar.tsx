@@ -69,7 +69,7 @@ function Row({ e, findings, onOpen }: { e: CalRow; findings: Finding[]; onOpen: 
             aria-label={t('news.calFindAria', { title: card.title + ' ' + code })}
             onClick={() => navigate({ name: 'add', query: torrentQuery(card, e.season), run: true })}
           >
-            {t('news.calFind')}
+            {e.status === 'future' ? t('news.calBell') : t('news.calFind')}
           </button>
         )}
       </span>
