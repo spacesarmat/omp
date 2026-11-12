@@ -80,8 +80,25 @@ function mergeOrder(base, local, incoming, key, path, issues, survivors) {
   return ordered;
 }
 
-function mergeValue(base, local, incoming, path, issues) {
-  if (equal(local, base)) return structuredClone(incoming);
+// A node listed in the destination orders of two containers of one context has two competing
+// parents: merge-by-id can produce this when local moves a node to one parent and incoming
+// moves the same node to another, and the runtime would then move the node back and forth on
+// every refresh. The merged layout must give every node at most one destination per context.
+function competingParentIssues(layout) {
+  const byContext = new Map();
+  for (const container of layout?.containers ?? []) {
+    const key = `${container.target}|${container.screenId}|${container.format}`;
+    const claimed = byContext.get(key) ?? new Set();
+    for (const nodeId of container.order) {
+      if (claimed.has(nodeId)) return [{ path: 'theme.layout.containers' }];
+      claimed.add(nodeId);
+    }
+    byContext.set(key, claimed);
+  }
+  return [];
+}
+
+function mergeValue(base, local, incoming, path, issues) {  if (equal(local, base)) return structuredClone(incoming);
   if (equal(incoming, base) || equal(local, incoming)) return structuredClone(local);
   if (object(base) && object(local) && object(incoming)) {
     const result = {};
@@ -93,7 +110,18 @@ function mergeValue(base, local, incoming, path, issues) {
     return result;
   }
   if (Array.isArray(base) && Array.isArray(local) && Array.isArray(incoming)) {
-    const key = path === 'theme.releaseIntents' ? 'target' : path === 'theme.overrides' || path === 'flow.rules' ? 'id' : null;
+    // Layout records and style presets carry unique record ids, so independent edits to
+    // different nodes, containers, clones or presets merge entry by entry instead of
+    // conflicting as whole arrays.
+    const key = path === 'theme.releaseIntents' ? 'target'
+      : path === 'theme.overrides'
+        || path === 'flow.rules'
+        || path === 'theme.stylePresets'
+        || path === 'theme.layout.placements'
+        || path === 'theme.layout.containers'
+        || path === 'theme.layout.clones'
+        ? 'id'
+        : null;
     if (key) {
       const merged = new Map();
       const allIds = new Set([...base, ...local, ...incoming].map((entry) => entry[key]));
@@ -173,6 +201,7 @@ export async function rebaseDraft({ root, draft: input }) {
   const issues = [];
   const theme = mergeValue(base.theme, draft.theme, incoming.theme, 'theme', issues);
   const flow = mergeValue(base.flow, draft.flow, incoming.flow, 'flow', issues);
+  issues.push(...competingParentIssues(theme.layout));
   if (issues.length) throw new DesignError('REBASE_CONFLICT', 409, issues);
   const rebased = parseEditorDraft({
     ...draft,

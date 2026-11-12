@@ -45,9 +45,10 @@ export interface LogicEditorProps {
   controller: DraftController;
   screenId: DesktopRouteId;
   elementId: string;
+  readOnly?: boolean;
 }
 
-export function LogicEditor({ controller, screenId, elementId }: LogicEditorProps) {
+export function LogicEditor({ controller, screenId, elementId, readOnly = false }: LogicEditorProps) {
   const draft = useDraftController(controller);
   const matching = draft.flow.rules.filter((rule) => rule.screenId === screenId && rule.elementId === elementId);
   const [selectedId, setSelectedId] = useState(matching[0]?.id || nextId(draft.flow, elementId));
@@ -71,6 +72,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
   }, [selectedId, draft.flow]);
 
   const save = () => {
+    if (readOnly) return;
     if (form.action === 'navigate' && !isDesktopRouteId(form.destination)) {
       setError('UNKNOWN_ROUTE');
       return;
@@ -104,6 +106,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
   };
 
   const move = (direction: -1 | 1) => {
+    if (readOnly) return;
     const index = draft.flow.rules.findIndex((rule) => rule.id === selectedId);
     const destination = index + direction;
     if (index < 0 || destination < 0 || destination >= draft.flow.rules.length) return;
@@ -117,7 +120,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
     <section class="editor-logic">
       <h3>Логика: {elementId}</h3>
       <label>Правило
-        <select data-testid="rule" value={selectedId} onChange={(event) => {
+        <select data-testid="rule" value={selectedId} disabled={readOnly} onChange={(event) => {
           setSelectedId(event.currentTarget.value);
           setIsNew(false);
         }}>
@@ -125,12 +128,13 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
           {isNew && <option value={selectedId}>{selectedId}</option>}
         </select>
       </label>
-      <button type="button" data-action="add-rule" onClick={add}>Добавить правило</button>
+      {readOnly && <p class="editor-notice" data-testid="inspector-readonly">Режим сравнения - редактирование выключено</p>}
+      <button type="button" data-action="add-rule" disabled={readOnly} onClick={add}>Добавить правило</button>
       <label>Событие
         <select data-testid="event" value="click" disabled><option value="click">click</option></select>
       </label>
       <label>Условие
-        <select data-testid="condition" value={form.condition} onChange={(event) => setForm({ ...form, condition: event.currentTarget.value as RuleForm['condition'] })}>
+        <select data-testid="condition" value={form.condition} disabled={readOnly} onChange={(event) => setForm({ ...form, condition: event.currentTarget.value as RuleForm['condition'] })}>
           <option value="none">Всегда</option>
           <option value="server-true">server.connected = true</option>
           <option value="server-false">server.connected = false</option>
@@ -138,7 +142,7 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
         </select>
       </label>
       <label>Действие
-        <select data-testid="action" value={form.action} onChange={(event) => setForm({ ...form, action: event.currentTarget.value as RuleForm['action'] })}>
+        <select data-testid="action" value={form.action} disabled={readOnly} onChange={(event) => setForm({ ...form, action: event.currentTarget.value as RuleForm['action'] })}>
           <option value="navigate">navigate</option>
           <option value="back">back</option>
           <option value="toast">toast</option>
@@ -146,19 +150,19 @@ export function LogicEditor({ controller, screenId, elementId }: LogicEditorProp
       </label>
       {form.action === 'navigate' && (
         <label>Экран назначения
-          <select data-testid="destination" value={form.destination} onChange={(event) => setForm({ ...form, destination: event.currentTarget.value })}>
+          <select data-testid="destination" value={form.destination} disabled={readOnly} onChange={(event) => setForm({ ...form, destination: event.currentTarget.value })}>
             {DESKTOP_ROUTES.map((route) => <option value={route.id}>{route.id}</option>)}
           </select>
         </label>
       )}
       {form.action === 'toast' && (
         <label>Текст сообщения
-          <input data-testid="toast-message" value={form.message} onChange={(event) => setForm({ ...form, message: event.currentTarget.value })} />
+          <input data-testid="toast-message" value={form.message} disabled={readOnly} onChange={(event) => setForm({ ...form, message: event.currentTarget.value })} />
         </label>
       )}
-      <button type="button" data-action="save-rule" onClick={save}>Сохранить правило</button>
-      <button type="button" data-action="move-up" onClick={() => move(-1)}>Вверх</button>
-      <button type="button" data-action="move-down" onClick={() => move(1)}>Вниз</button>
+      <button type="button" data-action="save-rule" disabled={readOnly} onClick={save}>Сохранить правило</button>
+      <button type="button" data-action="move-up" disabled={readOnly} onClick={() => move(-1)}>Вверх</button>
+      <button type="button" data-action="move-down" disabled={readOnly} onClick={() => move(1)}>Вниз</button>
       {error && <p role="alert">{error}</p>}
       {issues.length > 0 && <div class="editor-issues" role="alert">{issues.map((issue) => <div key={`${issue.code}-${issue.ruleId}`}>{issue.code}: {issue.message}</div>)}</div>}
     </section>

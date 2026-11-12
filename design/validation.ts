@@ -2,6 +2,11 @@ import {
   DESIGN_FORMATS,
   DESIGN_STATES,
   DESIGN_TARGETS,
+  LAYOUT_ALIGNMENTS,
+  LAYOUT_ANCHORS,
+  LAYOUT_DIRECTIONS,
+  LAYOUT_DISTRIBUTIONS,
+  LAYOUT_MODES,
   type DesignFormat,
   type DesignState,
   type DesignTarget,
@@ -10,7 +15,12 @@ import {
   type InteractionAction,
   type InteractionCondition,
   type InteractionRule,
+  type LayoutContainer,
+  type LayoutClone,
+  type LayoutDocument,
+  type LayoutPlacement,
   type ReleaseIntent,
+  type StylePreset,
   type ThemeDocument,
   type ThemeOverride,
   type TokenMap,
@@ -25,6 +35,28 @@ const COLORS = new Set(['--omp-color-background', '--omp-color-panel', '--omp-co
 const SIZES = new Set(['--omp-size-space', '--omp-size-font', '--omp-size-sidebar', '--omp-size-radius']);
 const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current']);
 const SCOPES = new Set(['target', 'component', 'screen', 'element', 'format', 'state']);
+export const LAYOUT_GEOMETRY_LIMIT = 10000;
+export const LAYOUT_ZINDEX_LIMIT = 999;
+// Spacing values (margins, paddings, size tokens) share one document limit so the editor fields,
+// the draft schema and the app runtime all accept the same range.
+export const LAYOUT_SIZE_PX_LIMIT = 512;
+const LAYOUT_CLONE_HTML_LIMIT = 50000;
+
+export function isLayoutGeometryValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_GEOMETRY_LIMIT;
+}
+
+export function isLayoutSizeValue(value: unknown): value is number | 'auto' {
+  return value === 'auto' || isLayoutGeometryValue(value);
+}
+
+export function isLayoutZIndexValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_ZINDEX_LIMIT;
+}
+
+export function isLayoutMarginValue(value: unknown): value is string {
+  return typeof value === 'string' && SIZE.test(value) && Number.parseFloat(value) <= LAYOUT_SIZE_PX_LIMIT;
+}
 
 export class DesignValidationError extends Error {
   readonly path: string;
@@ -80,8 +112,8 @@ function tokens(value: unknown, path: string, complete = false): TokenMap {
       if (typeof raw !== 'string' || !HEX.test(raw)) fail(`${path}.${key}`, 'six-digit hex color required');
       result[key] = raw.toUpperCase();
     } else if (SIZES.has(key)) {
-      if (typeof raw !== 'string' || !SIZE.test(raw) || Number.parseFloat(raw) > 512) {
-        fail(`${path}.${key}`, 'size from 0px to 512px with at most two decimals required');
+      if (typeof raw !== 'string' || !SIZE.test(raw) || Number.parseFloat(raw) > LAYOUT_SIZE_PX_LIMIT) {
+        fail(`${path}.${key}`, `size from 0px to ${LAYOUT_SIZE_PX_LIMIT}px with at most two decimals required`);
       }
       result[key] = raw;
     } else {
@@ -131,8 +163,145 @@ function releaseIntent(value: unknown, path: string): ReleaseIntent {
   return { target, version, channel };
 }
 
+function layoutGeometry(value: unknown, path: string): number {
+  if (!isLayoutGeometryValue(value)) {
+    fail(path, `integer from 0 to ${LAYOUT_GEOMETRY_LIMIT} required`);
+  }
+  return value;
+}
+
+function layoutSize(value: unknown, path: string): number | 'auto' {
+  if (value === 'auto') return value;
+  return layoutGeometry(value, path);
+}
+
+function layoutZIndex(value: unknown, path: string): number {
+  if (!isLayoutZIndexValue(value)) {
+    fail(path, `integer from 0 to ${LAYOUT_ZINDEX_LIMIT} required`);
+  }
+  return value;
+}
+
+function layoutLabel(value: unknown, path: string): string {
+  if (typeof value !== 'string' || value.length > 120) fail(path, 'string of at most 120 characters required');
+  return value;
+}
+
+function layoutContextFields(source: Record<string, unknown>, path: string, result: { target: DesignTarget; screenId: string; format: DesignFormat }): void {
+  result.target = oneOf(source.target, DESIGN_TARGETS, `${path}.target`) as DesignTarget;
+  result.screenId = id(source.screenId, `${path}.screenId`);
+  result.format = oneOf(source.format, DESIGN_FORMATS, `${path}.format`) as DesignFormat;
+}
+
+function layoutIdentity(entry: { target: string; screenId: string; format: string; nodeId: string }): string {
+  return `${entry.target}|${entry.screenId}|${entry.format}|${entry.nodeId}`;
+}
+
+function layoutContainer(value: unknown, path: string): LayoutContainer {
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'order', 'direction', 'padding', 'alignment', 'distribution'];
+  const source = plain(value, path, keys);
+  const result = {} as LayoutContainer;
+  layoutContextFields(source, path, result);
+  result.id = id(source.id, `${path}.id`);
+  result.nodeId = id(source.nodeId, `${path}.nodeId`);
+  if (!Array.isArray(source.order)) fail(`${path}.order`, 'array required');
+  result.order = source.order.map((entry, index) => id(entry, `${path}.order[${index}]`));
+  if (new Set(result.order).size !== result.order.length) fail(`${path}.order`, 'duplicate nodeId');
+  if (source.direction !== undefined) result.direction = oneOf(source.direction, LAYOUT_DIRECTIONS, `${path}.direction`);
+  if (source.padding !== undefined) {
+    if (typeof source.padding !== 'string' || !SIZE.test(source.padding) || Number.parseFloat(source.padding) > LAYOUT_SIZE_PX_LIMIT) {
+      fail(`${path}.padding`, `size from 0px to ${LAYOUT_SIZE_PX_LIMIT}px with at most two decimals required`);
+    }
+    result.padding = source.padding;
+  }
+  if (source.alignment !== undefined) result.alignment = oneOf(source.alignment, LAYOUT_ALIGNMENTS, `${path}.alignment`);
+  if (source.distribution !== undefined) result.distribution = oneOf(source.distribution, LAYOUT_DISTRIBUTIONS, `${path}.distribution`);
+  return result;
+}
+
+function layoutPlacement(value: unknown, path: string): LayoutPlacement {
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'mode', 'x', 'y', 'anchor', 'width', 'height', 'basisWidth', 'basisHeight', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight', 'margin', 'zIndex', 'hidden', 'locked', 'label'];
+  const source = plain(value, path, keys);
+  const result = {} as LayoutPlacement;
+  layoutContextFields(source, path, result);
+  result.id = id(source.id, `${path}.id`);
+  result.nodeId = id(source.nodeId, `${path}.nodeId`);
+  result.mode = oneOf(source.mode, LAYOUT_MODES, `${path}.mode`);
+  result.x = layoutGeometry(source.x, `${path}.x`);
+  result.y = layoutGeometry(source.y, `${path}.y`);
+  result.anchor = oneOf(source.anchor, LAYOUT_ANCHORS, `${path}.anchor`);
+  result.width = layoutSize(source.width, `${path}.width`);
+  result.height = layoutSize(source.height, `${path}.height`);
+  if (source.basisWidth !== undefined) result.basisWidth = layoutGeometry(source.basisWidth, `${path}.basisWidth`);
+  if (source.basisHeight !== undefined) result.basisHeight = layoutGeometry(source.basisHeight, `${path}.basisHeight`);
+  if (source.minWidth !== undefined) result.minWidth = layoutSize(source.minWidth, `${path}.minWidth`);
+  if (source.maxWidth !== undefined) result.maxWidth = layoutSize(source.maxWidth, `${path}.maxWidth`);
+  if (source.minHeight !== undefined) result.minHeight = layoutSize(source.minHeight, `${path}.minHeight`);
+  if (source.maxHeight !== undefined) result.maxHeight = layoutSize(source.maxHeight, `${path}.maxHeight`);
+  if (source.margin !== undefined) {
+    if (!isLayoutMarginValue(source.margin)) {
+      fail(`${path}.margin`, 'size from 0px to 512px with at most two decimals required');
+    }
+    result.margin = source.margin;
+  }
+  result.zIndex = layoutZIndex(source.zIndex, `${path}.zIndex`);
+  if (typeof source.hidden !== 'boolean') fail(`${path}.hidden`, 'boolean required');
+  if (typeof source.locked !== 'boolean') fail(`${path}.locked`, 'boolean required');
+  result.hidden = source.hidden;
+  result.locked = source.locked;
+  result.label = layoutLabel(source.label, `${path}.label`);
+  return result;
+}
+
+function layoutClone(value: unknown, path: string): LayoutClone {
+  const keys = ['id', 'target', 'screenId', 'format', 'nodeId', 'parentId', 'label', 'sourceNodeId', 'html'];
+  const source = plain(value, path, keys);
+  const result = {} as LayoutClone;
+  layoutContextFields(source, path, result);
+  result.id = id(source.id, `${path}.id`);
+  result.nodeId = id(source.nodeId, `${path}.nodeId`);
+  result.parentId = id(source.parentId, `${path}.parentId`);
+  if (source.sourceNodeId !== undefined) result.sourceNodeId = id(source.sourceNodeId, `${path}.sourceNodeId`);
+  result.label = layoutLabel(source.label, `${path}.label`);
+  if (typeof source.html !== 'string' || source.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>/]/i.test(source.html)) {
+    fail(`${path}.html`, `string without scripts of at most ${LAYOUT_CLONE_HTML_LIMIT} characters required`);
+  }
+  result.html = source.html;
+  return result;
+}
+
+function layoutDocument(value: unknown, path: string): LayoutDocument {
+  const source = plain(value, path, ['containers', 'placements', 'clones']);
+  if (!Array.isArray(source.containers)) fail(`${path}.containers`, 'array required');
+  if (!Array.isArray(source.placements)) fail(`${path}.placements`, 'array required');
+  const containers = source.containers.map((entry, index) => layoutContainer(entry, `${path}.containers[${index}]`));
+  const placements = source.placements.map((entry, index) => layoutPlacement(entry, `${path}.placements[${index}]`));
+  if (new Set(containers.map((entry) => entry.id)).size !== containers.length) fail(`${path}.containers`, 'duplicate container id');
+  if (new Set(placements.map((entry) => entry.id)).size !== placements.length) fail(`${path}.placements`, 'duplicate placement id');
+  if (new Set(containers.map(layoutIdentity)).size !== containers.length) fail(`${path}.containers`, 'duplicate container identity');
+  if (new Set(placements.map(layoutIdentity)).size !== placements.length) fail(`${path}.placements`, 'duplicate placement identity');
+  const result: LayoutDocument = { containers, placements };
+  if (source.clones !== undefined) {
+    if (!Array.isArray(source.clones)) fail(`${path}.clones`, 'array required');
+    const clones = source.clones.map((entry, index) => layoutClone(entry, `${path}.clones[${index}]`));
+    if (new Set(clones.map((entry) => entry.id)).size !== clones.length) fail(`${path}.clones`, 'duplicate clone id');
+    if (new Set(clones.map(layoutIdentity)).size !== clones.length) fail(`${path}.clones`, 'duplicate clone identity');
+    result.clones = clones;
+  }
+  return result;
+}
+
+function stylePreset(value: unknown, path: string): StylePreset {
+  const source = plain(value, path, ['id', 'name', 'tokens']);
+  return {
+    id: id(source.id, `${path}.id`),
+    name: text(source.name, `${path}.name`),
+    tokens: tokens(source.tokens, `${path}.tokens`),
+  };
+}
+
 export function parseThemeDocument(value: unknown): ThemeDocument {
-  const source = plain(value, 'theme', ['schemaVersion', 'id', 'name', 'baseCommit', 'tokens', 'overrides', 'releaseIntents']);
+  const source = plain(value, 'theme', ['schemaVersion', 'id', 'name', 'baseCommit', 'tokens', 'overrides', 'releaseIntents', 'layout', 'stylePresets']);
   if (source.schemaVersion !== 1) fail('theme.schemaVersion', 'only schema version 1 is supported');
   if (!Array.isArray(source.overrides)) fail('theme.overrides', 'array required');
   if (!Array.isArray(source.releaseIntents)) fail('theme.releaseIntents', 'array required');
@@ -140,7 +309,7 @@ export function parseThemeDocument(value: unknown): ThemeDocument {
   const releaseIntents = source.releaseIntents.map((entry, index) => releaseIntent(entry, `theme.releaseIntents[${index}]`));
   if (new Set(overrides.map((entry) => entry.id)).size !== overrides.length) fail('theme.overrides', 'duplicate override id');
   if (new Set(releaseIntents.map((entry) => entry.target)).size !== releaseIntents.length) fail('theme.releaseIntents', 'duplicate release target');
-  return {
+  const result: ThemeDocument = {
     schemaVersion: 1,
     id: id(source.id, 'theme.id'),
     name: text(source.name, 'theme.name'),
@@ -149,6 +318,14 @@ export function parseThemeDocument(value: unknown): ThemeDocument {
     overrides,
     releaseIntents,
   };
+  if (source.layout !== undefined) result.layout = layoutDocument(source.layout, 'theme.layout');
+  if (source.stylePresets !== undefined) {
+    if (!Array.isArray(source.stylePresets)) fail('theme.stylePresets', 'array required');
+    const presets = source.stylePresets.map((entry, index) => stylePreset(entry, `theme.stylePresets[${index}]`));
+    if (new Set(presets.map((entry) => entry.id)).size !== presets.length) fail('theme.stylePresets', 'duplicate preset id');
+    result.stylePresets = presets;
+  }
+  return result;
 }
 
 function condition(value: unknown, path: string, depth = 0): InteractionCondition {

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DESIGN_TARGETS, type DesignTarget, type ThemeDocument } from './schema.ts';
+import { DESIGN_TARGETS, type DesignTarget, type LayoutDocument, type ThemeDocument } from './schema.ts';
 import { generateThemeCss } from './theme.ts';
 import { parseThemeDocument } from './validation.ts';
 
@@ -16,6 +16,26 @@ interface GeneratedContent extends GeneratedFile {
 
 function outputName(target: DesignTarget): string {
   return `design/generated/${target}.css`;
+}
+
+const LAYOUT_OUTPUT = 'design/generated/layout.ts';
+
+// The production runtime imports this module. It carries only validated layout data as
+// JSON, so preview and production share the same document after an explicit export.
+export function generateLayoutModule(layout: LayoutDocument | undefined): string {
+  const document: LayoutDocument = {
+    containers: layout?.containers ?? [],
+    placements: layout?.placements ?? [],
+    ...(layout?.clones?.length ? { clones: layout.clones } : {}),
+  };
+  return [
+    "import type { LayoutDocument } from '../schema.ts';",
+    '',
+    '// Generated from design/themes. The export step rewrites this file with the reviewed',
+    '// layout document; an empty document keeps the production runtime a no-op.',
+    `export const PRODUCTION_LAYOUT: LayoutDocument = ${JSON.stringify(document, null, 2)};`,
+    '',
+  ].join('\n');
 }
 
 async function sourceThemes(root: string): Promise<ThemeDocument[]> {
@@ -47,6 +67,12 @@ async function expectedFiles(root: string): Promise<GeneratedContent[]> {
         sha256: createHash('sha256').update(content).digest('hex'),
       });
     }
+    const layout = generateLayoutModule(theme.layout);
+    files.push({
+      path: LAYOUT_OUTPUT,
+      content: layout,
+      sha256: createHash('sha256').update(layout).digest('hex'),
+    });
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }

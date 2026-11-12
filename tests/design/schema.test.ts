@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
+import type { LayoutContainer, LayoutPlacement } from '../../design/schema';
 import { DesignValidationError, parseFlowDocument, parseThemeDocument } from '../../design/validation';
 
 const BASE = '0000000000000000000000000000000000000000';
@@ -80,5 +81,124 @@ describe('design document schema', () => {
     const partial = createDefaultTheme(BASE);
     partial.overrides.push({ id: 'partial', scope: 'element', elementId: 'sidebar', tokens: { '--omp-color-panel': '#112233' } });
     expect(parseThemeDocument(partial).overrides[0].tokens).toEqual({ '--omp-color-panel': '#112233' });
+  });
+});
+
+function placement(patch: Partial<LayoutPlacement> = {}): LayoutPlacement {
+  return {
+    id: 'placement-card-a',
+    target: 'desktop-windows',
+    screenId: 'library',
+    format: 'landscape',
+    nodeId: 'card-a',
+    mode: 'flow',
+    x: 0,
+    y: 0,
+    anchor: 'top-left',
+    width: 'auto',
+    height: 'auto',
+    zIndex: 0,
+    hidden: false,
+    locked: false,
+    label: 'Card A',
+    ...patch,
+  };
+}
+
+describe('layout schema validation', () => {
+  it('accepts empty layout collections and style presets', () => {
+    const theme = createDefaultTheme(BASE);
+    expect(parseThemeDocument(theme)).toEqual(theme);
+    theme.stylePresets?.push({ id: 'bright-accent', name: 'Bright accent', tokens: { '--omp-color-accent': '#FFD34D' } });
+    const parsed = parseThemeDocument(theme);
+    expect(parsed.stylePresets?.[0].tokens).toEqual({ '--omp-color-accent': '#FFD34D' });
+  });
+
+  it('rejects unknown mode, anchors, directions and negative or oversized geometry', () => {
+    for (const patch of [
+      { mode: 'grid' },
+      { anchor: 'center' },
+      { x: -1 },
+      { y: 10001 },
+      { width: -5 },
+      { width: 10001 },
+      { height: 12.5 },
+      { zIndex: 1000 },
+      { zIndex: -1 },
+    ] as Array<Partial<LayoutPlacement>>) {
+      const theme = createDefaultTheme(BASE);
+      theme.layout?.placements.push(placement(patch));
+      expect(() => parseThemeDocument(theme), JSON.stringify(patch)).toThrow(DesignValidationError);
+    }
+
+    for (const container of [
+      { direction: 'diagonal' },
+      { order: ['card-a', 'card-a'] },
+    ] as Array<Record<string, unknown>>) {
+      const theme = createDefaultTheme(BASE);
+      theme.layout?.containers.push({
+        id: 'grid',
+        target: 'desktop-windows',
+        screenId: 'library',
+        format: 'landscape',
+        nodeId: 'card-grid',
+        order: ['card-a'],
+        ...container,
+      } as unknown as LayoutContainer);
+      expect(() => parseThemeDocument(theme), JSON.stringify(container)).toThrow(DesignValidationError);
+    }
+  });
+
+  it('accepts and validates the captured size basis on placements', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.layout?.placements.push(placement({ basisWidth: 400, basisHeight: 300 }));
+    const parsed = parseThemeDocument(theme);
+    expect(parsed.layout?.placements[0]).toMatchObject({ basisWidth: 400, basisHeight: 300 });
+
+    for (const patch of [
+      { basisWidth: 10001 },
+      { basisWidth: -1 },
+      { basisHeight: 12.5 },
+      { basisHeight: 'auto' },
+    ] as Array<Partial<LayoutPlacement>>) {
+      const invalid = createDefaultTheme(BASE);
+      invalid.layout?.placements.push({ ...placement(), ...patch } as LayoutPlacement);
+      expect(() => parseThemeDocument(invalid), JSON.stringify(patch)).toThrow(DesignValidationError);
+    }
+  });
+
+  it('rejects duplicate placement ids, identities and unknown layout fields', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.layout?.placements.push(placement(), placement({ id: 'other-id' }));
+    expect(() => parseThemeDocument(theme)).toThrow(DesignValidationError);
+
+    const duplicateIdentity = createDefaultTheme(BASE);
+    duplicateIdentity.layout?.placements.push(placement(), placement({ id: 'other-id', label: 'Copy' }));
+    expect(() => parseThemeDocument(duplicateIdentity)).toThrow(DesignValidationError);
+
+    const unknownField = createDefaultTheme(BASE) as unknown as Record<string, unknown>;
+    unknownField.layout = { containers: [], placements: [], extra: true };
+    expect(() => parseThemeDocument(unknownField)).toThrow(DesignValidationError);
+
+    const rawPlacement = createDefaultTheme(BASE) as unknown as { layout: { placements: Array<Record<string, unknown>> } };
+    rawPlacement.layout.placements.push({ ...placement(), rotation: 45 } as never);
+    expect(() => parseThemeDocument(rawPlacement)).toThrow(DesignValidationError);
+  });
+
+  it('rejects style presets with unknown tokens, duplicates or extra fields', () => {
+    const theme = createDefaultTheme(BASE);
+    theme.stylePresets = [
+      { id: 'bad-token', name: 'Bad', tokens: { '--unknown': '#111111' } as never },
+    ];
+    expect(() => parseThemeDocument(theme)).toThrow(DesignValidationError);
+
+    theme.stylePresets = [
+      { id: 'same', name: 'One', tokens: { '--omp-color-accent': '#111111' } },
+      { id: 'same', name: 'Two', tokens: { '--omp-color-accent': '#222222' } },
+    ];
+    expect(() => parseThemeDocument(theme)).toThrow(DesignValidationError);
+
+    theme.stylePresets = [{ id: 'extra', name: 'Extra', tokens: {}, effect: 'glow' } as never];
+    expect(() => parseThemeDocument(theme)).toThrow(DesignValidationError);
   });
 });

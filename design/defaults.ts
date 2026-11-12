@@ -28,6 +28,8 @@ export function createDefaultTheme(baseCommit: string): ThemeDocument {
     },
     overrides: [],
     releaseIntents: [],
+    layout: { containers: [], placements: [] },
+    stylePresets: [],
   };
 }
 

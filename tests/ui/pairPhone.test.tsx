@@ -123,7 +123,7 @@ describe('PairPhoneScreen on Android TV', () => {
   it('shows the code without a server too', async () => {
     fakePlugin([{ code: '0007', expiresAt: Date.now() + 300000 }]);
     const host = mountTracked(h(PairPhoneScreen, {}));
-    await settle();
+    await settleUntil(() => digits(host) === '0007');
     expect(host.querySelector('svg.qr')).toBeNull();
     expect(digits(host)).toBe('0007');
   });

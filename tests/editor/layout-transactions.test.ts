@@ -1,0 +1,312 @@
+import { describe, expect, it } from 'vitest';
+import type { LayoutContext, LayoutPlacement } from '../../design/schema';
+import { createDefaultTheme } from '../../design/defaults';
+import { getLayoutPlacement } from '../../design/layout';
+import { parseThemeDocument } from '../../design/validation';
+import { createDraftController, type DraftController } from '../../editor/src/drafts';
+import { createDefaultDraft } from '../../editor/shared/draft';
+import {
+  absolutePlacementFromRect,
+  collectLayoutElements,
+  createPlacement,
+  placementToRect,
+  moveNodeTransaction,
+  nudgePlacement,
+  placeNodeTransaction,
+  screenToArtboard,
+} from '../../editor/src/layout/transactions';
+
+const BASE = '0000000000000000000000000000000000000000';
+const context: LayoutContext = { target: 'desktop-windows', screenId: 'library', format: 'landscape' };
+
+function createController(): DraftController {
+  return createDraftController({
+    draft: createDefaultDraft('draft-layout', BASE),
+    client: {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+    },
+  });
+}
+
+function orderOf(controller: DraftController, parentId: string): string[] {
+  const container = controller.draft.theme.layout?.containers.find(
+    (entry) => entry.target === context.target
+      && entry.screenId === context.screenId
+      && entry.format === context.format
+      && entry.nodeId === parentId,
+  );
+  return container ? container.order : [];
+}
+
+describe('screenToArtboard', () => {
+  it('converts client coordinates at zoom 0.5 with a scrolled iframe origin', () => {
+    const point = screenToArtboard(
+      { x: 130, y: 90 },
+      { x: 100, y: 50, width: 640, height: 360 },
+      { width: 1280, height: 720 },
+      0.5,
+    );
+    expect(point).toEqual({ x: 60, y: 80 });
+  });
+
+  it('keeps coordinates outside the artboard instead of clamping them', () => {
+    const point = screenToArtboard(
+      { x: 90, y: 40 },
+      { x: 100, y: 50, width: 640, height: 360 },
+      { width: 1280, height: 720 },
+      1,
+    );
+    expect(point).toEqual({ x: -10, y: -10 });
+  });
+});
+
+describe('moveNodeTransaction', () => {
+  it('inserts card-b before card-a inside the flow container', () => {
+    const controller = createController();
+    moveNodeTransaction(controller, { context, nodeId: 'card-a', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 1 });
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 0 });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-b', 'card-a']);
+    expect(controller.canUndo).toBe(true);
+    controller.dispose();
+  });
+
+  it('seeds a new container with the document order of all siblings at the insertion index', () => {
+    const controller = createController();
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 0, siblings: ['card-a', 'card-b'] });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-b', 'card-a']);
+    controller.undo();
+    expect(controller.draft.theme.layout?.containers).toHaveLength(0);
+    controller.dispose();
+  });
+
+  it('clamps the seeded insertion index to the sibling bounds', () => {
+    const controller = createController();
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 99, siblings: ['card-a', 'card-b'] });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-a', 'card-b']);
+    controller.dispose();
+  });
+
+  it('moves an absolute node back to flow with one placement in a single undo step', () => {
+    const controller = createController();
+    moveNodeTransaction(controller, { context, nodeId: 'card-a', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 1 });
+    const absolute = createPlacement(context, 'card-b', 'Card B', { mode: 'absolute', x: 5000, y: 2500 });
+    placeNodeTransaction(controller, absolute);
+    const flowBack = createPlacement(context, 'card-b', 'Card B', { mode: 'flow' });
+
+    moveNodeTransaction(controller, { context, nodeId: 'card-b', parentId: 'card-grid', index: 0, placement: flowBack });
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-b', 'card-a']);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-b')?.mode).toBe('flow');
+
+    controller.undo();
+
+    expect(orderOf(controller, 'card-grid')).toEqual(['card-a', 'card-b']);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-b')).toMatchObject({ mode: 'absolute', x: 5000, y: 2500 });
+    controller.dispose();
+  });
+});
+
+describe('placeNodeTransaction', () => {
+  it('converts a flow node to absolute placement that preserves the on-screen rect', () => {
+    const controller = createController();
+    const rect = { x: 40, y: 24, width: 200, height: 120 };
+    const parentRect = { x: 0, y: 0, width: 400, height: 400 };
+    const placement = absolutePlacementFromRect(rect, parentRect, context, 'card-a', 'Card A');
+
+    placeNodeTransaction(controller, placement);
+
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toEqual(placement);
+    expect(placement).toMatchObject({
+      mode: 'absolute',
+      anchor: 'top-left',
+      x: 1000,
+      y: 600,
+      width: 5000,
+      height: 3000,
+    });
+    expect(controller.canUndo).toBe(true);
+    controller.undo();
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toBeUndefined();
+    controller.dispose();
+  });
+
+  it('stores the content offset when the measured parent is scrolled and shows the visible rect again', () => {
+    const parent = { x: 10, y: 20, width: 400, height: 200, scrollX: 40, scrollY: 100 };
+    const visual = { x: 10, y: 40, width: 80, height: 40 };
+
+    const placement = absolutePlacementFromRect(visual, parent, context, 'card-a', 'Card A');
+
+    // The visible box is already 40px left and 100px above the content position. Saving the
+    // visible delta would make absolute top apply that scroll a second time.
+    expect(placement).toMatchObject({ x: 1000, y: 6000 });
+    expect(placementToRect(placement, parent)).toMatchObject(visual);
+  });
+
+  it('subtracts a preserved margin from the measured border box so absolute placement does not jump twice', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { margin: '12px' });
+    const parent = { x: 0, y: 0, width: 400, height: 400 };
+    const border = { x: 40, y: 24, width: 200, height: 120 };
+
+    const placement = absolutePlacementFromRect(border, parent, context, 'card-a', 'Card A', base);
+
+    // The border box already sits 12px from the margin edge. Saved offsets must describe that
+    // margin edge, because the runtime applies left/top and the margin together.
+    expect(placement).toMatchObject({
+      mode: 'absolute',
+      anchor: 'top-left',
+      x: 700,
+      y: 300,
+      margin: '12px',
+    });
+    expect(placementToRect(placement, parent)).toMatchObject(border);
+  });
+
+  it('subtracts the margin from the anchored edges and round-trips the border box', () => {
+    const parent = { x: 10, y: 20, width: 400, height: 400 };
+    const border = { x: 110, y: 280, width: 80, height: 40 };
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'flow', anchor: 'bottom-right', margin: '12px' });
+
+    const placement = absolutePlacementFromRect(border, parent, context, 'card-a', 'Card A', base);
+
+    // Right offset of the border is 400 - (110 - 10) - 80 = 220, then minus the 12px margin.
+    // Bottom offset of the border is 400 - (280 - 20) - 40 = 100, then minus the 12px margin.
+    expect(placement).toMatchObject({ anchor: 'bottom-right', x: 5200, y: 2200, margin: '12px' });
+    expect(placementToRect(placement, parent)).toMatchObject(border);
+  });
+
+  it('keeps size, zIndex, label and anchor from the base placement while moving', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', {
+      mode: 'absolute',
+      x: 100,
+      y: 100,
+      anchor: 'bottom-right',
+      width: 'auto',
+      height: 800,
+      zIndex: 3,
+      hidden: true,
+      locked: true,
+    });
+    const moved = absolutePlacementFromRect(
+      { x: 300, y: 200, width: 400, height: 100 },
+      { x: 0, y: 0, width: 400, height: 400 },
+      context,
+      'card-a',
+      'Card A',
+      base,
+    );
+    expect(moved).toMatchObject({
+      id: base.id,
+      mode: 'absolute',
+      anchor: 'bottom-right',
+      x: 0,
+      y: 2500,
+      width: 'auto',
+      height: 800,
+      zIndex: 3,
+      hidden: true,
+      locked: true,
+      label: 'Card A',
+    });
+  });
+
+  it('creates a valid flow placement that round-trips through the draft validation', () => {
+    const controller = createController();
+    const placement: LayoutPlacement = createPlacement(context, 'card-a', 'Card A');
+    expect(placement).toMatchObject({ mode: 'flow', x: 0, y: 0, anchor: 'top-left', width: 'auto', height: 'auto', zIndex: 0 });
+    placeNodeTransaction(controller, placement);
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toEqual(placement);
+    controller.dispose();
+  });
+});
+
+describe('createPlacement', () => {
+  it('bounds the placement id to the schema limit for the longest supported node id', () => {
+    const longNodeId = 'a'.repeat(64);
+
+    const placement = createPlacement(context, longNodeId, 'Long node');
+
+    expect(placement.nodeId).toBe(longNodeId);
+    expect(placement.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+  });
+
+  it('round-trips a placement with the longest supported node id through parseThemeDocument', () => {
+    const controller = createController();
+    const longNodeId = 'a'.repeat(64);
+
+    placeNodeTransaction(controller, createPlacement(context, longNodeId, 'Long node', { mode: 'absolute', x: 100, y: 200 }));
+    const theme = parseThemeDocument(JSON.parse(JSON.stringify(controller.draft.theme)));
+
+    expect(theme.layout?.placements).toHaveLength(1);
+    expect(theme.layout?.placements[0].nodeId).toBe(longNodeId);
+    controller.dispose();
+  });
+});
+
+describe('collectLayoutElements', () => {
+  it('stamps data-layout-node attributes and maps node ids to elements', () => {
+    const root = document.createElement('div');
+    const grid = document.createElement('div');
+    grid.dataset.designId = 'card-grid';
+    const first = document.createElement('div');
+    first.dataset.designId = 'server-card';
+    const second = document.createElement('div');
+    second.dataset.designId = 'server-card';
+    const keyed = document.createElement('div');
+    keyed.dataset.key = 'hash-1';
+    grid.append(first, second, keyed);
+    root.appendChild(grid);
+
+    const elements = collectLayoutElements(root);
+
+    expect(first.dataset.layoutNode).toBe('server-card');
+    expect(second.dataset.layoutNode).toBe('server-card-2');
+    expect(keyed.dataset.layoutNode).toBe('key-hash-1');
+    expect(grid.dataset.layoutNode).toBe('card-grid');
+    expect(elements.get('server-card')).toBe(first);
+    expect(elements.get('server-card-2')).toBe(second);
+    expect(elements.get('key-hash-1')).toBe(keyed);
+  });
+});
+
+describe('nudgePlacement', () => {
+  it('moves a top-left anchored placement by whole artboard pixels', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 500, y: 250, width: 2500, height: 2500 });
+    const parentSize = { width: 400, height: 400 };
+
+    const nudged = nudgePlacement(base, { x: 1, y: 0 }, parentSize);
+    expect(nudged.x).toBe(525);
+    expect(nudged.y).toBe(250);
+
+    const shifted = nudgePlacement(base, { x: 0, y: -10 }, parentSize);
+    expect(shifted.x).toBe(500);
+    expect(shifted.y).toBe(0);
+  });
+
+  it('moves right and bottom anchored placements toward the pressed arrow visually', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', anchor: 'bottom-right', x: 500, y: 250 });
+    const parentSize = { width: 400, height: 400 };
+
+    const nudged = nudgePlacement(base, { x: 1, y: 1 }, parentSize);
+    expect(nudged.x).toBe(475);
+    expect(nudged.y).toBe(225);
+  });
+
+  it('clamps nudged coordinates to the geometry limit', () => {
+    const base = createPlacement(context, 'card-a', 'Card A', { mode: 'absolute', x: 9990, y: 20 });
+    const nudged = nudgePlacement(base, { x: 10, y: 0 }, { width: 100, height: 100 });
+    expect(nudged.x).toBe(10000);
+  });
+});

@@ -11,6 +11,85 @@ export type DesignState = (typeof DESIGN_STATES)[number];
 export type TokenMap = Record<string, string>;
 export type OverrideScope = 'target' | 'component' | 'screen' | 'element' | 'format' | 'state';
 
+export const LAYOUT_MODES = ['flow', 'absolute'] as const;
+export type LayoutMode = (typeof LAYOUT_MODES)[number];
+export const LAYOUT_ANCHORS = ['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const;
+export type LayoutAnchor = (typeof LAYOUT_ANCHORS)[number];
+export const LAYOUT_DIRECTIONS = ['row', 'column', 'auto'] as const;
+export type LayoutDirection = (typeof LAYOUT_DIRECTIONS)[number];
+export const LAYOUT_ALIGNMENTS = ['start', 'center', 'end', 'stretch'] as const;
+export type LayoutAlignment = (typeof LAYOUT_ALIGNMENTS)[number];
+export const LAYOUT_DISTRIBUTIONS = ['start', 'center', 'end', 'space-between', 'space-around'] as const;
+export type LayoutDistribution = (typeof LAYOUT_DISTRIBUTIONS)[number];
+
+export interface LayoutContext {
+  target: DesignTarget;
+  screenId: string;
+  format: DesignFormat;
+}
+
+export interface LayoutContainer extends LayoutContext {
+  id: string;
+  nodeId: string;
+  order: string[];
+  direction?: LayoutDirection;
+  padding?: string;
+  alignment?: LayoutAlignment;
+  distribution?: LayoutDistribution;
+}
+
+export interface LayoutPlacement extends LayoutContext {
+  id: string;
+  nodeId: string;
+  mode: LayoutMode;
+  x: number;
+  y: number;
+  anchor: LayoutAnchor;
+  width: number | 'auto';
+  height: number | 'auto';
+  // Size basis captured when a flow node converts to absolute: percent width and height keep
+  // resolving against these pixel sizes instead of the current parent, so a content-sized
+  // parent that shrinks after the child leaves the flow cannot collapse the absolute size.
+  // Absent on legacy documents, which keep the responsive percent behavior.
+  basisWidth?: number;
+  basisHeight?: number;
+  minWidth?: number | 'auto';
+  maxWidth?: number | 'auto';
+  minHeight?: number | 'auto';
+  maxHeight?: number | 'auto';
+  margin?: string;
+  zIndex: number;
+  hidden: boolean;
+  locked: boolean;
+  label: string;
+}
+
+export interface LayoutDocument {
+  containers: LayoutContainer[];
+  placements: LayoutPlacement[];
+  clones?: LayoutClone[];
+}
+
+export const LAYOUT_CLONE_HTML_LIMIT = 50000;
+
+// A clone is a duplicated or pasted layout node: the runtime materializes its sanitized html
+// snapshot into the parent container, so the copy renders even after reload or on a page where
+// the source node does not exist. Only the clone root is layout-addressable.
+export interface LayoutClone extends LayoutContext {
+  id: string;
+  nodeId: string;
+  parentId: string;
+  label: string;
+  sourceNodeId?: string;
+  html: string;
+}
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  tokens: TokenMap;
+}
+
 export interface ThemeOverride {
   id: string;
   scope: OverrideScope;
@@ -37,6 +116,8 @@ export interface ThemeDocument {
   tokens: TokenMap;
   overrides: ThemeOverride[];
   releaseIntents: ReleaseIntent[];
+  layout?: LayoutDocument;
+  stylePresets?: StylePreset[];
 }
 
 export type ConditionPath = 'server.connected' | 'target' | 'screen.current';

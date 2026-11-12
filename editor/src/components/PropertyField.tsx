@@ -3,15 +3,17 @@ import type { DesignPropertyDef } from '../../../design/catalog';
 
 export interface PropertyFieldProps extends DesignPropertyDef {
   value: string;
+  disabled?: boolean;
   onChange(token: string, value: string): void;
 }
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
-export function PropertyField({ token, label, kind, value, onChange }: PropertyFieldProps) {
+export function PropertyField({ token, label, kind, value, disabled = false, onChange }: PropertyFieldProps) {
   const [error, setError] = useState('');
   useEffect(() => setError(''), [value]);
   const change = (raw: string) => {
+    if (disabled) return;
     if (kind === 'color') {
       if (!HEX.test(raw)) {
         setError('INVALID_VALUE');
@@ -33,8 +35,8 @@ export function PropertyField({ token, label, kind, value, onChange }: PropertyF
     <label class="editor-property">
       <span>{label}</span>
       <span class="editor-property-input">
-        {kind === 'color' && <input type="color" aria-label={`${label} picker`} value={HEX.test(value) ? value : '#000000'} onChange={(event) => change(event.currentTarget.value)} />}
-        <input data-token={token} aria-label={label} value={kind === 'px' ? value.replace(/px$/, '') : value} inputMode={kind === 'px' ? 'decimal' : 'text'} onChange={(event) => change(event.currentTarget.value)} />
+        {kind === 'color' && <input type="color" aria-label={`${label} picker`} disabled={disabled} value={HEX.test(value) ? value : '#000000'} onChange={(event) => change(event.currentTarget.value)} />}
+        <input data-token={token} aria-label={label} disabled={disabled} value={kind === 'px' ? value.replace(/px$/, '') : value} inputMode={kind === 'px' ? 'decimal' : 'text'} onChange={(event) => change(event.currentTarget.value)} />
       </span>
       {error && <small role="alert">{error}</small>}
     </label>

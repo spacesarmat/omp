@@ -6,6 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The local theme editor became a visual layout editor: flow and absolute placement with dragging, snapping guides, resize handles, and multi-select with alignment and distribution
+- [tech] The editor gained a layers panel with filtering, renaming, hiding, locking, duplicating and pasting clones, plus a style library with presets, style copy and token usage search
+- [tech] The editor compares the current theme with the original via the Before/After button and shows platforms side by side; the Accessibility panel checks contrast, font size and geometry, and geometry warnings must be confirmed before export
+- [tech] Editor export became scoped: everything, one page or one component by node id, with a diff preview and a list of affected platforms. Production applies the reviewed layout through the generated module design/generated/layout.ts only on explicit export
 - [phone] Catalog list: a row swipe reveals the actions under that row, clipped to it. The same gesture no longer switches tabs. A manual update check on a beta, with betas off, says so
 - [phone] Catalog: the header and chips stay pinned and do not jump while scrolling. On a poster the badge sits above the season line
 - [phone] Account: a Supporter mark on a linked account that donated, and a thanks list. The list shows only people who opened their name

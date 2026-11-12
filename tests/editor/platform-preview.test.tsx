@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDefaultFlow, createDefaultTheme } from '../../design/defaults';
 import type { DesktopRouteId } from '../../desktop/src/shell/routes';
 import type { DesktopPreviewProps } from '../../desktop/src/preview/DesktopPreview';
+import { DesktopPreview } from '../../desktop/src/preview/DesktopPreview';
 import { PhonePreview } from '../../desktop/src/preview/PhonePreview';
 import { TvPreview } from '../../desktop/src/preview/TvPreview';
 import { platformKind } from '../../src/platform/env';
@@ -153,6 +154,60 @@ describe('platform previews', () => {
         expect(platformKind()).toBe('webos');
       }
     }
+  });
+
+  it('hides hidden layout nodes in the desktop preview', () => {
+    const config = props('settings', 'desktop-windows');
+    config.theme.layout = {
+      containers: [],
+      placements: [{
+        id: 'placement-content',
+        target: 'desktop-windows',
+        screenId: 'settings',
+        format: 'landscape',
+        nodeId: 'content',
+        mode: 'flow',
+        x: 0,
+        y: 0,
+        anchor: 'top-left',
+        width: 'auto',
+        height: 'auto',
+        zIndex: 0,
+        hidden: true,
+        locked: false,
+        label: 'content',
+      }],
+    };
+
+    mount(h(DesktopPreview, config));
+
+    expect(host.querySelector<HTMLElement>('[data-design-id="content"]')!.style.display).toBe('none');
+  });
+
+  it('materializes layout clones in the desktop preview without the original element', () => {
+    const config = props('settings', 'desktop-windows');
+    config.theme.layout = {
+      containers: [],
+      placements: [],
+      clones: [{
+        id: 'clone-demo',
+        target: 'desktop-windows',
+        screenId: 'settings',
+        format: 'landscape',
+        nodeId: 'copy-demo',
+        parentId: 'content',
+        label: 'Копия',
+        sourceNodeId: 'content',
+        html: '<div class="clone-box" data-design-id="card">Cloned</div>',
+      }],
+    };
+
+    mount(h(DesktopPreview, config));
+
+    const clone = host.querySelector<HTMLElement>('[data-layout-clone="copy-demo"]')!;
+    expect(clone).not.toBeNull();
+    expect(clone.textContent).toBe('Cloned');
+    expect(clone.closest('[data-design-id="content"]')).not.toBeNull();
   });
 
   it('selects phone and TV controls without running their real actions', () => {

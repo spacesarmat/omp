@@ -6,6 +6,7 @@ import { generateThemeCss } from '../../../design/theme.ts';
 import { DesktopShell } from '../shell/DesktopShell';
 import { isDesktopRouteId, type DesktopRouteId } from '../shell/routes';
 import { installPreviewFixture } from './fixtures';
+import { observeDesignElements } from './designElements';
 import { PreviewRoute } from './previewRoutes';
 
 export interface DesktopPreviewProps {
@@ -25,8 +26,11 @@ export interface DesktopPreviewProps {
 
 export function DesktopPreview(props: DesktopPreviewProps) {
   const [toast, setToast] = useState('');
+  const root = useRef<HTMLDivElement>(null);
   const history = useRef<DesktopRouteId[]>([props.route]);
   useEffect(() => installPreviewFixture({ serverConnected: props.serverConnected, language: props.language }), [props.serverConnected, props.language]);
+  const layoutContext = { target: props.target, screenId: props.route, format: props.format, state: props.state };
+  useEffect(() => root.current ? observeDesignElements(root.current, props.theme, layoutContext) : undefined, [props.theme, props.route, props.target, props.format, props.state]);
   useEffect(() => {
     if (history.current[history.current.length - 1] !== props.route) history.current.push(props.route);
   }, [props.route]);
@@ -68,7 +72,7 @@ export function DesktopPreview(props: DesktopPreviewProps) {
   };
 
   return (
-    <div onClick={onClick}>
+    <div ref={root} data-design-root onClick={onClick}>
       <style>{generateThemeCss(props.theme, props.target, props.state)}</style>
       <DesktopShell key={props.language} {...props}>
         <PreviewRoute {...props} />
