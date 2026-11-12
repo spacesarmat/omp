@@ -448,6 +448,58 @@ describe('group drag snapping', () => {
 });
 
 describe('nested selection movement', () => {
+  it('keeps nested children out of the commit guides so preview and commit agree', () => {
+    buildNestedPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 0, y: 0, width: 400, height: 400 }, { x: 0, y: 0, width: 800, height: 800 }, context, 'panel', 'panel'));
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 50, y: 50, width: 100, height: 100 }, { x: 0, y: 0, width: 400, height: 400 }, context, 'box-kid', 'box-kid'));
+
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointerup', 10, 10);
+    pointer(overlay(), 'pointerdown', 100, 100, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 100, 100, { shiftKey: true });
+
+    // Drag the panel 53px down: the leader top edge passes 3px below the child original top
+    // edge, which is a guide for the outermost-only snap. Preview and commit must run the same
+    // membership and leader, so the snapped result is identical in both.
+    pointer(overlay(), 'pointerdown', 10, 10);
+    pointer(overlay(), 'pointermove', 10, 63);
+    const previewTop = parseFloat(host.querySelector<HTMLElement>('[data-testid="selection-box"][data-layout-node="panel"]')!.style.top);
+    pointer(overlay(), 'pointerup', 10, 63);
+
+    const committed = placementToRect(placementOf('panel')!, { x: 0, y: 0, width: 800, height: 800 });
+    expect(committed.y).toBe(50);
+    expect(previewTop).toBeCloseTo(committed.y, 6);
+    // The child rides along inside the parent and its placement is never rewritten.
+    expect(placementOf('box-kid')).toMatchObject({ x: 1250, y: 1250 });
+  });
+
+  it('snaps a group drag started on a selected descendant through the outermost leader', () => {
+    buildNestedPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 0, y: 0, width: 400, height: 400 }, { x: 0, y: 0, width: 800, height: 800 }, context, 'panel', 'panel'));
+    placeNodeTransaction(controller, absolutePlacementFromRect({ x: 50, y: 50, width: 100, height: 100 }, { x: 0, y: 0, width: 400, height: 400 }, context, 'box-kid', 'box-kid'));
+
+    // The child is clicked first, so the drag starts on the selected descendant while the parent
+    // is the outermost moving member.
+    pointer(overlay(), 'pointerdown', 100, 100);
+    pointer(overlay(), 'pointerup', 100, 100);
+    pointer(overlay(), 'pointerdown', 10, 10, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 10, 10);
+
+    pointer(overlay(), 'pointerdown', 100, 100);
+    pointer(overlay(), 'pointermove', 100, 105);
+    const previewTop = parseFloat(host.querySelector<HTMLElement>('[data-testid="selection-box"][data-layout-node="panel"]')!.style.top);
+    pointer(overlay(), 'pointerup', 100, 105);
+
+    // 5px down snaps the parent bottom edge back to the stage edge, so the committed parent stays
+    // at its original position and the child still rides along untouched.
+    expect(placementOf('panel')!.y).toBe(0);
+    const committed = placementToRect(placementOf('panel')!, { x: 0, y: 0, width: 800, height: 800 });
+    expect(previewTop).toBeCloseTo(committed.y, 0);
+    expect(placementOf('box-kid')).toMatchObject({ x: 1250, y: 1250 });
+  });
+
   it('moves only the outermost selected nodes so an absolute child is not moved twice', () => {
     buildNestedPreview();
     const context = contextOf();
