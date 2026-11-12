@@ -584,6 +584,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
       ['yoomoneyWallet', 'Кошелёк ЮMoney'],
       ['yoomoneySecret', 'Секрет ЮMoney'],
       ['cryptoPayToken', 'Токен Crypto Pay'],
+      ['cryptoPayTestnetToken', 'Токен Crypto Pay (testnet)'],
     ],
   },
   {
@@ -641,7 +642,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
 ];
 
 /** Secrets are read-only in the panel: they live in the server's .env. */
-const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'cryptoPayToken', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
+const SECRET_KEYS = new Set(['botToken', 'yoomoneySecret', 'cryptoPayToken', 'cryptoPayTestnetToken', 'smtpPass', 'jackettApiKey', 'jacredApiKey', 'indexerPass']);
 
 /** One read-only secret: «задан ✅, ****abcd» or «не задан», and where it changes. */
 function SecretField({ name, label, view, fallback }: { name: string; label: string; view?: SecretView; fallback?: string }) {
@@ -827,7 +828,8 @@ export function SettingsCard({
                       setCryptoTest(e.target.checked);
                     }}
                   />
-                  Тестовая сеть Crypto Pay (testnet-pay.crypt.bot). Токен всё равно берётся из CRYPTO_PAY_TOKEN.
+                  Тестовая сеть Crypto Pay (testnet-pay.crypt.bot). Токен этого режима:{' '}
+                  {cryptoTest ? String(settings.cryptoPayTestnetToken || 'не задан') : String(settings.cryptoPayToken || 'не задан')}.
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input

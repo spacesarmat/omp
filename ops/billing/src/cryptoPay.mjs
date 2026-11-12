@@ -5,7 +5,8 @@ import { sameHex } from './crypto.mjs';
  * Crypto Pay API (@CryptoBot).
  * https://help.crypt.bot/crypto-pay-api
  *
- * The token is CRYPTO_PAY_TOKEN. It is never written here and never logged.
+ * The live token is CRYPTO_PAY_TOKEN. The testnet token is CRYPTO_PAY_TESTNET_TOKEN.
+ * cryptoPayCredentials picks the one for settings.cryptoTestnet. Neither token is logged.
  * The webhook signature is HMAC-SHA256 of the raw body. The key is SHA256(token), the raw digest.
  */
 
@@ -19,6 +20,39 @@ const TESTNET = 'https://testnet-pay.crypt.bot';
 
 export function cryptoPayHost(testnet) {
   return testnet ? TESTNET : MAINNET;
+}
+
+/**
+ * Token and host for the Crypto Pay mode that is on.
+ * testnet uses CRYPTO_PAY_TESTNET_TOKEN and testnet-pay.crypt.bot.
+ * The live mode uses CRYPTO_PAY_TOKEN and pay.crypt.bot.
+ * ready is false when that mode's token is empty. The other token is not returned.
+ */
+export function cryptoPayCredentials(settings) {
+  const s = settings || {};
+  const testnet = s.cryptoTestnet === true;
+  const token = String((testnet ? s.cryptoPayTestnetToken : s.cryptoPayToken) || '');
+  return {
+    testnet,
+    host: cryptoPayHost(testnet),
+    token,
+    ready: token !== '',
+  };
+}
+
+/**
+ * Which configured token signed this body.
+ * 'active' is the mode that is on (apply the payment).
+ * 'inactive' is the other mode (ack, do not apply).
+ * 'none' matches neither token.
+ */
+export function cryptoPaySignatureMode(rawBody, header, settings) {
+  const creds = cryptoPayCredentials(settings);
+  if (creds.token && cryptoPayAuthentic(rawBody, header, creds.token)) return 'active';
+  const s = settings || {};
+  const other = String((creds.testnet ? s.cryptoPayToken : s.cryptoPayTestnetToken) || '');
+  if (other && other !== creds.token && cryptoPayAuthentic(rawBody, header, other)) return 'inactive';
+  return 'none';
 }
 
 /** SHA256(token) as the HMAC key (32 raw bytes, not the hex text). */

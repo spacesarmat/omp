@@ -98,7 +98,7 @@ import {
 import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
-import { createCryptoInvoice, cryptoPayAuthentic, paidInvoice } from './cryptoPay.mjs';
+import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -900,51 +900,116 @@ function rememberCountry(state, accountId, country) {
   return changed ? { ...state, accounts } : state;
 }
 
-/** Create or reuse the Crypto Pay link for one quote. The token stays in the request header. */
+/** A quote from before modes: one live invoice, no testnet host in the url. */
+function legacyLiveLink(quote) {
+  if (!quote || quote.cryptoTestnet != null) return null;
+  const bag = quote.cryptoLinks;
+  if (bag && (bag.live || bag.testnet)) return null;
+  if (!quote.invoiceId || !(quote.payUrl || quote.webUrl)) return null;
+  const url = String(quote.payUrl || '') + ' ' + String(quote.webUrl || '');
+  if (url.toLowerCase().indexOf('testnet') >= 0) return null;
+  return {
+    invoiceId: String(quote.invoiceId),
+    payUrl: String(quote.payUrl || ''),
+    webUrl: String(quote.webUrl || ''),
+  };
+}
+
+/** Invoice already stored for this Crypto Pay mode. */
+function cryptoLinkFor(quote, testnet) {
+  const bag = quote && quote.cryptoLinks;
+  const saved = bag && bag[testnet ? 'testnet' : 'live'];
+  if (saved && (saved.payUrl || saved.webUrl)) {
+    return {
+      invoiceId: String(saved.invoiceId || ''),
+      payUrl: String(saved.payUrl || ''),
+      webUrl: String(saved.webUrl || ''),
+    };
+  }
+  if (quote && quote.cryptoTestnet === testnet && (quote.payUrl || quote.webUrl)) {
+    return {
+      invoiceId: String(quote.invoiceId || ''),
+      payUrl: String(quote.payUrl || ''),
+      webUrl: String(quote.webUrl || ''),
+    };
+  }
+  if (!testnet) return legacyLiveLink(quote);
+  return null;
+}
+
+function quoteWithCryptoLink(row, testnet, link) {
+  const key = testnet ? 'testnet' : 'live';
+  const bag = { ...(row.cryptoLinks || {}) };
+  if (!bag.live) {
+    const legacy = legacyLiveLink(row);
+    if (legacy) bag.live = legacy;
+  }
+  bag[key] = {
+    invoiceId: String(link.invoiceId || ''),
+    payUrl: String(link.payUrl || ''),
+    webUrl: String(link.webUrl || ''),
+  };
+  return {
+    ...row,
+    invoiceId: bag[key].invoiceId,
+    payUrl: bag[key].payUrl,
+    webUrl: bag[key].webUrl,
+    cryptoTestnet: testnet,
+    cryptoLinks: bag,
+  };
+}
+
+function cryptoLinkResult(row, link) {
+  return {
+    asset: row.asset,
+    amount: row.payAmount,
+    url: link.payUrl || link.webUrl,
+    webUrl: link.webUrl || link.payUrl,
+  };
+}
+
+/** Create or reuse the Crypto Pay link for the mode that is on. The token stays in the request header. */
 async function ensureCryptoLink(store, purchaseId, fetchImpl) {
   const state = await store.read();
   const quote = (state.purchases || []).find((p) => p.id === purchaseId);
   if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
   if (state.settings.cryptoEnabled !== true) return { error: 'disabled' };
-  if (quote.payUrl || quote.webUrl) {
-    return {
-      asset: quote.asset,
-      amount: quote.payAmount,
-      url: quote.payUrl || quote.webUrl,
-      webUrl: quote.webUrl || quote.payUrl,
-    };
+  const creds = cryptoPayCredentials(state.settings);
+  if (!creds.ready) return { error: 'disabled' };
+  const saved = cryptoLinkFor(quote, creds.testnet);
+  if (saved && quote.cryptoTestnet === creds.testnet && String(quote.invoiceId || '') === saved.invoiceId) {
+    return cryptoLinkResult(quote, saved);
   }
-  if (!state.settings.cryptoPayToken) return { error: 'disabled' };
+  if (saved) {
+    return store.update((cur) => {
+      const row = (cur.purchases || []).find((p) => p.id === purchaseId);
+      if (!row) return { state: cur, result: { error: 'bad_order' } };
+      const fresh = cryptoPayCredentials(cur.settings);
+      if (!fresh.ready || fresh.testnet !== creds.testnet) return { state: cur, result: { error: 'disabled' } };
+      const link = cryptoLinkFor(row, fresh.testnet);
+      if (!link) return { state: cur, result: { error: 'down' } };
+      const purchases = cur.purchases.map((p) => (p.id === purchaseId ? quoteWithCryptoLink(p, fresh.testnet, link) : p));
+      return { state: { ...cur, purchases }, result: cryptoLinkResult(row, link) };
+    });
+  }
   const invoice = await createCryptoInvoice(fetchImpl, {
-    testnet: state.settings.cryptoTestnet === true,
-    token: state.settings.cryptoPayToken,
+    testnet: creds.testnet,
+    token: creds.token,
     asset: quote.asset,
     amount: quote.payAmount,
     payload: 'buy:' + quote.id,
     description: 'Подписка OMP',
   });
   if (!invoice) return { error: 'down' };
+  const created = { invoiceId: invoice.invoiceId, payUrl: invoice.botUrl, webUrl: invoice.webUrl };
   return store.update((cur) => {
     const row = (cur.purchases || []).find((p) => p.id === purchaseId);
     if (!row) return { state: cur, result: { error: 'bad_order' } };
-    if (row.payUrl || row.webUrl) {
-      return {
-        state: cur,
-        result: { asset: row.asset, amount: row.payAmount, url: row.payUrl || row.webUrl, webUrl: row.webUrl || row.payUrl },
-      };
-    }
-    const purchases = cur.purchases.map((p) =>
-      p.id === purchaseId ? { ...p, invoiceId: invoice.invoiceId, payUrl: invoice.botUrl, webUrl: invoice.webUrl } : p,
-    );
-    return {
-      state: { ...cur, purchases },
-      result: {
-        asset: row.asset,
-        amount: row.payAmount,
-        url: invoice.botUrl || invoice.webUrl,
-        webUrl: invoice.webUrl || invoice.botUrl,
-      },
-    };
+    const fresh = cryptoPayCredentials(cur.settings);
+    if (!fresh.ready || fresh.testnet !== creds.testnet) return { state: cur, result: { error: 'disabled' } };
+    const link = cryptoLinkFor(row, fresh.testnet) || created;
+    const purchases = cur.purchases.map((p) => (p.id === purchaseId ? quoteWithCryptoLink(p, fresh.testnet, link) : p));
+    return { state: { ...cur, purchases }, result: cryptoLinkResult(row, link) };
   });
 }
 
@@ -3033,7 +3098,23 @@ export function createApp(file, fetchImpl, opts) {
         const state = await store.read();
         const now = Date.now();
         const header = req.headers['crypto-pay-api-signature'] || '';
-        if (!cryptoPayAuthentic(raw, header, state.settings.cryptoPayToken)) {
+        const signatureMode = cryptoPaySignatureMode(raw, header, state.settings);
+        if (signatureMode === 'inactive') {
+          let operationId = '';
+          try {
+            const parsed = JSON.parse(raw || '{}');
+            const paidOther = paidInvoice(parsed);
+            if (paidOther) operationId = 'crypto:' + paidOther.invoiceId;
+          } catch (e) {
+            operationId = '';
+          }
+          await store.update((cur) => ({
+            state: logWebhook(cur, { kind: 'ignored', operationId, label: '', amount: '', at: now }),
+          }));
+          process.stderr.write('crypto pay ignored inactive mode\n');
+          return send(res, 200, 'ok');
+        }
+        if (signatureMode !== 'active') {
           await store.update((cur) => ({
             state: logWebhook(cur, { kind: 'bad_signature', operationId: '', label: '', amount: '', at: now }),
           }));
@@ -3055,6 +3136,7 @@ export function createApp(file, fetchImpl, opts) {
             amount: paid.paidAmount,
             currency: paid.asset,
             now,
+            cryptoTestnet: state.settings.cryptoTestnet === true,
           }),
         );
         const freshPay = await store.read();
