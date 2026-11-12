@@ -100,7 +100,8 @@ jobs:
           git switch -c "$BRANCH"
           git add player2160.version android/app/build.gradle android/vendor/2160player CHANGELOG.md CHANGELOG.en.md \
             package.json package-lock.json desktop/package.json desktop/package-lock.json \
-            desktop/src-tauri/tauri.conf.json webos/appinfo.json
+            desktop/src-tauri/tauri.conf.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock \
+            webos/appinfo.json
           git commit -m "chore: 2160 Player $LATEST"
           git push --force origin "HEAD:refs/heads/$BRANCH"
           cat > "$RUNNER_TEMP/body.md" <<BODY
@@ -121,8 +122,9 @@ jobs:
             exit 1
           fi
           gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
-          PR=$(gh pr view --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --json number --jq .number)
+          PR=$(gh pr view "$BRANCH" --repo "$GITHUB_REPOSITORY" --json number --jq .number)
           SHA=$(git rev-parse HEAD)
           NOTICE="Обновлен 2160 Player до ${LATEST}"
-          export PR BRANCH SHA NOTICE
+          EXPECTED="CI"
+          export PR BRANCH SHA NOTICE EXPECTED
           bash scripts/upstream-ship.sh

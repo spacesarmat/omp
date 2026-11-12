@@ -32,10 +32,19 @@ export function promoteUnreleased(text, version, english = false) {
   return text.replace(re, `## ${ver}`);
 }
 
-/** Replace exactly `expected` occurrences of `"version": "<from>"`. */
-export function replaceVersionFields(text, from, to, expected) {
-  const needle = `"version": "${from}"`;
+/** Replace exactly `expected` occurrences of `needle`. */
+export function replaceCounted(text, needle, replacement, expected) {
   const count = text.split(needle).length - 1;
   if (count !== expected) throw new Error(`expected ${expected} of ${needle}, found ${count}`);
-  return text.split(needle).join(`"version": "${to}"`);
+  return text.split(needle).join(replacement);
+}
+
+/** Replace exactly `expected` occurrences of `"version": "<from>"`. */
+export function replaceVersionFields(text, from, to, expected) {
+  return replaceCounted(text, `"version": "${from}"`, `"version": "${to}"`, expected);
+}
+
+/** Cargo.toml / Cargo.lock use `version = "<from>"`. */
+export function replaceCargoVersion(text, from, to, expected) {
+  return replaceCounted(text, `version = "${from}"`, `version = "${to}"`, expected);
 }

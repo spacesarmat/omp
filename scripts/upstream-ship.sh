@@ -9,6 +9,7 @@ set -euo pipefail
 : "${BRANCH:?}"
 : "${SHA:?}"
 : "${NOTICE:?}"
+: "${EXPECTED:?}"
 : "${GITHUB_REPOSITORY:?}"
 : "${GH_TOKEN:?}"
 
@@ -18,12 +19,12 @@ deadline=$((SECONDS + 45 * 60))
 verdict="wait"
 while [ "$SECONDS" -lt "$deadline" ]; do
   set +e
-  json=$(gh pr checks "$PR" --repo "$GITHUB_REPOSITORY" --json name,state 2>/dev/null)
+  json=$(gh run list --repo "$GITHUB_REPOSITORY" --commit "$SHA" --json name,conclusion,status,headSha 2>/dev/null)
   set -e
   if [ -z "${json:-}" ]; then
     json='[]'
   fi
-  verdict=$(printf '%s' "$json" | node scripts/upstream-gate.mjs checks)
+  verdict=$(printf '%s' "$json" | node scripts/upstream-gate.mjs runs)
   case "$verdict" in
     pass) break ;;
     fail)

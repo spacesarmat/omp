@@ -2,7 +2,7 @@
 // Prints the new version. Does not tag or push.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { readChangelogUtf8, writeUtf8Lf } from './changelog-encoding.mjs';
-import { nextBeta, promoteUnreleased, replaceVersionFields, webosVersion } from './omp-version.mjs';
+import { nextBeta, promoteUnreleased, replaceCargoVersion, replaceVersionFields, webosVersion } from './omp-version.mjs';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const from = pkg.version;
@@ -10,7 +10,10 @@ const to = nextBeta(from);
 
 function rewrite(path, expected) {
   const text = readFileSync(path, 'utf8');
-  writeFileSync(path, replaceVersionFields(text, from, to, expected));
+  const next = path.endsWith('.toml') || path.endsWith('.lock')
+    ? replaceCargoVersion(text, from, to, expected)
+    : replaceVersionFields(text, from, to, expected);
+  writeFileSync(path, next);
 }
 
 pkg.version = to;
@@ -19,6 +22,8 @@ rewrite('package-lock.json', 2);
 rewrite('desktop/package.json', 1);
 rewrite('desktop/package-lock.json', 2);
 rewrite('desktop/src-tauri/tauri.conf.json', 1);
+rewrite('desktop/src-tauri/Cargo.toml', 1);
+rewrite('desktop/src-tauri/Cargo.lock', 1);
 
 const appinfoPath = 'webos/appinfo.json';
 const appinfo = JSON.parse(readFileSync(appinfoPath, 'utf8'));

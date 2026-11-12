@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { nextBeta, promoteUnreleased, webosVersion } from '../../scripts/omp-version.mjs';
-import { branchMayAutoMerge, checksVerdict } from '../../scripts/upstream-gate.mjs';
+import { branchMayAutoMerge, checksVerdict, runsVerdict } from '../../scripts/upstream-gate.mjs';
 
 describe('next OMP beta', () => {
   it('steps a beta and starts a patch beta from a stable version', () => {
@@ -45,6 +45,18 @@ describe('upstream auto-merge gate', () => {
     expect(checksVerdict([{ name: 'build', state: 'SUCCESS' }, { name: 'android', state: 'PENDING' }])).toBe('wait');
     expect(checksVerdict([{ name: 'build', state: 'SUCCESS' }, { name: 'android', state: 'FAILURE' }])).toBe('fail');
     expect(checksVerdict([{ name: 'build', state: 'SUCCESS' }, { name: 'package', state: 'SKIPPED' }])).toBe('pass');
+  });
+
+  it('waits until every dispatched workflow has succeeded', () => {
+    const ci = { name: 'CI', status: 'completed', conclusion: 'success' };
+    const desktopWait = { name: 'Desktop', status: 'in_progress', conclusion: '' };
+    const desktopOk = { name: 'Desktop', status: 'completed', conclusion: 'success' };
+    const desktopBad = { name: 'Desktop', status: 'completed', conclusion: 'failure' };
+    expect(runsVerdict([ci], ['CI', 'Desktop'])).toBe('wait');
+    expect(runsVerdict([ci, desktopWait], ['CI', 'Desktop'])).toBe('wait');
+    expect(runsVerdict([ci, desktopBad], ['CI', 'Desktop'])).toBe('fail');
+    expect(runsVerdict([ci, desktopOk], ['CI', 'Desktop'])).toBe('pass');
+    expect(runsVerdict([ci], ['CI'])).toBe('pass');
   });
 });
 
