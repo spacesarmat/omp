@@ -194,13 +194,11 @@ function own(c: EpisodeCopy, r: ProgressReader): EpisodeProgress | null {
  */
 export function episodeProgress(list: Torrent[], hash: string, idx: number, reader: ProgressReader): EpisodeProgress {
   let watched: EpisodeProgress | null = null;
-  let untimed = false;
   let partial: EpisodeProgress | null = null;
   episodeCopies(list, hash, idx).forEach(function (c) {
     const p = own(c, reader);
     if (!p) return;
     if (p.watched) {
-      if (!p.updated) untimed = true;
       if (!watched || p.updated > watched.updated) watched = p;
     } else if (!partial || p.updated > partial.updated) {
       partial = p;
@@ -208,7 +206,8 @@ export function episodeProgress(list: Torrent[], hash: string, idx: number, read
   });
   const w = watched as EpisodeProgress | null;
   const pp = partial as EpisodeProgress | null;
-  const b = w && (untimed || !pp || pp.updated <= w.updated) ? w : pp;
+  // A shared finish has no timestamp. A later local replay or restart wins over it.
+  const b = w && (!pp || pp.updated <= w.updated) ? w : pp;
   if (!b) return { watched: false, position: 0, ratio: 0, updated: 0, duration: 0, hash: hash, fileIndex: idx };
   if (b.hash === hash && b.fileIndex === idx) return b;
   const mine = reader.local(hash, idx);

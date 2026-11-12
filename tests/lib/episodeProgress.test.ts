@@ -49,6 +49,13 @@ describe('episodeProgress', () => {
     expect(episodeProgress(LIST, 'uhd', 1, reader({}, { 'hd:2': 1 })).watched).toBe(true);
   });
 
+  it('a later replay or restart beats an old shared finish', () => {
+    const replay = reader({ 'uhd:1': { time: 1200, duration: 3600, updated: 9 } }, { 'hd:2': 1 });
+    expect(episodeProgress(LIST, 'uhd', 1, replay)).toMatchObject({ watched: false, position: 1200 });
+    const restart = reader({ 'uhd:1': { time: 0, duration: 1, updated: 9 } }, { 'hd:2': 1 });
+    expect(episodeProgress(LIST, 'uhd', 1, restart)).toMatchObject({ watched: false, position: 0 });
+  });
+
   it('a real watch and a manual mark still count, a stored position stays a resume', () => {
     expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 3500, duration: 3600, updated: 5 } })).watched).toBe(true);
     expect(episodeProgress(LIST, 'uhd', 1, reader({ 'uhd:1': { time: 1, duration: 1, updated: 5 } })).watched).toBe(true);
