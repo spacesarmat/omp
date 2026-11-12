@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Donation rates are fetched: USDT, TON and BTC from Crypto Pay (CoinGecko fallback), a star as 0.013 USD times the CBR dollar. The admin can leave auto on, type a manual rate, set a markup and a max age. A zero or too-old rate hides that method. Billing was not deployed
+
 ## 0.30.1-beta.5
 
 - [phone] Watch from: a server row stays dark, with the name and address on one line, the status under them, and the menu on the right. The light box is gone

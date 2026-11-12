@@ -7,6 +7,7 @@ import { randomId } from './crypto.mjs';
 import { CRYPTO_ASSETS, formatAsset } from './cryptoPay.mjs';
 import { logWebhook, mskDate, mskDateTime, mskDayStart } from './logic.mjs';
 import { altCovers, starInvoiceBody } from './payMethods.mjs';
+import { donatePricing } from './rates.mjs';
 import { grossUp, payUrl, settledCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -105,15 +106,15 @@ export function starsForRub(rub, rubPerStar) {
   return stars;
 }
 
-function rateOf(settings, asset) {
-  if (asset === 'USDT') return Number(settings.cryptoRateUsdt) || 0;
-  if (asset === 'TON') return Number(settings.cryptoRateTon) || 0;
-  if (asset === 'BTC') return Number(settings.cryptoRateBtc) || 0;
+function rateOf(price, asset) {
+  if (asset === 'USDT') return Number(price.cryptoRateUsdt) || 0;
+  if (asset === 'TON') return Number(price.cryptoRateTon) || 0;
+  if (asset === 'BTC') return Number(price.cryptoRateBtc) || 0;
   return 0;
 }
 
-export function donateCryptoAmount(settings, asset, rub) {
-  const rate = rateOf(settings || {}, asset);
+export function donateCryptoAmount(settings, asset, rub, now) {
+  const rate = rateOf(donatePricing(settings, now), asset);
   const base = Number(rub) || 0;
   if (!(rate > 0) || !(base > 0)) return '';
   return formatAsset(asset, base / rate);
@@ -226,18 +227,25 @@ function nameScreen(id) {
   };
 }
 
-export function cryptoAllowed(settings, account, asset) {
+/** Crypto donate switch and the non-RU country rule. Does not look at the rate. */
+export function cryptoDonateOpen(settings, account) {
   const cfg = normalizeDonateSettings(settings && settings.donate);
   if (!cfg.crypto) return false;
   if (settings && settings.cryptoNonRu === true) {
     const code = String((account && account.country) || '').trim().toUpperCase();
     if (!/^[A-Z]{2}$/.test(code) || code === 'RU') return false;
   }
-  return rateOf(settings || {}, asset) > 0;
+  return true;
 }
 
-function methodScreen(state, account, row) {
+export function cryptoAllowed(settings, account, asset, now) {
+  if (!cryptoDonateOpen(settings, account)) return false;
+  return rateOf(donatePricing(settings, now), asset) > 0;
+}
+
+function methodScreen(state, account, row, now) {
   const cfg = cfgOf(state);
+  const price = donatePricing(state.settings, now);
   const lines = ['Как оплатить ' + row.amountRub + ' ₽?'];
   const buttons = [];
   if (cfg.yoomoney && state.settings.yoomoneyWallet) {
@@ -247,13 +255,13 @@ function methodScreen(state, account, row) {
     if (pc) buttons.push([{ text: 'Кошелёк - ' + rubText(pc.gross), callback_data: 'dn:p:' + row.id + ':PC' }]);
     if (ac) buttons.push([{ text: 'Карта - ' + rubText(ac.gross), callback_data: 'dn:p:' + row.id + ':AC' }]);
   }
-  const stars = cfg.stars ? starsForRub(row.amountRub, cfg.rubPerStar) : 0;
+  const stars = cfg.stars ? starsForRub(row.amountRub, price.rubPerStar) : 0;
   if (stars >= 1) buttons.push([{ text: 'Звёзды - ' + stars, callback_data: 'dn:p:' + row.id + ':XTR' }]);
   if (cfg.crypto) {
     for (let i = 0; i < CRYPTO_ASSETS.length; i++) {
       const asset = CRYPTO_ASSETS[i];
-      if (!cryptoAllowed(state.settings, account, asset)) continue;
-      const amount = donateCryptoAmount(state.settings, asset, row.amountRub);
+      if (!cryptoAllowed(state.settings, account, asset, now)) continue;
+      const amount = donateCryptoAmount(state.settings, asset, row.amountRub, now);
       if (!amount) continue;
       buttons.push([{ text: asset + ' - ' + amount, callback_data: 'dn:p:' + row.id + ':' + asset }]);
     }
@@ -262,8 +270,9 @@ function methodScreen(state, account, row) {
   return { text: lines.join('\n'), inline: { inline_keyboard: buttons } };
 }
 
-function lockMethod(state, account, row, method) {
+function lockMethod(state, account, row, method, now) {
   const cfg = cfgOf(state);
+  const price = donatePricing(state.settings, now);
   const named = { ...row, displayName: nameOf(account) || row.displayName };
   if (method === 'PC' || method === 'AC') {
     if (!cfg.yoomoney || !state.settings.yoomoneyWallet) return { error: 'ЮMoney для доната выключена' };
@@ -278,7 +287,7 @@ function lockMethod(state, account, row, method) {
     };
   }
   if (method === 'XTR') {
-    const stars = starsForRub(named.amountRub, cfg.rubPerStar);
+    const stars = starsForRub(named.amountRub, price.rubPerStar);
     if (!cfg.stars || stars < 1) return { error: 'Звёзды для доната выключены' };
     return {
       row: { ...named, method: 'stars', asset: 'XTR', payAmount: String(stars), gross: '', fee: '', status: 'pending', step: '' },
@@ -292,8 +301,8 @@ function lockMethod(state, account, row, method) {
     };
   }
   if (CRYPTO_ASSETS.indexOf(method) >= 0) {
-    const amount = donateCryptoAmount(state.settings, method, named.amountRub);
-    if (!cfg.crypto || !amount || !cryptoAllowed(state.settings, account, method)) return { error: 'Крипта для доната выключена' };
+    const amount = donateCryptoAmount(state.settings, method, named.amountRub, now);
+    if (!cfg.crypto || !amount || !cryptoAllowed(state.settings, account, method, now)) return { error: 'Крипта для доната выключена' };
     return {
       row: { ...named, method: 'crypto', asset: method, payAmount: amount, gross: '', fee: '', status: 'pending', step: '' },
       text: method + ' ' + amount + '. Ссылка на оплату:',
@@ -410,7 +419,7 @@ export function donateOnCallback(state, account, data, now) {
   if (bits[1] === 'p') {
     const pending = pendingById(state, account, id);
     if (pending) {
-      if (pending.method === 'crypto' && !cryptoAllowed(state.settings, account, pending.asset)) {
+      if (pending.method === 'crypto' && !cryptoDonateOpen(state.settings, account)) {
         return { state, answer: 'Крипта недоступна' };
       }
       const again = resendCheckout(state, pending);
@@ -420,7 +429,7 @@ export function donateOnCallback(state, account, data, now) {
     const heldRow = (state.donations || []).find((d) => d && d.id === id && d.accountId === account.id && d.status === 'pending' && d.held === true);
     if (heldRow) return { state, answer: 'Платёж уже у ЮMoney и ждёт подтверждения' };
     if (!row || row.step !== 'method') return { state, answer: 'Кнопка устарела' };
-    const locked = lockMethod(state, account, row, bits[3] || '');
+    const locked = lockMethod(state, account, row, bits[3] || '', at);
     if (locked.error) return { state, text: locked.error, answer: locked.error };
     return {
       state: putDonation(state, locked.row),
@@ -441,7 +450,7 @@ export function donateOnCallback(state, account, data, now) {
   if (bits[1] === 'n') {
     if (row.step !== 'name') return { state, answer: 'Кнопка устарела' };
     const next = { ...row, showName: bits[3] === '1', step: 'method', displayName: nameOf(account) || row.displayName };
-    const screen = methodScreen(state, account, next);
+    const screen = methodScreen(state, account, next, at);
     return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '' };
   }
   return { state, answer: 'Кнопка устарела' };
