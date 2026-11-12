@@ -1,13 +1,24 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import type { Subscription } from '../../src/monitor/types';
-import { checkedLine, episodesLine, freshText, hoursText, rangeText, subRule, summaryLines, whenText } from '../src/monitor/text';
+import { checkedLine, episodesLine, freshText, hoursText, rangeText, seriesSubLine, subRule, summaryLines, whenText } from '../src/monitor/text';
 
 const at = (h: number, m: number, dayShift = 0) => new Date(2026, 9, 3 + dayShift, h, m).getTime();
 
 afterEach(() => applyLanguageSetting('ru'));
 
 describe('monitoring texts', () => {
+  it('a series line names the seasons and the next air date', () => {
+    const line = seriesSubLine({
+      seasons: [{ episodes: 8 }, { episodes: 6 }],
+      nextEpisode: { airDate: '2026-11-20' },
+    });
+    expect(line).toContain('2 сезона');
+    expect(line).toContain('14 серий');
+    expect(line).toContain('Следующая серия выйдет');
+    expect(seriesSubLine({ seasons: [] })).toBe('');
+  });
+
   it('times: today, yesterday, a date', () => {
     const now = at(15, 0);
     expect(whenText(at(14, 20), now)).toBe('сегодня 14:20');

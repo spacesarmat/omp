@@ -15,6 +15,8 @@ import { reloadSourcePrefs, setSourceOn } from '../../src/sources/store';
 import { registerSource, unregisterSource } from '../../src/sources/registry';
 import { addFindings, addSubscription, getSubscription, loadSubs, rememberSeen, seenKeys, unseenCount } from '../../src/monitor/subs';
 import { rememberCheck } from '../src/monitor/subHold';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
+import type { CatalogCard } from '../../src/catalog/tmdb';
 import type { SourceResult } from '../../src/sources/types';
 import type { Subscription } from '../../src/monitor/types';
 import { subRule } from '../src/monitor/text';
@@ -77,6 +79,7 @@ afterEach(() => {
   mon.restore();
   vi.restoreAllMocks();
   setWatchActions(null);
+  setCatalogClientForTests(null);
 });
 
 describe('parsers', () => {
@@ -324,6 +327,30 @@ describe('SubFindings', () => {
     rememberCheck(s.id, 5);
     mount({ id: s.id });
     expect(el.querySelector('[data-sub-checks]')!.textContent).toContain('1');
+    expect(el.querySelectorAll('[data-sub-log] li')).toHaveLength(1);
+  });
+
+  it('a series subscription shows seasons and the next air date', async () => {
+    const show = {
+      kind: 'tv', id: 21, title: 'Ледяной перевал', original: 'Frost Pass', year: 2024,
+      poster: '', rating: 8, backdrop: '', genres: [], runtime: 50, overview: '', cast: [],
+      seasons: [{ number: 1, episodes: 8, year: 2024, aired: 8 }],
+      airing: true,
+      nextEpisode: { season: 1, episode: 9, airDate: '2026-11-20' },
+    } as CatalogCard;
+    const empty = () => Promise.resolve({ items: [], pages: 0 });
+    setCatalogClientForTests({ novelties: empty, discover: empty, search: empty, card: () => Promise.resolve(show) });
+    const s = addSubscription({
+      query: 'Ледяной перевал',
+      quality: '',
+      sources: null,
+      notify: true,
+      catalog: { kind: 'tv', id: 21, title: 'Ледяной перевал', year: 2024, poster: '' },
+    })!;
+    mount({ id: s.id });
+    await flush();
+    expect(el.querySelector('[data-sub-series]')!.textContent).toContain('1 сезон');
+    expect(el.querySelector('[data-sub-series]')!.textContent).toContain('Следующая серия выйдет');
   });
 
   it('a subscription that is gone says so', () => {

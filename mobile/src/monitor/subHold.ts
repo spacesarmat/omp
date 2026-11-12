@@ -51,6 +51,11 @@ export function checkCount(id: string): number {
   return (logs()[id] || { n: 0, at: [] }).n;
 }
 
+/** Newest checks first, at most the stored eight. The total can be higher: see checkCount. */
+export function checkTimes(id: string): number[] {
+  return (logs()[id] || { n: 0, at: [] }).at.slice();
+}
+
 export function rememberCheck(id: string, at: number): void {
   const all = logs();
   const prev = all[id] || { n: 0, at: [] };
