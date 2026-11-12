@@ -256,6 +256,7 @@ export function OmpJackettCard() {
               </div>
             )}
             {account && account.overLimit ? <div class="m-src-row m-note">{t('sources.billing.overLimit')}</div> : null}
+            {account && account.supporter ? <div class="m-src-row m-note" data-supporter="1">{t('sources.billing.supporter')}</div> : null}
             {cryptoError ? (
               <div class="m-src-row m-note" role="alert">
                 {cryptoError}

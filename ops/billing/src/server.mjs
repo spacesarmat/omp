@@ -165,6 +165,23 @@ import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtS
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
 import { isEmptyNotice, isTestNotification, noticeTypeOk, notificationAuthentic } from './yoomoney.mjs';
+import {
+  accountSupported,
+  applyDonateSettings,
+  applyDonation,
+  confirmDonateHold,
+  cryptoAllowed,
+  donateCryptoLinkLive,
+  donateCsv,
+  donateNoticeText,
+  donateReport,
+  donateStarCheckout,
+  donateThanksText,
+  hideDonateField,
+  markDonateRefund,
+  publicThanks,
+  rememberDonateInvoice,
+} from './donate.mjs';
 import { isReadOnlyError, readOnlyMode, readOnlyStore } from './readOnly.mjs';
 
 /** Browser return from the payment page. It never grants access: only a verified notice does. */
@@ -1013,9 +1030,73 @@ async function ensureCryptoLink(store, purchaseId, fetchImpl) {
   });
 }
 
+/** Crypto Pay link for a donation. The token stays in the request header. */
+async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
+  const state = await store.read();
+  const quote = (state.donations || []).find((p) => p && p.id === donationId);
+  if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
+  if (!state.settings.donate || state.settings.donate.crypto !== true) return { error: 'disabled' };
+  const payer = (state.accounts || []).find((a) => a && a.id === quote.accountId) || null;
+  if (!cryptoAllowed(state.settings, payer, quote.asset)) return { error: 'disabled' };
+  const creds = cryptoPayCredentials(state.settings);
+  if (!creds.ready) return { error: 'disabled' };
+  const issuedAt = Date.now();
+  if (donateCryptoLinkLive(quote, issuedAt, creds.testnet)) {
+    return { asset: quote.asset, amount: quote.payAmount, url: quote.payUrl || quote.webUrl, webUrl: quote.webUrl || quote.payUrl };
+  }
+  const invoice = await createCryptoInvoice(fetchImpl, {
+    testnet: creds.testnet,
+    token: creds.token,
+    asset: quote.asset,
+    amount: quote.payAmount,
+    payload: 'don:' + quote.id,
+    description: 'Донат OMP',
+  });
+  if (!invoice) return { error: 'down' };
+  return store.update((cur) => {
+    const fresh = cryptoPayCredentials(cur.settings);
+    if (!fresh.ready || fresh.testnet !== creds.testnet) return { state: cur, result: { error: 'disabled' } };
+    const row = (cur.donations || []).find((p) => p && p.id === donationId);
+    if (!row) return { state: cur, result: { error: 'bad_order' } };
+    const payerNow = (cur.accounts || []).find((a) => a && a.id === row.accountId) || null;
+    if (!cryptoAllowed(cur.settings, payerNow, row.asset)) return { state: cur, result: { error: 'disabled' } };
+    if (donateCryptoLinkLive(row, issuedAt, fresh.testnet)) {
+      return {
+        state: cur,
+        result: { asset: row.asset, amount: row.payAmount, url: row.payUrl || row.webUrl, webUrl: row.webUrl || row.payUrl },
+      };
+    }
+    const next = rememberDonateInvoice(cur, donationId, invoice, issuedAt, fresh.testnet);
+    const saved = (next.donations || []).find((p) => p && p.id === donationId) || row;
+    return {
+      state: next,
+      result: {
+        asset: saved.asset,
+        amount: saved.payAmount,
+        url: saved.payUrl || invoice.botUrl || invoice.webUrl,
+        webUrl: saved.webUrl || invoice.webUrl || invoice.botUrl,
+      },
+    };
+  });
+}
+
 /** A bot row that is a Stars invoice or a Crypto Pay link. Other rows stay on telegramSend. */
 async function sendBotRow(token, row, net, timeoutMs, store) {
   if (row && row.invoice) return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
+  if (row && row.cryptoIssue && row.cryptoIssue.donationId && store) {
+    const issued = await ensureDonateCryptoLink(store, row.cryptoIssue.donationId, net);
+    const webUrl = issued && (issued.webUrl || issued.url);
+    const botUrl = issued && issued.url;
+    const buttons = [];
+    if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
+    if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
+    return telegramSend(token, row.chatId, webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.', net, {
+      keyboard: row.keyboard,
+      inline: buttons.length ? { inline_keyboard: buttons } : undefined,
+      parseMode: row.parseMode,
+      timeoutMs,
+    });
+  }
   if (row && row.cryptoIssue && store) {
     const issued = await ensureCryptoLink(store, row.cryptoIssue.purchaseId, net);
     const webUrl = issued && (issued.webUrl || issued.url);
@@ -1184,6 +1265,38 @@ function confirmed(body) {
   return v === true || v === 'yes' || v === '1' || v === 1 || v === 'true';
 }
 
+function settleMoney(state, notice) {
+  if (String(notice && notice.label || '').indexOf('don:') === 0) return applyDonation(state, notice);
+  return applyPayment(state, notice);
+}
+
+async function finishDonate(state, applied, fetchImpl) {
+  if (!applied || applied.kind !== 'donate' || applied.duplicate) return;
+  publishAdmin({ type: applied.error ? 'error' : 'payment' });
+  if (applied.error) return;
+  const chat = applied.accountId ? telegramOf(state, applied.accountId) : '';
+  const text = applied.pending
+    ? 'Донат ждёт подтверждения в ЮMoney. Он ещё не засчитан.'
+    : donateThanksText(state.settings);
+  if (chat) {
+    try {
+      await telegramSend(state.settings.botToken, chat, text, fetchImpl, { keyboard: mainKeyboard() });
+    } catch (e) {
+      /* the donation is stored either way */
+    }
+  }
+  if (!applied.pending) {
+    const note = donateNoticeText(state.settings, applied.donation);
+    if (note && adminNotifyEnabled(state.settings)) {
+      try {
+        await notifyAdmins(state, adminBroadcast(state.settings, note), fetchImpl);
+      } catch (e) {
+        /* the donation is stored either way */
+      }
+    }
+  }
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -1245,6 +1358,7 @@ export function createApp(file, fetchImpl, opts) {
   const progressRate = createRateLimit(40, 60 * 1000);
   // Crypto Pay invoices. Ten creates per device per 10 minutes.
   const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
+  const thanksRate = createRateLimit(60, 10 * 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
@@ -1718,6 +1832,31 @@ export function createApp(file, fetchImpl, opts) {
           'content-type': 'text/csv; charset=utf-8',
           'content-disposition': 'attachment; filename="' + name + '"',
         });
+      }
+      if (req.method === 'GET' && path === '/admin/donations.csv') {
+        const admin = adminOf(req);
+        if (!admin) return send(res, 401, 'login required');
+        const csv = donateCsv(await store.read(), {
+          status: url.searchParams.get('status') || '',
+          method: url.searchParams.get('method') || '',
+          from: url.searchParams.get('from') || '',
+          to: url.searchParams.get('to') || '',
+        });
+        return send(res, 200, csv, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': 'attachment; filename="omp-donations.csv"',
+        });
+      }
+      if (req.method === 'GET' && path === '/admin/api/donations') {
+        const admin = adminOf(req);
+        if (!admin) return json(res, 401, { auth: false });
+        const state = await store.read();
+        return json(res, 200, donateReport(state, Date.now(), {
+          status: url.searchParams.get('status') || '',
+          method: url.searchParams.get('method') || '',
+          from: url.searchParams.get('from') || '',
+          to: url.searchParams.get('to') || '',
+        }));
       }
       if (req.method === 'GET' && path === '/admin/finance.csv') {
         const admin = adminOf(req);
@@ -2305,6 +2444,57 @@ export function createApp(file, fetchImpl, opts) {
           }
           redirectTo = '/admin/?tab=ads';
         }
+        if (path === '/admin/donate') {
+          await store.update((state) => ({
+            state: { ...state, settings: { ...state.settings, donate: applyDonateSettings(state.settings.donate, body) } },
+          }));
+          await audit(file, 'donate_settings', 'Донат', admin);
+          flashText = 'Настройки доната сохранены';
+          redirectTo = '/admin/?tab=donations';
+        }
+        if (path === '/admin/donate/confirm') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const id = String(body.id || '');
+            const out = await store.update((state) => confirmDonateHold(state, { id, now: Date.now() }));
+            if (out.error === 'not_found') flashError = 'Удержанный донат не найден';
+            else if (out.error) flashError = 'Донат не подтверждён: ' + out.error;
+            else {
+              await audit(file, 'donate_confirm', id, admin);
+              flashText = 'Донат подтверждён. Подписка не продлена.';
+              try {
+                await finishDonate(await store.read(), out, net);
+              } catch (e) {
+                /* the donation is stored either way */
+              }
+            }
+          }
+          redirectTo = '/admin/?tab=donations';
+        }
+        if (path === '/admin/donate/refund') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const id = String(body.id || '');
+            const changed = await store.update((state) => {
+              const next = markDonateRefund(state, { id, now: Date.now() });
+              return { state: next, result: { ok: next !== state } };
+            });
+            if (!changed.ok) flashError = 'Донат не найден или уже отмечен';
+            else {
+              await audit(file, 'donate_refund', id, admin);
+              flashText = 'Возврат отмечен. Деньги этой кнопкой не уходят.';
+            }
+          }
+          redirectTo = '/admin/?tab=donations';
+        }
+        if (path === '/admin/donate/hide') {
+          const id = String(body.id || '');
+          const field = body.field === 'comment' ? 'comment' : 'name';
+          await store.update((state) => ({ state: hideDonateField(state, { id, field }) }));
+          await audit(file, 'donate_hide', field + ' ' + id, admin);
+          flashText = field === 'comment' ? 'Комментарий скрыт или возвращён' : 'Имя скрыто или возвращено';
+          redirectTo = '/admin/?tab=donations';
+        }
         if (path === '/admin/referral') {
           await store.update((state) => {
             const r = applyReferralPost(body, state.referralJournal || [], state.referralBinds || []);
@@ -2639,6 +2829,13 @@ export function createApp(file, fetchImpl, opts) {
         if (!links.length) return json(res, 503, { error: 'down' });
         return json(res, 200, { links });
       }
+      if (req.method === 'GET' && path === '/v1/thanks') {
+        if (!thanksRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(thanksRate.retryAfter(clientIp(req)) || 60));
+          return json(res, 429, { error: 'rate' });
+        }
+        return json(res, 200, publicThanks(await store.read()));
+      }
       if (req.method === 'POST' && path === '/v1/auto-renew') {
         if (readOnly) return json(res, 503, { error: 'readonly' });
         const device = String(req.headers['x-device-id'] || '');
@@ -2724,6 +2921,7 @@ export function createApp(file, fetchImpl, opts) {
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
           referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),
+          supporter: accountSupported(state, account.id),
           bill: phoneBill(state, account.id, now),
         });
       }
@@ -3130,7 +3328,7 @@ export function createApp(file, fetchImpl, opts) {
         const paid = paidInvoice(body);
         if (!paid) return send(res, 200, 'ok');
         const applied = await store.update((cur) =>
-          applyPayment(cur, {
+          settleMoney(cur, {
             operationId: 'crypto:' + paid.invoiceId,
             label: paid.payload,
             amount: paid.paidAmount,
@@ -3140,6 +3338,10 @@ export function createApp(file, fetchImpl, opts) {
           }),
         );
         const freshPay = await store.read();
+        if (applied.kind === 'donate') {
+          await finishDonate(freshPay, applied, net);
+          return send(res, 200, 'ok');
+        }
         if (!applied.duplicate && !applied.error) {
           try {
             await tellPayment(freshPay, applied, net);
@@ -3206,7 +3408,7 @@ export function createApp(file, fetchImpl, opts) {
           return send(res, 400, 'bad type');
         }
         const applied = await store.update((cur) =>
-          applyPayment(cur, {
+          settleMoney(cur, {
             operationId: body.operation_id,
             label: body.label,
             amount: body.amount,
@@ -3220,6 +3422,10 @@ export function createApp(file, fetchImpl, opts) {
           }),
         );
         const freshPay = (await store.read());
+        if (applied.kind === 'donate') {
+          await finishDonate(freshPay, applied, net);
+          return send(res, 200, 'ok');
+        }
         if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net);
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
@@ -3433,7 +3639,8 @@ export async function pollBot(file, fetchImpl, opts) {
             decision = { ok: false, error: 'Этот счёт уже оплачен' };
           } else {
             try {
-              decision = starCheckoutDecision(await store.read(), early);
+              const snap = await store.read();
+              decision = payload.indexOf('don:') === 0 ? donateStarCheckout(snap, early) : starCheckoutDecision(snap, early);
             } catch (e) {
               decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
             }
@@ -3493,7 +3700,7 @@ export async function pollBot(file, fetchImpl, opts) {
             let applied;
             try {
               applied = await store.update((cur) =>
-                applyPayment(cur, {
+                settleMoney(cur, {
                   operationId: 'stars:' + charge,
                   label: payload,
                   amount: String(sp.total_amount),
@@ -3508,6 +3715,10 @@ export async function pollBot(file, fetchImpl, opts) {
               throw e;
             }
             const freshStar = await store.read();
+            if (applied.kind === 'donate') {
+              await finishDonate(freshStar, applied, net);
+              continue;
+            }
             if (!applied.duplicate && !applied.error) {
               try {
                 await tellPayment(freshStar, applied, net);

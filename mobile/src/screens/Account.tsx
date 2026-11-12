@@ -1,6 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
-import { billingPost } from '../../../src/billing/client';
+import { billingGet, billingPost } from '../../../src/billing/client';
 import { emitBillingChange } from '../../../src/billing/session';
 import { withDeviceToken } from '../../../src/billing/tokens';
 import { goBack } from '../nav';
@@ -23,8 +23,55 @@ export function Account() {
         <h1 class="m-bar-title">{t('settings.account')}</h1>
       </div>
       <OmpJackettCard />
+      <ThanksList />
       <PromoEntry />
     </div>
+  );
+}
+
+function ThanksList() {
+  const [names, setNames] = useState<{ name: string; amount?: number }[] | null>(null);
+  const [showAmounts, setShowAmounts] = useState(false);
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    let stop = false;
+    billingGet(phoneSourceContext(), '/v1/thanks', { timeoutMs: 8000 })
+      .then((res) => {
+        if (stop) return;
+        if (res.status < 200 || res.status >= 300) {
+          setDown(true);
+          return;
+        }
+        try {
+          const body = JSON.parse(res.text) as { names?: { name?: string; amount?: number }[]; showAmounts?: boolean };
+          const rows = Array.isArray(body.names) ? body.names : [];
+          setNames(rows.filter((row) => row && row.name).map((row) => ({ name: String(row.name), amount: typeof row.amount === 'number' ? row.amount : undefined })));
+          setShowAmounts(body.showAmounts === true);
+        } catch (e) {
+          setDown(true);
+        }
+      })
+      .catch(() => {
+        if (!stop) setDown(true);
+      });
+    return () => {
+      stop = true;
+    };
+  }, []);
+  return (
+    <section class="m-set-group" data-thanks="1">
+      <h2 class="m-small">{t('sources.billing.thanksTitle')}</h2>
+      {down ? <p class="m-small m-muted">{t('sources.billing.thanksDown')}</p> : null}
+      {names && names.length === 0 && !down ? <p class="m-small m-muted">{t('sources.billing.thanksEmpty')}</p> : null}
+      {names && names.length
+        ? names.map((row) => (
+            <div class="m-src-row" key={row.name}>
+              {row.name}
+              {showAmounts && row.amount != null ? ' - ' + row.amount + ' ₽' : ''}
+            </div>
+          ))
+        : null}
+    </section>
   );
 }
 

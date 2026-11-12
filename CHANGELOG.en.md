@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Account: a Supporter mark on a linked account that donated, and a thanks list. The list shows only people who opened their name
+- [tech] Bot and admin donations: a separate payment, migration 012, flag and methods off. It does not change a subscription or referral bonuses. A donation Crypto Pay invoice uses the active mode token and host. Billing was not deployed
+
 ## 0.30.1-beta.4
 
 - [phone] Help lists common problems first, device chips on one row, and "For your TV". Buttons open Developer Mode, wake-on-LAN, updates, the player and a promo code. An answer can be marked useful or not

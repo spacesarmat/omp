@@ -302,7 +302,7 @@ describe('bot', () => {
     expect(userPad.messages[0].text).toContain('Режим пользователя');
     const keys = userPad.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text);
     expect(keys).toContain('Кабинет');
-    expect(keys).toEqual(['Кабинет', 'Оплатить', 'Устройства', 'Промокод', 'Цены', 'Поддержка']);
+    expect(keys).toEqual(['Кабинет', 'Оплатить', 'Устройства', 'Промокод', 'Цены', 'Поддержка', 'Поддержать проект']);
     expect(keys).not.toContain('Сводка');
     expect(keys).not.toContain('Админ');
     const stay = botReply(userPad.state, {
