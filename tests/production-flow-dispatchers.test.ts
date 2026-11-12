@@ -43,7 +43,7 @@ import { createTvFlowDispatcher } from '../src/productionFlowDispatcher';
 import { createPhoneFlowDispatcher } from '../mobile/src/productionFlowDispatcher';
 import { createDesktopFlowDispatcher } from '../desktop/src/productionFlowDispatcher';
 import { unavailableProductionAction } from '../design/production-flow';
-import { currentRoute as tvRoute, routeStack as tvStack } from '../src/ui/nav';
+import { currentRoute as tvRoute, routeKey, routeStack as tvStack } from '../src/ui/nav';
 import { currentRoute as phoneRoute, routeStack as phoneStack } from '../mobile/src/nav';
 import { activeServerId, addServer, servers } from '../src/store/servers';
 
@@ -159,11 +159,17 @@ describe('tv flow dispatcher', () => {
     expect(dispatcher.queueAdd()).toMatchObject({ ok: false, error: expect.stringContaining('no open player queue') });
     const existing = { url: 'old', title: 'old', hash: 'old', fileIndex: 0 };
     tvStack.value = [{ name: 'library' }, { name: 'player', queue: [existing], index: 0 }, { name: 'torrent', hash: 'abc' }];
+    const playerBefore = tvStack.value[1];
+    const keyBefore = routeKey(playerBefore);
     expect(dispatcher.queueAdd()).toEqual({ ok: true });
+    // The player route keeps its object identity (and screen key), so rendering it again does
+    // not remount PlayerScreen: the current index and item stay, playback is not restarted.
     const player = tvStack.value[1];
+    expect(player).toBe(playerBefore);
+    expect(routeKey(player)).toBe(keyBefore);
     expect(player.name).toBe('player');
     if (player.name !== 'player') throw new Error('player route expected');
-    expect(player.queue[0]).toEqual(existing);
+    expect(player.queue[0]).toBe(existing);
     expect(player.queue).toHaveLength(2);
     expect(player.index).toBe(0);
     expect(tvRoute.value.name).toBe('torrent');

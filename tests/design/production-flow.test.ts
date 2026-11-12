@@ -119,6 +119,7 @@ function click(root: HTMLElement, elementId: string): void {
 
 beforeEach(() => {
   generated.flow.rules = [];
+  delete generated.flow.variables;
 });
 
 afterEach(() => {
@@ -394,6 +395,31 @@ describe('installProductionFlow', () => {
     }));
     notifyServer?.(true);
     expect(spy.calls).toEqual(['toast:first ran', 'toast:second ran']);
+  });
+
+  it('initializes declared variables before the first publisher event (click parity)', () => {
+    generated.flow.rules = [
+      {
+        ...eventRule('uses-variable', 'status', 'server.connected', 'variable seen'),
+        condition: { kind: 'eq', path: 'variable.flag', value: true },
+      },
+    ];
+    generated.flow.variables = [{ id: 'flag', name: 'Flag', type: 'boolean', initial: true }];
+    const spy = dispatcherSpy();
+    let notifyServer: ((connected: boolean) => void) | undefined;
+    const root = document.createElement('div');
+    document.body.appendChild(root);
+    installProductionFlow(root, optionsFor(spy, {
+      publishers: {
+        subscribeServer: (notify) => {
+          notifyServer = notify;
+          return () => undefined;
+        },
+      },
+    }));
+    // No click or timer ran yet: the declared variable must already hold its initial value.
+    notifyServer?.(true);
+    expect(spy.calls).toEqual(['toast:variable seen']);
   });
 
   it('activateProductionFlow drives the same runtime for preview harnesses', () => {

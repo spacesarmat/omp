@@ -136,6 +136,12 @@ function ensureDocumentVariables(flow: FlowDocument, active: FlowSession): void 
   }
 }
 
+// One initialization per session: declared variables get their initial values before any
+// event runs (click through executeFlow does the same; publisher events drive rules directly).
+export function ensureFlowDocumentVariables(flow: FlowDocument): void {
+  ensureDocumentVariables(flow, currentSession());
+}
+
 function resolvePath(path: ConditionPath, context: ExecutionContext): FlowVariableValue | undefined {
   if (path === 'server.connected') return context.serverConnected;
   if (path === 'target') return context.target;

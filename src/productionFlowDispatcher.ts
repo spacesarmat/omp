@@ -1,4 +1,4 @@
-import { currentRoute, goBack, navigate, openPlayer, routeStack, type Route } from './ui/nav';
+import { currentRoute, goBack, navigate, openPlayer, extendPlayerQueue, type Route } from './ui/nav';
 import { toast } from './ui/toast';
 import { confirmWithBody } from './ui/dialog';
 import { BILLING_BOT_URL } from './billing/config';
@@ -65,21 +65,14 @@ export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): F
     if (!queue.length) return { error: { ok: false, error: `${action}: the torrent has no playable files` } };
     return { queue };
   };
-  // queue.add appends to the open player route in the stack: the current index and the
-  // playing item stay untouched, playback is not forced.
+  // queue.add appends to the open player route in place: the route object keeps its identity
+  // (no screen remount, no playback restart) and the stack signal still notifies subscribers.
   const queueAdd = (): FlowDispatchOutcome => {
     const built = torrentQueue('queue.add');
     if ('error' in built) return built.error;
-    const stack = routeStack.value;
-    const at = stack.findIndex((entry) => entry.name === 'player');
-    if (at < 0) {
+    if (!extendPlayerQueue(built.queue)) {
       return { ok: false, error: 'queue.add is unavailable on tv: no open player queue; use queue.replace to start playback' };
     }
-    routeStack.value = stack.map((entry, index) => (
-      index === at && entry.name === 'player'
-        ? { ...entry, queue: [...entry.queue, ...built.queue] }
-        : entry
-    ));
     return { ok: true };
   };
   const sourceSearch = createFlowSourceSearch({

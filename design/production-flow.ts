@@ -1,6 +1,7 @@
 import { PRODUCTION_FLOW } from './generated/flow.ts';
 import {
   beginFlowSession,
+  ensureFlowDocumentVariables,
   executeFlow,
   executeGraphRule,
   resetFlowSession,
@@ -161,6 +162,7 @@ export function activateProductionFlow(root: HTMLElement, flow: FlowDocument, op
     ...published,
   });
   beginFlowSession(sessionEnvironmentNow());
+  ensureFlowDocumentVariables(flow);
 
   // Clicks are captured before the app's own handlers: a matched rule takes over the click
   // (no double navigation), while an unmatched click falls through untouched, so documents
