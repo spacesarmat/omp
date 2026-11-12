@@ -142,7 +142,18 @@ interface FocusProbeStyles {
   boxShadow: string;
 }
 
+// Bumped on every focus probe read, per measured document. PreviewPane's mutation observer
+// compares versions to tell probe-caused class churn apart from genuine changes: a changed
+// version means a geometry collection just read the current DOM, so the mutations queued by that
+// read carry nothing new and the batch is safe to skip.
+const focusProbeVersions = new WeakMap<Document, number>();
+
+export function focusProbeVersion(doc: Document): number {
+  return focusProbeVersions.get(doc) ?? 0;
+}
+
 function focusProbeStyles(doc: Document, element: HTMLElement): FocusProbeStyles {
+  focusProbeVersions.set(doc, (focusProbeVersions.get(doc) ?? 0) + 1);
   interface ProbeRule {
     parent: CSSStyleSheet | CSSGroupingRule;
     index: number;

@@ -3,6 +3,7 @@ import { act } from 'preact/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PreviewPane } from '../../editor/src/components/PreviewPane';
 import * as protocol from '../../editor/src/preview/protocol';
+import { collectGeometrySnapshot } from '../../design/layout-checks';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import { getEditorViewport } from '../../editor/shared/routes';
 
@@ -101,5 +102,38 @@ describe('PreviewPane geometry collection', () => {
     expect(snapshot).not.toBeNull();
     expect(snapshot!.format).toBe('portrait');
     expect(snapshot!.viewport).toEqual(getEditorViewport('android-phone', 'portrait'));
+  });
+
+  it('ignores focus-probe class churn but still collects genuine class changes', async () => {
+    const props = createProps();
+    act(() => render(h(PreviewPane, props), host));
+    const { doc } = loadIframe();
+    expect(props.onGeometryChange).toHaveBeenCalled();
+    const geometryCalls = () => (props.onGeometryChange as ReturnType<typeof vi.fn>).mock.calls.length;
+    const callsBefore = geometryCalls();
+
+    // A stylesheet :focus rule makes the geometry probe add and remove its probe class on every
+    // interactive element it reads.
+    if (!doc.head) doc.documentElement.insertBefore(doc.createElement('head'), doc.body);
+    const style = doc.createElement('style');
+    style.textContent = ':focus { outline-style: solid; }';
+    doc.head.appendChild(style);
+    const button = doc.createElement('button');
+    doc.body.appendChild(button);
+
+    // The probe churn queues class mutations, but the collection that caused them already read
+    // the current DOM: no recursive collect may run.
+    await act(async () => {
+      collectGeometrySnapshot(doc.body, { target: 'android-phone', screenId: 'settings', format: 'landscape', viewport: { width: 960, height: 720 } });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(geometryCalls()).toBe(callsBefore);
+
+    // A genuine class change still triggers a collection.
+    await act(async () => {
+      button.classList.add('real-state');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(geometryCalls()).toBe(callsBefore + 1);
   });
 });

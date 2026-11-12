@@ -3,7 +3,7 @@ import type { InteractionTrace } from '../../../design/interaction.ts';
 import type { LayoutContext, LayoutPlacement } from '../../../design/schema.ts';
 import type { DesktopRouteId } from '../../../desktop/src/shell/routes';
 import { collectLayoutNodes, layoutRootOf, snapshotCloneHtml, type LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
-import { collectGeometrySnapshot, type GeometrySnapshot } from '../../../design/layout-checks.ts';
+import { collectGeometrySnapshot, focusProbeVersion, type GeometrySnapshot } from '../../../design/layout-checks.ts';
 import { collectLayoutElements, type LayoutRect } from '../layout/transactions.ts';
 import { createSessionId, isTrustedPreviewEvent, newMessageId, parsePreviewMessage, sendPreviewCommand, type PreviewConfiguration, type PreviewCommandInput } from '../preview/protocol';
 import { CanvasControls, type CanvasTool } from './CanvasControls';
@@ -167,10 +167,20 @@ export function PreviewPane(props: PreviewPaneProps) {
   const attachObserver = () => {
     observer.current?.disconnect();
     observer.current = null;
-    const body = iframe.current?.contentDocument?.body;
-    if (!body || typeof MutationObserver === 'undefined') return;
+    const doc = iframe.current?.contentDocument;
+    const body = doc?.body;
+    if (!doc || !body || typeof MutationObserver === 'undefined') return;
+    let observedProbeVersion = focusProbeVersion(doc);
     observer.current = new MutationObserver((mutations) => {
+      const currentVersion = focusProbeVersion(doc);
+      const probeRan = currentVersion !== observedProbeVersion;
+      observedProbeVersion = currentVersion;
+      // Identity stamps never change what a collection reports.
       if (mutations.every((mutation) => mutation.type === 'attributes' && mutation.attributeName === 'data-layout-node')) return;
+      // A geometry collection bumped the probe version, and that very collection already
+      // re-read the DOM after these mutations queued, so the batch carries nothing new. Genuine
+      // changes keep collecting because no probe ran and the version stays unchanged.
+      if (probeRan) return;
       collectRef.current();
     });
     observer.current.observe(body, { childList: true, subtree: true, attributes: true });
