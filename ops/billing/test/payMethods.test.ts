@@ -680,6 +680,37 @@ describe('crypto pay invoice host', () => {
     const sent = http.calls.find((c) => c.url.indexOf('/sendMessage') >= 0);
     expect(sent && sent.body).toContain('Не удалось создать счёт');
   });
+
+  it('keeps a pre-mode live invoice payable after a later testnet link', async () => {
+    const b = await quoted({ cryptoTestnet: false, cryptoPayToken: TOKEN, cryptoPayTestnetToken: TESTNET_TOKEN });
+    const state = await readState(b.store);
+    const row = state.purchases.find((p: { id: string }) => p.id === b.id);
+    row.invoiceId = 'A';
+    row.payUrl = 'https://pay.crypt.bot/i/A';
+    row.webUrl = 'https://pay.crypt.bot/i/A';
+    delete row.cryptoTestnet;
+    delete row.cryptoLinks;
+    await writeState(b.store, state);
+    const http = net();
+    await handleCallback(b.store, BOT, press(b.id), http.fetchImpl, 5000);
+    expect(http.calls.some((c) => c.url.indexOf('/api/createInvoice') >= 0)).toBe(false);
+    expect(JSON.stringify(http.calls)).toContain('https://pay.crypt.bot/i/A');
+    const switched = await readState(b.store);
+    switched.settings.cryptoTestnet = true;
+    await writeState(b.store, switched);
+    await handleCallback(b.store, BOT, press(b.id), http.fetchImpl, 5000);
+    const back = await readState(b.store);
+    back.settings.cryptoTestnet = false;
+    const paid = applyPayment(back, {
+      operationId: 'crypto:A',
+      label: 'buy:' + b.id,
+      amount: '2.00',
+      currency: 'USDT',
+      now: Date.now(),
+    });
+    expect(paid.result.error).toBeUndefined();
+    expect(paid.state.subscriptions).toHaveLength(1);
+  });
 });
 
 describe('stars poll durability', () => {

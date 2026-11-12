@@ -898,7 +898,22 @@ function rememberCountry(state, accountId, country) {
   return changed ? { ...state, accounts } : state;
 }
 
-/** Invoice already stored for this Crypto Pay mode. A link with no mode is not reused. */
+/** A quote from before modes: one live invoice, no testnet host in the url. */
+function legacyLiveLink(quote) {
+  if (!quote || quote.cryptoTestnet != null) return null;
+  const bag = quote.cryptoLinks;
+  if (bag && (bag.live || bag.testnet)) return null;
+  if (!quote.invoiceId || !(quote.payUrl || quote.webUrl)) return null;
+  const url = String(quote.payUrl || '') + ' ' + String(quote.webUrl || '');
+  if (url.toLowerCase().indexOf('testnet') >= 0) return null;
+  return {
+    invoiceId: String(quote.invoiceId),
+    payUrl: String(quote.payUrl || ''),
+    webUrl: String(quote.webUrl || ''),
+  };
+}
+
+/** Invoice already stored for this Crypto Pay mode. */
 function cryptoLinkFor(quote, testnet) {
   const bag = quote && quote.cryptoLinks;
   const saved = bag && bag[testnet ? 'testnet' : 'live'];
@@ -916,12 +931,17 @@ function cryptoLinkFor(quote, testnet) {
       webUrl: String(quote.webUrl || ''),
     };
   }
+  if (!testnet) return legacyLiveLink(quote);
   return null;
 }
 
 function quoteWithCryptoLink(row, testnet, link) {
   const key = testnet ? 'testnet' : 'live';
   const bag = { ...(row.cryptoLinks || {}) };
+  if (!bag.live) {
+    const legacy = legacyLiveLink(row);
+    if (legacy) bag.live = legacy;
+  }
   bag[key] = {
     invoiceId: String(link.invoiceId || ''),
     payUrl: String(link.payUrl || ''),
