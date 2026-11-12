@@ -1179,8 +1179,8 @@ button, .m-btn {
 /* first screen: the poster takes what the controls leave, the controls end above the «Серии» chip and the system bar */
 .m-now-fold { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; flex-shrink: 0; }
 .m-now-fold-fit { min-height: 0; }
-.m-now-fold-fit .m-now-hero { flex: 0 1 auto; min-height: 0; }
 .m-now-fold .m-now-hero { flex: 1 1 0; min-height: 200px; }
+.m-now-fold-fit .m-now-hero { flex: 0 0 auto; min-height: 220px; height: 38vh; }
 .m-now-body {
   position: relative; z-index: 2; display: flex; flex-direction: column; gap: 12px;
   margin-top: -72px;
@@ -1302,6 +1302,10 @@ button, .m-btn {
 .m-now-chbtn { flex-shrink: 0; width: 48px; height: 48px; border: none; border-radius: 12px; background: var(--panel-2); display: flex; align-items: center; justify-content: center; padding: 0; }
 .m-now-chbtn:disabled, .m-now-chitem:disabled { opacity: 0.4; }
 .m-now-chtext { flex: 1 1 0; min-width: 0; text-align: center; font-size: 14px; overflow-wrap: anywhere; }
+button.m-now-chtext { border: none; background: none; color: inherit; display: flex; flex-direction: column; align-items: center; }
+.m-now-next { display: flex; align-items: center; padding: 8px; border-radius: 14px; background: var(--panel); }
+.m-now-next img, .m-now-next-frame { width: 54px; height: 80px; border-radius: 8px; background: #1C212B; object-fit: cover; flex-shrink: 0; }
+.m-now-next-text { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; padding: 0 10px; text-align: left; }
 .m-now-chnum { display: block; color: var(--muted); font-size: 12px; }
 .m-now-chlist { display: flex; flex-direction: column; gap: 4px; }
 .m-now-chhead { font-size: 16px; font-weight: 700; margin: 4px 0; }
