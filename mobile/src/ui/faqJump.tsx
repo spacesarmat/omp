@@ -11,6 +11,9 @@ const MARK_ROUTE: { [mark: string]: string } = {
   account: 'account',
   server: 'localServer',
   log: 'log',
+  remote: 'remote',
+  player: 'videoPlayer',
+  updates: 'settings',
 };
 
 effect(() => {
