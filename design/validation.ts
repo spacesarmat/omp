@@ -35,9 +35,25 @@ const COLORS = new Set(['--omp-color-background', '--omp-color-panel', '--omp-co
 const SIZES = new Set(['--omp-size-space', '--omp-size-font', '--omp-size-sidebar', '--omp-size-radius']);
 const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current']);
 const SCOPES = new Set(['target', 'component', 'screen', 'element', 'format', 'state']);
-const LAYOUT_GEOMETRY_LIMIT = 10000;
-const LAYOUT_ZINDEX_LIMIT = 999;
+export const LAYOUT_GEOMETRY_LIMIT = 10000;
+export const LAYOUT_ZINDEX_LIMIT = 999;
 const LAYOUT_CLONE_HTML_LIMIT = 50000;
+
+export function isLayoutGeometryValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_GEOMETRY_LIMIT;
+}
+
+export function isLayoutSizeValue(value: unknown): value is number | 'auto' {
+  return value === 'auto' || isLayoutGeometryValue(value);
+}
+
+export function isLayoutZIndexValue(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_ZINDEX_LIMIT;
+}
+
+export function isLayoutMarginValue(value: unknown): value is string {
+  return typeof value === 'string' && SIZE.test(value) && Number.parseFloat(value) <= 512;
+}
 
 export class DesignValidationError extends Error {
   readonly path: string;
@@ -145,7 +161,7 @@ function releaseIntent(value: unknown, path: string): ReleaseIntent {
 }
 
 function layoutGeometry(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > LAYOUT_GEOMETRY_LIMIT) {
+  if (!isLayoutGeometryValue(value)) {
     fail(path, `integer from 0 to ${LAYOUT_GEOMETRY_LIMIT} required`);
   }
   return value;
@@ -157,7 +173,7 @@ function layoutSize(value: unknown, path: string): number | 'auto' {
 }
 
 function layoutZIndex(value: unknown, path: string): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > LAYOUT_ZINDEX_LIMIT) {
+  if (!isLayoutZIndexValue(value)) {
     fail(path, `integer from 0 to ${LAYOUT_ZINDEX_LIMIT} required`);
   }
   return value;
@@ -218,7 +234,7 @@ function layoutPlacement(value: unknown, path: string): LayoutPlacement {
   if (source.minHeight !== undefined) result.minHeight = layoutSize(source.minHeight, `${path}.minHeight`);
   if (source.maxHeight !== undefined) result.maxHeight = layoutSize(source.maxHeight, `${path}.maxHeight`);
   if (source.margin !== undefined) {
-    if (typeof source.margin !== 'string' || !SIZE.test(source.margin) || Number.parseFloat(source.margin) > 512) {
+    if (!isLayoutMarginValue(source.margin)) {
       fail(`${path}.margin`, 'size from 0px to 512px with at most two decimals required');
     }
     result.margin = source.margin;

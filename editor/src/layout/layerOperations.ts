@@ -8,9 +8,17 @@ import {
   type LayoutPlacement,
   type ThemeDocument,
 } from '../../../design/schema.ts';
+import {
+  LAYOUT_GEOMETRY_LIMIT,
+  LAYOUT_ZINDEX_LIMIT,
+  isLayoutGeometryValue,
+  isLayoutMarginValue,
+  isLayoutSizeValue,
+  isLayoutZIndexValue,
+} from '../../../design/validation.ts';
 import { upsertLayoutClone, upsertLayoutPlacement } from '../../../design/layout.ts';
 import type { DraftController } from '../drafts.ts';
-import { createPlacement } from './transactions.ts';
+import { createPlacement, uniquePlacementId } from './transactions.ts';
 
 export const LAYER_NAME_LIMIT = 60;
 export const LAYER_CLIPBOARD_LIMIT = 100;
@@ -38,7 +46,7 @@ function commitPlacement(controller: DraftController, args: LayerNodeArgs, patch
   controller.update((draft) => {
     const placement = createPlacement(args.context, args.nodeId, patch.label ?? args.label, { ...(args.base ?? {}), ...patch });
     if (args.base?.id) placement.id = args.base.id;
-    draft.theme = upsertLayoutPlacement(draft.theme, placement);
+    draft.theme = upsertLayoutPlacement(draft.theme, { ...placement, id: uniquePlacementId(draft.theme, placement) });
     return draft;
   });
 }
@@ -163,10 +171,6 @@ export interface ClipboardParseResult {
   errors: string[];
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
 function validateClipboardNode(raw: unknown, index: number, errors: string[]): void {
   const prefix = `Узел ${index + 1}`;
   if (typeof raw !== 'object' || raw === null) {
@@ -177,16 +181,15 @@ function validateClipboardNode(raw: unknown, index: number, errors: string[]): v
   if (typeof node.label !== 'string' || !node.label.trim() || node.label.length > LAYER_NAME_LIMIT) errors.push(`${prefix}: некорректное имя`);
   if (!(LAYOUT_MODES as readonly string[]).includes(String(node.mode))) errors.push(`${prefix}: режим не поддерживается`);
   if (!(LAYOUT_ANCHORS as readonly string[]).includes(String(node.anchor))) errors.push(`${prefix}: якорь не поддерживается`);
-  if (!isFiniteNumber(node.x) || !isFiniteNumber(node.y)) errors.push(`${prefix}: координаты должны быть числами`);
-  if (!isFiniteNumber(node.zIndex)) errors.push(`${prefix}: zIndex должен быть числом`);
+  if (!isLayoutGeometryValue(node.x) || !isLayoutGeometryValue(node.y)) errors.push(`${prefix}: координаты должны быть целыми от 0 до ${LAYOUT_GEOMETRY_LIMIT}`);
+  if (!isLayoutZIndexValue(node.zIndex)) errors.push(`${prefix}: zIndex должен быть целым от 0 до ${LAYOUT_ZINDEX_LIMIT}`);
   for (const key of ['width', 'height'] as const) {
-    const value = node[key];
-    if (value !== 'auto' && !isFiniteNumber(value)) errors.push(`${prefix}: размер должен быть числом или auto`);
+    if (!isLayoutSizeValue(node[key])) errors.push(`${prefix}: размер должен быть целым от 0 до ${LAYOUT_GEOMETRY_LIMIT} или auto`);
   }
   for (const key of ['hidden', 'locked'] as const) {
     if (typeof node[key] !== 'boolean') errors.push(`${prefix}: флаг ${key} должен быть булевым`);
   }
-  if (node.margin !== undefined && typeof node.margin !== 'string') errors.push(`${prefix}: отступ должен быть строкой`);
+  if (node.margin !== undefined && !isLayoutMarginValue(node.margin)) errors.push(`${prefix}: отступ должен быть размером в px, например 8px`);
   if (node.html !== undefined
     && (typeof node.html !== 'string' || node.html.length > LAYOUT_CLONE_HTML_LIMIT || /<script[\s>/]/i.test(node.html))) {
     errors.push(`${prefix}: html недопустим`);

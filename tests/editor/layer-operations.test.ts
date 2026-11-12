@@ -141,6 +141,48 @@ describe('setNodeLocked', () => {
   });
 });
 
+describe('placement ids across contexts', () => {
+  it('keeps placement ids unique when the same node is hidden, locked and renamed in other contexts', () => {
+    const controller = createController();
+    const portrait: LayoutContext = { ...context, format: 'portrait' };
+
+    setNodeHidden(controller, args('card-a', 'Card A'), true);
+    setNodeLocked(controller, { context: portrait, nodeId: 'card-a', label: 'Card A' }, true);
+    renameNode(controller, { context: otherContext, nodeId: 'card-a', label: 'Card A', name: 'Hero' });
+
+    const placements = controller.draft.theme.layout?.placements ?? [];
+    expect(placements).toHaveLength(3);
+    const ids = placements.map((placement) => placement.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe('placement-card-a');
+    expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')?.hidden).toBe(true);
+    expect(getLayoutPlacement(controller.draft.theme, portrait, 'card-a')?.locked).toBe(true);
+    expect(getLayoutPlacement(controller.draft.theme, otherContext, 'card-a')?.label).toBe('Hero');
+    expect(() => parseThemeDocument(controller.draft.theme)).not.toThrow();
+    controller.dispose();
+  });
+
+  it('bounds placement ids to the schema limit for the longest supported node ids', () => {
+    const controller = createController();
+    const longNodeId = 'a'.repeat(64);
+    const portrait: LayoutContext = { ...context, format: 'portrait' };
+
+    setNodeHidden(controller, { context, nodeId: longNodeId, label: 'Long node' }, true);
+    setNodeLocked(controller, { context: portrait, nodeId: longNodeId, label: 'Long node' }, true);
+
+    const placements = controller.draft.theme.layout?.placements ?? [];
+    expect(placements).toHaveLength(2);
+    for (const placement of placements) {
+      expect(placement.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+      expect(placement.nodeId).toBe(longNodeId);
+    }
+    const roundTripped = parseThemeDocument(JSON.parse(JSON.stringify(controller.draft.theme)));
+    expect(roundTripped.layout?.placements.map((placement) => placement.id).sort())
+      .toEqual(placements.map((placement) => placement.id).sort());
+    controller.dispose();
+  });
+});
+
 describe('duplicateNode', () => {
   it('duplicates a node with a fresh schema-safe id, a copy label and the same geometry', () => {
     const controller = createController();
@@ -303,6 +345,48 @@ describe('clipboard', () => {
     const parsedLong = parseLayoutClipboard({ schemaVersion: 1, nodes: [long] });
     expect(parsedLong.clipboard).toBeNull();
     expect(parsedLong.errors[0]).toContain('html');
+  });
+
+  it('parseLayoutClipboard rejects geometry, sizes and zIndex outside schema bounds and arbitrary margin strings', () => {
+    const valid = copyNodes([createPlacement(context, 'card-a', 'Card A')]);
+    const node = valid.nodes[0];
+
+    const rejected = [
+      { ...node, x: -1 },
+      { ...node, y: 1.5 },
+      { ...node, x: 10001 },
+      { ...node, width: -5 },
+      { ...node, height: 100.5 },
+      { ...node, zIndex: 1000 },
+      { ...node, zIndex: -1 },
+      { ...node, zIndex: 2.5 },
+      { ...node, margin: 'auto' },
+      { ...node, margin: '12' },
+      { ...node, margin: '1000px' },
+      { ...node, margin: '1.234px' },
+    ];
+    for (const candidate of rejected) {
+      const parsed = parseLayoutClipboard({ schemaVersion: 1, nodes: [candidate] });
+      expect(parsed.clipboard).toBeNull();
+      expect(parsed.errors[0]).toContain('Узел 1');
+    }
+  });
+
+  it('parseLayoutClipboard accepts boundary values allowed by the schema', () => {
+    const node = {
+      ...copyNodes([createPlacement(context, 'card-a', 'Card A')]).nodes[0],
+      x: 10000,
+      y: 0,
+      width: 10000,
+      height: 'auto',
+      zIndex: 999,
+      margin: '512px',
+    };
+
+    const parsed = parseLayoutClipboard({ schemaVersion: 1, nodes: [node] });
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.clipboard?.nodes[0]).toMatchObject({ x: 10000, width: 10000, zIndex: 999, margin: '512px' });
   });
 
   it('pasteNodes pastes into another page with fresh ids and one undo step', () => {

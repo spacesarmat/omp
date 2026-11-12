@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { LayoutContext, LayoutPlacement } from '../../design/schema';
 import { createDefaultTheme } from '../../design/defaults';
 import { getLayoutPlacement } from '../../design/layout';
+import { parseThemeDocument } from '../../design/validation';
 import { createDraftController, type DraftController } from '../../editor/src/drafts';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import {
@@ -182,6 +183,29 @@ describe('placeNodeTransaction', () => {
     expect(placement).toMatchObject({ mode: 'flow', x: 0, y: 0, anchor: 'top-left', width: 'auto', height: 'auto', zIndex: 0 });
     placeNodeTransaction(controller, placement);
     expect(getLayoutPlacement(controller.draft.theme, context, 'card-a')).toEqual(placement);
+    controller.dispose();
+  });
+});
+
+describe('createPlacement', () => {
+  it('bounds the placement id to the schema limit for the longest supported node id', () => {
+    const longNodeId = 'a'.repeat(64);
+
+    const placement = createPlacement(context, longNodeId, 'Long node');
+
+    expect(placement.nodeId).toBe(longNodeId);
+    expect(placement.id).toMatch(/^[a-z0-9][a-z0-9-]{0,63}$/);
+  });
+
+  it('round-trips a placement with the longest supported node id through parseThemeDocument', () => {
+    const controller = createController();
+    const longNodeId = 'a'.repeat(64);
+
+    placeNodeTransaction(controller, createPlacement(context, longNodeId, 'Long node', { mode: 'absolute', x: 100, y: 200 }));
+    const theme = parseThemeDocument(JSON.parse(JSON.stringify(controller.draft.theme)));
+
+    expect(theme.layout?.placements).toHaveLength(1);
+    expect(theme.layout?.placements[0].nodeId).toBe(longNodeId);
     controller.dispose();
   });
 });

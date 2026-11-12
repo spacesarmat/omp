@@ -5,6 +5,11 @@ import type { DraftController } from '../drafts.ts';
 
 export const DRAG_THRESHOLD_PX = 4;
 export const LAYOUT_GEOMETRY_LIMIT = 10000;
+// Placement record ids must stay inside the schema id space /^[a-z0-9][a-z0-9-]{0,63}$/, so the
+// placement- prefix plus the longest 64-char node id is truncated and suffixes keep room.
+export const PLACEMENT_ID_LIMIT = 64;
+const PLACEMENT_ID_PREFIX = 'placement-';
+const PLACEMENT_ID_SUFFIX_ROOM = 8;
 
 export interface ClientPoint {
   x: number;
@@ -73,6 +78,10 @@ export function placementToRect(placement: LayoutPlacement, parentRect: LayoutRe
   return { x, y, width, height };
 }
 
+function placementRecordId(nodeId: string): string {
+  return `${PLACEMENT_ID_PREFIX}${nodeId}`.slice(0, PLACEMENT_ID_LIMIT - PLACEMENT_ID_SUFFIX_ROOM);
+}
+
 export function createPlacement(
   context: LayoutContext,
   nodeId: string,
@@ -80,7 +89,7 @@ export function createPlacement(
   patch: Partial<LayoutPlacement> = {},
 ): LayoutPlacement {
   return {
-    id: `placement-${nodeId}`,
+    id: placementRecordId(nodeId),
     target: context.target,
     screenId: context.screenId,
     format: context.format,
@@ -106,7 +115,7 @@ function sameIdentity(entry: LayoutPlacement, other: LayoutPlacement): boolean {
     && entry.nodeId === other.nodeId;
 }
 
-function uniquePlacementId(theme: ThemeDocument, placement: LayoutPlacement): string {
+export function uniquePlacementId(theme: ThemeDocument, placement: LayoutPlacement): string {
   const taken = new Set(theme.layout?.placements.map((entry) => entry.id) ?? []);
   if (!taken.has(placement.id)) return placement.id;
   const existing = theme.layout?.placements.find((entry) => entry.id === placement.id);
@@ -115,7 +124,7 @@ function uniquePlacementId(theme: ThemeDocument, placement: LayoutPlacement): st
   let candidate = `${placement.id}-${suffix}`;
   while (taken.has(candidate)) {
     suffix += 1;
-    candidate = `${placement.id}-${suffix}`;
+    candidate = `${placement.id}-${suffix}`.slice(0, PLACEMENT_ID_LIMIT);
   }
   return candidate;
 }
