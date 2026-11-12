@@ -3,6 +3,7 @@ import { LAYOUT_SIZE_PX_LIMIT } from '../../../design/validation.ts';
 import type { LayoutNodeDescriptor } from '../../../design/layoutDom.ts';
 import {
   absolutePlacementFromRect,
+  clampSizeToPlacement,
   createPlacement,
   placementSizeConversion,
   placementToRect,
@@ -136,6 +137,8 @@ export function LayoutInspector(props: LayoutInspectorProps) {
     if (readOnly || !geometryRect || !parentRect) return;
     const next = { ...geometryRect, ...patch };
     const base = placement ?? createPlacement(props.context, node.nodeId, label);
+    if (patch.width !== undefined) next.width = clampSizeToPlacement(next.width, base, parentRect.width, 'width');
+    if (patch.height !== undefined) next.height = clampSizeToPlacement(next.height, base, parentRect.height, 'height');
     const placed = absolutePlacementFromRect(next, parentRect, props.context, node.nodeId, label, base);
     const override: Partial<LayoutPlacement> = {};
     if (patch.width !== undefined) {

@@ -94,6 +94,26 @@ export function marginOffsetPx(margin: string | undefined): number {
 
 // Percent size conversions resolve against the captured basis when a record carries one, so
 // written units always describe what the runtime renders.
+function constraintPx(value: number | 'auto' | undefined, parentSize: number): number | undefined {
+  if (typeof value !== 'number' || !(parentSize > 0)) return undefined;
+  return (value / LAYOUT_GEOMETRY_LIMIT) * parentSize;
+}
+
+// Typed geometry uses the same pixel floor and ceiling as a resize handle: min/max are
+// fixed-point fractions of the parent, and a typed size below the minimum must not land.
+export function clampSizeToPlacement(
+  px: number,
+  placement: LayoutPlacement | undefined,
+  parentSize: number,
+  axis: 'width' | 'height',
+): number {
+  const min = constraintPx(axis === 'width' ? placement?.minWidth : placement?.minHeight, parentSize);
+  const max = constraintPx(axis === 'width' ? placement?.maxWidth : placement?.maxHeight, parentSize);
+  const lower = min ?? 0;
+  const upper = Math.max(lower, max ?? Number.POSITIVE_INFINITY);
+  return Math.min(upper, Math.max(lower, px));
+}
+
 export function placementSizeBasis(placement: LayoutPlacement | undefined, parentSize: number, axis: 'width' | 'height'): number {
   const basis = axis === 'width' ? placement?.basisWidth : placement?.basisHeight;
   return typeof basis === 'number' && basis > 0 ? basis : parentSize;

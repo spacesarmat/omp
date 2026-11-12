@@ -511,6 +511,40 @@ describe('layout workspace', () => {
     expect(placementOf('server-card-2')).toMatchObject({ width: 7500, height: 2000 });
   });
 
+  it('clamps a typed size to the same min and max the resize handle uses', () => {
+    buildPreview();
+    const context = contextOf();
+    placeNodeTransaction(controller, {
+      ...absolutePlacementFromRect(
+        { x: 0, y: 100, width: 400, height: 100 },
+        { x: 0, y: 0, width: 400, height: 400 },
+        context,
+        'server-card-2',
+        'server-card',
+      ),
+      minWidth: 7500,
+      maxHeight: 5000,
+    });
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointerup', 200, 150);
+
+    const width = host.querySelector<HTMLInputElement>('[data-testid="layout-width"]')!;
+    act(() => {
+      width.value = '100';
+      width.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // 7500 units of a 400px parent is 300px, the same floor the handle enforces.
+    expect(placementOf('server-card-2')?.width).toBe(7500);
+
+    const height = host.querySelector<HTMLInputElement>('[data-testid="layout-height"]')!;
+    act(() => {
+      height.value = '300';
+      height.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    // maxHeight 5000 is 200px of the 400px parent.
+    expect(placementOf('server-card-2')?.height).toBe(5000);
+  });
+
   it('syncs the numeric inspector with handle resizes and commits typed geometry', () => {
     buildPreview();
     const context = contextOf();

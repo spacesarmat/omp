@@ -190,6 +190,10 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     const listener = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof HTMLElement && (['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable)) return;
+      // A toolbar already used the arrow to move focus. Honoring it again would nudge the
+      // selected node. Arrow movement is for the canvas, not for controls that consumed the key.
+      if (event.defaultPrevented) return;
+      if (target instanceof HTMLElement && target.closest('[role="toolbar"]')) return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const step = ARROW_NUDGE_STEPS[event.key];
       if (!step) return;

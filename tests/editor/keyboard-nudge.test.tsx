@@ -172,6 +172,19 @@ describe('arrow key nudge', () => {
     input.remove();
   });
 
+  it('does not nudge when a toolbar already consumed the arrow to move focus', () => {
+    buildPreview();
+    dragCardToAbsolute();
+    const before = placementOf('server-card')?.x;
+    const design = host.querySelector<HTMLButtonElement>('[data-testid="mode-design"]')!;
+    design.focus();
+
+    key(design, 'ArrowRight');
+
+    expect(placementOf('server-card')?.x).toBe(before);
+    expect(document.activeElement).not.toBe(design);
+  });
+
   it('ignores Arrow presses with Ctrl or Alt held so browser and canvas shortcuts keep working', () => {
     buildPreview();
     dragCardToAbsolute();
