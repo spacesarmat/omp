@@ -225,7 +225,7 @@ function runAction(
 
 // Terminal actions end the branch after they run; toast, dialog and telegram.open are
 // fire-and-forget and let the walk continue along the default edge.
-const TERMINAL_ACTIONS = new Set([
+export const TERMINAL_ACTIONS = new Set([
   'navigate',
   'back',
   'openScreen',

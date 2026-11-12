@@ -1,8 +1,26 @@
 import type { FlowDocument, InteractionRule } from './schema.ts';
 
+export { validateFlowGraph } from './flow-validation-graph.ts';
+
+export type FlowIssueCode =
+  | 'SHADOWED_RULE'
+  | 'UNKNOWN_ROUTE'
+  | 'DUPLICATE_RULE'
+  | 'AMBIGUOUS_BRANCH'
+  | 'SELF_LOOP'
+  | 'MISSING_NODE'
+  | 'CYCLE'
+  | 'WRONG_VALUE_TYPE'
+  | 'UNREACHABLE_NODE'
+  | 'NO_TERMINAL_PATH'
+  | 'DEAD_RULE'
+  | 'EMPTY_MESSAGE';
+
 export interface FlowIssue {
-  code: 'SHADOWED_RULE' | 'UNKNOWN_ROUTE' | 'DUPLICATE_RULE';
-  ruleId: string;
+  code: FlowIssueCode;
+  ruleId?: string;
+  nodeId?: string;
+  edgeId?: string;
   message: string;
 }
 

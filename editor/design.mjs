@@ -98,6 +98,20 @@ function competingParentIssues(layout) {
   return [];
 }
 
+function mergeKey(path) {
+  if (path === 'theme.releaseIntents') return 'target';
+  if (path === 'theme.overrides'
+    || path === 'flow.rules'
+    || path === 'flow.variables'
+    || path === 'theme.stylePresets'
+    || path === 'theme.layout.placements'
+    || path === 'theme.layout.containers'
+    || path === 'theme.layout.clones') return 'id';
+  // Records inside one flow rule (ordered steps, graph nodes and edges) carry unique ids.
+  if (/\.steps$/.test(path) || /\.graph\.nodes$/.test(path) || /\.graph\.edges$/.test(path)) return 'id';
+  return null;
+}
+
 function mergeValue(base, local, incoming, path, issues) {  if (equal(local, base)) return structuredClone(incoming);
   if (equal(incoming, base) || equal(local, incoming)) return structuredClone(local);
   if (object(base) && object(local) && object(incoming)) {
@@ -109,35 +123,29 @@ function mergeValue(base, local, incoming, path, issues) {  if (equal(local, bas
     }
     return result;
   }
-  if (Array.isArray(base) && Array.isArray(local) && Array.isArray(incoming)) {
-    // Layout records and style presets carry unique record ids, so independent edits to
-    // different nodes, containers, clones or presets merge entry by entry instead of
-    // conflicting as whole arrays.
-    const key = path === 'theme.releaseIntents' ? 'target'
-      : path === 'theme.overrides'
-        || path === 'flow.rules'
-        || path === 'theme.stylePresets'
-        || path === 'theme.layout.placements'
-        || path === 'theme.layout.containers'
-        || path === 'theme.layout.clones'
-        ? 'id'
-        : null;
-    if (key) {
-      const merged = new Map();
-      const allIds = new Set([...base, ...local, ...incoming].map((entry) => entry[key]));
-      for (const id of allIds) {
-        const value = mergeValue(
-          base.find((entry) => entry[key] === id),
-          local.find((entry) => entry[key] === id),
-          incoming.find((entry) => entry[key] === id),
-          `${path}[${id}]`,
-          issues,
-        );
-        if (value !== undefined) merged.set(id, value);
-      }
-      const ids = mergeOrder(base, local, incoming, key, path, issues, new Set(merged.keys()));
-      return ids.map((id) => merged.get(id));
+  const key = mergeKey(path);
+  if (key && (Array.isArray(base) || Array.isArray(local) || Array.isArray(incoming))) {
+    // Layout records, style presets, flow rules, variables, steps, graph nodes and edges carry
+    // unique record ids, so independent edits to different records merge entry by entry instead
+    // of conflicting as whole arrays. A missing collection means "no records yet": additions on
+    // both sides still merge by id, while an edit on one side rejects against a deletion.
+    const baseEntries = Array.isArray(base) ? base : [];
+    const localEntries = Array.isArray(local) ? local : [];
+    const incomingEntries = Array.isArray(incoming) ? incoming : [];
+    const merged = new Map();
+    const allIds = new Set([...baseEntries, ...localEntries, ...incomingEntries].map((entry) => entry[key]));
+    for (const id of allIds) {
+      const value = mergeValue(
+        baseEntries.find((entry) => entry[key] === id),
+        localEntries.find((entry) => entry[key] === id),
+        incomingEntries.find((entry) => entry[key] === id),
+        `${path}[${id}]`,
+        issues,
+      );
+      if (value !== undefined) merged.set(id, value);
     }
+    const ids = mergeOrder(baseEntries, localEntries, incomingEntries, key, path, issues, new Set(merged.keys()));
+    return ids.map((id) => merged.get(id));
   }
   issues.push({ path });
   return structuredClone(local);
