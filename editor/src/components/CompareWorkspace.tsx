@@ -109,11 +109,13 @@ function CompareFrame(props: CompareFrameProps) {
       setHighlight(null);
       return;
     }
+    // The highlight lives in iframe coordinates next to the frame: the compare fit scale is a
+    // CSS transform, so the frame position on the editor page never enters the calculation.
     const box = element.getBoundingClientRect();
-    const frameBox = current.getBoundingClientRect();
+    const rootBox = root.getBoundingClientRect();
     setHighlight({
-      x: box.left - frameBox.left,
-      y: box.top - frameBox.top,
+      x: box.left - rootBox.left,
+      y: box.top - rootBox.top,
       width: box.width,
       height: box.height,
     });

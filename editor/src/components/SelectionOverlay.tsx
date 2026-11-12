@@ -56,6 +56,7 @@ export interface SelectionOverlayProps {
   onSelect(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
   onPlaceNode(placement: LayoutPlacement): void;
+  onPlaceNodes(placements: LayoutPlacement[]): void;
 }
 
 interface InsertionTarget {
@@ -67,6 +68,7 @@ interface InsertionTarget {
 interface DragState {
   pointerId: number;
   nodeId: string;
+  groupIds: string[];
   start: ClientPoint;
   started: boolean;
   emptyClick: boolean;
@@ -82,6 +84,7 @@ interface DragPreview {
   point: ClientPoint;
   start: ClientPoint;
   rect: LayoutRect | null;
+  groupRects: Record<string, LayoutRect> | null;
   lines: GuideLine[];
 }
 
@@ -141,12 +144,16 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
 
   const resolveInsertion = (point: ClientPoint, draggedId: string): InsertionTarget | null => {
     const dragged = props.nodes.find((node) => node.nodeId === draggedId);
+    const draggedAbsolute = existingPlacement(draggedId)?.mode === 'absolute';
     const eligible = new Map<string, boolean>();
-    if (dragged?.parentId && props.rects[dragged.parentId]) {
+    // Dragging an absolute node repositions it: only a drop into another recorded container is an
+    // explicit flow insertion, so its own parent never offers one.
+    if (!draggedAbsolute && dragged?.parentId && props.rects[dragged.parentId]) {
       const recorded = props.containers.find((container) => container.nodeId === dragged!.parentId);
       eligible.set(dragged.parentId, recorded?.direction === 'row');
     }
     for (const container of props.containers) {
+      if (draggedAbsolute && container.nodeId === dragged?.parentId) continue;
       if (!eligible.has(container.nodeId) && props.rects[container.nodeId]) {
         eligible.set(container.nodeId, container.direction === 'row');
       }
@@ -268,14 +275,28 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
       props.onMoveNode({ nodeId: node.nodeId, parentId: state.insertion.parentId, index: state.insertion.index, placement });
       return;
     }
-    const moved = {
-      x: rect.x + state.point.x - state.start.x,
-      y: rect.y + state.point.y - state.start.y,
-      width: rect.width,
-      height: rect.height,
-    };
-    const snapped = snapDragRect(moved, node.nodeId, state.altKey);
-    props.onPlaceNode(absolutePlacementFromRect(snapped.rect, nodeParentRect(node), props.context, node.nodeId, node.label, existingPlacement(node.nodeId)));
+    const delta = { x: state.point.x - state.start.x, y: state.point.y - state.start.y };
+    // A drag that started on a selected node moves the whole absolute group: every member follows
+    // the same delta and all placements land in one update, so one undo restores the group.
+    const members = state.groupIds.length ? state.groupIds : [state.nodeId];
+    const placements: LayoutPlacement[] = [];
+    for (const memberId of members) {
+      const member = props.nodes.find((entry) => entry.nodeId === memberId);
+      const memberRect = resolvedRect(memberId);
+      if (!member || !memberRect) continue;
+      const moved = {
+        x: memberRect.x + delta.x,
+        y: memberRect.y + delta.y,
+        width: memberRect.width,
+        height: memberRect.height,
+      };
+      const snapped = memberId === state.nodeId
+        ? snapDragRect(moved, memberId, state.altKey)
+        : { rect: moved, lines: [] };
+      placements.push(absolutePlacementFromRect(snapped.rect, nodeParentRect(member), props.context, member.nodeId, member.label, existingPlacement(member.nodeId)));
+    }
+    if (placements.length === 1) props.onPlaceNode(placements[0]);
+    else if (placements.length > 1) props.onPlaceNodes(placements);
   };
 
   const release = (state: DragState, event: PointerEvent): void => {
@@ -384,9 +405,15 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           props.onSelect(reduceSelection(selectionState(), { type: 'toggle', id: hit.nodeId }));
           return;
         }
+        let groupIds: string[] = [];
+        if (hit && props.selectedIds.includes(hit.nodeId) && existingPlacement(hit.nodeId)?.mode === 'absolute') {
+          const members = props.selectedIds.filter((id) => existingPlacement(id)?.mode === 'absolute');
+          if (members.length > 1) groupIds = members;
+        }
         drag.current = {
           pointerId: event.pointerId,
           nodeId: hit?.nodeId ?? '',
+          groupIds,
           start: point,
           started: false,
           emptyClick: !hit,
@@ -396,7 +423,9 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           altKey: event.altKey,
         };
         if (hit) {
-          props.onSelect({ ids: [hit.nodeId], anchorId: hit.nodeId });
+          // A drag starting on an already selected node keeps the group; only a fresh hit
+          // replaces the selection with the single node under the pointer.
+          if (!groupIds.length) props.onSelect({ ids: [hit.nodeId], anchorId: hit.nodeId });
           (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
         }
       }}
@@ -441,9 +470,27 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           });
           return;
         }
+        if (state.groupIds.length) {
+          state.insertion = null;
+          const delta = { x: point.x - state.start.x, y: point.y - state.start.y };
+          const groupRects: Record<string, LayoutRect> = {};
+          for (const memberId of state.groupIds) {
+            const base = resolvedRect(memberId);
+            if (base) {
+              groupRects[memberId] = { x: base.x + delta.x, y: base.y + delta.y, width: base.width, height: base.height };
+            }
+          }
+          const leaderBase = resolvedRect(state.nodeId);
+          const snapped = leaderBase
+            ? snapDragRect({ x: leaderBase.x + delta.x, y: leaderBase.y + delta.y, width: leaderBase.width, height: leaderBase.height }, state.nodeId, event.altKey)
+            : null;
+          if (snapped) groupRects[state.nodeId] = snapped.rect;
+          setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped ? snapped.rect : null, groupRects, lines: snapped ? snapped.lines : [] });
+          return;
+        }
         state.insertion = resolveInsertion(point, state.nodeId);
         if (state.insertion) {
-          setPreview({ nodeId: state.nodeId, insertion: state.insertion, point, start: state.start, rect: null, lines: [] });
+          setPreview({ nodeId: state.nodeId, insertion: state.insertion, point, start: state.start, rect: null, groupRects: null, lines: [] });
           return;
         }
         const base = resolvedRect(state.nodeId);
@@ -458,7 +505,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           state.nodeId,
           event.altKey,
         );
-        setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped.rect, lines: snapped.lines });
+        setPreview({ nodeId: state.nodeId, insertion: null, point, start: state.start, rect: snapped.rect, groupRects: null, lines: snapped.lines });
       }}
       onPointerUp={(event) => {
         const resizing = resize.current;
@@ -545,7 +592,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
         />
       )))}
       {props.selectedIds.map((nodeId) => {
-        const rect = nodeId === anchorId ? displayRect : resolvedRect(nodeId);
+        const rect = preview?.groupRects?.[nodeId] ?? (nodeId === anchorId ? displayRect : resolvedRect(nodeId));
         if (!rect) return null;
         return (
           <div
@@ -576,7 +623,7 @@ export function SelectionOverlay(props: SelectionOverlayProps) {
           style={{ left: `${marqueeRect.x}px`, top: `${marqueeRect.y}px`, width: `${marqueeRect.width}px`, height: `${marqueeRect.height}px` }}
         />
       )}
-      {preview && preview.nodeId === anchorId && !preview.insertion && (
+      {preview && !preview.insertion && (
         <div class="editor-free-mode" data-testid="free-mode">Свободное размещение</div>
       )}
       {preview?.insertion && renderInsertionLine(preview.insertion)}

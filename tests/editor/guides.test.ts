@@ -203,6 +203,7 @@ describe('selection overlay guides', () => {
       onSelect: () => undefined,
       onMoveNode: () => undefined,
       onPlaceNode: () => undefined,
+      onPlaceNodes: () => undefined,
     };
     act(() => { render(h(SelectionOverlay, props), host); });
     const area = host.querySelector<HTMLElement>('[data-testid="safe-area"]')!;
@@ -232,6 +233,7 @@ describe('selection overlay guides', () => {
       onSelect: () => undefined,
       onMoveNode: () => undefined,
       onPlaceNode: () => undefined,
+      onPlaceNodes: () => undefined,
     };
     act(() => { render(h(SelectionOverlay, props), host); });
     expect(host.querySelector('[data-testid="safe-area"]')).toBeNull();
@@ -268,6 +270,7 @@ describe('selection overlay guides', () => {
       onPlaceNode: (placement: { x: number; y: number }) => {
         placed.push({ rect: { x: placement.x, y: placement.y, width: 0, height: 0 } });
       },
+      onPlaceNodes: () => undefined,
     };
     act(() => { render(h(SelectionOverlay, props), host); });
     const surface = host.querySelector<HTMLElement>('[data-testid="selection-overlay"]')!;

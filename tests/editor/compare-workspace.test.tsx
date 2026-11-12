@@ -221,6 +221,35 @@ describe('compare workspace', () => {
     expect(box!.dataset.layoutNode).toBe('server-card');
   });
 
+  it('pins the compare highlight to the design root at frame offsets and fit scale', () => {
+    buildMainPreview();
+    openCompare();
+    const phone = frame('phone');
+    // The frame sits away from the editor page origin and is scaled down by the compare fit.
+    phone.getBoundingClientRect = () => clientRect(480, 260, 1280, 720);
+    const doc = phone.contentDocument!;
+    const root = doc.createElement('div');
+    root.setAttribute('data-design-root', '');
+    root.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
+    root.appendChild(doc.body.querySelector('[data-design-id="card-grid"]')!);
+    doc.body.appendChild(root);
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: phone.contentWindow,
+        data: { type: 'element-selected', elementId: 'server-card', messageId: 'msg-offset', sessionId: phone.name },
+      }));
+    });
+
+    const mark = host.querySelector<HTMLElement>('[data-testid="compare-view-phone"] [data-testid="compare-selection"]')!;
+    expect(mark.dataset.layoutNode).toBe('server-card');
+    expect(mark.style.left).toBe('0px');
+    expect(mark.style.top).toBe('0px');
+    expect(mark.style.width).toBe('400px');
+    expect(mark.style.height).toBe('100px');
+  });
+
   it('does not change compare views when the main draft is edited', () => {
     openCompare();
     const phoneSession = frame('phone').name;
@@ -500,7 +529,7 @@ describe('inspector read-only guard', () => {
 });
 
 describe('preview mutation collect', () => {
-  it('collects layout rects with the current zoom after deferred mutations', async () => {
+  it('collects layout rects in iframe coordinates, independent of the canvas zoom', async () => {
     const zoomHost = document.createElement('div');
     document.body.appendChild(zoomHost);
     const onNodesChange = vi.fn();
@@ -526,6 +555,7 @@ describe('preview mutation collect', () => {
       onSelectNode: () => undefined,
       onMoveNode: () => undefined,
       onPlaceNode: () => undefined,
+      onPlaceNodes: () => undefined,
     };
     try {
       act(() => render(h(PreviewPane, { ...baseProps, zoom: 1 }), zoomHost));
@@ -542,18 +572,18 @@ describe('preview mutation collect', () => {
       act(() => {
         iframe.dispatchEvent(new Event('load'));
       });
-      expect(onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1]['server-card'].width).toBe(400);
+      expect(onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1]['server-card']).toMatchObject({ x: 100, y: 50, width: 400 });
 
       act(() => render(h(PreviewPane, { ...baseProps, zoom: 2 }), zoomHost));
-      expect(onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1]['server-card'].width).toBe(200);
+      expect(onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1]['server-card']).toMatchObject({ x: 100, y: 50, width: 400 });
 
       onNodesChange.mockClear();
       await act(async () => {
         body.appendChild(doc.createElement('div'));
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      const rects = onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1] as Record<string, { width: number }>;
-      expect(rects['server-card'].width).toBe(200);
+      const rects = onNodesChange.mock.calls[onNodesChange.mock.calls.length - 1][1] as Record<string, { x: number; width: number }>;
+      expect(rects['server-card']).toMatchObject({ x: 100, width: 400 });
     } finally {
       act(() => render(null, zoomHost));
       zoomHost.remove();

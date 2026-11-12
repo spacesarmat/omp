@@ -13,8 +13,8 @@ import { createDraftController, type DraftController } from './drafts';
 import { useDraftController } from './useDraftController';
 import { createEditorClient, type EditorClient } from './client';
 import { createSessionId } from './preview/protocol';
-import { moveNodeTransaction, placeNodeTransaction, nudgePlacement, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, type LayoutRect } from './layout/transactions';
-import { alignPlacements, distributePlacements, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
+import { moveNodeTransaction, placeNodeTransaction, nudgePlacement, updateContainerTransaction, updateNodeMarginTransaction, alignSelectionTransaction, updateNodesMarginTransaction, createPlacement, absolutePlacementFromRect, placementToRect, type LayoutRect } from './layout/transactions';
+import { alignRects, distributeRects, flowAlignmentFor, reduceSelection, type SelectionAlignment, type SelectionState } from './layout/selection';
 import { copyNodes, duplicateNode, parseLayoutClipboard, pasteNodes, renameNode, setNodeHidden, setNodeLocked } from './layout/layerOperations';
 import { DEFAULT_GUIDE_SETTINGS, resolveGuideSettings, type GuideSettings } from './layout/guides';
 import type { LayerRowModel } from './components/LayersPanel';
@@ -162,6 +162,14 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
     if (existing?.locked || existing?.hidden) return;
     placeNodeTransaction(controller, placement);
   };
+  // A group drag commits every moved placement in one draft update, so one undo restores the group.
+  const handlePlaceNodes = (placements: LayoutPlacement[]) => {
+    const movable = placements.filter((placement) => {
+      const existing = getLayoutPlacement(draft.theme, layoutContext, placement.nodeId);
+      return !existing?.locked && !existing?.hidden;
+    });
+    if (movable.length) alignSelectionTransaction(controller, { context: layoutContext, placements: movable });
+  };
   // One Arrow press is one undo step. Only a single selected absolute node nudges; flow nodes,
   // locked and hidden nodes never move from the keyboard.
   const handleNudge = (dx: number, dy: number) => {
@@ -235,11 +243,33 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
       alignSelectionTransaction(controller, { context: layoutContext, container: { nodeId: parentId, seed, patch } });
       return;
     }
-    const bases = items
-      .map((item) => item.placement)
-      .filter((placement): placement is LayoutPlacement => Boolean(placement));
-    if (bases.length < 2) return;
-    const placements = axis === null ? alignPlacements(bases, alignment) : distributePlacements(bases, axis);
+    // Absolute nodes may sit in different parents with different offsets and widths, where
+    // percent units are not comparable: align the measured artboard rectangles and convert each
+    // result back through the node's own parent.
+    const absoluteItems = items.filter((item) => item.placement?.mode === 'absolute');
+    if (absoluteItems.length < 2) return;
+    const measured = absoluteItems.map((item) => {
+      const parentId = item.node!.parentId;
+      const parentRect = parentId && layoutRects[parentId]
+        ? layoutRects[parentId]
+        : { x: 0, y: 0, width: viewport.width, height: viewport.height };
+      return {
+        item,
+        parentRect,
+        rect: placementToRect(item.placement!, parentRect, layoutRects[item.node!.nodeId]),
+      };
+    });
+    const aligned = axis === null
+      ? alignRects(measured.map((entry) => entry.rect), alignment)
+      : distributeRects(measured.map((entry) => entry.rect), axis);
+    const placements = measured.map((entry, index) => absolutePlacementFromRect(
+      aligned[index],
+      entry.parentRect,
+      layoutContext,
+      entry.item.node!.nodeId,
+      entry.item.node!.label,
+      entry.item.placement,
+    ));
     alignSelectionTransaction(controller, { context: layoutContext, placements });
   };
   const handleAlignSelection = (alignment: SelectionAlignment) => alignSelection(alignment, null);
@@ -592,6 +622,7 @@ function EditorWorkspace({ controller, client }: { controller: DraftController; 
             onSelectNode={handleSelectNode}
             onMoveNode={handleMoveNode}
             onPlaceNode={handlePlaceNode}
+            onPlaceNodes={handlePlaceNodes}
           />
         </section>
         <aside class="editor-inspector" aria-label="Инспектор свойств">

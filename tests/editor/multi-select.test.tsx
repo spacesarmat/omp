@@ -9,6 +9,7 @@ import {
   absolutePlacementFromRect,
   moveNodeTransaction,
   placeNodeTransaction,
+  placementToRect,
 } from '../../editor/src/layout/transactions';
 import { getLayoutPlacement } from '../../design/layout';
 import type { LayoutContext } from '../../design/schema';
@@ -45,7 +46,7 @@ function clickButton(testId: string): void {
   });
 }
 
-function buildPreview(): void {
+function buildPreview(options: { toolbar?: boolean } = {}): void {
   const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
   iframe.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
   const doc = iframe.contentDocument!;
@@ -70,6 +71,11 @@ function buildPreview(): void {
   input.getBoundingClientRect = () => clientRect(0, 200, 400, 50);
   grid.append(first, second, input);
   body.appendChild(grid);
+  if (options.toolbar) {
+    const toolbar = make('toolbar', 200, 200, 200, 400);
+    toolbar.appendChild(make('toolbar-search', 300, 240, 80, 40));
+    body.appendChild(toolbar);
+  }
   act(() => {
     iframe.dispatchEvent(new Event('load'));
   });
@@ -200,6 +206,76 @@ describe('multi-select', () => {
 
     controller.undo();
     expect(placementOf('server-card-2')!.x).toBe(3000);
+  });
+
+  it('drags the whole group of absolute nodes with one undo step', () => {
+    buildPreview();
+    placeAbsolute('server-card', 100, 100, 200, 100);
+    placeAbsolute('server-card-2', 50, 300, 100, 50);
+
+    pointer(overlay(), 'pointerdown', 200, 50);
+    pointer(overlay(), 'pointerup', 200, 50);
+    pointer(overlay(), 'pointerdown', 200, 150, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 200, 150, { shiftKey: true });
+    expect(host.querySelectorAll('[data-testid="selection-box"]')).toHaveLength(2);
+
+    const update = vi.spyOn(controller, 'update');
+    pointer(overlay(), 'pointerdown', 200, 50);
+    expect(host.querySelectorAll('[data-testid="selection-box"]')).toHaveLength(2);
+    pointer(overlay(), 'pointermove', 260, 90);
+    pointer(overlay(), 'pointerup', 260, 90);
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(placementOf('server-card')).toMatchObject({ mode: 'absolute', x: 4000, y: 3500 });
+    expect(placementOf('server-card-2')).toMatchObject({ mode: 'absolute', x: 2750, y: 8500 });
+
+    controller.undo();
+    expect(placementOf('server-card')).toMatchObject({ x: 2500, y: 2500 });
+    expect(placementOf('server-card-2')).toMatchObject({ x: 1250, y: 7500 });
+  });
+
+  it('aligns absolute nodes across different parents by their artboard rectangles', () => {
+    buildPreview({ toolbar: true });
+    const context = contextOf();
+    placeNodeTransaction(controller, absolutePlacementFromRect(
+      { x: 200, y: 40, width: 80, height: 40 },
+      { x: 0, y: 0, width: 400, height: 400 },
+      context,
+      'server-card',
+      'server-card',
+    ));
+    placeNodeTransaction(controller, absolutePlacementFromRect(
+      { x: 300, y: 240, width: 80, height: 40 },
+      { x: 200, y: 200, width: 200, height: 400 },
+      context,
+      'toolbar-search',
+      'toolbar-search',
+    ));
+    // The same percent lead (5000) means different artboard positions inside parents with
+    // different offsets and widths, so percent comparison would treat the pair as aligned already.
+    expect(placementOf('server-card')!.x).toBe(5000);
+    expect(placementOf('toolbar-search')!.x).toBe(5000);
+
+    pointer(overlay(), 'pointerdown', 240, 60);
+    pointer(overlay(), 'pointerup', 240, 60);
+    pointer(overlay(), 'pointerdown', 340, 260, { shiftKey: true });
+    pointer(overlay(), 'pointerup', 340, 260, { shiftKey: true });
+
+    const update = vi.spyOn(controller, 'update');
+    clickButton('align-left');
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const gridRect = { x: 0, y: 0, width: 400, height: 400 };
+    const toolbarRect = { x: 200, y: 200, width: 200, height: 400 };
+    const aRect = placementToRect(placementOf('server-card')!, gridRect);
+    const bRect = placementToRect(placementOf('toolbar-search')!, toolbarRect);
+    expect(aRect.x).toBe(200);
+    expect(bRect.x).toBe(200);
+    expect(bRect.width).toBe(80);
+
+    controller.undo();
+    expect(placementOf('toolbar-search')!.x).toBe(5000);
+    expect(placementOf('server-card')!.x).toBe(5000);
   });
 
   it('skips locked nodes in a group align', () => {

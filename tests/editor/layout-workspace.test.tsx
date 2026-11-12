@@ -63,9 +63,16 @@ interface PreviewShape {
   input: HTMLInputElement;
 }
 
-function buildPreview(horizontal = false): PreviewShape {
+interface PreviewBuildOptions {
+  toolbar?: boolean;
+  frameRect?: DOMRect;
+  rooted?: boolean;
+}
+
+function buildPreview(horizontal = false, options: PreviewBuildOptions = {}): PreviewShape {
   const iframe = host.querySelector<HTMLIFrameElement>('iframe')!;
-  iframe.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
+  const frameRect = options.frameRect ?? clientRect(0, 0, 1280, 720);
+  iframe.getBoundingClientRect = () => frameRect;
   const doc = iframe.contentDocument!;
   if (!doc.documentElement) doc.appendChild(doc.createElement('html'));
   let body = doc.body;
@@ -92,7 +99,20 @@ function buildPreview(horizontal = false): PreviewShape {
     settings.value = input.value;
   });
   grid.append(first, second, input);
-  body.appendChild(grid);
+  const mountParent = (() => {
+    if (!options.rooted) return body;
+    const rootEl = doc.createElement('div');
+    rootEl.setAttribute('data-design-root', '');
+    rootEl.getBoundingClientRect = () => clientRect(0, 0, 1280, 720);
+    body.appendChild(rootEl);
+    return rootEl;
+  })();
+  mountParent.appendChild(grid);
+  if (options.toolbar) {
+    const toolbar = make('toolbar', 500, 0, 300, 100);
+    toolbar.appendChild(make('toolbar-search', 500, 0, 120, 40));
+    mountParent.appendChild(toolbar);
+  }
   act(() => {
     iframe.dispatchEvent(new Event('load'));
   });
@@ -214,7 +234,46 @@ describe('layout workspace', () => {
     expect(placementOf('server-card-2')).toBeUndefined();
   });
 
-  it('returns an absolute node to flow through the insertion point in one undo step', () => {
+  it('returns an absolute node to flow only through an explicit drop into another container in one undo step', () => {
+    buildPreview(false, { toolbar: true });
+    const context = contextOf();
+    moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
+    moveNodeTransaction(controller, { context, nodeId: 'server-card-2', parentId: 'card-grid', index: 1 });
+    controller.update((draft) => {
+      draft.theme.layout = {
+        containers: [
+          ...(draft.theme.layout?.containers ?? []),
+          { id: 'flow-toolbar', ...context, nodeId: 'toolbar', order: ['toolbar-search'], direction: 'column' },
+        ],
+        placements: draft.theme.layout?.placements ?? [],
+      };
+      return draft;
+    });
+    placeNodeTransaction(controller, absolutePlacementFromRect(
+      { x: 0, y: 100, width: 400, height: 100 },
+      { x: 0, y: 0, width: 400, height: 400 },
+      context,
+      'server-card-2',
+      'server-card',
+    ));
+    expect(placementOf('server-card-2')?.mode).toBe('absolute');
+
+    pointer(overlay(), 'pointerdown', 200, 150);
+    pointer(overlay(), 'pointermove', 600, 50);
+    expect(host.querySelector('[data-testid="insertion-line"]')).not.toBeNull();
+    pointer(overlay(), 'pointerup', 600, 50);
+
+    expect(orderOf('toolbar')).toEqual(['toolbar-search', 'server-card-2']);
+    expect(orderOf('card-grid')).toEqual(['server-card']);
+    expect(placementOf('server-card-2')?.mode).toBe('flow');
+
+    controller.undo();
+    expect(orderOf('card-grid')).toEqual(['server-card', 'server-card-2']);
+    expect(orderOf('toolbar')).toEqual(['toolbar-search']);
+    expect(placementOf('server-card-2')?.mode).toBe('absolute');
+  });
+
+  it('keeps an absolute node absolute while dragging inside its own container', () => {
     buildPreview();
     const context = contextOf();
     moveNodeTransaction(controller, { context, nodeId: 'server-card', parentId: 'card-grid', index: 0 });
@@ -227,18 +286,48 @@ describe('layout workspace', () => {
       'server-card',
     ));
     expect(placementOf('server-card-2')?.mode).toBe('absolute');
+    const update = vi.spyOn(controller, 'update');
 
     pointer(overlay(), 'pointerdown', 200, 150);
-    pointer(overlay(), 'pointermove', 200, 40);
-    expect(host.querySelector('[data-testid="insertion-line"]')).not.toBeNull();
-    pointer(overlay(), 'pointerup', 200, 40);
+    pointer(overlay(), 'pointermove', 260, 190);
+    expect(host.querySelector('[data-testid="insertion-line"]')).toBeNull();
+    expect(host.querySelector('[data-testid="free-mode"]')).not.toBeNull();
+    pointer(overlay(), 'pointerup', 260, 190);
 
-    expect(orderOf('card-grid')).toEqual(['server-card-2', 'server-card']);
-    expect(placementOf('server-card-2')?.mode).toBe('flow');
-
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(placementOf('server-card-2')).toMatchObject({ mode: 'absolute', x: 1500, y: 3500 });
     controller.undo();
-    expect(orderOf('card-grid')).toEqual(['server-card', 'server-card-2']);
-    expect(placementOf('server-card-2')?.mode).toBe('absolute');
+    expect(placementOf('server-card-2')).toMatchObject({ mode: 'absolute', x: 0, y: 2500 });
+  });
+
+  it('keeps canvas rects and hit targets in artboard coordinates at zoom and page offsets', () => {
+    buildPreview(false, { frameRect: clientRect(320, 180, 1280, 720), rooted: true });
+    act(() => {
+      host.querySelector<HTMLElement>('[data-action="zoom-in"]')!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    const zoom = 1.25;
+    const at = (x: number, y: number): { x: number; y: number } => ({ x: 320 + x * zoom, y: 180 + y * zoom });
+    const down = at(200, 50);
+
+    pointer(overlay(), 'pointerdown', down.x, down.y);
+    pointer(overlay(), 'pointerup', down.x, down.y);
+
+    const box = host.querySelector<HTMLElement>('[data-testid="selection-box"]');
+    expect(box).not.toBeNull();
+    expect(box!.dataset.layoutNode).toBe('server-card');
+    expect(box!.style.left).toBe('0px');
+    expect(box!.style.top).toBe('0px');
+    expect(box!.style.width).toBe('400px');
+
+    const move = at(500, 250);
+    pointer(overlay(), 'pointerdown', down.x, down.y);
+    pointer(overlay(), 'pointermove', move.x, move.y);
+    expect(host.querySelector('[data-testid="free-mode"]')).not.toBeNull();
+    pointer(overlay(), 'pointerup', move.x, move.y);
+
+    expect(placementOf('server-card')).toMatchObject({ mode: 'absolute', x: 7500, y: 5000 });
+    controller.undo();
+    expect(controller.draft.theme.layout?.placements ?? []).toHaveLength(0);
   });
 
   it('captures the pointer during a drag without changing real control settings', () => {

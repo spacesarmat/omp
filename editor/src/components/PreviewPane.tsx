@@ -32,6 +32,7 @@ export interface PreviewPaneProps extends PreviewConfiguration {
   onSelectNode(state: SelectionState): void;
   onMoveNode(args: MoveNodeArgs): void;
   onPlaceNode(placement: LayoutPlacement): void;
+  onPlaceNodes(placements: LayoutPlacement[]): void;
 }
 
 const MIN_ZOOM = 0.1;
@@ -71,15 +72,11 @@ export function PreviewPane(props: PreviewPaneProps) {
   const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
   const keyTarget = useRef<Document | null>(null);
   const observer = useRef<MutationObserver | null>(null);
-  const zoomRef = useRef(props.zoom);
   const [collected, setCollected] = useState<{ nodes: LayoutNodeDescriptor[]; rects: Record<string, LayoutRect> }>({ nodes: [], rects: {} });
   const origin = window.location.origin;
   const viewport = getEditorViewport(props.target, props.format);
   const layoutContext: LayoutContext = { target: props.target, screenId: props.route, format: props.format };
   const guideSettings = props.guideSettings ?? DEFAULT_GUIDE_SETTINGS;
-  useEffect(() => {
-    zoomRef.current = props.zoom;
-  });
 
   const collect = () => {
     const frame = iframe.current;
@@ -88,18 +85,20 @@ export function PreviewPane(props: PreviewPaneProps) {
     if (!frame || !doc || !rootEl) return;
     const elements = collectLayoutElements(rootEl);
     const nodes = collectLayoutNodes(rootEl);
-    const frameBox = frame.getBoundingClientRect();
-    const scale = zoomRef.current > 0 ? zoomRef.current : 1;
+    // Rects live in iframe coordinates relative to the registered design root. The overlay
+    // shares that space, so the canvas zoom and the frame position on the editor page never
+    // shift or scale hit targets.
+    const rootBox = rootEl.getBoundingClientRect();
     const rects: Record<string, LayoutRect> = {};
     for (const node of nodes) {
       const element = elements.get(node.nodeId);
       if (!element) continue;
       const box = element.getBoundingClientRect();
       rects[node.nodeId] = {
-        x: (box.left - frameBox.left) / scale,
-        y: (box.top - frameBox.top) / scale,
-        width: box.width / scale,
-        height: box.height / scale,
+        x: box.left - rootBox.left,
+        y: box.top - rootBox.top,
+        width: box.width,
+        height: box.height,
       };
     }
     setCollected({ nodes, rects });
@@ -333,6 +332,7 @@ export function PreviewPane(props: PreviewPaneProps) {
                 onSelect={props.onSelectNode}
                 onMoveNode={props.onMoveNode}
                 onPlaceNode={props.onPlaceNode}
+                onPlaceNodes={props.onPlaceNodes}
               />
             </div>
           </div>

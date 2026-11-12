@@ -1,5 +1,5 @@
 import type { LayoutAlignment, LayoutPlacement } from '../../../design/schema.ts';
-import { LAYOUT_GEOMETRY_LIMIT } from './transactions.ts';
+import { LAYOUT_GEOMETRY_LIMIT, type LayoutRect } from './transactions.ts';
 
 export interface SelectionState {
   ids: string[];
@@ -134,5 +134,47 @@ export function distributePlacements(placements: LayoutPlacement[], axis: Axis):
   return placements.map((placement) => {
     if (!next.has(placement.nodeId)) return placement;
     return withLead(placement, axis, next.get(placement.nodeId)!);
+  });
+}
+
+// Absolute nodes may sit in different parents, where percent units are not comparable, so group
+// edits align the measured artboard rectangles in pixels; the caller converts every result back
+// through the node's own parent rect.
+export function alignRects(rects: LayoutRect[], alignment: SelectionAlignment): LayoutRect[] {
+  const axis = axisOf(alignment);
+  if (rects.length < 2) return [...rects];
+  const lead = (rect: LayoutRect): number => (axis === 'x' ? rect.x : rect.y);
+  const size = (rect: LayoutRect): number => (axis === 'x' ? rect.width : rect.height);
+  const min = Math.min(...rects.map(lead));
+  const max = Math.max(...rects.map((rect) => lead(rect) + size(rect)));
+  const center = (min + max) / 2;
+  return rects.map((rect) => {
+    const target = alignment === 'left' || alignment === 'top'
+      ? min
+      : alignment === 'right' || alignment === 'bottom'
+        ? max - size(rect)
+        : center - size(rect) / 2;
+    return axis === 'x' ? { ...rect, x: target } : { ...rect, y: target };
+  });
+}
+
+export function distributeRects(rects: LayoutRect[], axis: Axis): LayoutRect[] {
+  if (rects.length < 2) return [...rects];
+  const lead = (rect: LayoutRect): number => (axis === 'x' ? rect.x : rect.y);
+  const size = (rect: LayoutRect): number => (axis === 'x' ? rect.width : rect.height);
+  const sorted = [...rects].sort((a, b) => lead(a) - lead(b));
+  const first = lead(sorted[0]);
+  const last = lead(sorted[sorted.length - 1]) + size(sorted[sorted.length - 1]);
+  const totalSize = sorted.reduce((sum, rect) => sum + size(rect), 0);
+  const gap = (last - first - totalSize) / (sorted.length - 1);
+  const next = new Map<LayoutRect, number>();
+  let cursor = first;
+  for (const rect of sorted) {
+    next.set(rect, cursor);
+    cursor += size(rect) + gap;
+  }
+  return rects.map((rect) => {
+    const at = next.get(rect)!;
+    return axis === 'x' ? { ...rect, x: at } : { ...rect, y: at };
   });
 }
