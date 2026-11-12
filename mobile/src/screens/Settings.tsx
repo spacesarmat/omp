@@ -30,6 +30,7 @@ import { phoneSourceContext } from '../searchContext';
 import { t, tp, type LanguageSetting } from '../../../src/i18n';
 import { LANGUAGE_NAMES } from '../../../src/i18n/languageNames';
 import { ScreenHeader } from '../ui/ScreenHeader';
+import { FaqDone } from '../ui/faqJump';
 import { friendsShare } from '../share/text';
 import { sendShare } from '../share/send';
 import { phonePlayerName } from './videoPlayerSettings';
@@ -450,6 +451,7 @@ export function Settings() {
   return (
     <div class="m-screen" data-route="settings">
       <ScreenHeader title={t('common.settings')} />
+      <FaqDone mark="updates" />
       <label class="m-faq-search">
         <input
           class="m-input"

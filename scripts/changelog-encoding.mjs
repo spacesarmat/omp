@@ -50,10 +50,15 @@ export function readChangelogUtf8(path, opts = {}) {
   return text;
 }
 
-/** Bullet body of the first `## …` section, or ''. */
+/** Bullet body of the first non-empty `## …` section, or ''. An empty «Не выпущено» is skipped. */
 export function latestSectionBody(md) {
-  const m = /^## [^\n]+\n+([\s\S]*?)(?=\n## |\s*$)/m.exec(md);
-  return m ? m[1] : '';
+  const parts = String(md).split(/^## /m).slice(1);
+  for (const part of parts) {
+    const nl = part.indexOf('\n');
+    const body = (nl < 0 ? '' : part.slice(nl + 1)).trim();
+    if (body) return body;
+  }
+  return '';
 }
 
 /**

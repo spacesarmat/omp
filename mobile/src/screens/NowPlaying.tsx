@@ -3,6 +3,7 @@ import { t } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { TracksSheet } from '../ui/TracksSheet';
 import { goBack, navigate, switchTab } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { activeTv } from '../tv/tvStore';
 import { applyAutoSkip, nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
@@ -102,6 +103,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     if (!s && launching.value) {
       return (
         <div class="m-screen m-now" data-route="nowPlaying">
+          <FaqDone mark="playing" />
           {head}
           <div class="m-now-empty">
             <div class="m-sheet-title">{t('now.launching')}</div>
@@ -111,6 +113,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     }
     return (
       <div class="m-screen m-now" data-route="nowPlaying">
+        <FaqDone mark="playing" />
         {head}
         <div class="m-now-empty">
           <div class="m-sheet-title">{t('now.nothing')}</div>
@@ -157,6 +160,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
     <>
       <NowDeck hash={s.hash} fileId={s.file} remote={<Remote />}>
         <div class="m-screen m-now m-now-bleed" data-route="nowPlaying">
+          <FaqDone mark="playing" />
           {/* the fold fills the first screen: the poster shrinks so the controls clear the «Серии» chip and the system bar */}
           <div class={'m-now-fold' + (list.length ? ' m-now-fold-fit' : '')}>
             <div class="m-now-hero">

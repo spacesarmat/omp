@@ -9,6 +9,11 @@ import { tmpdir } from 'node:os';
 import { assertChangelogText, decodeUtf8Strict, latestSectionBody, prependChangelogSection, readChangelogUtf8, writeUtf8Lf } from '../../scripts/changelog-encoding.mjs';
 
 describe('changelog encoding', () => {
+  it('skips an empty unreleased heading and reads the version under it', () => {
+    const md = '# Изменения\n\n## Не выпущено\n\n## 0.30.1-beta.4\n\n- [phone] Справка\n\n## 0.30.1-beta.3\n\n- старое\n';
+    expect(latestSectionBody(md)).toBe('- [phone] Справка');
+  });
+
   it('real CHANGELOG.md is strict UTF-8 with Cyrillic in the latest section', () => {
     const md = readChangelogUtf8('CHANGELOG.md', { russian: true });
     expect(md.startsWith('# Изменения\n')).toBe(true);

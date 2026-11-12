@@ -3,6 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
 import { goBack } from '../nav';
+import { FaqDone } from '../ui/faqJump';
 import { settings, updateSettings, type PhonePlayer } from '../../../src/store/settings';
 import { native } from '../platform/native';
 import { monitorNative } from '../monitor/native';
@@ -78,6 +79,7 @@ export function VideoPlayer() {
   const missing = pkg === null;
   return (
     <div class="m-screen" data-route="video-player">
+      <FaqDone mark="player" />
       <div class="m-bar">
         <button type="button" class="m-icon-btn tm" data-code="P14.1" aria-label={t('common.back')} onClick={() => goBack()}>
           <Icon d={BACK} />
