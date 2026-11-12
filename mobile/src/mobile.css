@@ -999,6 +999,9 @@ button, .m-btn {
 [data-tv-name] { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
 /* a saved TV that does not answer: the reason and «Повторить» */
 .m-remote-noanswer { display: flex; flex-direction: column; gap: 8px; }
+.m-remote-noanswer-row { display: flex; align-items: center; }
+.m-remote-noanswer-row .m-btn { margin-right: 8px; }
+.m-remote.dim .m-rb, .m-remote.dim .m-rt { opacity: 0.45; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
 .m-box-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px 0 12px; border-radius: 14px; background: var(--panel); }
 .m-box-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }

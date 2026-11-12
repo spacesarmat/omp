@@ -1078,6 +1078,9 @@ describe('Remote remembers the saved TVs', () => {
       tvState.value = 'error';
     });
     expect(el.querySelector('[data-no-answer]')!.textContent).toContain('OLED55C9PLA не отвечает - включите ТВ');
+    expect(el.querySelector('[data-no-answer]')!.textContent).toContain('Включить');
+    expect(el.querySelector('[data-power]')).toBeNull();
+    expect(el.querySelector('.m-remote.dim')).toBeTruthy();
     a.warmUp.mockClear();
     click(byBtn('Повторить')!);
     expect(a.warmUp).toHaveBeenCalledTimes(1);
@@ -1085,9 +1088,18 @@ describe('Remote remembers the saved TVs', () => {
       tvState.value = 'connected';
     });
     expect(el.querySelector('[data-no-answer]')).toBeNull();
+    expect(el.querySelector('[data-remote-dot]')).toBeTruthy();
+    expect(el.querySelector('.m-remote.dim')).toBeNull();
     act(() => {
       tvState.value = 'idle';
     });
+  });
+
+  it('remembers buttons or the touchpad', () => {
+    localStorage.setItem('tsp.remoteMode', 'touchpad');
+    saveTv({ ip: '192.168.1.156', name: 'LG OLED', clientKey: 'k' });
+    mount();
+    expect(el.querySelector('[role="tab"][aria-selected="true"]')!.textContent).toContain('Тачпад');
   });
 
   it('several saved TVs: the name opens a sheet with their state, one tap switches with the saved key', () => {

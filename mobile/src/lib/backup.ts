@@ -159,6 +159,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.subHold', // subscriptions paused by hand on this phone
   'tsp.subChecks', // times a manual check ran: rebuilt by the next checks
   'tsp.nowSkipMarks', // always skip recap and credits from the phone remote
+  'tsp.remoteMode', // buttons or touchpad: per device
   'tsp.historyHide', // phone: shows hidden from continue and history on this device
   'tsp.linkSpeed', // last measured download speed: rebuilt while watching
   'tsp.update', // update-check state

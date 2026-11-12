@@ -177,17 +177,45 @@ const stateText = (s: string): string => {
   return map[s] || s;
 };
 
-/** A saved TV that does not answer: the reason and «Повторить», never the setup screen. */
-function NoAnswer({ tv }: { tv: SavedTv }) {
+const MODE_KEY = 'tsp.remoteMode';
+
+function savedMode(): 'buttons' | 'touchpad' {
+  try {
+    return localStorage.getItem(MODE_KEY) === 'touchpad' ? 'touchpad' : 'buttons';
+  } catch {
+    return 'buttons';
+  }
+}
+
+function storeMode(mode: 'buttons' | 'touchpad'): void {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** A saved TV that does not answer: one plate with power, retry and the wake hint. */
+function NoAnswer({ tv, onWake }: { tv: SavedTv; onWake: () => void }) {
+  const [hint, setHint] = useState(false);
   if (tvState.value !== 'error' || tvWaking.value) return null;
   return (
     <div class="m-remote-noanswer" data-no-answer>
       <div class="m-hint-warn" role="status">
         {t('remote.noAnswerTv', { name: tvDisplayName(tv) })}
       </div>
-      <button type="button" class="m-btn m-btn-secondary" onClick={() => void act.warmUp()}>
-        {t('common.retry')}
-      </button>
+      <div class="m-remote-noanswer-row">
+        <button type="button" class="m-btn m-btn-primary" onClick={onWake}>
+          {t('remote.powerOn')}
+        </button>
+        <button type="button" class="m-btn m-btn-secondary" onClick={() => void act.warmUp()}>
+          {t('common.retry')}
+        </button>
+        <button type="button" class="m-btn m-btn-secondary" aria-expanded={hint} aria-label={t('remote.wolHow')} onClick={() => setHint((v) => !v)}>
+          ?
+        </button>
+      </div>
+      {hint && <p class="m-muted m-small">{t('remote.wolHint')}</p>}
     </div>
   );
 }
@@ -759,7 +787,11 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
   const [coding, setCoding] = useState(false);
-  const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
+  const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
+  const pickMode = (next: 'buttons' | 'touchpad') => {
+    setMode(next);
+    storeMode(next);
+  };
   // the TV forgot this phone (its token was dropped): pair again by the code
   const forgot = !tv.token || (state === 'error' && tvError.value === tvForgot());
   const found: FoundOmpTv = { ip: tv.ip, port: tv.ctlPort || ATV_PORT, name: tv.defaultName ?? tv.name, version: '' };
@@ -824,7 +856,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
     void act.warmUp();
   };
   return (
-    <div class={screenClass()} data-route="remote">
+    <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
@@ -841,7 +873,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
           <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />
         </>
       )}
-      {!forgot && !box && <NoAnswer tv={tv} />}
+      {!forgot && !box && <NoAnswer tv={tv} onWake={() => void wake()} />}
       {forgot && !box && (
         <div class="m-remote-forgot">
           <div class="m-hint-warn">{tvForgot()}</div>
@@ -852,10 +884,10 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
       )}
       <BoxRow tv={tv} />
       <div class="m-seg" role="tablist">
-        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
+        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => pickMode('buttons')}>
           {t('remote.buttons')}
         </button>
-        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
+        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => pickMode('touchpad')}>
           {t('remote.swipes')}
         </button>
       </div>
@@ -967,7 +999,11 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
 export function Remote() {
   const tv = activeTv.value;
   const state = tvState.value;
-  const [mode, setMode] = useState<'buttons' | 'touchpad'>('buttons');
+  const [mode, setMode] = useState<'buttons' | 'touchpad'>(savedMode);
+  const pickMode = (next: 'buttons' | 'touchpad') => {
+    setMode(next);
+    storeMode(next);
+  };
   const [kbd, setKbd] = useState(false);
   const [playing, setPlaying] = useState(true);
   const [tuning, setTuning] = useState(false);
@@ -1116,14 +1152,17 @@ export function Remote() {
   );
 
   return (
-    <div class={screenClass()} data-route="remote">
+    <div class={screenClass() + (state !== 'connected' && state !== 'pairing' ? ' dim' : '')} data-route="remote">
       <ScreenHeader
         title={t('nav.remote')}
         subtitle={
           <span title={tv.name}>
             <TvSwitch tv={tv} live={shownState} class="m-remote-title" />
             {' · '}
-            <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{shownState}</span>
+            <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>
+              {state === 'connected' ? <span class="m-bill-dot" data-remote-dot /> : null}
+              {shownState}
+            </span>
           </span>
         }
       >
@@ -1142,16 +1181,18 @@ export function Remote() {
       </ScreenHeader>
       {mode !== 'touchpad' && (
         <>
-          <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
+          {!(state === 'error' && !tvWaking.value) && (
+            <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
+          )}
           <PowerTools deviceId={tv.mac || tv.ip} showInputs={state === 'connected'} />
         </>
       )}
-      <NoAnswer tv={tv} />
+      <NoAnswer tv={tv} onWake={() => void on()} />
       <div class="m-seg" role="tablist">
-        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => setMode('buttons')}>
+        <button type="button" role="tab" aria-selected={mode === 'buttons'} class={mode === 'buttons' ? 'on' : ''} onClick={() => pickMode('buttons')}>
           {t('remote.buttons')}
         </button>
-        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => setMode('touchpad')}>
+        <button type="button" role="tab" aria-selected={mode === 'touchpad'} class={mode === 'touchpad' ? 'on' : ''} onClick={() => pickMode('touchpad')}>
           {t('remote.touchpad.title')}
         </button>
       </div>
