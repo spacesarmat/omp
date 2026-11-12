@@ -1,25 +1,16 @@
 name: CodeQL
 
-# Separate from CI. Not a required check. Docs-only and wiki-only changes skip push and pull_request.
-# Monday 09:00 Europe/Moscow (UTC+3, no daylight saving).
+# Separate from CI. Not a required check.
+# Once a week: Monday 09:00 Europe/Moscow (UTC+3, no daylight saving). Also started by hand.
 
 permissions:
   contents: read
   security-events: write
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - docs/**
-      - wiki/**
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - docs/**
-      - wiki/**
   schedule:
     - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 concurrency:
   group: codeql-${{ github.ref }}
