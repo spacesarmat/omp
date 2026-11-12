@@ -11,6 +11,7 @@ import { qualityOf } from '../../../src/sources/view';
 import { phoneSourceContext } from '../searchContext';
 import { showToast } from '../ui/toast';
 import { reloadMonitor } from './ui';
+import { isSubHeld, rememberCheck } from './subHold';
 
 // ye as a char code: the guard strips regex literals but not string literals
 const YE = String.fromCharCode(0x435);
@@ -170,8 +171,8 @@ export function checkSubNow(id: string): Promise<void> {
   const sub = getSubscription(id);
   if (!sub || isCheckingSub(id)) return Promise.resolve();
   // over the cap without the OMP subscription: paused, not checked (limit.ts)
-  if (isSubPaused(id)) {
-    showToast(t('monitor.limit.pausedCheck', { n: FREE_SUBS_MAX }));
+  if (isSubPaused(id) || isSubHeld(id)) {
+    showToast(isSubHeld(id) ? t('monitor.sub.held') : t('monitor.limit.pausedCheck', { n: FREE_SUBS_MAX }));
     return Promise.resolve();
   }
   checkingSubs.value = checkingSubs.value.concat([id]);
@@ -182,6 +183,7 @@ export function checkSubNow(id: string): Promise<void> {
   try {
     run = checkSubscription(phoneSourceContext(), sub).then((r) => {
       end();
+      rememberCheck(id, Date.now());
       reloadMonitor();
       if (!r.answered.length) showToast(t('news.noAnswerLater'));
       else if (r.first) showToast(t('news.subFirstCheck'));

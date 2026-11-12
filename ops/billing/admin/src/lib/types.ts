@@ -174,7 +174,20 @@ export type HomeData = {
   audit?: { at?: number; action: string; detail: string; actor?: FeedActor }[];
   series?: SeriesPoint[];
   secrets?: SecretView[];
-  settings?: Record<string, string | number | boolean>;
+  settings?: Record<string, string | number | boolean> & {
+    referral?: {
+      enabled?: boolean;
+      referrerDays?: number;
+      friendDays?: number;
+      balancePercent?: number;
+      tiers?: boolean;
+      friendDiscount?: boolean;
+      retention?: boolean;
+      delayDays?: number;
+      yearlyCap?: number;
+    };
+  };
+  referralJournal?: { id: string; friendId?: string; status: string; days: number; reason?: string }[];
   storage?: { engine: string; path: string; bytes: number };
   /** Postgres dumps; null when backups are not configured on the server. */
   backup?: BackupStatus | null;

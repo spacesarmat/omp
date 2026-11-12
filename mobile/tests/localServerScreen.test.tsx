@@ -86,7 +86,10 @@ describe('LocalServer screen', () => {
     expect(el.querySelectorAll('.m-step.ok')).toHaveLength(4);
     expect(text).toContain('Адрес для телевизора');
     expect(text).toContain('192.168.1.50:8090');
-    expect(text).toContain('На ТВ: Вход → «Найти в сети». Сервер работает, пока телефон включён и в этой сети Wi‑Fi.');
+    expect(text).toContain('На ТВ: Вход - «Найти в сети».');
+    expect(text).toContain('Сервер работает, пока телефон включён и в этой сети Wi-Fi.');
+    expect(text).not.toContain('→');
+    expect(el.querySelector('[data-copy-addr]')).toBeTruthy();
     expect(activeServer.value).toMatchObject({ name: 'Этот телефон', url: 'http://127.0.0.1:8090' });
     const open = Array.from(el.querySelectorAll('button')).find((b) => b.textContent === 'Открыть каталог')!;
     await act(async () => open.click());
@@ -411,7 +414,7 @@ describe('LocalServer screen in English', () => {
     expect(steps.slice(1)).toEqual(['Starting in the background', 'Checking the connection', 'Connecting OMP']);
     expect(el.textContent).toContain('Address for the TV');
     expect(el.textContent).toContain('VPN is on - other devices may not see the server.');
-    expect(el.textContent).toContain('On the TV: Sign in → “Find on network”.');
+    expect(el.textContent).toContain('On the TV: Sign in - “Find on network”.');
     expect(btn(el, 'Open the catalog')).toBeTruthy();
     expect(el.textContent).not.toMatch(CYR);
   });

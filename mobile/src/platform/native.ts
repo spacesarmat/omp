@@ -313,6 +313,8 @@ export interface OmpNativeApi {
   setLanguage(lang: 'ru' | 'en'): Promise<void>;
   /** Phone only: lock Activity to portrait or restore sensor; never rejects, no-op off-device / TV / old APK. */
   setOrientation(mode: 'portrait' | 'unlock'): Promise<void>;
+  /** Phone only: while the remote is open, volume keys go to the TV instead of the phone. */
+  setHwVolume(on: boolean): Promise<void>;
   /** The visible Cloudflare check (native sheet); cookies never come back. */
   cloudflareVisible(req: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   /** When the stored Cloudflare clearance of the site of url ends; null without one (or off-device). */
@@ -433,6 +435,7 @@ interface OmpNativePlugin {
   shareMessage?(o: { text: string; title?: string; subject?: string }): Promise<void>;
   setLanguage(o: { lang: string }): Promise<void>;
   setOrientation?(o: { mode: string }): Promise<void>;
+  setHwVolume?(o: { on: boolean }): Promise<void>;
   cloudflareVisible(o: CloudflareVisibleRequest): Promise<{ result?: string; sent?: boolean; via?: string }>;
   cloudflareClearance(o: { url: string }): Promise<{ until?: number | null }>;
   cloudflareWatch(o: { url?: string; token?: string; notify?: string; notifyLogin?: string }): Promise<void>;
@@ -1179,6 +1182,15 @@ export const native: OmpNativeApi = {
     if (!plugin || typeof plugin.setOrientation !== 'function') return Promise.resolve();
     try {
       return plugin.setOrientation({ mode }).then(noop, noop);
+    } catch {
+      return Promise.resolve();
+    }
+  },
+
+  setHwVolume(on) {
+    if (!plugin || typeof plugin.setHwVolume !== 'function') return Promise.resolve();
+    try {
+      return plugin.setHwVolume({ on }).then(noop, noop);
     } catch {
       return Promise.resolve();
     }

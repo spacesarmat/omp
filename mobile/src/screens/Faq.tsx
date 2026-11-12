@@ -1,14 +1,36 @@
 import { useEffect, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { Icon } from '../ui/Icon';
-import { goBack, navigate } from '../nav';
+import { goBack } from '../nav';
+import { openFromFaq } from '../ui/faqJump';
 import { BILLING_BOT_URL } from '../../../src/billing/config';
 import { DEVICES, FAQ, SECTIONS, itemFor, resolveFaqLink, type Device, type FaqItem, type FaqLine } from '../../../src/faq/faq';
 import { activeTv } from '../tv/tvStore';
+import { localServer } from '../server/localServer';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { TextField } from '../ui/TextField';
 
 const DEVICE_KEY = 'tsp.faqDevice';
+const VOTE_KEY = 'tsp.faqVotes';
+type FaqVote = 'up' | 'down';
+
+function isVoteMap(v: unknown): v is { [id: string]: FaqVote } {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  return Object.values(v as { [id: string]: unknown }).every((x) => x === 'up' || x === 'down');
+}
+
+/** Saved useful / not useful marks, by question id. */
+export function faqVotes(): { [id: string]: FaqVote } {
+  return loadJson(VOTE_KEY, {}, isVoteMap);
+}
+
+/** Tapping the same mark again clears it. */
+export function setFaqVote(id: string, vote: FaqVote): void {
+  const cur = faqVotes();
+  if (cur[id] === vote) delete cur[id];
+  else cur[id] = vote;
+  saveJson(VOTE_KEY, cur);
+}
 const deviceLabel = (d: Device) => DEVICES.find((x) => x.id === d)!.label;
 const sectionLabel = (it: FaqItem) => SECTIONS.find((s) => s.id === it.section)!.label;
 const isDevice = (v: unknown): v is Device => typeof v === 'string' && DEVICES.some((d) => d.id === v);
@@ -99,14 +121,29 @@ export function Faq(p: { q?: string } = {}) {
   // one answer open at a time
   const [open, setOpen] = useState<string | null>(link ? link.id : null);
   const [moreOpen, setMoreOpen] = useState<string | null>(null);
+  const [votes, setVotes] = useState(faqVotes);
   useEffect(() => {
     if (!open) return;
     const el = document.querySelector('.m-faq-item.open');
     if (el && typeof (el as HTMLElement).scrollIntoView === 'function') (el as HTMLElement).scrollIntoView({ block: 'start' });
-  }, []);
+  }, [open, device]);
 
   const searching = query.trim() !== '';
   const hits = searching ? searchFaq(query, device) : [];
+
+  const openDev = () => {
+    setDevice('lg');
+    setFromTv(false);
+    setOpen('lg-devmode-expiry');
+    setMoreOpen(null);
+    setQuery('');
+    saveJson(DEVICE_KEY, 'lg');
+  };
+
+  const vote = (id: string, mark: FaqVote) => {
+    setFaqVote(id, mark);
+    setVotes(faqVotes());
+  };
 
   const pick = (d: Device) => {
     setDevice(d);
@@ -147,6 +184,31 @@ export function Faq(p: { q?: string } = {}) {
             <div class="m-faq-short">
               <Lines lines={v.short} query={badge ? query : undefined} />
             </div>
+            <div class="m-faq-vote">
+              <button type="button" class={'m-btn m-btn-secondary' + (votes[it.id] === 'up' ? ' on' : '')} data-faq-vote="up" aria-pressed={votes[it.id] === 'up'} onClick={() => vote(it.id, 'up')}>
+                {t('faq.useful')}
+              </button>
+              <button type="button" class={'m-btn m-btn-secondary' + (votes[it.id] === 'down' ? ' on' : '')} data-faq-vote="down" aria-pressed={votes[it.id] === 'down'} onClick={() => vote(it.id, 'down')}>
+                {t('faq.notUseful')}
+              </button>
+            </div>
+            {it.id === 'lg-devmode' || it.id === 'lg-devmode-expiry' ? (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="dev" onClick={openDev}>
+                {t('faq.devMode')}
+              </button>
+            ) : it.id === 'wake' ? (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="wake" onClick={() => openFromFaq({ name: 'remote' }, 'remote')}>
+                {t('faq.wake')}
+              </button>
+            ) : it.id === 'beta' || it.id === 'lg-update' || it.id === 'atv-update' ? (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="updates" onClick={() => openFromFaq({ name: 'settings' }, 'updates')}>
+                {t('faq.updates')}
+              </button>
+            ) : it.id === 'sound-subs' || it.id === 'control' ? (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="playing" onClick={() => openFromFaq({ name: 'nowPlaying' }, 'playing')}>
+                {t('faq.nowPlaying')}
+              </button>
+            ) : null}
             {v.more.length > 0 && (
               <>
                 <button type="button" class="m-faq-more" aria-expanded={moreOpen === it.id} aria-controls={moreOpen === it.id ? 'faq-more-' + it.id : undefined} onClick={() => setMoreOpen(moreOpen === it.id ? null : it.id)}>
@@ -166,6 +228,9 @@ export function Faq(p: { q?: string } = {}) {
   };
 
   const shown = SECTIONS.map((s) => ({ s, items: FAQ.filter((it) => it.section === s.id && it.devices.includes(device)) })).filter((g) => g.items.length);
+  const trouble = shown.filter((g) => g.s.id === 'trouble');
+  const rest = shown.filter((g) => g.s.id !== 'trouble');
+  const ordered = trouble.concat(rest);
   const tvName = activeTv.value?.name;
 
   return (
@@ -212,15 +277,41 @@ export function Faq(p: { q?: string } = {}) {
             ))}
           </div>
           <div class="m-faq-actions">
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => navigate({ name: 'install' })}>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="install" onClick={() => openFromFaq({ name: 'install' }, 'install')}>
               {t('faq.installTv')}
             </button>
-            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => navigate({ name: 'tv' })}>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="tv" onClick={() => openFromFaq({ name: 'tv' }, 'tv')}>
               {t('faq.findTv')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="renew" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
+              {t('faq.renew')}
+            </button>
+            {localServer.value.supported && (
+              <button type="button" class="m-btn m-btn-secondary" data-faq-action="server" onClick={() => openFromFaq({ name: 'localServer' }, 'server')}>
+                {t('faq.phoneServer')}
+              </button>
+            )}
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="log" onClick={() => openFromFaq({ name: 'log' }, 'log')}>
+              {t('faq.logs')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="dev" onClick={openDev}>
+              {t('faq.devMode')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="wake" onClick={() => openFromFaq({ name: 'remote' }, 'remote')}>
+              {t('faq.wake')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="updates" onClick={() => openFromFaq({ name: 'settings' }, 'updates')}>
+              {t('faq.updates')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="player" onClick={() => openFromFaq({ name: 'videoPlayer' }, 'player')}>
+              {t('faq.playerSound')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary" data-faq-action="promo" onClick={() => openFromFaq({ name: 'account' }, 'account')}>
+              {t('faq.promo')}
             </button>
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
-          {shown.map((g) => (
+          {ordered.map((g) => (
             <section class="m-set-group" key={g.s.id}>
               <div class="m-set-label">{g.s.label}</div>
               <div class="m-faq-list">{g.items.map((it) => row(it, device, false))}</div>

@@ -254,10 +254,17 @@ export function humanEpisodes(season: number, episodes: number[], withSeason = f
   return withSeason ? t('library.seasonNamed', { n: season }) + ' · ' + head : head;
 }
 
+/** «Навсегда» and similar titles are the season finale, not the episode name. */
+export function displayEpisodeName(name: string): string {
+  if (/^(навсегда|finale)$/i.test(name.trim())) return t('news.calFinale');
+  return name;
+}
+
 /** The row's line: «7 серия · name». A number (from `rows.map`) is ignored. `true` adds the season. */
 export function rowLine(row: CalRow, opts?: boolean | number | { withSeason?: boolean }): string {
   const withSeason = typeof opts === 'number' ? false : typeof opts === 'boolean' ? opts : !!(opts && opts.withSeason);
-  return humanEpisodes(row.season, row.episodes, withSeason) + (row.name ? ' · ' + row.name : '');
+  const name = row.name ? displayEpisodeName(row.name) : '';
+  return humanEpisodes(row.season, row.episodes, withSeason) + (name ? ' · ' + name : '');
 }
 
 // --- list and month views

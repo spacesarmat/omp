@@ -1,4 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
+import { normalizeReferralSettings, referralCodeFor, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, labelSettled, rubOfPayment, starDue } from './payMethods.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
@@ -1137,6 +1138,51 @@ export function renewableExtras(state, sub, now) {
   return n && (Number(sub.extraUntil) || 0) >= (Number(sub.paidUntil) || 0) ? n : 0;
 }
 
+/** What the phone account screen shows: price, the 3% card fee, auto-renew and this account's payments. */
+export function phoneBill(state, accountId, now) {
+  const nowMs = now || Date.now();
+  const sub = (state.subscriptions || []).find((s) => s.accountId === accountId && s.product === 'jackett') || null;
+  const prices = priceText(state.settings || {});
+  const quote = sub ? renewalPrice(state, sub, nowMs) : { total: prices.price, days: prices.days };
+  const price = Math.max(0, Math.round((Number(quote.total) || 0) * 100) / 100);
+  const up = grossUp(price, 'AC');
+  const fee = up ? up.fee : 0;
+  const total = up ? up.gross : price;
+  const account = (state.accounts || []).find((a) => a.id === accountId);
+  const payments = [];
+  const rows = state.payments || [];
+  for (let i = rows.length - 1; i >= 0 && payments.length < 8; i--) {
+    const p = rows[i];
+    if (!p || p.accountId !== accountId || p.error || p.pending) continue;
+    payments.push({
+      at: Math.floor(Number(p.at) || 0),
+      amount: String(p.withdrawAmount || p.amount || ''),
+      currency: String(p.currency || p.asset || (p.withdrawAmount ? 'RUB' : '')),
+      title: String(p.label || ''),
+    });
+  }
+  return {
+    priceRub: price,
+    feeRub: fee,
+    totalRub: total,
+    days: Math.floor(Number(quote.days) || prices.days || 0),
+    autoRenew: !!(account && account.autoRenew),
+    payments,
+  };
+}
+
+/** Turns auto-renew on or off for one account. Missing account is an error and does not write. */
+export function setAutoRenew(state, accountId, on) {
+  let found = false;
+  const accounts = (state.accounts || []).map((a) => {
+    if (a.id !== accountId) return a;
+    found = true;
+    return { ...a, autoRenew: !!on };
+  });
+  if (!found) return { state, result: { error: 'not_linked' } };
+  return { state: { ...state, accounts }, result: { ok: true, autoRenew: !!on } };
+}
+
 export function renewalPrice(state, sub, now, opts) {
   const prices = priceText(state.settings);
   const add = opts && opts.addExtra > 0 ? Math.floor(opts.addExtra) : 0;
@@ -1209,7 +1255,113 @@ function resolveNotice(passed, held) {
   };
 }
 
-export function applyPayment(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw }) {
+function friendPaidAt(state, friendId, boundAt) {
+  let at = 0;
+  const from = Number(boundAt) || 0;
+  const rows = state.payments || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.accountId !== friendId || row.pending || row.error) continue;
+    const t = Number(row.at) || 0;
+    if (t >= from && (at === 0 || t < at)) at = t;
+  }
+  return at;
+}
+
+function referralRowSame(a, b) {
+  return !!a && !!b && a.status === b.status && a.days === b.days && a.reason === b.reason && a.at === b.at && a.grantedAt === b.grantedAt && !!a.friendGranted === !!b.friendGranted;
+}
+
+/**
+ * Turns a saved invitation into days once the friend has paid, the referrer is still active,
+ * and the delay has passed. A later call does not add the days again.
+ */
+export function settleReferrals(state, now) {
+  const settings = normalizeReferralSettings(state.settings && state.settings.referral);
+  if (!settings.enabled) return { state, granted: 0 };
+  const binds = state.referralBinds || [];
+  if (!binds.length) return { state, granted: 0 };
+  const when = now || Date.now();
+  const journal = (state.referralJournal || []).slice();
+  let subscriptions = state.subscriptions || [];
+  let granted = 0;
+  let changed = false;
+  for (let i = 0; i < binds.length; i++) {
+    const bind = binds[i];
+    if (!bind || !bind.friendId || !bind.referrerId) continue;
+    const idx = journal.findIndex((row) => row && row.friendId === bind.friendId && row.referrerId === bind.referrerId);
+    const prev = idx >= 0 ? journal[idx] : null;
+    if (prev && (prev.status === 'granted' || prev.status === 'cancelled' || prev.status === 'rejected')) continue;
+    const paidAt = friendPaidAt(state, bind.friendId, bind.boundAt);
+    if (!paidAt) continue;
+    const view = { ...state, subscriptions };
+    const referrerSub = anySub(view, bind.referrerId);
+    const active = !!(referrerSub && subAccess(view, referrerSub, when).access);
+    const waited = Math.floor((when - paidAt) / DAY);
+    let status = 'waiting';
+    let days = 0;
+    let reason = 'delay';
+    if (!active) {
+      status = 'rejected';
+      reason = 'inactive';
+    } else if (waited < settings.delayDays) {
+      status = 'waiting';
+      reason = 'delay';
+    } else {
+      const yearAgo = when - 365 * DAY;
+      let used = 0;
+      for (let j = 0; j < journal.length; j++) {
+        const row = journal[j];
+        if (!row || row.referrerId !== bind.referrerId || row.status !== 'granted') continue;
+        const grantAt = Number(row.grantedAt) || 0;
+        if (grantAt >= yearAgo) used += Math.max(0, Math.floor(Number(row.days) || 0));
+      }
+      const offer = Math.min(REFERRAL_BONUS_MAX, settings.referrerDays);
+      const capDays = settings.yearlyCap > 0 ? settings.yearlyCap * 30 : 0;
+      if (capDays > 0 && used + offer > capDays) {
+        status = 'waiting';
+        reason = 'year';
+      } else {
+        status = 'granted';
+        reason = 'paid';
+        days = offer;
+      }
+    }
+    const nextRow = {
+      id: prev && prev.id ? prev.id : randomId(),
+      friendId: bind.friendId,
+      referrerId: bind.referrerId,
+      status,
+      days,
+      reason,
+      paidAt,
+      at: paidAt,
+      grantedAt: status === 'granted' ? when : 0,
+      friendGranted: !!(prev && prev.friendGranted),
+    };
+    if (status === 'granted' && settings.friendDays > 0 && !nextRow.friendGranted) {
+      const friendSub = anySub({ ...state, subscriptions }, bind.friendId);
+      if (friendSub) {
+        const gift = extendGift({ ...state, subscriptions }, friendSub, settings.friendDays, when);
+        subscriptions = subscriptions.map((s) => (s.id === friendSub.id ? gift : s));
+        nextRow.friendGranted = true;
+      }
+    }
+    if (status === 'granted' && days > 0 && referrerSub) {
+      const extended = extendGift({ ...state, subscriptions }, referrerSub, days, when);
+      subscriptions = subscriptions.map((s) => (s.id === referrerSub.id ? extended : s));
+      granted++;
+    }
+    if (referralRowSame(prev, nextRow) && status !== 'granted') continue;
+    if (idx >= 0) journal[idx] = nextRow;
+    else journal.push(nextRow);
+    changed = true;
+  }
+  if (!changed) return { state, granted: 0 };
+  return { state: { ...state, subscriptions, referralJournal: journal }, granted };
+}
+
+function applyPaymentUnsettled(input, { operationId, label, amount, currency, unaccepted, now, withdrawAmount, notificationType, requireWithdraw }) {
   if (!operationId || seenPayment(input, operationId)) {
     return {
       state: logWebhook(input, { kind: 'duplicate', operationId: operationId || '', label: label || '', amount: amount || '', at: now }),
@@ -1406,6 +1558,14 @@ export function applyPayment(input, { operationId, label, amount, currency, unac
   }
   const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
   return { state: { ...state, payments }, result: { error: 'bad_label' } };
+}
+
+/** A successful payment can complete a referral that has already waited out its delay. */
+export function applyPayment(input, args) {
+  const out = applyPaymentUnsettled(input, args || {});
+  const when = args && args.now ? args.now : Date.now();
+  const settled = settleReferrals(out.state, when);
+  return settled.state === out.state ? out : { state: settled.state, result: out.result };
 }
 
 function money(amount) {
@@ -2691,6 +2851,52 @@ export function revokePromo(state, promoId) {
  * fresh device activation code. A promo with bonus slots only needs a subscription (`needs_subscription`).
  * The same account cannot redeem the same promo twice.
  */
+function referralCodeMatches(accountId, raw) {
+  const code = referralCodeFor(accountId);
+  const compact = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return code === String(raw || '').trim().toUpperCase() || code.replace(/-/g, '') === compact;
+}
+
+/**
+ * Account-screen code that belongs to a referrer. Null when it is not a referral code,
+ * so the promo list still runs. A match only saves the invitation. Days wait for a payment.
+ */
+export function redeemReferralCode(state, { code, accountId, deviceId, now }) {
+  const accounts = state.accounts || [];
+  let referrer = null;
+  for (let i = 0; i < accounts.length; i++) {
+    if (accounts[i] && referralCodeMatches(accounts[i].id, code)) {
+      referrer = accounts[i];
+      break;
+    }
+  }
+  if (!referrer) return null;
+  const settings = normalizeReferralSettings(state.settings && state.settings.referral);
+  if (!settings.enabled || !accountId) return { state, result: { error: 'bad_promo' } };
+  if (referrer.id === accountId) return { state, result: { error: 'bad_promo' } };
+  const friend = findAccount(state, accountId);
+  const friendTg = friend && friend.telegramId;
+  if (friendTg && referrer.telegramId && friendTg === referrer.telegramId) return { state, result: { error: 'bad_promo' } };
+  const device = String(deviceId || '');
+  if (device) {
+    const hit = (state.codes || []).find((row) => row && row.deviceId === device && !row.revoked);
+    const sub = hit ? (state.subscriptions || []).find((s) => s.id === hit.subscriptionId) : null;
+    if (sub && sub.accountId === referrer.id) return { state, result: { error: 'bad_promo' } };
+  }
+  const binds = state.referralBinds || [];
+  if (binds.some((row) => row && row.friendId === accountId)) return { state, result: { error: 'already' } };
+  const entry = { friendId: accountId, referrerId: referrer.id, code: referralCodeFor(referrer.id), boundAt: now || 0 };
+  const journalRow = { id: randomId(), friendId: accountId, referrerId: referrer.id, status: 'waiting', days: 0, reason: 'bind' };
+  return {
+    state: {
+      ...state,
+      referralBinds: binds.concat([entry]),
+      referralJournal: (state.referralJournal || []).concat([journalRow]),
+    },
+    result: { kind: 'referral', days: 0, paidUntil: 0, promoCode: entry.code },
+  };
+}
+
 export function redeemPromo(state, { code, accountId, now }) {
   const plain = normalizePromo(code);
   if (!plain || !findAccount(state, accountId)) return { state, result: { error: 'bad_promo' } };
