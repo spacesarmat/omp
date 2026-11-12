@@ -7,6 +7,7 @@ import { branchMayAutoMerge, checksVerdict, runsVerdict } from '../../scripts/up
 describe('next OMP beta', () => {
   it('steps a beta and starts a patch beta from a stable version', () => {
     expect(nextBeta('0.30.1-beta.5')).toBe('0.30.1-beta.6');
+    expect(nextBeta('0.30.1-beta.6')).toBe('0.30.1-beta.7');
     expect(nextBeta('0.30.1-beta.9')).toBe('0.30.1-beta.10');
     expect(nextBeta('0.30.1')).toBe('0.30.2-beta.1');
     expect(webosVersion('0.30.1-beta.6')).toBe('0.30.1');
