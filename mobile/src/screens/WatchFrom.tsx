@@ -101,6 +101,7 @@ export function WatchFrom() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [checks, setChecks] = useState<{ [id: string]: 'checking' | 'ok' | 'down' }>({});
+  const [info, setInfo] = useState(false);
   const ssid = normalizeSsid(prefs.manualSsid);
 
   useEffect(() => {
@@ -233,16 +234,18 @@ export function WatchFrom() {
         </button>
         <h1 class="m-bar-title">{t('settings.watchFrom')}</h1>
       </div>
-      <p class="m-watch-note">{t('settings.watchFromLead')}</p>
-
       <section class="m-set-group" data-section="now">
-        <div class="m-set-label">{t('settings.watchFromNow')}</div>
-        <div class="m-set-row">
+        <div class="m-set-card m-now-card">
+          <span class={'m-status-dot' + (reach === 'ok' ? ' on' : '')} data-now-dot />
           <div class="m-set-text">
             <span>{current ? serverLabel(current) : t('settings.watchFromNoServer')}</span>
             <span class="m-muted m-small" data-now-status="">{status}</span>
           </div>
+          <button type="button" class="m-icon-btn" data-watch-info aria-expanded={info} aria-label={t('settings.watchFromInfo')} onClick={() => setInfo((v) => !v)}>
+            i
+          </button>
         </div>
+        {info && <p class="m-watch-note">{t('settings.watchFromLead')}</p>}
       </section>
 
       <section class="m-set-group" data-section="rule">
@@ -299,7 +302,7 @@ export function WatchFrom() {
         )}
       </section>
 
-      <section class="m-set-group" data-section="network">
+      <section class="m-set-group" data-section="network" hidden={!auto}>
         <div class="m-set-label">{t('settings.watchFromNet')}</div>
         <p class="m-watch-note" data-net-note="" aria-live="polite">{note}</p>
         <button type="button" class="m-btn m-btn-primary" data-code="P35.2" data-action="current" aria-busy={busy} disabled={busy} onClick={() => void useCurrent()}>
@@ -340,16 +343,18 @@ export function WatchFrom() {
           const line = st === 'ok' ? t('settings.watchFromChecked', { name: serverLabel(s) }) : st === 'down' ? t('settings.watchFromCheckDown', { name: serverLabel(s) }) : st === 'checking' ? t('settings.checking') : '';
           return (
             <div key={s.id} class="m-set-row m-watch-server" data-server={s.id}>
-              <div class="m-set-text">
+              <button type="button" class="m-set-text m-watch-pick" data-select={s.id} onClick={() => select(s.id)}>
+                <span class={'m-status-dot' + (checks[s.id] === 'ok' || activeServerId.value === s.id ? ' on' : '')} />
                 <span>{serverLabel(s)}{activeServerId.value === s.id ? ' · ' + t('settings.watchFromCurrent') : ''}</span>
-                {line && <span class="m-muted m-small" data-check-line={s.id}>{line}</span>}
-              </div>
-              <div class="m-watch-actions">
-                <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-select={s.id} onClick={() => select(s.id)}>{t('settings.watchFromSelect')}</button>
+                {activeServerId.value === s.id && <Icon d="M5 12l5 5 9-10" size={16} />}
+              </button>
+              {line && <span class="m-muted m-small" data-check-line={s.id}>{line}</span>}
+              <details class="m-inline-menu">
+                <summary aria-label={t('settings.watchFromMenu', { name: serverLabel(s) })}>⋯</summary>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-check={s.id} onClick={() => void check(s)}>{t('settings.watchFromCheck')}</button>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-edit={s.id} onClick={() => navigate({ name: 'serverSettings', url: s.url })}>{t('connect.edit')}</button>
                 <button type="button" class="m-btn m-btn-secondary m-btn-sm" data-remove={s.id} onClick={() => void remove(s)}>{t('settings.watchFromRemove')}</button>
-              </div>
+              </details>
             </div>
           );
         })}
