@@ -244,6 +244,29 @@ export type InteractionAction =
   | { type: 'link.open'; url: string }
   | { type: 'telegram.open'; target: string };
 
+// The runtime whitelist mirrors the InteractionAction union one to one: protocol and
+// editor boundaries validate posted values against these names instead of trusting strings.
+export const INTERACTION_ACTION_TYPES: ReadonlyArray<InteractionAction['type']> = [
+  'navigate',
+  'back',
+  'toast',
+  'openScreen',
+  'dialog',
+  'playback.playPause',
+  'playback.stop',
+  'playback.nextEpisode',
+  'queue.add',
+  'queue.replace',
+  'server.connect',
+  'server.reconnect',
+  'server.retry',
+  'source.retry',
+  'source.next',
+  'variable.set',
+  'link.open',
+  'telegram.open',
+];
+
 export interface InteractionStep {
   id: string;
   condition?: InteractionCondition;
