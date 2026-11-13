@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultFlow } from '../../design/defaults';
-import { dispatchInteraction, type InteractionDispatcher } from '../../design/interaction';
+import { dispatchInteraction, toInteractionTraces, type InteractionDispatcher } from '../../design/interaction';
 import { validateFlow } from '../../design/flow-validation';
 import { parseFlowDocument } from '../../design/validation';
 import type { FlowDocument, InteractionCondition } from '../../design/schema';
@@ -48,6 +48,51 @@ describe('interaction interpreter', () => {
     dispatchInteraction(flow, event, { ...target, target: 'desktop-windows' }, dispatcher(calls));
     dispatchInteraction(flow, event, { ...target, target: 'desktop-macos' }, dispatcher(calls));
     expect(calls).toEqual(['back', 'hello']);
+  });
+});
+
+describe('toInteractionTraces', () => {
+  it('restores the matched legacy rule condition by rule id', () => {
+    const traces = toInteractionTraces(createDefaultFlow(BASE), [
+      { ruleId: 'settings-continue-connected', kind: 'action', action: 'navigate', target: 'library' },
+    ]);
+    expect(traces).toEqual([
+      {
+        ruleId: 'settings-continue-connected',
+        event: 'click',
+        action: 'navigate',
+        target: 'library',
+        condition: { kind: 'eq', path: 'server.connected', value: true },
+      },
+    ]);
+  });
+
+  it('does not invent conditions for graph rule entries', () => {
+    const flow: FlowDocument = {
+      ...createDefaultFlow(BASE),
+      rules: [{
+        id: 'graph-rule',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        event: 'click',
+        condition: { kind: 'eq', path: 'server.connected', value: true },
+        action: { type: 'toast', message: 'ignored in graph mode' },
+        graph: {
+          nodes: [
+            { id: 't', kind: 'trigger', ruleId: 'graph-rule', x: 0, y: 0 },
+            { id: 'a', kind: 'action', ruleId: 'graph-rule', x: 1, y: 0, stepId: 's1' },
+          ],
+          edges: [{ id: 'e1', from: 't', to: 'a', branch: 'default' }],
+        },
+        steps: [{ id: 's1', action: { type: 'toast', message: 'hi' } }],
+      }],
+    };
+    const traces = toInteractionTraces(flow, [
+      { ruleId: 'graph-rule', kind: 'action', action: 'toast', message: 'hi' },
+    ]);
+    expect(traces).toEqual([
+      { ruleId: 'graph-rule', event: 'click', action: 'toast', message: 'hi' },
+    ]);
   });
 });
 

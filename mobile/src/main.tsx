@@ -31,6 +31,9 @@ import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
 import { expectBetaGate } from '../../src/store/updates';
 import { installProductionDesign } from '../../design/production.ts';
+import { installProductionFlow } from '../../design/production-flow.ts';
+import { createPhoneFlowDispatcher } from './productionFlowDispatcher';
+import { createPhoneFlowPublishers } from './productionFlowPublishers';
 import { currentRoute, routeStack } from './nav';
 
 installCleartextSync(
@@ -149,4 +152,15 @@ if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
     subscribeScreen: (notify) => routeStack.subscribe(notify),
   });
   window.addEventListener('pagehide', stopProductionLayout, { once: true });
+  // Exported logic flows run through the typed dispatcher on top of the existing app APIs;
+  // the empty generated document keeps this a no-op until an explicit export.
+  const stopProductionFlow = installProductionFlow(document.body, {
+    target: 'android-phone',
+    screenOf: () => currentRoute.value.name,
+    subscribeScreen: (notify) => routeStack.subscribe(notify),
+    environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
+    publishers: createPhoneFlowPublishers(),
+    dispatcher: createPhoneFlowDispatcher({ openUrl: (url) => window.open(url, '_system') }),
+  });
+  window.addEventListener('pagehide', stopProductionFlow, { once: true });
 }

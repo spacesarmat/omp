@@ -39,6 +39,23 @@ export function routeKey(r: Route): number {
   return id;
 }
 
+/**
+ * Appends items to the queue of an open player route in place. The route object (and its
+ * screen key) stays the same, so rendering the player again does not remount PlayerScreen:
+ * the current index and item are untouched and playback is not restarted. The stack signal
+ * still notifies subscribers. False when no player route is open.
+ */
+export function extendPlayerQueue(items: PlayItem[]): boolean {
+  const stack = routeStack.value;
+  const route = stack.find((entry) => entry.name === 'player');
+  if (!route || route.name !== 'player') return false;
+  if (items.length) {
+    route.queue.push(...items);
+    routeStack.value = [...stack];
+  }
+  return true;
+}
+
 /** Where focus was on a screen we left: its focus key and its position among the screen's focusables. */
 export interface SavedFocus {
   key: string;

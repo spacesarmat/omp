@@ -1,4 +1,5 @@
-import type { DesignTarget, ReleaseIntent, ThemeDocument } from '../design/schema';
+import type { DesignTarget, FlowDocument, ReleaseIntent, ThemeDocument } from '../design/schema';
+import type { FlowDocumentDiff } from '../design/production-flow';
 import type { EditorDraft } from './shared/draft';
 
 export type ExportScope =
@@ -16,6 +17,9 @@ export interface ExportPlan {
   targets: DesignTarget[];
   draft: EditorDraft;
   theme: ThemeDocument;
+  // The scoped flow view the plan ships: the full document for the all scope, the owned
+  // rules (with the variables they reference) for a scoped export.
+  flow: FlowDocument;
   files: ExportPlanFile[];
 }
 
@@ -24,6 +28,8 @@ export interface ExportDiffFile {
   action: 'create' | 'update' | 'unchanged';
   before: string | null;
   after: string;
+  // Structured review diff for flow documents: added/removed/changed ids per section.
+  flow?: FlowDocumentDiff | null;
 }
 
 export interface ExportDiff {

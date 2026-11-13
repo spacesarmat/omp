@@ -105,6 +105,28 @@ function rebaseResult(value: unknown): RebaseResult {
   return { draft: parseEditorDraft(source.draft), changes: [...source.changes] };
 }
 
+function exportDiffOf(value: unknown): ExportDiff {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+  const source = value as Record<string, unknown>;
+  if (typeof source.baseCommit !== 'string' || !/^[0-9a-f]{40}$/.test(source.baseCommit)) {
+    throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+  }
+  if (!Array.isArray(source.files)) throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+  for (const file of source.files) {
+    if (typeof file !== 'object' || file === null || Array.isArray(file)) throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+    const entry = file as Record<string, unknown>;
+    if (typeof entry.path !== 'string' || typeof entry.after !== 'string') throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+    if (entry.before !== null && typeof entry.before !== 'string') throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+    if (entry.action !== 'create' && entry.action !== 'update' && entry.action !== 'unchanged') {
+      throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+    }
+  }
+  if (!Array.isArray(source.foreignDirty) || source.foreignDirty.some((path) => typeof path !== 'string')) {
+    throw new Error('INVALID_EXPORT_DIFF_RESPONSE');
+  }
+  return value as ExportDiff;
+}
+
 export function createEditorClient(options: EditorClientOptions = {}): EditorClient {
   const origin = loopbackOrigin(options.origin || window.location.origin);
   const token = options.token || tokenFromLocation();
@@ -179,7 +201,7 @@ export function createEditorClient(options: EditorClientOptions = {}): EditorCli
         body: JSON.stringify({ draft, scope: options?.scope ?? { kind: 'all' } }),
       });
       if (!response.ok) throw await apiError(response);
-      return response.json() as Promise<ExportDiff>;
+      return exportDiffOf(await response.json());
     },
   };
 }

@@ -145,6 +145,12 @@ describe('FlowMap and simulation', () => {
     expect(connected.trace).toHaveLength(1);
   });
 
+  it('restores the matched legacy rule condition in the simulation trace', async () => {
+    const result = await simulatePreviewClick({ flow: createDefaultFlow(BASE), serverConnected: true });
+    expect(result.trace[0].ruleId).toBe('settings-continue-connected');
+    expect(result.trace[0].condition).toEqual({ kind: 'eq', path: 'server.connected', value: true });
+  });
+
   it('simulates the selected target instead of always using Windows', async () => {
     const flow = createDefaultFlow(BASE);
     for (const rule of flow.rules) {
@@ -153,6 +159,90 @@ describe('FlowMap and simulation', () => {
     }
     const result = await simulatePreviewClick({ flow, serverConnected: true, target: 'desktop-macos' });
     expect(result.route).toBe('library');
+  });
+
+  it('runs graph rules through the shared interpreter with toast and navigation', async () => {
+    const flow: import('../../design/schema').FlowDocument = {
+      schemaVersion: 1,
+      id: 'sim-graph',
+      baseCommit: BASE,
+      rules: [{
+        id: 'graph-go',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        event: 'click',
+        action: { type: 'back' },
+        graph: {
+          nodes: [
+            { id: 't', kind: 'trigger', ruleId: 'graph-go', x: 0, y: 0 },
+            { id: 'a', kind: 'action', ruleId: 'graph-go', x: 1, y: 0, stepId: 's1' },
+            { id: 'b', kind: 'action', ruleId: 'graph-go', x: 2, y: 0, stepId: 's2' },
+          ],
+          edges: [
+            { id: 'e1', from: 't', to: 'a', branch: 'default' },
+            { id: 'e2', from: 'a', to: 'b', branch: 'default' },
+          ],
+        },
+        steps: [
+          { id: 's1', action: { type: 'toast', message: 'Шаг выполнен' } },
+          { id: 's2', action: { type: 'navigate', screenId: 'library' } },
+        ],
+      }],
+    };
+    const result = await simulatePreviewClick({ flow, serverConnected: true });
+    expect(result.route).toBe('library');
+    expect(result.toast).toBe('Шаг выполнен');
+    expect(result.trace.map((entry) => entry.action)).toEqual(['toast', 'navigate']);
+    expect(result.trace[1].target).toBe('library');
+    expect(result.realNetworkCalls).toBe(0);
+  });
+
+  it('reports unsupported preview actions as a sync outcome instead of throwing', async () => {
+    const flow: import('../../design/schema').FlowDocument = {
+      schemaVersion: 1,
+      id: 'sim-unsupported',
+      baseCommit: BASE,
+      rules: [{
+        id: 'graph-dialog',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        event: 'click',
+        action: { type: 'back' },
+        graph: {
+          nodes: [
+            { id: 't', kind: 'trigger', ruleId: 'graph-dialog', x: 0, y: 0 },
+            { id: 'a', kind: 'action', ruleId: 'graph-dialog', x: 1, y: 0, stepId: 's1' },
+          ],
+          edges: [{ id: 'e1', from: 't', to: 'a', branch: 'default' }],
+        },
+        steps: [{ id: 's1', action: { type: 'dialog', title: 'Заголовок', message: 'Сообщение' } }],
+      }],
+    };
+    const result = await simulatePreviewClick({ flow, serverConnected: true });
+    expect(result.route).toBe('settings');
+    expect(result.trace.map((entry) => entry.action)).toEqual(['dialog']);
+  });
+
+  it('keeps legacy documents on the legacy path with legacy precedence', async () => {
+    const flow = createDefaultFlow(BASE);
+    flow.rules.push({
+      id: 'graph-shadow',
+      screenId: 'settings',
+      elementId: 'settings-continue',
+      event: 'click',
+      action: { type: 'back' },
+      graph: {
+        nodes: [
+          { id: 't', kind: 'trigger', ruleId: 'graph-shadow', x: 0, y: 0 },
+          { id: 'a', kind: 'action', ruleId: 'graph-shadow', x: 1, y: 0, stepId: 's1' },
+        ],
+        edges: [{ id: 'e1', from: 't', to: 'a', branch: 'default' }],
+      },
+      steps: [{ id: 's1', action: { type: 'toast', message: 'graph must not run' } }],
+    });
+    const result = await simulatePreviewClick({ flow, serverConnected: true });
+    expect(result.route).toBe('library');
+    expect(result.trace.map((entry) => entry.action)).toEqual(['navigate']);
   });
 
   it('runs the same scenarios through the simulation panel', async () => {

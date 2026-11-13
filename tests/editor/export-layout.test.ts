@@ -77,11 +77,13 @@ function styleIdentity(patch: Partial<OverrideIdentity> = {}): OverrideIdentity 
 }
 
 const SETTINGS_FILES = [
+  'design/flows/desktop-default.json',
   'design/generated/android-phone.css',
   'design/generated/android-tv.css',
   'design/generated/desktop-linux.css',
   'design/generated/desktop-macos.css',
   'design/generated/desktop-windows.css',
+  'design/generated/flow.ts',
   'design/generated/layout.ts',
   'design/generated/lg-webos.css',
   'design/themes/default.json',
@@ -103,6 +105,7 @@ const ALL_FILES = [
   'design/generated/desktop-linux.css',
   'design/generated/desktop-macos.css',
   'design/generated/desktop-windows.css',
+  'design/generated/flow.ts',
   'design/generated/layout.ts',
   'design/generated/lg-webos.css',
   'design/themes/default.json',
@@ -143,8 +146,11 @@ describe('scoped layout export', () => {
     expect(plan.targets).toEqual([...DESIGN_TARGETS]);
     expect(plan.files.map((file) => file.path)).toEqual(SETTINGS_FILES);
     const diff = await createExportDiff(root, plan);
-    // The layout and theme carry the page edit; css without style changes stays untouched.
+    // The layout and theme carry the page edit; the flow json and module merge to the same
+    // document that is already exported; css without style changes stays untouched.
     expect(diff.files.map((file) => file.action)).toEqual([
+      'unchanged',
+      'unchanged',
       'unchanged',
       'unchanged',
       'unchanged',
@@ -186,12 +192,14 @@ describe('scoped layout export', () => {
     const plan = createExportPlan(second, { kind: 'component', nodeId: 'card-a' });
     expect(plan.targets).toEqual(['android-phone']);
     expect(plan.files.map((file) => file.path)).toEqual([
+      'design/flows/desktop-default.json',
       'design/generated/android-phone.css',
+      'design/generated/flow.ts',
       'design/generated/layout.ts',
       'design/themes/default.json',
     ]);
     const diff = await createExportDiff(root, plan);
-    expect(diff.files.map((file) => file.action)).toEqual(['unchanged', 'update', 'update']);
+    expect(diff.files.map((file) => file.action)).toEqual(['unchanged', 'unchanged', 'unchanged', 'update', 'update']);
 
     await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
     const shipped = await readProductionLayout(root);
@@ -364,7 +372,9 @@ describe('scoped layout export', () => {
     const theme = JSON.parse(await readFile(join(root, 'design', 'themes', 'default.json'), 'utf8'));
     expect(theme.layout.placements).toEqual([placement('card-a', 'settings', { x: 40 })]);
     expect([...(await readdir(join(root, 'design', 'generated')))].sort()).toEqual(GENERATED_SETTINGS_FILES.map((path) => path.slice('design/generated/'.length)));
-    await expect(readFile(join(root, 'design', 'flows', 'desktop-default.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    // The scoped flow export ships the rules the page owns: the two settings-continue rules.
+    const flow = JSON.parse(await readFile(join(root, 'design', 'flows', 'desktop-default.json'), 'utf8'));
+    expect(flow.rules.map((rule: { id: string }) => rule.id)).toEqual(['settings-continue-connected', 'settings-continue-disconnected']);
   });
 
   it('rejects unknown scopes and ids', async () => {

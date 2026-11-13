@@ -1,7 +1,9 @@
 import { h } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { DesignTarget, DesignFormat, DesignState, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
-import { dispatchInteraction, type InteractionTrace } from '../../../design/interaction.ts';
+import { beginFlowSession, executeFlow, resetFlowSession, type FlowDispatcher } from '../../../design/flow-graph.ts';
+import { createProductionDispatcher } from '../../../design/production-flow.ts';
+import { toInteractionTraces, type InteractionTrace } from '../../../design/interaction.ts';
 import { generateThemeCss } from '../../../design/theme.ts';
 import { DesktopShell } from '../shell/DesktopShell';
 import { isDesktopRouteId, type DesktopRouteId } from '../shell/routes';
@@ -51,23 +53,46 @@ export function DesktopPreview(props: DesktopPreviewProps) {
       props.onSelect(elementId);
       return;
     }
-    const trace = dispatchInteraction(
-      props.flow,
-      { screenId: props.route, elementId, type: 'click' },
-      { target: props.target, screenId: props.route, serverConnected: props.serverConnected },
-      {
-        navigate: (screenId) => {
-          if (isDesktopRouteId(screenId)) navigate(screenId);
-        },
-        back: () => {
-          if (history.current.length > 1) {
-            history.current.pop();
-            props.onNavigate(history.current[history.current.length - 1]);
-          }
-        },
-        toast: setToast,
+    // The preview runs the shared interpreter, exactly like the debugger and production:
+    // legacy rules keep their precedence and graph rules walk their nodes. One click is one
+    // session (begin, execute, reset), so variables never leak between preview clicks, and
+    // the dispatcher is a mock typed adapter: navigation, back and toast drive the preview
+    // state while every unsupported action reports a synchronous outcome instead of calling
+    // a real app API.
+    const dispatcher: FlowDispatcher = createProductionDispatcher({
+      navigate: (screenId) => {
+        if (!isDesktopRouteId(screenId)) return { ok: false, error: `UNKNOWN_ROUTE: ${screenId}` };
+        navigate(screenId);
+        return { ok: true };
       },
-    );
+      back: () => {
+        if (history.current.length > 1) {
+          history.current.pop();
+          props.onNavigate(history.current[history.current.length - 1]);
+        }
+        return { ok: true };
+      },
+      toast: (message) => {
+        setToast(message);
+        return { ok: true };
+      },
+    });
+    beginFlowSession({
+      target: props.target,
+      screenId: props.route,
+      serverConnected: props.serverConnected,
+      networkOnline: true,
+      accountSignedIn: false,
+      playbackState: 'idle',
+      downloadState: 'idle',
+    });
+    let trace: InteractionTrace[];
+    try {
+      const result = executeFlow(props.flow, { type: 'click', screenId: props.route, elementId }, dispatcher);
+      trace = toInteractionTraces(props.flow, result.trace);
+    } finally {
+      resetFlowSession();
+    }
     props.onTrace(trace);
   };
 

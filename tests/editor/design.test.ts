@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getCommittedDesign, rebaseDraft } from '../../editor/design.mjs';
+import { getCommittedDesign, mergeValue, rebaseDraft } from '../../editor/design.mjs';
 import { createDefaultDraft } from '../../editor/shared/draft';
 import type { LayoutClone, LayoutContainer, LayoutPlacement } from '../../design/schema';
 
@@ -32,8 +32,7 @@ async function makeRepo(): Promise<string> {
   return root;
 }
 
-async function writeDesign(root: string, draft: ReturnType<typeof createDefaultDraft>): Promise<void> {
-  const baseCommit = await head(root);
+async function writeDesign(root: string, draft: ReturnType<typeof createDefaultDraft>): Promise<void> {  const baseCommit = await head(root);
   draft.baseCommit = baseCommit;
   draft.theme.baseCommit = baseCommit;
   draft.flow.baseCommit = baseCommit;
@@ -45,6 +44,24 @@ async function writeDesign(root: string, draft: ReturnType<typeof createDefaultD
   await mkdir(join(root, 'design/flows'), { recursive: true });
   await writeFile(join(root, 'design/themes/default.json'), JSON.stringify(draft.theme), 'utf8');
   await writeFile(join(root, 'design/flows/desktop-default.json'), JSON.stringify(draft.flow), 'utf8');
+}
+
+function graphDemoRule() {
+  return {
+    id: 'graph-demo',
+    screenId: 'library',
+    elementId: 'demo-button',
+    event: 'click' as const,
+    action: { type: 'toast' as const, message: 'Base' },
+    steps: [{ id: 's-done', action: { type: 'toast' as const, message: 'Done' } }],
+    graph: {
+      nodes: [
+        { id: 't-main', kind: 'trigger' as const, x: 0, y: 0 },
+        { id: 'a-done', kind: 'action' as const, stepId: 's-done', x: 240, y: 0 },
+      ],
+      edges: [{ id: 'e-start', from: 't-main', to: 'a-done', branch: 'default' as const }],
+    },
+  };
 }
 
 afterEach(async () => {
@@ -332,8 +349,136 @@ describe('committed editor designs', () => {
     expect(result.draft.flow.rules[1].action).toEqual({ type: 'toast', message: 'Local edit' });
   });
 
-  it('stops instead of inventing a base when its commit is unavailable', async () => {
+  it('rebase merges independent flow graph node, edge and variable additions by id', async () => {
     const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.flow.rules.push(graphDemoRule());
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+
+    // Local adds its own condition node with steps and edges plus a variable.
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules.push(graphDemoRule());
+    const localRule = local.flow.rules[local.flow.rules.length - 1];
+    localRule.steps!.push({ id: 's-local', condition: { kind: 'eq', path: 'server.connected', value: true } });
+    localRule.graph!.nodes.push({ id: 'c-local', kind: 'condition', stepId: 's-local', x: 120, y: 0 });
+    localRule.graph!.edges.push(
+      { id: 'e-tlocal', from: 't-main', to: 'c-local', branch: 'default' },
+      { id: 'e-localdone', from: 'c-local', to: 'a-done', branch: 'true' },
+    );
+    local.flow.variables = [{ id: 'v-local', name: 'Local flag', type: 'boolean', initial: false }];
+
+    // Incoming independently adds another condition node with steps and edges plus a variable.
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules.push(graphDemoRule());
+    const incomingRule = incoming.flow.rules[incoming.flow.rules.length - 1];
+    incomingRule.steps!.push({ id: 's-incoming', condition: { kind: 'eq', path: 'network.online', value: true } });
+    incomingRule.graph!.nodes.push({ id: 'c-incoming', kind: 'condition', stepId: 's-incoming', x: 120, y: 120 });
+    incomingRule.graph!.edges.push(
+      { id: 'e-tincoming', from: 't-main', to: 'c-incoming', branch: 'default' },
+      { id: 'e-incomingdone', from: 'c-incoming', to: 'a-done', branch: 'true' },
+    );
+    incoming.flow.variables = [{ id: 'v-incoming', name: 'Incoming flag', type: 'boolean', initial: true }];
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    const result = await rebaseDraft({ root, draft: local });
+    const rule = result.draft.flow.rules.find((entry) => entry.id === 'graph-demo')!;
+    expect(rule.graph!.nodes.map((entry) => entry.id).sort()).toEqual(['a-done', 'c-incoming', 'c-local', 't-main']);
+    expect(rule.graph!.edges.map((entry) => entry.id).sort()).toEqual(['e-incomingdone', 'e-localdone', 'e-start', 'e-tincoming', 'e-tlocal']);
+    expect(rule.steps!.map((entry) => entry.id).sort()).toEqual(['s-done', 's-incoming', 's-local']);
+    expect((result.draft.flow.variables ?? []).map((entry) => entry.id).sort()).toEqual(['v-incoming', 'v-local']);
+  });
+
+  it('rebase rejects competing edits of the same flow graph node', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.flow.rules.push(graphDemoRule());
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules.push(graphDemoRule());
+    local.flow.rules[local.flow.rules.length - 1].graph!.nodes.find((entry) => entry.id === 'a-done')!.x = 480;
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules.push(graphDemoRule());
+    incoming.flow.rules[incoming.flow.rules.length - 1].graph!.nodes.find((entry) => entry.id === 'a-done')!.x = 960;
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'flow.rules[graph-demo].graph.nodes[a-done].x' }],
+    });
+  });
+
+  it('rebase rejects competing edits of the same flow graph edge', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.flow.rules.push(graphDemoRule());
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.rules.push(graphDemoRule());
+    local.flow.rules[local.flow.rules.length - 1].graph!.edges.find((entry) => entry.id === 'e-start')!.branch = 'error';
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.rules.push(graphDemoRule());
+    incoming.flow.rules[incoming.flow.rules.length - 1].graph!.edges.find((entry) => entry.id === 'e-start')!.branch = 'true';
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'flow.rules[graph-demo].graph.edges[e-start].branch' }],
+    });
+  });
+
+  it('rebase rejects competing edits of the same flow variable', async () => {
+    const root = await makeRepo();
+    const initial = createDefaultDraft('draft-1', await head(root));
+    initial.flow.rules.push(graphDemoRule());
+    initial.flow.variables = [{ id: 'v-count', name: 'Count', type: 'number', initial: 1 }];
+    await writeDesign(root, initial);
+    const base = await commit(root, 'base design');
+
+    const local = createDefaultDraft('draft-1', base);
+    local.flow.variables = [{ id: 'v-count', name: 'Count', type: 'number', initial: 2 }];
+
+    const incoming = createDefaultDraft('draft-1', base);
+    incoming.flow.variables = [{ id: 'v-count', name: 'Count', type: 'number', initial: 3 }];
+    await writeDesign(root, incoming);
+    await commit(root, 'incoming design');
+
+    await expect(rebaseDraft({ root, draft: local })).rejects.toMatchObject({
+      code: 'REBASE_CONFLICT',
+      issues: [{ path: 'flow.variables[v-count].initial' }],
+    });
+  });
+
+  it('rejects a non-array value on a keyed merge collection instead of normalizing it', () => {
+    const issues: Array<{ path: string }> = [];
+    const localVariable = { id: 'v-local', name: 'Local', type: 'boolean' as const, initial: false };
+    // A defined non-array value cannot come from a parsed document; merging it as an empty
+    // collection would silently drop one side of the rebase.
+    const merged = mergeValue([], [localVariable], { unexpected: true }, 'flow.variables', issues);
+    expect(issues).toEqual([{ path: 'flow.variables' }]);
+    expect(merged).toEqual([localVariable]);
+  });
+
+  it('keeps whole-collection deletion semantics on keyed merge paths', () => {
+    const variable = { id: 'v-local', name: 'Local', type: 'boolean' as const, initial: false };
+    // Deletion on one side and no change on the other: deletion wins without a conflict.
+    expect(mergeValue([variable], undefined, [variable], 'flow.variables', [])).toBeUndefined();
+    // Deletion on one side and an edit on the other: competing change, rejected.
+    const issues: Array<{ path: string }> = [];
+    mergeValue([variable], undefined, [{ ...variable, initial: true }], 'flow.variables', issues);
+    expect(issues).toEqual([{ path: 'flow.variables[v-local]' }]);
+  });
+
+  it('stops instead of inventing a base when its commit is unavailable', async () => {    const root = await makeRepo();
     const draft = createDefaultDraft('draft-1', '0000000000000000000000000000000000000000');
     const before = JSON.stringify(draft);
     await expect(rebaseDraft({ root, draft })).rejects.toMatchObject({ code: 'BASE_HISTORY_UNAVAILABLE' });
