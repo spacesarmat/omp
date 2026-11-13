@@ -104,6 +104,33 @@ describe('tv flow dispatcher', () => {
     expect(dispatcher.dialog('T', 'M')).toEqual({ ok: true });
   });
 
+  it('maps the editor search route to the TV search screen for navigate and openScreen', () => {
+    const dispatcher = createTvFlowDispatcher();
+    expect(dispatcher.navigate('search')).toEqual({ ok: true });
+    expect(tvRoute.value.name).toBe('add');
+    expect(dispatcher.openScreen('search')).toEqual({ ok: true });
+    expect(tvRoute.value.name).toBe('add');
+  });
+
+  it('opens editor screens that exist on the TV by their own name', () => {
+    const dispatcher = createTvFlowDispatcher();
+    for (const screenId of ['connect', 'library', 'settings']) {
+      expect(dispatcher.navigate(screenId)).toEqual({ ok: true });
+      expect(tvRoute.value.name).toBe(screenId);
+    }
+  });
+
+  it('rejects an unsupported destination instead of pushing it into the TV stack', () => {
+    const dispatcher = createTvFlowDispatcher();
+    tvStack.value = [{ name: 'library' }];
+    // «Новое» and «Управление» exist in the editor but have no TV screen; the player route
+    // needs queue data the flow action does not carry.
+    expect(dispatcher.navigate('news')).toMatchObject({ ok: false, error: expect.stringContaining('news') });
+    expect(dispatcher.openScreen('player')).toMatchObject({ ok: false, error: expect.stringContaining('player') });
+    expect(dispatcher.navigate('no-such-route')).toMatchObject({ ok: false, error: expect.stringContaining('no-such-route') });
+    expect(tvRoute.value.name).toBe('library');
+  });
+
   it('connects the active server through the existing connect helper', async () => {
     const dispatcher = createTvFlowDispatcher();
     expect(dispatcher.serverConnect()).toMatchObject({ ok: false, error: expect.stringContaining('no active server') });

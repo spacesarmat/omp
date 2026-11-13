@@ -38,6 +38,25 @@ function reportSearchCount(handle: SearchHandle): void {
 // Production flow actions on top of the existing TV shell APIs. The interpreter stays
 // synchronous: async app APIs (server connect, search) fire through their existing helpers
 // and report failures the way the TV's own screens do, never through the flow error branches.
+// The editor names screens after the desktop shell; the TV opens them through its own
+// Route table. Everything outside this map needs route data the flow action does not carry
+// (a torrent hash, a player queue), so it reports a documented error instead of pushing a
+// made-up route.
+const TV_FLOW_SCREENS: Record<string, Route> = {
+  connect: { name: 'connect' },
+  library: { name: 'library' },
+  settings: { name: 'settings' },
+  search: { name: 'add' },
+};
+
+function tvScreenRoute(action: string, screenId: string): { route: Route } | { error: FlowDispatchOutcome } {
+  const route = TV_FLOW_SCREENS[screenId];
+  if (!route) {
+    return { error: unavailableProductionAction(action, 'tv', `unsupported destination ${screenId}`) };
+  }
+  return { route };
+}
+
 export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): FlowDispatcher {
   const context = () => options.sourceContext?.() ?? tvSourceContext();
   const serverAction = (action: string): FlowDispatchOutcome => {
@@ -86,11 +105,15 @@ export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): F
   });
   return createProductionDispatcher({
     navigate: (screenId) => {
-      navigate({ name: screenId } as Route);
+      const target = tvScreenRoute('navigate', screenId);
+      if ('error' in target) return target.error;
+      navigate(target.route);
       return { ok: true };
     },
     openScreen: (screenId) => {
-      navigate({ name: screenId } as Route);
+      const target = tvScreenRoute('openScreen', screenId);
+      if ('error' in target) return target.error;
+      navigate(target.route);
       return { ok: true };
     },
     back: () => ({ ok: goBack() }),
