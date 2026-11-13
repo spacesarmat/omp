@@ -164,6 +164,18 @@ describe('tv flow dispatcher', () => {
     expect(tvRoute.value.name).toBe('library');
   });
 
+  it('passes a fresh route object for every navigation to the same editor screen', () => {
+    const dispatcher = createTvFlowDispatcher();
+    dispatcher.navigate('library');
+    dispatcher.openScreen('library');
+    const entries = tvStack.value.slice(-2);
+    expect(entries[0]).not.toBe(entries[1]);
+    expect(entries[0]).toEqual(entries[1]);
+    // The TV keys rendered screens by route object identity (routeKey), so two pushes of
+    // one screen must not share a single object.
+    expect(routeKey(entries[0])).not.toBe(routeKey(entries[1]));
+  });
+
   it('replaces the queue from the active torrent screen', () => {
     const dispatcher = createTvFlowDispatcher();
     expect(dispatcher.queueReplace()).toMatchObject({ ok: false, error: expect.stringContaining('torrent screen') });
@@ -284,6 +296,52 @@ describe('phone flow dispatcher', () => {
     expect(watch.hash).toBe('abc');
     expect(watch.file.id).toBe(1);
     expect(watch.title).toBe('E01.mkv');
+  });
+
+  it('passes a fresh route object for every navigation to the same editor screen', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    dispatcher.navigate('library');
+    dispatcher.openScreen('library');
+    let entries = phoneStack.value.slice(-2);
+    expect(entries[0]).not.toBe(entries[1]);
+    expect(entries[0]).toEqual(entries[1]);
+    dispatcher.navigate('search');
+    dispatcher.navigate('search');
+    entries = phoneStack.value.slice(-2);
+    expect(entries[0]).not.toBe(entries[1]);
+    expect(entries.map((route) => route.name)).toEqual(['add', 'add']);
+  });
+
+  it('restores the covered scroll of each entry when one screen is pushed twice', async () => {
+    const element = document.documentElement;
+    const originalHeight = Object.getOwnPropertyDescriptor(element, 'scrollHeight');
+    Object.defineProperty(element, 'scrollHeight', { value: 10000, configurable: true });
+    try {
+      const settle = async () => {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      };
+      const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+      element.scrollTop = 100;
+      dispatcher.navigate('library');
+      await settle();
+      element.scrollTop = 200;
+      dispatcher.navigate('library');
+      await settle();
+      expect(phoneStack.value).toHaveLength(3);
+      dispatcher.back();
+      await settle();
+      // The first library entry keeps its own covered scroll - the second push must not
+      // merge the two visits into one shared route object.
+      expect(element.scrollTop).toBe(200);
+      dispatcher.back();
+      await settle();
+      expect(element.scrollTop).toBe(100);
+    } finally {
+      if (originalHeight) Object.defineProperty(element, 'scrollHeight', originalHeight);
+      else Reflect.deleteProperty(element, 'scrollHeight');
+      element.scrollTop = 0;
+    }
   });
 
   it('retries the search query and rotates to the next enabled source', () => {

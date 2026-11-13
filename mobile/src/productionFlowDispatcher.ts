@@ -58,7 +58,9 @@ function phoneScreenRoute(action: string, screenId: string): { route: MRoute } |
   if (!route) {
     return { error: unavailableProductionAction(action, 'phone', `unsupported destination ${screenId}`) };
   }
-  return { route };
+  // nav.ts keys the covered scroll by route object identity, so every pushed stack entry
+  // needs its own object even for repeated visits to one screen.
+  return { route: { ...route } };
 }
 
 // Production flow actions on top of the existing phone app APIs. The interpreter stays

@@ -54,7 +54,9 @@ function tvScreenRoute(action: string, screenId: string): { route: Route } | { e
   if (!route) {
     return { error: unavailableProductionAction(action, 'tv', `unsupported destination ${screenId}`) };
   }
-  return { route };
+  // The TV keys rendered screens by route object identity (routeKey), so every pushed stack
+  // entry needs its own object even for repeated visits to one screen.
+  return { route: { ...route } };
 }
 
 export function createTvFlowDispatcher(options: TvFlowDispatcherOptions = {}): FlowDispatcher {
