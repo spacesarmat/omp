@@ -145,6 +145,12 @@ describe('FlowMap and simulation', () => {
     expect(connected.trace).toHaveLength(1);
   });
 
+  it('restores the matched legacy rule condition in the simulation trace', async () => {
+    const result = await simulatePreviewClick({ flow: createDefaultFlow(BASE), serverConnected: true });
+    expect(result.trace[0].ruleId).toBe('settings-continue-connected');
+    expect(result.trace[0].condition).toEqual({ kind: 'eq', path: 'server.connected', value: true });
+  });
+
   it('simulates the selected target instead of always using Windows', async () => {
     const flow = createDefaultFlow(BASE);
     for (const rule of flow.rules) {

@@ -67,7 +67,7 @@ export interface ExecutionTraceEntry {
   kind?: FlowNodeKind;
   branch?: FlowEdgeBranch;
   condition?: boolean;
-  action?: string;
+  action?: InteractionAction['type'];
   target?: string;
   message?: string;
   error?: string;

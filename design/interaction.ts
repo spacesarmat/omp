@@ -1,4 +1,4 @@
-import type { DesignTarget, FlowDocument, InteractionCondition, InteractionRule } from './schema.ts';
+import type { DesignTarget, FlowDocument, InteractionAction, InteractionCondition, InteractionRule } from './schema.ts';
 import type { ExecutionTraceEntry } from './flow-graph.ts';
 
 export interface InteractionContext {
@@ -22,7 +22,7 @@ export interface InteractionDispatcher {
 export interface InteractionTrace {
   ruleId: string;
   event: 'click';
-  action: 'navigate' | 'back' | 'toast';
+  action: InteractionAction['type'];
   target?: string;
   message?: string;
   condition?: InteractionCondition;
@@ -45,14 +45,20 @@ export function compareCondition(kind: string, actual: unknown, value: unknown):
 
 // Previews keep reporting the legacy trace shape while executing through the shared
 // interpreter: every executed action or result step becomes one trace entry, conditions
-// and step bookkeeping stay out of the public preview trace.
-export function toInteractionTraces(trace: ReadonlyArray<ExecutionTraceEntry>): InteractionTrace[] {
+// and step bookkeeping stay out of the public preview trace. The matched legacy rule
+// condition is restored by rule id, exactly what the legacy dispatcher used to attach;
+// graph rules never contribute one - their step conditions are evaluation bookkeeping.
+export function toInteractionTraces(flow: FlowDocument, trace: ReadonlyArray<ExecutionTraceEntry>): InteractionTrace[] {
   const result: InteractionTrace[] = [];
   for (const entry of trace) {
     if ((entry.kind !== 'action' && entry.kind !== 'result') || !entry.action) continue;
-    const item: InteractionTrace = { ruleId: entry.ruleId, event: 'click', action: entry.action as InteractionTrace['action'] };
+    const item: InteractionTrace = { ruleId: entry.ruleId, event: 'click', action: entry.action };
     if (entry.target !== undefined) item.target = entry.target;
     if (entry.message !== undefined) item.message = entry.message;
+    const rule = flow.rules.find((candidate) => candidate.id === entry.ruleId);
+    if (rule && !rule.graph && !(rule.steps && rule.steps.length) && rule.condition) {
+      item.condition = rule.condition;
+    }
     result.push(item);
   }
   return result;

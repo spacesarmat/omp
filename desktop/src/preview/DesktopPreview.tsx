@@ -89,7 +89,7 @@ export function DesktopPreview(props: DesktopPreviewProps) {
     let trace: InteractionTrace[];
     try {
       const result = executeFlow(props.flow, { type: 'click', screenId: props.route, elementId }, dispatcher);
-      trace = toInteractionTraces(result.trace);
+      trace = toInteractionTraces(props.flow, result.trace);
     } finally {
       resetFlowSession();
     }

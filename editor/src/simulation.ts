@@ -61,5 +61,5 @@ export async function simulatePreviewClick(harness: PreviewHarness): Promise<Sim
   } finally {
     resetFlowSession();
   }
-  return { route, trace: toInteractionTraces(result.trace), realNetworkCalls: 0, toast };
+  return { route, trace: toInteractionTraces(harness.flow, result.trace), realNetworkCalls: 0, toast };
 }
