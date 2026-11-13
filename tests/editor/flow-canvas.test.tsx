@@ -352,6 +352,22 @@ describe('flow canvas', () => {
     expect(nodes[1]).toMatchObject({ x: 348, y: 304 });
   });
 
+  it('adds nodes at the viewport center even when the viewport is offset on the page', () => {
+    mountCanvas();
+    const viewport = host.querySelector<HTMLElement>('[data-testid="flow-canvas-grid"]')!;
+    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+      x: 200, y: 100, left: 200, top: 100, right: 1000, bottom: 700, width: 800, height: 600, toJSON: () => ({}),
+    } as DOMRect);
+    click('[data-action="add-action"]');
+    expect(graphOf().nodes[0]).toMatchObject({ x: 312, y: 268 });
+    click('[data-action="zoom-in"]');
+    click('[data-action="add-action"]');
+    const second = graphOf().nodes[1];
+    // addFlowNode rounds node positions to whole pixels.
+    expect(second.x).toBe(Math.round(400 / 1.2 - 88 + 36));
+    expect(second.y).toBe(Math.round(300 / 1.2 - 32 + 36));
+  });
+
   it('scopes new nodes and links to the graph rule chosen in the rule selector', () => {
     mountCanvas();
     act(() => {
@@ -535,5 +551,133 @@ describe('flow node inspector', () => {
     expect(onSelectNode).toHaveBeenCalledTimes(1);
     click('[data-action="open-simulation"]');
     expect(onOpenSimulation).toHaveBeenCalledTimes(1);
+  });
+
+  describe('typed condition and action editors', () => {
+    const selectField = (testId: string, value: string) => {
+      const input = host.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`)!;
+      act(() => {
+        input.value = value;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+
+    const typeField = (testId: string, value: string) => {
+      const input = host.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)!;
+      act(() => {
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+
+    const mountConditionInspector = (variables: { id: string; name: string; type: string; initial: string | number | boolean; values?: string[] }[]) => {
+      mountCanvas();
+      act(() => {
+        controller.update((current) => {
+          current.flow.variables = variables as never;
+        });
+      });
+      click('[data-action="add-condition"]');
+      const nodeId = graphOf().nodes[0].id;
+      const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
+      mountInspector(nodeId, rule.id);
+      return () => controller.draft.flow.rules.find((entry) => entry.graph)!.steps![0];
+    };
+
+    it('creates a valid dialog and edits its title and message', () => {
+      mountCanvas();
+      click('[data-action="add-action"]');
+      const nodeId = graphOf().nodes[0].id;
+      const rule = controller.draft.flow.rules.find((entry) => entry.graph)!;
+      mountInspector(nodeId, rule.id);
+      selectField('inspector-action-type', 'dialog');
+      let step = controller.draft.flow.rules.find((entry) => entry.graph)!.steps![0];
+      expect(step.action).toMatchObject({ type: 'dialog' });
+      expect((step.action as { title: string }).title.length).toBeGreaterThan(0);
+      expect((step.action as { message: string }).message.length).toBeGreaterThan(0);
+      typeField('inspector-action-title', 'Нет сети');
+      typeField('inspector-action-message', 'Проверьте подключение');
+      step = controller.draft.flow.rules.find((entry) => entry.graph)!.steps![0];
+      expect(step.action).toMatchObject({ type: 'dialog', title: 'Нет сети', message: 'Проверьте подключение' });
+    });
+
+    it('edits a string variable condition as a text field', () => {
+      const stepOf = mountConditionInspector([{ id: 'route-var', name: 'Route', type: 'string', initial: '' }]);
+      selectField('inspector-condition-path', 'variable.route-var');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.route-var', value: '' });
+      const input = host.querySelector('[data-testid="inspector-condition-value"]')!;
+      expect(input instanceof HTMLInputElement).toBe(true);
+      typeField('inspector-condition-value', 'library');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.route-var', value: 'library' });
+    });
+
+    it('edits a boolean variable condition with a true/false select', () => {
+      const stepOf = mountConditionInspector([{ id: 'flag', name: 'Flag', type: 'boolean', initial: true }]);
+      selectField('inspector-condition-path', 'variable.flag');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.flag', value: true });
+      const input = host.querySelector('[data-testid="inspector-condition-value"]')!;
+      expect(input instanceof HTMLSelectElement).toBe(true);
+      selectField('inspector-condition-value', 'false');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.flag', value: false });
+    });
+
+    it('edits a number variable with decimal input and numeric operators', () => {
+      const stepOf = mountConditionInspector([{ id: 'count', name: 'Count', type: 'number', initial: 7 }]);
+      selectField('inspector-condition-path', 'variable.count');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.count', value: 7 });
+      const input = host.querySelector<HTMLInputElement>('[data-testid="inspector-condition-value"]')!;
+      expect(input.inputMode).toBe('decimal');
+      selectField('inspector-condition-op', 'gt');
+      expect(stepOf().condition).toEqual({ kind: 'gt', path: 'variable.count', value: 7 });
+      typeField('inspector-condition-value', '12');
+      expect(stepOf().condition).toEqual({ kind: 'gt', path: 'variable.count', value: 12 });
+      typeField('inspector-condition-value', 'abc');
+      expect(host.querySelector('[data-testid="inspector-error"]')!.textContent).toContain('NUMBER_REQUIRED');
+      expect(stepOf().condition).toEqual({ kind: 'gt', path: 'variable.count', value: 12 });
+    });
+
+    it('edits an enum variable with a select of its declared values', () => {
+      const stepOf = mountConditionInspector([{ id: 'mode', name: 'Mode', type: 'enum', initial: 'a', values: ['a', 'b'] }]);
+      selectField('inspector-condition-path', 'variable.mode');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.mode', value: 'a' });
+      const input = host.querySelector<HTMLSelectElement>('[data-testid="inspector-condition-value"]')!;
+      expect([...input.options].map((option) => option.value)).toEqual(['a', 'b']);
+      selectField('inspector-condition-value', 'b');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.mode', value: 'b' });
+    });
+
+    it('keeps the variable path through exists and back to a comparing operator', () => {
+      const stepOf = mountConditionInspector([{ id: 'route-var', name: 'Route', type: 'string', initial: '' }]);
+      selectField('inspector-condition-path', 'variable.route-var');
+      selectField('inspector-condition-op', 'exists');
+      expect(stepOf().condition).toEqual({ kind: 'exists', path: 'variable.route-var' });
+      expect(host.querySelector<HTMLSelectElement>('[data-testid="inspector-condition-path"]')!.value).toBe('variable.route-var');
+      selectField('inspector-condition-op', 'eq');
+      expect(stepOf().condition).toEqual({ kind: 'eq', path: 'variable.route-var', value: '' });
+    });
+
+    it('shows the restore-position string check as a text field without corrupting it', () => {
+      mountCanvas();
+      act(() => {
+        controller.update((current) => {
+          const instance = instantiateFlowTemplate('restore-position', {
+            id: current.flow.id,
+            baseCommit: current.flow.baseCommit,
+            screenId: 'settings',
+          });
+          current.flow.rules.push(...instance.rules);
+          current.flow.variables = [...(current.flow.variables ?? []), ...(instance.variables ?? [])];
+        });
+      });
+      const rule = controller.draft.flow.rules.find((entry) => entry.graph && entry.steps?.some((step) => step.condition?.kind === 'neq'))!;
+      const step = rule.steps!.find((entry) => entry.condition?.kind === 'neq')!;
+      const node = rule.graph!.nodes.find((entry) => entry.stepId === step.id)!;
+      mountInspector(node.id, rule.id);
+      const input = host.querySelector('[data-testid="inspector-condition-value"]')!;
+      expect(input instanceof HTMLInputElement).toBe(true);
+      expect((input as HTMLInputElement).value).toBe('');
+      const flat = step.condition as { path: string };
+      expect(host.querySelector<HTMLSelectElement>('[data-testid="inspector-condition-path"]')!.value).toBe(flat.path);
+    });
   });
 });

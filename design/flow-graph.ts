@@ -235,8 +235,10 @@ function runAction(
   }
 }
 
-// Terminal actions end the branch after they run; toast, dialog and telegram.open are
-// fire-and-forget and let the walk continue along the default edge.
+// Terminal actions end the branch after they run; toast, dialog, telegram.open and queue.add
+// are fire-and-forget and let the walk continue along the default edge. queue.add appends
+// to the open queue without touching the route, so a chain like «append, then next episode»
+// stays one branch.
 export const TERMINAL_ACTIONS = new Set([
   'navigate',
   'back',
@@ -244,7 +246,6 @@ export const TERMINAL_ACTIONS = new Set([
   'playback.playPause',
   'playback.stop',
   'playback.nextEpisode',
-  'queue.add',
   'queue.replace',
   'server.connect',
   'server.reconnect',

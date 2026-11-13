@@ -508,13 +508,13 @@ describe('createFlowExportPlan', () => {
     const plan = createFlowExportPlan(scoped, { kind: 'page', screenId: 'library' });
     expect(plan.flow.rules.map((entry) => entry.id)).toEqual(['r-library']);
     expect(plan.flow.variables?.map((entry) => entry.id)).toEqual(['last-play']);
-    expect(plan.files.map((file) => file.path)).toEqual(['design/flows/desktop-default.json']);
+    expect(plan.files.map((file) => file.path)).toEqual(['design/flows/desktop-default.json', 'design/generated/flow.ts']);
   });
 
   it('scopes a component export to the rules bound to that element', () => {
     const plan = createFlowExportPlan(draft(), { kind: 'component', nodeId: 'settings-continue' });
     expect(plan.flow.rules.map((entry) => entry.id)).toEqual(['r-settings']);
-    expect(plan.files.map((file) => file.path)).toEqual(['design/flows/desktop-default.json']);
+    expect(plan.files.map((file) => file.path)).toEqual(['design/flows/desktop-default.json', 'design/generated/flow.ts']);
   });
 
   it('rejects an unknown scope shape', () => {

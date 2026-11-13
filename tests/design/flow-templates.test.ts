@@ -103,6 +103,15 @@ describe('instantiateFlowTemplate', () => {
     expect(positionSet?.action).toMatchObject({ value: 120 });
     expectValid(flow);
   });
+
+  it('restore-position is documented as a configurable example, not a live restore', () => {
+    const template = FLOW_TEMPLATES.find((entry) => entry.id === 'restore-position')!;
+    expect(template.title).toContain('пример');
+    expect(template.description).toContain('typed adapters');
+    expect(template.description).toContain('вручную');
+    const definition = instantiateFlowTemplate('restore-position', createContext());
+    expectValid(definition);
+  });
 });
 
 describe('template runtime behavior', () => {
@@ -125,6 +134,31 @@ describe('template runtime behavior', () => {
       const result = executeFlow(flow, { type: 'click', screenId: 'remote', elementId: 'source-fallback' }, dispatcher({ fail: ['sourceNext'] }));
       expect(result.matched).toBe('graph');
       expect(result.toast).toBe('Не удалось открыть другой источник');
+    } finally {
+      resetFlowSession();
+    }
+  });
+
+  it('episode-queue appends the episode and then advances to the next one', () => {
+    const flow = instantiateFlowTemplate('episode-queue', createContext());
+    const calls: string[] = [];
+    const recording = {
+      ...dispatcher(),
+      queueAdd: () => {
+        calls.push('queue.add');
+        return { ok: true as const };
+      },
+      playbackNextEpisode: () => {
+        calls.push('playback.nextEpisode');
+        return { ok: true as const };
+      },
+    };
+    beginFlowSession({ target: 'desktop-windows', screenId: 'library', serverConnected: true, networkOnline: true, accountSignedIn: false, playbackState: 'idle', downloadState: 'idle' });
+    try {
+      const result = executeFlow(flow, { type: 'click', screenId: 'library', elementId: 'episode-item' }, recording);
+      expect(result.matched).toBe('graph');
+      expect(result.status).toBe('completed');
+      expect(calls).toEqual(['queue.add', 'playback.nextEpisode']);
     } finally {
       resetFlowSession();
     }

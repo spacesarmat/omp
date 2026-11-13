@@ -11,6 +11,7 @@ import { validateFlow, validateFlowGraph } from '../design/flow-validation.ts';
 import { generateLayoutModule } from '../design/generate.ts';
 import { parseFlowDocument, parseThemeDocument } from '../design/validation.ts';
 import { createFlowExportPlan, diffFlowDocuments, flowRuleInScope } from '../design/production-flow.ts';
+import { FLOW_MODULE_OUTPUT, generateFlowModule } from '../design/flow-module.ts';
 import { parseEditorDraft } from './shared/draft.ts';
 import { DESIGN_TARGETS, DESIGN_FORMATS, DESIGN_STATES } from '../design/schema.ts';
 import { DESKTOP_ROUTES } from '../desktop/src/shell/routes.ts';
@@ -329,7 +330,7 @@ export function createExportPlan(input, scopeInput) {
 // other screens survive, a scoped rule the draft edited ships with its new trigger, and a
 // scoped rule the draft dropped exports the deletion. Variables are global state: a scoped
 // export may add or update the variables its rules reference, but never deletes base ones.
-async function mergedFlowContents(root, plan) {
+async function mergedFlowDocument(root, plan) {
   const flowFile = plan.files.find((file) => file.path.startsWith('design/flows/'));
   let baseFlow = null;
   try {
@@ -379,7 +380,7 @@ async function mergedFlowContents(root, plan) {
     ...validateFlowGraph(mergedFlow, routes),
   ];
   if (flowIssues.length) throw new ExportError('INVALID_FLOW', 422, flowIssues);
-  return json(mergedFlow);
+  return mergedFlow;
 }
 
 async function exportContents(root, plan) {
@@ -474,7 +475,12 @@ async function exportContents(root, plan) {
     contents.set(file.path, generateThemeCss(mergedTheme, target));
   }
   if (plan.files.some((file) => file.path.startsWith('design/flows/'))) {
-    contents.set(flowFilePathOf(plan), await mergedFlowContents(root, plan));
+    // The merged document drives both the flow json and the production module: the module
+    // is generated from the full merge (foreign rules included), so the runtime, the
+    // generator check and the exported json never drift apart after a scoped export.
+    const mergedFlow = await mergedFlowDocument(root, plan);
+    contents.set(flowFilePathOf(plan), json(mergedFlow));
+    contents.set(FLOW_MODULE_OUTPUT, generateFlowModule(mergedFlow));
   }
   return contents;
 }

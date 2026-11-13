@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createExportDiff, createExportPlan, exportDraft } from '../../editor/export.mjs';
+import { checkGeneratedThemes } from '../../design/generate';
 import { startEditorServer, type RunningEditorServer } from '../../editor/server.mjs';
 import { createEditorClient } from '../../editor/src/client';
 import { createDefaultDraft } from '../../editor/shared/draft';
@@ -73,7 +74,7 @@ describe('design flow export', () => {
     await expect(exportDraft({ root, draft })).rejects.toMatchObject({ code: 'INVALID_FLOW' });
   });
 
-  it('merges a page-scoped export by rule id and never touches the production module', async () => {
+  it('merges a page-scoped export by rule id and rewrites the production module from the merged document', async () => {
     const { root, head } = await makeRepo();
     const draft = createDefaultDraft('draft-1', head);
     draft.flow.rules = [
@@ -81,7 +82,6 @@ describe('design flow export', () => {
       rule({ id: 'set-save', screenId: 'settings', elementId: 'settings-save', action: { type: 'navigate', screenId: 'library' } }),
     ];
     await exportDraft({ root, draft });
-    const moduleBefore = await readFile(join(root, 'design', 'generated', 'flow.ts'), 'utf8');
 
     draft.flow.rules = [
       rule({ id: 'lib-play', screenId: 'library', elementId: 'card-play', action: { type: 'navigate', screenId: 'news' } }),
@@ -89,8 +89,7 @@ describe('design flow export', () => {
     ];
     const result = await exportDraft({ root, draft, scope: { kind: 'page', screenId: 'library' } });
     expect(result.files).toContain('design/flows/desktop-default.json');
-    expect(result.files).not.toContain('design/generated/flow.ts');
-    expect(await readFile(join(root, 'design', 'generated', 'flow.ts'), 'utf8')).toBe(moduleBefore);
+    expect(result.files).toContain('design/generated/flow.ts');
 
     const merged = JSON.parse(await readFile(join(root, 'design', 'flows', 'desktop-default.json'), 'utf8'));
     expect(merged.rules.map((entry: InteractionRule) => entry.id).sort()).toEqual(['lib-new', 'lib-play', 'set-save']);
@@ -98,6 +97,13 @@ describe('design flow export', () => {
     expect(edited.action).toEqual({ type: 'navigate', screenId: 'news' });
     const foreign = merged.rules.find((entry: InteractionRule) => entry.id === 'set-save');
     expect(foreign.action).toEqual({ type: 'navigate', screenId: 'library' });
+
+    // The production module is regenerated from the same merged document: foreign screens
+    // survive in it and the scoped edit is applied, so the generator check and the runtime
+    // stay in sync with the json.
+    const module = await readFile(join(root, 'design', 'generated', 'flow.ts'), 'utf8');
+    for (const id of ['lib-play', 'lib-new', 'set-save']) expect(module).toContain(`"${id}"`);
+    expect(module).toContain('"screenId": "news"');
   });
 
   it('exports the deletion of a scoped rule dropped from the draft', async () => {
@@ -111,6 +117,57 @@ describe('design flow export', () => {
     await exportDraft({ root, draft, scope: { kind: 'page', screenId: 'library' } });
     const merged = JSON.parse(await readFile(join(root, 'design', 'flows', 'desktop-default.json'), 'utf8'));
     expect(merged.rules).toEqual([]);
+  });
+
+  it('keeps the generated module in sync through page and component scoped exports', async () => {
+    const { root, head } = await makeRepo();
+    const draft = createDefaultDraft('draft-1', head);
+    draft.flow.rules = [
+      rule({ id: 'set-save', screenId: 'settings', elementId: 'settings-save', action: { type: 'navigate', screenId: 'library' } }),
+      rule({ id: 'lib-play', screenId: 'library', elementId: 'card-play', action: { type: 'navigate', screenId: 'remote' } }),
+    ];
+    await exportDraft({ root, draft });
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+
+    // Page scope: the edited page ships, the foreign settings rule is preserved and the
+    // generator check sees the module rewritten from the merged document.
+    draft.flow.rules = [
+      rule({ id: 'lib-play', screenId: 'library', elementId: 'card-play', action: { type: 'navigate', screenId: 'news' } }),
+    ];
+    const pageResult = await exportDraft({ root, draft, scope: { kind: 'page', screenId: 'library' } });
+    expect(pageResult.files).toContain('design/generated/flow.ts');
+    let module = await readFile(join(root, 'design', 'generated', 'flow.ts'), 'utf8');
+    expect(module).toContain('"set-save"');
+    expect(module).toContain('"screenId": "news"');
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+
+    // Component scope on the other screen: the same guarantee for a component-level merge.
+    draft.flow.rules = [
+      rule({ id: 'set-save', screenId: 'settings', elementId: 'settings-save', action: { type: 'navigate', screenId: 'connect' } }),
+    ];
+    const componentResult = await exportDraft({ root, draft, scope: { kind: 'component', nodeId: 'settings-save' } });
+    expect(componentResult.files).toContain('design/generated/flow.ts');
+    module = await readFile(join(root, 'design', 'generated', 'flow.ts'), 'utf8');
+    expect(module).toContain('"lib-play"');
+    expect(module).toContain('"screenId": "connect"');
+    await expect(checkGeneratedThemes(root)).resolves.toBeUndefined();
+  });
+
+  it('reports the production module update in the scoped export diff', async () => {
+    const { root, head } = await makeRepo();
+    const draft = createDefaultDraft('draft-1', head);
+    draft.flow.rules = [
+      rule({ id: 'lib-play', screenId: 'library', elementId: 'card-play', action: { type: 'navigate', screenId: 'remote' } }),
+    ];
+    await exportDraft({ root, draft });
+    draft.flow.rules = [
+      rule({ id: 'lib-play', screenId: 'library', elementId: 'card-play', action: { type: 'navigate', screenId: 'news' } }),
+    ];
+    const diff = await createExportDiff(root, createExportPlan(draft, { kind: 'page', screenId: 'library' }));
+    const moduleFile = diff.files.find((file) => file.path === 'design/generated/flow.ts');
+    expect(moduleFile?.action).toBe('update');
+    expect(moduleFile?.after).toContain('"screenId": "news"');
+    expect(moduleFile?.before).toContain('"screenId": "remote"');
   });
 
   it('rejects a scoped export whose scoped flow fails validation', async () => {

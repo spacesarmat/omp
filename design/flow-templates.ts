@@ -64,8 +64,8 @@ export const FLOW_TEMPLATES: ReadonlyArray<FlowTemplateMeta> = [
   },
   {
     id: 'restore-position',
-    title: 'Возврат с сохранением позиции',
-    description: 'На уходе со экрана запоминает route, позицию и элемент, на входе возвращает к ним.',
+    title: 'Возврат позиции: пример variables',
+    description: 'Конфигурируемый пример variables и графа: сохраняет вручную заданные route, позицию и элемент в переменные и возвращает к ним на входе. Живой restore в production требует отдельных typed adapters.',
   },
 ];
 

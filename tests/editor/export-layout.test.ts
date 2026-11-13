@@ -83,6 +83,7 @@ const SETTINGS_FILES = [
   'design/generated/desktop-linux.css',
   'design/generated/desktop-macos.css',
   'design/generated/desktop-windows.css',
+  'design/generated/flow.ts',
   'design/generated/layout.ts',
   'design/generated/lg-webos.css',
   'design/themes/default.json',
@@ -145,8 +146,10 @@ describe('scoped layout export', () => {
     expect(plan.targets).toEqual([...DESIGN_TARGETS]);
     expect(plan.files.map((file) => file.path)).toEqual(SETTINGS_FILES);
     const diff = await createExportDiff(root, plan);
-    // The layout and theme carry the page edit; css without style changes stays untouched.
+    // The layout and theme carry the page edit; the flow json and module merge to the same
+    // document that is already exported; css without style changes stays untouched.
     expect(diff.files.map((file) => file.action)).toEqual([
+      'unchanged',
       'unchanged',
       'unchanged',
       'unchanged',
@@ -191,11 +194,12 @@ describe('scoped layout export', () => {
     expect(plan.files.map((file) => file.path)).toEqual([
       'design/flows/desktop-default.json',
       'design/generated/android-phone.css',
+      'design/generated/flow.ts',
       'design/generated/layout.ts',
       'design/themes/default.json',
     ]);
     const diff = await createExportDiff(root, plan);
-    expect(diff.files.map((file) => file.action)).toEqual(['unchanged', 'unchanged', 'update', 'update']);
+    expect(diff.files.map((file) => file.action)).toEqual(['unchanged', 'unchanged', 'unchanged', 'update', 'update']);
 
     await exportDraft({ root, draft: second, scope: { kind: 'component', nodeId: 'card-a' } });
     const shipped = await readProductionLayout(root);

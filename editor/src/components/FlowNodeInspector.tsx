@@ -64,7 +64,7 @@ function defaultAction(type: string, variables: { id: string; initial: string | 
   }
   if (type === 'navigate' || type === 'openScreen') return { type: type as 'navigate', screenId: 'library' };
   if (type === 'toast') return { type: 'toast', message: 'Сообщение' };
-  if (type === 'dialog') return { type: 'dialog', title: '', message: '' };
+  if (type === 'dialog') return { type: 'dialog', title: 'Заголовок', message: 'Сообщение' };
   return { type: type as 'back' };
 }
 
@@ -121,8 +121,30 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
 
   const condition: InteractionCondition = step?.condition ?? defaultCondition();
   const flat = condition.kind === 'all' || condition.kind === 'any' || condition.kind === 'not' || condition.kind === 'exists' ? undefined : condition;
-  const conditionPath = flat?.path ?? 'server.connected';
-  const isBooleanPath = BOOLEAN_PATHS.has(conditionPath) || conditionPath.startsWith('variable.');
+  // exists still owns its path: the path select keeps showing it and switching back to a
+  // comparing operator must not fall back to the default path.
+  const conditionPath = flat?.path ?? (condition.kind === 'exists' ? condition.path : 'server.connected');
+  const conditionVariable = variables.find((variable) => `variable.${variable.id}` === conditionPath);
+  const valueEditor = (path: string, kind: string): 'boolean' | 'number' | 'enum' | 'string' => {
+    const variable = variables.find((variable) => `variable.${variable.id}` === path);
+    if (BOOLEAN_PATHS.has(path) || variable?.type === 'boolean') return 'boolean';
+    if (kind === 'gt' || kind === 'gte' || kind === 'lt' || kind === 'lte' || variable?.type === 'number') return 'number';
+    if (variable?.type === 'enum') return 'enum';
+    return 'string';
+  };
+  const editorKind = valueEditor(conditionPath, flat?.kind ?? 'eq');
+  // The typed default a new condition on this path starts with: boolean paths compare
+  // against true, variables start from their declared initial value, so the saved
+  // condition always matches the path type.
+  const defaultValueFor = (path: string, kind: 'boolean' | 'number' | 'enum' | 'string'): string | number | boolean => {
+    if (kind === 'boolean') return true;
+    const variable = variables.find((variable) => `variable.${variable.id}` === path);
+    if (variable) {
+      if (kind === 'number' && typeof variable.initial !== 'number') return 0;
+      return variable.initial;
+    }
+    return kind === 'number' ? 0 : '';
+  };
   const action: InteractionAction = step?.action ?? defaultAction('toast');
 
   const setCondition = (next: InteractionCondition) => {
@@ -132,7 +154,8 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
   };
 
   const setConditionPath = (path: ConditionPath) => {
-    setCondition({ kind: 'eq', path, value: BOOLEAN_PATHS.has(path) ? true : '' });
+    const kind = valueEditor(path, 'eq');
+    setCondition({ kind: 'eq', path, value: defaultValueFor(path, kind) });
   };
 
   const setConditionOp = (kind: (typeof CONDITION_OPS)[number]) => {
@@ -140,23 +163,39 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
       setCondition({ kind: 'exists', path: conditionPath });
       return;
     }
-    const value = isBooleanPath ? flat?.value !== false : (flat?.value ?? '');
-    setCondition({ kind, path: conditionPath, value: typeof value === 'boolean' ? value : value });
+    // Keep the current value when it already fits the target editor; otherwise fall back
+    // to the typed default, so switching operators never writes an ill-typed value.
+    const target = valueEditor(conditionPath, kind);
+    const current = flat?.value;
+    let value = defaultValueFor(conditionPath, target);
+    if (target === 'boolean' && typeof current === 'boolean') value = current;
+    if (target === 'number' && typeof current === 'number') value = current;
+    if (target === 'string' && typeof current === 'string') value = current;
+    if (target === 'enum' && typeof current === 'string' && (conditionVariable?.values ?? []).includes(current)) value = current;
+    setCondition({ kind, path: conditionPath, value });
   };
 
   const setConditionValue = (raw: string) => {
     if (!flat) return;
-    if (isBooleanPath) {
+    if (editorKind === 'boolean') {
       setCondition({ ...flat, value: raw === 'true' });
       return;
     }
-    if (flat.kind === 'gt' || flat.kind === 'gte' || flat.kind === 'lt' || flat.kind === 'lte') {
+    if (editorKind === 'number') {
       const value = Number(raw);
       if (!Number.isFinite(value)) {
         setError('NUMBER_REQUIRED');
         return;
       }
       setCondition({ ...flat, value });
+      return;
+    }
+    if (editorKind === 'enum') {
+      if (!(conditionVariable?.values ?? []).includes(raw)) {
+        setError('ENUM_VALUE_REQUIRED');
+        return;
+      }
+      setCondition({ ...flat, value: raw });
       return;
     }
     setCondition({ ...flat, value: raw });
@@ -255,11 +294,17 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
             </select>
           </label>
           {flat && (
-            isBooleanPath ? (
+            editorKind === 'boolean' ? (
               <label>Значение
                 <select data-testid="inspector-condition-value" value={String(flat.value)} disabled={readOnly} onChange={(event) => setConditionValue(event.currentTarget.value)}>
                   <option value="true">true</option>
                   <option value="false">false</option>
+                </select>
+              </label>
+            ) : editorKind === 'enum' ? (
+              <label>Значение
+                <select data-testid="inspector-condition-value" value={String(flat.value)} disabled={readOnly} onChange={(event) => setConditionValue(event.currentTarget.value)}>
+                  {(conditionVariable?.values ?? []).map((value) => <option value={value}>{value}</option>)}
                 </select>
               </label>
             ) : (
@@ -268,7 +313,7 @@ export function FlowNodeInspector({ controller, ruleId, nodeId, readOnly = false
                   data-testid="inspector-condition-value"
                   value={String(flat.value ?? '')}
                   disabled={readOnly}
-                  inputMode={flat.kind === 'gt' || flat.kind === 'gte' || flat.kind === 'lt' || flat.kind === 'lte' ? 'decimal' : 'text'}
+                  inputMode={editorKind === 'number' ? 'decimal' : 'text'}
                   onInput={(event) => setConditionValue(event.currentTarget.value)}
                 />
               </label>

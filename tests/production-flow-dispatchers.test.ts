@@ -281,6 +281,30 @@ describe('phone flow dispatcher', () => {
       expect(outcome.error).toContain('phone');
     }
   });
+
+  it('maps the editor search route to the phone search screen for navigate and openScreen', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    expect(dispatcher.navigate('search')).toEqual({ ok: true });
+    expect(phoneRoute.value.name).toBe('add');
+    expect(dispatcher.openScreen('search')).toEqual({ ok: true });
+    expect(phoneRoute.value.name).toBe('add');
+  });
+
+  it('opens editor screens that exist on the phone by their own name', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    for (const screenId of ['library', 'news', 'remote', 'settings', 'connect']) {
+      expect(dispatcher.navigate(screenId)).toEqual({ ok: true });
+      expect(phoneRoute.value.name).toBe(screenId);
+    }
+  });
+
+  it('rejects an unsupported destination instead of pushing it into the phone stack', () => {
+    const dispatcher = createPhoneFlowDispatcher({ openUrl: vi.fn() });
+    phoneStack.value = [{ name: 'library' }];
+    expect(dispatcher.navigate('player')).toMatchObject({ ok: false, error: expect.stringContaining('player') });
+    expect(dispatcher.openScreen('no-such-route')).toMatchObject({ ok: false, error: expect.stringContaining('no-such-route') });
+    expect(phoneRoute.value.name).toBe('library');
+  });
 });
 
 describe('desktop flow dispatcher', () => {

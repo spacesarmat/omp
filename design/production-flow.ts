@@ -330,8 +330,11 @@ function json(value: unknown): string {
 
 // The flow contribution of an export. The all scope ships the complete document and the
 // generated production module; a scoped export ships only the rules the scope owns, with
-// the variables those rules reference, so unrelated screens keep their behavior. Merging
-// with the files on disk happens in the export step.
+// the variables those rules reference, so unrelated screens keep their behavior. The scoped
+// plan also names the generated module: the export step rewrites it from the full merged
+// document (never from the scoped subset), so the production runtime and the generator
+// check never drift behind the merged flow json. Merging with the files on disk happens in
+// the export step.
 export function createFlowExportPlan(draft: { flow: FlowDocument }, scopeInput: unknown): FlowExportPlan {
   const scope = normalizeScope(scopeInput);
   const flow = draft.flow;
@@ -356,7 +359,16 @@ export function createFlowExportPlan(draft: { flow: FlowDocument }, scopeInput: 
     rules,
     ...(variables.length ? { variables } : {}),
   };
-  return { scope, flow: scoped, files: [{ path: flowPath, content: json(scoped) }] };
+  return {
+    scope,
+    flow: scoped,
+    files: [
+      { path: flowPath, content: json(scoped) },
+      // Scoped placeholder, same convention as the scoped layout module: the export step
+      // replaces the content with the module generated from the merged document.
+      { path: FLOW_MODULE_OUTPUT, content: generateFlowModule(scoped) },
+    ].sort((a, b) => a.path.localeCompare(b.path)),
+  };
 }
 
 export interface FlowIdDiff {

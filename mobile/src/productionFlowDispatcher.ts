@@ -40,6 +40,27 @@ function reportSearchCount(handle: SearchHandle): void {
   setTimeout(() => clearInterval(timer), 120000);
 }
 
+// The editor names screens after the desktop shell; the phone opens them through its own
+// MRoute table. Everything outside this map needs route data the flow action does not carry
+// (a torrent hash, a player queue), so it reports a documented error instead of pushing a
+// made-up route. The desktop shell renders the phone app, so the same map serves both.
+const PHONE_FLOW_SCREENS: Record<string, MRoute> = {
+  connect: { name: 'connect' },
+  library: { name: 'library' },
+  news: { name: 'news' },
+  remote: { name: 'remote' },
+  settings: { name: 'settings' },
+  search: { name: 'add' },
+};
+
+function phoneScreenRoute(action: string, screenId: string): { route: MRoute } | { error: FlowDispatchOutcome } {
+  const route = PHONE_FLOW_SCREENS[screenId];
+  if (!route) {
+    return { error: unavailableProductionAction(action, 'phone', `unsupported destination ${screenId}`) };
+  }
+  return { route };
+}
+
 // Production flow actions on top of the existing phone app APIs. The interpreter stays
 // synchronous: async app APIs (server connect, playback, search) fire through their existing
 // helpers and report failures the way the app's own screens do, never through the flow error
@@ -89,11 +110,15 @@ export function createPhoneFlowDispatcher(options: PhoneFlowDispatcherOptions): 
   });
   return createProductionDispatcher({
     navigate: (screenId) => {
-      navigate({ name: screenId } as MRoute);
+      const target = phoneScreenRoute('navigate', screenId);
+      if ('error' in target) return target.error;
+      navigate(target.route);
       return { ok: true };
     },
     openScreen: (screenId) => {
-      navigate({ name: screenId } as MRoute);
+      const target = phoneScreenRoute('openScreen', screenId);
+      if ('error' in target) return target.error;
+      navigate(target.route);
       return { ok: true };
     },
     back: () => ({ ok: goBack() }),

@@ -164,7 +164,10 @@ export function FlowCanvas({ controller, screenId, readOnly = false, onSelectNod
     if (readOnly) return;
     setError('');
     const rect = viewportRef.current?.getBoundingClientRect();
-    const center = toWorld((rect?.width || 800) / 2, (rect?.height || 600) / 2);
+    // toWorld takes client coordinates: the page offset of the viewport has to be added
+    // before converting, otherwise a canvas placed away from the page origin computes a
+    // world center shifted by that offset.
+    const center = toWorld((rect?.left ?? 0) + (rect?.width || 800) / 2, (rect?.top ?? 0) + (rect?.height || 600) / 2);
     // Consecutive nodes cascade from the viewport center in small steps, so additions never
     // stack invisibly on one point until the user runs auto layout.
     const step = cascadeRef.current;

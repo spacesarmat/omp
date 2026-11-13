@@ -1,4 +1,5 @@
 import type { DesignTarget, FlowDocument, InteractionCondition, InteractionRule } from './schema.ts';
+import type { ExecutionTraceEntry } from './flow-graph.ts';
 
 export interface InteractionContext {
   target: DesignTarget;
@@ -40,6 +41,21 @@ export function compareCondition(kind: string, actual: unknown, value: unknown):
   }
   if (kind === 'contains') return typeof actual === 'string' && typeof value === 'string' && actual.includes(value);
   return false;
+}
+
+// Previews keep reporting the legacy trace shape while executing through the shared
+// interpreter: every executed action or result step becomes one trace entry, conditions
+// and step bookkeeping stay out of the public preview trace.
+export function toInteractionTraces(trace: ReadonlyArray<ExecutionTraceEntry>): InteractionTrace[] {
+  const result: InteractionTrace[] = [];
+  for (const entry of trace) {
+    if ((entry.kind !== 'action' && entry.kind !== 'result') || !entry.action) continue;
+    const item: InteractionTrace = { ruleId: entry.ruleId, event: 'click', action: entry.action as InteractionTrace['action'] };
+    if (entry.target !== undefined) item.target = entry.target;
+    if (entry.message !== undefined) item.message = entry.message;
+    result.push(item);
+  }
+  return result;
 }
 
 function conditionMatches(condition: InteractionCondition | undefined, context: InteractionContext): boolean {
