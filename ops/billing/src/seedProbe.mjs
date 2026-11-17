@@ -5,9 +5,13 @@
 // shared budget, merged per hash. The sidecar serves one lookup at a time and rate-limits the rest.
 // BEP 33 seed estimates are labeled estimates. The get_peers address count is not a seed count.
 // `completed` is the tracker's snatched count (BEP 48 `downloaded`, BEP 15 downloaded), not seeds.
+// When a bitmagnet source is passed, hashes left without a tracker measurement (samples = 0, the
+// tracker-less magnets) also get its DHT-derived counts as an estimate in the answer only: never
+// live, never verified, never stored - seed_probes keeps tracker-verified measurements alone.
 // The background refresh of popular hashes lives in seedRefresh.mjs: one hash a minute, same gate.
 import { isIP } from 'node:net';
 import { isPublicAddress } from './monitorHttp.mjs';
+import { mergeBitmagnetCounts } from './bitmagnetSource.mjs';
 
 export const SEED_TOP_N = 30;
 export const SEED_MAX_TRACKERS = 2;
@@ -40,6 +44,10 @@ const DHT_WAIT_MS = 6000;
 // Concurrent sidecar lookups per batch. The sidecar answers one at a time and 429s the rest; the
 // cap keeps the fan-out bounded while every stale hash still gets a chance inside the budget.
 const DHT_MAX_IN_FLIGHT = 4;
+// Short answer cache over the bitmagnet source: one GraphQL batch per hash per minute, not per
+// request. A miss (the crawler does not know the hash) is cached for the same window.
+export const BITMAGNET_CACHE_TTL_MS = 60 * 1000;
+const BITMAGNET_CACHE_MAX = 2048;
 
 function capCount(n) {
   if (typeof n !== 'number' || !isFinite(n) || n < 0 || n !== Math.floor(n)) return null;
@@ -574,6 +582,68 @@ function delay(ms) {
 }
 
 /**
+ * In-memory TTL cache over a bitmagnet source, in the same fetchCounts shape. Fresh answers (and
+ * misses) are served from the window without a network call; only hashes the cache does not hold
+ * are asked, in one batch. A disabled source never fetches; a source error resolves to an empty
+ * map. Expired entries are pruned and the table is capped, so a long-lived process stays bounded.
+ * Counts only: no URL or infohash is ever logged here.
+ */
+export function createBitmagnetCountsCache(source, opts) {
+  const o = opts || {};
+  const ttlMs = typeof o.ttlMs === 'number' && o.ttlMs >= 0 ? o.ttlMs : BITMAGNET_CACHE_TTL_MS;
+  const nowFn = typeof o.now === 'function' ? o.now : () => Date.now();
+  const rows = new Map();
+  return {
+    get enabled() {
+      return !!(source && source.enabled);
+    },
+    async fetchCounts(infoHashes) {
+      const out = new Map();
+      if (!source || !source.enabled || typeof source.fetchCounts !== 'function') return out;
+      const now = nowFn();
+      for (const [h, e] of rows) if (now - e.at >= ttlMs) rows.delete(h);
+      const list = Array.isArray(infoHashes) ? infoHashes : [];
+      const seen = Object.create(null);
+      const miss = [];
+      for (let i = 0; i < list.length; i++) {
+        const h = String(list[i] || '').trim().toLowerCase();
+        if (!/^[0-9a-f]{40}$/.test(h) || seen[h]) continue;
+        seen[h] = 1;
+        const e = rows.get(h);
+        if (e) {
+          if (e.row) out.set(h, e.row);
+        } else {
+          miss.push(h);
+        }
+      }
+      if (!miss.length) return out;
+      let fetched = new Map();
+      try {
+        fetched = await source.fetchCounts(miss);
+      } catch (e) {
+        fetched = new Map();
+      }
+      if (!fetched || typeof fetched.get !== 'function') fetched = new Map();
+      for (let i = 0; i < miss.length; i++) {
+        const h = miss[i];
+        const row = (fetched && fetched.get(h)) || null;
+        rows.set(h, { row, at: now });
+        if (row) out.set(h, row);
+      }
+      if (rows.size > BITMAGNET_CACHE_MAX) {
+        let drop = rows.size - BITMAGNET_CACHE_MAX;
+        for (const h of rows.keys()) {
+          if (drop <= 0) break;
+          rows.delete(h);
+          drop -= 1;
+        }
+      }
+      return out;
+    },
+  };
+}
+
+/**
  * Body of POST /v1/seed-check. `items` may be an array or a JSON string (the app posts a form).
  * Duplicate infohashes collapse. More than 30 are cut. A bad row is skipped.
  */
@@ -615,7 +685,7 @@ export function parseSeedRequest(body) {
 }
 
 function publicItem(hash, merged, cached) {
-  return {
+  const out = {
     infohash: hash,
     verified: !!merged.verified,
     live: !!merged.live,
@@ -633,6 +703,12 @@ function publicItem(hash, merged, cached) {
     measuredAt: merged.measuredAt || 0,
     cached: !!cached,
   };
+  // Additive estimate provenance: present only when bitmagnet counts were applied to this answer.
+  if (merged.source) {
+    out.source = merged.source;
+    if (typeof merged.ageMs === 'number' && isFinite(merged.ageMs)) out.ageMs = merged.ageMs;
+  }
+  return out;
 }
 
 function fromCache(row) {
@@ -760,7 +836,9 @@ async function runDhtBatch(dht, hashes, deadline, cap) {
  * with no tracker address beside the scrapes (capped concurrency, one shared budget), merged per
  * hash; when all carry trackers the first stale hash is asked. The answer keeps the request order.
  * `force` scrapes even a fresh row: the background refresh asks at half the TTL, when the endpoint
- * would still answer from the cache. The gate and the deadline apply the same way.
+ * would still answer from the cache. The gate and the deadline apply the same way. An optional
+ * `bitmagnet` source (fetchCounts shape) adds estimate counts to the answer for hashes with no
+ * tracker measurement; it never writes to the cache and never sets live/verified.
  */
 export async function runSeedCheck(opts) {
   const o = opts || {};
@@ -869,8 +947,46 @@ export async function runSeedCheck(opts) {
       itemsOut.push(publicItem(hash, merged, false));
     }
   }
+  // bitmagnet estimates for the hashes left without a tracker measurement (samples = 0): the
+  // tracker-less magnets, a dead tracker's miss, and cached miss rows. One batch, after the
+  // scrapes and DHT. The merge is response-time only - nothing here is saved, so the estimates
+  // never enter seed_probes, the background selection, or the verified/live flags. A stale or
+  // absent bitmagnet row, a disabled source, and any source error all keep the previous answer.
+  let bmApplied = 0;
+  if (o.bitmagnet && typeof o.bitmagnet.fetchCounts === 'function') {
+    const bmWanted = [];
+    const bmSeen = Object.create(null);
+    for (let i = 0; i < itemsOut.length; i++) {
+      const it = itemsOut[i];
+      if (it.samples === 0 && !bmSeen[it.infohash]) {
+        bmSeen[it.infohash] = 1;
+        bmWanted.push(it.infohash);
+      }
+    }
+    if (bmWanted.length) {
+      let bmRows = new Map();
+      try {
+        bmRows = await o.bitmagnet.fetchCounts(bmWanted);
+      } catch (e) {
+        bmRows = new Map();
+      }
+      if (bmRows && typeof bmRows.get === 'function' && bmRows.size) {
+        const bmNow = nowFn();
+        for (let i = 0; i < itemsOut.length; i++) {
+          const it = itemsOut[i];
+          if (it.samples !== 0) continue;
+          const row = bmRows.get(it.infohash);
+          if (!row) continue;
+          const merged = mergeBitmagnetCounts(it, row, { now: () => bmNow });
+          if (merged.source !== 'bitmagnet') continue;
+          itemsOut[i] = publicItem(it.infohash, merged, it.cached);
+          bmApplied += 1;
+        }
+      }
+    }
+  }
   return {
     items: itemsOut,
-    stats: { asked: items.length, cache: fresh.length, live, dht: dhtUseful },
+    stats: { asked: items.length, cache: fresh.length, live, dht: dhtUseful, bitmagnet: bmApplied },
   };
 }
