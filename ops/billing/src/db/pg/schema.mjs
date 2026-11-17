@@ -707,6 +707,44 @@ CREATE UNIQUE INDEX donations_operation_settled ON donations (operation_id)
   WHERE coalesce(operation_id, '') <> '' AND status IN ('paid', 'refunded');
 `,
   },
+  {
+    version: '013_bot_copy',
+    sql: `
+-- Editable bot replies. Empty sub_state and lang are the default variant.
+-- buttons NULL means "keep the buttons the code built".
+CREATE TABLE bot_copy (
+  template_id text NOT NULL,
+  sub_state text NOT NULL DEFAULT '' CHECK (sub_state IN ('', 'active', 'expired', 'trial')),
+  lang text NOT NULL DEFAULT '' CHECK (lang IN ('', 'ru', 'en')),
+  body text NOT NULL,
+  media_kind text NOT NULL DEFAULT '' CHECK (media_kind IN ('', 'photo', 'video')),
+  media_url text NOT NULL DEFAULT '',
+  buttons jsonb,
+  author text NOT NULL DEFAULT '',
+  updated_at bigint NOT NULL,
+  PRIMARY KEY (template_id, sub_state, lang)
+);
+CREATE TABLE bot_copy_versions (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  template_id text NOT NULL,
+  sub_state text NOT NULL DEFAULT '' CHECK (sub_state IN ('', 'active', 'expired', 'trial')),
+  lang text NOT NULL DEFAULT '' CHECK (lang IN ('', 'ru', 'en')),
+  body text NOT NULL,
+  media_kind text NOT NULL DEFAULT '' CHECK (media_kind IN ('', 'photo', 'video')),
+  media_url text NOT NULL DEFAULT '',
+  buttons jsonb,
+  author text NOT NULL DEFAULT '',
+  created_at bigint NOT NULL,
+  action text NOT NULL CHECK (action IN ('save', 'restore', 'reset'))
+);
+CREATE INDEX bot_copy_versions_lookup ON bot_copy_versions (template_id, sub_state, lang, id DESC);
+CREATE TABLE bot_copy_meta (
+  id text PRIMARY KEY,
+  rev bigint NOT NULL
+);
+INSERT INTO bot_copy_meta (id, rev) VALUES ('default', 0);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
