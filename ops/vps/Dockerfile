@@ -18,7 +18,10 @@ RUN apt-get update \
   && pg_dump --version
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# The NUC egress stalls TLS 1.3 handshakes to the npm registry (read ETIMEDOUT mid-build,
+# verified 17.11: npm ping silent by default, PONG with --tls-max-v1.2). Scope the workaround
+# and the retries to this step only; the runtime keeps its own TLS defaults.
+RUN NODE_OPTIONS=--tls-max-v1.2 npm ci --omit=dev --fetch-retries=5 --fetch-retry-maxtimeout=120000 && npm cache clean --force
 
 COPY src ./src
 # tools/migrateToPostgres.mjs: reads an archived billing.db into an empty Postgres (not used at runtime).
