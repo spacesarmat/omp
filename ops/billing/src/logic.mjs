@@ -1316,7 +1316,7 @@ function creditHeavyPay(state, row) {
   return money * 2 < full;
 }
 
-/** Accepted subscription payments of one friend since the bind: no device slots, no credit-covered renewals. */
+/** Accepted subscription payments of one friend since the bind: no device slots, no credit-covered renewals, no money kept as credit. */
 function friendPayments(state, friendId, boundAt) {
   const from = Number(boundAt) || 0;
   const out = [];
@@ -1324,7 +1324,7 @@ function friendPayments(state, friendId, boundAt) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.accountId !== friendId || row.pending || row.error) continue;
-    if (isDevicePay(state, row) || creditHeavyPay(state, row)) continue;
+    if (isDevicePay(state, row) || creditHeavyPay(state, row) || Number(row.credited) > 0) continue;
     const t = Number(row.at) || 0;
     if (t >= from) out.push(row);
   }
@@ -1704,7 +1704,24 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
   const covers = (kindMark) => coversNeed(quoted !== null ? quoted : priceOf(state, kindMark));
   if (quote && Number(quote.referralOff) > 0) {
     const payer = quote.accountId || (act.indexOf('new:') === 0 ? act.slice(4) : ((state.subscriptions || []).find((s) => s.id === act.slice(4)) || {}).accountId);
-    if (payer && subscriptionPaidBefore(state, payer, operationId)) return rejectAmount(state, row);
+    if (payer && subscriptionPaidBefore(state, payer, operationId)) {
+      // Stars: the server refunds the rejected charge automatically (refundRejectedStars).
+      if (alt && quote.method === 'stars') return rejectAmount(state, row);
+      // Other methods already collected the money. A payment covering the order becomes credit toward
+      // the next renewal instead of a dead hold; a short one stays a hold for the admin.
+      const target = act.indexOf('sub:') === 0 ? (state.subscriptions || []).find((s) => s.id === act.slice(4)) : anySub(state, payer);
+      const fromRub = quote && Number(quote.rub) > 0 ? Number(quote.rub) : 0;
+      const credit = Math.round(quoted > 0 ? quoted : fromRub);
+      if (target && credit > 0 && coversNeed(quoted !== null ? quoted : 0)) {
+        const total = creditOf(target) + credit;
+        const subscriptions = state.subscriptions.map((s) => (s.id === target.id ? { ...s, creditRub: total } : s));
+        return {
+          state: { ...state, payments: state.payments.concat([stampPayment(state, { ...row, credited: credit })]), subscriptions },
+          result: { kind: 'credit', subscriptionId: target.id, credit, creditTotal: total },
+        };
+      }
+      return rejectAmount(state, row);
+    }
   }
 
   if (act.indexOf('sub:') === 0) {

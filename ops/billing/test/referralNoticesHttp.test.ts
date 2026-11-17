@@ -3,6 +3,7 @@ import { activate, createSubscription, ensureTelegramAccount } from '../src/logi
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, writeState, testStore } from './pg';
+import { resetCopyCache } from '../src/botCopyStore.mjs';
 
 type App = (req: unknown, res: unknown) => Promise<void>;
 
@@ -103,5 +104,32 @@ describe('/v1/me referral notices', () => {
     const days = end.referralJournal.find((row: { variant?: string }) => !row.variant || row.variant === 'days');
     expect(days.noticePending).toBe(false);
     expect(days.friendNoticePending).toBe(false);
+  });
+
+  it('keeps the balance award visible when a saved template replaces the days notice', async () => {
+    const s = await seeded('token');
+    const st = await readState(s.file);
+    st.settings.referral = { ...st.settings.referral, balance: true, balancePercent: 10 };
+    await writeState(s.file, st);
+    await s.file.query(
+      "INSERT INTO bot_copy (template_id, sub_state, lang, body, media_kind, media_url, buttons, author, updated_at) VALUES ('referral.referrer', '', '', 'Бонус: {days}', '', '', NULL, 'test', $1)",
+      [Date.now()],
+    );
+    resetCopyCache();
+    const calls: { url: string; body: string }[] = [];
+    const app = createApp(
+      s.file,
+      async (url: string, init?: { body?: string }) => {
+        calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }), text: async () => '' };
+      },
+      { env: {} },
+    );
+    const res = await me(app, s.token, DEV);
+    expect(res.status).toBe(200);
+    const sent = calls.filter((c) => c.url.indexOf('sendMessage') >= 0);
+    const ref = sent.find((c) => c.body.indexOf('Бонус:') >= 0);
+    expect(ref).toBeTruthy();
+    expect(ref!.body.indexOf('₽ на баланс') >= 0).toBe(true);
   });
 });

@@ -344,7 +344,7 @@ describe('referral variants', () => {
     expect(quotePurchase(prior, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW }).result.price).toBe(200);
   });
 
-  it('credits each later subscription payment once and stops a second discounted order', () => {
+  it('credits each later subscription payment once and keeps a second discounted order as credit', () => {
     const first = settleReferrals(pay(world({ balance: true, balancePercent: 10, balanceMonthlyCap: 100 })), NOW);
     const again = {
       ...first.state,
@@ -383,7 +383,13 @@ describe('referral variants', () => {
       requireWithdraw: true,
       now: NOW + 1,
     });
-    expect(secondPay.result.error).toBe('amount');
+    // Approved behavior: the money of a second discounted order is kept as credit, not lost to a hold.
+    expect(secondPay.result.kind).toBe('credit');
+    expect(secondPay.result.credit).toBe(wallet.result.price);
+    const creditedRow = secondPay.state.payments.find((p: { operationId?: string }) => p.operationId === 'op-wallet')!;
+    expect(creditedRow.error).toBeUndefined();
+    expect(creditedRow.credited).toBe(wallet.result.price);
+    expect(sub(secondPay.state, 's-friend').creditRub).toBe(wallet.result.price);
   });
 
   it('shows the same capped discount as checkout and does not announce a cancelled gift', () => {
@@ -483,6 +489,30 @@ describe('referral credit cover and stars guards', () => {
     expect(row(settled.state, 'days')).toBeUndefined();
     expect(row(settled.state, 'balance')).toBeUndefined();
     expect(sub(settled.state, 's-ref').creditRub).toBe(0);
+  });
+
+  it('credits a second discounted payment instead of losing the money, and grants no bonus for it', () => {
+    const state = world({ referrerDays: 7, balance: true, balancePercent: 10, delayDays: 0, friendDiscount: true, friendDiscountRub: 50 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    const q1 = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 2 * DAY });
+    const q2 = quotePurchase(q1.state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 2 * DAY });
+    expect(q2.result.referralOff).toBe(50);
+    const p1 = applyPayment(q2.state, { operationId: 'op-one', label: q1.result.label, amount: q1.result.price + '.00', currency: '643', now: NOW - 2 * DAY });
+    expect(p1.result.kind).toBe('renew');
+    const before = sub(p1.state, 's-friend').creditRub || 0;
+    const p2 = applyPayment(p1.state, { operationId: 'op-two', label: q2.result.label, amount: q2.result.price + '.00', currency: '643', now: NOW - DAY });
+    expect(p2.result.kind).toBe('credit');
+    expect(p2.result.credit).toBe(q2.result.price);
+    expect(sub(p2.state, 's-friend').creditRub).toBe(before + q2.result.price);
+    const pay2 = p2.state.payments.find((p: { operationId?: string }) => p.operationId === 'op-two')!;
+    expect(pay2.error).toBeUndefined();
+    expect(pay2.credited).toBe(q2.result.price);
+    const settled = settleReferrals(p2.state, NOW);
+    const daysRows = settled.state.referralJournal.filter((r: { variant?: string; friendId?: string }) => r.friendId === 'friend' && (!r.variant || r.variant === 'days'));
+    expect(daysRows).toHaveLength(1);
+    expect(sub(settled.state, 's-ref').creditRub).toBe(15);
+    const short = applyPayment(p1.state, { operationId: 'op-short', label: q2.result.label, amount: '1.00', currency: '643', now: NOW - DAY });
+    expect(short.result.error).toBe('amount');
   });
 
   it('cancels a waiting balance award when the granted days row removes the bind', () => {

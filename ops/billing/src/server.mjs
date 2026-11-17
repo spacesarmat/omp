@@ -1434,6 +1434,8 @@ async function sendReferralNotices(store, token, messages, fetchImpl) {
           );
           if (applied.used === 'template' && applied.text) {
             text = applied.text;
+            // A saved template must not hide the ruble award: keep the balance line after it.
+            if (Number(msg.credit) > 0) text += '\n' + Math.floor(Number(msg.credit)) + ' ₽ на баланс';
             opts = { parseMode: applied.parseMode, inline: applied.inline, keyboard: mainKeyboard(), media: applied.media };
           }
         }
