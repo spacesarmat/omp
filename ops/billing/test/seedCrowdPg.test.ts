@@ -1,6 +1,7 @@
 // Phase 3 crowd storage on Postgres: migration 016 round-trip, dedup, prune, privacy, and the
 // watch-signals / seed-check routes. Runs in CI (BILLING_TEST_DATABASE_URL); the pure policy is
 // covered without a database in seedCrowd.test.ts.
+import { describe, expect, it } from 'vitest';
 import { activate, createSubscription, deviceCode } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { createCrowdRepo, loadCrowdReports, saveCrowdReports } from '../src/db/pg/seedCrowdSql.mjs';
@@ -59,10 +60,12 @@ async function call(
   return { status: res.status, data, headers: res.headers, body: res.body };
 }
 
-/** An activated device on a fresh subscription: the bearer headers the routes expect. */
+/** An activated device on a new subscription: the bearer headers the routes expect. Builds on the
+ * current state, so several devices can share one store (a second activation must not wipe the first). */
 async function activatedDevice(file: Awaited<ReturnType<typeof testStore>>, deviceId: string, accountId: string) {
   const now = Date.now();
-  const created = createSubscription(emptyState(), { accountId, now, days: 30 });
+  const base = (await readState(file)) || emptyState();
+  const created = createSubscription(base, { accountId, now, days: 30 });
   const act = activate(created.state, { code: created.result.code, deviceId, now });
   await writeState(file, act.state);
   const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
