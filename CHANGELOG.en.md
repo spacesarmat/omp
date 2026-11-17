@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Seed monitoring, phase 1: the check reads the snatched count (completed, BEP 48/15) and a checked release shows "downloaded N". Popular hashes refresh in the background once a minute through the same tracker gate; public tracker addresses are cached without a passkey and never logged. The seed check now covers the visible "New" feed rows on the phone, not only the search top. Migration 015 is additive. A new billing image is needed
+
 ## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount
