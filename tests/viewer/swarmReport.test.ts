@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { updateSettings } from '../../src/store/settings';
 import {
   SWARM_REPORT_BATCH_MAX,
   SWARM_REPORT_WINDOW_MS,
+  SWARM_SAMPLE_TTL_MS,
   flushSwarm,
   noteSwarmSample,
   resetSwarmReport,
@@ -16,8 +17,14 @@ function tor(p: { hash?: string; stat?: number; connected_seeders?: number; acti
   return { hash: HASH, stat: 3, connected_seeders: 5, active_peers: 8, ...p };
 }
 
+/** Drain the delivery promise chain without firing any (fake) timer. */
+async function drain(): Promise<void> {
+  for (let i = 0; i < 6; i++) await Promise.resolve();
+}
+
 describe('swarm report batch', () => {
   afterEach(() => {
+    vi.useRealTimers();
     resetSwarmReport();
     setSwarmPoster(null);
     updateSettings({ helpRank: true });
@@ -163,5 +170,58 @@ describe('swarm report batch', () => {
     flushSwarm();
     await tick();
     expect(calls).toBe(3);
+  });
+
+  it('pins the sample TTL: the server stamps the receive time, old counts must not look fresh', () => {
+    expect(SWARM_SAMPLE_TTL_MS).toBe(10 * 60 * 1000);
+  });
+
+  it('a sample older than the TTL is dropped after a failed send, the queue stays empty', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const sent: string[] = [];
+    setSwarmPoster(async (body) => {
+      sent.push(body.swarm);
+      return 'failed' as const;
+    });
+    noteSwarmSample(tor(), NOW);
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(1); // the fresh sample went out and failed; it is back in the queue
+    // playback stopped during the outage: TTL passes without a new sample
+    vi.setSystemTime(NOW + SWARM_SAMPLE_TTL_MS + 1);
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(1); // expired: dropped before retry, never sent as fresh
+    // the queue is empty now: even a recovered server gets nothing until a new sample arrives
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(1);
+    noteSwarmSample(tor({ connected_seeders: 9 }), NOW + SWARM_SAMPLE_TTL_MS + 2);
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(2); // a new sample reports again
+    expect(JSON.parse(sent[1])[0].seeders).toBe(9);
+  });
+
+  it('a sample inside the TTL still retries after a failed send', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const sent: string[] = [];
+    let fail = true;
+    setSwarmPoster(async (body) => {
+      sent.push(body.swarm);
+      return fail ? ('failed' as const) : ('accepted' as const);
+    });
+    noteSwarmSample(tor(), NOW);
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(1);
+    vi.setSystemTime(NOW + SWARM_SAMPLE_TTL_MS - 1000); // still fresh
+    fail = false;
+    flushSwarm();
+    await drain();
+    expect(sent).toHaveLength(2);
+    expect(JSON.parse(sent[1])).toEqual(JSON.parse(sent[0]));
   });
 });

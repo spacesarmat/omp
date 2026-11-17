@@ -5,6 +5,9 @@
 // Only infohash + seeders + leechers leave the device: the server derives the irreversible device
 // key and stores nothing else. One report per hash per window, batches of 20, a 30 s flush. The
 // window starts only when the server accepted the batch; a failed send retries on a later flush.
+// A sample older than SWARM_SAMPLE_TTL_MS is dropped, never sent or retried: the server stamps the
+// receive time, so stale counts (playback stopped during a billing outage) must not reach the crowd
+// as a fresh report. Active playback produces a new sample every few seconds - nothing is lost.
 // Chromium 53 safe: no ?., no ??, no Object.values.
 import { deviceId } from '../billing/session';
 import { settings } from '../store/settings';
@@ -14,6 +17,13 @@ import { sendSignalBody, type SignalDelivery } from './watchReport';
 export const SWARM_REPORT_WINDOW_MS = 10 * 60 * 1000;
 export const SWARM_REPORT_BATCH_MAX = 20;
 export const SWARM_REPORT_FLUSH_MS = 30000;
+/**
+ * Max age of a sample at send time. Same order as the dedup window, a separate meaning: the window
+ * bounds how OFTEN a hash is reported, the TTL bounds how OLD the counts may be when they go out.
+ * The server stamps reported_at with the receive time, so anything older would look fresh to the
+ * 6 h crowd trust window and could displace bitmagnet with stale numbers.
+ */
+export const SWARM_SAMPLE_TTL_MS = 10 * 60 * 1000;
 const COUNT_CAP = 1000000;
 
 export interface SwarmSample {
@@ -99,16 +109,22 @@ export function noteSwarmSample(
 }
 
 /**
- * Send one batch. The dedup window starts ONLY when the server accepted the batch: a failed send
- * (network, timeout, non-2xx) puts the reports back for a later flush - the next scheduled one, no
- * storm - and a missing session never counts as sent. Samples arriving mid-flight do not queue a
- * duplicate (inFlight); if the batch is not accepted, the original report is restored.
+ * Send one batch. Samples older than SWARM_SAMPLE_TTL_MS are dropped first - stale counts must
+ * never go out as a fresh report, even after a long outage. The dedup window starts ONLY when the
+ * server accepted the batch: a failed send (network, timeout, non-2xx) puts the still-fresh reports
+ * back for a later flush - the next scheduled one, no storm - and a missing session never counts as
+ * sent. Samples arriving mid-flight do not queue a duplicate (inFlight); if the batch is not
+ * accepted, the original report is restored while it is younger than the TTL.
  */
 export function flushSwarm(): void {
   if (flushTimer) {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
+  const now = Date.now();
+  Object.keys(queue).forEach((k) => {
+    if (now - queue[k].at >= SWARM_SAMPLE_TTL_MS) delete queue[k];
+  });
   const keys = Object.keys(queue);
   if (!keys.length) return;
   if (!helpOn()) {
@@ -124,19 +140,21 @@ export function flushSwarm(): void {
   }
   const items = entries.map((e) => e.sample);
   void send({ swarm: JSON.stringify(items), deviceId: deviceId(), help: '1' }).then((result) => {
+    const at = Date.now();
     for (let i = 0; i < entries.length; i++) {
       const h = entries[i].sample.infohash;
       delete inFlight[h];
       if (result === 'accepted') {
         lastSent[h] = entries[i].at;
-      } else if (!queue[h]) {
-        // Not accepted: the window must not start. Put the report back for a later flush.
+      } else if (!queue[h] && at - entries[i].at < SWARM_SAMPLE_TTL_MS) {
+        // Not accepted: the window must not start. Put the report back for a later flush,
+        // unless it expired while in flight - then wait for a new sample instead.
         queue[h] = entries[i];
       }
     }
     // A failed batch retries on the next flush; without a session the reports wait for a later
     // sample to schedule one (the sender resolves at once, nothing to retry against).
-    if (result === 'failed') schedule();
+    if (result === 'failed' && Object.keys(queue).length) schedule();
   });
   if (Object.keys(queue).length) schedule();
 }
