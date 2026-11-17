@@ -8,7 +8,7 @@ import { CRYPTO_ASSETS, formatAsset } from './cryptoPay.mjs';
 import { copyText, str } from './botCopy.mjs';
 import { logWebhook, mskDate, mskDateTime, mskDayStart } from './logic.mjs';
 import { altCovers, starInvoiceBody } from './payMethods.mjs';
-import { donatePricing } from './rates.mjs';
+import { paymentPricing } from './rates.mjs';
 import { grossUp, payUrl, settledCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -116,7 +116,7 @@ function rateOf(price, asset) {
 }
 
 export function donateCryptoAmount(settings, asset, rub, now) {
-  const rate = rateOf(donatePricing(settings, now), asset);
+  const rate = rateOf(paymentPricing(settings, now), asset);
   const base = Number(rub) || 0;
   if (!(rate > 0) || !(base > 0)) return '';
   return formatAsset(asset, base / rate);
@@ -246,12 +246,12 @@ export function cryptoDonateOpen(settings, account) {
 
 export function cryptoAllowed(settings, account, asset, now) {
   if (!cryptoDonateOpen(settings, account)) return false;
-  return rateOf(donatePricing(settings, now), asset) > 0;
+  return rateOf(paymentPricing(settings, now), asset) > 0;
 }
 
 function methodScreen(state, account, row, now, lang) {
   const cfg = cfgOf(state);
-  const price = donatePricing(state.settings, now);
+  const price = paymentPricing(state.settings, now);
   const lines = [str('don.methods', lang, { amount: row.amountRub })];
   const buttons = [];
   if (cfg.yoomoney && state.settings.yoomoneyWallet) {
@@ -278,7 +278,7 @@ function methodScreen(state, account, row, now, lang) {
 
 function lockMethod(state, account, row, method, now, lang) {
   const cfg = cfgOf(state);
-  const price = donatePricing(state.settings, now);
+  const price = paymentPricing(state.settings, now);
   const named = { ...row, displayName: nameOf(account) || row.displayName };
   if (method === 'PC' || method === 'AC') {
     if (!cfg.yoomoney || !state.settings.yoomoneyWallet) return { error: str('don.err_yoomoney_off', lang) };

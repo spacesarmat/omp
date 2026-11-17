@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { botCallback, botReply } from '../src/bot.mjs';
 import { amountCovers, cryptoPayAuthentic, cryptoPayHost, cryptoPaySign, formatAsset, paidInvoice } from '../src/cryptoPay.mjs';
 import { applyPayment, financeReport, openAccount, quotePurchase } from '../src/logic.mjs';
-import { cryptoOffered, starCheckoutDecision, starDue, starInvoiceBody } from '../src/payMethods.mjs';
+import { cryptoOffered, cryptoDue, starCheckoutDecision, starDue, starsOffered, starInvoiceBody } from '../src/payMethods.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 import { createApp, handleCallback, pollBot } from '../src/server.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 import { emptyState } from '../src/state.mjs';
@@ -969,5 +970,70 @@ describe('bot stars invoice', () => {
     expect(invoice.currency).toBe('XTR');
     expect(invoice.provider_token).toBe('');
     expect(invoice.payload).toBe('buy:' + id![1]);
+  });
+});
+
+describe('subscription prices follow the auto rate from the ruble base', () => {
+  const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
+  const STALE = NOW + 25 * 60 * 60 * 1000;
+  const book = mergeRateBook({ starUsd: 0.013, markupPercent: 0 }, {
+    usdt: { rub: 100, source: 'cryptopay' },
+    ton: { rub: 200, source: 'coingecko' },
+    btc: { rub: 8_000_000, source: 'coingecko' },
+    usd: { rub: 100, source: 'cbr' },
+  }, NOW);
+  const settings = {
+    starsEnabled: true,
+    cryptoEnabled: true,
+    priceRub: 150,
+    extraDeviceRub: 50,
+    starsPrice: 999,
+    starsExtra: 99,
+    cryptoUsdt: 9,
+    cryptoRateUsdt: 50,
+    rates: book,
+  };
+
+  it('stars derive from the ruble tariff while the auto rate is fresh', () => {
+    expect(starDue(settings, 'new', 0, 150, 150, NOW)).toBe(116);
+    expect(starDue(settings, 'dev', 1, 50, 50, NOW)).toBe(39);
+    expect(starsOffered(settings, 'new', NOW)).toBe(true);
+    expect(starsOffered(settings, 'dev', NOW)).toBe(true);
+  });
+
+  it('a ruble credit scales the derived stars down', () => {
+    expect(starDue(settings, 'new', 0, 150, 75, NOW)).toBe(58);
+  });
+
+  it('a stale auto rate falls back to the manual star tariffs', () => {
+    expect(starDue(settings, 'new', 0, 150, 150, STALE)).toBe(999);
+    expect(starDue(settings, 'dev', 1, 50, 50, STALE)).toBe(99);
+    expect(starsOffered(settings, 'new', STALE)).toBe(true);
+  });
+
+  it('auto off keeps the manual star tariffs', () => {
+    const off = { ...settings, rates: { ...book, auto: { usdt: false, ton: false, btc: false, star: false } } };
+    expect(starDue(off, 'new', 0, 150, 150, NOW)).toBe(999);
+  });
+
+  it('crypto derives from rubles with a fresh auto rate, ignoring the explicit asset price', () => {
+    expect(cryptoDue(settings, 'USDT', 'new', 0, 150, 150, NOW)).toBe('1.50');
+    expect(cryptoDue(settings, 'TON', 'new', 0, 150, 150, NOW)).toBe('0.7500');
+  });
+
+  it('a stale auto rate falls back to the explicit asset price, then the manual rate', () => {
+    expect(cryptoDue(settings, 'USDT', 'new', 0, 150, 150, STALE)).toBe('9.00');
+    const noExplicit = { ...settings, cryptoUsdt: 0 };
+    expect(cryptoDue(noExplicit, 'USDT', 'new', 0, 150, 150, STALE)).toBe('3.00');
+  });
+
+  it('quotePurchase freezes the derived star and crypto amounts', () => {
+    const base = emptyState();
+    const state = { ...base, settings: { ...base.settings, ...settings } };
+    const q = quotePurchase(state, { kind: 'new', now: NOW, method: 'stars' });
+    expect(q.result.payAmount).toBe('116');
+    const c = quotePurchase(state, { kind: 'new', now: NOW, method: 'crypto', asset: 'USDT' });
+    expect(c.result.payAmount).toBe('1.50');
+    expect(c.result.rub).toBe(150);
   });
 });

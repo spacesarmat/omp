@@ -217,7 +217,7 @@ function effective(book, key, manual, now) {
 }
 
 /** Ruble rates the donate menu uses. 0 hides that method. Manual wins only while auto is off. */
-export function donatePricing(settings, now) {
+export function paymentPricing(settings, now) {
   const s = settings || {};
   const book = normalizeRateSettings(s.rates);
   const at = Number(now) > 0 ? Number(now) : Date.now();
@@ -233,7 +233,7 @@ export function rateAdminView(settings, now) {
   const s = settings || {};
   const book = normalizeRateSettings(s.rates);
   const at = Number(now) > 0 ? Number(now) : Date.now();
-  const price = donatePricing(s, at);
+  const price = paymentPricing(s, at);
   const manual = {
     star: positive(s.donate && s.donate.rubPerStar),
     usdt: positive(s.cryptoRateUsdt),
@@ -452,7 +452,7 @@ let inflight = null;
  * Concurrent callers share one request. A failed round still stamps fetchedAt
  * so a donate tap does not hammer the hosts, and it does not replace a good rate.
  */
-export async function ensureDonateRates(store, fetchImpl, now) {
+export async function ensureRates(store, fetchImpl, now) {
   const nowMs = Number(now) > 0 ? Number(now) : Date.now();
   if (inflight) return inflight;
   const run = (async () => {
