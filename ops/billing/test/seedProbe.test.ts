@@ -409,6 +409,10 @@ function fakeBitmagnet(rows: Record<string, { seeders: number | null; leechers: 
   };
 }
 
+function pause(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 describe('runSeedCheck bitmagnet estimates (wiring)', () => {
   const NOW = 1_000_000_000;
   const noTrackers = (hash: string) => ({ infohash: hash, trackers: [] as string[] });
@@ -546,6 +550,80 @@ describe('runSeedCheck bitmagnet estimates (wiring)', () => {
     expect(bm.calls[0]).toHaveLength(30);
   });
 
+  it('a slow bitmagnet does not hold the answer past the request budget', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    let started = 0;
+    const slow = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        started += 1;
+        await pause(800);
+        return bm.fetchCounts(hashes);
+      },
+    };
+    const t0 = Date.now();
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      bitmagnet: slow,
+      deadlineMs: 300,
+      budgetMs: 400,
+    });
+    expect(Date.now() - t0).toBeLessThan(700);
+    expect(started).toBe(1);
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('keeps successful tracker results when the bitmagnet lookup outlives the budget', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    const slow = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        await pause(800);
+        return bm.fetchCounts(hashes);
+      },
+    };
+    const t0 = Date.now();
+    const out = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        noTrackers(HASH_B),
+      ],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      bitmagnet: slow,
+      deadlineMs: 500,
+      timeoutMs: 300,
+      budgetMs: 500,
+    });
+    expect(Date.now() - t0).toBeLessThan(800);
+    expect(out.items[0]).toMatchObject({ seeders: 3, live: true, verified: true });
+    expect(out.items[1]).toMatchObject({ seeders: 0, live: false });
+    expect(out.items[1].source).toBeUndefined();
+    expect(out.stats).toMatchObject({ live: 1, bitmagnet: 0 });
+  });
+
+  it('does not ask the source at all when the budget is already spent', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      bitmagnet: bm,
+      deadlineMs: 300,
+      budgetMs: 100,
+    });
+    expect(bm.calls).toHaveLength(0);
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false });
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
   it('enriches a cached miss without a re-scrape and leaves a verified cache row untouched', async () => {
     const cache = createMemorySeedCache();
     const first = await runSeedCheck({
@@ -628,6 +706,67 @@ describe('createBitmagnetCountsCache', () => {
     const b = await cache.fetchCounts([HASH, HASH_B]);
     expect(b.size).toBe(1);
     expect(asked).toEqual([[HASH, HASH_B]]);
+  });
+
+  it('shares one in-flight batch between concurrent callers, then serves the TTL', async () => {
+    const asked: string[][] = [];
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked.push(hashes.slice());
+        await pause(30);
+        return new Map(hashes.map((h) => [h, row]));
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH, HASH_B]), cache.fetchCounts([HASH, HASH_B])]);
+    expect(asked).toHaveLength(1);
+    expect(a.get(HASH)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_B)).toMatchObject({ seeders: 7 });
+    const c = await cache.fetchCounts([HASH, HASH_B]);
+    expect(asked).toHaveLength(1);
+    expect(c.size).toBe(2);
+  });
+
+  it('asks a shared hash only once when concurrent batches overlap', async () => {
+    const HASH_C = 'ef'.repeat(20);
+    const asked: string[][] = [];
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked.push(hashes.slice());
+        await pause(30);
+        return new Map(hashes.map((h) => [h, row]));
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH, HASH_B]), cache.fetchCounts([HASH_B, HASH_C])]);
+    const all = asked.reduce((acc: string[], x) => acc.concat(x), []);
+    expect(all.filter((h) => h === HASH_B)).toHaveLength(1);
+    expect(a.get(HASH)).toMatchObject({ seeders: 7 });
+    expect(a.get(HASH_B)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_B)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_C)).toMatchObject({ seeders: 7 });
+  });
+
+  it('a shared batch failure resolves for every waiter without a retry storm', async () => {
+    let calls = 0;
+    const source = {
+      enabled: true,
+      async fetchCounts() {
+        calls += 1;
+        await pause(20);
+        throw new Error('down');
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH]), cache.fetchCounts([HASH])]);
+    expect(calls).toBe(1);
+    expect(a.size).toBe(0);
+    expect(b.size).toBe(0);
+    const c = await cache.fetchCounts([HASH]);
+    expect(calls).toBe(1);
+    expect(c.size).toBe(0);
   });
 
   it('a disabled source never fetches, and a throwing source resolves to an empty map', async () => {

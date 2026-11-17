@@ -538,4 +538,50 @@ describe('POST /v1/seed-check', () => {
     expect((out.data.items as Record<string, unknown>[])[0].source).toBeUndefined();
     expect(graphqlCalls).toBe(0);
   });
+
+  it('a slow bitmagnet source does not hold the route past the request budget', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    let asked = 0;
+    const slowBitmagnet = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked += 1;
+        await new Promise((r) => setTimeout(r, 800));
+        return new Map(hashes.map((h) => [h, { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000, source: 'bitmagnet' }]));
+      },
+    };
+    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+      seedTransport: {
+        http: async () => ({ seeders: 8, leechers: 2 }),
+        udp: async () => null,
+      },
+      seedBitmagnet: slowBitmagnet,
+      seedBudgetMs: 300,
+    });
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([
+      { infohash: HASH, trackers: ['http://tracker.example/announce'] },
+      { infohash: HASH_B, trackers: [] },
+    ]));
+    const t0 = Date.now();
+    const out = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(Date.now() - t0).toBeLessThan(700);
+    expect(out.status).toBe(200);
+    expect(asked).toBe(1);
+    const items = out.data.items as Record<string, unknown>[];
+    // the verified tracker answer survives the source timeout; the estimate simply did not arrive
+    expect(items[0]).toMatchObject({ seeders: 8, live: true, verified: true });
+    expect(items[1]).toMatchObject({ seeders: 0, live: false });
+    expect(items[1].source).toBeUndefined();
+  });
 });

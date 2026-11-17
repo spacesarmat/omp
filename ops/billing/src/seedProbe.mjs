@@ -11,7 +11,7 @@
 // The background refresh of popular hashes lives in seedRefresh.mjs: one hash a minute, same gate.
 import { isIP } from 'node:net';
 import { isPublicAddress } from './monitorHttp.mjs';
-import { mergeBitmagnetCounts } from './bitmagnetSource.mjs';
+import { BITMAGNET_TIMEOUT_MS, mergeBitmagnetCounts } from './bitmagnetSource.mjs';
 
 export const SEED_TOP_N = 30;
 export const SEED_MAX_TRACKERS = 2;
@@ -48,6 +48,11 @@ const DHT_MAX_IN_FLIGHT = 4;
 // request. A miss (the crawler does not know the hash) is cached for the same window.
 export const BITMAGNET_CACHE_TTL_MS = 60 * 1000;
 const BITMAGNET_CACHE_MAX = 2048;
+// Whole-request budget of POST /v1/seed-check, the same 8 s the app waits (SEED_CHECK_TIMEOUT_MS).
+// The optional bitmagnet lookup starts after scrape/DHT and may wait only what is left of it.
+export const SEED_CHECK_BUDGET_MS = 8000;
+// Below this much budget left the optional lookup is not started at all: it could not finish.
+const BITMAGNET_MIN_LEFT_MS = 200;
 
 function capCount(n) {
   if (typeof n !== 'number' || !isFinite(n) || n < 0 || n !== Math.floor(n)) return null;
@@ -584,15 +589,28 @@ function delay(ms) {
 /**
  * In-memory TTL cache over a bitmagnet source, in the same fetchCounts shape. Fresh answers (and
  * misses) are served from the window without a network call; only hashes the cache does not hold
- * are asked, in one batch. A disabled source never fetches; a source error resolves to an empty
- * map. Expired entries are pruned and the table is capped, so a long-lived process stays bounded.
- * Counts only: no URL or infohash is ever logged here.
+ * are asked, in one batch. Concurrent callers share the in-flight batch per hash: a second device
+ * asking the same uncached hashes awaits the running lookup instead of opening its own, and a
+ * failed batch is shared too (cached as a miss), so a down source is not retried by every waiter.
+ * A disabled source never fetches; a source error resolves to an empty map. Expired entries are
+ * pruned and the table is capped, so a long-lived process stays bounded. Counts only: no URL or
+ * infohash is ever logged here.
  */
 export function createBitmagnetCountsCache(source, opts) {
   const o = opts || {};
   const ttlMs = typeof o.ttlMs === 'number' && o.ttlMs >= 0 ? o.ttlMs : BITMAGNET_CACHE_TTL_MS;
   const nowFn = typeof o.now === 'function' ? o.now : () => Date.now();
   const rows = new Map();
+  const pending = new Map();
+  function trimRows() {
+    if (rows.size <= BITMAGNET_CACHE_MAX) return;
+    let drop = rows.size - BITMAGNET_CACHE_MAX;
+    for (const h of rows.keys()) {
+      if (drop <= 0) break;
+      rows.delete(h);
+      drop -= 1;
+    }
+  }
   return {
     get enabled() {
       return !!(source && source.enabled);
@@ -617,26 +635,37 @@ export function createBitmagnetCountsCache(source, opts) {
         }
       }
       if (!miss.length) return out;
-      let fetched = new Map();
-      try {
-        fetched = await source.fetchCounts(miss);
-      } catch (e) {
-        fetched = new Map();
-      }
-      if (!fetched || typeof fetched.get !== 'function') fetched = new Map();
+      const waits = [];
+      const fresh = [];
       for (let i = 0; i < miss.length; i++) {
-        const h = miss[i];
-        const row = (fetched && fetched.get(h)) || null;
-        rows.set(h, { row, at: now });
-        if (row) out.set(h, row);
+        const p = pending.get(miss[i]);
+        if (p) waits.push(p);
+        else fresh.push(miss[i]);
       }
-      if (rows.size > BITMAGNET_CACHE_MAX) {
-        let drop = rows.size - BITMAGNET_CACHE_MAX;
-        for (const h of rows.keys()) {
-          if (drop <= 0) break;
-          rows.delete(h);
-          drop -= 1;
-        }
+      if (fresh.length) {
+        const batch = (async () => {
+          let fetched = new Map();
+          try {
+            fetched = await source.fetchCounts(fresh);
+          } catch (e) {
+            fetched = new Map();
+          }
+          if (!fetched || typeof fetched.get !== 'function') fetched = new Map();
+          const at = nowFn();
+          for (let i = 0; i < fresh.length; i++) {
+            rows.set(fresh[i], { row: fetched.get(fresh[i]) || null, at });
+            pending.delete(fresh[i]);
+          }
+          trimRows();
+          return fetched;
+        })();
+        for (let i = 0; i < fresh.length; i++) pending.set(fresh[i], batch);
+        waits.push(batch);
+      }
+      await Promise.all(waits);
+      for (let i = 0; i < miss.length; i++) {
+        const e = rows.get(miss[i]);
+        if (e && e.row) out.set(miss[i], e.row);
       }
       return out;
     },
@@ -838,7 +867,9 @@ async function runDhtBatch(dht, hashes, deadline, cap) {
  * `force` scrapes even a fresh row: the background refresh asks at half the TTL, when the endpoint
  * would still answer from the cache. The gate and the deadline apply the same way. An optional
  * `bitmagnet` source (fetchCounts shape) adds estimate counts to the answer for hashes with no
- * tracker measurement; it never writes to the cache and never sets live/verified.
+ * tracker measurement; it never writes to the cache and never sets live/verified. Its wait is
+ * bounded by `budgetMs` (the whole-request budget, default SEED_CHECK_BUDGET_MS) minus the time
+ * scrape/DHT already spent, so a slow source cannot push the answer past the app's timeout.
  */
 export async function runSeedCheck(opts) {
   const o = opts || {};
@@ -964,23 +995,34 @@ export async function runSeedCheck(opts) {
       }
     }
     if (bmWanted.length) {
-      let bmRows = new Map();
-      try {
-        bmRows = await o.bitmagnet.fetchCounts(bmWanted);
-      } catch (e) {
-        bmRows = new Map();
-      }
-      if (bmRows && typeof bmRows.get === 'function' && bmRows.size) {
-        const bmNow = nowFn();
-        for (let i = 0; i < itemsOut.length; i++) {
-          const it = itemsOut[i];
-          if (it.samples !== 0) continue;
-          const row = bmRows.get(it.infohash);
-          if (!row) continue;
-          const merged = mergeBitmagnetCounts(it, row, { now: () => bmNow });
-          if (merged.source !== 'bitmagnet') continue;
-          itemsOut[i] = publicItem(it.infohash, merged, it.cached);
-          bmApplied += 1;
+      // The optional lookup waits only what is left of the whole-request budget (the app drops the
+      // answer past it): scrape/DHT already spent their share. Below the floor it is not started at
+      // all. The wait is capped by the source timeout too; on expiry the existing results return.
+      const budgetMs = typeof o.budgetMs === 'number' && o.budgetMs > 0 ? o.budgetMs : SEED_CHECK_BUDGET_MS;
+      const left = budgetMs - (nowFn() - now);
+      if (left > BITMAGNET_MIN_LEFT_MS) {
+        const waitMs = Math.min(BITMAGNET_TIMEOUT_MS, left);
+        let bmRows = new Map();
+        try {
+          bmRows = await Promise.race([
+            Promise.resolve().then(() => o.bitmagnet.fetchCounts(bmWanted)),
+            delay(waitMs).then(() => new Map()),
+          ]);
+        } catch (e) {
+          bmRows = new Map();
+        }
+        if (bmRows && typeof bmRows.get === 'function' && bmRows.size) {
+          const bmNow = nowFn();
+          for (let i = 0; i < itemsOut.length; i++) {
+            const it = itemsOut[i];
+            if (it.samples !== 0) continue;
+            const row = bmRows.get(it.infohash);
+            if (!row) continue;
+            const merged = mergeBitmagnetCounts(it, row, { now: () => bmNow });
+            if (merged.source !== 'bitmagnet') continue;
+            itemsOut[i] = publicItem(it.infohash, merged, it.cached);
+            bmApplied += 1;
+          }
         }
       }
     }

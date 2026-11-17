@@ -167,7 +167,7 @@ import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db
 import { scoreOf, watchRankEnabled } from './watchRank.mjs';
 import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
-import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createBitmagnetCountsCache, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
+import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, SEED_CHECK_BUDGET_MS, createBitmagnetCountsCache, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
 import { createBitmagnetSource } from './bitmagnetSource.mjs';
 import { startSeedRefresh } from './seedRefresh.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
@@ -3417,6 +3417,9 @@ export function createApp(file, fetchImpl, opts) {
             transport: seedTransport,
             dht: seedDht(cfg),
             bitmagnet: bitmagnetFor(state.settings),
+            // The app waits SEED_CHECK_TIMEOUT_MS (8 s) for the whole check: the optional bitmagnet
+            // lookup may use only what scrape/DHT leave of that budget, never push the answer past it.
+            budgetMs: (opts && opts.seedBudgetMs) || SEED_CHECK_BUDGET_MS,
           });
           counts = out.stats;
           status = 200;
