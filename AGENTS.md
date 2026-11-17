@@ -11,9 +11,9 @@
 - `desktop/`: Windows desktop (Tauri + Preact, экраны `mobile/src`). TypeScript адаптеры в `desktop/src/platform`, Rust-процессы,
   загрузки, mpv и обновления в `desktop/src-tauri`, тесты в `desktop/tests`. NSIS-установщик собирается через `npm --prefix desktop run tauri -- build --bundles nsis`.
   Установка и переносимость описаны в `docs/desktop-cross-platform.md`.
-- `editor/`: локальный визуальный редактор тем и макета (flow/absolute, слои, пресеты, сравнение, доступность), запуск `npm run editor`, сборка `npm run build:editor`.
+- `editor/`: локальный визуальный редактор тем, макета и логики (flow/absolute, слои, пресеты, сравнение, доступность, node canvas потоков с debugger и шаблонами), запуск `npm run editor`, сборка `npm run build:editor`.
   `design/`: версионированные JSON-темы и правила, семантические tokens и детерминированный CSS generator.
-  Проверки: `npm run test:editor`, `npm run editor:generate -- --check`. Production макет активируется только явным экспортом через generated-модуль `design/generated/layout.ts`; autosave production не меняет.
+  Проверки: `npm run test:editor`, `npm run editor:generate -- --check`. Production макет активируется только явным экспортом через generated-модуль `design/generated/layout.ts`, логика потоков - через `design/generated/flow.ts`; autosave production не меняет.
 - `ops/billing/`: биллинг и админ-панель (`src/*.mjs` сервер и бот @OMPBILLINGBOT, `admin/` React-панель, Postgres).
 - `ops/vps/`: сервер (NUC): `docker-compose.yml` + `docker-compose.nuc.yml`, `Caddyfile.nuc`, `deploy.sh`, `jacred/`, `jackett-monitor/`, `site/`.
 - `scripts/`: релиз, CHANGELOG, Telegram-посты, TorrServer, проверки (`npm run check:boot`, `check:changelog`, `check:torrserver`,

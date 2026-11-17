@@ -35,4 +35,23 @@ describe('preview protocol', () => {
     expect(JSON.stringify(command)).not.toContain('token');
     expect(() => sendPreviewCommand(iframe, command, 'https://attacker.invalid')).toThrow();
   });
+
+  it('accepts every typed preview trace action and rejects arbitrary strings', () => {
+    const graphTrace = {
+      ...base,
+      type: 'trace',
+      trace: [
+        { ruleId: 'graph-dialog', event: 'click', action: 'dialog' },
+        { ruleId: 'graph-set', event: 'click', action: 'variable.set' },
+        { ruleId: 'graph-link', event: 'click', action: 'link.open' },
+        { ruleId: 'graph-telegram', event: 'click', action: 'telegram.open' },
+        { ruleId: 'legacy-go', event: 'click', action: 'navigate', target: 'library' },
+      ],
+    };
+    expect(parsePreviewMessage(graphTrace)).toEqual(graphTrace);
+    expect(() => parsePreviewMessage({ ...base, type: 'trace', trace: [{ ruleId: 'evil', event: 'click', action: 'evil.action' }] }))
+      .toThrow('Invalid trace action');
+    expect(() => parsePreviewMessage({ ...base, type: 'trace', trace: [{ ruleId: 'evil', event: 'click', action: 'fetch(http://x)' }] }))
+      .toThrow('Invalid trace action');
+  });
 });

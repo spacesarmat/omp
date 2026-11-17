@@ -1,7 +1,8 @@
 name: 2160 Player update
 
-# Opens (or refreshes) a pull request chore/player2160-<tag> with the submodule, the player-core coordinate
-# and changelog lines under «Не выпущено». It never pushes to main, never tags and never releases.
+# Opens chore/player2160-<tag>, waits until checks are green, squash-merges that branch only,
+# then tags the next OMP beta and starts Release. A failed check stops before the merge.
+# main stays protected: nothing is pushed to main except by merging the pull request.
 
 on:
   schedule:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: player2160-update
+  group: upstream-component-update
   cancel-in-progress: false
 
 jobs:
@@ -69,6 +70,7 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          node scripts/omp-release-bump.mjs
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
@@ -96,7 +98,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
-          git add player2160.version android/app/build.gradle android/vendor/2160player CHANGELOG.md CHANGELOG.en.md
+          git add player2160.version android/app/build.gradle android/vendor/2160player CHANGELOG.md CHANGELOG.en.md \
+            package.json package-lock.json desktop/package.json desktop/package-lock.json \
+            desktop/src-tauri/tauri.conf.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock \
+            webos/appinfo.json
           git commit -m "chore: 2160 Player $LATEST"
           git push --force origin "HEAD:refs/heads/$BRANCH"
           cat > "$RUNNER_TEMP/body.md" <<BODY
@@ -104,8 +109,8 @@ jobs:
 
           - сабмодуль android/vendor/2160player на коммит тега
           - player2160.version и координата tv.p2160:player-core
-          - строки в CHANGELOG в «Не выпущено»
-          - версия OMP не меняется, тег и релиз не создаются: обновление уйдёт со следующим релизом
+          - строки в CHANGELOG переносятся из «Не выпущено» в следующую бету OMP
+          - версия OMP поднимается на следующую бету, после зелёного CI PR вливается и выпускается релиз
           - перед PR файл player-core.aar скачан и проверен по sha256. Сборку APK делает CI этой ветки
 
           Открыто автоматически workflow «2160 Player update». CI на этой ветке запускается через workflow_dispatch;
@@ -116,5 +121,10 @@ jobs:
             echo "::error::Could not open the pull request. Turn on Settings, Actions, General, 'Allow GitHub Actions to create and approve pull requests', or open it by hand from $BRANCH."
             exit 1
           fi
-          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
-            || echo "::warning::Could not start CI on $BRANCH: run it from Actions, CI, Run workflow"
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          PR=$(gh pr view "$BRANCH" --repo "$GITHUB_REPOSITORY" --json number --jq .number)
+          SHA=$(git rev-parse HEAD)
+          NOTICE="Обновлен 2160 Player до ${LATEST}"
+          EXPECTED="CI"
+          export PR BRANCH SHA NOTICE EXPECTED
+          bash scripts/upstream-ship.sh

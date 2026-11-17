@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DESIGN_TARGETS, type DesignTarget, type LayoutDocument, type ThemeDocument } from './schema.ts';
+import { DESIGN_TARGETS, type DesignTarget, type FlowDocument, type LayoutDocument, type ThemeDocument } from './schema.ts';
 import { generateThemeCss } from './theme.ts';
-import { parseThemeDocument } from './validation.ts';
+import { FLOW_MODULE_OUTPUT, generateFlowModule } from './flow-module.ts';
+import { parseFlowDocument, parseThemeDocument } from './validation.ts';
 
 export interface GeneratedFile {
   path: string;
@@ -55,6 +56,22 @@ async function sourceThemes(root: string): Promise<ThemeDocument[]> {
   return themes;
 }
 
+// The production runtime reads a single generated module, so the first flow document
+// (sorted by file name) is the generated source, mirroring the single committed design.
+async function sourceFlow(root: string): Promise<FlowDocument | null> {
+  const directory = join(root, 'design', 'flows');
+  let names: string[];
+  try {
+    names = await readdir(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+  const first = names.filter((entry) => entry.endsWith('.json')).sort()[0];
+  if (!first) return null;
+  return parseFlowDocument(JSON.parse(await readFile(join(directory, first), 'utf8')));
+}
+
 async function expectedFiles(root: string): Promise<GeneratedContent[]> {
   const themes = await sourceThemes(root);
   const files: GeneratedContent[] = [];
@@ -72,6 +89,15 @@ async function expectedFiles(root: string): Promise<GeneratedContent[]> {
       path: LAYOUT_OUTPUT,
       content: layout,
       sha256: createHash('sha256').update(layout).digest('hex'),
+    });
+  }
+  const flow = await sourceFlow(root);
+  if (flow) {
+    const module = generateFlowModule(flow);
+    files.push({
+      path: FLOW_MODULE_OUTPUT,
+      content: module,
+      sha256: createHash('sha256').update(module).digest('hex'),
     });
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));

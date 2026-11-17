@@ -2,6 +2,14 @@ import {
   DESIGN_FORMATS,
   DESIGN_STATES,
   DESIGN_TARGETS,
+  FLOW_EDGE_BRANCHES,
+  FLOW_EVENT_TYPES,
+  FLOW_LINK_HOSTS,
+  FLOW_NODE_KINDS,
+  FLOW_TELEGRAM_TARGETS,
+  FLOW_TIMER_INTERVAL_MAX,
+  FLOW_TIMER_INTERVAL_MIN,
+  FLOW_VARIABLE_TYPES,
   LAYOUT_ALIGNMENTS,
   LAYOUT_ANCHORS,
   LAYOUT_DIRECTIONS,
@@ -11,10 +19,16 @@ import {
   type DesignState,
   type DesignTarget,
   type ConditionPath,
+  type ConditionValue,
   type FlowDocument,
+  type FlowGraph,
+  type FlowNodeView,
+  type FlowVariable,
+  type FlowVariableValue,
   type InteractionAction,
   type InteractionCondition,
   type InteractionRule,
+  type InteractionStep,
   type LayoutContainer,
   type LayoutClone,
   type LayoutDocument,
@@ -33,7 +47,8 @@ const SIZE = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?px$/;
 const VERSION = /^\d+\.\d+\.\d+(?:-beta\.\d+)?$/;
 const COLORS = new Set(['--omp-color-background', '--omp-color-panel', '--omp-color-text', '--omp-color-accent', '--omp-color-muted', '--omp-color-danger']);
 const SIZES = new Set(['--omp-size-space', '--omp-size-font', '--omp-size-sidebar', '--omp-size-radius']);
-const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current']);
+const CONDITION_PATHS = new Set(['server.connected', 'target', 'screen.current', 'network.online', 'account.signedIn', 'playback.state', 'download.state']);
+const FLOW_COOLDOWN_LIMIT = 3600000;
 const SCOPES = new Set(['target', 'component', 'screen', 'element', 'format', 'state']);
 export const LAYOUT_GEOMETRY_LIMIT = 10000;
 export const LAYOUT_ZINDEX_LIMIT = 999;
@@ -52,6 +67,15 @@ export function isLayoutSizeValue(value: unknown): value is number | 'auto' {
 
 export function isLayoutZIndexValue(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= LAYOUT_ZINDEX_LIMIT;
+}
+
+// Element ids keep the same safe id shape the flow document schema enforces, so an inspector
+// edit can never smuggle arbitrary JavaScript or URLs into a trigger binding. The wildcard is
+// accepted only where the schema accepts it (timer rules).
+export function isFlowElementIdValue(value: unknown, options: { allowWildcard?: boolean } = {}): value is string {
+  if (typeof value !== 'string' || value.length > 64) return false;
+  if (value === '*') return Boolean(options.allowWildcard);
+  return ID.test(value);
 }
 
 export function isLayoutMarginValue(value: unknown): value is string {
@@ -328,59 +352,251 @@ export function parseThemeDocument(value: unknown): ThemeDocument {
   return result;
 }
 
-function condition(value: unknown, path: string, depth = 0): InteractionCondition {
+function isScalar(value: unknown): value is ConditionValue {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+function conditionPath(value: unknown, path: string, variables: ReadonlySet<string> | undefined): ConditionPath {
+  const result = text(value, path, 80);
+  if (CONDITION_PATHS.has(result)) return result as ConditionPath;
+  if (result.startsWith('variable.')) {
+    const variableId = result.slice('variable.'.length);
+    if (!ID.test(variableId)) fail(path, 'invalid variable condition path');
+    if (variables && !variables.has(variableId)) fail(path, 'unknown variable');
+    return result as ConditionPath;
+  }
+  fail(path, 'unknown condition path');
+}
+
+function condition(value: unknown, path: string, variables?: ReadonlySet<string>, depth = 0): InteractionCondition {
   if (depth > 8) fail(path, 'condition nesting is limited to 8');
   const source = plain(value, path, ['kind', 'path', 'value', 'conditions', 'condition']);
   const kind = text(source.kind, `${path}.kind`, 10);
-  if (kind === 'eq') {
-    const conditionPath = text(source.path, `${path}.path`, 40);
-    if (!CONDITION_PATHS.has(conditionPath)) fail(`${path}.path`, 'unknown condition path');
-    if (typeof source.value !== 'string' && typeof source.value !== 'boolean') fail(`${path}.value`, 'string or boolean required');
-    return { kind, path: conditionPath as ConditionPath, value: source.value };
+  if (kind === 'eq' || kind === 'neq') {
+    if (!isScalar(source.value)) fail(`${path}.value`, 'string, number or boolean required');
+    return { kind, path: conditionPath(source.path, `${path}.path`, variables), value: source.value };
+  }
+  if (kind === 'gt' || kind === 'gte' || kind === 'lt' || kind === 'lte') {
+    if (typeof source.value !== 'number') fail(`${path}.value`, 'number required');
+    return { kind, path: conditionPath(source.path, `${path}.path`, variables), value: source.value };
+  }
+  if (kind === 'contains') {
+    if (typeof source.value !== 'string') fail(`${path}.value`, 'string required');
+    return { kind, path: conditionPath(source.path, `${path}.path`, variables), value: source.value };
+  }
+  if (kind === 'exists') {
+    if (source.value !== undefined) fail(`${path}.value`, 'value is not allowed');
+    return { kind, path: conditionPath(source.path, `${path}.path`, variables) };
   }
   if (kind === 'all' || kind === 'any') {
     if (!Array.isArray(source.conditions) || !source.conditions.length) fail(`${path}.conditions`, 'non-empty array required');
-    return { kind, conditions: source.conditions.map((entry, index) => condition(entry, `${path}.conditions[${index}]`, depth + 1)) };
+    return { kind, conditions: source.conditions.map((entry, index) => condition(entry, `${path}.conditions[${index}]`, variables, depth + 1)) };
   }
-  if (kind === 'not') return { kind, condition: condition(source.condition, `${path}.condition`, depth + 1) };
+  if (kind === 'not') return { kind, condition: condition(source.condition, `${path}.condition`, variables, depth + 1) };
   return fail(`${path}.kind`, 'unknown condition kind');
 }
 
-function action(value: unknown, path: string): InteractionAction {
-  const source = plain(value, path, ['type', 'screenId', 'message']);
+function variableValueMatches(variable: FlowVariable, value: FlowVariableValue): boolean {
+  if (variable.type === 'boolean') return typeof value === 'boolean';
+  if (variable.type === 'number') return typeof value === 'number';
+  if (variable.type === 'string') return typeof value === 'string';
+  return typeof value === 'string' && (variable.values ?? []).includes(value);
+}
+
+function action(value: unknown, path: string, variables?: ReadonlyMap<string, FlowVariable>): InteractionAction {
+  const source = plain(value, path, ['type', 'screenId', 'message', 'title', 'variableId', 'value', 'url', 'target']);
   const type = text(source.type, `${path}.type`, 20);
   if (type === 'navigate') return { type, screenId: id(source.screenId, `${path}.screenId`) };
   if (type === 'back') return { type };
   if (type === 'toast') return { type, message: text(source.message, `${path}.message`, 200) };
+  if (type === 'openScreen') return { type, screenId: id(source.screenId, `${path}.screenId`) };
+  if (type === 'dialog') {
+    return { type, title: text(source.title, `${path}.title`), message: text(source.message, `${path}.message`, 500) };
+  }
+  if (type === 'playback.playPause' || type === 'playback.stop' || type === 'playback.nextEpisode') return { type };
+  if (type === 'queue.add' || type === 'queue.replace') return { type };
+  if (type === 'server.connect' || type === 'server.reconnect' || type === 'server.retry') return { type };
+  if (type === 'source.retry' || type === 'source.next') return { type };
+  if (type === 'variable.set') {
+    const variableId = id(source.variableId, `${path}.variableId`);
+    if (!isScalar(source.value)) fail(`${path}.value`, 'string, number or boolean required');
+    const variable = variables?.get(variableId);
+    if (variables && !variable) fail(`${path}.variableId`, 'unknown variable');
+    if (variable && !variableValueMatches(variable, source.value)) fail(`${path}.value`, `value does not match variable type ${variable.type}`);
+    return { type, variableId, value: source.value };
+  }
+  if (type === 'link.open') {
+    const url = text(source.url, `${path}.url`, 500);
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      fail(`${path}.url`, 'valid URL required');
+    }
+    if (parsed.protocol !== 'https:') fail(`${path}.url`, 'https URL required');
+    if (parsed.username || parsed.password) fail(`${path}.url`, 'credentials are not allowed');
+    if (!(FLOW_LINK_HOSTS as readonly string[]).includes(parsed.host)) fail(`${path}.url`, 'link host is not allowed');
+    return { type, url };
+  }
+  if (type === 'telegram.open') return { type, target: oneOf(source.target, [...FLOW_TELEGRAM_TARGETS], `${path}.target`) };
   return fail(`${path}.type`, 'unknown action type');
 }
 
-function rule(value: unknown, path: string): InteractionRule {
-  const source = plain(value, path, ['id', 'screenId', 'elementId', 'event', 'condition', 'action']);
+function flowVariable(value: unknown, path: string): FlowVariable {
+  const source = plain(value, path, ['id', 'name', 'type', 'initial', 'values']);
+  const type = oneOf(source.type, [...FLOW_VARIABLE_TYPES], `${path}.type`);
+  if (!isScalar(source.initial)) fail(`${path}.initial`, 'string, number or boolean required');
+  const result: FlowVariable = {
+    id: id(source.id, `${path}.id`),
+    name: text(source.name, `${path}.name`),
+    type,
+    initial: source.initial,
+  };
+  if (type === 'boolean' && typeof source.initial !== 'boolean') fail(`${path}.initial`, 'boolean required');
+  if (type === 'number' && typeof source.initial !== 'number') fail(`${path}.initial`, 'number required');
+  if (type === 'string' && typeof source.initial !== 'string') fail(`${path}.initial`, 'string required');
+  if (type === 'enum') {
+    if (!Array.isArray(source.values) || !source.values.length) fail(`${path}.values`, 'non-empty array required');
+    const values = source.values.map((entry, index) => text(entry, `${path}.values[${index}]`, 64));
+    if (new Set(values).size !== values.length) fail(`${path}.values`, 'duplicate value');
+    if (typeof source.initial !== 'string' || !values.includes(source.initial)) fail(`${path}.initial`, 'initial value must be one of values');
+    result.values = values;
+  } else if (source.values !== undefined) {
+    fail(`${path}.values`, 'values are only allowed for enum variables');
+  }
+  return result;
+}
+
+function step(value: unknown, path: string, variables: ReadonlyMap<string, FlowVariable>): InteractionStep {
+  const source = plain(value, path, ['id', 'condition', 'action']);
+  const result: InteractionStep = { id: id(source.id, `${path}.id`) };
+  if (source.condition === undefined && source.action === undefined) fail(path, 'condition or action required');
+  if (source.condition !== undefined) result.condition = condition(source.condition, `${path}.condition`, new Set(variables.keys()));
+  if (source.action !== undefined) result.action = action(source.action, `${path}.action`, variables);
+  return result;
+}
+
+function flowGraph(value: unknown, path: string, ruleId: string, steps: ReadonlyMap<string, InteractionStep>): FlowGraph {
+  const source = plain(value, path, ['nodes', 'edges']);
+  if (!Array.isArray(source.nodes)) fail(`${path}.nodes`, 'array required');
+  if (!Array.isArray(source.edges)) fail(`${path}.edges`, 'array required');
+  const nodes: FlowNodeView[] = [];
+  for (const [index, entry] of source.nodes.entries()) {
+    const nodePath = `${path}.nodes[${index}]`;
+    const nodeSource = plain(entry, nodePath, ['id', 'kind', 'ruleId', 'stepId', 'x', 'y', 'label']);
+    const node: FlowNodeView = {
+      id: id(nodeSource.id, `${nodePath}.id`),
+      kind: oneOf(nodeSource.kind, [...FLOW_NODE_KINDS], `${nodePath}.kind`),
+      x: layoutGeometry(nodeSource.x, `${nodePath}.x`),
+      y: layoutGeometry(nodeSource.y, `${nodePath}.y`),
+    };
+    if (nodeSource.ruleId !== undefined) {
+      const nodeRuleId = id(nodeSource.ruleId, `${nodePath}.ruleId`);
+      if (nodeRuleId !== ruleId) fail(`${nodePath}.ruleId`, 'node belongs to a different rule');
+      node.ruleId = nodeRuleId;
+    }
+    if (nodeSource.label !== undefined) node.label = layoutLabel(nodeSource.label, `${nodePath}.label`);
+    const stepId = nodeSource.stepId === undefined ? undefined : id(nodeSource.stepId, `${nodePath}.stepId`);
+    if (stepId !== undefined) {
+      const linked = steps.get(stepId);
+      if (!linked) fail(`${nodePath}.stepId`, 'unknown step');
+      if (node.kind === 'condition' && !linked.condition) fail(`${nodePath}.stepId`, 'condition node requires a step with a condition');
+      if ((node.kind === 'action' || node.kind === 'result') && !linked.action) fail(`${nodePath}.stepId`, `${node.kind} node requires a step with an action`);
+      node.stepId = stepId;
+    }
+    nodes.push(node);
+  }
+  if (new Set(nodes.map((entry) => entry.id)).size !== nodes.length) fail(`${path}.nodes`, 'duplicate node id');
+  const nodeIds = new Set(nodes.map((entry) => entry.id));
+  const edges: FlowGraph['edges'] = [];
+  for (const [index, entry] of source.edges.entries()) {
+    const edgePath = `${path}.edges[${index}]`;
+    const edgeSource = plain(entry, edgePath, ['id', 'from', 'to', 'branch']);
+    const from = id(edgeSource.from, `${edgePath}.from`);
+    const to = id(edgeSource.to, `${edgePath}.to`);
+    if (!nodeIds.has(from) || !nodeIds.has(to)) fail(edgePath, 'edge references an unknown node');
+    if (from === to) fail(edgePath, 'self-loop edge');
+    edges.push({
+      id: id(edgeSource.id, `${edgePath}.id`),
+      from,
+      to,
+      branch: oneOf(edgeSource.branch, [...FLOW_EDGE_BRANCHES], `${edgePath}.branch`),
+    });
+  }
+  if (new Set(edges.map((entry) => entry.id)).size !== edges.length) fail(`${path}.edges`, 'duplicate edge id');
+  return { nodes, edges };
+}
+
+function rule(value: unknown, path: string, variables: ReadonlyMap<string, FlowVariable>): InteractionRule {
+  const source = plain(value, path, ['id', 'screenId', 'elementId', 'event', 'condition', 'action', 'steps', 'graph', 'cooldownMs', 'intervalMs']);
   const screenId = text(source.screenId, `${path}.screenId`, 64);
   if (screenId !== '*' && !ID.test(screenId)) fail(`${path}.screenId`, 'invalid screen id or wildcard');
-  if (source.event !== 'click') fail(`${path}.event`, 'only click is supported');
+  const event = oneOf(source.event, [...FLOW_EVENT_TYPES], `${path}.event`);
+  const elementId = text(source.elementId, `${path}.elementId`, 64);
+  if (event === 'timer') {
+    if (elementId !== '*' && !ID.test(elementId)) fail(`${path}.elementId`, 'invalid element id or wildcard');
+  } else {
+    id(source.elementId, `${path}.elementId`);
+  }
   const result: InteractionRule = {
     id: id(source.id, `${path}.id`),
     screenId,
-    elementId: id(source.elementId, `${path}.elementId`),
-    event: 'click',
-    action: action(source.action, `${path}.action`),
+    elementId,
+    event,
+    action: action(source.action, `${path}.action`, variables),
   };
-  if (source.condition !== undefined) result.condition = condition(source.condition, `${path}.condition`);
+  const variableIds = new Set(variables.keys());
+  if (source.condition !== undefined) result.condition = condition(source.condition, `${path}.condition`, variableIds);
+  if (source.steps !== undefined) {
+    if (!Array.isArray(source.steps)) fail(`${path}.steps`, 'array required');
+    const steps = source.steps.map((entry, index) => step(entry, `${path}.steps[${index}]`, variables));
+    if (new Set(steps.map((entry) => entry.id)).size !== steps.length) fail(`${path}.steps`, 'duplicate step id');
+    result.steps = steps;
+  }
+  if (source.graph !== undefined) {
+    const steps = new Map((result.steps ?? []).map((entry) => [entry.id, entry]));
+    result.graph = flowGraph(source.graph, `${path}.graph`, result.id, steps);
+  }
+  if (source.cooldownMs !== undefined) {
+    if (typeof source.cooldownMs !== 'number' || !Number.isInteger(source.cooldownMs) || source.cooldownMs < 0 || source.cooldownMs > FLOW_COOLDOWN_LIMIT) {
+      fail(`${path}.cooldownMs`, `integer from 0 to ${FLOW_COOLDOWN_LIMIT} required`);
+    }
+    result.cooldownMs = source.cooldownMs;
+  }
+  if (event === 'timer') {
+    if (source.intervalMs === undefined) fail(`${path}.intervalMs`, 'timer rules require intervalMs');
+    if (typeof source.intervalMs !== 'number' || !Number.isInteger(source.intervalMs)
+      || source.intervalMs < FLOW_TIMER_INTERVAL_MIN || source.intervalMs > FLOW_TIMER_INTERVAL_MAX) {
+      fail(`${path}.intervalMs`, `integer from ${FLOW_TIMER_INTERVAL_MIN} to ${FLOW_TIMER_INTERVAL_MAX} required`);
+    }
+    result.intervalMs = source.intervalMs;
+  } else if (source.intervalMs !== undefined) {
+    fail(`${path}.intervalMs`, 'intervalMs is only allowed for timer rules');
+  }
   return result;
 }
 
 export function parseFlowDocument(value: unknown): FlowDocument {
-  const source = plain(value, 'flow', ['schemaVersion', 'id', 'baseCommit', 'rules']);
+  const source = plain(value, 'flow', ['schemaVersion', 'id', 'baseCommit', 'rules', 'variables']);
   if (source.schemaVersion !== 1) fail('flow.schemaVersion', 'only schema version 1 is supported');
   if (!Array.isArray(source.rules)) fail('flow.rules', 'array required');
-  const rules = source.rules.map((entry, index) => rule(entry, `flow.rules[${index}]`));
+  const variables = new Map<string, FlowVariable>();
+  if (source.variables !== undefined) {
+    if (!Array.isArray(source.variables)) fail('flow.variables', 'array required');
+    for (const [index, entry] of source.variables.entries()) {
+      const variable = flowVariable(entry, `flow.variables[${index}]`);
+      if (variables.has(variable.id)) fail('flow.variables', 'duplicate variable id');
+      variables.set(variable.id, variable);
+    }
+  }
+  const rules = source.rules.map((entry, index) => rule(entry, `flow.rules[${index}]`, variables));
   if (new Set(rules.map((entry) => entry.id)).size !== rules.length) fail('flow.rules', 'duplicate rule id');
-  return {
+  const result: FlowDocument = {
     schemaVersion: 1,
     id: id(source.id, 'flow.id'),
     baseCommit: commit(source.baseCommit, 'flow.baseCommit'),
     rules,
   };
+  if (source.variables !== undefined) result.variables = [...variables.values()];
+  return result;
 }

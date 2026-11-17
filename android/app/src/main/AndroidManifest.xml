@@ -100,9 +100,10 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
-            <!-- Title links. autoVerify uses assetlinks.json (release cert of v0.20.8-beta.1
-                 plus the debug cert). Until that file is deployed, Android opens the site
-                 and the page button still starts this activity by an intent link. -->
+            <!-- Title links. autoVerify uses assetlinks.json (release cert of v0.20.8-beta.1 only;
+                 the public debug cert must not be listed for this package). Until that file is
+                 deployed, Android opens the site and the page button still starts this activity
+                 by an intent link. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
