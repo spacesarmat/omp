@@ -233,17 +233,31 @@ describe('donate rate timing', () => {
   });
 
   it('prices a new quote from a fresh cache and refreshes behind the answer when the interval has passed', () => {
-    expect(donateRateWait('dn:n:row1:0', priced, NOW + 60 * 1000)).toBe('skip');
-    expect(donateRateWait('dn:n:row1:0', priced, NOW + 13 * 60 * 1000)).toBe('background');
+    const naming = { ...priced, donations: [{ id: 'row1', status: 'draft', step: 'name' }] };
+    expect(donateRateWait('dn:n:row1:0', naming, NOW + 60 * 1000)).toBe('skip');
+    expect(donateRateWait('dn:n:row1:0', naming, NOW + 13 * 60 * 1000)).toBe('background');
     const draft = { ...priced, donations: [{ id: 'row1', status: 'draft', step: 'method' }] };
     expect(donateRateWait('dn:p:row1:USDT', draft, NOW + 13 * 60 * 1000)).toBe('background');
   });
 
   it('waits for a quote only when the cache cannot price it', () => {
-    const empty = { settings: { rates: { auto: { usdt: true, ton: true, btc: true, star: true } } }, donations: [] };
+    const row = [{ id: 'row1', status: 'draft', step: 'name' }];
+    const empty = { settings: { rates: { auto: { usdt: true, ton: true, btc: true, star: true } } }, donations: row };
     expect(donateRateWait('dn:n:row1:0', empty, NOW)).toBe('block');
-    const manual = { settings: { rates: { auto: { usdt: false, ton: false, btc: false, star: false } } }, donations: [] };
+    const manual = { settings: { rates: { auto: { usdt: false, ton: false, btc: false, star: false } } }, donations: row };
     expect(donateRateWait('dn:n:row1:0', manual, NOW)).toBe('skip');
+  });
+
+  it('answers a stale name or method button without calling the rate hosts', () => {
+    const moved = { ...priced, donations: [{ id: 'row1', status: 'draft', step: 'method' }] };
+    expect(donateRateWait('dn:n:row1:0', moved, NOW + 13 * 60 * 1000)).toBe('skip');
+    const naming = { ...priced, donations: [{ id: 'row1', status: 'draft', step: 'name' }] };
+    expect(donateRateWait('dn:p:row1:USDT', naming, NOW + 13 * 60 * 1000)).toBe('skip');
+    const cancelled = { ...priced, donations: [{ id: 'row1', status: 'cancelled', step: '' }] };
+    expect(donateRateWait('dn:n:row1:0', cancelled, NOW + 13 * 60 * 1000)).toBe('skip');
+    expect(donateRateWait('dn:n:missing:0', priced, NOW + 13 * 60 * 1000)).toBe('skip');
+    const empty = { settings: { rates: { auto: { usdt: true, ton: true, btc: true, star: true } } }, donations: [] };
+    expect(donateRateWait('dn:n:row1:0', empty, NOW)).toBe('skip');
   });
 
   it('keeps a Crypto Pay price that arrives during the short wait after CoinGecko', async () => {

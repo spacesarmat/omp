@@ -418,7 +418,7 @@ function bookCovers(book, now) {
 
 /**
  * Whether this donate tap may call the rate hosts.
- * 'skip': amount, comment, a repeat of a frozen invoice, manual rates, or a fresh cache.
+ * 'skip': amount, comment, a stale button, a repeat of a frozen invoice, manual rates, or a fresh cache.
  * 'background': the cache can still price the quote, but a refresh is due. Answer first.
  * 'block': the quote has no usable rate, so the invoice has to wait for one fetch.
  */
@@ -428,11 +428,10 @@ export function donateRateWait(data, state, now) {
   const paying = raw.indexOf('dn:p:') === 0;
   if (!naming && !paying) return 'skip';
   const rows = (state && state.donations) || [];
-  if (paying) {
-    const id = raw.split(':')[2] || '';
-    const row = rows.find((d) => d && d.id === id);
-    if (!row || row.status !== 'draft' || row.step !== 'method') return 'skip';
-  }
+  const id = raw.split(':')[2] || '';
+  const row = rows.find((d) => d && d.id === id);
+  // Only a live draft on the step that renders prices may wait; a stale button is answered at once.
+  if (!row || row.status !== 'draft' || row.step !== (naming ? 'name' : 'method')) return 'skip';
   const book = normalizeRateSettings(state && state.settings && state.settings.rates);
   if (!anyAuto(book)) return 'skip';
   const at = Number(now) > 0 ? Number(now) : Date.now();
