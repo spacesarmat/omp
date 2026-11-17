@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Seed monitoring: bitmagnet source module - batch seed/leech lookup by infohash over GraphQL (up to 30 hashes per request), freshness policy and merge with current counts, errors never throw into the caller. Complements the Torznab search without duplicating it. Wiring into server.mjs ships in a separate PR after phase 1
+
 ## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount

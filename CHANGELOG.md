@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Мониторинг сидов: модуль-источник bitmagnet - батч-запрос seed/leech по infohash через GraphQL (до 30 хешей за запрос), политика свежести и слияния с текущими counts, ошибки не роняют вызывающего. Дополняет Torznab-поиск, не дублирует его. Wiring в server.mjs - отдельным PR после фазы 1
+
 ## 0.30.1-beta.7
 
 - [phone] Приглашение: если рефереру начислен баланс, экран показывает сумму
