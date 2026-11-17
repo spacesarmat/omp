@@ -223,17 +223,22 @@ export function reverseReferralRow(state, id, now, actor) {
   let binds = (state.referralBinds || []).slice();
   const bits = ['Отмена ' + variantName(variant) + '.'];
   const missing = [];
+  // Once the bind is gone, settleReferrals never visits this pair again: its waiting awards
+  // (a balance held by the month cap, retention) would stay waiting forever, so cancel them too.
+  const dropWaiting = () => {
+    for (let i = 0; i < list.length; i++) {
+      const other = list[i];
+      if (!other || other.id === row.id || other.friendId !== row.friendId || other.referrerId !== row.referrerId) continue;
+      if (other.status === 'waiting' || other.status === 'rejected') {
+        list[i] = { ...other, status: 'cancelled', reason: 'manual', noticePending: false, friendNoticePending: false };
+      }
+    }
+  };
   if (row.status !== 'granted') {
     bits.push('Бонус ещё не выдан.');
     if (daysVariant(row) && row.friendId) {
       binds = binds.filter((item) => !item || item.friendId !== row.friendId);
-      for (let i = 0; i < list.length; i++) {
-        const other = list[i];
-        if (!other || other.id === row.id || other.friendId !== row.friendId || other.referrerId !== row.referrerId) continue;
-        if (other.status === 'waiting' || other.status === 'rejected') {
-          list[i] = { ...other, status: 'cancelled', reason: 'manual', noticePending: false, friendNoticePending: false };
-        }
-      }
+      dropWaiting();
     }
   } else {
     const removed = [];
@@ -269,7 +274,10 @@ export function reverseReferralRow(state, id, now, actor) {
       }
     }
     if (removed.length) bits.push('Снято ' + removed.join(' и ') + '.');
-    if (daysVariant(row) && row.friendId) binds = binds.filter((item) => !item || item.friendId !== row.friendId);
+    if (daysVariant(row) && row.friendId) {
+      binds = binds.filter((item) => !item || item.friendId !== row.friendId);
+      dropWaiting();
+    }
   }
   const shortfall = missing.join(', ');
   if (shortfall) bits.push('Не снято: ' + shortfall + '.');

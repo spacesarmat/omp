@@ -1292,20 +1292,24 @@ function referralIndex(journal, friendId, referrerId, variant) {
 function creditHeavyPay(state, row) {
   if (!row) return false;
   let credit = Math.max(0, Math.floor(Number(row.credit) || 0));
+  let off = 0;
   let full = 0;
+  const money = rubOfPayment(row);
   const label = String(row.label || '');
   if (label.indexOf('buy:') === 0) {
     const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
     if (quote) {
+      off = Math.max(0, Math.floor(Number(quote.referralOff) || 0));
       full = (Number(quote.price) || 0) + (Number(quote.credit) || 0) + (Number(quote.referralOff) || 0);
       const quoted = Math.max(0, Math.floor(Number(quote.credit) || 0));
       // No saved credit: the quote froze it, unless the payer covered the missing part in money.
-      if (!credit && quoted > 0 && rubOfPayment(row) <= (Number(quote.price) || 0) + 0.01) credit = quoted;
+      if (!credit && quoted > 0 && money <= (Number(quote.price) || 0) + 0.01) credit = quoted;
     }
   }
   if (!(credit > 0)) return false;
-  if (!(full > 0)) full = rubOfPayment(row) + credit;
-  return credit * 2 > full;
+  if (!(full > 0)) full = money + credit + off;
+  // The friend discount is not money: the cash part must reach at least half of the full price.
+  return money * 2 < full;
 }
 
 /** Accepted subscription payments of one friend since the bind: no device slots, no credit-covered renewals. */

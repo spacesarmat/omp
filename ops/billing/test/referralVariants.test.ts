@@ -450,6 +450,43 @@ describe('referral credit cover and stars guards', () => {
     expect(row(settled.state, 'balance')).toMatchObject({ status: 'granted', credit: 15 });
   });
 
+  it('does not count a payment where credit and the friend discount together leave little money', () => {
+    const state = world({ referrerDays: 7, balance: true, balancePercent: 10, delayDays: 0, friendDiscount: true, friendDiscountRub: 100 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    state.subscriptions[1].creditRub = 90;
+    const quoted = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - DAY });
+    expect(quoted.result.price).toBe(10);
+    expect(quoted.result.credit).toBe(90);
+    expect(quoted.result.referralOff).toBe(100);
+    const paid = applyPayment(quoted.state, { operationId: 'op-mix', label: quoted.result.label, amount: '10.00', currency: '643', now: NOW - DAY });
+    expect(paid.result.kind).toBe('renew');
+    const settled = settleReferrals(paid.state, NOW);
+    expect(row(settled.state, 'days')).toBeUndefined();
+    expect(row(settled.state, 'balance')).toBeUndefined();
+    expect(sub(settled.state, 's-ref').creditRub).toBe(0);
+  });
+
+  it('cancels a waiting balance award when the granted days row removes the bind', () => {
+    const settings = { referrerDays: 7, balance: true, balancePercent: 10, balanceMonthlyCap: 20, delayDays: 0 };
+    const first = settleReferrals(pay(world(settings)), NOW);
+    const daysId = String(row(first.state, 'days')!.id);
+    const again = {
+      ...first.state,
+      payments: first.state.payments.concat([{ id: 'p2', accountId: 'friend', at: NOW + 10 * DAY, amount: '200.00', label: 'sub:s-friend' }]),
+    };
+    const held = settleReferrals(again, NOW + 11 * DAY);
+    const waiting = held.state.referralJournal.filter((item) => item.variant === 'balance' && item.status === 'waiting');
+    expect(waiting).toHaveLength(1);
+    const undone = applyReferralPost({ cancelId: daysId, settings: held.state.settings.referral }, held.state, {
+      now: NOW + 11 * DAY,
+      actor: { kind: 'admin', id: '9', label: '9' },
+    });
+    expect(undone.binds).toEqual([]);
+    expect(undone.journal.find((item) => item.id === waiting[0].id)!.status).toBe('cancelled');
+    const later = settleReferrals(undone.state, NOW + 71 * DAY);
+    expect(later.state.referralJournal.find((item) => item.id === waiting[0].id)!.status).toBe('cancelled');
+  });
+
   it('recognizes an old credit-covered payment by its quote, unless the missing credit was paid in money', () => {
     const state = world({ referrerDays: 7, delayDays: 0 });
     state.referralBinds[0].boundAt = NOW - 100 * DAY;

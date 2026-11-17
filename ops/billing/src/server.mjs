@@ -2980,7 +2980,8 @@ export function createApp(file, fetchImpl, opts) {
           const next = await store.update((cur) => {
             let merged = settleReferrals(cur, now).state;
             if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
-            const notes = claimReferralNotices(merged);
+            // Without a bot token the notices cannot be sent: leave them pending instead of clearing the flags.
+            const notes = cur.settings && cur.settings.botToken ? claimReferralNotices(merged) : { state: merged, messages: [] };
             referralNotes = notes.messages;
             return { state: notes.state, result: notes.state };
           });
