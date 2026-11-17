@@ -96,6 +96,37 @@ describe('createBitmagnetSource fetchCounts', () => {
     expect(map.get(HASH_B)).toEqual({ seeders: 7, leechers: 3, updatedAt: NOW - 1000, source: 'bitmagnet' });
   });
 
+  it('binds updatedAt to the record that gave the counts, never hiding stale fallback fields', async () => {
+    const old = NOW - 10 * 60 * 60 * 1000;
+    const fetchImpl = fakeFetch(() =>
+      jsonRes(itemsBody([
+        // torrent counts null but torrent.updatedAt fresh: the applied counts are the old item ones
+        item(HASH, { seeders: 7, leechers: 3, updatedAt: iso(old), torrent: { seeders: null, leechers: null, updatedAt: iso(NOW - 1000) } }),
+        // mixed: seeders from torrent, leechers from item - the older timestamp governs
+        item(HASH_B, { seeders: 99, leechers: 2, updatedAt: iso(old), torrent: { seeders: 34, leechers: null, updatedAt: iso(NOW - 1000) } }),
+      ])),
+    );
+    const src = createBitmagnetSource({ baseUrl: BASE, fetchImpl, now: () => NOW });
+    const map = await src.fetchCounts([HASH, HASH_B]);
+    expect(map.get(HASH).updatedAt).toBe(old);
+    expect(src.isFresh(map.get(HASH), 60000)).toBe(false);
+    expect(map.get(HASH_B).seeders).toBe(34);
+    expect(map.get(HASH_B).leechers).toBe(2);
+    expect(map.get(HASH_B).updatedAt).toBe(old);
+    expect(src.isFresh(map.get(HASH_B), 60000)).toBe(false);
+  });
+
+  it('does not borrow a fresh item timestamp for torrent counts with an unknown aggregate age', async () => {
+    const fetchImpl = fakeFetch(() =>
+      jsonRes(itemsBody([item(HASH, { updatedAt: iso(NOW - 1000), torrent: { seeders: 34, leechers: 1, updatedAt: null } })])),
+    );
+    const src = createBitmagnetSource({ baseUrl: BASE, fetchImpl, now: () => NOW });
+    const map = await src.fetchCounts([HASH]);
+    expect(map.get(HASH).seeders).toBe(34);
+    expect(map.get(HASH).updatedAt).toBe(null);
+    expect(src.isFresh(map.get(HASH), 60000)).toBe(false);
+  });
+
   it('treats null counts as unknown: both null omits the row, one null stays null', async () => {
     const fetchImpl = fakeFetch(() =>
       jsonRes(itemsBody([
@@ -161,6 +192,27 @@ describe('createBitmagnetSource fetchCounts', () => {
       expect(src.lastStatus.ok).toBe(false);
       expect(typeof src.lastStatus.error).toBe('string');
     }
+  });
+
+  it('cancels the response body on non-200 and on a bad shape so connections are released', async () => {
+    let cancelledHttp = 0;
+    let cancelledShape = 0;
+    const httpFail = fakeFetch(() => ({
+      status: 503,
+      body: { cancel: async () => { cancelledHttp += 1; } },
+      json: async () => ({}),
+    }));
+    const shapeFail = fakeFetch(() => ({
+      status: 200,
+      body: { cancel: async () => { cancelledShape += 1; } },
+      json: async () => ({ data: {} }),
+    }));
+    const src1 = createBitmagnetSource({ baseUrl: BASE, fetchImpl: httpFail, now: () => NOW });
+    expect((await src1.fetchCounts([HASH])).size).toBe(0);
+    expect(cancelledHttp).toBe(1);
+    const src2 = createBitmagnetSource({ baseUrl: BASE, fetchImpl: shapeFail, now: () => NOW });
+    expect((await src2.fetchCounts([HASH])).size).toBe(0);
+    expect(cancelledShape).toBe(1);
   });
 
   it('aborts on timeout and reports it without throwing', async () => {
@@ -237,14 +289,42 @@ describe('mergeBitmagnetCounts', () => {
     expect(out.fresh).toBe(true);
   });
 
-  it('does not apply a stale row and does not touch a tracker row', () => {
+  it('does not apply a stale row and does not touch a tracker row or its age', () => {
     const stale = { ...fresh, updatedAt: NOW - BITMAGNET_MAX_AGE_MS - 1000 };
     const out = mergeBitmagnetCounts(existing, stale, { now: () => NOW });
     expect(out.seeders).toBe(1);
     expect(out.source).toBe('tracker');
     expect(out.fresh).toBe(false);
     expect(out.live).toBe(true);
-    expect(out.ageMs).toBe(BITMAGNET_MAX_AGE_MS + 1000);
+    // The stale incoming counts were not applied, so their age must not label the tracker row.
+    expect(out.ageMs).toBe(undefined);
+    const withAge = mergeBitmagnetCounts({ ...existing, ageMs: 500 }, stale, { now: () => NOW });
+    expect(withAge.ageMs).toBe(500);
+  });
+
+  it('keeps null unknown when neither input gives a number', () => {
+    const out = mergeBitmagnetCounts({}, { ...fresh, seeders: null }, { now: () => NOW, maxAgeMs: 60000 });
+    expect(out.seeders).toBe(null);
+    expect(out.leechers).toBe(1);
+    expect(out.fresh).toBe(true);
+    const zero = mergeBitmagnetCounts({ seeders: 0, leechers: 0 }, { ...fresh, seeders: null, leechers: null, updatedAt: NOW - 1000 }, { now: () => NOW, maxAgeMs: 60000 });
+    expect(zero.seeders).toBe(0);
+    expect(zero.leechers).toBe(0);
+  });
+
+  it('recomputes the age of saved bitmagnet counts from measuredAt on every merge', () => {
+    const saved = { seeders: 34, leechers: 1, live: true, verified: true, source: 'bitmagnet', measuredAt: NOW - 1000, ageMs: 1000 };
+    const later = NOW + 60 * 60 * 1000;
+    const absent = mergeBitmagnetCounts(saved, null, { now: () => later });
+    expect(absent.ageMs).toBe(60 * 60 * 1000 + 1000);
+    expect(absent.fresh).toBe(false);
+    expect(absent.live).toBe(false);
+    const stale = { ...fresh, updatedAt: NOW - 2000 };
+    const withStale = mergeBitmagnetCounts(saved, stale, { now: () => later, maxAgeMs: 60000 });
+    // Age comes from the applied (saved) counts, not from the unapplied incoming row.
+    expect(withStale.ageMs).toBe(60 * 60 * 1000 + 1000);
+    expect(withStale.seeders).toBe(34);
+    expect(withStale.fresh).toBe(false);
   });
 
   it('demotes a stale bitmagnet-sourced row so it is never shown as live', () => {

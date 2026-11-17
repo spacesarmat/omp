@@ -10,14 +10,17 @@
 // Counts policy: items[].torrent.seeders/leechers/updatedAt is the aggregate and wins;
 // items[].seeders/leechers/updatedAt (torrent_contents) is the fallback. A null count means
 // "unknown", never zero: a field null in both places stays null, and a row with both counts
-// null is omitted. Errors (network, timeout, non-200, GraphQL errors, bad JSON) resolve to an
-// empty Map so the caller keeps its previous numbers.
+// null is omitted. updatedAt belongs to the record that gave the counts - a fresh aggregate
+// timestamp never labels stale fallback counts (mixed records take the older timestamp).
+// Errors (network, timeout, non-200, GraphQL errors, bad JSON) resolve to an empty Map so the
+// caller keeps its previous numbers; unread response bodies are cancelled.
 //
 // Freshness: isFresh(row, maxAgeMs) is age-only, with a one-minute clock-skew tolerance.
 // mergeBitmagnetCounts never presents stale bitmagnet numbers as live: a fresh row applies
-// counts and marks source/age/estimate, a stale or absent row demotes live when the existing
-// counts themselves came from bitmagnet. Tracker verification (live/verified) stays owned by
-// the scrape path; bitmagnet counts are DHT-derived estimates.
+// counts (a null field keeps the existing number, or null when there is none) and marks
+// source/age/estimate; a stale or absent row demotes live when the existing counts themselves
+// came from bitmagnet and keeps their age advancing from measuredAt. Tracker verification
+// (live/verified) stays owned by the scrape path; bitmagnet counts are DHT-derived estimates.
 //
 // Logging: this module never prints URLs or infohashes. lastStatus carries counts and status
 // only ({ ok, status, error, ms, at, asked, rows }) for the caller's log line.
@@ -80,20 +83,31 @@ function batchQuery(hashes) {
   );
 }
 
-/** One answer item -> { seeders, leechers, updatedAt, source }, or null when both counts are unknown. */
+/**
+ * One answer item -> { seeders, leechers, updatedAt, source }, or null when both counts are unknown.
+ * updatedAt belongs to the record that gave the counts: all-torrent counts carry the torrent
+ * timestamp; when a count falls back to contents, the contents timestamp governs, and with
+ * mixed records the older of the two wins so a fresh aggregate cannot hide a stale field.
+ */
 function rowOf(item) {
   if (!item || typeof item !== 'object') return null;
   const hash = String(item.infoHash || '').toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(hash)) return null;
   const t = item.torrent && typeof item.torrent === 'object' ? item.torrent : null;
-  const pick = (field) => {
-    const fromTorrent = t ? count(t[field]) : null;
-    return fromTorrent !== null ? fromTorrent : count(item[field]);
-  };
-  const seeders = pick('seeders');
-  const leechers = pick('leechers');
+  const tSeeders = t ? count(t.seeders) : null;
+  const tLeechers = t ? count(t.leechers) : null;
+  const seeders = tSeeders !== null ? tSeeders : count(item.seeders);
+  const leechers = tLeechers !== null ? tLeechers : count(item.leechers);
   if (seeders === null && leechers === null) return null;
-  const updatedAt = timeMs(t && t.updatedAt) !== null ? timeMs(t && t.updatedAt) : timeMs(item.updatedAt);
+  const tsTorrent = timeMs(t && t.updatedAt);
+  const tsItem = timeMs(item.updatedAt);
+  const allFromTorrent = (seeders === null || tSeeders !== null) && (leechers === null || tLeechers !== null);
+  let updatedAt;
+  if (allFromTorrent) {
+    updatedAt = tsTorrent;
+  } else {
+    updatedAt = tsItem === null ? null : tsTorrent === null ? tsItem : Math.min(tsTorrent, tsItem);
+  }
   return { hash, row: { seeders, leechers, updatedAt, source: 'bitmagnet' } };
 }
 
@@ -106,9 +120,10 @@ export function isFreshRow(row, maxAgeMs, now) {
 
 /**
  * Pure merge of one existing counts row with one bitmagnet row (or null).
- * Fresh bitmagnet counts apply (a null field keeps the existing number), marked with
- * source 'bitmagnet', fresh, ageMs and estimate. Stale or absent bitmagnet data never
- * applies and never keeps a bitmagnet-sourced row live. opts: { now, maxAgeMs }.
+ * Fresh bitmagnet counts apply (a null field keeps the existing number, or null when there
+ * is none), marked with source 'bitmagnet', fresh, ageMs and estimate. Stale or absent
+ * bitmagnet data never applies, never keeps a bitmagnet-sourced row live, and the age of
+ * saved bitmagnet counts keeps advancing from measuredAt. opts: { now, maxAgeMs }.
  */
 export function mergeBitmagnetCounts(existing, bitmagnet, opts) {
   const o = opts || {};
@@ -122,8 +137,9 @@ export function mergeBitmagnetCounts(existing, bitmagnet, opts) {
     (bitmagnet.seeders != null || bitmagnet.leechers != null) &&
     isFreshRow(bitmagnet, maxAgeMs, now);
   if (usable) {
-    out.seeders = bitmagnet.seeders != null ? bitmagnet.seeders : base.seeders || 0;
-    out.leechers = bitmagnet.leechers != null ? bitmagnet.leechers : base.leechers || 0;
+    // Unknown stays unknown: a null field keeps the existing number, or null when there is none.
+    out.seeders = bitmagnet.seeders != null ? bitmagnet.seeders : base.seeders != null ? base.seeders : null;
+    out.leechers = bitmagnet.leechers != null ? bitmagnet.leechers : base.leechers != null ? base.leechers : null;
     out.source = 'bitmagnet';
     out.fresh = true;
     out.ageMs = Math.max(0, now - bitmagnet.updatedAt);
@@ -134,15 +150,26 @@ export function mergeBitmagnetCounts(existing, bitmagnet, opts) {
     return out;
   }
   out.fresh = false;
-  if (bitmagnet && typeof bitmagnet.updatedAt === 'number' && isFinite(bitmagnet.updatedAt)) {
-    out.ageMs = Math.max(0, now - bitmagnet.updatedAt);
-  }
   if (base.source === 'bitmagnet') {
-    // Stale estimates are shown as numbers with an age, never as a live swarm.
+    // The saved counts were not refreshed: their age keeps advancing from measuredAt,
+    // and stale estimates are shown as numbers with an age, never as a live swarm.
+    if (typeof base.measuredAt === 'number' && isFinite(base.measuredAt)) {
+      out.ageMs = Math.max(0, now - base.measuredAt);
+    }
     out.live = false;
     out.verified = false;
   }
+  // A stale or absent incoming row was not applied, so its timestamp never labels these counts.
   return out;
+}
+
+/** Release a response body that will not be read, so a failed request does not hold the connection. */
+async function dropBody(res) {
+  try {
+    if (res && res.body && typeof res.body.cancel === 'function') await res.body.cancel();
+  } catch (e) {
+    // already consumed or closed
+  }
 }
 
 /**
@@ -190,6 +217,7 @@ export function createBitmagnetSource(opts) {
             signal: ctrl.signal,
           });
           if (res.status !== 200) {
+            await dropBody(res);
             status.ok = false;
             status.status = res.status;
             status.error = 'http';
@@ -197,12 +225,14 @@ export function createBitmagnetSource(opts) {
           }
           const body = await res.json();
           if (body && Array.isArray(body.errors) && body.errors.length) {
+            await dropBody(res);
             status.ok = false;
             status.error = 'graphql';
             continue;
           }
           const items = body && body.data && body.data.torrentContent && body.data.torrentContent.search && body.data.torrentContent.search.items;
           if (!Array.isArray(items)) {
+            await dropBody(res);
             status.ok = false;
             status.error = 'shape';
             continue;
