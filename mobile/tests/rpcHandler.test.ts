@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createRpcHandler, RpcError, MAX_RESULTS } from '../src/rpc/handler';
+import { createRpcHandler, RpcError, MAX_RESULTS, toRpcResult } from '../src/rpc/handler';
 import { saveBillingAccess } from '../../src/billing/entitlement';
 import { saveBillingSession } from '../../src/billing/session';
 import { allowBillingSignIn, signOutBilling } from '../../src/sources/ompJackett';
@@ -357,5 +357,15 @@ describe('rpc handler: states, handles and failures', () => {
     const key = ((await rpc.dispatch('searchPoll', { handle })) as { results: { key: string }[] }).results[0].key;
     await expect(rpc.dispatch('resolve', { handle, key })).rejects.toMatchObject({ code: 'failed', message: 'no link' });
     await expect(rpc.dispatch('resolve', { handle: 'nope', key })).rejects.toMatchObject({ code: 'expired' });
+  });
+});
+
+describe('toRpcResult estimate provenance', () => {
+  it('copies seedSource and seedAgeMs of a bitmagnet estimate, and drops them when absent', () => {
+    const r = toRpcResult({ ...row(1), Seed: 22, Peer: 4, seedCheck: 'dht', dhtEstimate: true, seedSource: 'bitmagnet', seedAgeMs: 60000 } as never, 'k1');
+    expect(r).toMatchObject({ Seed: 22, Peer: 4, seedCheck: 'dht', seedSource: 'bitmagnet', seedAgeMs: 60000 });
+    const plain = toRpcResult(row(2) as never, 'k2');
+    expect(plain.seedSource).toBeUndefined();
+    expect(plain.seedAgeMs).toBeUndefined();
   });
 });

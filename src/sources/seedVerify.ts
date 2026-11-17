@@ -29,6 +29,10 @@ export interface SeedMeasure {
   noTracker?: boolean;
   samples: number;
   measuredAt: number;
+  /** Estimate provenance ('bitmagnet'). Absent on a verified row and on an older server answer. */
+  source?: string;
+  /** Age of the estimate counts at answer time, ms. Absent when the server did not send it. */
+  ageMs?: number;
 }
 
 export function seedCheckAvailable(ctx: SourceContext | null): boolean {
@@ -86,7 +90,7 @@ export function parseSeedResponse(text: string): SeedMeasure[] | null {
     const hash = typeof it.infohash === 'string' ? it.infohash.toLowerCase() : '';
     if (!/^[0-9a-f]{40}$/.test(hash)) continue;
     const num = (k: string) => (typeof it[k] === 'number' && isFinite(it[k] as number) ? Math.floor(it[k] as number) : 0);
-    out.push({
+    const m: SeedMeasure = {
       infohash: hash,
       verified: it.verified === true,
       live: it.live === true,
@@ -102,7 +106,10 @@ export function parseSeedResponse(text: string): SeedMeasure[] | null {
       noTracker: it.noTracker === true,
       samples: num('samples'),
       measuredAt: num('measuredAt'),
-    });
+    };
+    if (typeof it.source === 'string' && it.source) m.source = it.source;
+    if (typeof it.ageMs === 'number' && isFinite(it.ageMs) && it.ageMs >= 0) m.ageMs = Math.floor(it.ageMs);
+    out.push(m);
   }
   return out;
 }
@@ -134,7 +141,7 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
       };
     }
     if (m && m.estimate) {
-      return {
+      const out: SourceResult = {
         ...r,
         hash: r.hash || hash,
         seedCheck: 'dht' as const,
@@ -144,6 +151,17 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
         dhtEstimate: true,
         noTracker: m.noTracker,
       };
+      // An estimate that carries counts (bitmagnet): the numbers reach the row, still an estimate -
+      // never live/verified. A fresh bitmagnet zero overwrites the search counts too (a dead torrent
+      // must not keep the indexer's number as an estimate). A pure BEP 33 sample has no source and
+      // seeders 0: it keeps the search numbers.
+      if (m.source === 'bitmagnet' || (m.seeders || 0) > 0 || (m.leechers || 0) > 0) {
+        out.Seed = m.seeders;
+        out.Peer = m.leechers;
+      }
+      if (m.source) out.seedSource = m.source;
+      if (typeof m.ageMs === 'number') out.seedAgeMs = m.ageMs;
+      return out;
     }
     return { ...r, hash: r.hash || hash, seedCheck: 'unverified' as const, noTracker: !!(m && m.noTracker) };
   });

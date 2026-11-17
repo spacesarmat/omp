@@ -75,6 +75,23 @@ describe('seed ranking', () => {
     ];
     expect(orderSearch(list, 'date', 'a', NOW).map((r) => r.Title)).toEqual(['B', 'A']);
   });
+
+  it('ranks a bitmagnet estimate above an unchecked row and below a live one', () => {
+    const list = [
+      row({ Title: 'Unchecked big', Seed: 5000, seedCheck: 'unverified' }),
+      row({ Title: 'Estimate', Seed: 22, Peer: 4, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet' }),
+      row({ Title: 'Live', Seed: 1, seedCheck: 'live', seedCheckAt: NOW }),
+    ];
+    expect(rankSearchResults(list, '', NOW).map((r) => r.Title)).toEqual(['Live', 'Estimate', 'Unchecked big']);
+  });
+
+  it('a zero bitmagnet estimate gets no estimate bonus over an unchecked row', () => {
+    const list = [
+      row({ Title: 'Dead estimate', Seed: 0, Peer: 0, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet' }),
+      row({ Title: 'Unchecked', Seed: 3, seedCheck: 'unverified' }),
+    ];
+    expect(rankSearchResults(list, '', NOW).map((r) => r.Title)).toEqual(['Unchecked', 'Dead estimate']);
+  });
 });
 
 describe('one seed status', () => {
@@ -93,6 +110,23 @@ describe('one seed status', () => {
     expect(seedStatusLine(row({ Title: 'P', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, seedCheck: 'dht', dhtPeers: 8 }))).toBe('Нет адреса трекера');
     expect(seedStatusLine(row({ Title: 'U', hash: HASH, Seed: 4, seedCheck: 'unverified', noTracker: true }))).toBe('Нет адреса трекера');
     expect(seedStatusLine(row({ Title: 'F', Seed: 9 }))).toBe('');
+  });
+
+  it('shows bitmagnet estimate counts as an estimate with the DHT mark, never as a live scrape', () => {
+    lang.value = 'ru';
+    const bare = row({
+      Title: 'A', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH,
+      Seed: 22, Peer: 4, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet', noTracker: true,
+    });
+    expect(seedStatusLine(bare)).toBe('Нет адреса трекера · ~22 сида · 4 лича · по DHT');
+    const listed = row({
+      Title: 'B', hash: HASH, Magnet: magnet,
+      Seed: 22, Peer: 4, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet',
+    });
+    expect(seedStatusLine(listed)).toBe('~22 сида · 4 лича · по DHT');
+    // a zero-count estimate keeps the old zero-estimate line, and a BEP 33 estimate is unchanged
+    expect(seedStatusLine(row({ Title: 'C', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH, Seed: 0, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet', noTracker: true }))).toBe('Нет адреса трекера · ~0 сидов по DHT');
+    expect(seedStatusLine(row({ Title: 'D', hash: HASH, Magnet: magnet, seedCheck: 'dht', dhtPeers: 80, dhtSeeds: 8, dhtEstimate: true }))).toBe('~8 сидов по DHT');
   });
 
   it('does not let a device scrape or a busy check replace the round', () => {

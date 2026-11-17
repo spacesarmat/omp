@@ -167,7 +167,8 @@ import { createWatchRepo, parseSignalBody, rankSearchXml, voterHash } from './db
 import { scoreOf, watchRankEnabled } from './watchRank.mjs';
 import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
-import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
+import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, SEED_CHECK_BUDGET_MS, createBitmagnetCountsCache, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
+import { createBitmagnetSource } from './bitmagnetSource.mjs';
 import { startSeedRefresh } from './seedRefresh.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
@@ -531,6 +532,8 @@ export function formatSeedLog(status, ms, deviceId, counts) {
     bit(c.live) +
     ' dht=' +
     bit(c.dht) +
+    ' bitmagnet=' +
+    bit(c.bitmagnet) +
     ' device=' +
     deviceLogId(deviceId) +
     '\n'
@@ -1601,6 +1604,21 @@ export function createApp(file, fetchImpl, opts) {
         };
       }
       : null;
+  // bitmagnet counts for the hashes a scrape cannot measure (the tracker-less magnets). Same admin
+  // switch and URL as the Torznab search; both are re-read per request, while the source and its
+  // 60s answer cache are rebuilt only when the URL changes. Estimates go into the answer only -
+  // never into seed_probes or the background refresh, which stays tracker-verified.
+  let bitmagnetUrl = '';
+  let seedBitmagnet = null;
+  const bitmagnetFor = (settings) => {
+    if (opts && opts.seedBitmagnet) return opts.seedBitmagnet;
+    const url = sourceEnabled(settings, 'bitmagnet') ? String((settings && settings.bitmagnetUrl) || '').trim() : '';
+    if (url !== bitmagnetUrl) {
+      bitmagnetUrl = url;
+      seedBitmagnet = url ? createBitmagnetCountsCache(createBitmagnetSource({ baseUrl: url, fetchImpl: net })) : null;
+    }
+    return seedBitmagnet;
+  };
   // Popular hashes stay fresh without a device asking: one re-scrape a minute through the same gate
   // and transport. PG only, never read-only, and only the startup block opts in (test apps do not schedule).
   // The timers are unref'ed and the gate is shared, so nothing else holds the process or the tracker budget.
@@ -3398,6 +3416,10 @@ export function createApp(file, fetchImpl, opts) {
             gate: seedGate,
             transport: seedTransport,
             dht: seedDht(cfg),
+            bitmagnet: bitmagnetFor(state.settings),
+            // The app waits SEED_CHECK_TIMEOUT_MS (8 s) for the whole check: the optional bitmagnet
+            // lookup may use only what scrape/DHT leave of that budget, never push the answer past it.
+            budgetMs: (opts && opts.seedBudgetMs) || SEED_CHECK_BUDGET_MS,
           });
           counts = out.stats;
           status = 200;

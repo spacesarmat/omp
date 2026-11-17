@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { setRpcTransport, phoneStatus } from '../../src/phone/rpc';
 import { savePhoneLink, forgetPhoneLink } from '../../src/phone/phoneStore';
-import { startTvSearch, resolveTvResult, POLL_MS } from '../../src/phone/phoneSearch';
+import { startTvSearch, resolveTvResult, fromRpcResult, POLL_MS } from '../../src/phone/phoneSearch';
 import type { TvResult } from '../../src/phone/phoneSearch';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { reloadSourcePrefs, resetHealth } from '../../src/sources/store';
@@ -254,5 +254,24 @@ describe('resolveTvResult', () => {
     await expect(resolveTvResult(viaRow)).rejects.toMatchObject({ code: 'expired' });
     useScript({ resolve: ['{"ok":false,"error":{"code":"failed","message":"only a file"}}'] });
     await expect(resolveTvResult(viaRow)).rejects.toMatchObject({ code: 'failed', message: 'only a file' });
+  });
+});
+
+describe('fromRpcResult estimate provenance', () => {
+  it('carries seedSource and seedAgeMs of a bitmagnet estimate onto the TV row', () => {
+    const r = fromRpcResult(
+      {
+        key: 'k1', Title: 'Film', Size: '', Seed: 22, Peer: 4, Tracker: '', CreateDate: '', Categories: '', Magnet: '', Hash: '', source: 'nnmclub',
+        seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet', seedAgeMs: 60000,
+      },
+      'h1',
+    );
+    expect(r).toMatchObject({ Seed: 22, Peer: 4, seedCheck: 'dht', seedSource: 'bitmagnet', seedAgeMs: 60000 });
+    const old = fromRpcResult(
+      { key: 'k2', Title: 'Film', Size: '', Seed: 5, Peer: 1, Tracker: '', CreateDate: '', Categories: '', Magnet: '', Hash: '', source: 'nnmclub' },
+      'h1',
+    );
+    expect(old && old.seedSource).toBeUndefined();
+    expect(old && old.seedAgeMs).toBeUndefined();
   });
 });

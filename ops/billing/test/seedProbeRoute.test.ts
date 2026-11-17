@@ -422,4 +422,166 @@ describe('POST /v1/seed-check', () => {
     const due = await listPopularSeedProbes((sql: string, params: unknown[]) => file.query(sql, params), Date.now() + TTL_POPULAR_MS, 5);
     expect(due).toEqual([]);
   });
+
+  it('bitmagnet estimates reach tracker-less hashes over the admin URL and stay out of seed_probes', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    let graphqlCalls = 0;
+    const iso = new Date(Date.now() - 60_000).toISOString();
+    const app = createApp(
+      file,
+      async (url: string) => {
+        if (String(url).indexOf('/graphql') >= 0) {
+          graphqlCalls += 1;
+          return {
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({
+              data: {
+                torrentContent: {
+                  search: {
+                    items: [
+                      { infoHash: HASH_B, seeders: 30, leechers: 5, updatedAt: iso, torrent: { seeders: 30, leechers: 5, updatedAt: iso } },
+                    ],
+                  },
+                },
+              },
+            }),
+            text: async () => '{}',
+          };
+        }
+        return { status: 200, headers: { get: () => null }, text: async () => '{}' };
+      },
+      {
+        env: {},
+        monitor: { health: () => null },
+        seedTransport: {
+          http: async () => ({ seeders: 8, leechers: 2 }),
+          udp: async () => null,
+        },
+      },
+    );
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const st = await readState(file);
+    await writeState(file, { ...st, settings: { ...st.settings, bitmagnetEnabled: true, bitmagnetUrl: 'http://192.0.2.10:3333' } });
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([
+      { infohash: HASH, trackers: ['http://tracker.example/announce'] },
+      { infohash: HASH_B, trackers: [] },
+    ]));
+    const first = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(first.status).toBe(200);
+    const items = first.data.items as Record<string, unknown>[];
+    expect(items[0]).toMatchObject({ seeders: 8, live: true, verified: true, estimate: false });
+    expect(items[0].source).toBeUndefined();
+    expect(items[1]).toMatchObject({ seeders: 30, leechers: 5, live: false, verified: false, estimate: true, source: 'bitmagnet', noTracker: true, samples: 0 });
+    expect(items[1].ageMs as number).toBeGreaterThanOrEqual(59_000);
+    expect(graphqlCalls).toBe(1);
+    expect(first.body).not.toContain('192.0.2.10');
+    // the second answer comes from the caches: no scrape, no second GraphQL batch inside the TTL
+    const again = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(again.status).toBe(200);
+    const items2 = again.data.items as Record<string, unknown>[];
+    expect(items2[0]).toMatchObject({ seeders: 8, cached: true });
+    expect(items2[1]).toMatchObject({ seeders: 30, source: 'bitmagnet', estimate: true, live: false, cached: true });
+    expect(graphqlCalls).toBe(1);
+    // the estimate is response-time only: seed_probes keeps the tracker-less miss, never popular
+    const cache = createPgSeedCache(file);
+    const rows = await cache.get([{ infohash: HASH_B, trackerKey: '' }]);
+    expect(rows[0]).toMatchObject({ seeders: 0, leechers: 0, live: false, samples: 0 });
+    const due = await listPopularSeedProbes((sql: string, params: unknown[]) => file.query(sql, params), Date.now() + TTL_POPULAR_MS, 5);
+    expect(due.map((r: { infohash: string }) => r.infohash)).not.toContain(HASH_B);
+    // the log line carries the estimate counter, never a hash or an address
+    const line = formatSeedLog(200, 12, DEV, { asked: 2, cache: 0, live: 1, dht: 0, bitmagnet: 1 });
+    expect(line).toContain('bitmagnet=1');
+    expect(line).not.toContain(HASH_B);
+    expect(line).not.toContain('192.0.2.10');
+  });
+
+  it('the bitmagnet switch off keeps seed-check away from GraphQL', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    let graphqlCalls = 0;
+    const app = createApp(
+      file,
+      async (url: string) => {
+        if (String(url).indexOf('/graphql') >= 0) graphqlCalls += 1;
+        return { status: 200, headers: { get: () => null }, text: async () => '{}' };
+      },
+      {
+        env: {},
+        monitor: { health: () => null },
+        seedTransport: { http: async () => null, udp: async () => null },
+      },
+    );
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const st = await readState(file);
+    // the URL is saved but the switch stays off, as before the Torznab search is enabled
+    await writeState(file, { ...st, settings: { ...st.settings, bitmagnetUrl: 'http://192.0.2.10:3333' } });
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([{ infohash: HASH_B, trackers: [] }]));
+    const out = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(out.status).toBe(200);
+    expect((out.data.items as Record<string, unknown>[])[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect((out.data.items as Record<string, unknown>[])[0].source).toBeUndefined();
+    expect(graphqlCalls).toBe(0);
+  });
+
+  it('a slow bitmagnet source does not hold the route past the request budget', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    let asked = 0;
+    const slowBitmagnet = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked += 1;
+        await new Promise((r) => setTimeout(r, 800));
+        return new Map(hashes.map((h) => [h, { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000, source: 'bitmagnet' }]));
+      },
+    };
+    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+      seedTransport: {
+        http: async () => ({ seeders: 8, leechers: 2 }),
+        udp: async () => null,
+      },
+      seedBitmagnet: slowBitmagnet,
+      seedBudgetMs: 300,
+    });
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([
+      { infohash: HASH, trackers: ['http://tracker.example/announce'] },
+      { infohash: HASH_B, trackers: [] },
+    ]));
+    const t0 = Date.now();
+    const out = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(Date.now() - t0).toBeLessThan(700);
+    expect(out.status).toBe(200);
+    expect(asked).toBe(1);
+    const items = out.data.items as Record<string, unknown>[];
+    // the verified tracker answer survives the source timeout; the estimate simply did not arrive
+    expect(items[0]).toMatchObject({ seeders: 8, live: true, verified: true });
+    expect(items[1]).toMatchObject({ seeders: 0, live: false });
+    expect(items[1].source).toBeUndefined();
+  });
 });

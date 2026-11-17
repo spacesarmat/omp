@@ -3,7 +3,7 @@
 import { t } from '../i18n';
 import { qualityRank } from '../monitor/quality';
 import { parseReleaseInfo } from '../lib/releaseInfo';
-import { rankScore } from '../sources/seedRank';
+import { rankScore, estimateSeedCount } from '../sources/seedRank';
 import type { SourceResult } from '../sources/types';
 
 export interface DeviceCaps {
@@ -87,7 +87,7 @@ export function rankViewerSources<T extends SourceResult>(list: T[], query: stri
 
 function seedKind(r: SourceResult): 'live' | 'dht' | 'weak' {
   if (r.seedCheck === 'live' && (r.Seed || 0) > 0) return 'live';
-  if (r.seedCheck === 'dht' && r.dhtEstimate && (r.dhtSeeds || 0) > 0) return 'dht';
+  if (estimateSeedCount(r) > 0) return 'dht';
   if ((r.Seed || 0) > 0 && r.seedCheck !== 'unverified') return 'live';
   return 'weak';
 }
@@ -99,8 +99,8 @@ export function pickReason(best: SourceResult, next: SourceResult | null, ctx: R
     if (seedKind(best) === 'live') return 'seeds';
     return ctx.device.kind === 'phone' ? 'codec' : 'quality';
   }
-  const seedB = seedKind(best) === 'live' ? (best.Seed || 0) : seedKind(best) === 'dht' ? (best.dhtSeeds || 0) : 0;
-  const seedN = seedKind(next) === 'live' ? (next.Seed || 0) : seedKind(next) === 'dht' ? (next.dhtSeeds || 0) : 0;
+  const seedB = seedKind(best) === 'live' ? (best.Seed || 0) : seedKind(best) === 'dht' ? estimateSeedCount(best) : 0;
+  const seedN = seedKind(next) === 'live' ? (next.Seed || 0) : seedKind(next) === 'dht' ? estimateSeedCount(next) : 0;
   const codecB = codecFit(best.Title || '', ctx.device);
   const codecN = codecFit(next.Title || '', ctx.device);
   const speedB = speedFit(best.sizeBytes, ctx.speedBps);

@@ -6,6 +6,7 @@ import {
   bdecode,
   cacheFresh,
   connectRequest,
+  createBitmagnetCountsCache,
   createMemorySeedCache,
   createTrackerGate,
   httpScrapeUrl,
@@ -20,6 +21,7 @@ import {
   scrapeRequest,
   ttlMs,
 } from '../src/seedProbe.mjs';
+import { createBitmagnetSource } from '../src/bitmagnetSource.mjs';
 import { resolvePublic } from '../src/seedProbeNet.mjs';
 
 const HASH = 'ab'.repeat(20);
@@ -386,5 +388,399 @@ describe('runSeedCheck DHT budget and coverage (phase 2)', () => {
     expect(out.items[0]).toMatchObject({ infohash: HASH, live: true, seeders: 3, peers: 6 });
     expect(out.items[1]).toMatchObject({ infohash: HASH_B, live: true, peers: 0 });
     expect(out.stats.dht).toBe(1);
+  });
+});
+
+/** A stand-in for createBitmagnetSource: records the asked batches, answers from a fixed table. */
+function fakeBitmagnet(rows: Record<string, { seeders: number | null; leechers: number | null; updatedAt: number | null }>) {
+  const calls: string[][] = [];
+  return {
+    calls,
+    enabled: true,
+    async fetchCounts(hashes: string[]) {
+      calls.push(hashes.slice());
+      const map = new Map<string, { seeders: number | null; leechers: number | null; updatedAt: number | null; source: string }>();
+      for (const h of hashes) {
+        const r = rows[h];
+        if (r) map.set(h, { ...r, source: 'bitmagnet' });
+      }
+      return map;
+    },
+  };
+}
+
+function pause(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+describe('runSeedCheck bitmagnet estimates (wiring)', () => {
+  const NOW = 1_000_000_000;
+  const noTrackers = (hash: string) => ({ infohash: hash, trackers: [] as string[] });
+  const idleTransport = { http: async () => null, udp: async () => null };
+
+  it('gives a tracker-less hash a fresh estimate with source and age, never live, and does not store it', async () => {
+    const cache = createMemorySeedCache();
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: NOW - 60_000 } });
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache,
+      now: () => NOW,
+      transport: idleTransport,
+      bitmagnet: bm,
+      deadlineMs: 300,
+    });
+    expect(bm.calls).toEqual([[HASH_B]]);
+    expect(out.items[0]).toMatchObject({
+      infohash: HASH_B,
+      seeders: 21,
+      leechers: 4,
+      live: false,
+      verified: false,
+      estimate: true,
+      source: 'bitmagnet',
+      noTracker: true,
+      samples: 0,
+      cached: false,
+    });
+    expect(out.items[0].ageMs).toBe(60_000);
+    expect(out.stats).toMatchObject({ asked: 1, live: 0, bitmagnet: 1 });
+    // the estimate is response-time only: the stored row stays the tracker-less miss it was
+    const rows = await cache.get([{ infohash: HASH_B, trackerKey: '' }]);
+    expect(rows[0]).toMatchObject({ seeders: 0, leechers: 0, live: false, samples: 0 });
+    expect(JSON.stringify(rows[0])).not.toContain('bitmagnet');
+  });
+
+  it('never overwrites a tracker-verified hash and does not even ask bitmagnet for it', async () => {
+    const t0 = Date.now();
+    const bm = fakeBitmagnet({
+      [HASH]: { seeders: 99, leechers: 9, updatedAt: t0 - 1000 },
+      [HASH_B]: { seeders: 21, leechers: 4, updatedAt: t0 - 1000 },
+    });
+    const out = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        noTrackers(HASH_B),
+      ],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      bitmagnet: bm,
+      deadlineMs: 500,
+      timeoutMs: 300,
+    });
+    expect(bm.calls).toEqual([[HASH_B]]);
+    expect(out.items[0]).toMatchObject({ seeders: 3, leechers: 1, live: true, verified: true, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.items[0].ageMs).toBeUndefined();
+    expect(out.items[1]).toMatchObject({ seeders: 21, source: 'bitmagnet', live: false });
+    expect(out.stats.bitmagnet).toBe(1);
+  });
+
+  it('does not apply a stale or undated bitmagnet row', async () => {
+    const bm = fakeBitmagnet({
+      [HASH]: { seeders: 50, leechers: 5, updatedAt: NOW - 7 * 60 * 60 * 1000 },
+      [HASH_B]: { seeders: 50, leechers: 5, updatedAt: null },
+    });
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH), noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => NOW,
+      transport: idleTransport,
+      bitmagnet: bm,
+      deadlineMs: 300,
+    });
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.items[1]).toMatchObject({ seeders: 0, live: false });
+    expect(out.items[1].source).toBeUndefined();
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('a disabled source never touches the network and keeps the previous answer', async () => {
+    let fetched = 0;
+    const source = createBitmagnetSource({
+      baseUrl: '',
+      fetchImpl: async () => {
+        fetched += 1;
+        return { status: 200, json: async () => ({}) };
+      },
+    });
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => NOW,
+      transport: idleTransport,
+      bitmagnet: createBitmagnetCountsCache(source, { now: () => NOW }),
+      deadlineMs: 300,
+    });
+    expect(fetched).toBe(0);
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('a source error keeps the previous answer and does not fail the batch', async () => {
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => NOW,
+      transport: idleTransport,
+      bitmagnet: { fetchCounts: async () => { throw new Error('down'); } },
+      deadlineMs: 300,
+    });
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('asks one batch capped at 30 hashes', async () => {
+    const hashes: string[] = [];
+    for (let i = 0; i < 35; i++) hashes.push(i.toString(16).padStart(2, '0').repeat(20));
+    const bm = fakeBitmagnet({});
+    const out = await runSeedCheck({
+      items: hashes.map(noTrackers),
+      cache: createMemorySeedCache(),
+      now: () => NOW,
+      transport: idleTransport,
+      bitmagnet: bm,
+      deadlineMs: 300,
+    });
+    expect(out.items).toHaveLength(30);
+    expect(bm.calls).toHaveLength(1);
+    expect(bm.calls[0]).toHaveLength(30);
+  });
+
+  it('a slow bitmagnet does not hold the answer past the request budget', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    let started = 0;
+    const slow = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        started += 1;
+        await pause(800);
+        return bm.fetchCounts(hashes);
+      },
+    };
+    const t0 = Date.now();
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      bitmagnet: slow,
+      deadlineMs: 300,
+      budgetMs: 400,
+    });
+    expect(Date.now() - t0).toBeLessThan(700);
+    expect(started).toBe(1);
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false, estimate: false });
+    expect(out.items[0].source).toBeUndefined();
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('keeps successful tracker results when the bitmagnet lookup outlives the budget', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    const slow = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        await pause(800);
+        return bm.fetchCounts(hashes);
+      },
+    };
+    const t0 = Date.now();
+    const out = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        noTrackers(HASH_B),
+      ],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      bitmagnet: slow,
+      deadlineMs: 500,
+      timeoutMs: 300,
+      budgetMs: 500,
+    });
+    expect(Date.now() - t0).toBeLessThan(800);
+    expect(out.items[0]).toMatchObject({ seeders: 3, live: true, verified: true });
+    expect(out.items[1]).toMatchObject({ seeders: 0, live: false });
+    expect(out.items[1].source).toBeUndefined();
+    expect(out.stats).toMatchObject({ live: 1, bitmagnet: 0 });
+  });
+
+  it('does not ask the source at all when the budget is already spent', async () => {
+    const bm = fakeBitmagnet({ [HASH_B]: { seeders: 21, leechers: 4, updatedAt: Date.now() - 1000 } });
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH_B)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      bitmagnet: bm,
+      deadlineMs: 300,
+      budgetMs: 100,
+    });
+    expect(bm.calls).toHaveLength(0);
+    expect(out.items[0]).toMatchObject({ seeders: 0, live: false });
+    expect(out.stats.bitmagnet).toBe(0);
+  });
+
+  it('enriches a cached miss without a re-scrape and leaves a verified cache row untouched', async () => {
+    const cache = createMemorySeedCache();
+    const first = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        noTrackers(HASH_B),
+      ],
+      cache,
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      deadlineMs: 500,
+      timeoutMs: 300,
+    });
+    expect(first.items[1]).toMatchObject({ seeders: 0, cached: false });
+    let scrapes = 0;
+    const t0 = Date.now();
+    const bm = fakeBitmagnet({
+      [HASH]: { seeders: 99, leechers: 9, updatedAt: t0 - 1000 },
+      [HASH_B]: { seeders: 21, leechers: 4, updatedAt: t0 - 1000 },
+    });
+    const second = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        noTrackers(HASH_B),
+      ],
+      cache,
+      now: () => Date.now(),
+      transport: { http: async () => { scrapes += 1; return { seeders: 3, leechers: 1 }; }, udp: async () => null },
+      bitmagnet: bm,
+      deadlineMs: 500,
+      timeoutMs: 300,
+    });
+    expect(scrapes).toBe(0);
+    expect(second.stats.cache).toBe(2);
+    expect(second.items[0]).toMatchObject({ seeders: 3, live: true, cached: true });
+    expect(second.items[0].source).toBeUndefined();
+    expect(second.items[1]).toMatchObject({ seeders: 21, source: 'bitmagnet', estimate: true, live: false, cached: true });
+    expect(second.stats.bitmagnet).toBe(1);
+    expect(bm.calls).toEqual([[HASH_B]]);
+  });
+});
+
+describe('createBitmagnetCountsCache', () => {
+  const NOW = 1_000_000_000;
+  const row = { seeders: 7, leechers: 2, updatedAt: NOW - 1000, source: 'bitmagnet' };
+
+  it('serves a repeated hash from the TTL window and re-asks after it', async () => {
+    let calls = 0;
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        calls += 1;
+        return new Map(hashes.map((h) => [h, row]));
+      },
+    };
+    let now = NOW;
+    const cache = createBitmagnetCountsCache(source, { now: () => now, ttlMs: 60_000 });
+    const a = await cache.fetchCounts([HASH]);
+    expect(a.get(HASH)).toMatchObject({ seeders: 7 });
+    const b = await cache.fetchCounts([HASH]);
+    expect(b.get(HASH)).toMatchObject({ seeders: 7 });
+    expect(calls).toBe(1);
+    now = NOW + 60_000;
+    await cache.fetchCounts([HASH]);
+    expect(calls).toBe(2);
+  });
+
+  it('caches a miss too, and asks only for the hashes it does not hold', async () => {
+    const asked: string[][] = [];
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked.push(hashes.slice());
+        return new Map(hashes.filter((h) => h === HASH).map((h) => [h, row]));
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const a = await cache.fetchCounts([HASH, HASH_B]);
+    expect(a.size).toBe(1);
+    const b = await cache.fetchCounts([HASH, HASH_B]);
+    expect(b.size).toBe(1);
+    expect(asked).toEqual([[HASH, HASH_B]]);
+  });
+
+  it('shares one in-flight batch between concurrent callers, then serves the TTL', async () => {
+    const asked: string[][] = [];
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked.push(hashes.slice());
+        await pause(30);
+        return new Map(hashes.map((h) => [h, row]));
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH, HASH_B]), cache.fetchCounts([HASH, HASH_B])]);
+    expect(asked).toHaveLength(1);
+    expect(a.get(HASH)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_B)).toMatchObject({ seeders: 7 });
+    const c = await cache.fetchCounts([HASH, HASH_B]);
+    expect(asked).toHaveLength(1);
+    expect(c.size).toBe(2);
+  });
+
+  it('asks a shared hash only once when concurrent batches overlap', async () => {
+    const HASH_C = 'ef'.repeat(20);
+    const asked: string[][] = [];
+    const source = {
+      enabled: true,
+      async fetchCounts(hashes: string[]) {
+        asked.push(hashes.slice());
+        await pause(30);
+        return new Map(hashes.map((h) => [h, row]));
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH, HASH_B]), cache.fetchCounts([HASH_B, HASH_C])]);
+    const all = asked.reduce((acc: string[], x) => acc.concat(x), []);
+    expect(all.filter((h) => h === HASH_B)).toHaveLength(1);
+    expect(a.get(HASH)).toMatchObject({ seeders: 7 });
+    expect(a.get(HASH_B)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_B)).toMatchObject({ seeders: 7 });
+    expect(b.get(HASH_C)).toMatchObject({ seeders: 7 });
+  });
+
+  it('a shared batch failure resolves for every waiter without a retry storm', async () => {
+    let calls = 0;
+    const source = {
+      enabled: true,
+      async fetchCounts() {
+        calls += 1;
+        await pause(20);
+        throw new Error('down');
+      },
+    };
+    const cache = createBitmagnetCountsCache(source, { now: () => NOW, ttlMs: 60_000 });
+    const [a, b] = await Promise.all([cache.fetchCounts([HASH]), cache.fetchCounts([HASH])]);
+    expect(calls).toBe(1);
+    expect(a.size).toBe(0);
+    expect(b.size).toBe(0);
+    const c = await cache.fetchCounts([HASH]);
+    expect(calls).toBe(1);
+    expect(c.size).toBe(0);
+  });
+
+  it('a disabled source never fetches, and a throwing source resolves to an empty map', async () => {
+    let fetched = 0;
+    const disabled = createBitmagnetCountsCache(
+      createBitmagnetSource({ baseUrl: '', fetchImpl: async () => { fetched += 1; return { status: 200, json: async () => ({}) }; } }),
+      { now: () => NOW },
+    );
+    expect((await disabled.fetchCounts([HASH])).size).toBe(0);
+    expect(fetched).toBe(0);
+    const broken = createBitmagnetCountsCache(
+      { enabled: true, fetchCounts: async () => { throw new Error('down'); } },
+      { now: () => NOW },
+    );
+    expect((await broken.fetchCounts([HASH])).size).toBe(0);
   });
 });

@@ -8,6 +8,8 @@ The crawler runs (`--keys=dht_crawler`) and publishes the swarm port 3334 tcp+ud
 
 Counts are read over GraphQL: `POST http://<bind>:3333/graphql`, `torrentContent.search(input:{infoHashes:[...]})` -> `items[].torrent.seeders/leechers/updatedAt` (the `torrent_contents` aggregate can be null). There is no on-demand re-scrape: `reprocess` only re-runs classification, so counts age with the crawler cycle (days for rare hashes).
 
+The dht-peers sidecar bootstraps from this crawler: on the NUC set `DHT_BOOTSTRAP_NODES=<LAN-host bitmagnet>:3334` in the deployment `.env`. The value is deployment-specific and is not hardcoded in the repo.
+
 ## Resources
 
 Upstream asks for about 300 MB RAM for bitmagnet and at least 1 GB RAM for Postgres. This file caps bitmagnet at 512 MB and Postgres at 1 GB, with 256 MB of Postgres shared memory. Measured on the NUC 17.11.2026: the Postgres volume is about 8 GB per 1 million torrents; upstream's guide is about 80 GB of disk per 10 million torrents. The NUC has ~840 GB free - watch the volume before the index grows past a few million.
