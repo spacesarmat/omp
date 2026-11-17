@@ -1,7 +1,8 @@
 // Fresh seeder counts for the top search rows. The app sends infohashes and announce URLs.
 // This process scrapes those trackers (HTTP BEP 48, UDP BEP 15) from the NUC address, with a
-// shared cap so one search cannot stampede a tracker. DHT is one extra lookup per batch when the
-// sidecar is configured: one lookup per batch, preferably a hash with no tracker address.
+// shared cap so one search cannot stampede a tracker. When the sidecar is configured, DHT covers
+// every stale hash with no tracker address (not just one): capped-concurrency lookups inside one
+// shared budget, merged per hash. The sidecar serves one lookup at a time and rate-limits the rest.
 // BEP 33 seed estimates are labeled estimates. The get_peers address count is not a seed count.
 // `completed` is the tracker's snatched count (BEP 48 `downloaded`, BEP 15 downloaded), not seeds.
 // The background refresh of popular hashes lives in seedRefresh.mjs: one hash a minute, same gate.
@@ -10,8 +11,11 @@ import { isPublicAddress } from './monitorHttp.mjs';
 
 export const SEED_TOP_N = 30;
 export const SEED_MAX_TRACKERS = 2;
-export const SEED_TRACKER_TIMEOUT_MS = 1200;
-export const SEED_BATCH_DEADLINE_MS = 4000;
+// Per-job scrape budget. Phase 2 raised it from 1200: the direct ISP path answers in ~200 ms, but
+// an http->https redirect chain (up to 3 hops, each re-gated) needs room, and the old 1200 ms cut
+// working chains short. The batch deadline below still bounds the whole scrape phase.
+export const SEED_TRACKER_TIMEOUT_MS = 4500;
+export const SEED_BATCH_DEADLINE_MS = 5000;
 export const SEED_MAX_IN_FLIGHT = 6;
 export const SEED_PER_HOST_GAP_MS = 500;
 export const SEED_WINDOW_MS = 10 * 1000;
@@ -30,7 +34,12 @@ export const REFRESH_BACKOFF_MS = Math.floor(TTL_POPULAR_MS / 2);
 export const POPULAR_SEEDS = 15;
 export const POPULAR_HITS = 3;
 export const COUNT_CAP = 1000000;
-const DHT_WAIT_MS = 1500;
+// Shared budget for the batch's DHT lookups. Phase 2 raised it from 1500: the sidecar needs
+// ~2300-5000 ms to bootstrap and answer (BEP 33), so the old 1500 ms race discarded working replies.
+const DHT_WAIT_MS = 6000;
+// Concurrent sidecar lookups per batch. The sidecar answers one at a time and 429s the rest; the
+// cap keeps the fan-out bounded while every stale hash still gets a chance inside the budget.
+const DHT_MAX_IN_FLIGHT = 4;
 
 function capCount(n) {
   if (typeof n !== 'number' || !isFinite(n) || n < 0 || n !== Math.floor(n)) return null;
@@ -485,6 +494,18 @@ export function createTrackerGate(opts) {
     release() {
       inFlight = inFlight > 0 ? inFlight - 1 : 0;
     },
+    // Why a take would fail, as a wait time: the ms left on the per-host gap when the gap is the
+    // ONLY blocker (a sequential request may wait it out), 0 when take would succeed right now, or
+    // null when a concurrency/window cap blocks. A cap is a legitimate limit, not a gap to wait out.
+    gapWaitMs(host, now) {
+      if (inFlight >= maxInFlight) return null;
+      prune(now);
+      if (stamps.length >= windowMax) return null;
+      if (Object.prototype.hasOwnProperty.call(hostAt, host) && now - hostAt[host] < perHostGapMs) {
+        return perHostGapMs - (now - hostAt[host]);
+      }
+      return 0;
+    },
   };
 }
 
@@ -653,8 +674,12 @@ async function scrapeJobs(jobs, opts) {
     while (Date.now() < deadline) {
       const job = claim();
       if (!job) return;
+      const isUdp = job.kind === 'udp';
       const now = Date.now();
-      if (!gate.take(job.host, now)) {
+      // UDP scrapes a single host, so it is gated here. HTTP gates every contacted host inside the
+      // transport (each redirect hop included): a redirect target is a different host and must not
+      // bypass the per-host gap or the shared request-window budget. A gate refusal there is a miss.
+      if (isUdp && !gate.take(job.host, now)) {
         job.tries = (job.tries || 0) + 1;
         if (job.tries <= 8 && Date.now() < deadline) retry.push(job);
         await delay(Math.min(80, Math.max(0, deadline - Date.now())));
@@ -669,9 +694,9 @@ async function scrapeJobs(jobs, opts) {
         if (ac) timer = setTimeout(() => ac.abort(), budget);
         const signal = ac ? ac.signal : undefined;
         const sample = await Promise.race([
-          job.kind === 'udp'
+          isUdp
             ? opts.transport.udp(job.host, job.port, job.hash, budget, { signal: signal })
-            : opts.transport.http(job.url, job.hash, budget, { signal: signal }),
+            : opts.transport.http(job.url, job.hash, budget, { signal: signal, gate: gate }),
           delay(budget).then(() => null),
         ]);
         if (sample && capCount(sample.seeders) !== null && capCount(sample.leechers) !== null) {
@@ -685,7 +710,7 @@ async function scrapeJobs(jobs, opts) {
       } finally {
         if (timer) clearTimeout(timer);
         if (ac) ac.abort();
-        gate.release();
+        if (isUdp) gate.release();
       }
     }
   }
@@ -697,8 +722,43 @@ async function scrapeJobs(jobs, opts) {
 }
 
 /**
- * Cache hits return at once. The rest are scraped until the deadline. One DHT lookup runs beside
- * the scrapes for the first hash that was not cached. The answer keeps the request order.
+ * DHT for the given hashes, beside the scrapes. Lookups run with a capped concurrency inside one
+ * shared deadline; each hash races the time left, so a slow sidecar cannot hang the batch.
+ * Returns a map hash -> dhtSample (zeros for a hash that did not answer in budget). The sidecar
+ * serves one lookup at a time and rate-limits the rest, so most fan-out resolves to zeros here.
+ */
+async function runDhtBatch(dht, hashes, deadline, cap) {
+  const out = Object.create(null);
+  let next = 0;
+  async function worker() {
+    while (next < hashes.length) {
+      const hash = hashes[next];
+      next += 1;
+      const left = deadline - Date.now();
+      if (left <= 0) {
+        out[hash] = dhtSample(0);
+        continue;
+      }
+      out[hash] = await Promise.race([
+        Promise.resolve()
+          .then(() => dht(hash))
+          .then((n) => dhtSample(n))
+          .catch(() => dhtSample(0)),
+        delay(left).then(() => dhtSample(0)),
+      ]);
+    }
+  }
+  const n = Math.max(1, Math.min(cap, hashes.length));
+  const workers = [];
+  for (let i = 0; i < n; i++) workers.push(worker());
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * Cache hits return at once. The rest are scraped until the deadline. DHT covers every stale hash
+ * with no tracker address beside the scrapes (capped concurrency, one shared budget), merged per
+ * hash; when all carry trackers the first stale hash is asked. The answer keeps the request order.
  * `force` scrapes even a fresh row: the background refresh asks at half the TTL, when the endpoint
  * would still answer from the cache. The gate and the deadline apply the same way.
  */
@@ -729,43 +789,37 @@ export async function runSeedCheck(opts) {
   for (let wave = 0; wave < SEED_MAX_TRACKERS; wave++) {
     for (let i = 0; i < planned.length; i++) if (planned[i][wave]) jobs.push(planned[i][wave]);
   }
-  let dhtHit = dhtSample(0);
-  let dhtHash = '';
-  // One lookup per batch. A hash with no usable tracker goes first: that row has nothing else to show.
-  let dhtTarget = '';
+  // DHT covers every stale hash with no tracker address, not just one: those rows have nothing else
+  // to show, and phase 1 asked only a single hash per batch. A hash that carries trackers already
+  // has a verified scrape, so it is not asked here (the sidecar serves one lookup at a time). When
+  // every hash carries trackers, the first stale hash is asked, as in phase 1. The shared budget
+  // starts now and runs beside the scrapes. dhtWaitMs / dhtConcurrency are injectable for tests.
+  const dhtHashes = [];
   for (let i = 0; i < stale.length; i++) {
-    if (!dhtTarget) dhtTarget = stale[i].infohash;
-    if (!trackerJobs(stale[i]).length) {
-      dhtTarget = stale[i].infohash;
-      break;
-    }
+    if (!trackerJobs(stale[i]).length) dhtHashes.push(stale[i].infohash);
   }
-  const dhtTask = o.dht && dhtTarget
-    ? Promise.race([
-      Promise.resolve()
-        .then(() => o.dht(dhtTarget))
-        .then((n) => dhtSample(n))
-        .catch(() => dhtSample(0)),
-      delay(DHT_WAIT_MS).then(() => dhtSample(0)),
-    ])
-    : Promise.resolve(dhtSample(0));
+  if (!dhtHashes.length && stale.length) dhtHashes.push(stale[0].infohash);
+  const dhtWaitMs = o.dhtWaitMs || DHT_WAIT_MS;
+  const dhtConcurrency = o.dhtConcurrency || DHT_MAX_IN_FLIGHT;
+  const dhtTask = o.dht && dhtHashes.length
+    ? runDhtBatch(o.dht, dhtHashes, Date.now() + dhtWaitMs, dhtConcurrency)
+    : Promise.resolve(Object.create(null));
   const samples = await scrapeJobs(jobs, {
     deadline: now + deadlineMs,
     gate,
     timeoutMs: o.timeoutMs || SEED_TRACKER_TIMEOUT_MS,
     transport,
   });
-  if (dhtTarget) {
-    dhtHit = await dhtTask;
-    const useful = dhtHit.peers > 0 || dhtHit.estimate || dhtHit.dhtSeeds > 0;
-    if (useful) dhtHash = dhtTarget;
-  }
+  const dhtByHash = await dhtTask;
+  let dhtUseful = 0;
   const measuredAt = nowFn();
   const saved = [];
   const measured = Object.create(null);
   for (let i = 0; i < stale.length; i++) {
     const hash = stale[i].infohash;
-    const merged = mergeMeasurements(samples[hash] || [], hash === dhtHash ? dhtHit : 0, measuredAt);
+    const dhtHit = dhtByHash[hash] || dhtSample(0);
+    if (dhtHit.peers > 0 || dhtHit.estimate || dhtHit.dhtSeeds > 0) dhtUseful += 1;
+    const merged = mergeMeasurements(samples[hash] || [], dhtHit, measuredAt);
     merged.noTracker = trackerJobs(stale[i]).length === 0;
     measured[hash] = merged;
     // A forced refresh with no tracker answer must not erase a working measurement: the stored
@@ -817,6 +871,6 @@ export async function runSeedCheck(opts) {
   }
   return {
     items: itemsOut,
-    stats: { asked: items.length, cache: fresh.length, live, dht: dhtHash ? 1 : 0 },
+    stats: { asked: items.length, cache: fresh.length, live, dht: dhtUseful },
   };
 }

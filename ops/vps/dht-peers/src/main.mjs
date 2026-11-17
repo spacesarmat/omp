@@ -1,7 +1,7 @@
 // HTTP on the docker network only. DHT_TOKEN empty: lookups stay disabled, /health still answers.
 import { createServer } from 'node:http';
 import { createDhtApp } from './http.mjs';
-import { createDhtLookup } from './lookup.mjs';
+import { createDhtLookup, parseBootstrapNodes } from './lookup.mjs';
 
 function envInt(name, fallback) {
   const raw = String(process.env[name] || '').trim();
@@ -14,6 +14,8 @@ const port = envInt('DHT_HTTP_PORT', 8788);
 const lookup = createDhtLookup({
   lookupMs: envInt('DHT_LOOKUP_MS', 8000),
   idleMs: envInt('DHT_IDLE_MS', 10 * 60 * 1000),
+  // Reachable bootstrap nodes (e.g. the LAN bitmagnet DHT port on the NUC). Empty: public routers only.
+  bootstrap: parseBootstrapNodes(process.env.DHT_BOOTSTRAP_NODES),
 });
 const app = createDhtApp({
   token: String(process.env.DHT_TOKEN || ''),

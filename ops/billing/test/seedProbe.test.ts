@@ -260,3 +260,131 @@ describe('resolvePublic', () => {
     expect(await resolvePublic('tracker.example', onlyPublic)).toEqual({ address: '93.184.216.34', family: 4 });
   });
 });
+
+describe('runSeedCheck DHT budget and coverage (phase 2)', () => {
+  const HASH_C = 'ef'.repeat(20);
+  const noTrackers = (hash: string) => ({ infohash: hash, trackers: [] as string[] });
+  const idleTransport = { http: async () => null, udp: async () => null };
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  it('asks DHT for every tracker-less hash in the batch and merges each one', async () => {
+    const seen: string[] = [];
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH), noTrackers(HASH_B), noTrackers(HASH_C)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      dht: async (hash: string) => {
+        seen.push(hash);
+        return { peers: hash === HASH ? 10 : hash === HASH_B ? 20 : 30, seedsEstimate: 0, peerEstimate: 0, estimate: false };
+      },
+      deadlineMs: 300,
+      dhtWaitMs: 2000,
+    });
+    expect(seen.slice().sort()).toEqual([HASH, HASH_B, HASH_C].sort());
+    expect(out.items[0]).toMatchObject({ infohash: HASH, peers: 10, noTracker: true });
+    expect(out.items[1]).toMatchObject({ infohash: HASH_B, peers: 20, noTracker: true });
+    expect(out.items[2]).toMatchObject({ infohash: HASH_C, peers: 30, noTracker: true });
+    expect(out.stats.dht).toBe(3);
+  });
+
+  it('caps the concurrent DHT lookups and still covers the whole batch', async () => {
+    const seen: string[] = [];
+    let active = 0;
+    let maxActive = 0;
+    const hashes = [HASH, HASH_B, HASH_C, '11'.repeat(20), '22'.repeat(20), '33'.repeat(20)];
+    const out = await runSeedCheck({
+      items: hashes.map(noTrackers),
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      dhtConcurrency: 2,
+      dht: async (hash: string) => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        seen.push(hash);
+        await wait(20);
+        active--;
+        return 5;
+      },
+      deadlineMs: 300,
+      dhtWaitMs: 3000,
+    });
+    expect(maxActive).toBeLessThanOrEqual(2);
+    expect(seen).toHaveLength(hashes.length);
+    expect(out.stats.dht).toBe(hashes.length);
+    expect(out.items.every((it: any) => it.peers === 5)).toBe(true);
+  });
+
+  it('discards a DHT answer that outlives the shared budget', async () => {
+    const slow = await runSeedCheck({
+      items: [noTrackers(HASH)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      dht: async () => {
+        await wait(300);
+        return 42;
+      },
+      deadlineMs: 300,
+      dhtWaitMs: 80,
+    });
+    expect(slow.items[0]).toMatchObject({ peers: 0, dhtSeeds: 0 });
+    expect(slow.stats.dht).toBe(0);
+
+    const fast = await runSeedCheck({
+      items: [noTrackers(HASH)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      dht: async () => {
+        await wait(10);
+        return 42;
+      },
+      deadlineMs: 300,
+      dhtWaitMs: 1000,
+    });
+    expect(fast.items[0]).toMatchObject({ peers: 42 });
+    expect(fast.stats.dht).toBe(1);
+  });
+
+  it('keeps an answer slower than the old 1500 ms race under the raised default budget', async () => {
+    const out = await runSeedCheck({
+      items: [noTrackers(HASH)],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: idleTransport,
+      dht: async () => {
+        await wait(1600); // longer than the phase-1 1500 ms race, inside the phase-2 6000 ms budget
+        return { peers: 7, seedsEstimate: 3, peerEstimate: 9, estimate: true };
+      },
+      deadlineMs: 2500,
+    });
+    expect(out.items[0]).toMatchObject({ peers: 7, dhtSeeds: 3, peerEstimate: 9, estimate: true });
+    expect(out.stats.dht).toBe(1);
+  }, 10000);
+
+  it('asks the first stale hash when every hash carries trackers (phase-1 fallback)', async () => {
+    const seen: string[] = [];
+    const out = await runSeedCheck({
+      items: [
+        { infohash: HASH, trackers: ['http://one.example/announce'] },
+        { infohash: HASH_B, trackers: ['http://two.example/announce'] },
+      ],
+      cache: createMemorySeedCache(),
+      now: () => Date.now(),
+      transport: { http: async () => ({ seeders: 3, leechers: 1 }), udp: async () => null },
+      dht: async (hash: string) => {
+        seen.push(hash);
+        return 6;
+      },
+      deadlineMs: 500,
+      timeoutMs: 300,
+      dhtWaitMs: 1000,
+    });
+    expect(seen).toEqual([HASH]);
+    expect(out.items[0]).toMatchObject({ infohash: HASH, live: true, seeders: 3, peers: 6 });
+    expect(out.items[1]).toMatchObject({ infohash: HASH_B, live: true, peers: 0 });
+    expect(out.stats.dht).toBe(1);
+  });
+});

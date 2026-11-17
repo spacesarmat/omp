@@ -68,7 +68,7 @@ import { createDhtApp } from '../dht-peers/src/http.mjs';
 // @ts-ignore plain module
 import { countPeerKeys, createPeerCache, parseCompactPeer, peerKey, waitForReady } from '../dht-peers/src/peers.mjs';
 // @ts-ignore plain module
-import { createDhtLookup } from '../dht-peers/src/lookup.mjs';
+import { createDhtLookup, parseBootstrapNodes, routingTableSize } from '../dht-peers/src/lookup.mjs';
 
 const TOKEN = 'ab'.repeat(16);
 const HASH = 'cd'.repeat(20);
@@ -232,6 +232,8 @@ describe('compose bounds for dht-peers', () => {
     expect(block).toContain('mem_limit: 150m');
     expect(block).toContain('memswap_limit: 150m');
     expect(block).toContain('DHT_TOKEN: ${DHT_PEERS_TOKEN:-}');
+    // The bootstrap setting must reach the container, with an empty default (public routers only).
+    expect(block).toContain('DHT_BOOTSTRAP_NODES: ${DHT_BOOTSTRAP_NODES:-}');
     expect(block).toContain('cap_drop:');
     expect(block).not.toMatch(/^\s+ports:/m);
     expect(base).toContain('BILLING_DHT_URL: ${BILLING_DHT_URL:-http://dht-peers:8788}');
@@ -401,5 +403,90 @@ describe('BEP 33 scrape lookup', () => {
       peerEstimate: estimateBloom(merged),
       scraped: true,
     });
+  });
+});
+
+describe('dht-peers bootstrap and not-ready gate (phase 2)', () => {
+  const hash = 'ab'.repeat(20);
+
+  it('parses DHT_BOOTSTRAP_NODES into valid host:port nodes', () => {
+    expect(parseBootstrapNodes('')).toEqual([]);
+    expect(parseBootstrapNodes(undefined)).toEqual([]);
+    expect(parseBootstrapNodes('192.168.1.211:3334')).toEqual(['192.168.1.211:3334']);
+    expect(parseBootstrapNodes('a.example:6881, b.example:6969; c.example:3334')).toEqual([
+      'a.example:6881',
+      'b.example:6969',
+      'c.example:3334',
+    ]);
+    // bad ports, empty hosts and duplicates are dropped
+    expect(parseBootstrapNodes('a.example:0 b.example:70000 :6881 c.example c.example:6881 c.example:6881')).toEqual([
+      'c.example:6881',
+    ]);
+  });
+
+  it('reads the routing-table size, or null when the node does not expose it', () => {
+    expect(routingTableSize({ nodes: { toArray: () => [{}, {}] } })).toBe(2);
+    expect(routingTableSize({ nodes: { toArray: () => [] } })).toBe(0);
+    expect(routingTableSize({})).toBe(null);
+    expect(routingTableSize(null)).toBe(null);
+    expect(routingTableSize({ nodes: { toArray: () => { throw new Error('x'); } } })).toBe(null);
+  });
+
+  it('adds env bootstrap nodes on top of the public routers, and leaves defaults untouched when empty', async () => {
+    const made: any[] = [];
+    const node = {
+      ready: true,
+      destroyed: false,
+      on() {},
+      removeListener() {},
+      listen() {},
+      nodes: { toArray: () => [{}] },
+      _rpc: { id: Buffer.alloc(20, 1) },
+      _closest(_t: Buffer, _m: unknown, _o: unknown, cb: () => void) { cb(); },
+    };
+    const withEnv = createDhtLookup({ lookupMs: 5000, idleMs: 1000, bootstrap: ['192.168.1.211:3334'], createNode: (o: any) => { made.push(o); return node; } });
+    await withEnv.lookup(hash);
+    expect(made[0].bootstrap).toEqual([
+      'router.bittorrent.com:6881',
+      'router.utorrent.com:6881',
+      'dht.transmissionbt.com:6881',
+      '192.168.1.211:3334',
+    ]);
+
+    const plain = createDhtLookup({ lookupMs: 5000, idleMs: 1000, createNode: (o: any) => { made.push(o); return node; } });
+    await plain.lookup(hash);
+    expect(made[1].bootstrap).toBeUndefined();
+    expect(made[1]).toEqual({ maxTables: 4, maxValues: 8, maxPeers: 200, maxAge: 10 * 60 * 1000 });
+  });
+
+  function readyNode(table: unknown[]) {
+    return {
+      ready: true,
+      destroyed: false,
+      on() {},
+      removeListener() {},
+      listen() {},
+      nodes: { toArray: () => table },
+      _rpc: { id: Buffer.alloc(20, 1) },
+      _closest(_t: Buffer, _m: unknown, _o: unknown, cb: () => void) { cb(); },
+    };
+  }
+
+  it('reports not_ready when a ready node has an empty routing table (bootstrap timed out)', async () => {
+    const lookup = createDhtLookup({ lookupMs: 5000, idleMs: 1000, createNode: () => readyNode([]) });
+    expect(await lookup.lookup(hash)).toEqual({ ok: false, error: 'not_ready' });
+  });
+
+  it('searches when the routing table has nodes', async () => {
+    const lookup = createDhtLookup({ lookupMs: 5000, idleMs: 1000, createNode: () => readyNode([{ id: Buffer.alloc(20, 2) }]) });
+    const found = await lookup.lookup(hash);
+    expect(found.ok).toBe(true);
+  });
+
+  it('honours an injected tableSize gate', async () => {
+    const empty = createDhtLookup({ lookupMs: 5000, idleMs: 1000, tableSize: () => 0, createNode: () => readyNode([{ id: Buffer.alloc(20, 2) }]) });
+    expect(await empty.lookup(hash)).toEqual({ ok: false, error: 'not_ready' });
+    const full = createDhtLookup({ lookupMs: 5000, idleMs: 1000, tableSize: () => 3, createNode: () => readyNode([]) });
+    expect((await full.lookup(hash)).ok).toBe(true);
   });
 });
