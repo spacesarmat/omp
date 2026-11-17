@@ -135,12 +135,17 @@ export function seedStatusLine(r: SourceResult): string {
   }
   if (r.seedCheck === 'dht') {
     const reason = r.noTracker || !trackerListed(r) ? 'notrackers' : 'timeout';
+    // A crowd estimate (phase 3) is the median of the devices' own TorrServer swarm reports, marked
+    // «по данным устройств». A valid crowd zero is shown as such too: it must not fall through to
+    // the DHT formatter, which would attribute the zero to DHT (or show a saved DHT sample instead).
+    if (r.seedSource === 'crowd') {
+      const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + t('sources.crowdVia');
+      return reason === 'notrackers' ? t('sources.seedsNoTracker') + ' · ' + est : est;
+    }
     // bitmagnet estimate: real seed/leech counts from the local DHT index, shown as an estimate
-    // (the «~» mark and «по DHT»), never as a verified scrape. A crowd estimate (phase 3) is the
-    // median of the devices' own TorrServer swarm reports, marked «по данным устройств».
-    if ((r.seedSource === 'bitmagnet' || r.seedSource === 'crowd') && (r.Seed || 0) > 0) {
-      const via = r.seedSource === 'crowd' ? t('sources.crowdVia') : t('sources.dhtVia');
-      const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + via;
+    // (the «~» mark and «по DHT»), never as a verified scrape.
+    if (r.seedSource === 'bitmagnet' && (r.Seed || 0) > 0) {
+      const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + t('sources.dhtVia');
       return reason === 'notrackers' ? t('sources.seedsNoTracker') + ' · ' + est : est;
     }
     const dht =

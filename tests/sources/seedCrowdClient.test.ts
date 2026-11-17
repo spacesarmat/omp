@@ -80,6 +80,24 @@ describe('crowd estimate on the row', () => {
     expect(seedStatusLine(noTracker)).toBe('Нет адреса трекера · ~7 сидов · 2 лича · по данным устройств');
   });
 
+  it('a valid crowd zero keeps the device label, never the DHT formatter', () => {
+    const zero = applySeedRound([row({ Title: 'A', hash: HASH, Seed: 40 })], [crowdMeasure({ seeders: 0, leechers: 0 })], true)[0];
+    expect(seedStatusLine(zero)).toBe('~0 сидов · 0 личей · по данным устройств');
+    // a saved DHT sample must not cover the crowd zero
+    const withDht = applySeedRound(
+      [row({ Title: 'A', hash: HASH })],
+      [crowdMeasure({ seeders: 0, leechers: 0, dhtSeeds: 5, peers: 9 })],
+      true,
+    )[0];
+    expect(seedStatusLine(withDht)).toBe('~0 сидов · 0 личей · по данным устройств');
+    const noTracker = applySeedRound(
+      [row({ Title: 'A', hash: HASH, Magnet: 'magnet:?xt=urn:btih:' + HASH })],
+      [crowdMeasure({ seeders: 0, leechers: 0 })],
+      true,
+    )[0];
+    expect(seedStatusLine(noTracker)).toBe('Нет адреса трекера · ~0 сидов · 0 личей · по данным устройств');
+  });
+
   it('ranks as an estimate: below a verified swarm, above an unchecked row', () => {
     const live = applySeedRound([row({ Title: 'A', hash: HASH })], [crowdMeasure({ verified: true, live: true, seeders: 2, leechers: 0, samples: 1, source: undefined, ageMs: undefined })], true)[0];
     const crowd = applySeedRound([row({ Title: 'A', hash: HASH })], [crowdMeasure({ seeders: 100 })], true)[0];
