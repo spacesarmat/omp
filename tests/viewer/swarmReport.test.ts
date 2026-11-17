@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { updateSettings } from '../../src/store/settings';
 import {
   SWARM_REPORT_BATCH_MAX,
@@ -23,6 +23,13 @@ async function drain(): Promise<void> {
 }
 
 describe('swarm report batch', () => {
+  // The TTL prune reads the real clock: pin it for every test so fixed NOW samples
+  // never expire as wall-clock time passes (Greptile: tests expire with time).
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
   afterEach(() => {
     vi.useRealTimers();
     resetSwarmReport();
@@ -121,7 +128,6 @@ describe('swarm report batch', () => {
   });
 
   it('a failed delivery does not start the window and the next flush retries', async () => {
-    const tick = () => new Promise((r) => setTimeout(r, 0));
     const sent: string[] = [];
     let fail = true;
     setSwarmPoster(async (body) => {
@@ -130,23 +136,22 @@ describe('swarm report batch', () => {
     });
     noteSwarmSample(tor(), NOW);
     flushSwarm();
-    await tick();
+    await drain();
     expect(sent).toHaveLength(1);
     // the report is back in the queue: the next flush retries it without a new sample
     fail = false;
     flushSwarm();
-    await tick();
+    await drain();
     expect(sent).toHaveLength(2);
     expect(JSON.parse(sent[1])).toEqual(JSON.parse(sent[0]));
     // the window started only after the acceptance: a sample inside it is deduped
     noteSwarmSample(tor({ connected_seeders: 9 }), NOW + 1000);
     flushSwarm();
-    await tick();
+    await drain();
     expect(sent).toHaveLength(2);
   });
 
   it('a missing session never counts as sent and never blocks the hash', async () => {
-    const tick = () => new Promise((r) => setTimeout(r, 0));
     let calls = 0;
     let session = false;
     setSwarmPoster(async () => {
@@ -155,20 +160,20 @@ describe('swarm report batch', () => {
     });
     noteSwarmSample(tor(), NOW);
     flushSwarm();
-    await tick();
+    await drain();
     expect(calls).toBe(1);
     // still queued: a later flush tries again
     flushSwarm();
-    await tick();
+    await drain();
     expect(calls).toBe(2);
     session = true;
     flushSwarm();
-    await tick();
+    await drain();
     expect(calls).toBe(3);
     // accepted at last: the window is now active
     noteSwarmSample(tor({ connected_seeders: 9 }), NOW + 1000);
     flushSwarm();
-    await tick();
+    await drain();
     expect(calls).toBe(3);
   });
 
