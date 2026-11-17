@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Bot: full English for replies, buttons, reminders and donations. The template catalog and UI strings carry ru/en, the language comes from the Telegram account; an unsupported language stays Russian. The constructor shows the base text and samples in the variant language. CIS language infrastructure follows in later PRs
+
 ## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount

@@ -1,5 +1,6 @@
 /** Admin-side referral settings. The master flag starts off. Bonus days never exceed 14. */
 import { randomId } from './crypto.mjs';
+import { normalizeLang, str } from './botCopy.mjs';
 
 export const REFERRAL_BONUS_MAX = 14;
 export const REFERRAL_YEAR_MONTHS = 12;
@@ -359,21 +360,24 @@ export function claimReferralNotices(state) {
     return next;
   });
   const accounts = state.accounts || [];
+  const accOf = (id) => accounts.find((item) => item && item.id === id) || null;
   const chatOf = (id) => {
-    const acc = accounts.find((item) => item && item.id === id);
+    const acc = accOf(id);
     return acc && acc.telegramId ? String(acc.telegramId) : '';
   };
+  const langOf = (id) => normalizeLang(accOf(id) && accOf(id).lang);
   const messages = [];
   for (const [id, bucket] of byRef) {
     const chatId = chatOf(id);
+    const lang = langOf(id);
     const parts = [];
-    if (bucket.days) parts.push(bucket.days + ' дн.');
-    if (bucket.retention) parts.push('удержание ' + bucket.retention + ' дн.');
-    if (bucket.credit) parts.push(bucket.credit + ' ₽ на баланс');
+    if (bucket.days) parts.push(str('ref.days', lang, { n: bucket.days }));
+    if (bucket.retention) parts.push(str('ref.retention', lang, { n: bucket.retention }));
+    if (bucket.credit) parts.push(str('ref.credit', lang, { n: bucket.credit }));
     if (chatId && parts.length) {
       messages.push({
         chatId,
-        text: 'Друг оплатил подписку. Вам начислено ' + parts.join(' и ') + '.',
+        text: str('ref.referrer', lang, { parts: parts.join(str('ref.and', lang)) }),
         restore: bucket.restore,
         accountId: id,
         role: 'referrer',
@@ -390,7 +394,7 @@ export function claimReferralNotices(state) {
     if (chatId) {
       messages.push({
         chatId,
-        text: 'По приглашению вам начислено ' + row.friendDays + ' дн.',
+        text: str('ref.friend', langOf(row.friendId), { days: row.friendDays }),
         restore: [{ id: row.id, noticePending: false, friendNoticePending: true }],
         accountId: row.friendId,
         role: 'friend',

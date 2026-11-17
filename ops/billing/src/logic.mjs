@@ -1,5 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
-import { normalizeLang } from './botCopy.mjs';
+import { normalizeLang, str } from './botCopy.mjs';
 import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, isDevicePay, labelSettled, rubOfPayment, starDue, subscriptionPaidBefore } from './payMethods.mjs';
@@ -231,7 +231,7 @@ function plural(n, one, few, many) {
  * The limit and its parts, for the bot, the cabinet and the panel:
  * «2 базовых + 1 бонусный (навсегда) + 1 купленный», or «3 (индивидуальный лимит) + …».
  */
-export function limitBreakdown(state, sub, now) {
+export function limitBreakdown(state, sub, now, lang) {
   if (!sub) return null;
   const at = now === undefined ? Date.now() : now;
   const override = limitOverrideOf(sub);
@@ -250,12 +250,14 @@ export function limitBreakdown(state, sub, now) {
   const bonus = Array.from(groups.values()).sort((a, b) => (a.until === null ? -1 : b.until === null ? 1 : a.until - b.until));
   const bonusTotal = activeBonus(sub, at);
   const extra = activeExtras(state, sub, at);
-  const parts = [override !== null ? override + ' (индивидуальный лимит)' : base + ' ' + plural(base, 'базовое', 'базовых', 'базовых')];
+  const en = lang === 'en';
+  const parts = [override !== null ? str('lim.custom', lang, { n: override }) : base + ' ' + (en ? 'base' : plural(base, 'базовое', 'базовых', 'базовых'))];
   for (let i = 0; i < bonus.length; i++) {
     const g = bonus[i];
-    parts.push(g.count + ' ' + plural(g.count, 'бонусный', 'бонусных', 'бонусных') + ' (' + (g.until === null ? 'навсегда' : 'до ' + mskDate(g.until)) + ')');
+    const untilText = g.until === null ? str('lim.forever', lang) : str('lim.until', lang, { date: mskDate(g.until) });
+    parts.push(g.count + ' ' + (en ? 'bonus' : plural(g.count, 'бонусный', 'бонусных', 'бонусных')) + ' (' + untilText + ')');
   }
-  if (extra > 0) parts.push(extra + ' ' + plural(extra, 'купленный', 'купленных', 'купленных'));
+  if (extra > 0) parts.push(extra + ' ' + (en ? 'purchased' : plural(extra, 'купленный', 'купленных', 'купленных')));
   return {
     total: base + bonusTotal + extra,
     base,
@@ -2850,7 +2852,7 @@ export function revokeCode(state, codeId) {
  * A bound device over that limit has `overLimit` and gets no access until the slot is renewed; `overReason` says why:
  * 'extra_expired' (a lapsed extra slot would hold it) or 'device_limit'.
  */
-export function subscriptionView(state, accountId, now) {
+export function subscriptionView(state, accountId, now, lang) {
   const sub = anySub(state, accountId);
   if (!sub) return null;
   const codes = state.codes.filter((c) => c.subscriptionId === sub.id && !c.revoked);
@@ -2868,7 +2870,7 @@ export function subscriptionView(state, accountId, now) {
     baseLimit: baseLimitOf(state, sub),
     limitOverride: limitOverrideOf(sub),
     bonusSlots: activeBonus(sub, now),
-    limit: limitBreakdown(state, sub, now),
+    limit: limitBreakdown(state, sub, now, lang),
     extraSlots: extras,
     extraUntil: extras ? Number(sub.extraUntil) || 0 : 0,
     lapsingExtras: lapsingExtras(state, sub, now),
@@ -3276,9 +3278,9 @@ export function mskTime(ms) {
   return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes());
 }
 
-/** 19.10.2026 15:00 МСК */
-export function mskDateTime(ms) {
-  return mskDate(ms) + ' ' + mskTime(ms) + ' МСК';
+/** 19.10.2026 15:00 МСК (RU) / 19.10.2026 15:00 MSK (EN). No language stays RU. */
+export function mskDateTime(ms, lang) {
+  return mskDate(ms) + ' ' + mskTime(ms) + (lang === 'en' ? ' MSK' : ' МСК');
 }
 
 /** Days before the Moscow expiry day: 3 days before, the day before, and the expiry day itself. */
