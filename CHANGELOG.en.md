@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount
 - [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 014
