@@ -391,6 +391,8 @@ export function pickVariant(rows, state, lang) {
     const byLang = hit('', ln);
     if (byLang) return byLang;
   }
+  // Unsupported or absent language: only the default variant, never a state-only one.
+  if (!ln) return hit('', '');
   if (st) {
     const byState = hit(st, '');
     if (byState) return byState;
